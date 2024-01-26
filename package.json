@@ -105,10 +105,10 @@
     "tailwindcss": "^3.3.5",
     "tailwindcss-animate": "^1.0.7",
     "tailwindcss-radix": "^2.8.0",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "@faker-js/faker": "^8.3.1"
   },
   "devDependencies": {
-    "@faker-js/faker": "^8.3.1",
     "@playwright/test": "^1.40.1",
     "@remix-run/dev": "^2.3.1",
     "@remix-run/eslint-config": "^2.3.1",

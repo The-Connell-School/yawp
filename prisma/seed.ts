@@ -1,5 +1,6 @@
+import { staging } from '#app/routes/resources+/seed'
 import { prisma } from '#app/utils/db.server.ts'
-import { cleanupDb, createPassword, createUser } from '#tests/db-utils.ts'
+import { cleanupDb } from '#tests/db-utils.ts'
 
 async function seed() {
 	console.log('🌱 Seeding...')
@@ -10,92 +11,24 @@ async function seed() {
 	console.timeEnd('🧹 Cleaned up the database...')
 
 	console.time('🔑 Created permissions...')
-	const entities = ['user']
-	const actions = ['create', 'read', 'update', 'delete']
-	const accesses = ['own', 'any'] as const
-	for (const entity of entities) {
-		for (const action of actions) {
-			for (const access of accesses) {
-				await prisma.permission.create({ data: { entity, action, access } })
-			}
-		}
-	}
+	await Promise.all(
+		staging.permissions.map(permission =>
+			prisma.permission.create({ data: permission }),
+		),
+	)
 	console.timeEnd('🔑 Created permissions...')
 
 	console.time('👑 Created roles...')
-	await prisma.role.create({
-		data: {
-			name: 'admin',
-			permissions: {
-				connect: await prisma.permission.findMany({
-					select: { id: true },
-					where: { access: 'any' },
-				}),
-			},
-		},
-	})
-	await prisma.role.create({
-		data: {
-			name: 'teacher',
-			permissions: {
-				connect: await prisma.permission.findMany({
-					select: { id: true },
-					where: { access: 'own' },
-				}),
-			},
-		},
-	})
-	await prisma.role.create({
-		data: {
-			name: 'student',
-			permissions: {
-				connect: await prisma.permission.findMany({
-					select: { id: true },
-					where: { access: 'own' },
-				}),
-			},
-		},
-	})
+	await Promise.all(
+		staging.roles.map(role => prisma.role.create({ data: role })),
+	)
 	console.timeEnd('👑 Created roles...')
 
-	console.time(`🔒 Created admin users`)
-
-	await Promise.all([
-		prisma.user.create({
-			select: { id: true },
-			data: {
-				email: 'admin@example.com',
-				name: 'Joe Brown',
-				password: {
-					create: createPassword('jbrown'),
-				},
-				roles: { connect: [{ name: 'admin' }, { name: 'teacher' }] },
-			},
-		}),
-	])
-
-	console.timeEnd(`🔒 Created admin users`)
-
-	console.time(`👩🏼‍🏫 Created teacher users`)
-	const totalUsers = 2
-
-	for (let index = 0; index < totalUsers; index++) {
-		const userData = createUser()
-		await prisma.user
-			.create({
-				select: { id: true },
-				data: {
-					...userData,
-					password: { create: createPassword(userData.email) },
-					roles: { connect: { name: 'teacher' } },
-				},
-			})
-			.catch(e => {
-				console.error('Error creating a teacher:', e)
-				return null
-			})
-	}
-	console.timeEnd(`👩🏼‍🏫 Created teacher users`)
+	console.time(`🔒 Created users`)
+	await Promise.all(
+		staging.users.map(user => prisma.user.create({ data: user })),
+	)
+	console.timeEnd(`🔒 Created users`)
 
 	console.timeEnd(`🌱 Database has been seeded`)
 }

@@ -252,7 +252,7 @@ export const AssistantDescriptionRow = ({ assistant }: Props) => {
 				labelProps={{ className: 'hidden' }}
 				textareaProps={{
 					size: 'sm',
-					placeholder: 'Description',
+					placeholder: 'Hit the button below to get started!',
 					...conform.input(description),
 				}}
 			/>
