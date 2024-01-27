@@ -5,7 +5,7 @@ type Params = {
 	onSwipe?: (direction: 'left' | 'right') => void
 }
 
-export const useOnSwipe = ({ onSwipe, threshold = 50 }: Params = {}) => {
+export const useOnSwipe = ({ onSwipe, threshold = 80 }: Params = {}) => {
 	const [touchStart, setTouchStart] = useState<number | null>(null)
 	const [touchEnd, setTouchEnd] = useState<number | null>(null)
 	const distance = (touchStart ?? 0) - (touchEnd ?? 0)

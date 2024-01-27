@@ -6,19 +6,17 @@ import {
 	type ActionFunctionArgs,
 	json,
 } from '@remix-run/node'
-import { useFetcher, useLoaderData } from '@remix-run/react'
-import { type ReactNode, useEffect, useRef } from 'react'
+import { useFetcher, useLoaderData, useParams } from '@remix-run/react'
+import { useEffect, useRef, useState } from 'react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { AssistantIcon } from '#app/components/icons'
 import { Button } from '#app/components/ui/button'
 import { Skeleton } from '#app/components/ui/skeleton'
-import { useUser } from '#app/hooks/useUser'
 import { ChatInput } from '#app/routes/assistants.$id.$threadId/chat-input'
 import { openai } from '#app/services/openai'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { getUserImgSrc } from '#app/utils/misc'
+import { LoadMoreButton, Message, PreviousMessages } from './previous-messages'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariantResponse(params.id, 'Missing assistant id')
@@ -30,7 +28,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		await Promise.all([
 			openai.beta.assistants.retrieve(params.id),
 			openai.beta.threads.retrieve(params.threadId),
-			openai.beta.threads.messages.list(params.threadId, { order: 'desc' }),
+			openai.beta.threads.messages.list(params.threadId, {
+				order: 'desc',
+				limit: 50,
+			}),
 			openai.beta.threads.runs.list(params.threadId),
 			prisma.thread.findUnique({
 				where: { threadId: params.threadId, assistantMetadata: { userId } },
@@ -43,6 +44,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	)
 
 	const hasMore = (messages as any).body.has_more
+	const lastId = (messages as any).body.last_id
 	const latestRun = runs.data[0]
 	invariantResponse(latestRun, 'Something weird happened. No runs found.')
 
@@ -50,6 +52,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		messages: {
 			...messages,
 			hasMore,
+			lastId,
 			data: hasMore
 				? messages.data.reverse()
 				: messages.data.reverse().slice(1),
@@ -95,7 +98,9 @@ export default function Route() {
 	const loaderFetcher = useFetcher<typeof loader>()
 	const actionFetcher = useFetcher<typeof action>()
 	const optimisticResponse = actionFetcher.formData?.get('response')
+	const params = useParams()
 
+	const [previous, setPrevious] = useState<{ lastId: string }[]>([])
 	const messagesRef = useRef<HTMLDivElement>(null)
 
 	const [actionForm, actionFields] = useForm({
@@ -128,11 +133,31 @@ export default function Route() {
 	}, [messages])
 
 	return (
-		<main className="flex min-h-screen w-full flex-col">
+		<main className="flex max-h-screen min-h-screen w-full flex-col pb-6">
 			<div
-				className="h-[calc(100vh-80px)] overflow-scroll pb-6 pt-14 sm:h-[calc(100vh-90px)]"
+				className="h-screen overflow-scroll pb-6 pt-16 sm:h-[calc(100vh-90px)]"
 				ref={messagesRef}
 			>
+				{params.threadId
+					? previous
+							.reverse()
+							.map(({ lastId }, index) => (
+								<PreviousMessages
+									key={lastId}
+									lastId={lastId}
+									assistantName={assistant.name}
+									onLoadMore={value => setPrevious(p => p.concat(value))}
+									hideLoadMore={index !== 0}
+								/>
+							))
+					: null}
+				{messages.hasMore && messages.lastId && !previous.length ? (
+					<LoadMoreButton
+						onClick={() =>
+							setPrevious(p => p.concat({ lastId: messages.lastId }))
+						}
+					/>
+				) : null}
 				{messages.data.map(message => {
 					const isUser = message.role === 'user'
 					const text = (
@@ -201,40 +226,4 @@ export default function Route() {
 
 export function ErrorBoundary() {
 	return <GeneralErrorBoundary />
-}
-
-const Message = ({
-	isUser,
-	children,
-	assistantName,
-}: {
-	isUser: boolean
-	children?: ReactNode
-	assistantName?: string | null
-}) => {
-	const user = useUser()
-
-	return (
-		<div className="p-4">
-			<div className="mx-auto flex max-w-[700px] gap-4">
-				<div>
-					{isUser ? (
-						<img
-							src={getUserImgSrc(user.image?.id)}
-							alt={user.name ?? user.email}
-							className="h-8 w-8 min-w-8 rounded-full object-cover"
-						/>
-					) : (
-						<div className="flex items-center justify-center rounded-full bg-primary/50 p-2">
-							<AssistantIcon />
-						</div>
-					)}
-				</div>
-				<div className="w-full">
-					<h4>{isUser ? user.name : assistantName}</h4>
-					{children}
-				</div>
-			</div>
-		</div>
-	)
 }
