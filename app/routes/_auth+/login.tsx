@@ -269,7 +269,7 @@ export default function LoginPage() {
 							: '/img/yawp_black_logo.png'
 					}
 					alt="Logo on white background"
-					className="mx-auto mb-10 h-auto w-44 rounded object-cover"
+					className="mx-auto mb-10 h-auto w-80 rounded object-cover"
 				/>
 				<h1>Welcome back!</h1>
 				<p>Please enter your details.</p>

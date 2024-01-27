@@ -212,7 +212,7 @@ export default function SignupRoute() {
 					<FormSelect
 						labelProps={{
 							htmlFor: fields.workshopTeacherId.id,
-							children: 'Workshop Teacher',
+							children: 'Yawp! Teacher',
 						}}
 						selectProps={{
 							...conform.input(fields.workshopTeacherId),
