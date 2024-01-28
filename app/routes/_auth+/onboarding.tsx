@@ -163,7 +163,7 @@ export default function SignupRoute() {
 			</div>
 			<Form
 				method="POST"
-				className="mx-auto mt-20 flex min-w-full max-w-sm flex-col gap-3 sm:min-w-[368px]"
+				className="mx-auto mt-20 flex min-w-full max-w-sm flex-col gap-3 px-8 sm:min-w-[368px]"
 				{...form.props}
 			>
 				<AuthenticityTokenInput />

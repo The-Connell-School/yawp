@@ -278,7 +278,7 @@ export default function VerifyRoute() {
 					<div>
 						<ErrorList errors={form.errors} id={form.errorId} />
 					</div>
-					<div className="flex w-full gap-2">
+					<div className="flex w-full gap-2 px-8">
 						<Form method="POST" {...form.props} className="flex-1">
 							<AuthenticityTokenInput />
 							<HoneypotInputs />
