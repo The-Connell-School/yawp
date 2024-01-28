@@ -132,7 +132,7 @@ export default function SignupRoute() {
 					Please enter your email.
 				</p>
 			</div>
-			<div className="mx-auto mt-16 min-w-full max-w-sm sm:min-w-[368px]">
+			<div className="mx-auto mt-16 min-w-full max-w-sm px-8 sm:min-w-[368px]">
 				<Form method="POST" {...form.props} className="flex flex-col gap-4">
 					<AuthenticityTokenInput />
 					<HoneypotInputs />

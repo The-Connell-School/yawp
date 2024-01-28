@@ -130,8 +130,8 @@ export default function Route() {
 	return isChild ? (
 		<Outlet />
 	) : (
-		<main className="flex min-h-screen w-full flex-col items-center justify-center gap-2">
-			<h1>{assistant.name}</h1>
+		<main className="flex min-h-screen w-full flex-col items-center justify-center gap-2 px-2">
+			<h1 className="text-center">{assistant.name}</h1>
 			<p className="mx-auto mb-4 max-w-[420px] text-center text-muted-foreground">
 				{configuration?.description ?? 'Hit the button below to get started!'}
 			</p>
