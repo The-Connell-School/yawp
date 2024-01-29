@@ -18,7 +18,7 @@ export const SidebarSection = ({ links, title }: Props) => {
 	return (
 		<div className="mb-4 flex flex-col gap-0.5">
 			<div className="mb-1 flex items-center justify-between gap-2 pl-2">
-				<p className="text-sm font-bold text-foreground">{title}</p>
+				<p className="text-foreground text-sm font-bold">{title}</p>
 			</div>
 			{links.map(({ to, label, icon, isDisabled, badge, isExternal }) => (
 				<NavLink
@@ -27,10 +27,10 @@ export const SidebarSection = ({ links, title }: Props) => {
 					end
 					className={({ isActive }) =>
 						cn(
-							'flex items-center rounded p-1 px-2 text-slate-300 hover:bg-foreground/15',
+							'hover:bg-foreground/15 flex items-center rounded p-1 px-2 text-slate-300',
 							{
 								'bg-foreground/15': isActive,
-								'pointer-events-none text-foreground/40': isDisabled,
+								'text-foreground/40 pointer-events-none': isDisabled,
 							},
 						)
 					}
@@ -42,7 +42,7 @@ export const SidebarSection = ({ links, title }: Props) => {
 					})}{' '}
 					{label}
 					{badge ? (
-						<div className="ml-auto rounded bg-foreground/20 px-1 py-0.5 text-xs">
+						<div className="bg-foreground/20 ml-auto rounded px-1 py-0.5 text-xs">
 							{badge}
 						</div>
 					) : null}
@@ -57,8 +57,8 @@ export const SidebarSection = ({ links, title }: Props) => {
 							<path
 								fill="none"
 								stroke="currentColor"
-								stroke-linecap="round"
-								stroke-linejoin="round"
+								strokeLinecap="round"
+								strokeLinejoin="round"
 								d="M18.5 8.5v-5h-5m5 0l-7 7m-1-7h-5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"
 							/>
 						</svg>

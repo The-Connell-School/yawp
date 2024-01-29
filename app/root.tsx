@@ -32,6 +32,7 @@ import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
 import { getHslFromVar, hslToHex } from './utils/hslToHex'
 import { cn, combineHeaders, getDomainUrl } from './utils/misc.tsx'
+import { type NavState, navStateCookie } from './utils/nav-state.server.ts'
 import { type Theme, getTheme } from './utils/theme.server.ts'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
@@ -47,7 +48,7 @@ export const links: LinksFunction = () => {
 			type: 'image/png',
 			href: '/favicons/favicon-32x32.png',
 		},
-		{ rel: 'apple-touch-icon', href: '/img/yawp_white_logo.png' },
+		{ rel: 'apple-touch-icon', href: '/favicons/apple-touch-icon.png' },
 		{
 			rel: 'manifest',
 			href: '/site.webmanifest',
@@ -108,6 +109,9 @@ export async function loader({ request }: DataFunctionArgs) {
 	const honeyProps = honeypot.getInputProps()
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken()
 
+	const cookieHeader = request.headers.get('Cookie')
+	const cookie = (await navStateCookie.parse(cookieHeader)) || {}
+
 	return json(
 		{
 			user,
@@ -117,6 +121,7 @@ export async function loader({ request }: DataFunctionArgs) {
 				path: new URL(request.url).pathname,
 				userPrefs: {
 					theme: getTheme(request),
+					navState: (cookie.state as NavState) ?? 'expanded',
 				},
 			},
 			ENV: getEnv(),
