@@ -21,13 +21,13 @@ import {
 	type VerifyFunctionArgs,
 } from '#app/routes/_auth+/verify.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
 import { EmailSchema } from '#app/utils/schemas/user.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { type BreadcrumbHandle } from '../assistants.profile/route'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (

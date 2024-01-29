@@ -14,7 +14,6 @@ import * as React from 'react'
 const hintsUtils = getHintUtils({
 	theme: colorSchemeHint,
 	timeZone: timeZoneHint,
-	// add other hints here
 })
 
 export const { getHints } = hintsUtils

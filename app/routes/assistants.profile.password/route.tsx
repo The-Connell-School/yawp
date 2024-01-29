@@ -22,7 +22,7 @@ import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { PasswordSchema } from '#app/utils/schemas/user'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
-import { type BreadcrumbHandle } from '../assistants.profile/route'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (

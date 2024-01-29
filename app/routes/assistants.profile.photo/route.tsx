@@ -24,7 +24,7 @@ import {
 	useDoubleCheck,
 	useIsPending,
 } from '#app/utils/misc.tsx'
-import { type BreadcrumbHandle } from '../assistants.profile/route'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (

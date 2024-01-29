@@ -36,11 +36,11 @@ import {
 	TableRow,
 } from '#app/components/ui/table'
 import { openai } from '#app/services/openai'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { validateCSRF } from '#app/utils/csrf.server'
 import { prisma } from '#app/utils/db.server'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { pick } from '#app/utils/pick'
-import { type BreadcrumbHandle } from '../assistants.profile/route'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (

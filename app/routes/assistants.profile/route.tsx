@@ -1,16 +1,12 @@
 import { Link, Outlet, useMatches } from '@remix-run/react'
-import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { SlashIcon } from '#app/components/icons'
 import { button } from '#app/components/ui/button'
+import {
+	BreadcrumbHandleMatch,
+	type BreadcrumbHandle,
+} from '#app/utils/breadcrumb'
 import { cn } from '#app/utils/misc'
-
-export const BreadcrumbHandle = z.object({ breadcrumb: z.any() })
-export type BreadcrumbHandle = z.infer<typeof BreadcrumbHandle>
-
-const BreadcrumbHandleMatch = z.object({
-	handle: BreadcrumbHandle,
-})
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (
