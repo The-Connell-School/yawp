@@ -47,7 +47,7 @@ export const links: LinksFunction = () => {
 			type: 'image/png',
 			href: '/favicons/favicon-32x32.png',
 		},
-		{ rel: 'apple-touch-icon', href: '/img/yawp_white_logo.png' },
+		{ rel: 'apple-touch-icon', href: '/favicons/apple-touch-icon.png' },
 		{
 			rel: 'manifest',
 			href: '/site.webmanifest',
