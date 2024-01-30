@@ -9,7 +9,7 @@ kill_timeout = "5s"
 [build]
 
 [deploy]
-  release_command = "node ./other/sentry-create-release"
+  release_command = "npx prisma migrate deploy && node ./other/sentry-create-release"
 
 [[mounts]]
   source = "data"

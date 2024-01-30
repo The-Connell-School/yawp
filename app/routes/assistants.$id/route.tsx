@@ -27,7 +27,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 	const userId = await requireUserId(request)
 	const [metadata, configuration] = await Promise.all([
-		prisma.assistantMetadata.findUnique({
+		prisma.assistantMetadata.findFirst({
 			where: { assistantId: params.id, userId },
 			select: { isVerified: true },
 		}),
@@ -67,7 +67,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const assistantId = params.id
 	const [assistant, assistantMetadata] = await Promise.all([
 		openai.beta.assistants.retrieve(assistantId),
-		prisma.assistantMetadata.findUnique({
+		prisma.assistantMetadata.findFirst({
 			where: { assistantId, userId },
 			select: {
 				_count: { select: { threads: true } },
