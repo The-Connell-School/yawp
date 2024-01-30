@@ -83,7 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	await prisma.assistantMetadata.upsert({
 		where: { userId, assistantId },
 		update: { isVerified: true },
-		create: { assistantId, userId, isVerified: true },
+		create: { assistantId, user: { connect: { id: userId }}, isVerified: true },
 	})
 
 	return redirect(`/assistants/${assistantId}`)
