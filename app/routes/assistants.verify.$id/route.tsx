@@ -21,7 +21,7 @@ import { useIsPending } from '#app/utils/misc'
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariantResponse(params.id, 'Missing assistant id')
 	const userId = await requireUserId(request)
-	const metadata = await prisma.assistantMetadata.findUnique({
+	const metadata = await prisma.assistantMetadata.findFirst({
 		where: { assistantId: params.id, userId },
 		select: { isVerified: true },
 	})
@@ -79,12 +79,25 @@ export async function action({ request }: ActionFunctionArgs) {
 	}
 
 	const { assistantId } = submission.value
-
-	await prisma.assistantMetadata.upsert({
-		where: { userId, assistantId },
-		update: { isVerified: true },
-		create: { assistantId, user: { connect: { id: userId }}, isVerified: true },
+	const existing = await prisma.assistantMetadata.findFirst({
+		where: { assistantId, userId },
+		select: { id: true },
 	})
+
+	if (existing) {
+		await prisma.assistantMetadata.update({
+			where: { id: existing.id },
+			data: { isVerified: true },
+		})
+	} else {
+		await prisma.assistantMetadata.create({
+			data: {
+				assistantId,
+				user: { connect: { id: userId } },
+				isVerified: true,
+			},
+		})
+	}
 
 	return redirect(`/assistants/${assistantId}`)
 }
