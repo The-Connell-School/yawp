@@ -11,6 +11,7 @@ const ToastSchema = z.object({
 	id: z.string().default(() => cuid()),
 	title: z.string().optional(),
 	type: TypeSchema.default('message'),
+	closeButton: z.boolean().default(true).optional(),
 })
 
 export type Toast = z.infer<typeof ToastSchema>
@@ -60,7 +61,7 @@ export async function getToast(request: Request) {
 		headers: toast
 			? new Headers({
 					'set-cookie': await toastSessionStorage.destroySession(session),
-			  })
+				})
 			: null,
 	}
 }

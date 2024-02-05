@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
@@ -176,12 +179,8 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 		schema: ProfileFormSchema,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const data = submission.value
@@ -191,7 +190,7 @@ async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
 		data: { name: data.name },
 	})
 
-	return json({ status: 'success', submission } as const)
+	return json(submission.reply())
 }
 
 function UpdateProfile() {
@@ -201,7 +200,7 @@ function UpdateProfile() {
 	const [form, fields] = useForm({
 		id: 'edit-profile',
 		constraint: getFieldsetConstraint(ProfileFormSchema),
-		lastSubmission: fetcher.data?.submission,
+		lastResult: fetcher.data,
 		onValidate({ formData }) {
 			return parse(formData, { schema: ProfileFormSchema })
 		},
@@ -209,12 +208,16 @@ function UpdateProfile() {
 	})
 
 	return (
-		<fetcher.Form method="POST" {...form.props} className="flex flex-col gap-2">
+		<fetcher.Form
+			method="POST"
+			{...getFormProps(form)}
+			className="flex flex-col gap-2"
+		>
 			<AuthenticityTokenInput />
 			<FormInput
 				labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
 				inputProps={{
-					...conform.input(fields.name),
+					...getInputProps(fields.name, { type: 'text' }),
 					className: 'w-auto max-w-[400px] min-w-[200px]',
 				}}
 				errors={fields.name.errors}

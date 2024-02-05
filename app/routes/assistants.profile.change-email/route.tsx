@@ -1,6 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
-import { invariant } from '@epic-web/invariant'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import * as E from '@react-email/components'
 import {
 	type ActionFunctionArgs,
@@ -47,18 +49,31 @@ export async function handleVerification({
 	submission,
 }: VerifyFunctionArgs) {
 	await requireRecentVerification(request)
-	invariant(submission.value, 'submission.value should be defined by now')
+
+	if (submission.status !== 'success') {
+		throw await redirectWithToast('/login', {
+			type: 'error',
+			title: 'Invalid submission',
+			description: 'Submission was not successful. Please try again.',
+		})
+	}
 
 	const verifySession = await verifySessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
 	const newEmail = verifySession.get(newEmailAddressSessionKey)
+
 	if (!newEmail) {
-		submission.error[''] = [
-			'You must submit the code on the same device that requested the email change.',
-		]
-		return json({ status: 'error', submission } as const, { status: 400 })
+		return json(
+			submission.reply({
+				formErrors: [
+					'You must submit the code on the same device that requested the email change.',
+				],
+			}),
+			{ status: 400 },
+		)
 	}
+
 	const preUpdateUser = await prisma.user.findFirstOrThrow({
 		select: { email: true },
 		where: { id: submission.value.target },
@@ -128,12 +143,10 @@ export async function action({ request }: ActionFunctionArgs) {
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
-	}
+
 	const { otp, redirectTo, verifyUrl } = await prepareVerification({
 		period: 10 * 60,
 		request,
@@ -156,8 +169,9 @@ export async function action({ request }: ActionFunctionArgs) {
 			},
 		})
 	} else {
-		submission.error[''] = [response.error.message]
-		return json({ status: 'error', submission } as const, { status: 500 })
+		return json(submission.reply({ formErrors: [response.error.message] }), {
+			status: 500,
+		})
 	}
 }
 
@@ -223,7 +237,7 @@ export default function ChangeEmailIndex() {
 	const [form, fields] = useForm({
 		id: 'change-email-form',
 		constraint: getFieldsetConstraint(ChangeEmailSchema),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: ChangeEmailSchema })
 		},
@@ -238,12 +252,12 @@ export default function ChangeEmailIndex() {
 				<strong>{data.user.email}</strong>.
 			</p>
 			<div className="mt-5">
-				<Form method="POST" {...form.props}>
+				<Form method="POST" {...getFormProps(form)}>
 					<AuthenticityTokenInput />
 					<FormInput
 						labelProps={{ children: 'New Email' }}
 						inputProps={{
-							...conform.input(fields.email),
+							...getInputProps(fields.email, { type: 'email' }),
 							autoComplete: 'email',
 						}}
 						className="max-w-sm"

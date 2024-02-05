@@ -29,16 +29,7 @@ const roles: SeedData['roles'] = [
 		},
 	},
 	{
-		name: 'teacher',
-		permissions: {
-			connect: await prisma.permission.findMany({
-				select: { id: true },
-				where: { access: 'own' },
-			}),
-		},
-	},
-	{
-		name: 'student',
+		name: 'user',
 		permissions: {
 			connect: await prisma.permission.findMany({
 				select: { id: true },
@@ -55,17 +46,14 @@ export const staging: SeedData = {
 		{
 			email: 'brian@theconnellschool.com',
 			name: 'Brian Connell',
-			password: {
-				create: createPassword('bconnell'),
-			},
-			roles: { connect: [{ name: 'admin' }, { name: 'teacher' }] },
+			password: { create: createPassword('bconnell') },
+			roles: { connect: [{ name: 'admin' }] },
+			teacherProfile: { create: {} },
 		},
 		{
 			email: 'bryant@brock.software',
 			name: 'Bryant Brock',
-			password: {
-				create: createPassword('bbrock'),
-			},
+			password: { create: createPassword('bbrock') },
 			roles: { connect: [{ name: 'admin' }] },
 		},
 	],
@@ -78,10 +66,9 @@ export const production: SeedData = {
 		{
 			email: 'brian@theconnellschool.com',
 			name: 'Brian Connell',
-			password: {
-				create: createPassword('bconnell'),
-			},
-			roles: { connect: [{ name: 'admin' }, { name: 'teacher' }] },
+			password: { create: createPassword('bconnell') },
+			teacherProfile: { create: {} },
+			roles: { connect: [{ name: 'admin' }] },
 		},
 	],
 }

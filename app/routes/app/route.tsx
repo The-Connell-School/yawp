@@ -85,7 +85,7 @@ export default function Route() {
 	const isNavExpanded = navState === 'expanded'
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'base' || breakpoint === 'sm'
-	const navExpanded = isMobile || isNavExpanded
+	const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded
 
 	const matches = useMatches()
 	const breadcrumbs = matches
@@ -139,7 +139,7 @@ export default function Route() {
 				</Button>
 				<div className="flex items-center">
 					{breadcrumbs.map((bc, i) => (
-						<slot key={bc.toString()}>
+						<slot key={bc.key}>
 							{i === 0 ? (
 								bc
 							) : (
@@ -204,9 +204,10 @@ export default function Route() {
 								key={link.to}
 								className={({ isActive }) =>
 									cn(
-										'flex w-full items-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-primary/15 dark:hover:bg-primary/20',
+										'flex w-full items-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
 										{
-											'bg-primary/10 text-primary dark:bg-primary/15': isActive,
+											'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
+												isActive,
 											'py-2': !navExpanded,
 										},
 									)
@@ -242,27 +243,27 @@ export default function Route() {
 						))}
 				</div>
 				<div className="flex flex-grow flex-col justify-end gap-2">
-					<div className={cn('flex gap-2 px-2', { 'flex-col': !navExpanded })}>
+					<div className={cn('flex px-2', { 'flex-col': !navExpanded })}>
 						<Tooltip text="Sign out">
-							<Button size="icon-sm" variant="outline" asChild>
+							<Button size="icon-sm" variant="ghost" asChild>
 								<Link to="/logout">
 									<ExitIcon />
 								</Link>
 							</Button>
 						</Tooltip>
-						<ThemeSwitch buttonProps={{ variant: 'outline' }} />
+						<ThemeSwitch buttonProps={{ variant: 'ghost' }} />
 						{!isMobile ? (
 							<div className={navExpanded ? 'ml-auto' : undefined}>
-								<NavStateSwitch buttonProps={{ variant: 'outline' }} />
+								<NavStateSwitch buttonProps={{ variant: 'ghost' }} />
 							</div>
 						) : null}
 					</div>
 					<Link to="/assistants/profile">
-						<div className="flex items-center gap-4 border-t p-2 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-2">
+						<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
 							<img
 								src={getUserImgSrc(user.image?.id)}
 								alt={user.name ?? user.email}
-								className="h-8 w-8 min-w-8 rounded-full object-cover"
+								className="h-7 w-7 min-w-7 rounded-full object-cover"
 							/>
 							{navExpanded ? (
 								<div>
@@ -278,8 +279,11 @@ export default function Route() {
 			</nav>
 			<div
 				className={cn(
-					'h-[100vh - 3rem] relative min-w-full flex-grow -translate-x-[250px] overflow-y-scroll transition-all duration-300 ease-in-out sm:w-full sm:min-w-0 sm:translate-x-0',
-					{ 'translate-x-0 opacity-50': isMobileNavOpen },
+					'h-[100vh - 3rem] relative min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:w-full sm:min-w-0 sm:translate-x-0',
+					{
+						'translate-x-0 opacity-50': isMobileNavOpen,
+						'-translate-x-[250px]': isNavExpanded,
+					},
 				)}
 				onClick={isMobileNavOpen ? () => setMobileNavOpen(false) : undefined}
 				{...swipeEvents}

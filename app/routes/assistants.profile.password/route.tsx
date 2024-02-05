@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
@@ -18,11 +21,11 @@ import {
 	requireUserId,
 	verifyUserPassword,
 } from '#app/utils/auth.server.ts'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { PasswordSchema } from '#app/utils/schemas/user'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
-import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (
@@ -91,13 +94,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	})
 	// clear the payload so we don't send the password back to the client
 	submission.payload = {}
-	if (submission.intent !== 'submit') {
-		// clear the value so we don't send the password back to the client
-		submission.value = undefined
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { newPassword } = submission.value
@@ -131,7 +129,7 @@ export default function ChangePasswordRoute() {
 	const [form, fields] = useForm({
 		id: 'password-change-form',
 		constraint: getFieldsetConstraint(ChangePasswordForm),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: ChangePasswordForm })
 		},
@@ -139,12 +137,12 @@ export default function ChangePasswordRoute() {
 	})
 
 	return (
-		<Form method="POST" {...form.props} className="max-w-md">
+		<Form method="POST" {...getFormProps(form)} className="max-w-md">
 			<AuthenticityTokenInput />
 			<FormInput
 				labelProps={{ children: 'Current Password' }}
 				inputProps={{
-					...conform.input(fields.currentPassword, { type: 'password' }),
+					...getInputProps(fields.currentPassword, { type: 'password' }),
 					autoComplete: 'current-password',
 				}}
 				errors={fields.currentPassword.errors}
@@ -152,7 +150,7 @@ export default function ChangePasswordRoute() {
 			<FormInput
 				labelProps={{ children: 'New Password' }}
 				inputProps={{
-					...conform.input(fields.newPassword, { type: 'password' }),
+					...getInputProps(fields.newPassword, { type: 'password' }),
 					autoComplete: 'new-password',
 				}}
 				errors={fields.newPassword.errors}
@@ -160,7 +158,7 @@ export default function ChangePasswordRoute() {
 			<FormInput
 				labelProps={{ children: 'Confirm New Password' }}
 				inputProps={{
-					...conform.input(fields.confirmNewPassword, {
+					...getInputProps(fields.confirmNewPassword, {
 						type: 'password',
 					}),
 					autoComplete: 'new-password',

@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import {
 	type ActionFunctionArgs,
 	json,
@@ -89,11 +92,8 @@ export async function action({ request }: ActionFunctionArgs) {
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	switch (submission.value.intent) {
@@ -127,13 +127,7 @@ export default function TwoFactorRoute() {
 	const [form, fields] = useForm({
 		id: 'verify-form',
 		constraint: getFieldsetConstraint(ActionSchema),
-		lastSubmission: actionData?.submission,
-		onValidate({ formData }) {
-			if (formData.get('intent') === 'cancel') {
-				return parse(formData, { schema: CancelSchema })
-			}
-			return parse(formData, { schema: VerifySchema })
-		},
+		lastResult: actionData,
 	})
 
 	return (
@@ -161,7 +155,7 @@ export default function TwoFactorRoute() {
 					lose access to your account.
 				</p>
 				<div className="flex w-full max-w-xs flex-col justify-center gap-4">
-					<Form method="POST" {...form.props} className="flex-1">
+					<Form method="POST" {...getFormProps(form)} className="flex-1">
 						<AuthenticityTokenInput />
 						<FormInput
 							labelProps={{
@@ -169,7 +163,7 @@ export default function TwoFactorRoute() {
 								children: 'Code',
 							}}
 							inputProps={{
-								...conform.input(fields.code),
+								...getInputProps(fields.code, { type: 'text' }),
 								autoFocus: true,
 								autoComplete: 'one-time-code',
 							}}
