@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type LoaderFunctionArgs,
@@ -57,11 +60,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	const submission = parse(formData, { schema: Schema })
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const assistantId = params.id
@@ -122,7 +122,7 @@ export default function Route() {
 
 	const [form, fields] = useForm({
 		id: 'create-thread-form',
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		constraint: getFieldsetConstraint(Schema),
 		defaultValue: { assistantId: assistant.id },
 	})
@@ -135,8 +135,8 @@ export default function Route() {
 			<p className="mx-auto mb-4 max-w-[420px] text-center text-muted-foreground">
 				{configuration?.description ?? 'Hit the button below to get started!'}
 			</p>
-			<Form method="POST" {...form.props}>
-				<input type="hidden" {...conform.input(fields.assistantId)} />
+			<Form method="POST" {...getFormProps(form)}>
+				<input {...getInputProps(fields.assistantId, { type: 'hidden' })} />
 				<Button isLoading={isPending}>
 					{configuration?.actionText ?? 'Get started'}
 				</Button>

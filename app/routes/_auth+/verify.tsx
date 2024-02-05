@@ -1,5 +1,13 @@
-import { conform, useForm, type Submission } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import {
+	getInputProps,
+	useForm,
+	type Submission,
+	getFormProps,
+} from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { type ActionFunctionArgs, json } from '@remix-run/node'
 import { Form, useActionData, useSearchParams } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
@@ -26,12 +34,19 @@ import {
 } from './login.tsx'
 import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
 import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
+import { handleVerification as handleTeacherOnboardingVerification } from './teacher-onboarding.tsx'
 
 export const codeQueryParam = 'code'
 export const targetQueryParam = 'target'
 export const typeQueryParam = 'type'
 export const redirectToQueryParam = 'redirectTo'
-const types = ['onboarding', 'reset-password', 'change-email', '2fa'] as const
+const types = [
+	'onboarding',
+	'reset-password',
+	'change-email',
+	'2fa',
+	'teacher-onboarding',
+] as const
 const VerificationTypeSchema = z.enum(types)
 export type VerificationTypes = z.infer<typeof VerificationTypeSchema>
 
@@ -180,11 +195,8 @@ async function validateRequest(
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	// this code path could be part of a loader (GET request), so we need to make
@@ -220,6 +232,10 @@ async function validateRequest(
 		case '2fa': {
 			return handleLoginTwoFactorVerification({ request, body, submission })
 		}
+		case 'teacher-onboarding': {
+			await deleteVerification()
+			return handleTeacherOnboardingVerification({ request, body, submission })
+		}
 	}
 }
 
@@ -243,6 +259,7 @@ export default function VerifyRoute() {
 
 	const headings: Record<VerificationTypes, React.ReactNode> = {
 		onboarding: checkEmail,
+		'teacher-onboarding': checkEmail,
 		'reset-password': checkEmail,
 		'change-email': checkEmail,
 		'2fa': (
@@ -258,7 +275,7 @@ export default function VerifyRoute() {
 	const [form, fields] = useForm({
 		id: 'verify-form',
 		constraint: getFieldsetConstraint(VerifySchema),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: VerifySchema })
 		},
@@ -279,7 +296,7 @@ export default function VerifyRoute() {
 						<ErrorList errors={form.errors} id={form.errorId} />
 					</div>
 					<div className="flex w-full gap-2 px-8">
-						<Form method="POST" {...form.props} className="flex-1">
+						<Form method="POST" {...getFormProps(form)} className="flex-1">
 							<AuthenticityTokenInput />
 							<HoneypotInputs />
 							<FormInput
@@ -288,19 +305,19 @@ export default function VerifyRoute() {
 									children: 'Code',
 								}}
 								inputProps={{
-									...conform.input(fields[codeQueryParam]),
+									...getInputProps(fields[codeQueryParam], { type: 'text' }),
 									autoComplete: 'one-time-code',
 								}}
 								errors={fields[codeQueryParam].errors}
 							/>
 							<input
-								{...conform.input(fields[typeQueryParam], { type: 'hidden' })}
+								{...getInputProps(fields[typeQueryParam], { type: 'hidden' })}
 							/>
 							<input
-								{...conform.input(fields[targetQueryParam], { type: 'hidden' })}
+								{...getInputProps(fields[targetQueryParam], { type: 'hidden' })}
 							/>
 							<input
-								{...conform.input(fields[redirectToQueryParam], {
+								{...getInputProps(fields[redirectToQueryParam], {
 									type: 'hidden',
 								})}
 							/>

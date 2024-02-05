@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
@@ -41,13 +44,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	})
 	// clear the payload so we don't send the password back to the client
 	submission.payload = {}
-	if (submission.intent !== 'submit') {
-		// clear the value so we don't send the password back to the client
-		submission.value = undefined
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { password } = submission.value
@@ -73,7 +71,7 @@ export default function CreatePasswordRoute() {
 	const [form, fields] = useForm({
 		id: 'password-create-form',
 		constraint: getFieldsetConstraint(CreatePasswordForm),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: CreatePasswordForm })
 		},
@@ -81,11 +79,11 @@ export default function CreatePasswordRoute() {
 	})
 
 	return (
-		<Form method="POST" {...form.props} className="mx-auto max-w-md">
+		<Form method="POST" {...getFormProps(form)} className="mx-auto max-w-md">
 			<FormInput
 				labelProps={{ children: 'New Password' }}
 				inputProps={{
-					...conform.input(fields.password, { type: 'password' }),
+					...getInputProps(fields.password, { type: 'password' }),
 					autoComplete: 'new-password',
 				}}
 				errors={fields.password.errors}
@@ -93,7 +91,7 @@ export default function CreatePasswordRoute() {
 			<FormInput
 				labelProps={{ children: 'Confirm New Password' }}
 				inputProps={{
-					...conform.input(fields.confirmPassword, {
+					...getInputProps(fields.confirmPassword, {
 						type: 'password',
 					}),
 					autoComplete: 'new-password',

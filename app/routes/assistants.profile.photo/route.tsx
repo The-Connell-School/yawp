@@ -1,5 +1,5 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
@@ -17,6 +17,7 @@ import { ErrorList } from '#app/components/forms/error-list'
 import { CameraIcon, ResetIcon } from '#app/components/icons'
 import { Button, button } from '#app/components/ui/button'
 import { requireUserId } from '#app/utils/auth.server.ts'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import {
@@ -24,7 +25,6 @@ import {
 	useDoubleCheck,
 	useIsPending,
 } from '#app/utils/misc.tsx'
-import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (
@@ -76,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	)
 	await validateCSRF(formData, request.headers)
 
-	const submission = await parse(formData, {
+	const submission = await parseWithZod(formData, {
 		schema: PhotoFormSchema.transform(async data => {
 			if (data.intent === 'delete') return { intent: 'delete' }
 			if (data.photoFile.size <= 0) return z.NEVER
@@ -91,11 +91,8 @@ export async function action({ request }: ActionFunctionArgs) {
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { image, intent } = submission.value
@@ -125,16 +122,8 @@ export default function PhotoRoute() {
 
 	const [form, fields] = useForm({
 		id: 'profile-photo',
-		constraint: getFieldsetConstraint(PhotoFormSchema),
-		lastSubmission: actionData?.submission,
-		onValidate({ formData }) {
-			// otherwise, the best error zod gives us is "Invalid input" which is not
-			// enough
-			if (formData.get('intent') === 'delete') {
-				return parse(formData, { schema: DeleteImageSchema })
-			}
-			return parse(formData, { schema: NewImageSchema })
-		},
+		constraint: getZodConstraint(PhotoFormSchema),
+		lastResult: actionData,
 		shouldRevalidate: 'onBlur',
 	})
 
@@ -145,7 +134,7 @@ export default function PhotoRoute() {
 				encType="multipart/form-data"
 				className="flex gap-10"
 				onReset={() => setNewImageSrc(null)}
-				{...form.props}
+				{...getFormProps(form)}
 			>
 				<AuthenticityTokenInput />
 				<img
@@ -164,7 +153,7 @@ export default function PhotoRoute() {
 						an image has been selected). Progressive enhancement FTW!
 					*/}
 					<input
-						{...conform.input(fields.photoFile, { type: 'file' })}
+						{...getInputProps(fields.photoFile, { type: 'file' })}
 						accept="image/*"
 						className="peer sr-only"
 						required

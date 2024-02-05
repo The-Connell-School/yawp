@@ -20,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	return json({})
 }
 
-export default function StudentsPage() {
+export default function Route() {
 	return (
 		<main className="relative h-full overflow-y-scroll pt-[108px] sm:pt-[53px]">
 			<nav className="fixed left-0 right-0 top-[55px] flex items-end border-b px-6 pt-4 sm:top-0">

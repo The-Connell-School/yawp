@@ -38,7 +38,7 @@ const useBreakpoint = () => {
 		if (1024 < windowSize.width && windowSize.width < 1280) {
 			setBreakPoint('xl')
 		}
-		if (windowSize.width >= 1536) {
+		if (windowSize.width >= 1280) {
 			setBreakPoint('2xl')
 		}
 

@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
@@ -70,12 +73,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	})
 
 	submission.payload = {}
-	if (submission.intent !== 'submit') {
-		submission.value = undefined
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { assistantId } = submission.value
@@ -109,7 +108,7 @@ export default function Route() {
 
 	const [form, fields] = useForm({
 		id: 'assistant-password-form',
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		constraint: getFieldsetConstraint(Schema),
 		defaultValue: { assistantId: params.id },
 		onValidate: ({ formData }) => parse(formData, { schema: Schema }),
@@ -120,7 +119,7 @@ export default function Route() {
 			<Form
 				className="mx-auto flex min-h-screen max-w-[400px] flex-grow flex-col items-center justify-center gap-4 p-4"
 				method="POST"
-				{...form.props}
+				{...getFormProps(form)}
 			>
 				<div className="grid gap-1">
 					<h2 className="font-bold">Enter password</h2>
@@ -129,12 +128,12 @@ export default function Route() {
 						workshop leader.
 					</p>
 				</div>
-				<input {...conform.input(fields.assistantId)} type="hidden" />
+				<input {...getInputProps(fields.assistantId, { type: 'hidden' })} />
 				<FormInput
 					className="w-full"
 					inputProps={{
 						placeholder: 'Password',
-						...conform.input(fields.password, { type: 'password' }),
+						...getInputProps(fields.password, { type: 'password' }),
 					}}
 					errors={fields.password.errors}
 				/>

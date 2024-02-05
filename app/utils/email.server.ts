@@ -31,7 +31,7 @@ export async function sendEmail({
 	| { html: string; text: string; react?: never }
 	| { react: ReactElement; html?: never; text?: never }
 )) {
-	const from = process.env.RESEND_FROM_EMAIL
+	const from = process.env.RESEND_FROM_EMAIL ?? 'test@example.com'
 
 	const email = {
 		from,

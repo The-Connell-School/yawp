@@ -44,7 +44,7 @@ async function getOrInsertUser({
 			data: {
 				...userData,
 				email,
-				roles: { connect: { name: 'student' } },
+				roles: { connect: { name: 'user' } },
 				password: { create: { hash: await getPasswordHash(password) } },
 			},
 		})

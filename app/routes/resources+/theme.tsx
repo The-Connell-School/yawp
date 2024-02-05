@@ -1,5 +1,5 @@
-import { useForm } from '@conform-to/react'
-import { parse } from '@conform-to/zod'
+import { getFormProps, useForm } from '@conform-to/react'
+import { parseWithZod as parse } from '@conform-to/zod'
 import { type ActionFunctionArgs, json } from '@remix-run/node'
 import { useFetcher, useFetchers } from '@remix-run/react'
 import { z } from 'zod'
@@ -19,12 +19,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	const submission = parse(formData, { schema: ThemeFormSchema })
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { theme } = submission.value
@@ -33,7 +29,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		headers: { 'set-cookie': setTheme(theme) },
 	}
 
-	return json({ success: true, submission }, responseInit)
+	return json(submission.reply(), responseInit)
 }
 
 /**
@@ -65,6 +61,10 @@ export function useOptimisticThemeMode() {
 			schema: ThemeFormSchema,
 		})
 
+		if (submission.status !== 'success' || !submission.value) {
+			return
+		}
+
 		return submission.value?.theme
 	}
 }
@@ -75,7 +75,7 @@ export function ThemeSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 
 	const [form] = useForm({
 		id: 'theme-switch',
-		lastSubmission: fetcher.data?.submission,
+		lastResult: fetcher.data,
 	})
 
 	const optimisticMode = useOptimisticThemeMode()
@@ -89,7 +89,11 @@ export function ThemeSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 	}
 
 	return (
-		<fetcher.Form method="POST" action="/resources/theme" {...form.props}>
+		<fetcher.Form
+			method="POST"
+			action="/resources/theme"
+			{...getFormProps(form)}
+		>
 			<input type="hidden" name="theme" value={nextMode} />
 			<div className="flex gap-2">
 				<Tooltip text="Color mode">
