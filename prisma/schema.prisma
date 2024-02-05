@@ -23,14 +23,12 @@ model User {
   connections Connection[]
 
   // Custom
-  assistants       AssistantMetadata[]
-  studentProfileId String?
-  studentProfile   StudentProfile?
-  teacherProfileId String?
-  teacherProfile   TeacherProfile?
-  studentProfiles  StudentProfile[]    @relation("Students")
-  exerciseSessions ExerciseSession[]
-  exerciseComments ExerciseComment[]
+  assistants      AssistantMetadata[]
+  studentProfile  StudentProfile?
+  teacherProfile  TeacherProfile?
+  studentProfiles StudentProfile[]    @relation("Students")
+  moduleSessions  ModuleSession[]
+  moduleComments  ModuleComment[]
 }
 
 model UserImage {
@@ -94,6 +92,7 @@ model Verification {
   digits    Int /// The number of digits in the otp
   period    Int /// The number of seconds the otp is valid for
   charSet   String /// The valid characters for the otp
+  metadata  String? /// Additional JSON data to instruct actions to take after verification, e.g. create a teacher '{ "createTeacherProfile": ... }'
   expiresAt DateTime?
 
   @@unique([target, type])
@@ -159,23 +158,9 @@ model TeacherProfile {
 }
 
 model Module_ {
-  id                      String     @id @default(cuid())
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
-  title                   String
-  descriptionText         String?
-  descriptionHtml         String?
-  position                Int
-  copyContentFromPrevious Boolean    @default(false)
-  exercises               Exercise[]
-}
-
-model Exercise {
   id                      String        @id @default(cuid())
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
-  moduleId                String
-  module_                 Module_       @relation(fields: [moduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   title                   String
   position                Int
   description             String?
@@ -187,8 +172,8 @@ model Instruction {
   id         String   @id @default(cuid())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  exerciseId String
-  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  moduleId   String
+  module_    Module_  @relation(fields: [moduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   answerKey  String
   prompt     String
   promptType String // 'ai' | 'hardcoded'
@@ -196,35 +181,35 @@ model Instruction {
   position   Int
 }
 
-model ExerciseSession {
-  id                  String                   @id @default(cuid())
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
+model ModuleSession {
+  id                  String                 @id @default(cuid())
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   userId              String
-  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   instructionPosition Int
   contentText         String?
   contentHtml         String?
-  comments            ExerciseComment[]
-  messages            ExerciseSessionMessage[]
+  comments            ModuleComment[]
+  messages            ModuleSessionMessage[]
 }
 
-model ExerciseComment {
-  id                String          @id @default(cuid())
-  createdAt         DateTime        @default(now())
-  exerciseSessionId String
-  exerciseSession   ExerciseSession @relation(fields: [exerciseSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  userId            String          @unique
-  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  content           String
+model ModuleComment {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  moduleSessionId String
+  moduleSession   ModuleSession @relation(fields: [moduleSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  content         String
 }
 
-model ExerciseSessionMessage {
-  id                String          @id @default(cuid())
-  createdAt         DateTime        @default(now())
-  exerciseSessionId String
-  exerciseSession   ExerciseSession @relation(fields: [exerciseSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  content           String
-  agent             String // 'prompt' | 'response'
-  context           String?
+model ModuleSessionMessage {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  moduleSessionId String
+  moduleSession   ModuleSession @relation(fields: [moduleSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  content         String
+  agent           String // 'prompt' | 'response'
+  context         String?
 }

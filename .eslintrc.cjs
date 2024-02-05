@@ -12,6 +12,11 @@ module.exports = {
 	rules: {
 		// playwright requires destructuring in fixtures even if you don't use anything 🤷‍♂️
 		'no-empty-pattern': 'off',
+		'no-console': 'warn',
+		'@typescript-eslint/no-unused-vars': [
+			'warn',
+			{ varsIgnorePattern: '^_', argsIgnorePattern: '^_' },
+		],
 		'@typescript-eslint/consistent-type-imports': [
 			'warn',
 			{

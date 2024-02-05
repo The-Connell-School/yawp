@@ -1,11 +1,8 @@
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
 import {
-	type FieldConfig,
-	conform,
-	useFieldList,
-	useFieldset,
-	useForm,
-} from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { type AssistantConfiguration } from '@prisma/client'
 import {
 	type LoaderFunctionArgs,
@@ -20,7 +17,6 @@ import {
 	useLoaderData,
 	useRouteError,
 } from '@remix-run/react'
-import { useRef } from 'react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
 import { ErrorList } from '#app/components/forms/error-list'
@@ -113,11 +109,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const submission = parse(formData, { schema: ManageAssistantsSchema })
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	await Promise.all(
@@ -139,12 +132,12 @@ export default function Route() {
 
 	const [form, { assistants }] = useForm({
 		id: 'manage-assistants-form',
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		constraint: getFieldsetConstraint(ManageAssistantsSchema),
 		defaultValue: { assistants: data },
 	})
 
-	const assistantsList = useFieldList(form.ref, assistants)
+	const assistantsList = assistants.getFieldList()
 
 	return (
 		<div>
@@ -156,7 +149,7 @@ export default function Route() {
 				<code>id</code>.
 			</p>
 			<div className="mt-5">
-				<Form method="POST" {...form.props}>
+				<Form method="POST" {...getFormProps(form)}>
 					<AuthenticityTokenInput />
 					<div className="rounded-lg border">
 						<Table>
@@ -168,25 +161,52 @@ export default function Route() {
 								<TableHead className="min-w-[135px]">Description</TableHead>
 							</TableHeader>
 							<TableBody>
-								{assistantsList.map(a => (
-									<TableRow key={a.key}>
-										<TableCell className="align-top">
-											{a.defaultValue.id}
-										</TableCell>
-										<TableCell className="align-top">
-											{a.defaultValue.name}
-										</TableCell>
-										<TableCell className="align-top">
-											<AssistantPinRow assistant={a} />
-										</TableCell>
-										<TableCell className="align-top">
-											<AssistantActionTextRow assistant={a} />
-										</TableCell>
-										<TableCell className="align-top">
-											<AssistantDescriptionRow assistant={a} />
-										</TableCell>
-									</TableRow>
-								))}
+								{assistantsList.map(assistant => {
+									const a = assistant.getFieldset()
+
+									return (
+										<TableRow key={a.id.key}>
+											<TableCell className="align-top">
+												{a.id.initialValue}
+											</TableCell>
+											<TableCell className="align-top">
+												{a.name.initialValue}
+											</TableCell>
+											<TableCell className="align-top">
+												<input {...getInputProps(a.id, { type: 'hidden' })} />
+												<FormInput
+													labelProps={{ className: 'hidden' }}
+													inputProps={{
+														size: 'sm',
+														required: true,
+														placeholder: 'Password',
+														...getInputProps(a.pin, { type: 'password' }),
+													}}
+												/>
+											</TableCell>
+											<TableCell className="align-top">
+												<FormInput
+													labelProps={{ className: 'hidden' }}
+													inputProps={{
+														size: 'sm',
+														placeholder: 'Get started',
+														...getInputProps(a.actionText, { type: 'text' }),
+													}}
+												/>
+											</TableCell>
+											<TableCell className="align-top">
+												<FormTextarea
+													labelProps={{ className: 'hidden' }}
+													textareaProps={{
+														size: 'sm',
+														placeholder: 'Hit the button below to get started!',
+														...getInputProps(a.description, { type: 'text' }),
+													}}
+												/>
+											</TableCell>
+										</TableRow>
+									)
+								})}
 							</TableBody>
 						</Table>
 					</div>
@@ -198,65 +218,6 @@ export default function Route() {
 				</Form>
 			</div>
 		</div>
-	)
-}
-
-type Props = {
-	assistant: FieldConfig<z.infer<typeof AssistantSchema>>
-}
-
-export const AssistantPinRow = ({ assistant }: Props) => {
-	const ref = useRef<HTMLFieldSetElement>(null)
-	const { pin, id } = useFieldset(ref, assistant)
-
-	return (
-		<fieldset ref={ref}>
-			<input type="hidden" {...conform.input(id)} />
-			<FormInput
-				labelProps={{ className: 'hidden' }}
-				inputProps={{
-					size: 'sm',
-					required: true,
-					placeholder: 'Password',
-					...conform.input(pin),
-				}}
-			/>
-		</fieldset>
-	)
-}
-
-export const AssistantActionTextRow = ({ assistant }: Props) => {
-	const ref = useRef<HTMLFieldSetElement>(null)
-	const { actionText } = useFieldset(ref, assistant)
-
-	return (
-		<fieldset ref={ref}>
-			<FormInput
-				labelProps={{ className: 'hidden' }}
-				inputProps={{
-					size: 'sm',
-					placeholder: 'Get started',
-					...conform.input(actionText),
-				}}
-			/>
-		</fieldset>
-	)
-}
-export const AssistantDescriptionRow = ({ assistant }: Props) => {
-	const ref = useRef<HTMLFieldSetElement>(null)
-	const { description } = useFieldset(ref, assistant)
-
-	return (
-		<fieldset ref={ref}>
-			<FormTextarea
-				labelProps={{ className: 'hidden' }}
-				textareaProps={{
-					size: 'sm',
-					placeholder: 'Hit the button below to get started!',
-					...conform.input(description),
-				}}
-			/>
-		</fieldset>
 	)
 }
 

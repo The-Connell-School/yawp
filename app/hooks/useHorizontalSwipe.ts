@@ -22,7 +22,6 @@ export const useOnSwipe = ({ onSwipe, threshold = 80 }: Params = {}) => {
 	const onTouchEnd = () => {
 		const isSwipeLeft = distance > threshold
 		const isSwipeRight = distance < -threshold
-		console.log({ isSwipeLeft, isSwipeRight, distance })
 
 		if (onSwipe && (isSwipeRight || isSwipeLeft)) {
 			onSwipe(isSwipeRight ? 'right' : 'left')

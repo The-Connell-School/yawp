@@ -1,6 +1,5 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
-import { invariant } from '@epic-web/invariant'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import {
 	json,
 	redirect,
@@ -114,7 +113,14 @@ export async function handleVerification({
 	request,
 	submission,
 }: VerifyFunctionArgs) {
-	invariant(submission.value, 'Submission should have a value by this point')
+	if (submission.status !== 'success') {
+		throw await redirectWithToast('/login', {
+			type: 'error',
+			title: 'Invalid submission',
+			description: 'Submission was not successful. Please try again.',
+		})
+	}
+
 	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
@@ -201,41 +207,38 @@ export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 	checkHoneypot(formData)
-	const submission = await parse(formData, {
-		schema: intent =>
-			LoginFormSchema.transform(async (data, ctx) => {
-				if (intent !== 'submit') return { ...data, session: null }
+	const submission = await parseWithZod(formData, {
+		schema: LoginFormSchema.transform(async (data, ctx) => {
+			const session = await login(data)
 
-				const session = await login(data)
-				if (!session) {
-					ctx.addIssue({
-						code: z.ZodIssueCode.custom,
-						message: 'Invalid email or password',
-					})
-					return z.NEVER
-				}
+			if (!session) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: 'Invalid email or password',
+				})
+				return z.NEVER
+			}
 
-				return { ...data, session }
-			}),
+			return { ...data, session }
+		}),
 		async: true,
 	})
 	// get the password off the payload that's sent back
 	delete submission.payload.password
 
-	if (submission.intent !== 'submit') {
-		// @ts-expect-error - conform should probably have support for doing this
-		delete submission.value?.password
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value?.session) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (
+		submission.status !== 'success' ||
+		!submission.value ||
+		!submission.value.session
+	) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { session, remember, redirectTo } = submission.value
 
 	return handleNewSession({
 		request,
-		session,
+		session: session,
 		remember: remember ?? false,
 		redirectTo: redirectTo ?? DEFAULT_ROUTE,
 	})
@@ -250,12 +253,9 @@ export default function LoginPage() {
 
 	const [form, fields] = useForm({
 		id: 'login-form',
-		constraint: getFieldsetConstraint(LoginFormSchema),
-		defaultValue: { redirectTo },
-		lastSubmission: actionData?.submission,
-		onValidate({ formData }) {
-			return parse(formData, { schema: LoginFormSchema })
-		},
+		constraint: getZodConstraint(LoginFormSchema),
+		defaultValue: { redirectTo, remember: false, email: '', password: '' },
+		lastResult: actionData,
 		shouldRevalidate: 'onBlur',
 	})
 
@@ -276,13 +276,13 @@ export default function LoginPage() {
 			</div>
 			<div>
 				<div className="mx-auto mt-10 w-full max-w-md px-8">
-					<Form method="POST" {...form.props}>
+					<Form method="POST" {...getFormProps(form)}>
 						<AuthenticityTokenInput />
 						<HoneypotInputs />
 						<FormInput
 							labelProps={{ children: 'Email' }}
 							inputProps={{
-								...conform.input(fields.email),
+								...getInputProps(fields.email, { type: 'text' }),
 								autoFocus: true,
 								className: 'lowercase',
 								autoComplete: 'email',
@@ -290,11 +290,10 @@ export default function LoginPage() {
 							}}
 							errors={fields.email.errors}
 						/>
-
 						<FormInput
 							labelProps={{ children: 'Password' }}
 							inputProps={{
-								...conform.input(fields.password, {
+								...getInputProps(fields.password, {
 									type: 'password',
 								}),
 								autoComplete: 'current-password',
@@ -305,11 +304,12 @@ export default function LoginPage() {
 
 						<div className="mt-4 flex items-center justify-between">
 							<FormCheckbox
+								field={fields.remember}
 								labelProps={{
 									htmlFor: fields.remember.id,
 									children: 'Remember me',
 								}}
-								buttonProps={conform.input(fields.remember, {
+								buttonProps={getInputProps(fields.remember, {
 									type: 'checkbox',
 								})}
 								errors={fields.remember.errors}
@@ -322,7 +322,7 @@ export default function LoginPage() {
 							</Link>
 						</div>
 
-						<input {...conform.input(fields.redirectTo, { type: 'hidden' })} />
+						<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
 						<ErrorList errors={form.errors} id={form.errorId} />
 
 						<div className="flex items-center justify-between gap-6 pt-3">

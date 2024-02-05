@@ -1,5 +1,5 @@
-import { useForm } from '@conform-to/react'
-import { parse } from '@conform-to/zod'
+import { getFormProps, useForm } from '@conform-to/react'
+import { parseWithZod as parse } from '@conform-to/zod'
 import { type ActionFunctionArgs, json } from '@remix-run/node'
 import { useFetcher, useFetchers } from '@remix-run/react'
 import { z } from 'zod'
@@ -21,12 +21,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	const submission = parse(formData, { schema: FormSchema })
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { state } = submission.value
@@ -39,7 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		headers: { 'Set-Cookie': await navStateCookie.serialize(cookie) },
 	}
 
-	return json({ success: true, submission }, responseInit)
+	return json(submission.reply(), responseInit)
 }
 
 /**
@@ -68,6 +64,10 @@ export function useOptimisticNavState() {
 	if (fetcher && fetcher.formData) {
 		const submission = parse(fetcher.formData, { schema: FormSchema })
 
+		if (submission.status !== 'success' || !submission.value) {
+			return
+		}
+
 		return submission.value?.state
 	}
 }
@@ -78,7 +78,7 @@ export function NavStateSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 
 	const [form] = useForm({
 		id: 'nav-state-switch',
-		lastSubmission: fetcher.data?.submission,
+		lastResult: fetcher.data,
 	})
 
 	const optimistic = useOptimisticNavState()
@@ -91,7 +91,11 @@ export function NavStateSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 	}
 
 	return (
-		<fetcher.Form method="POST" action="/resources/nav-state" {...form.props}>
+		<fetcher.Form
+			method="POST"
+			action="/resources/nav-state"
+			{...getFormProps(form)}
+		>
 			<input type="hidden" name="state" value={nextState} />
 			<div className="flex gap-2">
 				<Tooltip text={state ? 'Collapse navigation' : 'Expand navigation'}>

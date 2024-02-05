@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type LoaderFunctionArgs,
@@ -72,14 +75,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	const submission = parse(formData, { schema: Schema })
 
-	if (submission.value?.isPoll === 'true') {
-		return json({ submission, status: 'polling' } as const)
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	} else if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.value.isPoll === 'true') {
+		return json(submission.reply())
 	}
 
 	await openai.beta.threads.messages.create(params.threadId, {
@@ -90,7 +91,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		assistant_id: params.id,
 	})
 
-	return json({ submission, status: 'in_progress' } as const)
+	return json(submission.reply())
 }
 
 export default function Route() {
@@ -105,7 +106,7 @@ export default function Route() {
 
 	const [actionForm, actionFields] = useForm({
 		id: 'thread-response-form',
-		lastSubmission: actionFetcher.data?.submission,
+		lastResult: actionFetcher.data,
 		constraint: getFieldsetConstraint(Schema),
 	})
 
@@ -211,11 +212,13 @@ export default function Route() {
 			<div className="flex w-full items-center justify-center px-3">
 				<actionFetcher.Form
 					method="POST"
-					{...actionForm.props}
+					{...getFormProps(actionForm)}
 					className="w-full"
 				>
 					<ChatInput
-						textareaProps={{ ...conform.input(actionFields.response) }}
+						textareaProps={{
+							...getInputProps(actionFields.response, { type: 'text' }),
+						}}
 						onSubmit={actionFetcher.submit}
 					/>
 				</actionFetcher.Form>
