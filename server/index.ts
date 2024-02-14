@@ -167,13 +167,13 @@ const rateLimitDefault = {
 const strongestRateLimit = rateLimit({
 	...rateLimitDefault,
 	windowMs: 60 * 1000,
-	max: 10 * maxMultiple,
+	max: 1000 * maxMultiple,
 })
 
 const strongRateLimit = rateLimit({
 	...rateLimitDefault,
 	windowMs: 60 * 1000,
-	max: 100 * maxMultiple,
+	max: 1000 * maxMultiple,
 })
 
 const generalRateLimit = rateLimit(rateLimitDefault)

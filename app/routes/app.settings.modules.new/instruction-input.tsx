@@ -1,5 +1,6 @@
 import { type Instruction as PrismaInstruction } from '@prisma/client'
 import { useState, type ReactNode, useEffect } from 'react'
+import { FormInput } from '#app/components/forms/form-input'
 import { FormRadioGroup } from '#app/components/forms/form-radio-group'
 import { FormTextarea } from '#app/components/forms/form-textarea'
 import { DotsVerticalIcon } from '#app/components/icons'
@@ -121,7 +122,7 @@ const Drawer = <T,>({
 
 	return (
 		<DrawerComponent open={isOpen} onOpenChange={() => setIsOpen(!isOpen)}>
-			<DrawerTrigger asChild>{trigger}</DrawerTrigger>x{' '}
+			<DrawerTrigger asChild>{trigger}</DrawerTrigger>
 			<DrawerContent>
 				<DrawerHeader>
 					<DrawerTitle>{title}</DrawerTitle>
@@ -172,6 +173,7 @@ export function InstructionInput({
 	instruction: Instruction
 	index: number
 }) {
+	const [answerType, setAnswerType] = useState(instruction.answerType)
 	const breakpoint = useBreakpoint()
 	const isDesktop = ['lg', 'xl', '2xl'].includes(breakpoint ?? '')
 	const Parent = isDesktop ? Dialog : Drawer
@@ -192,6 +194,16 @@ export function InstructionInput({
 				name="instructions_answerKey"
 				type="hidden"
 				value={instruction.answerKey}
+			/>
+			<input
+				name="instructions_answerType"
+				type="hidden"
+				value={instruction.answerType}
+			/>
+			<input
+				name="instructions_answerTypeOptions"
+				type="hidden"
+				value={instruction.answerTypeOptions ?? ''}
 			/>
 			<Parent
 				value={instruction}
@@ -258,6 +270,39 @@ export function InstructionInput({
             `,
 						}}
 					/>
+					<FormRadioGroup
+						index={index}
+						radioGroupProps={{
+							className: 'gap-1',
+							options: [
+								{
+									value: 'textarea',
+									label: 'Text Area',
+								},
+								{
+									value: 'select',
+									label: 'Select',
+									info: 'Present students with response options to choose from.',
+								},
+							],
+							defaultValue: instruction.answerType,
+							onValueChange: value => setAnswerType(value),
+							name: 'instructions_answerType',
+						}}
+						labelProps={{ children: 'Answer Type' }}
+					/>
+					{answerType === 'select' ? (
+						<FormInput
+							index={index}
+							inputProps={{
+								placeholder: "I'm done, I need help, Give a hint",
+								name: 'instructions_answerTypeOptions',
+								defaultValue: instruction.answerTypeOptions ?? '',
+								required: true,
+							}}
+							labelProps={{ children: 'Select options' }}
+						/>
+					) : null}
 					<FormTextarea
 						index={index}
 						textareaProps={{

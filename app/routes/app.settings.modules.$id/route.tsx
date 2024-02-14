@@ -18,16 +18,19 @@ import { redirectWithToast } from '#app/utils/toast.server'
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing module id')
 	await requireUserWithRole(request, ['admin'])
-	const module_ = await prisma.module_.findUnique({
-		where: { id: params.id },
-		include: { instructions: true },
-	})
+	const [module_, tutors] = await Promise.all([
+		prisma.module_.findUnique({
+			where: { id: params.id },
+			include: { instructions: true },
+		}),
+		prisma.tutor.findMany({ select: { id: true, name: true } }),
+	])
 
 	if (!module_) {
 		return redirect('/app/settings/modules')
 	}
 
-	return json({ module_ })
+	return json({ module_, tutors })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -47,30 +50,40 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			description: 'Module deleted successfully.',
 			closeButton: false,
 		})
-	} else if (submission.payload.intent === 'submit') {
+	} else {
 		const value = submission.value as z.infer<typeof Schema>
 		const prompts = toArray(value.instructions_prompt)
 		const promptTypes = toArray(value.instructions_promptType)
 		const answerKeys = toArray(value.instructions_answerKey)
 		const answerTypes = toArray(value.instructions_answerType)
+		const answerTypesOptions = toArray(value.instructions_answerTypeOptions)
 
 		const instructions = prompts?.reduce(
 			(acc, prompt, i) => {
 				const answerKey = answerKeys[i]
 				const answerType = answerTypes[i] || 'textarea'
+				const answerTypeOptions = answerTypesOptions[i]
 				const promptType = promptTypes[i]
 
 				if (!prompt || !answerKey || !answerType || !promptType) {
 					return acc
 				}
 
-				acc.push({ answerKey, answerType, prompt, promptType, position: i })
+				acc.push({
+					answerKey,
+					answerType,
+					prompt,
+					promptType,
+					position: i,
+					answerTypeOptions,
+				})
 				return acc
 			},
 			[] as {
 				prompt: string
 				answerKey: string
 				answerType: string
+				answerTypeOptions?: string
 				promptType: string
 				position: number
 			}[],
@@ -86,8 +99,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				title: submission.value.title,
 				position: submission.value.position,
 				description: submission.value.description,
+				tutorId: submission.value.tutorId,
 				copyContentFromPrevious:
-					submission.value.copyContentFromPrevious === 'true',
+					submission.value.copyContentFromPrevious === 'on',
 				instructions: { create: instructions },
 			},
 		})

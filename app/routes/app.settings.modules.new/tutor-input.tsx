@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDownIcon } from 'lucide-react'
 import { type InputHTMLAttributes, useState } from 'react'
 import { Button } from '#/app/components/ui/button'
 import {
@@ -13,23 +13,18 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from '#/app/components/ui/popover'
-import { TrashIcon } from '#app/components/icons'
 import { cn } from '#app/utils/misc'
 
-export function StudentInput({
-	students,
-	onDelete,
+export function TutorInput({
+	tutors,
 	inputProps,
-	index,
 }: {
-	student: { email: string }
-	students: { email: string }[]
-	onDelete: () => void
-	index: number
+	tutors: { name: string; id: string }[]
 	inputProps: InputHTMLAttributes<HTMLInputElement>
 }) {
 	const [open, setOpen] = useState(false)
 	const [value, setValue] = useState(inputProps.defaultValue)
+	const currentName = tutors.find(t => t.id === value)?.name
 
 	return (
 		<>
@@ -38,7 +33,6 @@ export function StudentInput({
 				value={value}
 				type="hidden"
 				defaultValue={undefined}
-				data-index={index}
 			/>
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
@@ -48,32 +42,20 @@ export function StudentInput({
 						aria-expanded={open}
 						className="w-full justify-between text-sm"
 					>
-						{value || 'Select student...'}
-						<div className="flex items-center gap-1">
-							<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-							<span
-								onClick={e => {
-									e.stopPropagation()
-									e.preventDefault()
-									onDelete()
-								}}
-								className="rounded-lg p-1 transition-opacity hover:opacity-60"
-							>
-								<TrashIcon />
-							</span>
-						</div>
+						{currentName || 'Select tutor...'}
+						<ChevronsUpDownIcon className="h-4" />
 					</Button>
 				</PopoverTrigger>
 				<PopoverContent className="w-[320px] p-0" align="start">
 					<Command>
-						<CommandInput placeholder="Search students..." />
-						<CommandEmpty>No students found.</CommandEmpty>
+						<CommandInput placeholder="Search tutors..." />
+						<CommandEmpty>No tutors found.</CommandEmpty>
 						<CommandGroup>
-							{students.length ? (
-								students.map(({ email }) => (
+							{tutors.length ? (
+								tutors.map(({ name, id }) => (
 									<CommandItem
-										key={email}
-										value={email}
+										key={id}
+										value={id}
 										onSelect={currentValue => {
 											setValue(currentValue === value ? '' : currentValue)
 											setOpen(false)
@@ -82,15 +64,15 @@ export function StudentInput({
 										<Check
 											className={cn(
 												'mr-2 h-4 w-4',
-												value === email ? 'opacity-100' : 'opacity-0',
+												value === id ? 'opacity-100' : 'opacity-0',
 											)}
 										/>
-										{email}
+										{name}
 									</CommandItem>
 								))
 							) : (
 								<p className="w-full p-2 text-center text-sm text-muted-foreground">
-									Not students found
+									Not tutors found
 								</p>
 							)}
 						</CommandGroup>

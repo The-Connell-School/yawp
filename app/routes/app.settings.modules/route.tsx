@@ -55,13 +55,9 @@ export default function Route() {
 				Add, edit, or remove modules. Modules are the building blocks of your
 				course. Configure the modules to fit your course's needs.
 			</p>
-			<div className="mt-4 flex w-full rounded-sm border">
-				<div
-					className={cn(
-						'flex h-full w-full flex-col gap-1 md:w-1/2 md:border-r',
-					)}
-				>
-					<div className="flex items-center justify-between p-3">
+			<div className="mt-4 flex w-full rounded-sm">
+				<div className={cn('flex h-full w-full flex-col md:w-1/2 md:border-r')}>
+					<div className="flex items-center justify-between pb-3 pr-3">
 						<SearchInput />
 						<Link to="/app/settings/modules/new">
 							<Button size="icon" variant="outline">
@@ -69,7 +65,7 @@ export default function Route() {
 							</Button>
 						</Link>
 					</div>
-					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t p-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
+					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
 						{modules.length > 0 ? (
 							modules.map(module_ => (
 								<NavLink
@@ -86,7 +82,10 @@ export default function Route() {
 										<h4 className="text-sm">Module</h4>
 									</div>
 									<p>
-										{module_.title}: {module_.description?.slice(0, 100)}
+										{module_.title}:{' '}
+										{(module_.description?.length ?? 0) > 95
+											? `${module_.description?.slice(0, 95)}...`
+											: module_.description}
 									</p>
 								</NavLink>
 							))
