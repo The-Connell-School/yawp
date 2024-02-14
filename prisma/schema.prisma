@@ -23,6 +23,7 @@ model User {
   connections Connection[]
 
   // Custom
+  uploads         Upload[]
   assistants      AssistantMetadata[]
   studentProfile  StudentProfile?
   teacherProfile  TeacherProfile?
@@ -158,40 +159,56 @@ model TeacherProfile {
 }
 
 model Module_ {
-  id                      String        @id @default(cuid())
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  id                      String          @id @default(cuid())
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
   title                   String
   position                Int
   description             String?
-  copyContentFromPrevious Boolean       @default(false)
+  copyContentFromPrevious Boolean         @default(false)
+  tutorId                 String?
+  tutor                   Tutor?          @relation(fields: [tutorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   instructions            Instruction[]
+  moduleSessions          ModuleSession[]
+}
+
+model Tutor {
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  name         String
+  instructions String?
+  files        Upload[]
+  modules      Module_[]
 }
 
 model Instruction {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  moduleId   String
-  module_    Module_  @relation(fields: [moduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  answerKey  String
-  prompt     String
-  promptType String // 'ai' | 'hardcoded'
-  answerType String // 'textarea' | 'select'
-  position   Int
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  moduleId          String
+  module_           Module_  @relation(fields: [moduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  answerKey         String
+  prompt            String
+  promptType        String // 'ai' | 'hardcoded'
+  answerType        String // 'textarea' | 'select'
+  answerTypeOptions String? // comma separated list of options
+  position          Int
 }
 
 model ModuleSession {
-  id                  String                 @id @default(cuid())
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
-  userId              String
-  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  instructionPosition Int
-  contentText         String?
-  contentHtml         String?
-  comments            ModuleComment[]
-  messages            ModuleSessionMessage[]
+  id                    String                 @id @default(cuid())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  moduleId              String
+  module                Module_                @relation(fields: [moduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  instructionsCompleted Int
+  currentContentText    String?
+  currentContentHtml    String?
+  comments              ModuleComment[]
+  messages              ModuleSessionMessage[]
 }
 
 model ModuleComment {
@@ -202,6 +219,7 @@ model ModuleComment {
   userId          String        @unique
   user            User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   content         String
+  highlightId     String?
 }
 
 model ModuleSessionMessage {
@@ -210,6 +228,20 @@ model ModuleSessionMessage {
   moduleSessionId String
   moduleSession   ModuleSession @relation(fields: [moduleSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   content         String
-  agent           String // 'prompt' | 'response'
+  agent           String // 'user' | 'assistant' | 'system'
   context         String?
+}
+
+model Upload {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  name        String
+  contentType String
+  blob        Bytes
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId      String
+  tutorId     String?
+  tutor       Tutor?    @relation(fields: [tutorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }

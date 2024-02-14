@@ -1,7 +1,12 @@
 import { getInputProps, getFormProps, useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod as parse } from '@conform-to/zod'
-import { type ActionFunctionArgs, json } from '@remix-run/node'
-import { Form, useActionData } from '@remix-run/react'
+import { type Instruction, type Module_ } from '@prisma/client'
+import {
+	type ActionFunctionArgs,
+	json,
+	type LoaderFunctionArgs,
+} from '@remix-run/node'
+import { Form, useActionData, useLoaderData } from '@remix-run/react'
 import { v4 } from 'uuid'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
@@ -17,23 +22,27 @@ import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { InstructionInput } from './instruction-input'
+import { TutorInput } from './tutor-input'
 
 const StringItem = z
 	.union([z.string().optional(), z.array(z.string().optional())])
 	.optional()
 export const Schema = z.object({
 	title: z.string(),
+	tutorId: z.string().optional(),
 	position: z.number(),
 	description: z.string().optional(),
 	copyContentFromPrevious: z.string().optional(),
 	instructions_answerKey: StringItem,
 	instructions_answerType: StringItem,
+	instructions_answerTypeOptions: StringItem,
 	instructions_prompt: StringItem,
 	instructions_promptType: StringItem,
 	instructions: z.array(
 		z.object({
 			answerKey: z.string(),
 			answerType: z.string(),
+			answerTypeOptions: z.string(),
 			prompt: z.string(),
 			promptType: z.string(),
 			position: z.number(),
@@ -53,6 +62,15 @@ export const toArray = (value: string | (string | undefined)[] | undefined) => {
 	return []
 }
 
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+	await requireUserWithRole(request, ['admin'])
+	const tutors = await prisma.tutor.findMany({
+		select: { id: true, name: true },
+	})
+
+	return json({ tutors })
+}
+
 export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
@@ -66,24 +84,36 @@ export async function action({ request }: ActionFunctionArgs) {
 	const promptTypes = toArray(submission.value.instructions_promptType)
 	const answerKeys = toArray(submission.value.instructions_answerKey)
 	const answerTypes = toArray(submission.value.instructions_answerType)
+	const answerTypesOptions = toArray(
+		submission.value.instructions_answerTypeOptions,
+	)
 
 	const instructions = prompts?.reduce(
 		(acc, prompt, i) => {
 			const answerKey = answerKeys[i]
 			const answerType = answerTypes[i] || 'textarea'
+			const answerTypeOptions = answerTypesOptions[i]
 			const promptType = promptTypes[i]
 
 			if (!prompt || !answerKey || !answerType || !promptType) {
 				return acc
 			}
 
-			acc.push({ answerKey, answerType, prompt, promptType, position: i })
+			acc.push({
+				answerKey,
+				answerType,
+				prompt,
+				promptType,
+				position: i,
+				answerTypeOptions,
+			})
 			return acc
 		},
 		[] as {
 			prompt: string
 			answerKey: string
 			answerType: string
+			answerTypeOptions?: string
 			promptType: string
 			position: number
 		}[],
@@ -94,6 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			title: submission.value.title,
 			position: submission.value.position,
 			description: submission.value.description,
+			tutorId: submission.value.tutorId,
 			copyContentFromPrevious:
 				submission.value.copyContentFromPrevious === 'true',
 			instructions: { create: instructions },
@@ -109,8 +140,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function Route({
 	isEditing = false,
-	defaultValue = { instructions: [], id: '' },
+	defaultValue = { instructions: [], id: '' } as any,
+}: {
+	isEditing?: boolean
+	defaultValue?: Module_ & { instructions: Instruction[] }
 }) {
+	const { tutors } = useLoaderData<typeof loader>()
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
 	const dc = useDoubleCheck()
@@ -119,7 +154,7 @@ export default function Route({
 		id: isEditing ? `edit-module-${defaultValue.id}` : 'new-module',
 		lastResult: actionData,
 		constraint: getZodConstraint(Schema),
-		defaultValue: defaultValue as unknown as Schema,
+		defaultValue,
 	})
 
 	const {
@@ -131,6 +166,7 @@ export default function Route({
 	} = useFieldArray(fields.instructions, [
 		'answerKey',
 		'answerType',
+		'answerTypeOptions',
 		'prompt',
 		'promptType',
 		'position',
@@ -140,7 +176,7 @@ export default function Route({
 		<Form
 			{...getFormProps(form)}
 			method="POST"
-			className="flex h-full flex-col justify-start gap-4 p-4"
+			className="flex h-full max-h-[calc(100vh-70px)] flex-col justify-start gap-4 overflow-y-scroll p-4"
 		>
 			<div className="flex gap-4">
 				<FormInput
@@ -175,6 +211,22 @@ export default function Route({
 				labelProps={{ children: 'Description' }}
 				errors={fields.description.errors}
 			/>
+			<div className="grid gap-1">
+				<div>
+					<label htmlFor={fields.tutorId.id}>Tutor</label>
+					<p className="text-sm text-muted-foreground">
+						The tutor instructions will be sent on every answer check and AI
+						prompt creation.
+					</p>
+				</div>
+				<TutorInput
+					tutors={tutors ?? []}
+					inputProps={{
+						...getInputProps(fields.tutorId, { type: 'hidden' }),
+						defaultValue: fields.tutorId.initialValue,
+					}}
+				/>
+			</div>
 			<FormCheckbox
 				field={fields.copyContentFromPrevious}
 				buttonProps={{ required: false }}
@@ -210,7 +262,7 @@ export default function Route({
 							key={v4()}
 							instruction={instruction}
 							onDelete={() => remove(i)}
-							onCancel={prev => reset(i, prev)}
+							onCancel={prev => reset(i, prev as any)}
 							onSave={setValues}
 							index={i}
 						/>
@@ -221,7 +273,12 @@ export default function Route({
 							e.preventDefault()
 							append({
 								answerKey: '',
-								answerType: '',
+								answerType: 'textarea',
+								answerTypeOptions: '',
+								updatedAt: new Date(),
+								createdAt: new Date(),
+								id: '',
+								moduleId: '',
 								prompt: '',
 								promptType: 'hardcoded',
 								position: (instructionFields.at(-1)?.position ?? 0) + 1,

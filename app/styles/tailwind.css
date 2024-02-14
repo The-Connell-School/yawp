@@ -33,6 +33,17 @@ code {
 	@apply rounded bg-primary/20 p-0.5 text-sm;
 }
 
+/* TipTap editor styles */
+.tiptap blockquote {
+	@apply my-2 border-l-4 border-muted-foreground p-2 text-muted-foreground;
+}
+.tiptap ul {
+	@apply list-disc pl-6;
+}
+.tiptap ol {
+	@apply list-decimal pl-6;
+}
+
 /* UI Theme */
 
 @layer base {

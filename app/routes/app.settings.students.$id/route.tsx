@@ -93,7 +93,7 @@ export default function Route() {
 		<Form
 			{...getFormProps(form)}
 			method="POST"
-			className="flex h-full w-full flex-col gap-4 p-4"
+			className="flex h-full max-h-[calc(100vh-70px)] w-full flex-col gap-4 overflow-y-scroll p-4"
 		>
 			<FormInput
 				inputProps={{ value: email, disabled: true }}

@@ -79,13 +79,9 @@ export default function Route() {
 				allowing them to comment on student's writing and view their module
 				progress.
 			</p>
-			<div className="mt-4 flex w-full rounded-sm border">
-				<div
-					className={cn(
-						'flex h-full w-full flex-col gap-1 md:w-1/2 md:border-r',
-					)}
-				>
-					<div className="flex items-center justify-between p-3">
+			<div className="mt-4 flex w-full rounded-sm">
+				<div className={cn('flex h-full w-full flex-col md:w-1/2 md:border-r')}>
+					<div className="flex items-center justify-between pb-3 pr-3">
 						<SearchInput />
 						<Link to="/app/settings/teachers/new">
 							<Button size="icon" variant="outline">
@@ -93,7 +89,7 @@ export default function Route() {
 							</Button>
 						</Link>
 					</div>
-					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t p-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
+					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
 						{invitations.length > 0
 							? invitations.map(invitation => (
 									<div
