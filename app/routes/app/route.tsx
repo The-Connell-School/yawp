@@ -18,7 +18,6 @@ import {
 	ExitIcon,
 	GearIcon,
 	HamburgerIcon,
-	HomeIcon,
 	LayersIcon,
 	LockClosedIcon,
 	ReloadIcon,
@@ -46,12 +45,6 @@ const links: {
 	admin?: boolean
 	end?: boolean
 }[] = [
-	{
-		to: '/app',
-		label: 'Home',
-		icon: <HomeIcon />,
-		end: true,
-	},
 	{
 		to: '/app/modules',
 		label: 'Modules',
@@ -162,7 +155,7 @@ export default function Route() {
 			{/* Left navigation panel */}
 			<nav
 				className={cn(
-					'z-20 flex h-screen w-[240px] min-w-[240px] -translate-x-full transform flex-col overflow-hidden border-r bg-background transition-all duration-300 ease-in-out sm:flex sm:translate-x-0 ',
+					'z-20 flex h-screen w-[225px] min-w-[225px] -translate-x-full transform flex-col overflow-hidden border-r bg-background transition-all duration-300 ease-in-out sm:flex sm:translate-x-0 ',
 					{
 						'translate-x-0': isMobileNavOpen,
 						'w-[56px] min-w-0 items-center': !navExpanded,
@@ -279,7 +272,7 @@ export default function Route() {
 			</nav>
 			<div
 				className={cn(
-					'h-[100vh - 3rem] relative min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:w-full sm:min-w-0 sm:translate-x-0',
+					'h-[100vh - 3rem] relative ml-6 min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:ml-0 sm:w-full sm:min-w-0 sm:translate-x-0',
 					{
 						'translate-x-0 opacity-50': isMobileNavOpen,
 						'-translate-x-[250px]': isNavExpanded,

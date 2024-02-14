@@ -257,3 +257,13 @@ export async function downloadFile(url: string, retries: number = 0) {
 		return downloadFile(url, retries + 1)
 	}
 }
+
+export const toArray = (value: string | (string | undefined)[] | undefined) => {
+	if (Array.isArray(value)) {
+		return value
+	}
+	if (value) {
+		return [value]
+	}
+	return []
+}

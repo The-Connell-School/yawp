@@ -1,5 +1,6 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import {
+	Link,
 	NavLink,
 	Outlet,
 	useLoaderData,
@@ -8,7 +9,9 @@ import {
 	useSearchParams,
 } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { PlusIcon } from '#app/components/icons'
 import { SearchInput } from '#app/components/search-input'
+import { Button } from '#app/components/ui/button'
 import { Drawer, DrawerContent } from '#app/components/ui/drawer'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { prisma } from '#app/utils/db.server'
@@ -21,43 +24,54 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
 
-	const students = await prisma.user.findMany({
+	const tutors = await prisma.tutor.findMany({
 		where: {
-			studentProfile: { isNot: null },
-			...(query ? { name: { contains: query } } : {}),
+			...(query
+				? {
+						OR: [
+							{ name: { contains: query } },
+							{ instructions: { contains: query } },
+						],
+					}
+				: {}),
 		},
-		include: { studentProfile: true },
 	})
 
-	return json({ students })
+	return json({ tutors })
 }
 
 export default function Route() {
-	const { students } = useLoaderData<typeof loader>()
+	const { tutors } = useLoaderData<typeof loader>()
 	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
 	const showSidePanel = ['lg', 'xl', '2xl'].includes(breakpoint ?? '')
-	const isEditing = !!useMatch('/app/settings/students/:id')
+	const isEditing = !!useMatch('/app/settings/tutors/:id')
 	const [searchParams] = useSearchParams()
 
 	return (
 		<main className="h-full w-full overflow-y-scroll p-6">
-			<h2>Students</h2>
+			<h2>Tutors</h2>
 			<p className="mt-1 max-w-[550px] text-muted-foreground">
-				Edit or remove students. All sign-ups obtain a student profile and show
-				up here. Students only have access to the home and moduels page.
+				Add, edit, or remove tutors. Tutors are the "brains" behind your
+				application. Configure them with content or instruct them how to respond
+				to students.
 			</p>
 			<div className="mt-4 flex w-full rounded-sm">
 				<div className={cn('flex h-full w-full flex-col md:w-1/2 md:border-r')}>
 					<div className="flex items-center justify-between pb-3 pr-3">
 						<SearchInput />
+						<Link to="/app/settings/tutors/new">
+							<Button size="icon" variant="outline">
+								<PlusIcon />
+							</Button>
+						</Link>
 					</div>
-					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t pb-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
-						{students.length > 0 ? (
-							students.map(student => (
+					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
+						{tutors.length > 0 ? (
+							tutors.map(tutor => (
 								<NavLink
-									key={student.id}
-									to={`/app/settings/students/${student.studentProfile?.id}?q=${searchParams.get('q') ?? ''}`}
+									key={tutor.id}
+									to={`/app/settings/tutors/${tutor.id}?q=${searchParams.get('q') ?? ''}`}
 									className={({ isActive }) =>
 										cn(
 											'grid cursor-pointer rounded-sm border p-2 transition-opacity hover:opacity-80 md:p-3',
@@ -66,17 +80,23 @@ export default function Route() {
 									}
 								>
 									<div className="flex items-center gap-1">
-										<h4 className="text-sm">Student</h4>
+										<h4 className="text-sm">Tutor</h4>
 									</div>
 									<p>
-										{student.name}: {student.email}
+										{tutor.name}:{' '}
+										{(tutor.instructions?.length ?? 0) > 95
+											? `${tutor.instructions?.slice(0, 95)}...`
+											: tutor.instructions}
 									</p>
 								</NavLink>
 							))
 						) : (
 							<div className="flex h-full w-full flex-col items-center justify-center gap-1">
-								<h3>No students found.</h3>
-								<p>When students sign up, they will show up here.</p>
+								<h3>No tutors found.</h3>
+								<p>
+									Hit the <code className="bg-foreground/10 px-1">+</code>{' '}
+									button above to create one.
+								</p>
 							</div>
 						)}
 					</div>
@@ -88,11 +108,11 @@ export default function Route() {
 				) : (
 					<Drawer
 						open={isEditing}
-						onClose={() => navigate('/app/settings/students')}
+						onClose={() => navigate('/app/settings/tutors')}
 					>
 						<DrawerContent
 							className="pb-4"
-							onInteractOutside={() => navigate('/app/settings/students')}
+							onInteractOutside={() => navigate('/app/settings/tutors')}
 						>
 							<Outlet />
 						</DrawerContent>

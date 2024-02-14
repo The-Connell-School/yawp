@@ -1,4 +1,4 @@
-import { type FieldMetadata, useInputControl } from '@conform-to/react'
+import { useInputControl } from '@conform-to/react'
 import { useId, useRef } from 'react'
 import { Checkbox, type CheckboxProps } from '../ui/checkbox'
 import { ErrorList, type ListOfErrors } from './error-list'
@@ -10,7 +10,7 @@ export function FormCheckbox({
 	className,
 	field,
 }: {
-	field: FieldMetadata<string>
+	field: any
 	labelProps: JSX.IntrinsicElements['label']
 	buttonProps: CheckboxProps
 	errors?: ListOfErrors
@@ -32,7 +32,8 @@ export function FormCheckbox({
 					aria-describedby={errorId}
 					{...buttonProps}
 					onCheckedChange={state => {
-						control.change(state.valueOf().toString())
+						const value = state.valueOf() ? 'on' : 'off'
+						control.change(value)
 						buttonProps.onCheckedChange?.(state)
 					}}
 					onFocus={event => {
@@ -44,7 +45,7 @@ export function FormCheckbox({
 						buttonProps.onBlur?.(event)
 					}}
 					type="button"
-					value={control.value}
+					checked={control.value === 'on'}
 				/>
 				<label
 					htmlFor={id}

@@ -9,6 +9,7 @@ const tabs = [
 	{ label: 'Teachers', to: '/app/settings/teachers' },
 	{ label: 'Students', to: '/app/settings/students' },
 	{ label: 'Modules', to: '/app/settings/modules' },
+	{ label: 'Tutors', to: '/app/settings/tutors' },
 ]
 
 export const handle: BreadcrumbHandle = {

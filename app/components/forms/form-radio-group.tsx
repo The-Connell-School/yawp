@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { v4 } from 'uuid'
 import { cn } from '#app/utils/misc'
 import { InfoCircledIcon } from '../icons'
@@ -12,7 +12,7 @@ import { ErrorList, type ListOfErrors } from './error-list'
 
 export function FormRadioGroup({
 	labelProps,
-	radioGroupProps: { options, ...radioGroupProps },
+	radioGroupProps: { options, onValueChange, ...radioGroupProps },
 	errors,
 	className,
 	index,
@@ -23,6 +23,7 @@ export function FormRadioGroup({
 	radioGroupProps: RadioGroupProps & {
 		options: { value: string; label: string; info?: string }[]
 		form?: string
+		onValueChange?: (value: string) => void
 	}
 	errors?: ListOfErrors
 	className?: string
@@ -32,6 +33,12 @@ export function FormRadioGroup({
 	const id = radioGroupProps.id ?? fallbackId
 	const errorId = errors?.length ? `${id}-error` : undefined
 	const [value, setValue] = useState(radioGroupProps.defaultValue)
+
+	useEffect(() => {
+		if (value) {
+			onValueChange?.(value)
+		}
+	}, [onValueChange, radioGroupProps.defaultValue, value])
 
 	return (
 		<>

@@ -135,7 +135,7 @@ export default function Route() {
 		<Form
 			{...getFormProps(form)}
 			method="POST"
-			className="flex h-full flex-col justify-start gap-4 p-4"
+			className="flex h-full max-h-[calc(100vh-70px)] flex-col justify-start gap-4 overflow-y-scroll p-4"
 		>
 			<FormInput
 				inputProps={{
