@@ -15,21 +15,11 @@ import {
 	DialogTrigger,
 } from '#app/components/ui/dialog'
 import {
-	Drawer as DrawerComponent,
-	DrawerTrigger,
-	DrawerContent,
-	DrawerHeader,
-	DrawerTitle,
-	DrawerFooter,
-	DrawerDescription,
-} from '#app/components/ui/drawer'
-import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '#app/components/ui/dropdown-menu'
-import useBreakpoint from '#app/hooks/useBreakpoint'
 import { usePrevious } from '#app/hooks/usePrevious'
 
 const useOriginalValue = <T,>({
@@ -76,13 +66,13 @@ const Dialog = <T,>({
 	return (
 		<DialogComponent open={isOpen} onOpenChange={() => setIsOpen(!isOpen)}>
 			<DialogTrigger asChild>{trigger}</DialogTrigger>
-			<DialogContent>
-				<DialogHeader>
+			<DialogContent className="p-0">
+				<DialogHeader className="px-6 pt-6">
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>
 				</DialogHeader>
 				{children}
-				<DialogFooter>
+				<DialogFooter className="flex flex-col gap-2 px-6 pb-6 md:flex-row">
 					<Button
 						onClick={e => {
 							e.preventDefault()
@@ -108,53 +98,6 @@ const Dialog = <T,>({
 	)
 }
 
-const Drawer = <T,>({
-	trigger,
-	children,
-	description,
-	title,
-	onCancel,
-	onSave,
-	value,
-}: ParentProps<T>) => {
-	const [isOpen, setIsOpen] = useState(false)
-	const originalValue = useOriginalValue({ isOpen, value })
-
-	return (
-		<DrawerComponent open={isOpen} onOpenChange={() => setIsOpen(!isOpen)}>
-			<DrawerTrigger asChild>{trigger}</DrawerTrigger>
-			<DrawerContent>
-				<DrawerHeader>
-					<DrawerTitle>{title}</DrawerTitle>
-					<DrawerDescription>{description}</DrawerDescription>
-				</DrawerHeader>
-				{children}
-				<DrawerFooter>
-					<Button
-						onClick={e => {
-							e.preventDefault()
-							onSave()
-							setIsOpen(false)
-						}}
-					>
-						Save
-					</Button>
-					<Button
-						variant="outline"
-						onClick={e => {
-							e.preventDefault()
-							setIsOpen(false)
-							if (originalValue) onCancel(originalValue)
-						}}
-					>
-						Cancel
-					</Button>
-				</DrawerFooter>
-			</DrawerContent>
-		</DrawerComponent>
-	)
-}
-
 type Instruction = Omit<
 	PrismaInstruction,
 	'createdAt' | 'updatedAt' | 'moduleId' | 'id'
@@ -174,9 +117,7 @@ export function InstructionInput({
 	index: number
 }) {
 	const [answerType, setAnswerType] = useState(instruction.answerType)
-	const breakpoint = useBreakpoint()
-	const isDesktop = ['lg', 'xl', '2xl'].includes(breakpoint ?? '')
-	const Parent = isDesktop ? Dialog : Drawer
+	const Parent = Dialog
 
 	return (
 		<>
@@ -193,7 +134,7 @@ export function InstructionInput({
 			<input
 				name="instructions_answerKey"
 				type="hidden"
-				value={instruction.answerKey}
+				value={instruction.answerKey ?? ''}
 			/>
 			<input
 				name="instructions_answerType"
@@ -232,7 +173,7 @@ export function InstructionInput({
 					</div>
 				}
 			>
-				<div className="flex flex-col gap-4">
+				<div className="flex max-h-[calc(100vh-150px)] flex-col gap-4 overflow-scroll px-6">
 					<FormRadioGroup
 						index={index}
 						radioGroupProps={{
@@ -309,7 +250,7 @@ export function InstructionInput({
 							placeholder:
 								'The answer is 55. If they guess 10 above or below, they are correct.',
 							name: 'instructions_answerKey',
-							defaultValue: instruction.answerKey,
+							defaultValue: instruction.answerKey ?? '',
 							required: true,
 						}}
 						labelProps={{

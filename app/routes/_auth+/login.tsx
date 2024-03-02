@@ -17,7 +17,7 @@ import { ErrorList } from '#app/components/forms/error-list.tsx'
 import { FormCheckbox } from '#app/components/forms/form-checkbox.tsx'
 import { FormInput } from '#app/components/forms/form-input.tsx'
 import { Button, button } from '#app/components/ui/button.tsx'
-import { twoFAVerificationType } from '#app/routes/assistants.profile.two-factor/route.tsx'
+import { twoFAVerificationType } from '#app/routes/app.profile.two-factor/route.tsx'
 import {
 	getUserId,
 	login,

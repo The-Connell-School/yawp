@@ -282,6 +282,9 @@ export default function Route({
 								prompt: '',
 								promptType: 'hardcoded',
 								position: (instructionFields.at(-1)?.position ?? 0) + 1,
+								hasAnswerKey: false,
+								concludingPrompt: '',
+								concludingPromptType: 'hardcoded',
 							})
 						}}
 					>

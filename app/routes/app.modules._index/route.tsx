@@ -7,20 +7,22 @@ import { prisma } from '#app/utils/db.server'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
-	const modules = await prisma.module_.findMany({
-		orderBy: { position: 'asc' },
-		select: {
-			_count: { select: { instructions: true } },
-			id: true,
-			title: true,
-			description: true,
-		},
-	})
-	const session = await prisma.moduleSession.findFirst({
-		where: { userId },
-		orderBy: { module: { position: 'desc' } },
-		select: { module: { select: { id: true } }, instructionsCompleted: true },
-	})
+	const [modules, session] = await Promise.all([
+		prisma.module_.findMany({
+			orderBy: { position: 'asc' },
+			select: {
+				_count: { select: { instructions: true } },
+				id: true,
+				title: true,
+				description: true,
+			},
+		}),
+		prisma.moduleSession.findFirst({
+			where: { userId },
+			orderBy: { module: { position: 'desc' } },
+			select: { module: { select: { id: true } }, instructionsCompleted: true },
+		}),
+	])
 
 	if (!session) {
 		return json({ modules, nextModuleId: modules[0]?.id, isStarting: true })
@@ -40,7 +42,7 @@ export default function Route() {
 	const user = useUser()
 
 	return (
-		<div className="mx-auto flex h-full w-full max-w-screen-lg flex-col p-2">
+		<div className="mx-auto mt-12 flex h-full max-w-screen-lg flex-col p-2 sm:mt-0">
 			{nextModuleId ? (
 				<div className="mt-10 flex justify-between rounded-lg border p-5">
 					<div className="flex flex-col">
