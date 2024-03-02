@@ -20,6 +20,7 @@ import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
+import { GlobalLoading } from './components/global-loading.tsx'
 import { Toaster } from './components/toaster.tsx'
 import { useNonce } from './contexts/nonce.ts'
 import { useTheme } from './routes/resources+/theme.tsx'
@@ -85,6 +86,8 @@ export async function loader({ request }: DataFunctionArgs) {
 							name: true,
 							email: true,
 							image: { select: { id: true } },
+							studentProfiles: { select: { id: true, userId: true } },
+							teacherProfile: { select: { id: true } },
 							roles: {
 								select: {
 									name: true,
@@ -198,6 +201,7 @@ function App() {
 
 	return (
 		<Document nonce={nonce} theme={theme} env={data.ENV}>
+			<GlobalLoading />
 			<div className="flex h-screen min-h-screen flex-col justify-between">
 				<div className="flex-1">
 					<Outlet />

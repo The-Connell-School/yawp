@@ -1,4 +1,3 @@
-import { type InputControlOptions } from '#node_modules/@conform-to/react/integrations'
 import { useInputControl } from '@conform-to/react'
 import { type Upload } from '@prisma/client'
 import { useId, type InputHTMLAttributes } from 'react'
@@ -12,7 +11,7 @@ export const FormFileInput = ({
 	onDelete,
 	...props
 }: InputHTMLAttributes<HTMLInputElement> & {
-	field: InputControlOptions
+	field: any
 	index: number
 	onDelete: () => void
 }) => {
