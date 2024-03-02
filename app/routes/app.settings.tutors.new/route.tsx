@@ -20,7 +20,8 @@ const StringItem = z
 export const Schema = z.object({
 	id: z.string().optional(),
 	name: z.string(),
-	instructions: z.string().optional(),
+	promptInstructions: z.string().optional(),
+	answerInstructions: z.string().optional(),
 	files_blob: StringItem,
 	files_name: StringItem,
 	files_contentType: StringItem,
@@ -60,7 +61,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	const created = await prisma.tutor.create({
 		data: {
 			name: submission.value.name,
-			instructions: submission.value.instructions,
+			answerInstructions: submission.value.answerInstructions,
+			promptInstructions: submission.value.promptInstructions,
 			files: { create: files },
 		},
 	})
@@ -113,11 +115,25 @@ export default function Route({
 			/>
 			<FormTextarea
 				textareaProps={{
-					...getInputProps(fields.instructions, { type: 'text' }),
+					...getInputProps(fields.promptInstructions, { type: 'text' }),
 					placeholder: 'You are a helpful tutor.',
 				}}
-				labelProps={{ children: 'Instructions' }}
-				errors={fields.instructions.errors}
+				labelProps={{
+					children: 'Prompt Instructions',
+					info: 'Additional instructions included in every Instruction which uses AI to prompt the user.',
+				}}
+				errors={fields.promptInstructions.errors}
+			/>
+			<FormTextarea
+				textareaProps={{
+					...getInputProps(fields.answerInstructions, { type: 'text' }),
+					placeholder: 'Your response should be encouraging.',
+				}}
+				labelProps={{
+					children: 'Answer Instructions',
+					info: 'Additional instructions to be sent when determining the response / answer check for every instruction.',
+				}}
+				errors={fields.answerInstructions.errors}
 			/>
 			{/* <div className="flex flex-col gap-1">
 				<div className="flex items-center gap-1">

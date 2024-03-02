@@ -74,7 +74,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		const created = await prisma.tutor.update({
 			data: {
 				name: submission.value.name,
-				instructions: submission.value.instructions,
+				promptInstructions: submission.value.promptInstructions,
+				answerInstructions: submission.value.answerInstructions,
 				files: { create: files },
 			},
 			where: { id: params.id },

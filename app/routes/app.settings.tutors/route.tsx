@@ -30,7 +30,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 				? {
 						OR: [
 							{ name: { contains: query } },
-							{ instructions: { contains: query } },
+							{ promptInstructions: { contains: query } },
+							{ answerInstructions: { contains: query } },
 						],
 					}
 				: {}),
@@ -84,9 +85,9 @@ export default function Route() {
 									</div>
 									<p>
 										{tutor.name}:{' '}
-										{(tutor.instructions?.length ?? 0) > 95
-											? `${tutor.instructions?.slice(0, 95)}...`
-											: tutor.instructions}
+										{(tutor.promptInstructions?.length ?? 0) > 95
+											? `${tutor.promptInstructions?.slice(0, 95)}...`
+											: tutor.promptInstructions}
 									</p>
 								</NavLink>
 							))

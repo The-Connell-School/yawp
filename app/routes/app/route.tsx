@@ -5,21 +5,24 @@ import {
 	useLocation,
 	useMatches,
 } from '@remix-run/react'
+import { AwardIcon } from 'lucide-react'
 import {
 	useCallback,
 	useEffect,
 	useState,
 	cloneElement,
 	type ReactElement,
+	createContext,
 } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import {
-	BellIcon,
+	AssistantIcon,
 	ExitIcon,
 	GearIcon,
 	HamburgerIcon,
 	LayersIcon,
 	LockClosedIcon,
+	PersonIcon,
 	ReloadIcon,
 	SlashIcon,
 	XIcon,
@@ -43,6 +46,7 @@ const links: {
 	to: string
 	label: string
 	admin?: boolean
+	teacher?: boolean
 	end?: boolean
 }[] = [
 	{
@@ -51,9 +55,15 @@ const links: {
 		icon: <LayersIcon />,
 	},
 	{
-		to: '/app/notifications',
-		label: 'Notifications',
-		icon: <BellIcon />,
+		to: '/app/assistants',
+		label: 'Assistants',
+		icon: <AssistantIcon />,
+	},
+	{
+		to: '/app/students',
+		label: 'Students',
+		icon: <PersonIcon />,
+		teacher: true,
 	},
 	{
 		to: '/app/settings',
@@ -62,6 +72,11 @@ const links: {
 		admin: true,
 	},
 ]
+
+export const NavExpandedContext = createContext({
+	isMobileNavOpen: false,
+	setIsMobileNavOpen: (() => {}) as any,
+})
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: 'Home',
@@ -72,19 +87,23 @@ export default function Route() {
 	const location = useLocation()
 	const user = useUser()
 	const isAdmin = user.roles.find(r => r.name === 'admin')
-	const [isMobileNavOpen, setMobileNavOpen] = useState(false)
-
-	const navState = useNavState()
-	const isNavExpanded = navState === 'expanded'
-	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'base' || breakpoint === 'sm'
-	const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded
+	const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
 
 	const matches = useMatches()
+	const isInAssistants = !!matches.find(m => m.id.includes('app.assistants'))
+
+	const navState = useNavState()
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'base' || breakpoint === 'sm'
+	const isNavExpanded = navState === 'expanded' || isMobile
+	const navExpanded = (isMobile && isMobileNavOpen) || isNavExpanded
+
 	const breadcrumbs = matches
 		.map(m => {
 			const result = BreadcrumbHandleMatch.safeParse(m)
 			if (!result.success || !result.data.handle.breadcrumb) return null
+			if (typeof result.data.handle.breadcrumb !== 'string')
+				return result.data.handle.breadcrumb
 			return (
 				<Link
 					key={m.id}
@@ -100,9 +119,9 @@ export default function Route() {
 	const onSwipe = useCallback(
 		(direction: 'left' | 'right') => {
 			if (direction === 'right' && !isMobileNavOpen) {
-				setMobileNavOpen(true)
+				setIsMobileNavOpen(true)
 			} else if (direction === 'left' && isMobileNavOpen) {
-				setMobileNavOpen(false)
+				setIsMobileNavOpen(false)
 			}
 		},
 		[isMobileNavOpen],
@@ -112,7 +131,7 @@ export default function Route() {
 
 	// Close the navigation bar when the route changes
 	useEffect(() => {
-		setMobileNavOpen(false)
+		setIsMobileNavOpen(false)
 	}, [location])
 
 	return (
@@ -122,11 +141,16 @@ export default function Route() {
 			})}
 		>
 			{/* Mobile top menu */}
-			<div className="fixed left-0 right-0 top-0 z-10 flex items-center justify-between overflow-hidden border-b bg-background p-2 sm:hidden">
+			<div
+				className={cn(
+					'fixed left-0 right-0 top-0 z-10 flex items-center justify-between overflow-hidden border-b bg-background p-2 sm:hidden',
+					{ 'opacity-50': !isInAssistants && isMobileNavOpen },
+				)}
+			>
 				<Button
 					variant="outline"
 					size="icon"
-					onClick={() => setMobileNavOpen(true)}
+					onClick={() => setIsMobileNavOpen(true)}
 				>
 					<HamburgerIcon />
 				</Button>
@@ -155,7 +179,7 @@ export default function Route() {
 			{/* Left navigation panel */}
 			<nav
 				className={cn(
-					'z-20 flex h-screen w-[225px] min-w-[225px] -translate-x-full transform flex-col overflow-hidden border-r bg-background transition-all duration-300 ease-in-out sm:flex sm:translate-x-0 ',
+					'z-20 flex h-screen w-[190px] min-w-[190px] -translate-x-full transform flex-col overflow-hidden border-r bg-background transition-all duration-300 ease-in-out sm:flex sm:translate-x-0 ',
 					{
 						'translate-x-0': isMobileNavOpen,
 						'w-[56px] min-w-0 items-center': !navExpanded,
@@ -184,14 +208,19 @@ export default function Route() {
 						variant="outline"
 						size="icon-sm"
 						className="sm:hidden"
-						onClick={() => setMobileNavOpen(false)}
+						onClick={() => setIsMobileNavOpen(false)}
 					>
 						<XIcon />
 					</Button>
 				</div>
 				<div className="grid gap-1 p-3">
 					{links
-						.filter(link => !link.admin || (link.admin && isAdmin))
+						.filter(
+							link =>
+								(!link.admin && !link.teacher) ||
+								(link.admin && isAdmin) ||
+								(link.teacher && (user.teacherProfile || isAdmin)),
+						)
 						.map(link => (
 							<NavLink
 								key={link.to}
@@ -225,9 +254,14 @@ export default function Route() {
 								{navExpanded ? (
 									<>
 										<span className="w-full">{link.label}</span>
+										{link.teacher ? (
+											<Tooltip text="Teachers only">
+												<AwardIcon className="h-5 w-5" />
+											</Tooltip>
+										) : null}
 										{link.admin ? (
 											<Tooltip text="Admin only">
-												<LockClosedIcon />
+												<LockClosedIcon className="h-5 w-5" />
 											</Tooltip>
 										) : null}
 									</>
@@ -251,7 +285,7 @@ export default function Route() {
 							</div>
 						) : null}
 					</div>
-					<Link to="/assistants/profile">
+					<Link to="/app/profile">
 						<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
 							<img
 								src={getUserImgSrc(user.image?.id)}
@@ -272,16 +306,25 @@ export default function Route() {
 			</nav>
 			<div
 				className={cn(
-					'h-[100vh - 3rem] relative ml-6 min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:ml-0 sm:w-full sm:min-w-0 sm:translate-x-0',
+					'h-[100vh - 3rem] relative min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:ml-0 sm:w-full sm:min-w-0 sm:translate-x-0',
 					{
-						'translate-x-0 opacity-50': isMobileNavOpen,
-						'-translate-x-[250px]': isNavExpanded,
+						'translate-x-0': isMobileNavOpen,
+						'-translate-x-[190px]': isNavExpanded,
+						'opacity-50': !isInAssistants && isMobileNavOpen,
 					},
 				)}
-				onClick={isMobileNavOpen ? () => setMobileNavOpen(false) : undefined}
+				onClick={
+					isMobileNavOpen && !isInAssistants
+						? () => setIsMobileNavOpen(false)
+						: undefined
+				}
 				{...swipeEvents}
 			>
-				<Outlet />
+				<NavExpandedContext.Provider
+					value={{ isMobileNavOpen, setIsMobileNavOpen }}
+				>
+					<Outlet />
+				</NavExpandedContext.Provider>
 			</div>
 		</main>
 	)
