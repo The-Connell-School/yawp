@@ -199,6 +199,7 @@ model Instruction {
   answerTypeOptions    String? // comma separated list of options
   concludingPrompt     String?
   concludingPromptType String? // 'ai' | 'hardcoded'
+  canAskQuestion       Boolean?
   position             Int
 }
 

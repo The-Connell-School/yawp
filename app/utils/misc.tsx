@@ -24,6 +24,7 @@ export function getErrorMessage(error: unknown) {
 	) {
 		return error.message
 	}
+	// eslint-disable-next-line no-console
 	console.error('Unable to get error message for error', error)
 	return 'Unknown Error'
 }

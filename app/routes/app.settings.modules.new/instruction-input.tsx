@@ -173,7 +173,7 @@ export function InstructionInput({
 					</div>
 				}
 			>
-				<div className="flex max-h-[calc(100vh-150px)] flex-col gap-4 overflow-scroll px-6">
+				<div className="flex max-h-[calc(100vh-150px)] flex-col gap-4 overflow-scroll px-6 py-1">
 					<FormRadioGroup
 						index={index}
 						radioGroupProps={{
@@ -223,7 +223,6 @@ export function InstructionInput({
 								{
 									value: 'select',
 									label: 'Select',
-									info: 'Present students with response options to choose from.',
 								},
 							],
 							defaultValue: instruction.answerType,
@@ -232,6 +231,16 @@ export function InstructionInput({
 						}}
 						labelProps={{ children: 'Answer Type' }}
 					/>
+					{/* {answerType === 'select' ? (
+						<FormSwitch
+							index={index}
+							switchProps={{
+								defaultValue: instruction.promptType,
+								name: 'instructions_canAskQuestion',
+							}}
+							labelProps={{ children: <p>Can ask questions?</p> }}
+						/>
+					) : null} */}
 					{answerType === 'select' ? (
 						<FormInput
 							index={index}
@@ -246,9 +255,16 @@ export function InstructionInput({
 					) : null}
 					<FormTextarea
 						index={index}
+						helperText={
+							<p className="text-sm text-muted-foreground">
+								Use variables to reference specific values. <br />
+								Available variables:{' '}
+								<code className="text-xs">{`{{writing}}`}</code>,{' '}
+								<code className="text-xs">{`{{input}}`}</code>
+							</p>
+						}
 						textareaProps={{
-							placeholder:
-								'The answer is 55. If they guess 10 above or below, they are correct.',
+							placeholder: 'The {{writing}} should be 3 sentences or longer.',
 							name: 'instructions_answerKey',
 							defaultValue: instruction.answerKey ?? '',
 							required: true,

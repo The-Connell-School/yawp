@@ -36,6 +36,7 @@ function createDatabase(tryAgain = true): Database.Database {
 	} catch (error: unknown) {
 		fs.unlinkSync(CACHE_DATABASE_PATH)
 		if (tryAgain) {
+			// eslint-disable-next-line no-console
 			console.error(
 				`Error creating cache database, deleting the file at "${CACHE_DATABASE_PATH}" and trying again...`,
 			)

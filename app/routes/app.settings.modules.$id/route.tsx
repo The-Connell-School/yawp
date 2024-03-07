@@ -54,6 +54,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		const value = submission.value as z.infer<typeof Schema>
 		const prompts = toArray(value.instructions_prompt)
 		const promptTypes = toArray(value.instructions_promptType)
+		const canAskQuestions = toArray(
+			submission.value.instructions_canAskQuestion,
+		)
 		const answerKeys = toArray(value.instructions_answerKey)
 		const answerTypes = toArray(value.instructions_answerType)
 		const answerTypesOptions = toArray(value.instructions_answerTypeOptions)
@@ -64,8 +67,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				const answerType = answerTypes[i] || 'textarea'
 				const answerTypeOptions = answerTypesOptions[i]
 				const promptType = promptTypes[i]
+				const canAskQuestion = canAskQuestions[i] === 'true'
 
-				if (!prompt || !answerKey || !answerType || !promptType) {
+				if (!prompt || !promptType) {
 					return acc
 				}
 
@@ -76,16 +80,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
 					promptType,
 					position: i,
 					answerTypeOptions,
+					canAskQuestion,
 				})
 				return acc
 			},
 			[] as {
 				prompt: string
-				answerKey: string
+				answerKey?: string
 				answerType: string
 				answerTypeOptions?: string
 				promptType: string
 				position: number
+				canAskQuestion?: boolean
 			}[],
 		)
 

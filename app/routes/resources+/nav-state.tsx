@@ -11,7 +11,7 @@ import {
 import { Button, type ButtonProps } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
 import { useRequestInfo } from '#app/hooks/useRequestInfo'
-import { navStateCookie } from '#app/utils/nav-state.server'
+import { navStateCookie } from '#app/utils/state/nav-state.server'
 
 const FormSchema = z.object({
 	state: z.enum(['expanded', 'collapsed']),

@@ -33,8 +33,11 @@ import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
 import { getHslFromVar, hslToHex } from './utils/hslToHex'
 import { cn, combineHeaders, getDomainUrl } from './utils/misc.tsx'
-import { type NavState, navStateCookie } from './utils/nav-state.server.ts'
-import { type Theme, getTheme } from './utils/theme.server.ts'
+import {
+	type NavState,
+	navStateCookie,
+} from './utils/state/nav-state.server.ts'
+import { type Theme, getTheme } from './utils/state/theme.server.ts'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
 

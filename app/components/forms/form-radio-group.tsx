@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { type ReactNode, useEffect, useId, useState } from 'react'
 import { v4 } from 'uuid'
 import { cn } from '#app/utils/misc'
 import { InfoCircledIcon } from '../icons'
@@ -21,7 +21,7 @@ export function FormRadioGroup({
 		info?: string
 	}
 	radioGroupProps: RadioGroupProps & {
-		options: { value: string; label: string; info?: string }[]
+		options: { value: string; label: ReactNode; info?: string }[]
 		form?: string
 		onValueChange?: (value: string) => void
 	}
@@ -68,12 +68,19 @@ export function FormRadioGroup({
 					{options.map(option => (
 						<div key={v4()} className="flex items-center space-x-2">
 							<RadioGroupItem value={option.value} id={option.value} />
-							<label htmlFor={option.value}>{option.label}</label>
-							{option.info ? (
-								<Tooltip text={<p className="max-w-[300px]">{option.info}</p>}>
-									<InfoCircledIcon />
-								</Tooltip>
-							) : null}
+							<label
+								htmlFor={option.value}
+								className="flex w-full items-center gap-2"
+							>
+								{option.label}
+								{option.info ? (
+									<Tooltip
+										text={<p className="max-w-[300px]">{option.info}</p>}
+									>
+										<InfoCircledIcon />
+									</Tooltip>
+								) : null}
+							</label>
 						</div>
 					))}
 				</RadioGroup>
