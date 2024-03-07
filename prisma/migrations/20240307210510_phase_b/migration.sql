@@ -7,9 +7,9 @@
   - You are about to drop the `ExerciseSessionMessage` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the column `descriptionHtml` on the `Module_` table. All the data in the column will be lost.
   - You are about to drop the column `descriptionText` on the `Module_` table. All the data in the column will be lost.
+  - You are about to drop the column `exerciseId` on the `Instruction` table. All the data in the column will be lost.
   - You are about to drop the column `studentProfileId` on the `User` table. All the data in the column will be lost.
   - You are about to drop the column `teacherProfileId` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the column `exerciseId` on the `Instruction` table. All the data in the column will be lost.
   - Added the required column `moduleId` to the `Instruction` table without a default value. This is not possible if the table is not empty.
 
 */
@@ -139,17 +139,6 @@ CREATE TABLE "new_Module_" (
 INSERT INTO "new_Module_" ("copyContentFromPrevious", "createdAt", "id", "position", "title", "updatedAt") SELECT "copyContentFromPrevious", "createdAt", "id", "position", "title", "updatedAt" FROM "Module_";
 DROP TABLE "Module_";
 ALTER TABLE "new_Module_" RENAME TO "Module_";
-CREATE TABLE "new_User" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "email" TEXT NOT NULL,
-    "name" TEXT
-);
-INSERT INTO "new_User" ("createdAt", "email", "id", "name", "updatedAt") SELECT "createdAt", "email", "id", "name", "updatedAt" FROM "User";
-DROP TABLE "User";
-ALTER TABLE "new_User" RENAME TO "User";
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE TABLE "new_Instruction" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -163,11 +152,23 @@ CREATE TABLE "new_Instruction" (
     "answerTypeOptions" TEXT,
     "concludingPrompt" TEXT,
     "concludingPromptType" TEXT,
+    "canAskQuestion" BOOLEAN,
     "position" INTEGER NOT NULL,
     CONSTRAINT "Instruction_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module_" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 INSERT INTO "new_Instruction" ("answerKey", "answerType", "createdAt", "id", "position", "prompt", "promptType", "updatedAt") SELECT "answerKey", "answerType", "createdAt", "id", "position", "prompt", "promptType", "updatedAt" FROM "Instruction";
 DROP TABLE "Instruction";
 ALTER TABLE "new_Instruction" RENAME TO "Instruction";
+CREATE TABLE "new_User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT
+);
+INSERT INTO "new_User" ("createdAt", "email", "id", "name", "updatedAt") SELECT "createdAt", "email", "id", "name", "updatedAt" FROM "User";
+DROP TABLE "User";
+ALTER TABLE "new_User" RENAME TO "User";
+CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 PRAGMA foreign_key_check;
 PRAGMA foreign_keys=ON;

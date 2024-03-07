@@ -1,4 +1,4 @@
-import { forwardRef, useId } from 'react'
+import { type ReactNode, forwardRef, useId } from 'react'
 import { cn } from '#app/utils/misc'
 import { InfoCircledIcon } from '../icons'
 import { Textarea, type TextareaProps } from '../ui/textarea'
@@ -16,9 +16,10 @@ export const FormTextarea = forwardRef<
 		errors?: ListOfErrors
 		className?: string
 		index?: number
+		helperText?: ReactNode
 	}
 >(function FormTextarea(
-	{ labelProps, textareaProps, errors, className, index },
+	{ labelProps, textareaProps, errors, className, index, helperText },
 	ref,
 ) {
 	const fallbackId = useId()
@@ -35,6 +36,7 @@ export const FormTextarea = forwardRef<
 							<InfoCircledIcon />
 						</Tooltip>
 					</span>
+					{helperText ?? null}
 				</label>
 			) : (
 				<label htmlFor={id} {...labelProps} />

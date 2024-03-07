@@ -42,7 +42,7 @@ async function seed() {
 					create: [
 						{
 							answerKey:
-								'The student must have written some content. For example, "Problems in education," "Voting rights," "The Great Gatsby," or "Feminism." Any amount of content is correct, it doesn\'t have to be a complete sentence or one of the examples.',
+								'The {{writing}} must not be empty. For example, "Problems in education," "Voting rights," "The Great Gatsby," or "Feminism." Any amount of {{writing}} is correct, it doesn\'t have to be a complete sentence or one of the examples.',
 							position: 1,
 							prompt: `How exciting! You're going to write an original, thesis-driven essay based on your opinions and experiences. I can help you through this process! The first thing I need to know is what is your general topic? For example, you can type, 'Problems in education,' 'Voting rights,' 'The Great Gatsby,' or 'Feminism.' Go ahead and type your topic now.`,
 							promptType: 'hardcoded',
@@ -58,7 +58,7 @@ async function seed() {
 							answerTypeOptions: "I'm ready!",
 						},
 						{
-							answerKey: `The student should write a few sentences. If they ask a question, respond with an appropriate answer, but continue prompting them to write more content until they've written 2 sentences or more, or if they have asked responded "I'm done" 3 times.`,
+							answerKey: `The {{writing}} must not be empty and contain at least 3 sentences.`,
 							position: 3,
 							prompt: `Ready, set, write!`,
 							promptType: 'hardcoded',

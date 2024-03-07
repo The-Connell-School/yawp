@@ -6,10 +6,13 @@ import {
 	EditorProvider,
 	useCurrentEditor,
 	type ChainedCommands,
+	type Editor,
 } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import {
+	AlignVerticalSpaceAround,
 	BoldIcon,
+	Check,
 	Heading1Icon,
 	Heading2Icon,
 	Heading3Icon,
@@ -40,6 +43,7 @@ import { Tooltip } from '#app/components/ui/tooltip'
 import { useDebounce } from '#app/hooks/useDebounce'
 import { camelCase } from '#app/utils/camelCase'
 import { cn } from '#app/utils/misc'
+import { LineHeight } from './tiptap-extensions/line-height'
 
 type onHighlight = ({
 	highlightId,
@@ -51,12 +55,13 @@ type onHighlight = ({
 
 const styleButtons: {
 	icon?: ReactNode
-	label: string
-	command: keyof ChainedCommands
+	label?: string
+	command?: keyof ChainedCommands
 	params?: any
 	checkDisabled?: boolean
 	disableActiveStyles?: boolean
 	activeId?: string
+	override?: (editor: Editor) => ReactNode
 }[] = [
 	{
 		icon: <BoldIcon className="h-4 w-4" />,
@@ -107,6 +112,53 @@ const styleButtons: {
 		command: 'toggleHeading',
 		activeId: 'heading',
 		params: { level: 3 },
+	},
+	{
+		override: editor => (
+			<DropdownMenu>
+				<Tooltip text="Line Height" delayDuration={300}>
+					<DropdownMenuTrigger>
+						<div className={cn(styleBarItemStyle)}>
+							<AlignVerticalSpaceAround className="h-4 w-4" />
+						</div>
+					</DropdownMenuTrigger>
+				</Tooltip>
+				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
+					{['1', '1.5', '2'].map(height => (
+						<DropdownMenuItem
+							key={height}
+							onClick={e => {
+								e.preventDefault()
+								e.stopPropagation()
+								editor
+									.chain()
+									.focus()
+									.setLineHeight(height as any)
+									.run()
+							}}
+							className={cn(
+								styleBarItemStyle,
+								'flex w-[65px] items-center gap-3',
+								{
+									[styleBarItemActiveStyle]: editor.isActive('paragraph', {
+										lineHeight: height,
+									}),
+								},
+							)}
+						>
+							<Check
+								className={cn('h-4 w-4', {
+									invisible: !editor.isActive('paragraph', {
+										lineHeight: height,
+									}),
+								})}
+							/>
+							<span>{height}</span>
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		),
 	},
 	{
 		icon: <ListBulletIcon className="h-4 w-4" />,
@@ -192,22 +244,25 @@ const StyleBar = ({ onHighlight }: { onHighlight?: onHighlight }) => {
 			className="bg-muted-background flex w-full items-center gap-0.5 border-b p-1"
 			ref={containerRef}
 		>
-			{visibleButtons.map(({ icon, label, command, params, activeId }) => (
-				<Tooltip text={label} delayDuration={300} key={label}>
-					<div
-						// @ts-ignore
-						onClick={() => editor.chain().focus()[command](params).run()}
-						className={cn(styleBarItemStyle, {
-							[styleBarItemActiveStyle]: editor.isActive(
-								activeId ?? camelCase(label),
-								params,
-							),
-						})}
-					>
-						{icon ?? label}
-					</div>
-				</Tooltip>
-			))}
+			{visibleButtons.map(
+				({ icon, label, command, params, activeId, override }) =>
+					override?.(editor) ?? (
+						<Tooltip text={label} delayDuration={300} key={label}>
+							<div
+								// @ts-ignore
+								onClick={() => editor.chain().focus()[command](params).run()}
+								className={cn(styleBarItemStyle, {
+									[styleBarItemActiveStyle]: editor.isActive(
+										activeId ?? camelCase(label ?? ''),
+										params,
+									),
+								})}
+							>
+								{icon ?? label}
+							</div>
+						</Tooltip>
+					),
+			)}
 			<Tooltip text="Comment" delayDuration={300}>
 				<div
 					onClick={async () => {
@@ -255,7 +310,7 @@ const StyleBar = ({ onHighlight }: { onHighlight?: onHighlight }) => {
 								}}
 								className={cn(styleBarItemStyle, 'flex items-center gap-3', {
 									[styleBarItemActiveStyle]: editor.isActive(
-										activeId ?? camelCase(label),
+										activeId ?? camelCase(label ?? ''),
 										params,
 									),
 								})}
@@ -272,6 +327,7 @@ const StyleBar = ({ onHighlight }: { onHighlight?: onHighlight }) => {
 }
 
 const extensions = [
+	LineHeight,
 	Color.configure({ types: [TextStyle.name, ListItem.name] }),
 	// @ts-ignore
 	TextStyle.configure({ types: [ListItem.name] }),

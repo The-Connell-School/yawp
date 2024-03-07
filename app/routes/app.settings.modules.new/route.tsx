@@ -38,6 +38,7 @@ export const Schema = z.object({
 	instructions_answerTypeOptions: StringItem,
 	instructions_prompt: StringItem,
 	instructions_promptType: StringItem,
+	instructions_canAskQuestion: StringItem,
 	instructions: z.array(
 		z.object({
 			answerKey: z.string(),
@@ -46,6 +47,7 @@ export const Schema = z.object({
 			prompt: z.string(),
 			promptType: z.string(),
 			position: z.number(),
+			canAskQuestion: z.string().optional(),
 			id: z.string().optional(),
 		}),
 	),
@@ -82,6 +84,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	const prompts = toArray(submission.value.instructions_prompt)
 	const promptTypes = toArray(submission.value.instructions_promptType)
+	const canAskQuestions = toArray(submission.value.instructions_canAskQuestion)
 	const answerKeys = toArray(submission.value.instructions_answerKey)
 	const answerTypes = toArray(submission.value.instructions_answerType)
 	const answerTypesOptions = toArray(
@@ -94,8 +97,9 @@ export async function action({ request }: ActionFunctionArgs) {
 			const answerType = answerTypes[i] || 'textarea'
 			const answerTypeOptions = answerTypesOptions[i]
 			const promptType = promptTypes[i]
+			const canAskQuestion = canAskQuestions[i] === 'true'
 
-			if (!prompt || !answerKey || !answerType || !promptType) {
+			if (!prompt || !promptType) {
 				return acc
 			}
 
@@ -106,16 +110,18 @@ export async function action({ request }: ActionFunctionArgs) {
 				promptType,
 				position: i,
 				answerTypeOptions,
+				canAskQuestion,
 			})
 			return acc
 		},
 		[] as {
 			prompt: string
-			answerKey: string
+			answerKey?: string
 			answerType: string
 			answerTypeOptions?: string
 			promptType: string
 			position: number
+			canAskQuestion?: boolean
 		}[],
 	)
 
@@ -285,6 +291,7 @@ export default function Route({
 								hasAnswerKey: false,
 								concludingPrompt: '',
 								concludingPromptType: 'hardcoded',
+								canAskQuestion: false,
 							})
 						}}
 					>

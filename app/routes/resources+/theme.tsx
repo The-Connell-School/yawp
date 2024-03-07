@@ -9,7 +9,7 @@ import { Button, type ButtonProps } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
 import { useHints } from '#app/hooks/useHints'
 import { useRequestInfo } from '#app/hooks/useRequestInfo'
-import { setTheme } from '#app/utils/theme.server'
+import { setTheme } from '#app/utils/state/theme.server'
 
 const ThemeFormSchema = z.object({
 	theme: z.enum(['light', 'dark']),
