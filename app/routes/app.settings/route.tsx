@@ -24,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Route() {
 	return (
 		<main className="relative h-full overflow-y-scroll pt-[108px] sm:pt-[53px]">
-			<nav className="fixed left-0 right-0 top-[55px] flex items-end border-b px-6 pt-4 sm:top-0">
+			<nav className="fixed left-0 right-0 top-[55px] flex items-end border-b bg-background px-3 pt-4 sm:top-0 sm:px-6">
 				{tabs.map(tab => (
 					<NavLink
 						key={tab.to}

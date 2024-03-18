@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../app/routes/_marketing+/index.tsx"],
+  "sourcesContent": ["// REMIX HMR BEGIN\nimport * as __hmr__ from \"remix:hmr\";\nif (import.meta) {\nimport.meta.hot = __hmr__.createHotContext(\n//@ts-expect-error\n\"app/routes/_marketing+/index.tsx\"\n);\nimport.meta.hot.lastModified = \"1706063332938.9036\";\n}\n// REMIX HMR END\n\nimport { redirect, type MetaFunction } from '@remix-run/node'\nimport { DEFAULT_ROUTE } from '#app/utils/misc'\n\nexport const meta: MetaFunction = () => [{ title: 'Yawp!' }]\n\nexport async function loader() {\n\treturn redirect(DEFAULT_ROUTE)\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;AAWA,kBAA4C;AAT5C,IAAI,aAAa;AACjB,cAAY,MAAc;AAAA;AAAA,IAE1B;AAAA,EACA;AACA,cAAY,IAAI,eAAe;AAC/B;AAMO,IAAM,OAAqB,MAAM,CAAC,EAAE,OAAO,QAAQ,CAAC;",
+  "names": []
+}

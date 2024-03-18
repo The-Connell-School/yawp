@@ -1,19 +1,23 @@
-import { parseWithZod } from '@conform-to/zod'
 import { invariant } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
 import { json, redirect, useLoaderData } from '@remix-run/react'
-import { type z } from 'zod'
+import { withZod } from '@remix-validated-form/with-zod'
+import { TrashIcon } from 'lucide-react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
+import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import Form, {
-	Schema,
-	toArray,
-} from '#app/routes/app.settings.modules.new/route'
+import { Button } from '#app/components/ui/button'
 import { prisma } from '#app/utils/db.server'
+import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
+import { ModuleForm } from '../app.settings.modules.new/form'
+import { validator } from '../app.settings.modules.new/form/schema'
+
+const deleteValidator = withZod(z.object({ id: z.string() }))
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing module id')
@@ -37,63 +41,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	invariant(params.id, 'Missing student profile id')
 	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
-	const submission = parseWithZod(formData, { schema: Schema })
+	const subaction = formData.get('subaction')
 
-	if (submission.status !== 'success' || !submission.value) {
-		return json(submission.reply(), { status: 400 })
-	}
-
-	if (submission.payload.intent === 'delete') {
-		await prisma.module_.delete({ where: { id: params.id } })
+	if (subaction === 'delete') {
+		const { error, data } = await deleteValidator.validate(formData)
+		if (error) return validationError(error)
+		await prisma.module_.delete({ where: { id: data.id } })
 		return redirectWithToast('/app/settings/modules', {
 			type: 'success',
 			description: 'Module deleted successfully.',
 			closeButton: false,
 		})
 	} else {
-		const value = submission.value as z.infer<typeof Schema>
-		const prompts = toArray(value.instructions_prompt)
-		const promptTypes = toArray(value.instructions_promptType)
-		const canAskQuestions = toArray(
-			submission.value.instructions_canAskQuestion,
-		)
-		const answerKeys = toArray(value.instructions_answerKey)
-		const answerTypes = toArray(value.instructions_answerType)
-		const answerTypesOptions = toArray(value.instructions_answerTypeOptions)
-
-		const instructions = prompts?.reduce(
-			(acc, prompt, i) => {
-				const answerKey = answerKeys[i]
-				const answerType = answerTypes[i] || 'textarea'
-				const answerTypeOptions = answerTypesOptions[i]
-				const promptType = promptTypes[i]
-				const canAskQuestion = canAskQuestions[i] === 'true'
-
-				if (!prompt || !promptType) {
-					return acc
-				}
-
-				acc.push({
-					answerKey,
-					answerType,
-					prompt,
-					promptType,
-					position: i,
-					answerTypeOptions,
-					canAskQuestion,
-				})
-				return acc
-			},
-			[] as {
-				prompt: string
-				answerKey?: string
-				answerType: string
-				answerTypeOptions?: string
-				promptType: string
-				position: number
-				canAskQuestion?: boolean
-			}[],
-		)
+		const { error, data } = await validator.validate(formData)
+		if (error) return validationError(error)
 
 		await prisma.instruction.deleteMany({
 			where: { moduleId: params.id },
@@ -102,13 +63,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		await prisma.module_.update({
 			where: { id: params.id },
 			data: {
-				title: submission.value.title,
-				position: submission.value.position,
-				description: submission.value.description,
-				tutorId: submission.value.tutorId,
-				copyContentFromPrevious:
-					submission.value.copyContentFromPrevious === 'on',
-				instructions: { create: instructions },
+				...data,
+				tutorId: data.tutorId || null,
+				instructions: {
+					create: data.instructions?.map((d, i) => ({ ...d, position: i })),
+				},
 			},
 		})
 
@@ -120,9 +79,48 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	}
 }
 
-export default function Route() {
-	const { module_ } = useLoaderData<typeof loader>()
-	return <Form defaultValue={module_ as any} isEditing />
+export default function ModuleRoute() {
+	const data = useLoaderData<typeof loader>()
+	const isPending = useIsPending()
+	const dc = useDoubleCheck()
+	const formId = `edit-module-${data.module_.id}`
+
+	return (
+		<div className="flex flex-col">
+			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+				<ModuleForm
+					tutors={data.tutors}
+					defaultValues={data.module_}
+					formId={formId}
+					key={formId}
+				/>
+			</div>
+			<div className="flex gap-2 px-6 pb-6 pt-1">
+				<Button type="submit" disabled={isPending} form={formId}>
+					Update
+				</Button>
+				<ValidatedForm
+					validator={deleteValidator}
+					method="POST"
+					subaction="delete"
+				>
+					<input type="hidden" name="id" value={data.module_.id} />
+					<Button
+						{...dc.getButtonProps({ type: 'submit' })}
+						disabled={isPending}
+						size={dc.doubleCheck ? 'default' : 'icon'}
+						variant={dc.doubleCheck ? 'destructive' : 'secondary'}
+					>
+						{dc.doubleCheck ? (
+							'Are you sure?'
+						) : (
+							<TrashIcon className="h-5 w-5" />
+						)}
+					</Button>
+				</ValidatedForm>
+			</div>
+		</div>
+	)
 }
 
 export function ErrorBoundary() {

@@ -12,7 +12,7 @@ import { sendEmail } from '#app/utils/email.server'
 import { useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { prepareVerification } from '../_auth+/verify'
+import { prepareVerification } from '../_auth+/verify.server'
 
 const Schema = z.object({ email: z.string() })
 type Schema = z.infer<typeof Schema>

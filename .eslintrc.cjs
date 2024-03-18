@@ -10,6 +10,7 @@ module.exports = {
 		'prettier',
 	],
 	rules: {
+		'react-refresh/only-export-components': 'off',
 		// playwright requires destructuring in fixtures even if you don't use anything 🤷‍♂️
 		'no-empty-pattern': 'off',
 		'no-console': 'warn',
@@ -44,7 +45,7 @@ module.exports = {
 	},
 	overrides: [
 		{
-			plugins: ['remix-react-routes'],
+			plugins: ['remix-react-routes', 'react-refresh'],
 			files: appFiles,
 			excludedFiles: testFiles,
 			rules: {

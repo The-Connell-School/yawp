@@ -83,7 +83,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 		return redirectWithToast(`/app/settings/tutors/${created.id}`, {
 			type: 'success',
-			description: 'Tutor created successfully',
+			description: 'Tutor updated successfully',
 			closeButton: false,
 		})
 	}
