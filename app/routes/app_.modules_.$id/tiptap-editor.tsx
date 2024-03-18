@@ -363,10 +363,6 @@ export const TiptapEditor = ({
 	const [debouncedHtml] = useDebounce(html, 1000)
 
 	useEffect(() => {
-		if (initialContent === debouncedHtml) {
-			return
-		}
-
 		onChange?.({ html: debouncedHtml ?? '', text: debouncedText ?? '' })
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [debouncedHtml, debouncedText])

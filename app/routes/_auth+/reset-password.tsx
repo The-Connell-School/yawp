@@ -16,44 +16,10 @@ import { ErrorList } from '#app/components/forms/error-list.tsx'
 import { FormInput } from '#app/components/forms/form-input.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { requireAnonymous, resetUserPassword } from '#app/utils/auth.server.ts'
-import { prisma } from '#app/utils/db.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { PasswordAndConfirmPasswordSchema } from '#app/utils/schemas/user.ts'
-import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { type VerifyFunctionArgs } from './verify.tsx'
-
-const resetPasswordEmailSessionKey = 'resetPasswordEmail'
-
-export async function handleVerification({ submission }: VerifyFunctionArgs) {
-	if (submission.status !== 'success') {
-		throw await redirectWithToast('/login', {
-			type: 'error',
-			title: 'Invalid submission',
-			description: 'Submission was not successful. Please try again.',
-		})
-	}
-
-	const target = submission.value.target
-	const user = await prisma.user.findFirst({
-		where: { email: target },
-		select: { email: true },
-	})
-
-	if (!user) {
-		return json(submission.reply({ fieldErrors: { code: ['Invalid code'] } }), {
-			status: 400,
-		})
-	}
-
-	const verifySession = await verifySessionStorage.getSession()
-	verifySession.set(resetPasswordEmailSessionKey, user.email)
-	return redirect('/reset-password', {
-		headers: {
-			'set-cookie': await verifySessionStorage.commitSession(verifySession),
-		},
-	})
-}
+import { resetPasswordEmailSessionKey } from './reset-password.server.ts'
 
 const ResetPasswordSchema = PasswordAndConfirmPasswordSchema
 

@@ -12,6 +12,7 @@ import {
 } from '@remix-run/node'
 import { Form, Link, useActionData, useLoaderData } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
+import { serverOnly$ } from 'vite-env-only'
 import { z } from 'zod'
 import { ErrorList } from '#app/components/forms/error-list'
 import { FormInput } from '#app/components/forms/form-input'
@@ -21,7 +22,7 @@ import {
 	prepareVerification,
 	requireRecentVerification,
 	type VerifyFunctionArgs,
-} from '#app/routes/_auth+/verify.tsx'
+} from '#app/routes/_auth+/verify.server'
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
@@ -44,66 +45,66 @@ export const handle: BreadcrumbHandle = {
 
 const newEmailAddressSessionKey = 'new-email-address'
 
-export async function handleVerification({
-	request,
-	submission,
-}: VerifyFunctionArgs) {
-	await requireRecentVerification(request)
+export const handleVerification = serverOnly$(
+	async ({ request, submission }: VerifyFunctionArgs) => {
+		await requireRecentVerification(request)
 
-	if (submission.status !== 'success') {
-		throw await redirectWithToast('/login', {
-			type: 'error',
-			title: 'Invalid submission',
-			description: 'Submission was not successful. Please try again.',
-		})
-	}
+		if (submission.status !== 'success') {
+			throw await redirectWithToast('/login', {
+				type: 'error',
+				title: 'Invalid submission',
+				description: 'Submission was not successful. Please try again.',
+			})
+		}
 
-	const verifySession = await verifySessionStorage.getSession(
-		request.headers.get('cookie'),
-	)
-	const newEmail = verifySession.get(newEmailAddressSessionKey)
-
-	if (!newEmail) {
-		return json(
-			submission.reply({
-				formErrors: [
-					'You must submit the code on the same device that requested the email change.',
-				],
-			}),
-			{ status: 400 },
+		const verifySession = await verifySessionStorage.getSession(
+			request.headers.get('cookie'),
 		)
-	}
+		const newEmail = verifySession.get(newEmailAddressSessionKey)
 
-	const preUpdateUser = await prisma.user.findFirstOrThrow({
-		select: { email: true },
-		where: { id: submission.value.target },
-	})
-	const user = await prisma.user.update({
-		where: { id: submission.value.target },
-		select: { id: true, email: true },
-		data: { email: newEmail },
-	})
+		if (!newEmail) {
+			return json(
+				submission.reply({
+					formErrors: [
+						'You must submit the code on the same device that requested the email change.',
+					],
+				}),
+				{ status: 400 },
+			)
+		}
 
-	void sendEmail({
-		to: preUpdateUser.email,
-		subject: 'Yawp! email changed',
-		react: <EmailChangeNoticeEmail userId={user.id} />,
-	})
+		const preUpdateUser = await prisma.user.findFirstOrThrow({
+			select: { email: true },
+			where: { id: submission.value.target },
+		})
+		const user = await prisma.user.update({
+			where: { id: submission.value.target },
+			select: { id: true, email: true },
+			data: { email: newEmail },
+		})
 
-	return redirectWithToast(
-		'/app/profile',
-		{
-			title: 'Email Changed',
-			type: 'success',
-			description: `Your email has been changed to ${user.email}`,
-		},
-		{
-			headers: {
-				'set-cookie': await verifySessionStorage.destroySession(verifySession),
+		void sendEmail({
+			to: preUpdateUser.email,
+			subject: 'Yawp! email changed',
+			react: <EmailChangeNoticeEmail userId={user.id} />,
+		})
+
+		return redirectWithToast(
+			'/app/profile',
+			{
+				title: 'Email Changed',
+				type: 'success',
+				description: `Your email has been changed to ${user.email}`,
 			},
-		},
-	)
-}
+			{
+				headers: {
+					'set-cookie':
+						await verifySessionStorage.destroySession(verifySession),
+				},
+			},
+		)
+	},
+)
 
 const ChangeEmailSchema = z.object({
 	email: EmailSchema,

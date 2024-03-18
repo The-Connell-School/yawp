@@ -39,9 +39,7 @@ import {
 import { authSessionStorage } from '#app/utils/session.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { type VerifyFunctionArgs } from './verify.tsx'
-
-const onboardingEmailSessionKey = 'teacherOnboardingEmail'
+import { onboardingEmailSessionKey } from './teacher-onboarding.server'
 
 const SignupFormSchema = z
 	.object({
@@ -108,24 +106,6 @@ export async function action({ request }: ActionFunctionArgs) {
 		{ title: 'Welcome', description: 'Thanks for signing up!' },
 		{ headers },
 	)
-}
-
-export async function handleVerification({ submission }: VerifyFunctionArgs) {
-	if (submission.status !== 'success') {
-		throw await redirectWithToast('/login', {
-			type: 'error',
-			title: 'Invalid submission',
-			description: 'Submission was not successful. Please try again.',
-		})
-	}
-
-	const verifySession = await verifySessionStorage.getSession()
-	verifySession.set(onboardingEmailSessionKey, submission.value.target)
-	return redirect('/teacher-onboarding', {
-		headers: {
-			'set-cookie': await verifySessionStorage.commitSession(verifySession),
-		},
-	})
 }
 
 export const meta: MetaFunction = () => {

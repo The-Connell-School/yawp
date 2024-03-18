@@ -1,0 +1,28 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "
+      Your job is to determine if the user's writing the text contains content that the user would then write or re-write existing content.
+      Your goal is to prevent AI from writing content for the user, so determine if the text below has any indication of providing content to write for the user.
+      Respond with exactly a \"yes\" or \"no\" exactly, no punctuation or capital letters.
+      "
+    }
+    {
+      "role": "user",
+      "content": "
+      Does the text write or re-write any content for the user?
+      Does the text suggest word-for-word content for the user to write?
+      Respond with exactly a \"yes\" or \"no\" exactly, no punctuation or capital letters.
+
+      text = ###
+      Taylor Swift's birthday is December 13th.
+      ###
+      "
+    }
+    {
+      "role": "assistant",
+      "content": "no"
+    }
+  ]
+}

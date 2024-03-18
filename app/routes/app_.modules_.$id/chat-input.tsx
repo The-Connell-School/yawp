@@ -54,7 +54,7 @@ export const ChatInput = ({ isDisabled, textareaProps, onSubmit }: Props) => {
 		<div className="relative mx-auto flex w-full max-w-[700px] items-center">
 			<textarea
 				className="no-scrollbar my-auto h-[50px] max-h-[200px] min-h-[50px] w-full resize-none rounded-lg border bg-background p-3 pr-14 focus:border-primary focus:outline-1 focus:outline-primary"
-				placeholder="Ask a question or share a thought..."
+				placeholder="Ask a question or respond"
 				ref={textareaRef}
 				onChange={handleTextareaChange}
 				onKeyDown={handleKeyDown}

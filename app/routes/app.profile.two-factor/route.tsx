@@ -1,8 +1,8 @@
 import { Link, Outlet } from '@remix-run/react'
 import { LockClosedIcon } from '#app/components/icons'
 import { button } from '#app/components/ui/button'
-import { type VerificationTypes } from '#app/routes/_auth+/verify.tsx'
 import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
+import { type VerificationTypes } from '../_auth+/verify_props'
 
 export const handle: BreadcrumbHandle = {
 	breadcrumb: (

@@ -148,7 +148,7 @@ export const Comment = ({
 								const formData = new FormData()
 								formData.append('commentId', comment.id)
 								formData.append('moduleSessionId', moduleSessionId)
-								formData.append('intent', 'delete-comment')
+								formData.append('intent', 'delete-document-comment')
 								fetcher.submit(formData, { method: 'POST' })
 
 								const mark = document.getElementById(highlightId)
