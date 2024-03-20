@@ -4,8 +4,8 @@ import { FormInput } from '#app/components/forms/form-input-2'
 import { FormSearchSelect } from '#app/components/forms/form-search-select'
 import { FormTextarea } from '#app/components/forms/form-textarea-2'
 import { Button } from '#app/components/ui/button'
-import { type Schema, validator } from '../form/schema'
-import { Instruction, type InstructionSchema } from '../form-instruction'
+import { type Schema, validator, type InstructionSchema } from '../form/schema'
+import { Instruction } from './instruction'
 
 interface Props {
 	formId: string

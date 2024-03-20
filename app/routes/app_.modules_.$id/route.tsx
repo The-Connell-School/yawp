@@ -59,9 +59,7 @@ import { TiptapEditor } from './tiptap-editor'
 
 /*
  * Fix tutor
- * Font style (times new roman)
- * Make dashboards more fun
- * Students need a period (onboarding)
+ * Make dashboards more fun (https://dribbble.com/shots/20639762-Sharecourse-E-learning-Dashboard)
  */
 
 // const GPT35_MODEL =
@@ -768,7 +766,7 @@ export default function Route() {
 	)
 
 	const Editor = (
-		<div className="w-full overflow-hidden border-r md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
+		<div className="font-times w-full overflow-hidden border-r md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
 			<TiptapEditor
 				initialContent={moduleSession.document?.html}
 				onHighlight={({ highlightId, content }) => {

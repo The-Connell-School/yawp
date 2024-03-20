@@ -124,7 +124,7 @@ const styleButtons: {
 					</DropdownMenuTrigger>
 				</Tooltip>
 				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
-					{['1', '1.5', '2'].map(height => (
+					{['1', '1.15', '1.5', '2'].map(height => (
 						<DropdownMenuItem
 							key={height}
 							onClick={e => {

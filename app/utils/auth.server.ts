@@ -103,6 +103,7 @@ export async function signup({
 	password,
 	name,
 	grade,
+	period,
 	school,
 	teacher,
 	workshopTeacherId,
@@ -113,6 +114,7 @@ export async function signup({
 	school: string
 	teacher: string
 	grade: string
+	period: string
 	workshopTeacherId?: string
 }) {
 	const hashedPassword = await getPasswordHash(password)
@@ -129,6 +131,7 @@ export async function signup({
 					studentProfile: {
 						create: {
 							grade,
+							period,
 							school,
 							schoolTeacher: teacher,
 							...(workshopTeacherId

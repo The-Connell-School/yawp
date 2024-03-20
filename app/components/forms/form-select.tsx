@@ -36,7 +36,7 @@ export function FormSelect({
 				defaultValue={selectProps.defaultValue?.toString()}
 				dir="ltr"
 			>
-				<SelectTrigger className="w-[180px]">
+				<SelectTrigger>
 					<SelectValue placeholder="Select" />
 				</SelectTrigger>
 				<SelectContent>

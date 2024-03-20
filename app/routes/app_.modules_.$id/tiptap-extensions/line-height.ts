@@ -1,11 +1,11 @@
 import { Extension } from '@tiptap/core'
 
-type Options = '1' | '1.5' | '2'
+type Options = '1' | '1.15' | '1.5' | '2'
 
 export interface LineHeightOptions {
 	types: string[]
 	heights: Options[]
-	defaultHeight: '1'
+	defaultHeight: '1.15'
 }
 
 declare module '@tiptap/core' {
@@ -41,8 +41,8 @@ export const LineHeight = Extension.create<LineHeightOptions>({
 				'caption',
 				'table',
 			],
-			heights: ['1', '1.5', '2'],
-			defaultHeight: '1',
+			heights: ['1', '1.15', '1.5', '2'],
+			defaultHeight: '1.15',
 		}
 	},
 

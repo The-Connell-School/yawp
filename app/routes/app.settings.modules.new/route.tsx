@@ -3,7 +3,7 @@ import {
 	json,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { useLoaderData } from '@remix-run/react'
+import { Link, useLoaderData } from '@remix-run/react'
 import { validationError } from 'remix-validated-form'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Button } from '#app/components/ui/button'
@@ -59,6 +59,14 @@ export default function Route() {
 			<div className="flex gap-2 px-6 pb-6 pt-1">
 				<Button type="submit" disabled={isPending} form="create-module">
 					Create
+				</Button>
+				<Button
+					disabled={isPending}
+					variant="secondary"
+					asChild
+					className="md:hidden"
+				>
+					<Link to="/app/settings/modules">Cancel</Link>
 				</Button>
 			</div>
 		</div>

@@ -45,6 +45,7 @@ export const SignupFormSchema = z
 		school: z.string(),
 		teacher: z.string(),
 		grade: z.string(),
+		period: z.string(),
 		workshopTeacherId: z.string().optional(),
 		remember: z.boolean().optional(),
 		redirectTo: z.string().optional(),
@@ -140,14 +141,14 @@ export default function SignupRoute() {
 	})
 
 	return (
-		<div className="mx-auto w-full max-w-md px-2 py-20">
+		<div className="mx-auto w-full max-w-lg px-2 py-20">
 			<div className="flex flex-col gap-3 text-center">
 				<h1>Welcome, {data.email}!</h1>
 				<p>Please enter your details.</p>
 			</div>
 			<Form
 				method="POST"
-				className="mx-auto mt-20 flex min-w-full max-w-sm flex-col gap-3 px-8 sm:min-w-[368px]"
+				className="mx-auto mt-20 flex min-w-full max-w-lg flex-col gap-3 px-8 sm:min-w-[368px]"
 				{...getFormProps(form)}
 			>
 				<AuthenticityTokenInput />
@@ -193,24 +194,39 @@ export default function SignupRoute() {
 						errors={fields.grade.errors}
 						className="w-full"
 					/>
-					<FormSelect
+					<FormInput
 						labelProps={{
-							htmlFor: fields.workshopTeacherId.id,
-							children: 'Yawp! Teacher',
+							htmlFor: fields.period.id,
+							children: 'Period',
+							info: 'Which period is this for you?',
 						}}
-						selectProps={{
-							...getInputProps(fields.workshopTeacherId, { type: 'text' }),
+						inputProps={{
+							...getInputProps(fields.period, { type: 'text' }),
 							autoComplete: 'name',
-							defaultValue: data.workshopTeachers[0]?.id,
-							options: data.workshopTeachers.map(teacher => ({
-								value: teacher.id,
-								label: teacher.name,
-							})),
+							required: true,
 						}}
-						errors={fields.workshopTeacherId.errors}
+						errors={fields.period.errors}
 						className="w-full"
 					/>
 				</div>
+				<FormSelect
+					labelProps={{
+						htmlFor: fields.workshopTeacherId.id,
+						children: 'Yawp! Teacher',
+					}}
+					selectProps={{
+						...getInputProps(fields.workshopTeacherId, { type: 'text' }),
+						autoComplete: 'name',
+						defaultValue: data.workshopTeachers[0]?.id,
+						options: data.workshopTeachers.map(teacher => ({
+							value: teacher.id,
+							label: teacher.name,
+						})),
+						className: 'w-full',
+					}}
+					errors={fields.workshopTeacherId.errors}
+					className="min-w-full"
+				/>
 				<FormInput
 					labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
 					inputProps={{

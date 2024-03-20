@@ -217,7 +217,7 @@ export function Instruction({ index, onDelete }: Props) {
 							name={`instructions[${index}].concludingPrompt`}
 							placeholder="Congratulation, you've complete this step!"
 							labelInfo="Depending on the above selection, this will either be sent to the student word-for-word, or this text will first be sent to GPT-4 and then given to the student."
-							value={value.concludingPrompt}
+							value={value.concludingPrompt ?? ''}
 							onChange={e =>
 								setValue({ ...value, concludingPrompt: e.target.value })
 							}
@@ -248,4 +248,3 @@ export function Instruction({ index, onDelete }: Props) {
 		</>
 	)
 }
-export { InstructionSchema }
