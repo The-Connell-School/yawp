@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { staging } from '#app/routes/resources+/seed'
+import { staging } from '#app/routes/resources+/seed.server'
 import { prisma } from '#app/utils/db.server.ts'
 import { cleanupDb } from '#tests/db-utils.ts'
 
@@ -9,11 +9,12 @@ async function seed() {
 
 	console.time('🧹 Cleaned up the database...')
 	await cleanupDb(prisma)
+	const stagingData = await staging()
 	console.timeEnd('🧹 Cleaned up the database...')
 
 	console.time('🔑 Created permissions...')
 	await Promise.all(
-		staging.permissions.map(permission =>
+		stagingData.permissions.map(permission =>
 			prisma.permission.create({ data: permission }),
 		),
 	)
@@ -21,13 +22,13 @@ async function seed() {
 
 	console.time('👑 Created roles...')
 	await Promise.all(
-		staging.roles.map(role => prisma.role.create({ data: role })),
+		stagingData.roles.map(role => prisma.role.create({ data: role })),
 	)
 	console.timeEnd('👑 Created roles...')
 
 	console.time(`🔒 Created users`)
 	await Promise.all(
-		staging.users.map(user => prisma.user.create({ data: user })),
+		stagingData.users.map(user => prisma.user.create({ data: user })),
 	)
 	console.timeEnd(`🔒 Created users`)
 
