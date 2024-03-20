@@ -150,6 +150,7 @@ model StudentProfile {
   school           String?
   schoolTeacher    String?
   grade            String?
+  period           String?
 }
 
 model TeacherProfile {

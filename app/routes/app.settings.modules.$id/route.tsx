@@ -3,7 +3,7 @@ import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { json, redirect, useLoaderData } from '@remix-run/react'
+import { Link, json, redirect, useLoaderData } from '@remix-run/react'
 import { withZod } from '@remix-validated-form/with-zod'
 import { TrashIcon } from 'lucide-react'
 import { ValidatedForm, validationError } from 'remix-validated-form'
@@ -98,6 +98,14 @@ export default function ModuleRoute() {
 			<div className="flex gap-2 px-6 pb-6 pt-1">
 				<Button type="submit" disabled={isPending} form={formId}>
 					Update
+				</Button>
+				<Button
+					disabled={isPending}
+					variant="secondary"
+					asChild
+					className="md:hidden"
+				>
+					<Link to="/app/settings/modules">Cancel</Link>
 				</Button>
 				<ValidatedForm
 					validator={deleteValidator}

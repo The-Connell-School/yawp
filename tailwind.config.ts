@@ -20,6 +20,7 @@ const config = {
 		extend: {
 			fontFamily: {
 				sans: ['var(--font-sans)'],
+				times: ['Times New Roman', 'serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',

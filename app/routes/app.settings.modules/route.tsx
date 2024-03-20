@@ -62,7 +62,7 @@ export default function Route() {
 						Add, edit, or remove modules. Modules are the building blocks of
 						your course. Configure the modules to fit your course's needs.
 					</p>
-					<div className="flex items-center justify-between py-3 pr-3">
+					<div className="flex items-center justify-between py-3 md:pr-3">
 						<SearchInput />
 						<Link to="/app/settings/modules/new">
 							<Button>
@@ -71,7 +71,7 @@ export default function Route() {
 							</Button>
 						</Link>
 					</div>
-					<div className="flex h-[calc(100vh-245px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
+					<div className="flex h-[calc(100vh-245px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px] md:pr-3">
 						{modules.length > 0 ? (
 							modules.map(module_ => (
 								<NavLink

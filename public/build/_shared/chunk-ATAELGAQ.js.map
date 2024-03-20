@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../app/hooks/useDebounce.ts"],
-  "sourcesContent": ["// REMIX HMR BEGIN\nimport * as __hmr__ from \"remix:hmr\";\nif (import.meta) {\nimport.meta.hot = __hmr__.createHotContext(\n//@ts-expect-error\n\"app/hooks/useDebounce.ts\"\n);\nimport.meta.hot.lastModified = \"1708316645855.9998\";\n}\n// REMIX HMR END\n\nimport { useState, useEffect } from 'react'\n\nexport function useDebounce<T = any>(value: T, delay: number): [T, boolean] {\n\tconst [debouncedValue, setDebouncedValue] = useState(value)\n\tlet [isDebouncing, setDebouncing] = useState(false)\n\n\tuseEffect(() => {\n\t\tsetDebouncing(true)\n\t\tconst handler = setTimeout(() => {\n\t\t\tsetDebouncing(false)\n\n\t\t\tsetDebouncedValue(value)\n\t\t}, delay)\n\n\t\treturn () => {\n\t\t\tclearTimeout(handler)\n\t\t}\n\t}, [value, delay])\n\treturn [debouncedValue, isDebouncing]\n}\n"],
-  "mappings": ";;;;;;;;;;;AAWA,mBAAoC;AATpC,IAAI,aAAa;AACjB,cAAY,MAAc;AAAA;AAAA,IAE1B;AAAA,EACA;AACA,cAAY,IAAI,eAAe;AAC/B;AAKO,SAAS,YAAqB,OAAU,OAA6B;AAC3E,QAAM,CAAC,gBAAgB,iBAAiB,QAAI,uBAAS,KAAK;AAC1D,MAAI,CAAC,cAAc,aAAa,QAAI,uBAAS,KAAK;AAElD,8BAAU,MAAM;AACf,kBAAc,IAAI;AAClB,UAAM,UAAU,WAAW,MAAM;AAChC,oBAAc,KAAK;AAEnB,wBAAkB,KAAK;AAAA,IACxB,GAAG,KAAK;AAER,WAAO,MAAM;AACZ,mBAAa,OAAO;AAAA,IACrB;AAAA,EACD,GAAG,CAAC,OAAO,KAAK,CAAC;AACjB,SAAO,CAAC,gBAAgB,YAAY;AACrC;",
-  "names": []
-}

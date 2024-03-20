@@ -95,7 +95,7 @@ async function validateRequest(
 		}
 		case 'change-email': {
 			await deleteVerification()
-			return handleChangeEmailVerification({ request, body, submission })
+			return handleChangeEmailVerification?.({ request, body, submission })
 		}
 		case '2fa': {
 			return handleLoginTwoFactorVerification({ request, body, submission })

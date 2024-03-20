@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../app/utils/breadcrumb.ts"],
-  "sourcesContent": ["// REMIX HMR BEGIN\nimport * as __hmr__ from \"remix:hmr\";\nif (import.meta) {\nimport.meta.hot = __hmr__.createHotContext(\n//@ts-expect-error\n\"app/utils/breadcrumb.ts\"\n);\nimport.meta.hot.lastModified = \"1708316645708.2175\";\n}\n// REMIX HMR END\n\nimport { z } from 'zod'\n\nexport const BreadcrumbHandle = z.object({ breadcrumb: z.any() })\nexport type BreadcrumbHandle = z.infer<typeof BreadcrumbHandle>\nexport const BreadcrumbHandleMatch = z.object({ handle: BreadcrumbHandle })\n"],
-  "mappings": ";;;;;;;;AAEA,IAAI,aAAa;AACjB,cAAY,MAAc;AAAA;AAAA,IAE1B;AAAA,EACA;AACA,cAAY,IAAI,eAAe;AAC/B;AAKO,IAAM,mBAAmB,EAAE,OAAO,EAAE,YAAY,EAAE,IAAI,EAAE,CAAC;AAEzD,IAAM,wBAAwB,EAAE,OAAO,EAAE,QAAQ,iBAAiB,CAAC;",
-  "names": []
-}

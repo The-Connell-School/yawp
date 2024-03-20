@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../../app/utils/startCase/startCase.ts"],
-  "sourcesContent": ["// REMIX HMR BEGIN\nimport * as __hmr__ from \"remix:hmr\";\nif (import.meta) {\nimport.meta.hot = __hmr__.createHotContext(\n//@ts-expect-error\n\"app/utils/startCase/startCase.ts\"\n);\nimport.meta.hot.lastModified = \"1706130424803.7034\";\n}\n// REMIX HMR END\n\nexport function startCase(str: string): string {\n\treturn str\n\t\t.replace(/([A-Z])/g, ' $1') // insert a space before all caps\n\t\t.replace(/_/g, ' ') // replace underscores with spaces\n\t\t.replace(/-/g, ' ') // replace hyphens with spaces\n\t\t.replace(/\\s+/g, ' ') // collapse repeated spaces\n\t\t.trim() // remove leading and trailing spaces\n\t\t.toLowerCase() // convert to lowercase\n\t\t.replace(/^\\w|\\s\\w/g, m => m.toUpperCase()) // capitalize the first letter of each word\n}\n"],
-  "mappings": ";;;;;AAEA,IAAI,aAAa;AACjB,cAAY,MAAc;AAAA;AAAA,IAE1B;AAAA,EACA;AACA,cAAY,IAAI,eAAe;AAC/B;AAGO,SAAS,UAAU,KAAqB;AAC9C,SAAO,IACL,QAAQ,YAAY,KAAK,EACzB,QAAQ,MAAM,GAAG,EACjB,QAAQ,MAAM,GAAG,EACjB,QAAQ,QAAQ,GAAG,EACnB,KAAK,EACL,YAAY,EACZ,QAAQ,aAAa,OAAK,EAAE,YAAY,CAAC;AAC5C;",
-  "names": []
-}
