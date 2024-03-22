@@ -60,7 +60,7 @@ You can translate all instructions to Spanish if requested.
 					`,
 					},
 				},
-				description: `Learn to brain-dump. We get you to start dreaming and writing about your favorite topics before moving on to forming a thesis. This is the fun part.`,
+				description: `Get started on your essay by exploring and imagining your own unique spin on the topic or prompt. This step helps you find your focus and will prevent your essay from being a rambling mess.`,
 				instructions: {
 					create: [
 						{
@@ -94,24 +94,14 @@ You can translate all instructions to Spanish if requested.
 							title: 'Write!',
 						},
 						{
-							answerKey: `The student should write a few sentences. If they ask a question, respond with an appropriate answer, but continue prompting them to write more content until they've written 2 sentences or more. You can say "See if you can write a little bit more on this, and then we'll move onto the next step" if they don't have enough sentences yet.`,
+							answerKey: `The student should write 3 more sentences in the user_content than the previous message.`,
 							position: 4,
-							prompt: `Great work! The next step in pre-writing is to read over what we've written. A lot of it may not be that interesting—that's ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you've written for a while and you don't have anything that's really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]`,
-							promptType: 'hardcoded',
-							answerType: 'select',
-							answerTypeOptions: "I'm done",
-							canAskQuestion: true,
-							title: "Read over what we've written",
-						},
-						{
-							answerKey: `The student should respond on a specific aspect of their topic that they want to focus on in their essay. For example, "I want to focus on the impact of the internet on education." or "I want to focus on Feminism". If they ask a question, it does not satisfy the answer_key. Else, the answer_key is satisfied.`,
-							position: 5,
-							prompt: `You should identify a couple possible "diamonds in the rough" (i.e. topics for an essay that the student has written in the content). You should let the user decide which diamond they want to write on. Ask them which they like best.`,
+							prompt: `Start your response, word for word, with the quote below. Then, analyze the user_content and identifying examples of diamonds that they can explore further. Add it to the end of the quote below. "Great work! The next step in pre-writing is to read over what we've written. A lot of it may not be that interesting—that's ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you've written for a while and you don't have anything that's really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]"`,
 							promptType: 'ai',
 							answerType: 'select',
 							answerTypeOptions: "I'm done",
 							canAskQuestion: true,
-							title: 'Identify Dimonds',
+							title: 'Identify diamonds in the rough',
 						},
 						{
 							answerKey: `The student should respond with an affirmative (like "yes" or "no"). If yes, the answer_key is satisfied. If no, prompt them to choose a different "diamond in the rough" (a topic in the content that was written) and respond word-for-word with "Ok, let's go back and look at another angle -- find a different 'diamond' from your pre-write."`,
@@ -130,7 +120,7 @@ You can translate all instructions to Spanish if requested.
 							promptType: 'hardcoded',
 							answerType: 'textarea',
 							concludingPrompt:
-								"Get the name of the user from previous messages, and respond character for character (filling in the <name>): 'Great work today <name>!'",
+								"Get the name of the user from previous content, and respond character for character (filling in the <name>): 'Great work today <name>!'",
 							concludingPromptType: 'ai',
 							title: 'Concluding',
 						},

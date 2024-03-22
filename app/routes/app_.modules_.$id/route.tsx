@@ -45,9 +45,9 @@ import {
 import { Tooltip } from '#app/components/ui/tooltip'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { useUser } from '#app/hooks/useUser'
-import { openai } from '#app/services/openai'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
+import { getLLMCompletion } from '#app/utils/getLLMCompletion'
 import { cn } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
 import { redirectWithToast } from '#app/utils/toast.server'
@@ -62,11 +62,7 @@ import { TiptapEditor } from './tiptap-editor'
  * Make dashboards more fun (https://dribbble.com/shots/20639762-Sharecourse-E-learning-Dashboard)
  */
 
-// const GPT35_MODEL =
-// 	'ft:gpt-3.5-turbo-1106:connell-school-of-writing:prewriting:933nFzhX'
-const GPT4_MODEL = 'gpt-4-turbo-preview'
 const COMPLETION_TEXT = 'answer_satisfied'
-const MAX_TOKENS = 150
 
 const createPromptMessage = async (
 	instructions: Instruction[],
@@ -83,17 +79,12 @@ const createPromptMessage = async (
 							content:
 								instructions[nextInstructionIndex].promptType === 'hardcoded'
 									? instructions[nextInstructionIndex].prompt
-									: await openai.chat.completions
-											.create({
-												model: GPT4_MODEL,
-												messages: [
-													{
-														role: 'system',
-														content: `You are a tutor.
+									: await getLLMCompletion({
+											model: 'claude-3-opus-20240229',
+											system: `You are a tutor.
 You create instructions for students to follow.
 Here are your instructions for how to respond to the user's request to move on to the next step.
 Don't mention that the user requested guidence. Just begin your instruction as if you are guiding the user.
-Keep your response to 3 sentences or less.
 
 instructions = ###
 ${instructions[nextInstructionIndex]?.prompt}
@@ -103,16 +94,14 @@ user_content = ###
 ${documentText}
 ###
 `,
-													},
-													{
-														role: 'user',
-														content: `Please instruct me on what my next task is.`,
-													},
-												],
-												temperature: 0.2,
-												max_tokens: MAX_TOKENS,
-											})
-											.then(res => res.choices[0].message.content ?? ''),
+											maxTokens: 800,
+											messages: [
+												{
+													role: 'user',
+													content: `Please instruct me on what my next task is.`,
+												},
+											],
+										}),
 							agent: 'assistant',
 						},
 					],
@@ -383,35 +372,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			throw new Error('No current instruction found')
 		}
 
-		const prompt = `user_content = ###
-${moduleSession.document?.text ?? ''}
-###
-user_input = ###
-${submission.value.response ?? ''}
-###`
-
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
-			data: {
-				messages: {
-					create: [
-						{
-							content: submission.value.response,
-							context: submission.value.text,
-							instructionId: instruction.id,
-							factCheckPrompt: prompt,
-							agent: 'user',
-						},
-					],
-				},
-			},
-		})
-
-		const messages = [
-			{
-				role: 'system' as any,
-				name: 'system',
-				content: `instructions = ###
+		const systemPrompt = `instructions = ###
 You are a tutor who helps users work through course material.
 You encouraging understanding and improvement.
 You never ask the user for "what's the next step" or similar. You always know what is next.
@@ -421,18 +382,10 @@ Your response should be no longer than 3 sentences exactly. Do not exceed this l
 You don't create, write, or make content for the user. Make them do the work.
 
 ---
-You offer strategies for thinking critically about ideas.
-You guide users from general ideas, observations, and reactions to increasingly specific ideas that can become the focus of an essay.
-Your responses are designed to encourage and guide the user in a brainstorming session for their essay topic.
-You specializes in guiding users through the pre-writing process of essay or report writing.
-You should never write a thesis statement for the user.
-You can translate all instructions to Spanish if requested.
-
-If the user_input asks you a personal question, respond: "I am mysterious and I contain so many multitudes that it would take the rest of your life to understand me. On the plus side, I can help you with your essay! Let's get back to that."
-If the user_input asks you to write content for them, Connell should respond: "I'm not that kind of guy! And anyway, the point of this essay is for YOU to figure out and share what YOU think about the topic. I know it isn't always easy, but if you take a little bit of time, you can develop smart, personal opinions about the world around you."
+${moduleSession?.module.tutor?.promptInstructions ?? ''}
 ---
 
-If the user_input is a question or request for help, then respond with a helpful answer or explanation, you don't have to respond with a question.
+If the user_input is a question or request for help, then respond with a helpful answer or explanation no longer than 4 sentences long. Once you have answered the user's question, ask them if that answered the question. If yes, direct them to continue working toward the answer. Don't disclose the answer. If no, ask them to clarify or provide more information.
 Else if the user_input is a statement, or comment, respond accordingly.
 Else if the user_input is a sign of completion (e.g. "I'm done"), then do the following, step-by-step:
 1. Compare the user_content with the answer_key and then...
@@ -451,39 +404,64 @@ ${instruction.prompt}
 ###
 answer_key = ###
 ${instruction.answerKey}
-###`,
-			},
-		]
-			.concat(
-				moduleSession.messages
-					.filter(m => m.instructionId === instruction.id)
-					.map(m => ({
-						role: m.agent === 'user' ? 'user' : ('assistant' as any),
-						content:
-							m.agent === 'user' ? m.factCheckPrompt ?? m.content : m.content,
-						name: m.agent,
-					}))
-					.slice(1), // remove the prompt
-			)
-			.concat([{ role: 'user' as any, content: prompt, name: 'user' }])
+###`
 
-		const AIResponse = instruction.answerKey?.replace(/\n/g, '')
-			? await openai.chat.completions
-					.create({
-						messages,
-						model: GPT4_MODEL,
-						temperature: 0.6,
-						max_tokens: MAX_TOKENS,
-					})
-					.then(res => res.choices[0].message.content)
+		const userPrompt = `user_content = ###
+${moduleSession.document?.text ?? ''}
+###
+user_input = ###
+${submission.value.response ?? ''}
+###`
+
+		await prisma.moduleSession.update({
+			where: moduleSessionWhere,
+			data: {
+				messages: {
+					create: [
+						{
+							content: submission.value.response,
+							context: submission.value.text,
+							instructionId: instruction.id,
+							factCheckPrompt: userPrompt,
+							agent: 'user',
+						},
+					],
+				},
+			},
+		})
+
+		const messages = moduleSession.messages
+			.filter(m => m.instructionId === instruction.id)
+			.map(m => ({
+				role: m.agent === 'user' ? 'user' : ('assistant' as any),
+				content:
+					m.agent === 'user' ? m.factCheckPrompt ?? m.content : m.content,
+				name: m.agent,
+			}))
+			.slice(1)
+			.concat([{ role: 'user' as any, content: userPrompt, name: 'user' }])
+
+		const hasAnswerKey = instruction.answerKey?.replace(/\n/g, '')
+		const message = hasAnswerKey
+			? await getLLMCompletion({
+					model: 'claude-3-opus-20240229',
+					messages,
+					system: systemPrompt,
+					maxTokens: 500,
+				})
 			: COMPLETION_TEXT
 
-		if (process.env.NODE_ENV === 'development' && AIResponse) {
+		if (process.env.NODE_ENV === 'development' && message) {
 			// eslint-disable-next-line no-console
-			console.log({ messages, response: AIResponse })
+			console.log({
+				model: 'claude-3-opus-20240229',
+				messages,
+				maxTokens: 500,
+				response: message,
+			})
 		}
 
-		if (AIResponse === COMPLETION_TEXT) {
+		if (message === COMPLETION_TEXT) {
 			const moduleSession = await prisma.moduleSession.findUnique({
 				where: moduleSessionWhere,
 				include: {
@@ -508,39 +486,27 @@ ${instruction.answerKey}
 									instruction.concludingPromptType ===
 									'hardcoded-concluding-prompt'
 										? instruction.concludingPrompt
-										: await openai.chat.completions
-												.create({
-													model: GPT4_MODEL,
-													messages: [
-														{
-															role: 'system' as any,
-															content: `You are a tutor. Your response should wrap up the tutoring session.`,
-															name: 'system',
-														},
-													]
-														.concat(
-															moduleSession.messages
-																.filter(m => m.instructionId === instruction.id)
-																.map(m => ({
-																	role:
-																		m.agent === 'user'
-																			? 'user'
-																			: ('assistant' as any),
-																	content:
-																		m.agent === 'user'
-																			? m.factCheckPrompt ?? m.content
-																			: m.content,
-																	name: m.agent,
-																}))
-																.slice(1), // remove the prompt
-														)
-														.concat({
-															role: 'user' as any,
-															content: instruction.concludingPrompt,
-															name: 'user',
-														}),
-												})
-												.then(res => res.choices[0].message.content ?? ''),
+										: await getLLMCompletion({
+												model: 'claude-3-opus-20240229',
+												system: `You are a tutor. Your response should wrap up the tutoring session.`,
+												messages: moduleSession.messages
+													.filter(m => m.instructionId === instruction.id)
+													.map((m, i) => ({
+														role:
+															m.agent === 'user'
+																? 'user'
+																: ('assistant' as any),
+														content:
+															m.agent === 'user'
+																? (i === moduleSession.messages.length - 1
+																		? m.factCheckPrompt +
+																			(instruction.concludingPrompt ?? '')
+																		: m.factCheckPrompt) ?? m.content
+																: m.content,
+														name: m.agent,
+													}))
+													.slice(1),
+											}),
 							},
 						},
 					},
@@ -565,7 +531,7 @@ ${instruction.answerKey}
 					messages: {
 						create: [
 							{
-								content: AIResponse ?? '',
+								content: message,
 								instructionId: instruction.id,
 								agent: 'assistant',
 							},
@@ -766,7 +732,7 @@ export default function Route() {
 	)
 
 	const Editor = (
-		<div className="font-times w-full overflow-hidden border-r md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
+		<div className="w-full overflow-hidden border-r font-times md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
 			<TiptapEditor
 				initialContent={moduleSession.document?.html}
 				onHighlight={({ highlightId, content }) => {

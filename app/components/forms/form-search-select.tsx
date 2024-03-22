@@ -88,8 +88,9 @@ export function FormSearchSelect({
 									<CommandItem
 										key={optValue}
 										value={optValue}
-										onSelect={currentValue => {
-											setValue(currentValue === optValue ? '' : currentValue)
+										className="cursor-pointer"
+										onSelect={incoming => {
+											setValue(incoming === value ? '' : incoming)
 											setOpen(false)
 										}}
 									>
