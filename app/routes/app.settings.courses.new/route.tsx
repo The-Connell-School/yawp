@@ -44,7 +44,6 @@ export async function action({ request }: ActionFunctionArgs) {
 					position: index,
 					tutorId: cm.tutorId || null,
 					instructions: {
-						deleteMany: {},
 						create: (cm.instructions ?? []).map((instruction, i) => ({
 							...instruction,
 							position: i,
