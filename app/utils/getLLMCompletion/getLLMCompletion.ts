@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
-const { anthropic } = await import('../../services/anthropic')
-const { openai } = await import('../../services/openai')
+import { anthropic } from '#app/services/anthropic'
+import { openai } from '#app/services/openai'
 
 interface Params {
 	messages: { role: 'user' | 'assistant'; content: string; name?: string }[]
