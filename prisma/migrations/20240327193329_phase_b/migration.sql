@@ -5,14 +5,10 @@
   - You are about to drop the `ExerciseComment` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the `ExerciseSession` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the `ExerciseSessionMessage` table. If the table is not empty, all the data it contains will be lost.
+  - You are about to drop the `Instruction` table. If the table is not empty, all the data it contains will be lost.
+  - You are about to drop the `Module_` table. If the table is not empty, all the data it contains will be lost.
   - You are about to drop the column `studentProfileId` on the `User` table. All the data in the column will be lost.
   - You are about to drop the column `teacherProfileId` on the `User` table. All the data in the column will be lost.
-  - You are about to drop the column `exerciseId` on the `Instruction` table. All the data in the column will be lost.
-  - You are about to drop the column `copyContentFromPrevious` on the `Module_` table. All the data in the column will be lost.
-  - You are about to drop the column `descriptionHtml` on the `Module_` table. All the data in the column will be lost.
-  - You are about to drop the column `descriptionText` on the `Module_` table. All the data in the column will be lost.
-  - Added the required column `moduleId` to the `Instruction` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `title` to the `Instruction` table without a default value. This is not possible if the table is not empty.
 
 */
 -- DropIndex
@@ -44,41 +40,108 @@ PRAGMA foreign_keys=off;
 DROP TABLE "ExerciseSessionMessage";
 PRAGMA foreign_keys=on;
 
+-- DropTable
+PRAGMA foreign_keys=off;
+DROP TABLE "Instruction";
+PRAGMA foreign_keys=on;
+
+-- DropTable
+PRAGMA foreign_keys=off;
+DROP TABLE "Module_";
+PRAGMA foreign_keys=on;
+
 -- CreateTable
 CREATE TABLE "Tutor" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "name" TEXT NOT NULL,
-    "promptInstructions" TEXT,
-    "answerInstructions" TEXT
+    "instructions" TEXT
 );
 
 -- CreateTable
-CREATE TABLE "ModuleSession" (
+CREATE TABLE "Course" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
-    "moduleId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "instructionsCompleted" INTEGER NOT NULL,
-    "documentId" TEXT,
-    CONSTRAINT "ModuleSession_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module_" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "ModuleSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "ModuleSession_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "position" INTEGER NOT NULL
 );
 
 -- CreateTable
-CREATE TABLE "ModuleSessionMessage" (
+CREATE TABLE "CourseImage" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "moduleSessionId" TEXT NOT NULL,
+    "updatedAt" DATETIME NOT NULL,
+    "altText" TEXT,
+    "contentType" TEXT NOT NULL,
+    "blob" BLOB NOT NULL,
+    "courseId" TEXT NOT NULL,
+    CONSTRAINT "CourseImage_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "Course" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CourseModule" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "deletedAt" DATETIME,
+    "title" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "description" TEXT,
+    "tutorId" TEXT,
+    "courseId" TEXT,
+    CONSTRAINT "CourseModule_tutorId_fkey" FOREIGN KEY ("tutorId") REFERENCES "Tutor" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CourseModule_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "Course" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CourseModuleInstruction" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "courseModuleId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "answerKey" TEXT,
+    "hasAnswerKey" BOOLEAN NOT NULL DEFAULT false,
+    "prompt" TEXT NOT NULL,
+    "promptType" TEXT NOT NULL,
+    "answerType" TEXT NOT NULL,
+    "answerTypeOptions" TEXT,
+    "concludingPrompt" TEXT,
+    "concludingPromptType" TEXT,
+    "canAskQuestion" BOOLEAN NOT NULL DEFAULT false,
+    "interactiveType" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    CONSTRAINT "CourseModuleInstruction_courseModuleId_fkey" FOREIGN KEY ("courseModuleId") REFERENCES "CourseModule" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CourseModuleSession" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "courseModuleId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "instructionsCompleted" INTEGER NOT NULL,
+    "documentId" TEXT,
+    CONSTRAINT "CourseModuleSession_courseModuleId_fkey" FOREIGN KEY ("courseModuleId") REFERENCES "CourseModule" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CourseModuleSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "CourseModuleSession_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CourseModuleSessionMessage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "courseModuleSessionId" TEXT NOT NULL,
     "instructionId" TEXT NOT NULL,
     "content" TEXT NOT NULL,
     "agent" TEXT NOT NULL,
     "factCheckPrompt" TEXT,
     "context" TEXT,
-    CONSTRAINT "ModuleSessionMessage_moduleSessionId_fkey" FOREIGN KEY ("moduleSessionId") REFERENCES "ModuleSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "CourseModuleSessionMessage_courseModuleSessionId_fkey" FOREIGN KEY ("courseModuleSessionId") REFERENCES "CourseModuleSession" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -143,39 +206,8 @@ INSERT INTO "new_User" ("createdAt", "email", "id", "name", "updatedAt") SELECT 
 DROP TABLE "User";
 ALTER TABLE "new_User" RENAME TO "User";
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-CREATE TABLE "new_Instruction" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "moduleId" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
-    "answerKey" TEXT,
-    "hasAnswerKey" BOOLEAN NOT NULL DEFAULT false,
-    "prompt" TEXT NOT NULL,
-    "promptType" TEXT NOT NULL,
-    "answerType" TEXT NOT NULL,
-    "answerTypeOptions" TEXT,
-    "concludingPrompt" TEXT,
-    "concludingPromptType" TEXT,
-    "canAskQuestion" BOOLEAN NOT NULL DEFAULT false,
-    "position" INTEGER NOT NULL,
-    CONSTRAINT "Instruction_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module_" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-INSERT INTO "new_Instruction" ("answerKey", "answerType", "createdAt", "id", "position", "prompt", "promptType", "updatedAt") SELECT "answerKey", "answerType", "createdAt", "id", "position", "prompt", "promptType", "updatedAt" FROM "Instruction";
-DROP TABLE "Instruction";
-ALTER TABLE "new_Instruction" RENAME TO "Instruction";
-CREATE TABLE "new_Module_" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "title" TEXT NOT NULL,
-    "position" INTEGER NOT NULL,
-    "description" TEXT,
-    "tutorId" TEXT,
-    CONSTRAINT "Module__tutorId_fkey" FOREIGN KEY ("tutorId") REFERENCES "Tutor" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-INSERT INTO "new_Module_" ("createdAt", "id", "position", "title", "updatedAt") SELECT "createdAt", "id", "position", "title", "updatedAt" FROM "Module_";
-DROP TABLE "Module_";
-ALTER TABLE "new_Module_" RENAME TO "Module_";
 PRAGMA foreign_key_check;
 PRAGMA foreign_keys=ON;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "CourseImage_courseId_key" ON "CourseImage"("courseId");

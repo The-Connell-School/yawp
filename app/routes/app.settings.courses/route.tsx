@@ -24,8 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
 
-	const modules = await prisma.module_.findMany({
-		include: { _count: { select: { instructions: true } } },
+	const courses = await prisma.course.findMany({
 		where: {
 			...(query
 				? {
@@ -38,15 +37,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		},
 	})
 
-	return json({ modules })
+	return json({ courses })
 }
 
-export default function Route() {
-	const { modules } = useLoaderData<typeof loader>()
+export default function CoursesRoute() {
+	const { courses } = useLoaderData<typeof loader>()
 	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
 	const showSidePanel = ['lg', 'xl', '2xl'].includes(breakpoint ?? '')
-	const isEditing = !!useMatch('/app/settings/modules/:id')
+	const isEditing = !!useMatch('/app/settings/courses/:id')
 	const [searchParams] = useSearchParams()
 
 	return (
@@ -57,14 +56,15 @@ export default function Route() {
 						'flex h-[calc(100vh-104px)] w-full flex-col overflow-y-scroll pl-3 pr-3 pt-3 sm:h-[calc(100vh-54px)] sm:pl-6 sm:pt-6 md:w-1/2 md:border-r md:pr-0',
 					)}
 				>
-					<h2>Modules</h2>
-					<p className="mt-1 max-w-[550px] text-muted-foreground">
-						Add, edit, or remove modules. Modules are the building blocks of
-						your course. Configure the modules to fit your course's needs.
+					<h2>Courses</h2>
+					<p className="mt-1 max-w-[550px] pr-3 text-muted-foreground">
+						Add, edit, or remove courses. Courses are the main way to organize
+						your content. Students will work through courses to complete your
+						program.
 					</p>
 					<div className="flex items-center justify-between py-3 md:pr-3">
 						<SearchInput />
-						<Link to="/app/settings/modules/new">
+						<Link to="/app/settings/courses/new">
 							<Button>
 								<PlusIcon className="mr-1" />
 								New
@@ -72,11 +72,11 @@ export default function Route() {
 						</Link>
 					</div>
 					<div className="flex h-[calc(100vh-245px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px] md:pr-3">
-						{modules.length > 0 ? (
-							modules.map(module_ => (
+						{courses.length > 0 ? (
+							courses.map(course => (
 								<NavLink
-									key={module_.id}
-									to={`/app/settings/modules/${module_.id}?q=${searchParams.get('q') ?? ''}`}
+									key={course.id}
+									to={`/app/settings/courses/${course.id}?q=${searchParams.get('q') ?? ''}`}
 									className={({ isActive }) =>
 										cn(
 											'flex cursor-pointer items-center justify-between gap-2 rounded border p-2 shadow-sm transition hover:bg-muted/50 md:p-3',
@@ -87,18 +87,14 @@ export default function Route() {
 										)
 									}
 								>
-									<p className="font-bold">{module_.title}</p>
-									<p className="text-sm text-muted-foreground">
-										{module_._count.instructions}{' '}
-										{module_._count.instructions === 1
-											? 'Instruction'
-											: 'Instructions'}
+									<p className="font-bold">
+										{course.title || 'Untitled course'}
 									</p>
 								</NavLink>
 							))
 						) : (
 							<div className="flex h-full w-full flex-col items-center justify-center gap-1">
-								<h3>No modules found.</h3>
+								<h3>No courses found.</h3>
 								<p>
 									Hit the <code className="bg-foreground/10 px-1">+</code>{' '}
 									button above to create one.
@@ -114,11 +110,11 @@ export default function Route() {
 				) : (
 					<Drawer
 						open={isEditing}
-						onClose={() => navigate('/app/settings/modules')}
+						onClose={() => navigate('/app/settings/courses')}
 					>
 						<DrawerContent
 							className="pb-4"
-							onInteractOutside={() => navigate('/app/settings/modules')}
+							onInteractOutside={() => navigate('/app/settings/courses')}
 						>
 							<Outlet />
 						</DrawerContent>

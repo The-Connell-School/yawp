@@ -30,8 +30,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 				? {
 						OR: [
 							{ name: { contains: query } },
-							{ promptInstructions: { contains: query } },
-							{ answerInstructions: { contains: query } },
+							{ instructions: { contains: query } },
 						],
 					}
 				: {}),
@@ -50,24 +49,29 @@ export default function Route() {
 	const [searchParams] = useSearchParams()
 
 	return (
-		<main className="h-full w-full overflow-y-scroll p-6">
-			<h2>Tutors</h2>
-			<p className="mt-1 max-w-[550px] text-muted-foreground">
-				Add, edit, or remove tutors. Tutors are the "brains" behind your
-				application. Configure them with content or instruct them how to respond
-				to students.
-			</p>
-			<div className="mt-4 flex w-full rounded-sm">
-				<div className={cn('flex h-full w-full flex-col md:w-1/2 md:border-r')}>
-					<div className="flex items-center justify-between pb-3 pr-3">
+		<main className="h-full w-full">
+			<div className="flex w-full rounded-sm">
+				<div
+					className={cn(
+						'flex h-[calc(100vh-104px)] w-full flex-col overflow-y-scroll pl-3 pr-3 pt-3 sm:h-[calc(100vh-54px)] sm:pl-6 sm:pt-6 md:w-1/2 md:border-r md:pr-0',
+					)}
+				>
+					<h2>Tutors</h2>
+					<p className="mt-1 max-w-[550px] text-muted-foreground">
+						Add, edit, or remove tutors. Tutors are the "brains" behind your
+						application. Configure them with content or instruct them how to
+						respond to students.
+					</p>
+					<div className="flex items-center justify-between py-3 md:pr-3">
 						<SearchInput />
 						<Link to="/app/settings/tutors/new">
-							<Button size="icon" variant="outline">
-								<PlusIcon />
+							<Button>
+								<PlusIcon className="mr-1" />
+								New
 							</Button>
 						</Link>
 					</div>
-					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px]">
+					<div className="flex h-[calc(100vh-245px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 sm:h-[calc(100vh-275px)] sm:min-h-[400px] md:pr-3">
 						{tutors.length > 0 ? (
 							tutors.map(tutor => (
 								<NavLink
@@ -75,20 +79,15 @@ export default function Route() {
 									to={`/app/settings/tutors/${tutor.id}?q=${searchParams.get('q') ?? ''}`}
 									className={({ isActive }) =>
 										cn(
-											'grid cursor-pointer rounded-sm border p-2 transition-opacity hover:opacity-80 md:p-3',
-											{ 'border-primary/50 bg-primary/5': isActive },
+											'flex cursor-pointer items-center justify-between gap-2 rounded border p-2 shadow-sm transition hover:bg-muted/50 md:p-3',
+											{
+												'border-primary/20 bg-primary/10 text-primary hover:bg-primary/10':
+													isActive,
+											},
 										)
 									}
 								>
-									<div className="flex items-center gap-1">
-										<h4 className="text-sm">Tutor</h4>
-									</div>
-									<p>
-										{tutor.name}:{' '}
-										{(tutor.promptInstructions?.length ?? 0) > 95
-											? `${tutor.promptInstructions?.slice(0, 95)}...`
-											: tutor.promptInstructions}
-									</p>
+									<p className="font-bold">{tutor.name}</p>
 								</NavLink>
 							))
 						) : (
@@ -103,7 +102,7 @@ export default function Route() {
 					</div>
 				</div>
 				{showSidePanel ? (
-					<div className="hidden h-[calc(100vh-345px)] w-1/2 overflow-y-scroll sm:h-[calc(100vh-207px)] sm:min-h-[400px] md:block">
+					<div className="hidden h-[calc(100vh-111px)] w-1/2 overflow-y-scroll sm:h-[calc(100vh-54px)] md:block">
 						<Outlet />
 					</div>
 				) : (

@@ -16,8 +16,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			user: {
 				include: {
 					image: true,
-					moduleSessions: {
-						include: { module: { include: { instructions: true } } },
+					courseModuleSessions: {
+						include: { courseModule: { include: { instructions: true } } },
 					},
 				},
 			},
@@ -49,15 +49,15 @@ export default function Route() {
 				</div>
 			</div>
 			<div className="mt-6">
-				{studentProfile.user.moduleSessions.map(ms => (
+				{studentProfile.user.courseModuleSessions.map(ms => (
 					<Link
 						key={ms.id}
 						className="flex w-fit flex-col items-center justify-center rounded border p-4"
-						to={`/app/modules/${ms.moduleId}?studentProfileId=${studentProfile.id}`}
+						to={`/app/modules/${ms.courseModuleId}?studentProfileId=${studentProfile.id}`}
 					>
-						<p>{ms.module.title}</p>
+						<p>{ms.courseModule.title}</p>
 						<p className="text-muted-foreground">
-							{ms.instructionsCompleted === ms.module.instructions.length
+							{ms.instructionsCompleted === ms.courseModule.instructions.length
 								? 'Completed'
 								: 'Not completed'}
 						</p>

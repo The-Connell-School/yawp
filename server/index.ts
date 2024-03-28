@@ -95,8 +95,8 @@ app.use(
 	morgan('tiny', {
 		skip: (req, res) =>
 			res.statusCode === 200 &&
-			(req.url?.startsWith('/resources/user-images') ||
-				req.url?.startsWith('/resources/healthcheck')),
+			(req.url?.startsWith('/api/user-images') ||
+				req.url?.startsWith('/api/healthcheck')),
 	}),
 )
 
@@ -174,8 +174,8 @@ app.use((req, res, next) => {
 		'/onboarding',
 		'/reset-password',
 		'/app/profile',
-		'/resources/login',
-		'/resources/verify',
+		'/api/login',
+		'/api/verify',
 	]
 	if (req.method !== 'GET' && req.method !== 'HEAD') {
 		if (strongPaths.some(p => req.path.includes(p))) {

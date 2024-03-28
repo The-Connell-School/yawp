@@ -5,7 +5,7 @@ import {
 import { useForm } from '@conform-to/react'
 import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import { invariant } from '@epic-web/invariant'
-import { type Prisma, type Instruction } from '@prisma/client'
+import { type Prisma, type CourseModuleInstruction } from '@prisma/client'
 import {
 	type LoaderFunctionArgs,
 	json,
@@ -23,6 +23,7 @@ import { useEffect, useRef } from 'react'
 import { useSpinDelay } from 'spin-delay'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { ArrowRightIcon } from '#app/components/icons'
 import {
 	AlertDialog,
 	AlertDialogTrigger,
@@ -48,7 +49,7 @@ import { useUser } from '#app/hooks/useUser'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { getLLMCompletion } from '#app/utils/getLLMCompletion'
-import { cn } from '#app/utils/misc'
+import { cn, parseAIResponse } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { ChatInput } from './chat-input'
@@ -57,15 +58,10 @@ import { Comment } from './comment'
 import { SelectButtons } from './select-buttons'
 import { TiptapEditor } from './tiptap-editor'
 
-/*
- * Fix tutor
- * Make dashboards more fun (https://dribbble.com/shots/20639762-Sharecourse-E-learning-Dashboard)
- */
-
 const COMPLETION_TEXT = 'answer_satisfied'
 
 const createPromptMessage = async (
-	instructions: Instruction[],
+	instructions: CourseModuleInstruction[],
 	nextInstructionIndex: number,
 	documentText: string,
 ) =>
@@ -112,7 +108,7 @@ ${documentText}
 const getModuleSessionWhere = (
 	userId: string,
 	studentProfileId?: string | null,
-): Prisma.ModuleSessionWhereInput =>
+): Prisma.CourseModuleSessionWhereInput =>
 	studentProfileId
 		? {
 				user: {
@@ -130,15 +126,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const studentProfileId = url.searchParams.get('studentProfileId')
 	const userId = await requireUserId(request)
 
-	const [module_, moduleSession] = await Promise.all([
-		prisma.module_.findUnique({
+	const [courseModule, courseModuleSession] = await Promise.all([
+		prisma.courseModule.findUnique({
 			where: { id: params.id },
 			include: { instructions: true, tutor: true },
 		}),
-		prisma.moduleSession.findFirst({
+		prisma.courseModuleSession.findFirst({
 			where: {
 				...getModuleSessionWhere(userId, studentProfileId),
-				moduleId: params.id,
+				courseModuleId: params.id,
 			},
 			include: {
 				messages: true,
@@ -160,25 +156,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		}),
 	])
 
-	if (!module_) {
+	if (!courseModule) {
 		return redirectWithToast('/app', {
 			type: 'error',
 			description: 'Module not found',
 			closeButton: false,
 		})
-	} else if (!moduleSession && studentProfileId) {
+	} else if (!courseModuleSession && studentProfileId) {
 		return redirectWithToast('/app', {
 			type: 'error',
 			description: 'Student session not found',
 			closeButton: false,
 		})
-	} else if (!moduleSession) {
-		const newModuleSession = await prisma.moduleSession.create({
+	} else if (!courseModuleSession) {
+		const newModuleSession = await prisma.courseModuleSession.create({
 			data: {
 				userId,
-				moduleId: params.id,
+				courseModuleId: params.id,
 				instructionsCompleted: 0,
-				...(await createPromptMessage(module_.instructions, 0, '')),
+				...(await createPromptMessage(courseModule.instructions, 0, '')),
 			},
 			include: {
 				messages: true,
@@ -199,23 +195,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			},
 		})
 
-		const nextInstruction = module_.instructions[0] ?? null
-		return json({ module_, moduleSession: newModuleSession, nextInstruction })
+		const nextInstruction = courseModule.instructions[0] ?? null
+		return json({
+			courseModule,
+			courseModuleSession: newModuleSession,
+			nextInstruction,
+		})
 	}
 
 	const nextInstruction =
-		module_.instructions[moduleSession.instructionsCompleted] ?? null
-	return json({ module_, moduleSession, nextInstruction })
+		courseModule.instructions[courseModuleSession.instructionsCompleted] ?? null
+	return json({ courseModule, courseModuleSession, nextInstruction })
 }
 
 const Schema = z.object({
-	moduleSessionId: z.string().optional(),
+	courseModuleSessionId: z.string().optional(),
 	intent: z
 		.union([
 			z.literal('update-document'),
 			z.literal('restart-instructions'),
 			z.literal('create-document-comment'),
 			z.literal('delete-document-comment'),
+			z.literal('complete-current-instruction'),
 			z.literal('create-document-comment-response'),
 		])
 		.optional(),
@@ -237,18 +238,21 @@ export async function action({ request }: ActionFunctionArgs) {
 		return json(submission.reply(), { status: 400 })
 	}
 
-	invariant(submission.value.moduleSessionId, 'Missing `moduleSessionId`')
+	invariant(
+		submission.value.courseModuleSessionId,
+		'Missing `courseModuleSessionId`',
+	)
 
 	const url = new URL(request.url)
 	const studentProfileId = url.searchParams.get('studentProfileId')
-	const moduleSessionWhere = {
+	const courseModuleSessionWhere = {
 		...getModuleSessionWhere(userId, studentProfileId),
-		id: submission.value.moduleSessionId,
+		id: submission.value.courseModuleSessionId,
 	}
 
 	if (submission.value.intent === 'update-document') {
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
 			data: {
 				document: {
 					upsert: {
@@ -266,22 +270,51 @@ export async function action({ request }: ActionFunctionArgs) {
 			},
 		})
 		return submission.reply()
+	} else if (submission.value.intent === 'complete-current-instruction') {
+		const courseModuleSession = await prisma.courseModuleSession.findUnique({
+			where: courseModuleSessionWhere,
+			include: {
+				document: true,
+				courseModule: { include: { instructions: true, tutor: true } },
+			},
+		})
+
+		if (!courseModuleSession) {
+			throw new Error('No module session found')
+		}
+
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
+			data: {
+				instructionsCompleted: { increment: 1 },
+				...(await createPromptMessage(
+					courseModuleSession.courseModule.instructions,
+					courseModuleSession.instructionsCompleted + 1,
+					courseModuleSession.document?.text ?? '',
+				)),
+			},
+		})
+		return submission.reply()
 	} else if (submission.value.intent === 'restart-instructions') {
-		const moduleSession = await prisma.moduleSession.findUnique({
-			where: { id: submission.value.moduleSessionId },
-			include: { module: { include: { instructions: true, tutor: true } } },
+		const courseModuleSession = await prisma.courseModuleSession.findUnique({
+			where: { id: submission.value.courseModuleSessionId },
+			include: {
+				courseModule: { include: { instructions: true, tutor: true } },
+			},
 		})
 
 		await prisma.$transaction([
-			prisma.moduleSessionMessage.deleteMany({
-				where: { moduleSessionId: submission.value.moduleSessionId },
+			prisma.courseModuleSessionMessage.deleteMany({
+				where: {
+					courseModuleSessionId: submission.value.courseModuleSessionId,
+				},
 			}),
-			prisma.moduleSession.update({
-				where: moduleSessionWhere,
+			prisma.courseModuleSession.update({
+				where: courseModuleSessionWhere,
 				data: {
 					instructionsCompleted: 0,
 					...(await createPromptMessage(
-						moduleSession?.module.instructions ?? [],
+						courseModuleSession?.courseModule.instructions ?? [],
 						0,
 						submission.value.text ?? '',
 					)),
@@ -292,8 +325,8 @@ export async function action({ request }: ActionFunctionArgs) {
 	} else if (submission.value.intent === 'delete-document-comment') {
 		invariant(submission.value.commentId, 'Missing `commentId`')
 
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
 			data: {
 				document: {
 					update: { comments: { delete: { id: submission.value.commentId } } },
@@ -305,8 +338,8 @@ export async function action({ request }: ActionFunctionArgs) {
 		invariant(submission.value.content, 'Missing `content`')
 		invariant(submission.value.highlightId, 'Missing `highlightId`')
 
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
 			data: {
 				document: {
 					update: {
@@ -328,8 +361,8 @@ export async function action({ request }: ActionFunctionArgs) {
 		invariant(submission.value.commentId, 'Missing `commentId`')
 		invariant(submission.value.commentResponse, 'Missing `commentResponse`')
 
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
 			data: {
 				document: {
 					update: {
@@ -356,17 +389,19 @@ export async function action({ request }: ActionFunctionArgs) {
 	} else if (submission.value.response) {
 		invariant(submission.value.response, 'Missing `response`')
 
-		const moduleSession = await prisma.moduleSession.findFirst({
-			where: moduleSessionWhere,
+		const courseModuleSession = await prisma.courseModuleSession.findFirst({
+			where: courseModuleSessionWhere,
 			include: {
-				module: { include: { instructions: true, tutor: true } },
+				courseModule: { include: { instructions: true, tutor: true } },
 				messages: true,
 				document: true,
 			},
 		})
 
 		const instruction =
-			moduleSession?.module.instructions[moduleSession?.instructionsCompleted]
+			courseModuleSession?.courseModule.instructions[
+				courseModuleSession?.instructionsCompleted
+			]
 
 		if (!instruction) {
 			throw new Error('No current instruction found')
@@ -378,43 +413,50 @@ You encouraging understanding and improvement.
 You never ask the user for "what's the next step" or similar. You always know what is next.
 You ask more questions than you answer, though you will provide factual information when requested.
 You are supportive, instructive, and witty, enhancing the user's learning experience and confidence.
-Your response should be no longer than 3 sentences exactly. Do not exceed this limit.
-You don't create, write, or make content for the user. Make them do the work.
+Your response should be no longer than 3 sentences exactly.
+You don't create, write, or make content for the user.
+You pretend to now know the answer_key nor that you know there even is an answer. However, you can guide the user toward the answer_key.
 
----
-${moduleSession?.module.tutor?.promptInstructions ?? ''}
----
+${courseModuleSession?.courseModule.tutor?.instructions ?? ''}
 
-If the user_input is a question or request for help, then respond with a helpful answer or explanation no longer than 4 sentences long. Once you have answered the user's question, ask them if that answered the question. If yes, direct them to continue working toward the answer. Don't disclose the answer. If no, ask them to clarify or provide more information.
+${
+	instruction.interactiveType === 'answer'
+		? `If the user_input is a question or request for help, then respond with a helpful answer or explanation no longer than 4 sentences long. Once you have answered the user's question, ask them if that answered the question. If yes, direct them to continue working toward the answer. Don't disclose the answer. If no, ask them to clarify or provide more information.
 Else if the user_input is a statement, or comment, respond accordingly.
 Else if the user_input is a sign of completion (e.g. "I'm done"), then do the following, step-by-step:
 1. Compare the user_content with the answer_key and then...
-2. Your response should be an aswer to this question: does the user_content contain a value (notified between ###) that satisifes the answer_key requirements? (not your response)
+2. Your response should be an aswer to this question: does the user_content contain a value that satisifes the answer_key requirements? (not your response)
 - If it does, respond with "answer_satisfied" character for character.
 - If it doesn't, respond with feedback to guide the student closer to the answer_key without disclosing it directly.
 - Your hint should aim to facilitate learning.
-- Never disclose the answer_key directly.
-- Do not use the word "requirement" or "require" in your response.
+- Never disclose the answer_key directly
 - Your response should be no more than 2 sentences long, max. No exceptions.
-- Ask questions to guide the user to the answer_key.
+- Ask questions to guide the user to the answer_key.`
+		: ''
+}
 ###
 
-initial prompt given to the student = ###
+initial prompt given to the user = ###
 ${instruction.prompt}
 ###
-answer_key = ###
+${
+	instruction.interactiveType === 'answer'
+		? `answer_key = ###
 ${instruction.answerKey}
 ###`
+		: ''
+}
+`
 
 		const userPrompt = `user_content = ###
-${moduleSession.document?.text ?? ''}
+${courseModuleSession.document?.text ?? ''}
 ###
 user_input = ###
 ${submission.value.response ?? ''}
 ###`
 
-		await prisma.moduleSession.update({
-			where: moduleSessionWhere,
+		await prisma.courseModuleSession.update({
+			where: courseModuleSessionWhere,
 			data: {
 				messages: {
 					create: [
@@ -430,7 +472,7 @@ ${submission.value.response ?? ''}
 			},
 		})
 
-		const messages = moduleSession.messages
+		const messages = courseModuleSession.messages
 			.filter(m => m.instructionId === instruction.id)
 			.map(m => ({
 				role: m.agent === 'user' ? 'user' : ('assistant' as any),
@@ -451,37 +493,27 @@ ${submission.value.response ?? ''}
 				})
 			: COMPLETION_TEXT
 
-		if (process.env.NODE_ENV === 'development' && message) {
-			// eslint-disable-next-line no-console
-			console.log({
-				model: 'claude-3-opus-20240229',
-				messages,
-				maxTokens: 500,
-				response: message,
-			})
-		}
-
 		if (message === COMPLETION_TEXT) {
-			const moduleSession = await prisma.moduleSession.findUnique({
-				where: moduleSessionWhere,
+			const courseModuleSession = await prisma.courseModuleSession.findUnique({
+				where: courseModuleSessionWhere,
 				include: {
 					messages: true,
-					module: { include: { instructions: true, tutor: true } },
+					courseModule: { include: { instructions: true, tutor: true } },
 					document: true,
 				},
 			})
 
-			invariant(moduleSession, 'No module session found')
+			invariant(courseModuleSession, 'No module session found')
 
 			if (instruction.concludingPrompt?.length) {
-				await prisma.moduleSession.update({
-					where: moduleSessionWhere,
+				await prisma.courseModuleSession.update({
+					where: courseModuleSessionWhere,
 					data: {
 						messages: {
 							create: {
 								agent: 'assistant',
 								instructionId: instruction.id,
-								context: moduleSession.document?.text ?? '',
+								context: courseModuleSession.document?.text ?? '',
 								content:
 									instruction.concludingPromptType ===
 									'hardcoded-concluding-prompt'
@@ -489,7 +521,7 @@ ${submission.value.response ?? ''}
 										: await getLLMCompletion({
 												model: 'claude-3-opus-20240229',
 												system: `You are a tutor. Your response should wrap up the tutoring session.`,
-												messages: moduleSession.messages
+												messages: courseModuleSession.messages
 													.filter(m => m.instructionId === instruction.id)
 													.map((m, i) => ({
 														role:
@@ -498,7 +530,7 @@ ${submission.value.response ?? ''}
 																: ('assistant' as any),
 														content:
 															m.agent === 'user'
-																? (i === moduleSession.messages.length - 1
+																? (i === courseModuleSession.messages.length - 1
 																		? m.factCheckPrompt +
 																			(instruction.concludingPrompt ?? '')
 																		: m.factCheckPrompt) ?? m.content
@@ -513,20 +545,20 @@ ${submission.value.response ?? ''}
 				})
 			}
 
-			await prisma.moduleSession.update({
-				where: { id: moduleSession.id },
+			await prisma.courseModuleSession.update({
+				where: { id: courseModuleSession.id },
 				data: {
 					instructionsCompleted: { increment: 1 },
 					...(await createPromptMessage(
-						moduleSession.module.instructions,
-						moduleSession.instructionsCompleted + 1,
-						moduleSession.document?.text ?? '',
+						courseModuleSession.courseModule.instructions,
+						courseModuleSession.instructionsCompleted + 1,
+						courseModuleSession.document?.text ?? '',
 					)),
 				},
 			})
 		} else {
-			await prisma.moduleSession.update({
-				where: moduleSessionWhere,
+			await prisma.courseModuleSession.update({
+				where: courseModuleSessionWhere,
 				data: {
 					messages: {
 						create: [
@@ -551,7 +583,7 @@ export default function Route() {
 	const navigate = useNavigate()
 	const fetcher = useFetcher<typeof action>()
 	const messagesRef = useRef<HTMLDivElement>(null)
-	const { module_, moduleSession } = useLoaderData<typeof loader>()
+	const { courseModule, courseModuleSession } = useLoaderData<typeof loader>()
 	const [searchParams] = useSearchParams()
 	const studentProfileId = searchParams.get('studentProfileId')
 	const breakpoint = useBreakpoint()
@@ -567,7 +599,7 @@ export default function Route() {
 					{
 						id: 'unknown',
 						createdAt: new Date().toISOString(),
-						documentId: moduleSession.documentId!,
+						documentId: courseModuleSession.documentId!,
 						content: fetcher.formData?.get('content') as string,
 						highlightId: fetcher.formData?.get('highlightId') as string,
 						userId: user.id,
@@ -576,22 +608,29 @@ export default function Route() {
 					},
 				]
 			: []
-	const comments = moduleSession.document?.comments.concat(newComment) ?? []
+	const comments =
+		courseModuleSession.document?.comments.concat(newComment) ?? []
 
 	const currentInstruction =
-		module_.instructions[moduleSession.instructionsCompleted]
+		courseModule.instructions[courseModuleSession.instructionsCompleted]
+	const hasNextInstruction =
+		!!courseModule.instructions[courseModuleSession.instructionsCompleted + 1]
 
-	const messages =
-		fetcher.formData && !fetcher.formData.get('intent')
-			? moduleSession.messages.concat({
-					id: 'unknown',
-					createdAt: new Date(),
-					moduleSessionId: params.id,
-					agent: 'user',
-					content: fetcher.formData.get('response'),
-					responses: [],
-				} as any)
-			: moduleSession.messages
+	const isResponding =
+		fetcher.formData &&
+		!fetcher.formData.get('intent') &&
+		!!fetcher.formData.get('response')
+
+	const messages = isResponding
+		? courseModuleSession.messages.concat({
+				id: 'unknown',
+				createdAt: new Date(),
+				courseModuleSessionId: params.id,
+				agent: 'user',
+				content: fetcher.formData!.get('response'),
+				responses: [],
+			} as any)
+		: courseModuleSession.messages
 
 	const [form, fields] = useForm({
 		id: 'module-session-response',
@@ -611,21 +650,22 @@ export default function Route() {
 			<div className="flex items-center justify-between gap-8 border-b py-1 pl-4 pr-1">
 				<div className="flex w-full items-center gap-2">
 					<p className="min-w-fit text-sm">
-						{moduleSession.instructionsCompleted === module_.instructions.length
+						{courseModuleSession.instructionsCompleted ===
+						courseModule.instructions.length
 							? 'Completed'
 							: 'Progress'}
 					</p>
 					<div className="h-2 w-full rounded-full border bg-muted">
 						<Tooltip
-							text={`${moduleSession.instructionsCompleted} of ${module_.instructions.length}`}
+							text={`${courseModuleSession.instructionsCompleted} of ${courseModule.instructions.length}`}
 						>
 							<div
 								className="h-full rounded-full bg-primary transition-all duration-200 ease-in-out"
 								style={{
 									width: `${Math.max(
 										5,
-										(moduleSession.instructionsCompleted /
-											module_.instructions.length) *
+										(courseModuleSession.instructionsCompleted /
+											courseModule.instructions.length) *
 											100,
 									)}%`,
 								}}
@@ -654,8 +694,14 @@ export default function Route() {
 								onClick={() => {
 									const formData = new FormData()
 									formData.append('intent', 'restart-instructions')
-									formData.append('text', moduleSession.document?.text ?? '')
-									formData.append('moduleSessionId', moduleSession.id)
+									formData.append(
+										'text',
+										courseModuleSession.document?.text ?? '',
+									)
+									formData.append(
+										'courseModuleSessionId',
+										courseModuleSession.id,
+									)
 									fetcher.submit(formData, { method: 'POST' })
 								}}
 							>
@@ -666,8 +712,9 @@ export default function Route() {
 				</AlertDialog>
 			</div>
 			<div
-				className="no-scrollbar flex h-[calc(100vh-215px)] flex-col gap-3 overflow-scroll px-3 py-2 md:h-full"
+				className="no-scrollbar flex h-[calc(100vh-265px)] flex-col gap-3 overflow-scroll px-3 py-2 md:h-full"
 				ref={messagesRef}
+				id="course-module-session-messages"
 			>
 				{messages
 					.filter(m => ['user', 'assistant'].includes(m.agent))
@@ -688,12 +735,14 @@ export default function Route() {
 									{timeAgo(new Date(message.createdAt))}
 								</p>
 							</div>
-							<p>{message.content}</p>
+							{message.agent === 'assistant' ? (
+								parseAIResponse(message.content)
+							) : (
+								<p>{message.content}</p>
+							)}
 						</div>
 					))}
-				{fetcher.state !== 'idle' && !fetcher.formData?.get('intent') ? (
-					<ChatPending />
-				) : null}
+				{fetcher.state !== 'idle' && isResponding ? <ChatPending /> : null}
 			</div>
 			{!currentInstruction ? (
 				<div className="border-t p-2">
@@ -702,8 +751,26 @@ export default function Route() {
 					</p>
 				</div>
 			) : null}
-			{currentInstruction?.answerType === 'textarea' ? (
-				<div className="flex w-full items-center justify-center px-3">
+			{currentInstruction?.answerType === 'textarea' ||
+			currentInstruction.interactiveType === 'dialogue' ? (
+				<div className="flex w-full flex-col px-3">
+					{currentInstruction.interactiveType === 'dialogue' &&
+					hasNextInstruction ? (
+						<Button
+							variant="link"
+							className="w-fit p-0 text-muted-foreground"
+							size="sm"
+							onClick={e => {
+								e.preventDefault()
+								const formData = new FormData()
+								formData.append('intent', 'complete-current-instruction')
+								formData.append('courseModuleSessionId', courseModuleSession.id)
+								fetcher.submit(formData, { method: 'POST' })
+							}}
+						>
+							Next step <ArrowRightIcon className="ml-1.5" />
+						</Button>
+					) : null}
 					<ChatInput
 						textareaProps={{
 							...getInputProps(fields.response, { type: 'text' }),
@@ -721,9 +788,9 @@ export default function Route() {
 					onSubmit={fetcher.submit}
 					onClick={opt => {
 						const formData = new FormData()
-						formData.append('text', moduleSession.document?.text ?? '')
+						formData.append('text', courseModuleSession.document?.text ?? '')
 						formData.append('response', opt)
-						formData.append('moduleSessionId', moduleSession.id)
+						formData.append('courseModuleSessionId', courseModuleSession.id)
 						fetcher.submit(formData, { method: 'POST' })
 					}}
 				/>
@@ -734,12 +801,12 @@ export default function Route() {
 	const Editor = (
 		<div className="w-full overflow-hidden border-r font-times md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
 			<TiptapEditor
-				initialContent={moduleSession.document?.html}
+				initialContent={courseModuleSession.document?.html}
 				onHighlight={({ highlightId, content }) => {
 					const formData = new FormData()
 					formData.append('content', content)
 					formData.append('highlightId', highlightId)
-					formData.append('moduleSessionId', moduleSession.id)
+					formData.append('courseModuleSessionId', courseModuleSession.id)
 					formData.append('intent', 'create-document-comment')
 					fetcher.submit(formData, { method: 'POST' })
 
@@ -753,7 +820,7 @@ export default function Route() {
 					const formData = new FormData()
 					formData.append('text', text)
 					formData.append('html', html)
-					formData.append('moduleSessionId', moduleSession.id)
+					formData.append('courseModuleSessionId', courseModuleSession.id)
 					formData.append('intent', 'update-document')
 					fetcher.submit(formData, { method: 'POST' })
 				}}
@@ -771,7 +838,7 @@ export default function Route() {
 							id={`${comment.highlightId}-comment`}
 							highlightId={comment.highlightId}
 							comment={comment as any}
-							moduleSessionId={moduleSession.id}
+							moduleSessionId={courseModuleSession.id}
 						/>
 					))}
 				</div>
@@ -789,10 +856,14 @@ export default function Route() {
 			method="POST"
 			className="flex h-screen w-screen flex-col overflow-hidden"
 		>
-			<input name="moduleSessionId" value={moduleSession.id} type="hidden" />
+			<input
+				name="courseModuleSessionId"
+				value={courseModuleSession.id}
+				type="hidden"
+			/>
 			<input
 				name="text"
-				value={moduleSession.document?.text ?? 'none'}
+				value={courseModuleSession.document?.text ?? 'none'}
 				type="hidden"
 			/>
 			<nav className="border-b">
@@ -805,19 +876,19 @@ export default function Route() {
 							navigate(
 								studentProfileId
 									? `/app/students/${studentProfileId}`
-									: '/app/modules',
+									: `/app/courses/${courseModule.courseId}`,
 							)
 						}}
 					>
 						<ArrowLeft className="h-4" />
 						{studentProfileId ? 'Back' : 'Home'}
 					</Button>
-					<h4>{module_.title}</h4>
+					<h4>{courseModule.title}</h4>
 					{studentProfileId ? (
 						<Badge variant="info-outlined" className="md:text-md text-xs">
 							{isMobile
-								? moduleSession.user.name
-								: `Viewing work by ${moduleSession.user.name}`}
+								? courseModuleSession.user.name
+								: `Viewing work by ${courseModuleSession.user.name}`}
 						</Badge>
 					) : null}
 					{isPending ? (

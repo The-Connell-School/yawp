@@ -1,25 +1,28 @@
-import { parseWithZod } from '@conform-to/zod'
 import { invariant } from '@epic-web/invariant'
-import { type Upload } from '@prisma/client'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { json, redirect, useLoaderData } from '@remix-run/react'
+import { Link, json, redirect, useLoaderData } from '@remix-run/react'
+import { withZod } from '@remix-validated-form/with-zod'
+import { TrashIcon } from 'lucide-react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
+import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { Button } from '#app/components/ui/button'
 import { prisma } from '#app/utils/db.server'
-import { toArray } from '#app/utils/misc'
+import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import Form, { Schema } from '../app.settings.tutors.new/route'
+import { TutorForm } from '../app.settings.tutors.new/form'
+import { validator } from '../app.settings.tutors.new/form/schema'
+
+const deleteValidator = withZod(z.object({ id: z.string() }))
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing tutor id')
 	await requireUserWithRole(request, ['admin'])
-	const tutor = await prisma.tutor.findUnique({
-		where: { id: params.id },
-		include: { files: true },
-	})
+	const tutor = await prisma.tutor.findUnique({ where: { id: params.id } })
 
 	if (!tutor) {
 		return redirect('/app/settings/tutors')
@@ -30,68 +33,78 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
 	invariant(params.id, 'Missing tutor id')
-	const user = await requireUserWithRole(request, ['admin'])
+	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
-	const submission = parseWithZod(formData, { schema: Schema })
+	const subaction = formData.get('subaction')
 
-	if (submission.status !== 'success' || !submission.value) {
-		return json(submission.reply(), { status: 400 })
-	}
-
-	if (submission.payload.intent === 'delete') {
-		await prisma.tutor.delete({ where: { id: params.id } })
+	if (subaction === 'delete') {
+		const { error, data } = await deleteValidator.validate(formData)
+		if (error) return validationError(error)
+		await prisma.tutor.delete({ where: { id: data.id } })
 		return redirectWithToast('/app/settings/tutors', {
 			type: 'success',
 			description: 'Tutor deleted successfully.',
 			closeButton: false,
 		})
 	} else {
-		const fileBlobs = toArray(submission.value.files_blob)
-		const fileNames = toArray(submission.value.files_name)
-		const fileContentTypes = toArray(submission.value.files_contentType)
+		const { error, data } = await validator.validate(formData)
+		if (error) return validationError(error)
 
-		const files = fileBlobs?.reduce((acc, blob, i) => {
-			const fileName = fileNames[i]
-			const fileContentType = fileContentTypes[i]
+		await prisma.tutor.update({ where: { id: params.id }, data })
 
-			if (!fileName || !fileContentType || !blob) {
-				return acc
-			}
-
-			acc.push({
-				blob: Buffer.from(blob),
-				name: fileName,
-				contentType: fileContentType,
-				userId: user.id,
-			} as Upload)
-			return acc
-		}, [] as Upload[])
-
-		await prisma.upload.deleteMany({
-			where: { tutorId: params.id },
-		})
-
-		const created = await prisma.tutor.update({
-			data: {
-				name: submission.value.name,
-				promptInstructions: submission.value.promptInstructions,
-				answerInstructions: submission.value.answerInstructions,
-				files: { create: files },
-			},
-			where: { id: params.id },
-		})
-
-		return redirectWithToast(`/app/settings/tutors/${created.id}`, {
+		return redirectWithToast(`/app/settings/tutors/${params.id}`, {
 			type: 'success',
-			description: 'Tutor updated successfully',
+			description: 'Tutor updated successfully.',
 			closeButton: false,
 		})
 	}
 }
 
-export default function Route() {
-	const { tutor } = useLoaderData<typeof loader>()
-	return <Form defaultValue={tutor as any} isEditing />
+export default function TutorRoute() {
+	const data = useLoaderData<typeof loader>()
+	const isPending = useIsPending()
+	const dc = useDoubleCheck()
+	const formId = `edit-tutor-${data.tutor.id}`
+
+	return (
+		<div className="flex flex-col">
+			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+				<TutorForm defaultValues={data.tutor} formId={formId} key={formId} />
+			</div>
+			<div className="flex gap-2 px-6 pb-6 pt-1">
+				<Button type="submit" disabled={isPending} form={formId}>
+					Update
+				</Button>
+				<Button
+					disabled={isPending}
+					variant="secondary"
+					asChild
+					className="md:hidden"
+				>
+					<Link to="/app/settings/tutors">Cancel</Link>
+				</Button>
+				<ValidatedForm
+					validator={deleteValidator}
+					method="POST"
+					subaction="delete"
+				>
+					<input type="hidden" name="id" value={data.tutor.id} />
+					<Button
+						{...dc.getButtonProps({ type: 'submit' })}
+						disabled={isPending}
+						size={dc.doubleCheck ? 'default' : 'icon'}
+						variant={dc.doubleCheck ? 'destructive' : 'secondary'}
+					>
+						{dc.doubleCheck ? (
+							'Are you sure?'
+						) : (
+							<TrashIcon className="h-5 w-5" />
+						)}
+					</Button>
+				</ValidatedForm>
+			</div>
+		</div>
+	)
 }
 
 export function ErrorBoundary() {
