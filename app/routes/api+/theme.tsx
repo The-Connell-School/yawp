@@ -54,7 +54,7 @@ export function useTheme() {
  */
 export function useOptimisticThemeMode() {
 	const fetchers = useFetchers()
-	const themeFetcher = fetchers.find(f => f.formAction === '/resources/theme')
+	const themeFetcher = fetchers.find(f => f.formAction === '/api/theme')
 
 	if (themeFetcher && themeFetcher.formData) {
 		const submission = parse(themeFetcher.formData, {
@@ -89,11 +89,7 @@ export function ThemeSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 	}
 
 	return (
-		<fetcher.Form
-			method="POST"
-			action="/resources/theme"
-			{...getFormProps(form)}
-		>
+		<fetcher.Form method="POST" action="/api/theme" {...getFormProps(form)}>
 			<input type="hidden" name="theme" value={nextMode} />
 			<div className="flex gap-2">
 				<Tooltip text="Color mode">

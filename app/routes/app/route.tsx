@@ -38,8 +38,8 @@ import {
 } from '#app/utils/breadcrumb'
 import { cn, getUserImgSrc } from '#app/utils/misc'
 import { startCase } from '#app/utils/startCase'
-import { NavStateSwitch, useNavState } from '../resources+/nav-state'
-import { ThemeSwitch, useTheme } from '../resources+/theme'
+import { NavStateSwitch, useNavState } from '../api+/nav-state'
+import { ThemeSwitch, useTheme } from '../api+/theme'
 
 const links: {
 	icon?: ReactElement
@@ -50,8 +50,8 @@ const links: {
 	end?: boolean
 }[] = [
 	{
-		to: '/app/modules',
-		label: 'Modules',
+		to: '/app/courses',
+		label: 'Courses',
 		icon: <LayersIcon />,
 	},
 	{

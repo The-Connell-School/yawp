@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Toaster as SonnerToaster, toast as showToast } from 'sonner'
-import { useTheme } from '#app/routes/resources+/theme'
+import { useTheme } from '#app/routes/api+/theme'
 import { type Toast } from '#app/utils/toast.server.ts'
 
 export function Toaster({ toast }: { toast?: Toast | null }) {

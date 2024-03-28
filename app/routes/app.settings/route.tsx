@@ -6,9 +6,9 @@ import { cn } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 
 const tabs = [
+	{ label: 'Courses', to: '/app/settings/courses' },
 	{ label: 'Teachers', to: '/app/settings/teachers' },
 	{ label: 'Students', to: '/app/settings/students' },
-	{ label: 'Modules', to: '/app/settings/modules' },
 	{ label: 'Tutors', to: '/app/settings/tutors' },
 ]
 

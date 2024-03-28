@@ -20,7 +20,7 @@ import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { DEFAULT_ROUTE, useIsPending } from '#app/utils/misc.tsx'
 import { EmailSchema, PasswordSchema } from '#app/utils/schemas/user.ts'
-import { useTheme } from '../resources+/theme.tsx'
+import { useTheme } from '../api+/theme.tsx'
 import { handleNewSession } from './login.server.ts'
 
 const LoginFormSchema = z.object({

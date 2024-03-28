@@ -59,7 +59,7 @@ export function useNavState() {
  */
 export function useOptimisticNavState() {
 	const fetchers = useFetchers()
-	const fetcher = fetchers.find(f => f.formAction === '/resources/nav-state')
+	const fetcher = fetchers.find(f => f.formAction === '/api/nav-state')
 
 	if (fetcher && fetcher.formData) {
 		const submission = parse(fetcher.formData, { schema: FormSchema })
@@ -91,11 +91,7 @@ export function NavStateSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 	}
 
 	return (
-		<fetcher.Form
-			method="POST"
-			action="/resources/nav-state"
-			{...getFormProps(form)}
-		>
+		<fetcher.Form method="POST" action="/api/nav-state" {...getFormProps(form)}>
 			<input type="hidden" name="state" value={nextState} />
 			<div className="flex gap-2">
 				<Tooltip text={state ? 'Collapse navigation' : 'Expand navigation'}>

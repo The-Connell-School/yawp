@@ -2,8 +2,11 @@ import {
 	type ActionFunctionArgs,
 	json,
 	type LoaderFunctionArgs,
+	unstable_parseMultipartFormData,
+	unstable_createMemoryUploadHandler,
 } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
+import omit from 'lodash/omit'
 import { validationError } from 'remix-validated-form'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Button } from '#app/components/ui/button'
@@ -11,50 +14,72 @@ import { prisma } from '#app/utils/db.server'
 import { useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { ModuleForm } from './form'
-import { validator } from './form/schema'
+import { CourseForm } from './form'
+import { MAX_SIZE, validator } from './form/schema'
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 	await requireUserWithRole(request, ['admin'])
-	const tutors = await prisma.tutor.findMany({
-		select: { id: true, name: true },
-	})
-
+	const tutors = await prisma.tutor.findMany({ orderBy: { name: 'asc' } })
 	return json({ tutors })
 }
 
 export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, ['admin'])
-	const formData = await request.formData()
+	const formData = await unstable_parseMultipartFormData(
+		request,
+		unstable_createMemoryUploadHandler({ maxPartSize: MAX_SIZE }),
+	)
 	const { error, data } = await validator.validate(formData)
 
 	if (error) return validationError(error)
 
-	const created = await prisma.module_.create({
+	const count = await prisma.course.count()
+	const created = await prisma.course.create({
 		data: {
-			...data,
-			tutorId: data.tutorId || null,
-			instructions: {
-				create: data.instructions?.map((d, i) => ({ ...d, position: i })),
+			...omit(data, ['image', 'courseImageSrc']),
+			position: count,
+			courseModules: {
+				create: (data.courseModules ?? []).map((cm, index) => ({
+					...omit(cm, ['id']),
+					position: index,
+					tutorId: cm.tutorId || null,
+					instructions: {
+						deleteMany: {},
+						create: (cm.instructions ?? []).map((instruction, i) => ({
+							...instruction,
+							position: i,
+						})),
+					},
+				})),
 			},
 		},
 	})
 
-	return redirectWithToast(`/app/settings/modules/${created.id}`, {
+	if (data.image && data.courseImageSrc) {
+		await prisma.courseImage.create({
+			data: {
+				course: { connect: { id: created.id } },
+				contentType: data.image.type,
+				blob: Buffer.from(await data.image.arrayBuffer()),
+			},
+		})
+	}
+
+	return redirectWithToast(`/app/settings/courses/${created.id}`, {
 		type: 'success',
-		description: 'Module created successfully',
+		description: 'Course created successfully',
 		closeButton: false,
 	})
 }
 
 export default function Route() {
-	const { tutors } = useLoaderData<typeof loader>()
+	const data = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
 
 	return (
 		<div className="flex flex-col">
 			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
-				<ModuleForm formId="create-module" tutors={tutors} />
+				<CourseForm formId="create-module" tutors={data.tutors} />
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">
 				<Button type="submit" disabled={isPending} form="create-module">
@@ -66,7 +91,7 @@ export default function Route() {
 					asChild
 					className="md:hidden"
 				>
-					<Link to="/app/settings/modules">Cancel</Link>
+					<Link to="/app/settings/courses">Cancel</Link>
 				</Button>
 			</div>
 		</div>

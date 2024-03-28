@@ -44,6 +44,13 @@ code {
 	@apply rounded bg-primary/20 p-0.5 text-sm;
 }
 
+#course-module-session-messages ul {
+	@apply list-disc;
+}
+#course-module-session-messages ol {
+	@apply list-decimal;
+}
+
 /* .tiptap {
 	@apply overflow-scroll;
 } */

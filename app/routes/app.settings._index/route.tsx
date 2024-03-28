@@ -1,5 +1,5 @@
 import { redirect } from '@remix-run/node'
 
 export async function loader() {
-	return redirect('/app/settings/teachers')
+	return redirect('/app/settings/courses')
 }

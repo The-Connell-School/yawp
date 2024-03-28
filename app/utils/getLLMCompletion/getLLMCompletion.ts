@@ -1,3 +1,7 @@
+/* eslint-disable no-console */
+const { anthropic } = await import('../../services/anthropic')
+const { openai } = await import('../../services/openai')
+
 interface Params {
 	messages: { role: 'user' | 'assistant'; content: string; name?: string }[]
 	system?: string
@@ -7,25 +11,34 @@ interface Params {
 }
 
 export async function getLLMCompletion(params: Params) {
+	if (process.env.NODE_ENV === 'development') {
+		console.log('🧪 LLM completion started')
+	}
+
 	if (['claude-3-opus-20240229'].includes(params.model)) {
-		const { anthropic } = await import('../../services/anthropic')
+		console.time('🧪 LLM completion finished')
 		const message = await anthropic.messages.create({
 			max_tokens: params.maxTokens ?? 1024,
 			model: params.model,
 			system: params.system,
 			messages: params.messages.map(({ name: _, ...m }) => m),
-			temperature: params.temperature,
+			temperature: 0.6,
 		})
+
+		if (process.env.NODE_ENV === 'development' && message) {
+			console.log({ ...params, response: message.content[0].text ?? '' })
+			console.timeEnd('🧪 LLM completion finished')
+		}
 
 		return message.content[0].text ?? ''
 	}
 
 	if (['gpt-4-turbo-preview'].includes(params.model)) {
-		const { openai } = await import('../../services/openai')
+		console.time('🧪 LLM completion finished')
 		const message = await openai.chat.completions.create({
 			model: params.model,
 			max_tokens: params.maxTokens,
-			temperature: params.temperature,
+			temperature: 0.6,
 			messages: [
 				...(params.system
 					? [{ role: 'system' as const, content: params.system }]
@@ -33,6 +46,14 @@ export async function getLLMCompletion(params: Params) {
 				...params.messages,
 			],
 		})
+
+		if (process.env.NODE_ENV === 'development' && message) {
+			console.log({
+				...params,
+				response: message.choices[0].message.content ?? '',
+			})
+			console.timeEnd('🧪 LLM completion finished')
+		}
 
 		return message.choices[0].message.content ?? ''
 	}
