@@ -1,4 +1,5 @@
 import { vitePlugin as remix } from '@remix-run/dev'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { flatRoutes } from 'remix-flat-routes'
 import { defineConfig } from 'vite'
 import envOnly from 'vite-env-only'
@@ -11,6 +12,7 @@ export default defineConfig({
 		rollupOptions: {
 			external: [/node:.*/, 'stream', 'crypto', 'fsevents'],
 		},
+		sourcemap: true,
 	},
 	plugins: [
 		envOnly(),
@@ -34,5 +36,6 @@ export default defineConfig({
 				})
 			},
 		}),
+		sentryVitePlugin({ org: 'yawp', project: 'yawp-school' }),
 	],
 })
