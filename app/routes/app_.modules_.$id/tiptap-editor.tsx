@@ -359,8 +359,8 @@ export const TiptapEditor = ({
 }) => {
 	const [text, setText] = useState<string>()
 	const [html, setHtml] = useState<string>()
-	const [debouncedText] = useDebounce(text, 1000)
-	const [debouncedHtml] = useDebounce(html, 1000)
+	const [debouncedText] = useDebounce(text, 800)
+	const [debouncedHtml] = useDebounce(html, 800)
 
 	useEffect(() => {
 		onChange?.({ html: debouncedHtml ?? '', text: debouncedText ?? '' })

@@ -19,10 +19,10 @@ export const Comment = ({
 	comment,
 	id,
 	highlightId,
-	moduleSessionId,
+	courseModuleSessionId,
 }: {
 	id: string
-	moduleSessionId: string
+	courseModuleSessionId: string
 	comment: DocumentComment & {
 		user: User & { image: UserImage }
 		responses: (DocumentCommentResponse & {
@@ -91,7 +91,7 @@ export const Comment = ({
 				if (input.value) {
 					const formData = new FormData()
 					formData.append('commentId', comment.id)
-					formData.append('moduleSessionId', moduleSessionId)
+					formData.append('courseModuleSessionId', courseModuleSessionId)
 					formData.append('commentResponse', input.value.trim())
 					formData.append('intent', 'create-document-comment-response')
 					fetcher.submit(formData, { method: 'POST' })
@@ -147,7 +147,7 @@ export const Comment = ({
 							if (dc) {
 								const formData = new FormData()
 								formData.append('commentId', comment.id)
-								formData.append('moduleSessionId', moduleSessionId)
+								formData.append('courseModuleSessionId', courseModuleSessionId)
 								formData.append('intent', 'delete-document-comment')
 								fetcher.submit(formData, { method: 'POST' })
 
@@ -219,7 +219,7 @@ export const Comment = ({
 							if (input.value) {
 								const formData = new FormData()
 								formData.append('commentId', comment.id)
-								formData.append('moduleSessionId', moduleSessionId)
+								formData.append('courseModuleSessionId', courseModuleSessionId)
 								formData.append('commentResponse', input.value.trim())
 								formData.append('intent', 'create-document-comment-response')
 								fetcher.submit(formData, { method: 'POST' })

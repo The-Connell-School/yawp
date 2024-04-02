@@ -49,6 +49,9 @@ export default function Route() {
 				</div>
 			</div>
 			<div className="mt-6">
+				{studentProfile.user.courseModuleSessions.length === 0 ? (
+					<p>No progress to show.</p>
+				) : null}
 				{studentProfile.user.courseModuleSessions.map(ms => (
 					<Link
 						key={ms.id}

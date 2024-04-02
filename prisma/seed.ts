@@ -51,7 +51,7 @@ async function seed() {
 		Your responses are designed to encourage and guide the student in a brainstorming session for their essay topic.
 		You specializes in guiding users through the pre-writing process of essay or report writing.
 		You should never write a thesis statement for the user.
-		You can translate all instructions to Spanish if requested.
+		If the user asks you to respond in Spanish, you can do so.
 
 		If user asks you a personal question, respond: "I am mysterious and I contain so many multitudes that it would take the rest of your life to understand me. On the plus side, I can help you with your essay! Let's get back to that."
 		If user asks you to write anything for them, Connell should respond: "I'm not that kind of guy! And anyway, the point of this essay is for YOU to figure out and share what YOU think about the topic. I know it isn't always easy, but if you take a little bit of time, you can develop smart, personal opinions about the world around you."
@@ -86,47 +86,21 @@ async function seed() {
 								{
 									answerKey: `The content must be 3 sentences or more.`,
 									position: 3,
-									prompt: `Ready, set, write!`,
-									promptType: 'hardcoded',
+									prompt: `Context = """
+* Give some feedback on the initial pre-write
+* help to identify diamonds in the rough and asking student to choose one to pre-write further on
+* give feedback on the diamonds identified
+* confirm with the student that the diamond they choose is what they want to work on
+* close out by asking the student's name
+"""
+
+Your response should be = "Ready, set, write!" (word for word)`,
+									promptType: 'ai',
 									answerType: 'select',
 									answerTypeOptions: "I'm done",
 									canAskQuestion: true,
 									title: 'Write!',
-									interactiveType: 'answer',
-								},
-								{
-									answerKey: `The student should write 3 more sentences in the user_content than the previous message.`,
-									position: 4,
-									prompt: `Start your response, word for word, with the quote below. Then, analyze the user_content and identifying examples of diamonds that they can explore further. Add it to the end of the quote below. "Great work! The next step in pre-writing is to read over what we've written. A lot of it may not be that interesting—that's ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you've written for a while and you don't have anything that's really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]"`,
-									promptType: 'ai',
-									answerType: 'select',
-									answerTypeOptions: "I'm done",
-									canAskQuestion: true,
-									title: 'Identify diamonds in the rough',
-									interactiveType: 'answer',
-								},
-								{
-									answerKey: `The student should respond with an affirmative (like "yes" or "no"). If yes, the answer_key is satisfied. If no, prompt them to choose a different "diamond in the rough" (a topic in the content that was written) and respond word-for-word with "Ok, let's go back and look at another angle -- find a different 'diamond' from your pre-write."`,
-									position: 6,
-									prompt: `Begin your message with this word-for-word: "This is a great topic.". Then, talk about why this will make a good essay. End your message with this word-for-word: "Is this the specific topic you want to build a thesis around?"`,
-									promptType: 'ai',
-									answerType: 'select',
-									answerTypeOptions: 'Yes,No',
-									canAskQuestion: false,
-									title: 'Get topic confirmation',
-									interactiveType: 'answer',
-								},
-								{
-									answerKey: `The student should respond with their name. For example, "My name is John." or "John." Any name satisfies the answer_key.`,
-									position: 7,
-									prompt: `Excellent! You've just completed the pre-writing phase. Take a minute to recognize how you started with a very general idea and through the process of Critical Thinking--simply asking and answering questions--you've found a more specific focus. This step of pre-writing alone has already improved your chances of writing a great essay! Now that you have your specific focus, you can move onto developing a thesis statement. Ask your teacher to direct you to Connell Thesis Assistant. By the way, what's your name?`,
-									promptType: 'hardcoded',
-									answerType: 'textarea',
-									concludingPrompt:
-										"Get the name of the user from previous content, and respond character for character (filling in the <name>): 'Great work today <name>!'",
-									concludingPromptType: 'ai',
-									title: 'Concluding',
-									interactiveType: 'answer',
+									interactiveType: 'dialogue',
 								},
 							],
 						},
