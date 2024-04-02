@@ -1,7 +1,7 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { MixIcon, RocketIcon } from '#app/components/icons'
+import { ArrowRightIcon, MixIcon, RocketIcon } from '#app/components/icons'
 import { Button } from '#app/components/ui/button'
 import { useUser } from '#app/hooks/useUser'
 import { requireUserId } from '#app/utils/auth.server'
@@ -71,22 +71,30 @@ export default function Route() {
 	const { courses, currentCourseModuleId, isStarting } =
 		useLoaderData<typeof loader>()
 	const user = useUser()
+	const isTeacher = user.teacherProfile !== null
 
 	return (
 		<div className="flex h-full w-full flex-col">
 			<div className="flex w-full justify-between border-b bg-muted">
 				<div className="relative mx-auto w-full max-w-screen-lg p-3 pt-20 sm:p-5 sm:pt-10">
-					<div className="flex max-w-[200px] flex-col sm:max-w-[400px]">
+					<div className="flex flex-col">
 						<h2>Welcome, {user.name}!</h2>
-						<p className="mt-3 max-w-[200px] text-muted-foreground">
-							{currentCourseModuleId
-								? isStarting
-									? 'Hit the button to the right to get started!'
-									: 'Hit the button to the right to pickup where you left off.'
-								: "You've completed all the modules. Check back later for new content."}
-						</p>
+						{isTeacher ? (
+							<p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+								Welcome to your dashboard. Here you can view and manage your
+								students.
+							</p>
+						) : (
+							<p className="mt-3 max-w-[200px] text-muted-foreground">
+								{currentCourseModuleId
+									? isStarting
+										? 'Hit the button to the right to get started!'
+										: 'Hit the button to the right to pickup where you left off.'
+									: "You've completed all the modules. Check back later for new content."}
+							</p>
+						)}
 					</div>
-					{currentCourseModuleId ? (
+					{currentCourseModuleId && !isTeacher ? (
 						<Button
 							asChild
 							className="absolute right-3 top-20 sm:right-5 sm:top-10"
@@ -99,6 +107,24 @@ export default function Route() {
 					) : null}
 				</div>
 			</div>
+			{isTeacher ? (
+				<div className="mx-auto w-full max-w-screen-lg p-3 pb-0 sm:p-5 sm:pb-0">
+					<div className="w-full rounded-xl border bg-muted/50 p-6 md:w-1/4">
+						<h1 className="text-foreground/75">
+							{user.studentProfiles.length}
+						</h1>
+						<p>
+							Total {user.studentProfiles.length === 1 ? 'student' : 'students'}
+						</p>
+						<Link
+							to="/app/students"
+							className="flex items-center gap-1 text-sm text-muted-foreground hover:underline"
+						>
+							Manage <ArrowRightIcon />
+						</Link>
+					</div>
+				</div>
+			) : null}
 			<ul className="mx-auto flex w-full max-w-screen-lg flex-col gap-3 p-3 sm:p-5">
 				{courses.map(course => (
 					<li key={course.id}>

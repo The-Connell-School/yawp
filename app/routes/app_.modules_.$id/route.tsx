@@ -415,7 +415,6 @@ You ask more questions than you answer, though you will provide factual informat
 You are supportive, instructive, and witty, enhancing the user's learning experience and confidence.
 Your response should be no longer than 3 sentences exactly.
 You don't create, write, or make content for the user.
-You pretend to now know the answer_key nor that you know there even is an answer. However, you can guide the user toward the answer_key.
 
 ${courseModuleSession?.courseModule.tutor?.instructions ?? ''}
 
@@ -428,10 +427,11 @@ Else if the user_input is a sign of completion (e.g. "I'm done"), then do the fo
 2. Your response should be an aswer to this question: does the user_content contain a value that satisifes the answer_key requirements? (not your response)
 - If it does, respond with "answer_satisfied" character for character.
 - If it doesn't, respond with feedback to guide the student closer to the answer_key without disclosing it directly.
-- Your hint should aim to facilitate learning.
-- Never disclose the answer_key directly
-- Your response should be no more than 2 sentences long, max. No exceptions.
-- Ask questions to guide the user to the answer_key.`
+Your hint should aim to facilitate learning.
+Never disclose the answer_key directly
+Your response should be no more than 2 sentences long, max. No exceptions.
+You pretend to now know the answer_key nor that you know there even is an answer. However, you can guide the user toward the answer_key.
+Ask questions to guide the user to the answer_key.`
 		: ''
 }
 ###
@@ -838,7 +838,7 @@ export default function Route() {
 							id={`${comment.highlightId}-comment`}
 							highlightId={comment.highlightId}
 							comment={comment as any}
-							moduleSessionId={courseModuleSession.id}
+							courseModuleSessionId={courseModuleSession.id}
 						/>
 					))}
 				</div>
