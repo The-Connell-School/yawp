@@ -25,22 +25,19 @@ const deleteValidator = withZod(z.object({ id: z.string() }))
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing course id')
 	await requireUserWithRole(request, ['admin'])
-	const [course, tutors] = await Promise.all([
-		prisma.course.findUnique({
-			where: { id: params.id },
-			include: {
-				courseModules: { include: { instructions: true } },
-				image: { select: { id: true } },
-			},
-		}),
-		prisma.tutor.findMany({ orderBy: { name: 'asc' } }),
-	])
+	const course = await prisma.course.findUnique({
+		where: { id: params.id },
+		include: {
+			courseModules: { include: { instructions: true } },
+			image: { select: { id: true } },
+		},
+	})
 
 	if (!course) {
 		return redirect('/app/settings/courses')
 	}
 
-	return json({ course, tutors })
+	return json({ course })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -82,7 +79,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 							...cm,
 							courseId: params.id,
 							position: CMIdx,
-							tutorId: cm.tutorId || null,
 							instructions: {
 								create: (cm.instructions ?? []).map((i, IIdx) => ({
 									...i,
@@ -97,7 +93,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 							...cm,
 							courseId: params.id,
 							position: CMIdx,
-							tutorId: cm.tutorId || null,
 							instructions: {
 								create: (cm.instructions ?? []).map((i, IIdx) => ({
 									...i,
@@ -176,7 +171,6 @@ export default function CoursesIdRoute() {
 					}}
 					formId={formId}
 					key={formId}
-					tutors={data.tutors}
 				/>
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">

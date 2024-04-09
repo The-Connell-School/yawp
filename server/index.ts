@@ -166,7 +166,7 @@ const strongRateLimit = rateLimit({
 
 const generalRateLimit = rateLimit(rateLimitDefault)
 app.use((req, res, next) => {
-	const generalPaths = ['/assistants/verify']
+	const generalPaths = ['/app/assistants/verify']
 	const strongPaths = [
 		'/login',
 		'/signup',
@@ -182,7 +182,6 @@ app.use((req, res, next) => {
 		if (generalPaths.some(p => req.path.includes(p))) {
 			return generalRateLimit(req, res, next)
 		}
-
 		if (strongPaths.some(p => req.path.includes(p))) {
 			return strongestRateLimit(req, res, next)
 		}

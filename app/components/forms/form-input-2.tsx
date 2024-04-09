@@ -51,7 +51,7 @@ export function FormInput({
 				{...getInputProps({ id, ...props })}
 			/>
 			{helperText ? (
-				<p className="text-muted-foreground">{helperText}</p>
+				<p className="text-xs text-muted-foreground">{helperText}</p>
 			) : null}
 			<div>{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}</div>
 		</div>

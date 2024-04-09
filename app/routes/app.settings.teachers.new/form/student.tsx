@@ -1,5 +1,6 @@
 import { Check, ChevronsUpDown } from 'lucide-react'
-import { type InputHTMLAttributes, useState } from 'react'
+import { useState } from 'react'
+import { useControlField } from 'remix-validated-form'
 import { Button } from '#/app/components/ui/button'
 import {
 	Command,
@@ -16,30 +17,21 @@ import {
 import { TrashIcon } from '#app/components/icons'
 import { cn } from '#app/utils/misc'
 
-export function StudentInput({
+export function Student({
+	name,
 	students,
 	onDelete,
-	inputProps,
-	index,
 }: {
-	student: { email: string }
+	name: string
 	students: { email: string }[]
 	onDelete: () => void
-	index: number
-	inputProps: InputHTMLAttributes<HTMLInputElement>
 }) {
 	const [open, setOpen] = useState(false)
-	const [value, setValue] = useState(inputProps.defaultValue)
+	const [value, setValue] = useControlField<string>(name)
 
 	return (
 		<>
-			<input
-				{...inputProps}
-				value={value}
-				type="hidden"
-				defaultValue={undefined}
-				data-index={index}
-			/>
+			<input value={value} name={name} type="hidden" />
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button
@@ -90,7 +82,7 @@ export function StudentInput({
 								))
 							) : (
 								<p className="w-full p-2 text-center text-sm text-muted-foreground">
-									Not students found
+									No students found
 								</p>
 							)}
 						</CommandGroup>

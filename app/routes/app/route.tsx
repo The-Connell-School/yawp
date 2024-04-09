@@ -29,6 +29,7 @@ import {
 } from '#app/components/icons'
 import { Button, button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
+import { UserImage } from '#app/components/user-image.js'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { useOnSwipe } from '#app/hooks/useHorizontalSwipe'
 import { useUser } from '#app/hooks/useUser'
@@ -36,9 +37,9 @@ import {
 	BreadcrumbHandleMatch,
 	type BreadcrumbHandle,
 } from '#app/utils/breadcrumb'
-import { cn, getUserImgSrc } from '#app/utils/misc'
+import { cn } from '#app/utils/misc'
 import { startCase } from '#app/utils/startCase'
-import { NavStateSwitch, useNavState } from '../api+/nav-state'
+import { NavStateSwitch, useNavState } from '../api+/preferences.nav/route'
 import { ThemeSwitch, useTheme } from '../api+/theme'
 
 const links: {
@@ -49,11 +50,11 @@ const links: {
 	teacher?: boolean
 	end?: boolean
 }[] = [
-	{
-		to: '/app/courses',
-		label: 'Courses',
-		icon: <LayersIcon />,
-	},
+	// {
+	// 	to: '/app/courses',
+	// 	label: 'Courses',
+	// 	icon: <LayersIcon />,
+	// },
 	{
 		to: '/app/assistants',
 		label: 'Assistants',
@@ -136,50 +137,14 @@ export default function Route() {
 
 	return (
 		<main
-			className={cn('flex h-screen max-h-screen min-h-screen', {
+			className={cn('flex h-screen min-h-screen overflow-hidden', {
 				'overflow-hidden': isMobileNavOpen,
 			})}
 		>
-			{/* Mobile top menu */}
-			<div
-				className={cn(
-					'fixed left-0 right-0 top-0 z-10 flex items-center justify-between overflow-hidden border-b bg-background p-2 sm:hidden',
-					{ 'opacity-50': !isInAssistants && isMobileNavOpen },
-				)}
-			>
-				<Button
-					variant="outline"
-					size="icon"
-					onClick={() => setIsMobileNavOpen(true)}
-				>
-					<HamburgerIcon />
-				</Button>
-				<div className="flex items-center">
-					{breadcrumbs.map((bc, i) => (
-						<slot key={bc.key}>
-							{i === 0 ? (
-								bc
-							) : (
-								<>
-									<SlashIcon />
-									{bc}
-								</>
-							)}
-						</slot>
-					))}
-				</div>
-				<Button
-					variant="outline"
-					size="icon"
-					onClick={() => window.location.reload()}
-				>
-					<ReloadIcon />
-				</Button>
-			</div>
 			{/* Left navigation panel */}
 			<nav
 				className={cn(
-					'z-20 flex h-screen w-[190px] min-w-[190px] -translate-x-full transform flex-col overflow-hidden border-r bg-background transition-all duration-300 ease-in-out sm:flex sm:translate-x-0 ',
+					'z-20 flex h-full w-[190px] min-w-[190px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
 					{
 						'translate-x-0': isMobileNavOpen,
 						'w-[56px] min-w-0 items-center': !navExpanded,
@@ -287,11 +252,7 @@ export default function Route() {
 					</div>
 					<Link to="/app/profile">
 						<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
-							<img
-								src={getUserImgSrc(user.image?.id)}
-								alt={user.name ?? user.email}
-								className="h-7 w-7 min-w-7 rounded-full object-cover"
-							/>
+							<UserImage user={user} size="xs" />
 							{navExpanded ? (
 								<div>
 									<p className="text-sm font-bold">{user.name}</p>
@@ -306,7 +267,7 @@ export default function Route() {
 			</nav>
 			<div
 				className={cn(
-					'h-[100vh - 3rem] relative min-w-full flex-grow overflow-y-scroll transition-all duration-300 ease-in-out sm:ml-0 sm:w-full sm:min-w-0 sm:translate-x-0',
+					'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
 					{
 						'translate-x-0': isMobileNavOpen,
 						'-translate-x-[190px]': isNavExpanded,
@@ -320,6 +281,42 @@ export default function Route() {
 				}
 				{...swipeEvents}
 			>
+				{/* Mobile top menu */}
+				<div
+					className={cn(
+						'flex items-center justify-between border-b bg-background p-2 sm:hidden',
+						{ 'opacity-50': !isInAssistants && isMobileNavOpen },
+					)}
+				>
+					<Button
+						variant="outline"
+						size="icon"
+						onClick={() => setIsMobileNavOpen(true)}
+					>
+						<HamburgerIcon />
+					</Button>
+					<div className="flex items-center">
+						{breadcrumbs.map((bc, i) => (
+							<slot key={bc.key}>
+								{i === 0 ? (
+									bc
+								) : (
+									<>
+										<SlashIcon />
+										{bc}
+									</>
+								)}
+							</slot>
+						))}
+					</div>
+					<Button
+						variant="outline"
+						size="icon"
+						onClick={() => window.location.reload()}
+					>
+						<ReloadIcon />
+					</Button>
+				</div>
 				<NavExpandedContext.Provider
 					value={{ isMobileNavOpen, setIsMobileNavOpen }}
 				>

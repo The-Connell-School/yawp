@@ -20,8 +20,8 @@ export const CourseModuleInstructionSchema = z.object({
 export const CourseModuleSchema = z.object({
 	id: z.string().nullish(),
 	title: z.string().min(1, 'Title is required'),
-	tutorId: z.string().nullable(),
 	description: z.string().nullable(),
+	tutorInstructions: z.string().nullable(),
 	instructions: z.array(CourseModuleInstructionSchema).optional(),
 })
 

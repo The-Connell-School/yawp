@@ -1,35 +1,23 @@
-import { getFormProps, useForm } from '@conform-to/react'
-import { getZodConstraint, parseWithZod } from '@conform-to/zod'
 import { invariant } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
 } from '@remix-run/node'
-import { Form, json, redirect, useLoaderData } from '@remix-run/react'
-import { v4 } from 'uuid'
+import { Link, json, redirect, useLoaderData } from '@remix-run/react'
+import { withZod } from '@remix-validated-form/with-zod'
+import { TrashIcon } from 'lucide-react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { FormInput } from '#app/components/forms/form-input'
-import { TrashIcon } from '#app/components/icons'
 import { Button } from '#app/components/ui/button'
-import { useFieldArray } from '#app/hooks/useFieldArray'
 import { prisma } from '#app/utils/db.server'
 import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { StudentInput } from './student-input'
+import { TeacherForm } from '../app.settings.teachers.new/form'
+import { validator } from '../app.settings.teachers.new/form/schema'
 
-const EditSchema = z.object({
-	intent: z.literal('submit'),
-	students_email: z.union([
-		z.array(z.string().optional()),
-		z.string().optional(),
-	]),
-})
-const DeleteSchema = z.object({
-	intent: z.literal('delete'),
-})
-const Schema = z.union([EditSchema, DeleteSchema])
+const deleteValidator = withZod(z.object({ id: z.string() }))
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing teacher profile id')
@@ -38,6 +26,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		prisma.teacherProfile.findUnique({
 			where: { id: params.id },
 			select: {
+				id: true,
 				user: {
 					select: { email: true, studentProfiles: { select: { user: true } } },
 				},
@@ -51,6 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	}
 
 	return json({
+		id: teacherProfile.id,
 		email: teacherProfile.user.email,
 		students: teacherProfile.user.studentProfiles.map(sp => sp.user),
 		allStudents,
@@ -58,23 +48,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-	invariant(params.id, 'Missing teacher profile id')
+	invariant(params.id, 'Missing teacher id')
 	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
-	const submission = parseWithZod(formData, {
-		schema: Schema.transform(data => {
-			if (data.intent === 'delete') return { intent: 'delete' }
-			return data
-		}),
-	})
+	const subaction = formData.get('subaction')
 
-	if (submission.status !== 'success' || !submission.value) {
-		return json(submission.reply(), { status: 400 })
-	}
-
-	const { intent } = submission.value
-
-	if (intent === 'delete') {
+	if (subaction === 'delete') {
+		const { error } = await deleteValidator.validate(formData)
+		if (error) return validationError(error)
 		await prisma.$transaction([
 			prisma.teacherProfile.delete({ where: { id: params.id } }),
 			prisma.studentProfile.updateMany({
@@ -82,109 +63,103 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				data: { workshopLeaderId: null },
 			}),
 		])
-		return redirect('/app/settings/teachers')
-	} else if (intent === 'submit') {
-		const value = submission.value as z.infer<typeof EditSchema>
-		const raw = value.students_email
-		const emails = (Array.isArray(raw) ? raw : [raw]).filter(Boolean)
+		return redirectWithToast('/app/settings/teachers', {
+			type: 'success',
+			description: 'Teacher deleted successfully.',
+			closeButton: false,
+		})
+	} else {
+		const { error, data } = await validator.validate(formData)
+		if (error) return validationError(error)
 
 		const teacherProfile = await prisma.teacherProfile.findUnique({
 			where: { id: params.id },
 			select: { user: { select: { id: true } } },
 		})
 
-		await prisma.studentProfile.updateMany({
-			where: { user: { email: { in: emails } } },
-			data: { workshopLeaderId: teacherProfile?.user.id },
+		const currentStudents = await prisma.studentProfile.findMany({
+			where: { workshopLeaderId: teacherProfile?.user.id },
+			select: { user: { select: { email: true } } },
 		})
+
+		const studentsToRemove = currentStudents.filter(
+			cs => !data.students?.some(s => s.email === cs.user.email),
+		)
+		const studentsToAdd =
+			data.students?.filter(
+				s => !currentStudents.some(cs => cs.user.email === s.email),
+			) ?? []
+
+		await Promise.all([
+			prisma.studentProfile.updateMany({
+				where: {
+					user: { email: { in: studentsToRemove.map(s => s.user.email) } },
+				},
+				data: { workshopLeaderId: null },
+			}),
+			prisma.studentProfile.updateMany({
+				where: { user: { email: { in: studentsToAdd.map(s => s.email) } } },
+				data: { workshopLeaderId: teacherProfile?.user.id },
+			}),
+		])
 
 		return redirectWithToast(`/app/settings/teachers/${params.id}`, {
 			type: 'success',
-			description: 'Teacher profile updated successfully.',
+			description: 'Teacher updated successfully.',
 			closeButton: false,
 		})
 	}
 }
 
-export default function Route() {
-	const { email, students, allStudents } = useLoaderData<typeof loader>()
+export default function TeachersIdRoute() {
+	const { id, allStudents, email, students } = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
 	const dc = useDoubleCheck()
-
-	const [form, fields] = useForm({
-		id: `edit-teacher-profile-${email}`,
-		constraint: getZodConstraint(Schema),
-		defaultValue: { students, email },
-	})
-
-	const {
-		fields: studentFields,
-		append,
-		remove,
-	} = useFieldArray(fields.students, ['email'])
-
-	const selectedStudentEmails = studentFields.map(s => s.email)
-	const remainingStudents = allStudents.filter(
-		s => !selectedStudentEmails.includes(s.email),
-	)
+	const formId = `edit-teacher-${id}`
 
 	return (
-		<Form
-			{...getFormProps(form)}
-			method="POST"
-			className="flex h-full max-h-[calc(100vh-70px)] w-full flex-col gap-4 overflow-y-scroll p-4"
-		>
-			<FormInput
-				inputProps={{ value: email, disabled: true }}
-				labelProps={{ children: 'Email' }}
-			/>
-			<div className="flex flex-col gap-1">
-				<label className="mb-1">Students</label>
-				{studentFields.map((student, i) => (
-					<StudentInput
-						key={v4()}
-						onDelete={() => remove(i)}
-						student={student}
-						students={remainingStudents}
-						index={i}
-						inputProps={{
-							type: 'email',
-							placeholder: 'email@example.com',
-							className: 'pr-10',
-							name: 'students_email',
-							defaultValue: student?.email,
-							required: true,
-						}}
-					/>
-				))}
-				<Button
-					variant="outline"
-					onClick={e => {
-						e.preventDefault()
-						append({ id: '', email: '' } as any)
-					}}
-				>
-					Add student
-				</Button>
+		<div className="flex flex-col">
+			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+				<TeacherForm
+					defaultValues={{ email, students }}
+					allStudents={allStudents}
+					formId={formId}
+					key={formId}
+				/>
 			</div>
-			<div className="flex gap-1 pb-4">
-				<Button name="intent" value="submit" type="submit" disabled={isPending}>
+			<div className="flex gap-2 px-6 pb-6 pt-1">
+				<Button type="submit" disabled={isPending} form={formId}>
 					Update
 				</Button>
 				<Button
-					{...dc.getButtonProps({
-						type: 'submit',
-						name: 'intent',
-						value: 'delete',
-					})}
 					disabled={isPending}
-					size={dc.doubleCheck ? 'default' : 'icon'}
-					variant={dc.doubleCheck ? 'destructive' : 'secondary'}
+					variant="secondary"
+					asChild
+					className="md:hidden"
 				>
-					{dc.doubleCheck ? 'Are you sure?' : <TrashIcon className="h-5 w-5" />}
+					<Link to="/app/settings/teachers">Cancel</Link>
 				</Button>
+				<ValidatedForm
+					validator={deleteValidator}
+					method="POST"
+					subaction="delete"
+				>
+					<input type="hidden" name="id" value={id} />
+					<Button
+						{...dc.getButtonProps({ type: 'submit' })}
+						disabled={isPending}
+						size={dc.doubleCheck ? 'default' : 'icon'}
+						variant={dc.doubleCheck ? 'destructive' : 'secondary'}
+					>
+						{dc.doubleCheck ? (
+							'Delete teacher'
+						) : (
+							<TrashIcon className="h-5 w-5" />
+						)}
+					</Button>
+				</ValidatedForm>
 			</div>
-		</Form>
+		</div>
 	)
 }
 

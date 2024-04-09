@@ -129,7 +129,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const [courseModule, courseModuleSession] = await Promise.all([
 		prisma.courseModule.findUnique({
 			where: { id: params.id },
-			include: { instructions: true, tutor: true },
+			include: { instructions: true },
 		}),
 		prisma.courseModuleSession.findFirst({
 			where: {
@@ -275,7 +275,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			where: courseModuleSessionWhere,
 			include: {
 				document: true,
-				courseModule: { include: { instructions: true, tutor: true } },
+				courseModule: { include: { instructions: true } },
 			},
 		})
 
@@ -299,7 +299,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		const courseModuleSession = await prisma.courseModuleSession.findUnique({
 			where: { id: submission.value.courseModuleSessionId },
 			include: {
-				courseModule: { include: { instructions: true, tutor: true } },
+				courseModule: { include: { instructions: true } },
 			},
 		})
 
@@ -392,7 +392,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		const courseModuleSession = await prisma.courseModuleSession.findFirst({
 			where: courseModuleSessionWhere,
 			include: {
-				courseModule: { include: { instructions: true, tutor: true } },
+				courseModule: { include: { instructions: true } },
 				messages: true,
 				document: true,
 			},
@@ -416,7 +416,7 @@ You are supportive, instructive, and witty, enhancing the user's learning experi
 Your response should be no longer than 3 sentences exactly.
 You don't create, write, or make content for the user.
 
-${courseModuleSession?.courseModule.tutor?.instructions ?? ''}
+${courseModuleSession?.courseModule.tutorInstructions ?? ''}
 
 ${
 	instruction.interactiveType === 'answer'
@@ -498,7 +498,7 @@ ${submission.value.response ?? ''}
 				where: courseModuleSessionWhere,
 				include: {
 					messages: true,
-					courseModule: { include: { instructions: true, tutor: true } },
+					courseModule: { include: { instructions: true } },
 					document: true,
 				},
 			})

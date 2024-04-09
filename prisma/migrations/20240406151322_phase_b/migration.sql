@@ -51,15 +51,6 @@ DROP TABLE "Module_";
 PRAGMA foreign_keys=on;
 
 -- CreateTable
-CREATE TABLE "Tutor" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    "name" TEXT NOT NULL,
-    "instructions" TEXT
-);
-
--- CreateTable
 CREATE TABLE "Course" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -90,9 +81,8 @@ CREATE TABLE "CourseModule" (
     "title" TEXT NOT NULL,
     "position" INTEGER NOT NULL,
     "description" TEXT,
-    "tutorId" TEXT,
+    "tutorInstructions" TEXT,
     "courseId" TEXT,
-    CONSTRAINT "CourseModule_tutorId_fkey" FOREIGN KEY ("tutorId") REFERENCES "Tutor" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "CourseModule_courseId_fkey" FOREIGN KEY ("courseId") REFERENCES "Course" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -188,9 +178,7 @@ CREATE TABLE "Upload" (
     "contentType" TEXT NOT NULL,
     "blob" BLOB NOT NULL,
     "userId" TEXT NOT NULL,
-    "tutorId" TEXT,
-    CONSTRAINT "Upload_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Upload_tutorId_fkey" FOREIGN KEY ("tutorId") REFERENCES "Tutor" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    CONSTRAINT "Upload_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- RedefineTables

@@ -86,7 +86,7 @@ export default function Route() {
 					{ 'translate-x-[190px]': isMobileNavOpen },
 				)}
 			>
-				<div className="grid gap-1 p-2 pt-20 sm:pt-5">
+				<div className="grid gap-1 p-2 pt-5">
 					<h4 className="ml-2 text-sm">Assistants</h4>
 					{assistants.data.map(assistant => (
 						<NavLink

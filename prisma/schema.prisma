@@ -161,16 +161,6 @@ model TeacherProfile {
   isActive  Boolean  @default(true)
 }
 
-model Tutor {
-  id            String         @id @default(cuid())
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  name          String
-  instructions  String?
-  files         Upload[]
-  courseModules CourseModule[]
-}
-
 model Course {
   id            String         @id @default(cuid())
   createdAt     DateTime       @default(now())
@@ -201,8 +191,7 @@ model CourseModule {
   title                String
   position             Int
   description          String?
-  tutorId              String?
-  tutor                Tutor?                    @relation(fields: [tutorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  tutorInstructions    String?
   courseId             String?
   course               Course?                   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   instructions         CourseModuleInstruction[]
@@ -299,6 +288,4 @@ model Upload {
   blob        Bytes
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId      String
-  tutorId     String?
-  tutor       Tutor?    @relation(fields: [tutorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
