@@ -18,3 +18,7 @@ OpenAI has a way to interact with those "My GPTs" (using the powerful GPT4
 model) via an API. All you need is an interface to interact with it. That's what
 this is - a way for The Connell School to put their "My GPTs" in front of their
 many students at a fraction of the cost.
+
+### Redploys
+
+2

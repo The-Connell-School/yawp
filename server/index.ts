@@ -153,7 +153,7 @@ app.use(
 // rate limiting because playwright tests are very fast and we don't want to
 // have to wait for the rate limit to reset between tests.
 const maxMultiple =
-	MODE !== 'production' || process.env.PLAYWRIGHT_TEST_BASE_URL ? 10_000 : 1
+	MODE !== 'production' || process.env.PLAYWRIGHT_TEST_BASE_URL ? 10_000 : 5
 const rateLimitDefault = {
 	windowMs: 60 * 1000,
 	max: 1000 * maxMultiple,
@@ -178,6 +178,7 @@ const strongRateLimit = rateLimit({
 
 const generalRateLimit = rateLimit(rateLimitDefault)
 app.use((req, res, next) => {
+	const generalPaths = ['/assistants/verify']
 	const strongPaths = [
 		'/login',
 		'/signup',
@@ -190,6 +191,10 @@ app.use((req, res, next) => {
 		'/resources/verify',
 	]
 	if (req.method !== 'GET' && req.method !== 'HEAD') {
+		if (generalPaths.some(p => req.path.includes(p))) {
+			return generalRateLimit(req, res, next)
+		}
+
 		if (strongPaths.some(p => req.path.includes(p))) {
 			return strongestRateLimit(req, res, next)
 		}
