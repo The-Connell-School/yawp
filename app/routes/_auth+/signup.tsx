@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import * as E from '@react-email/components'
 import {
 	json,
@@ -21,7 +24,7 @@ import { sendEmail } from '#app/utils/email.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import { EmailSchema } from '#app/utils/schemas/user.ts'
-import { prepareVerification } from './verify.tsx'
+import { prepareVerification } from './verify.server.ts'
 
 const SignupSchema = z.object({
 	email: EmailSchema,
@@ -50,12 +53,11 @@ export async function action({ request }: ActionFunctionArgs) {
 		}),
 		async: true,
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
+
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
-	}
+
 	const { email } = submission.value
 	const { verifyUrl, redirectTo, otp } = await prepareVerification({
 		period: 10 * 60,
@@ -73,8 +75,9 @@ export async function action({ request }: ActionFunctionArgs) {
 	if (response.status === 'success') {
 		return redirect(redirectTo.toString())
 	} else {
-		submission.error[''] = [response.error.message]
-		return json({ status: 'error', submission } as const, { status: 500 })
+		return json(submission.reply({ formErrors: [response.error.message] }), {
+			status: 500,
+		})
 	}
 }
 
@@ -116,7 +119,7 @@ export default function SignupRoute() {
 	const [form, fields] = useForm({
 		id: 'signup-form',
 		constraint: getFieldsetConstraint(SignupSchema),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			const result = parse(formData, { schema: SignupSchema })
 			return result
@@ -132,8 +135,12 @@ export default function SignupRoute() {
 					Please enter your email.
 				</p>
 			</div>
-			<div className="mx-auto mt-16 min-w-full max-w-sm sm:min-w-[368px]">
-				<Form method="POST" {...form.props} className="flex flex-col gap-4">
+			<div className="mx-auto mt-16 min-w-full max-w-sm px-8 sm:min-w-[368px]">
+				<Form
+					method="POST"
+					{...getFormProps(form)}
+					className="flex flex-col gap-4"
+				>
 					<AuthenticityTokenInput />
 					<HoneypotInputs />
 					<FormInput
@@ -142,7 +149,7 @@ export default function SignupRoute() {
 							children: 'Email',
 						}}
 						inputProps={{
-							...conform.input(fields.email),
+							...getInputProps(fields.email, { type: 'email' }),
 							autoFocus: true,
 							autoComplete: 'email',
 						}}

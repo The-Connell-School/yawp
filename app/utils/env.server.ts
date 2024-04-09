@@ -28,6 +28,7 @@ export function init() {
 	const parsed = schema.safeParse(process.env)
 
 	if (parsed.success === false) {
+		// eslint-disable-next-line no-console
 		console.error(
 			'❌ Invalid environment variables:',
 			parsed.error.flatten().fieldErrors,

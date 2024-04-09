@@ -1,5 +1,8 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getFormProps, getInputProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import * as E from '@react-email/components'
 import {
 	json,
@@ -20,7 +23,7 @@ import { prisma } from '#app/utils/db.server.ts'
 import { sendEmail } from '#app/utils/email.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { EmailSchema } from '#app/utils/schemas/user.ts'
-import { prepareVerification } from './verify.tsx'
+import { prepareVerification } from './verify.server'
 
 const ForgotPasswordSchema = z.object({
 	email: EmailSchema,
@@ -49,12 +52,11 @@ export async function action({ request }: ActionFunctionArgs) {
 		}),
 		async: true,
 	})
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
+
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
-	}
+
 	const { email } = submission.value
 
 	const user = await prisma.user.findFirstOrThrow({
@@ -80,8 +82,9 @@ export async function action({ request }: ActionFunctionArgs) {
 	if (response.status === 'success') {
 		return redirect(redirectTo.toString())
 	} else {
-		submission.error[''] = [response.error.message]
-		return json({ status: 'error', submission } as const, { status: 500 })
+		return json(submission.reply({ formErrors: [response.error.message] }), {
+			status: 500,
+		})
 	}
 }
 
@@ -122,7 +125,7 @@ export default function ForgotPasswordRoute() {
 	const [form, fields] = useForm({
 		id: 'forgot-password-form',
 		constraint: getFieldsetConstraint(ForgotPasswordSchema),
-		lastSubmission: forgotPassword.data?.submission,
+		lastResult: forgotPassword.data,
 		onValidate({ formData }) {
 			return parse(formData, { schema: ForgotPasswordSchema })
 		},
@@ -138,8 +141,8 @@ export default function ForgotPasswordRoute() {
 						No worries, we'll send you reset instructions.
 					</p>
 				</div>
-				<div className="mx-auto mt-8 min-w-full max-w-sm sm:min-w-[368px]">
-					<forgotPassword.Form method="POST" {...form.props}>
+				<div className="mx-auto mt-8 min-w-full max-w-sm px-8 sm:min-w-[368px]">
+					<forgotPassword.Form method="POST" {...getFormProps(form)}>
 						<AuthenticityTokenInput />
 						<HoneypotInputs />
 						<FormInput
@@ -150,8 +153,7 @@ export default function ForgotPasswordRoute() {
 							}}
 							inputProps={{
 								autoFocus: true,
-								type: 'email',
-								...conform.input(fields.email),
+								...getInputProps(fields.email, { type: 'email' }),
 							}}
 							errors={fields.email.errors}
 						/>

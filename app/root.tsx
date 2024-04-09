@@ -8,7 +8,6 @@ import {
 } from '@remix-run/node'
 import {
 	Links,
-	LiveReload,
 	Meta,
 	Outlet,
 	Scripts,
@@ -20,10 +19,11 @@ import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
+import { GlobalLoading } from './components/global-loading.tsx'
 import { Toaster } from './components/toaster.tsx'
 import { useNonce } from './contexts/nonce.ts'
-import { useTheme } from './routes/resources+/theme.tsx'
-import tailwindStyleSheetUrl from './styles/tailwind.css'
+import { useTheme } from './routes/api+/theme.tsx'
+import tailwindStyleSheetUrl from './styles/tailwind.css?url'
 import { getUserId, logout } from './utils/auth.server.ts'
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx'
 import { csrf } from './utils/csrf.server.ts'
@@ -32,7 +32,11 @@ import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
 import { getHslFromVar, hslToHex } from './utils/hslToHex'
 import { cn, combineHeaders, getDomainUrl } from './utils/misc.tsx'
-import { type Theme, getTheme } from './utils/theme.server.ts'
+import {
+	type NavState,
+	navStateCookie,
+} from './utils/state/nav-state.server.ts'
+import { type Theme, getTheme } from './utils/state/theme.server.ts'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
 
@@ -47,7 +51,7 @@ export const links: LinksFunction = () => {
 			type: 'image/png',
 			href: '/favicons/favicon-32x32.png',
 		},
-		{ rel: 'apple-touch-icon', href: '/img/yawp_white_logo.png' },
+		{ rel: 'apple-touch-icon', href: '/favicons/apple-touch-icon.png' },
 		{
 			rel: 'manifest',
 			href: '/site.webmanifest',
@@ -84,6 +88,8 @@ export async function loader({ request }: DataFunctionArgs) {
 							name: true,
 							email: true,
 							image: { select: { id: true } },
+							studentProfiles: { select: { id: true, userId: true } },
+							teacherProfile: { select: { id: true } },
 							roles: {
 								select: {
 									name: true,
@@ -99,14 +105,14 @@ export async function loader({ request }: DataFunctionArgs) {
 			)
 		: null
 	if (userId && !user) {
-		console.info('something weird happened')
-		// something weird happened... The user is authenticated but we can't find
-		// them in the database. Maybe they were deleted? Let's log them out.
 		await logout({ request, redirectTo: '/' })
 	}
 	const { toast, headers: toastHeaders } = await getToast(request)
 	const honeyProps = honeypot.getInputProps()
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken()
+
+	const cookieHeader = request.headers.get('Cookie')
+	const cookie = (await navStateCookie.parse(cookieHeader)) || {}
 
 	return json(
 		{
@@ -117,6 +123,7 @@ export async function loader({ request }: DataFunctionArgs) {
 				path: new URL(request.url).pathname,
 				userPrefs: {
 					theme: getTheme(request),
+					navState: (cookie.state as NavState) ?? 'expanded',
 				},
 			},
 			ENV: getEnv(),
@@ -176,7 +183,6 @@ function Document({
 				/>
 				<ScrollRestoration nonce={nonce} />
 				<Scripts nonce={nonce} />
-				<LiveReload nonce={nonce} />
 			</body>
 		</html>
 	)
@@ -196,6 +202,7 @@ function App() {
 
 	return (
 		<Document nonce={nonce} theme={theme} env={data.ENV}>
+			<GlobalLoading />
 			<div className="flex h-screen min-h-screen flex-col justify-between">
 				<div className="flex-1">
 					<Outlet />

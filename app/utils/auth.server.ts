@@ -103,6 +103,7 @@ export async function signup({
 	password,
 	name,
 	grade,
+	period,
 	school,
 	teacher,
 	workshopTeacherId,
@@ -113,6 +114,7 @@ export async function signup({
 	school: string
 	teacher: string
 	grade: string
+	period: string
 	workshopTeacherId?: string
 }) {
 	const hashedPassword = await getPasswordHash(password)
@@ -124,20 +126,12 @@ export async function signup({
 				create: {
 					email: email.toLowerCase(),
 					name,
-					roles: {
-						connectOrCreate: {
-							create: { name: 'student' },
-							where: { name: 'student' },
-						},
-					},
-					password: {
-						create: {
-							hash: hashedPassword,
-						},
-					},
+					roles: { connect: [{ name: 'user' }] },
+					password: { create: { hash: hashedPassword } },
 					studentProfile: {
 						create: {
 							grade,
+							period,
 							school,
 							schoolTeacher: teacher,
 							...(workshopTeacherId
@@ -145,6 +139,36 @@ export async function signup({
 								: {}),
 						},
 					},
+				},
+			},
+		},
+		select: { id: true, expirationDate: true },
+	})
+
+	return session
+}
+
+export async function signupAsTeacher({
+	email,
+	password,
+	name,
+}: {
+	email: User['email']
+	name: User['name']
+	password: string
+}) {
+	const hashedPassword = await getPasswordHash(password)
+
+	const session = await prisma.session.create({
+		data: {
+			expirationDate: getSessionExpirationDate(),
+			user: {
+				create: {
+					email: email.toLowerCase(),
+					name,
+					roles: { connect: [{ name: 'user' }] },
+					password: { create: { hash: hashedPassword } },
+					teacherProfile: { create: {} },
 				},
 			},
 		},
@@ -174,7 +198,8 @@ export async function signupWithConnection({
 				create: {
 					email: email.toLowerCase(),
 					name,
-					roles: { connect: { name: 'student' } },
+					roles: { connect: { name: 'user' } },
+					studentProfile: { create: {} },
 					connections: { create: { providerId, providerName } },
 					image: imageUrl
 						? { create: await downloadFile(imageUrl) }

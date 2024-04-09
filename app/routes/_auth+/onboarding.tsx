@@ -1,11 +1,14 @@
-import { conform, useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
-import { invariant } from '@epic-web/invariant'
+import { getInputProps, getFormProps, useForm } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import {
 	json,
 	redirect,
-	type DataFunctionArgs,
 	type MetaFunction,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
 } from '@remix-run/node'
 import {
 	Form,
@@ -34,16 +37,15 @@ import {
 import { authSessionStorage } from '#app/utils/session.server.ts'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { type VerifyFunctionArgs } from './verify.tsx'
+import { onboardingEmailSessionKey } from './onboarding.server.ts'
 
-const onboardingEmailSessionKey = 'onboardingEmail'
-
-const SignupFormSchema = z
+export const SignupFormSchema = z
 	.object({
 		name: NameSchema,
 		school: z.string(),
 		teacher: z.string(),
 		grade: z.string(),
+		period: z.string(),
 		workshopTeacherId: z.string().optional(),
 		remember: z.boolean().optional(),
 		redirectTo: z.string().optional(),
@@ -61,39 +63,33 @@ async function requireOnboardingEmail(request: Request) {
 	}
 	return email
 }
-export async function loader({ request }: DataFunctionArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
 	const workshopTeachers = await prisma.user.findMany({
-		where: { roles: { some: { name: 'teacher' } } },
+		where: { teacherProfile: { isNot: null } },
 	})
 
 	return json({ email, workshopTeachers })
 }
 
-export async function action({ request }: DataFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
 	const formData = await request.formData()
 	await validateCSRF(formData, request.headers)
 	checkHoneypot(formData)
 	const submission = await parse(formData, {
-		schema: intent =>
-			SignupFormSchema.transform(async data => {
-				if (intent !== 'submit') return { ...data, session: null }
-
-				const session = await signup({
-					...data,
-					email,
-				})
-				return { ...data, session }
-			}),
+		schema: SignupFormSchema.transform(async data => {
+			const session = await signup({
+				...data,
+				email,
+			})
+			return { ...data, session }
+		}),
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value?.session) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	const { session, remember, redirectTo } = submission.value
@@ -122,17 +118,6 @@ export async function action({ request }: DataFunctionArgs) {
 	)
 }
 
-export async function handleVerification({ submission }: VerifyFunctionArgs) {
-	invariant(submission.value, 'submission.value should be defined by now')
-	const verifySession = await verifySessionStorage.getSession()
-	verifySession.set(onboardingEmailSessionKey, submission.value.target)
-	return redirect('/onboarding', {
-		headers: {
-			'set-cookie': await verifySessionStorage.commitSession(verifySession),
-		},
-	})
-}
-
 export const meta: MetaFunction = () => {
 	return [{ title: 'Setup Yawp! Account' }]
 }
@@ -148,7 +133,7 @@ export default function SignupRoute() {
 		id: 'onboarding-form',
 		constraint: getFieldsetConstraint(SignupFormSchema),
 		defaultValue: { redirectTo },
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: SignupFormSchema })
 		},
@@ -156,22 +141,22 @@ export default function SignupRoute() {
 	})
 
 	return (
-		<div className="mx-auto w-full max-w-md px-2 py-20">
+		<div className="mx-auto w-full max-w-lg px-2 py-20">
 			<div className="flex flex-col gap-3 text-center">
 				<h1>Welcome, {data.email}!</h1>
 				<p>Please enter your details.</p>
 			</div>
 			<Form
 				method="POST"
-				className="mx-auto mt-20 flex min-w-full max-w-sm flex-col gap-3 sm:min-w-[368px]"
-				{...form.props}
+				className="mx-auto mt-20 flex min-w-full max-w-lg flex-col gap-3 px-8 sm:min-w-[368px]"
+				{...getFormProps(form)}
 			>
 				<AuthenticityTokenInput />
 				<HoneypotInputs />
 				<FormInput
 					labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
 					inputProps={{
-						...conform.input(fields.name),
+						...getInputProps(fields.name, { type: 'text' }),
 						autoComplete: 'name',
 					}}
 					errors={fields.name.errors}
@@ -180,7 +165,7 @@ export default function SignupRoute() {
 					<FormInput
 						labelProps={{ htmlFor: fields.school.id, children: 'School' }}
 						inputProps={{
-							...conform.input(fields.school),
+							...getInputProps(fields.school, { type: 'text' }),
 							autoComplete: 'name',
 							required: true,
 						}}
@@ -190,7 +175,7 @@ export default function SignupRoute() {
 					<FormInput
 						labelProps={{ htmlFor: fields.teacher.id, children: 'Teacher' }}
 						inputProps={{
-							...conform.input(fields.teacher),
+							...getInputProps(fields.teacher, { type: 'text' }),
 							autoComplete: 'name',
 							required: true,
 						}}
@@ -202,35 +187,50 @@ export default function SignupRoute() {
 					<FormInput
 						labelProps={{ htmlFor: fields.grade.id, children: 'Grade' }}
 						inputProps={{
-							...conform.input(fields.grade),
+							...getInputProps(fields.grade, { type: 'text' }),
 							autoComplete: 'name',
 							required: true,
 						}}
 						errors={fields.grade.errors}
 						className="w-full"
 					/>
-					<FormSelect
+					<FormInput
 						labelProps={{
-							htmlFor: fields.workshopTeacherId.id,
-							children: 'Yawp! Teacher',
+							htmlFor: fields.period.id,
+							children: 'Period',
+							info: 'Which period is this for you?',
 						}}
-						selectProps={{
-							...conform.input(fields.workshopTeacherId),
+						inputProps={{
+							...getInputProps(fields.period, { type: 'text' }),
 							autoComplete: 'name',
-							defaultValue: data.workshopTeachers[0]?.id,
-							options: data.workshopTeachers.map(teacher => ({
-								value: teacher.id,
-								label: teacher.name,
-							})),
+							required: true,
 						}}
-						errors={fields.workshopTeacherId.errors}
+						errors={fields.period.errors}
 						className="w-full"
 					/>
 				</div>
+				<FormSelect
+					labelProps={{
+						htmlFor: fields.workshopTeacherId.id,
+						children: 'Yawp! Teacher',
+					}}
+					selectProps={{
+						...getInputProps(fields.workshopTeacherId, { type: 'text' }),
+						autoComplete: 'name',
+						defaultValue: data.workshopTeachers[0]?.id,
+						options: data.workshopTeachers.map(teacher => ({
+							value: teacher.id,
+							label: teacher.name,
+						})),
+						className: 'w-full',
+					}}
+					errors={fields.workshopTeacherId.errors}
+					className="min-w-full"
+				/>
 				<FormInput
 					labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
 					inputProps={{
-						...conform.input(fields.password, { type: 'password' }),
+						...getInputProps(fields.password, { type: 'password' }),
 						autoComplete: 'new-password',
 					}}
 					errors={fields.password.errors}
@@ -242,22 +242,23 @@ export default function SignupRoute() {
 						children: 'Confirm Password',
 					}}
 					inputProps={{
-						...conform.input(fields.confirmPassword, { type: 'password' }),
+						...getInputProps(fields.confirmPassword, { type: 'password' }),
 						autoComplete: 'new-password',
 					}}
 					errors={fields.confirmPassword.errors}
 				/>
 
 				<FormCheckbox
+					field={fields.remember}
 					labelProps={{
 						htmlFor: fields.remember.id,
 						children: 'Remember me',
 					}}
-					buttonProps={conform.input(fields.remember)}
+					buttonProps={getInputProps(fields.remember, { type: 'checkbox' })}
 					errors={fields.remember.errors}
 				/>
 
-				<input {...conform.input(fields.redirectTo, { type: 'hidden' })} />
+				<input {...getInputProps(fields.redirectTo, { type: 'hidden' })} />
 				<ErrorList errors={form.errors} id={form.errorId} />
 
 				<div className="flex items-center justify-between gap-6">

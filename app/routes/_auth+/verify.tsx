@@ -1,5 +1,8 @@
-import { conform, useForm, type Submission } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { getInputProps, useForm, getFormProps } from '@conform-to/react'
+import {
+	getZodConstraint as getFieldsetConstraint,
+	parseWithZod as parse,
+} from '@conform-to/zod'
 import { type ActionFunctionArgs, json } from '@remix-run/node'
 import { Form, useActionData, useSearchParams } from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
@@ -9,152 +12,32 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { ErrorList } from '#app/components/forms/error-list.tsx'
 import { FormInput } from '#app/components/forms/form-input.tsx'
 import { Button } from '#app/components/ui/button.tsx'
-import { handleVerification as handleChangeEmailVerification } from '#app/routes/assistants.profile.change-email/route.tsx'
-import { twoFAVerificationType } from '#app/routes/assistants.profile.two-factor/route.tsx'
-import { type twoFAVerifyVerificationType } from '#app/routes/assistants.profile.two-factor.verify/route.tsx'
-import { requireUserId } from '#app/utils/auth.server.ts'
+import { handleVerification as handleChangeEmailVerification } from '#app/routes/app.profile.change-email/route.tsx'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { ensurePrimary } from '#app/utils/litefs.server.ts'
-import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
-import { redirectWithToast } from '#app/utils/toast.server.ts'
-import { generateTOTP, verifyTOTP } from '#app/utils/totp.server.ts'
+import { useIsPending } from '#app/utils/misc.tsx'
+import { handleVerification as handleLoginTwoFactorVerification } from './login.server'
+import { handleVerification as handleOnboardingVerification } from './onboarding.server'
+import { handleVerification as handleResetPasswordVerification } from './reset-password.server'
+import { handleVerification as handleTeacherOnboardingVerification } from './teacher-onboarding.server.ts'
+import { isCodeValid } from './verify.server.ts'
 import {
-	handleVerification as handleLoginTwoFactorVerification,
-	shouldRequestTwoFA,
-} from './login.tsx'
-import { handleVerification as handleOnboardingVerification } from './onboarding.tsx'
-import { handleVerification as handleResetPasswordVerification } from './reset-password.tsx'
-
-export const codeQueryParam = 'code'
-export const targetQueryParam = 'target'
-export const typeQueryParam = 'type'
-export const redirectToQueryParam = 'redirectTo'
-const types = ['onboarding', 'reset-password', 'change-email', '2fa'] as const
-const VerificationTypeSchema = z.enum(types)
-export type VerificationTypes = z.infer<typeof VerificationTypeSchema>
-
-const VerifySchema = z.object({
-	[codeQueryParam]: z.string().min(6).max(6),
-	[typeQueryParam]: VerificationTypeSchema,
-	[targetQueryParam]: z.string(),
-	[redirectToQueryParam]: z.string().optional(),
-})
+	codeQueryParam,
+	redirectToQueryParam,
+	targetQueryParam,
+	typeQueryParam,
+	VerifySchema,
+	VerificationTypeSchema,
+	type VerificationTypes,
+} from './verify_props'
 
 export async function action({ request }: ActionFunctionArgs) {
 	const formData = await request.formData()
 	checkHoneypot(formData)
 	await validateCSRF(formData, request.headers)
 	return validateRequest(request, formData)
-}
-
-export function getRedirectToUrl({
-	request,
-	type,
-	target,
-	redirectTo,
-}: {
-	request: Request
-	type: VerificationTypes
-	target: string
-	redirectTo?: string
-}) {
-	const redirectToUrl = new URL(`${getDomainUrl(request)}/verify`)
-	redirectToUrl.searchParams.set(typeQueryParam, type)
-	redirectToUrl.searchParams.set(targetQueryParam, target)
-	if (redirectTo) {
-		redirectToUrl.searchParams.set(redirectToQueryParam, redirectTo)
-	}
-	return redirectToUrl
-}
-
-export async function requireRecentVerification(request: Request) {
-	const userId = await requireUserId(request)
-	const shouldReverify = await shouldRequestTwoFA(request)
-	if (shouldReverify) {
-		const reqUrl = new URL(request.url)
-		const redirectUrl = getRedirectToUrl({
-			request,
-			target: userId,
-			type: twoFAVerificationType,
-			redirectTo: reqUrl.pathname + reqUrl.search,
-		})
-		throw await redirectWithToast(redirectUrl.toString(), {
-			title: 'Please Reverify',
-			description: 'Please reverify your account before proceeding',
-		})
-	}
-}
-
-export async function prepareVerification({
-	period,
-	request,
-	type,
-	target,
-}: {
-	period: number
-	request: Request
-	type: VerificationTypes
-	target: string
-}) {
-	const verifyUrl = getRedirectToUrl({ request, type, target })
-	const redirectTo = new URL(verifyUrl.toString())
-
-	const { otp, ...verificationConfig } = generateTOTP({
-		algorithm: 'SHA256',
-		// Leaving off 0 and O on purpose to avoid confusing users.
-		charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
-		period,
-	})
-	const verificationData = {
-		type,
-		target,
-		...verificationConfig,
-		expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
-	}
-	await prisma.verification.upsert({
-		where: { target_type: { target, type } },
-		create: verificationData,
-		update: verificationData,
-	})
-
-	// add the otp to the url we'll email the user.
-	verifyUrl.searchParams.set(codeQueryParam, otp)
-
-	return { otp, redirectTo, verifyUrl }
-}
-
-export type VerifyFunctionArgs = {
-	request: Request
-	submission: Submission<z.infer<typeof VerifySchema>>
-	body: FormData | URLSearchParams
-}
-
-export async function isCodeValid({
-	code,
-	type,
-	target,
-}: {
-	code: string
-	type: VerificationTypes | typeof twoFAVerifyVerificationType
-	target: string
-}) {
-	const verification = await prisma.verification.findUnique({
-		where: {
-			target_type: { target, type },
-			OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }],
-		},
-		select: { algorithm: true, secret: true, period: true, charSet: true },
-	})
-	if (!verification) return false
-	const result = verifyTOTP({
-		otp: code,
-		...verification,
-	})
-	if (!result) return false
-
-	return true
 }
 
 async function validateRequest(
@@ -180,11 +63,8 @@ async function validateRequest(
 		async: true,
 	})
 
-	if (submission.intent !== 'submit') {
-		return json({ status: 'idle', submission } as const)
-	}
-	if (!submission.value) {
-		return json({ status: 'error', submission } as const, { status: 400 })
+	if (submission.status !== 'success' || !submission.value) {
+		return json(submission.reply(), { status: 400 })
 	}
 
 	// this code path could be part of a loader (GET request), so we need to make
@@ -215,10 +95,14 @@ async function validateRequest(
 		}
 		case 'change-email': {
 			await deleteVerification()
-			return handleChangeEmailVerification({ request, body, submission })
+			return handleChangeEmailVerification?.({ request, body, submission })
 		}
 		case '2fa': {
 			return handleLoginTwoFactorVerification({ request, body, submission })
+		}
+		case 'teacher-onboarding': {
+			await deleteVerification()
+			return handleTeacherOnboardingVerification({ request, body, submission })
 		}
 	}
 }
@@ -243,6 +127,7 @@ export default function VerifyRoute() {
 
 	const headings: Record<VerificationTypes, React.ReactNode> = {
 		onboarding: checkEmail,
+		'teacher-onboarding': checkEmail,
 		'reset-password': checkEmail,
 		'change-email': checkEmail,
 		'2fa': (
@@ -258,7 +143,7 @@ export default function VerifyRoute() {
 	const [form, fields] = useForm({
 		id: 'verify-form',
 		constraint: getFieldsetConstraint(VerifySchema),
-		lastSubmission: actionData?.submission,
+		lastResult: actionData,
 		onValidate({ formData }) {
 			return parse(formData, { schema: VerifySchema })
 		},
@@ -278,8 +163,8 @@ export default function VerifyRoute() {
 					<div>
 						<ErrorList errors={form.errors} id={form.errorId} />
 					</div>
-					<div className="flex w-full gap-2">
-						<Form method="POST" {...form.props} className="flex-1">
+					<div className="flex w-full gap-2 px-8">
+						<Form method="POST" {...getFormProps(form)} className="flex-1">
 							<AuthenticityTokenInput />
 							<HoneypotInputs />
 							<FormInput
@@ -288,19 +173,19 @@ export default function VerifyRoute() {
 									children: 'Code',
 								}}
 								inputProps={{
-									...conform.input(fields[codeQueryParam]),
+									...getInputProps(fields[codeQueryParam], { type: 'text' }),
 									autoComplete: 'one-time-code',
 								}}
 								errors={fields[codeQueryParam].errors}
 							/>
 							<input
-								{...conform.input(fields[typeQueryParam], { type: 'hidden' })}
+								{...getInputProps(fields[typeQueryParam], { type: 'hidden' })}
 							/>
 							<input
-								{...conform.input(fields[targetQueryParam], { type: 'hidden' })}
+								{...getInputProps(fields[targetQueryParam], { type: 'hidden' })}
 							/>
 							<input
-								{...conform.input(fields[redirectToQueryParam], {
+								{...getInputProps(fields[redirectToQueryParam], {
 									type: 'hidden',
 								})}
 							/>

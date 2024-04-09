@@ -4,14 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSpinDelay } from 'spin-delay'
 import { twMerge } from 'tailwind-merge'
 
-export const DEFAULT_ROUTE = '/assistants'
+export const DEFAULT_ROUTE = '/app'
 
 export function getUserImgSrc(imageId?: string | null) {
-	return imageId ? `/resources/user-images/${imageId}` : '/img/user.png'
+	return imageId ? `/api/user-images/${imageId}` : '/img/user.png'
 }
 
 export function getNoteImgSrc(imageId: string) {
-	return `/resources/note-images/${imageId}`
+	return `/api/note-images/${imageId}`
 }
 
 export function getErrorMessage(error: unknown) {
@@ -24,6 +24,7 @@ export function getErrorMessage(error: unknown) {
 	) {
 		return error.message
 	}
+	// eslint-disable-next-line no-console
 	console.error('Unable to get error message for error', error)
 	return 'Unknown Error'
 }
@@ -255,5 +256,109 @@ export async function downloadFile(url: string, retries: number = 0) {
 	} catch (e) {
 		if (retries > MAX_RETRIES) throw e
 		return downloadFile(url, retries + 1)
+	}
+}
+
+export const toArray = (value: string | (string | undefined)[] | undefined) => {
+	if (Array.isArray(value)) {
+		return value
+	}
+	if (value) {
+		return [value]
+	}
+	return []
+}
+
+export function parseAIResponse(text: string): JSX.Element {
+	// Split the text into items based on the numbering pattern
+	const items = text.split(/\d+\./).slice(1)
+
+	if (items.length > 0) {
+		return (
+			<ol>
+				{items.map((item, index) => {
+					// Split item into segments that are inside and outside of quotations
+					const segments = item.split(/("[^"]+")/).map(segment =>
+						// Check if the segment is quoted text
+						segment.startsWith('"') && segment.endsWith('"') ? (
+							<strong key={segment}>{segment.slice(1, -1)}</strong> // Remove quotes and wrap with <strong>
+						) : (
+							segment // Non-quoted text remains unchanged
+						),
+					)
+
+					if (
+						segments.some(s => {
+							if (typeof s === 'string') {
+								const subLines = s.split('\n').slice(1)
+
+								if (
+									subLines.length > 0 &&
+									subLines.some(sl => sl.includes('-') || sl.includes('•'))
+								) {
+									return true
+								} else {
+									return false
+								}
+							} else {
+								return false
+							}
+						})
+					) {
+						const item = segments[0]
+						const subItems = typeof item === 'string' ? item.split('\n') : item
+						const firstItem = Array.isArray(subItems) ? subItems[0] : subItems
+						const remainingItems = Array.isArray(subItems)
+							? subItems
+									.slice(1)
+									.filter(subItem => subItem !== '\n' && subItem.length > 0)
+									.map(subItem => subItem.replace(/(-|•)/g, ''))
+							: []
+
+						return (
+							<li key={index} className="ml-4">
+								{firstItem}
+								<ul key={index} className="ml-4">
+									{remainingItems.map((segment, idx) => (
+										<li key={`${index}.${idx}-nested`}>{segment}</li>
+									))}
+								</ul>
+							</li>
+						)
+					}
+
+					const segment = segments[0]
+					if (
+						segment &&
+						typeof segment === 'string' &&
+						segment.includes('\n\n')
+					) {
+						const segmentPieces = segment.split('\n\n')
+						const lastItem = segmentPieces[0]
+
+						return (
+							<>
+								<li key={index} className="ml-4">
+									{lastItem}
+								</li>
+								{segmentPieces.slice(1).map((segmentPiece, idx) => (
+									<p key={`${index}.${idx}-ending`} className="pt-3">
+										{segmentPiece}
+									</p>
+								))}
+							</>
+						)
+					}
+
+					return (
+						<li key={index} className="ml-4">
+							{segments}
+						</li>
+					)
+				})}
+			</ol>
+		)
+	} else {
+		return <p>{text}</p>
 	}
 }

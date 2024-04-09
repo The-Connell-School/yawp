@@ -7,10 +7,10 @@ import {
 import { RemixServer } from '@remix-run/react'
 import * as Sentry from '@sentry/remix'
 import isbot from 'isbot'
-import { getInstanceInfo } from 'litefs-js'
 import { renderToPipeableStream } from 'react-dom/server'
 import { NonceProvider } from './contexts/nonce.ts'
 import { getEnv, init } from './utils/env.server.ts'
+import { getInstanceInfo } from './utils/litefs.server.ts'
 import { makeTimings } from './utils/timing.server.ts'
 
 const ABORT_DELAY = 5000

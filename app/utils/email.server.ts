@@ -31,7 +31,7 @@ export async function sendEmail({
 	| { html: string; text: string; react?: never }
 	| { react: ReactElement; html?: never; text?: never }
 )) {
-	const from = process.env.RESEND_FROM_EMAIL
+	const from = process.env.RESEND_FROM_EMAIL ?? 'test@example.com'
 
 	const email = {
 		from,
@@ -41,13 +41,18 @@ export async function sendEmail({
 
 	// feel free to remove this condition once you've set up resend
 	if (
-		!(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) &&
+		!(process.env.RESEND_API_KEY || process.env.RESEND_FROM_EMAIL) &&
 		!process.env.MOCKS
 	) {
-		console.error(`RESEND_API_KEY not set and we're not in mocks mode.`)
+		// eslint-disable-next-line no-console
+		console.error(
+			`RESEND_API_KEY or RESEND_FROM_EMAIL not set and we're not in mocks mode.`,
+		)
+		// eslint-disable-next-line no-console
 		console.error(
 			`To send emails, set the RESEND_API_KEY environment variable.`,
 		)
+		// eslint-disable-next-line no-console
 		console.error(`Would have sent the following email:`, JSON.stringify(email))
 		return {
 			status: 'success',

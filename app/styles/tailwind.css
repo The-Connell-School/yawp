@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+	/* Hide scrollbar for Chrome, Safari and Opera */
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	/* Hide scrollbar for IE, Edge and Firefox */
+	.no-scrollbar {
+		-ms-overflow-style: none; /* IE and Edge */
+		scrollbar-width: none; /* Firefox */
+	}
+}
 /* Typography */
 
 * {
@@ -31,6 +42,34 @@ h4 {
 
 code {
 	@apply rounded bg-primary/20 p-0.5 text-sm;
+}
+
+#course-module-session-messages ul {
+	@apply list-disc;
+}
+#course-module-session-messages ol {
+	@apply list-decimal;
+}
+
+/* .tiptap {
+	@apply overflow-scroll;
+} */
+
+/* TipTap editor styles */
+.tiptap blockquote {
+	@apply my-2 border-l-4 border-muted-foreground p-2 text-muted-foreground;
+}
+.tiptap ul {
+	@apply list-disc pl-6;
+}
+.tiptap ol {
+	@apply list-decimal pl-6;
+}
+.tiptap mark {
+	@apply bg-yellow-100;
+}
+.tiptap mark.focused {
+	@apply bg-yellow-300;
 }
 
 /* UI Theme */
