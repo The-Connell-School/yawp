@@ -9,7 +9,6 @@ const tabs = [
 	{ label: 'Courses', to: '/app/settings/courses' },
 	{ label: 'Teachers', to: '/app/settings/teachers' },
 	{ label: 'Students', to: '/app/settings/students' },
-	{ label: 'Tutors', to: '/app/settings/tutors' },
 ]
 
 export const handle: BreadcrumbHandle = {
@@ -23,15 +22,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function Route() {
 	return (
-		<main className="relative h-full overflow-y-scroll pt-[108px] sm:pt-[53px]">
-			<nav className="fixed left-0 right-0 top-[55px] flex items-end border-b bg-background px-3 pt-4 sm:top-0 sm:px-6">
+		<main className="flex h-screen flex-col overflow-hidden">
+			<nav className="flex items-end border-b bg-background px-3 pt-3">
 				{tabs.map(tab => (
 					<NavLink
 						key={tab.to}
 						to={tab.to}
 						className={({ isActive }) =>
 							cn(
-								'mr-8 border-b border-b-transparent pb-3 text-muted-foreground',
+								'mr-8 border-b border-b-transparent pb-2 text-muted-foreground',
 								{
 									'border-b-foreground font-semibold text-foreground': isActive,
 								},

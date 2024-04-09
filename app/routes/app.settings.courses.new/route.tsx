@@ -5,7 +5,7 @@ import {
 	unstable_parseMultipartFormData,
 	unstable_createMemoryUploadHandler,
 } from '@remix-run/node'
-import { Link, useLoaderData } from '@remix-run/react'
+import { Link } from '@remix-run/react'
 import omit from 'lodash/omit'
 import { validationError } from 'remix-validated-form'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
@@ -19,8 +19,7 @@ import { MAX_SIZE, validator } from './form/schema'
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
 	await requireUserWithRole(request, ['admin'])
-	const tutors = await prisma.tutor.findMany({ orderBy: { name: 'asc' } })
-	return json({ tutors })
+	return json({})
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -42,7 +41,6 @@ export async function action({ request }: ActionFunctionArgs) {
 				create: (data.courseModules ?? []).map((cm, index) => ({
 					...omit(cm, ['id']),
 					position: index,
-					tutorId: cm.tutorId || null,
 					instructions: {
 						create: (cm.instructions ?? []).map((instruction, i) => ({
 							...instruction,
@@ -72,13 +70,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Route() {
-	const data = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
 
 	return (
 		<div className="flex flex-col">
 			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
-				<CourseForm formId="create-module" tutors={data.tutors} />
+				<CourseForm formId="create-module" />
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">
 				<Button type="submit" disabled={isPending} form="create-module">

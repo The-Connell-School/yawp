@@ -16,10 +16,9 @@ import { type Schema, validator, type CourseModuleSchema } from './schema'
 interface Props {
 	formId: string
 	defaultValues?: z.infer<typeof Schema>
-	tutors: { id: string; name: string }[]
 }
 
-export const CourseForm = ({ defaultValues, tutors, formId }: Props) => {
+export const CourseForm = ({ defaultValues, formId }: Props) => {
 	const { error } = useField('courseModules', { formId })
 	const [courseModules, { push, remove }] = useFieldArray<
 		z.infer<typeof CourseModuleSchema>
@@ -91,8 +90,7 @@ export const CourseForm = ({ defaultValues, tutors, formId }: Props) => {
 							<CourseModule
 								key={key}
 								onDelete={() => remove(i)}
-								index={i}
-								tutors={tutors}
+								name={`courseModules[${i}]`}
 							/>
 						))}
 						<Button

@@ -49,7 +49,9 @@ function Base(
 			) : hideLabel ? null : (
 				<label htmlFor={id}>{label ?? startCase(name)}</label>
 			)}
-			{subLabel ? <p className="text-muted-foreground">{subLabel}</p> : null}
+			{subLabel ? (
+				<p className="text-sm text-muted-foreground">{subLabel}</p>
+			) : null}
 			<Textarea
 				id={id}
 				ref={ref}

@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { useControlField, useField, useFieldArray } from 'remix-validated-form'
 import { type z } from 'zod'
 import { FormInput } from '#app/components/forms/form-input-2'
-import { FormSearchSelect } from '#app/components/forms/form-search-select'
 import { FormTextarea } from '#app/components/forms/form-textarea-2'
 import { DotsVerticalIcon } from '#app/components/icons'
 import { Button } from '#app/components/ui/button'
@@ -31,19 +30,17 @@ import {
 } from './schema'
 
 interface Props {
-	tutors: { id: string; name: string }[]
-	index: number
+	name: string
 	onDelete: () => void
 }
 
-export function CourseModule({ tutors, index, onDelete }: Props) {
-	const path = `courseModules[${index}]`
+export function CourseModule({ name, onDelete }: Props) {
 	const [value, setValue] =
-		useControlField<z.infer<typeof CourseModuleSchema>>(path)
+		useControlField<z.infer<typeof CourseModuleSchema>>(name)
 
 	const { upsert, remove: removeHiddenFields } = useHiddenValues()
 	useCallDebouncedCallback(
-		() => upsert(omit(value, ['instructions']), path),
+		() => upsert(omit(value, ['instructions']), name),
 		300,
 		[value],
 	)
@@ -51,10 +48,10 @@ export function CourseModule({ tutors, index, onDelete }: Props) {
 	const [isOpen, setIsOpen] = useState(false)
 	const originalValue = useOriginalValue({ isOpen, value })
 
-	const { error } = useField(`${path}.instructions`)
+	const { error } = useField(`${name}.instructions`)
 	const [instructions, { push, remove }] = useFieldArray<
 		z.infer<typeof CourseModuleInstructionSchema>
-	>(`${path}.instructions`)
+	>(`${name}.instructions`)
 
 	if (!value) return null
 
@@ -82,7 +79,7 @@ export function CourseModule({ tutors, index, onDelete }: Props) {
 						<DropdownMenuContent>
 							<DropdownMenuItem
 								onClick={() => {
-									removeHiddenFields(path)
+									removeHiddenFields(name)
 									onDelete()
 								}}
 								className="cursor-pointer"
@@ -93,29 +90,34 @@ export function CourseModule({ tutors, index, onDelete }: Props) {
 					</DropdownMenu>
 				</div>
 			</SheetTrigger>
-			<SheetContent className="flex flex-col" forceMount>
+			<SheetContent className="sm:max-w-screen flex w-screen flex-col rounded-l-xl px-4 py-5 sm:w-[600px]">
 				<SheetHeader className="px-1">
 					<SheetTitle>Module</SheetTitle>
 				</SheetHeader>
 				<div className="flex flex-grow flex-col gap-3 overflow-scroll px-1">
 					<FormInput
 						label="Title"
-						name={`${path}.title`}
+						name={`${name}.title`}
 						placeholder="Title"
 						value={value.title}
 						onChange={e => setValue({ ...value, title: e.target.value })}
 					/>
-					<FormSearchSelect
-						label="Tutor"
-						name={`${path}.tutorId`}
-						options={tutors.map(t => ({ value: t.id, label: t.name }))}
-					/>
 					<FormTextarea
 						label="Description"
-						name={`${path}.description`}
+						name={`${name}.description`}
 						placeholder="Description"
 						value={value.description ?? ''}
 						onChange={e => setValue({ ...value, description: e.target.value })}
+					/>
+					<FormTextarea
+						label="Context"
+						subLabel="Add instructions & context for the tutor."
+						name={`${name}.tutorInstructions`}
+						placeholder="You are a helpful tutor..."
+						value={value.tutorInstructions ?? ''}
+						onChange={e =>
+							setValue({ ...value, tutorInstructions: e.target.value })
+						}
 					/>
 					<div className="flex w-full flex-col gap-1">
 						<label>Instructions</label>
@@ -127,8 +129,7 @@ export function CourseModule({ tutors, index, onDelete }: Props) {
 								<Instruction
 									key={key}
 									onDelete={() => remove(i)}
-									index={i}
-									subPath={path}
+									name={`${name}.instructions[${i}]`}
 								/>
 							))}
 							<Button

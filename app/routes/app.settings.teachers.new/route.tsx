@@ -1,83 +1,53 @@
-import { getInputProps, getFormProps, useForm } from '@conform-to/react'
-import { getZodConstraint, parseWithZod as parse } from '@conform-to/zod'
 import * as E from '@react-email/components'
-import { type ActionFunctionArgs, json } from '@remix-run/node'
-import { Form, useActionData } from '@remix-run/react'
-import { z } from 'zod'
+import {
+	type ActionFunctionArgs,
+	json,
+	type LoaderFunctionArgs,
+} from '@remix-run/node'
+import { Link, useLoaderData } from '@remix-run/react'
+import { validationError } from 'remix-validated-form'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { FormInput } from '#app/components/forms/form-input'
 import { Button } from '#app/components/ui/button'
 import { prisma } from '#app/utils/db.server'
-import { sendEmail } from '#app/utils/email.server'
+import { sendEmail } from '#app/utils/email.server.js'
 import { useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { prepareVerification } from '../_auth+/verify.server'
+import { TeacherForm } from './form'
+import { validator } from './form/schema'
 
-const Schema = z.object({ email: z.string() })
-type Schema = z.infer<typeof Schema>
-
-function InvitationEmail({ url }: { url: string }) {
-	return (
-		<E.Html lang="en" dir="ltr">
-			<E.Container>
-				<h1>
-					<E.Text>Welcome to Yawp!</E.Text>
-				</h1>
-				<p>
-					<E.Text>
-						You've been invited to join Yawp! as a teacher. To get started,
-						click the link below.
-					</E.Text>
-				</p>
-				<E.Link href={url}>{url}</E.Link>
-			</E.Container>
-		</E.Html>
-	)
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+	await requireUserWithRole(request, ['admin'])
+	const allStudents = await prisma.user.findMany({
+		where: { studentProfile: { isNot: null } },
+	})
+	return json({ allStudents })
 }
 
 export async function action({ request }: ActionFunctionArgs) {
 	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
+	const { error, data, formId } = await validator.validate(formData)
+	if (error) return validationError(error)
 
-	const submission = await parse(formData, {
-		async: true,
-		schema: Schema.superRefine(async ({ email }, ctx) => {
-			const [user, verification] = await Promise.all([
-				prisma.user.findUnique({
-					where: { email },
-					include: { teacherProfile: true },
-				}),
-				prisma.verification.findFirst({
-					where: { target: email, type: 'teacher-onboarding' },
-				}),
-			])
-
-			if (user && user.teacherProfile) {
-				return ctx.addIssue({
-					path: ['email'],
-					code: z.ZodIssueCode.custom,
-					message: 'Email is already a teacher.',
-				})
-			} else if (verification) {
-				return ctx.addIssue({
-					path: ['email'],
-					code: z.ZodIssueCode.custom,
-					message: 'Email is already invited.',
-				})
-			}
+	const [user, verification] = await Promise.all([
+		prisma.user.findUnique({
+			where: { email: data.email },
+			include: { teacherProfile: true },
 		}),
-	})
+		prisma.verification.findFirst({
+			where: { target: data.email, type: 'teacher-onboarding' },
+		}),
+	])
 
-	if (submission.status !== 'success' || !submission.value) {
-		return json(submission.reply(), { status: 400 })
+	if (user && user.teacherProfile) {
+		const error = 'A teacher already exists with that email.'
+		return validationError({ fieldErrors: { email: error }, formId }, data)
+	} else if (verification) {
+		const error = 'A teacher with that email has already been invited.'
+		return validationError({ fieldErrors: { email: error }, formId }, data)
 	}
-
-	const { email } = submission.value
-	const user = await prisma.user.findUnique({
-		where: { email },
-		include: { roles: true },
-	})
 
 	if (user) {
 		const update = await prisma.user.update({
@@ -86,26 +56,38 @@ export async function action({ request }: ActionFunctionArgs) {
 			include: { teacherProfile: true },
 		})
 
-		return redirectWithToast(
-			`/app/settings/teachers/${update.teacherProfile?.id}`,
-			{
-				type: 'success',
-				description: 'Teacher created successfully.',
-				closeButton: false,
-			},
-		)
+		return redirectWithToast(`/app/settings/teachers/${update.id}`, {
+			type: 'success',
+			description: 'Teacher updated successfully',
+			closeButton: false,
+		})
 	} else {
 		const { verifyUrl } = await prepareVerification({
 			period: 60 * 60 * 48,
 			request,
 			type: 'teacher-onboarding',
-			target: email,
+			target: data.email,
 		})
 
 		const response = await sendEmail({
-			to: email,
+			to: data.email,
 			subject: `You've been invited to join Yawp!`,
-			react: <InvitationEmail url={verifyUrl.href} />,
+			react: (
+				<E.Html lang="en" dir="ltr">
+					<E.Container>
+						<h1>
+							<E.Text>Welcome to Yawp!</E.Text>
+						</h1>
+						<p>
+							<E.Text>
+								You've been invited to join Yawp! as a teacher. To get started,
+								click the link below.
+							</E.Text>
+						</p>
+						<E.Link href={verifyUrl.href}>{verifyUrl.href}</E.Link>
+					</E.Container>
+				</E.Html>
+			),
 		})
 
 		if (response.status === 'success') {
@@ -115,46 +97,38 @@ export async function action({ request }: ActionFunctionArgs) {
 				closeButton: false,
 			})
 		} else {
-			return json(submission.reply({ formErrors: [response.error.message] }), {
-				status: 500,
+			return redirectWithToast('/app/settings/teachers', {
+				type: 'error',
+				description: 'Teacher invitation was not sent. Please try again.',
+				closeButton: false,
 			})
 		}
 	}
 }
 
 export default function Route() {
-	const actionData = useActionData<typeof action>()
+	const { allStudents } = useLoaderData<typeof loader>()
 	const isPending = useIsPending()
-	const [form, fields] = useForm({
-		id: 'new-teacher-form',
-		lastResult: actionData,
-		constraint: getZodConstraint(Schema),
-	})
 
 	return (
-		<Form
-			{...getFormProps(form)}
-			method="POST"
-			className="flex h-full max-h-[calc(100vh-70px)] flex-col justify-start gap-4 overflow-y-scroll p-4"
-		>
-			<FormInput
-				inputProps={{
-					...getInputProps(fields.email, { type: 'email' }),
-					placeholder: 'email@example.com',
-					required: true,
-					className: 'max-w-[400px]',
-				}}
-				labelProps={{ children: 'Email' }}
-				errors={fields.email.errors}
-			/>
-			<p className="text-sm text-muted-foreground">
-				Students can be added once the teacher has been created and the user
-				exists or has accepted the invitation.
-			</p>
-			<Button type="submit" isLoading={isPending} className="max-w-fit">
-				Create
-			</Button>
-		</Form>
+		<div className="flex flex-col">
+			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+				<TeacherForm formId="create-module" allStudents={allStudents} />
+			</div>
+			<div className="flex gap-2 px-6 pb-6 pt-1">
+				<Button type="submit" disabled={isPending} form="create-module">
+					Create
+				</Button>
+				<Button
+					disabled={isPending}
+					variant="secondary"
+					asChild
+					className="md:hidden"
+				>
+					<Link to="/app/settings/teachers">Cancel</Link>
+				</Button>
+			</div>
+		</div>
 	)
 }
 

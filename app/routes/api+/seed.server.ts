@@ -54,6 +54,27 @@ export const staging: () => Promise<SeedData> = async () => ({
 			password: { create: createPassword('bbrock') },
 			roles: { connect: [{ name: 'admin' }] },
 		},
+		{
+			email: 'jdoe@brock.software',
+			name: 'John Doe',
+			password: { create: createPassword('jdoe') },
+			roles: { connect: [{ name: 'user' }] },
+			studentProfile: { create: {} },
+		},
+		{
+			email: 'jsmith@brock.software',
+			name: 'Jane Smith',
+			password: { create: createPassword('jsmith') },
+			roles: { connect: [{ name: 'user' }] },
+			studentProfile: { create: {} },
+		},
+		{
+			email: 'arobins@brock.software',
+			name: 'Alex Robins',
+			password: { create: createPassword('arobins') },
+			roles: { connect: [{ name: 'user' }] },
+			teacherProfile: { create: {} },
+		},
 	],
 })
 

@@ -34,21 +34,19 @@ import { useOriginalValue } from '#app/hooks/useOriginalValue'
 import { type CourseModuleInstructionSchema } from './schema'
 
 interface Props {
-	index: number
-	subPath: string
+	name: string
 	onDelete: () => void
 }
 
-export function Instruction({ subPath, index, onDelete }: Props) {
-	const path = `${subPath}.instructions[${index}]`
+export function Instruction({ name, onDelete }: Props) {
 	const [value, setValue] =
-		useControlField<z.infer<typeof CourseModuleInstructionSchema>>(path)
+		useControlField<z.infer<typeof CourseModuleInstructionSchema>>(name)
 
 	const [isOpen, setIsOpen] = useState(false)
 	const originalValue = useOriginalValue({ isOpen, value })
 
 	const { upsert, remove } = useHiddenValues()
-	useCallDebouncedCallback(() => upsert(value, path), 300, [value])
+	useCallDebouncedCallback(() => upsert(value, name), 300, [value])
 
 	if (!value) return null
 
@@ -70,7 +68,7 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 						<DropdownMenuContent>
 							<DropdownMenuItem
 								onClick={() => {
-									remove(path)
+									remove(name)
 									onDelete()
 								}}
 								className="cursor-pointer"
@@ -81,14 +79,14 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 					</DropdownMenu>
 				</div>
 			</SheetTrigger>
-			<SheetContent className="sm:max-w-screen flex w-screen flex-col rounded-l-xl px-4 py-5 sm:w-[600px]">
+			<SheetContent className="flex w-screen flex-col rounded-l-xl px-4 py-5 sm:w-[550px] sm:max-w-[95%]">
 				<SheetHeader className="px-1">
 					<SheetTitle>Instruction</SheetTitle>
 				</SheetHeader>
 				<div className="flex flex-grow flex-col gap-4 overflow-scroll px-1">
 					<FormInput
 						label="Title"
-						name={`${path}.title`}
+						name={`${name}.title`}
 						placeholder="Title"
 						value={value.title}
 						onChange={e => setValue({ ...value, title: e.target.value })}
@@ -108,11 +106,11 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 						]}
 						className="gap-1"
 						label="Prompt type"
-						name={`${path}.promptType`}
+						name={`${name}.promptType`}
 					/>
 					<FormTextarea
 						label="Prompt"
-						name={`${path}.prompt`}
+						name={`${name}.prompt`}
 						placeholder="Welcome student! Begin by introducing yourself."
 						labelInfo="Depending on the above selection, this will either be sent to the student word-for-word, or this text will first be sent to GPT-4 and then given to the student."
 						value={value.prompt}
@@ -146,12 +144,12 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 								]}
 								className="gap-1"
 								label="Answer type"
-								name={`${path}.answerType`}
+								name={`${name}.answerType`}
 							/>
 							{value.answerType === 'select' ? (
 								<FormInput
 									label="Answer options"
-									name={`${path}.answerTypeOptions`}
+									name={`${name}.answerTypeOptions`}
 									placeholder="I'm done, I need help, Give a hint"
 									value={value.answerTypeOptions ?? ''}
 									onChange={e =>
@@ -162,7 +160,7 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 							{value.answerType === 'select' ? (
 								<FormSwitch
 									label="Can ask a question?"
-									name={`${path}.canAskQuestion`}
+									name={`${name}.canAskQuestion`}
 									checked={value.canAskQuestion}
 									onCheckedChange={canAskQuestion =>
 										setValue({ ...value, canAskQuestion })
@@ -188,7 +186,7 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 									</p>
 								}
 								placeholder={`I.e. "the content should be 3 sentences or more"`}
-								name={`${path}.answerKey`}
+								name={`${name}.answerKey`}
 								label="Answer key"
 								labelInfo="Describe the end goal of this instruction. This content will be checked by GPT-4 to consider whether or not a student has successfully completed the instruction"
 								value={value.answerKey ?? ''}
@@ -211,11 +209,11 @@ export function Instruction({ subPath, index, onDelete }: Props) {
 								]}
 								className="gap-1"
 								label="Concluding prompt type"
-								name={`${path}.concludingPromptType`}
+								name={`${name}.concludingPromptType`}
 							/>
 							<FormTextarea
 								label="Concluding prompt"
-								name={`${path}.concludingPrompt`}
+								name={`${name}.concludingPrompt`}
 								placeholder="Congratulation, you've complete this step!"
 								labelInfo="Depending on the above selection, this will either be sent to the student word-for-word, or this text will first be sent to GPT-4 and then given to the student."
 								value={value.concludingPrompt ?? ''}

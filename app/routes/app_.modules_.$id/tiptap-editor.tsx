@@ -349,7 +349,7 @@ const extensions = [
 ]
 
 export const TiptapEditor = ({
-	initialContent = '<h1></h1>',
+	initialContent = '',
 	onChange,
 	onHighlight,
 }: {
