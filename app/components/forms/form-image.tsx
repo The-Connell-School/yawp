@@ -39,7 +39,12 @@ export function FormImage({
 			{children({
 				src,
 				pick: () => document.getElementById(id)?.click(),
-				remove: () => setSrc(null),
+				remove: () => {
+					setSrc(null)
+					// Remove the file from the input so that the same file can be selected again
+					document.getElementById(id)?.setAttribute('type', 'text')
+					document.getElementById(id)?.setAttribute('type', 'file')
+				},
 			})}
 		</>
 	)

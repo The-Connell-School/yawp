@@ -7,7 +7,7 @@ import { getDomainUrl } from '#app/utils/misc'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { twoFAVerificationType } from '../app.profile.two-factor/route'
 import { type twoFAVerifyVerificationType } from '../app.profile.two-factor.verify/route'
-import { shouldRequestTwoFA } from './login.server'
+import { shouldRequestTwoFA } from './login/utils.server'
 import {
 	type VerifySchema,
 	codeQueryParam,

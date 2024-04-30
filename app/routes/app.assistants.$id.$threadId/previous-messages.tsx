@@ -1,5 +1,4 @@
 import { useParams } from '@remix-run/react'
-import { type ThreadMessagesPage } from 'openai/resources/beta/threads/messages/messages.mjs'
 import { type ReactNode } from 'react'
 import useSWR from 'swr'
 import { AssistantIcon } from '#app/components/icons'
@@ -25,10 +24,9 @@ export function PreviousMessages({
 	const threadId = params.threadId
 
 	const url = `/app/assistants/${assistantId}/${threadId}/${lastId}`
-	const { data, error, isLoading } = useSWR<ThreadMessagesPage>(
-		url,
-		() => fetch(url).then(res => res.json()) as any,
-	)
+	const { data, error, isLoading } = useSWR<{
+		data: { id: string; role: string; content: { type: string }[] }[]
+	}>(url, () => fetch(url).then(res => res.json()) as any)
 
 	const hasMore = (data as any | undefined)?.body.has_more
 	const nextLastId = (data as any | undefined)?.body.last_id

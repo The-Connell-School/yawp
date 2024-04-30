@@ -95,7 +95,7 @@ app.use(
 	morgan('tiny', {
 		skip: (req, res) =>
 			res.statusCode === 200 &&
-			(req.url?.startsWith('/api/user-images') ||
+			(req.url?.startsWith('/api/image') ||
 				req.url?.startsWith('/api/healthcheck')),
 	}),
 )
@@ -235,12 +235,14 @@ const server = app.listen(portToUse, () => {
 				: 0
 
 	if (portUsed !== desiredPort) {
+		// eslint-disable-next-line no-console
 		console.warn(
 			chalk.yellow(
 				`⚠️  Port ${desiredPort} is not available, using ${portUsed} instead.`,
 			),
 		)
 	}
+	// eslint-disable-next-line no-console
 	console.log(`🚀  We have liftoff!`)
 	const localUrl = `http://localhost:${portUsed}`
 	let lanUrl: string | null = null
@@ -252,6 +254,7 @@ const server = app.listen(portToUse, () => {
 		lanUrl = `http://${localIp}:${portUsed}`
 	}
 
+	// eslint-disable-next-line no-console
 	console.log(
 		`
 ${chalk.bold('Local:')}            ${chalk.cyan(localUrl)}

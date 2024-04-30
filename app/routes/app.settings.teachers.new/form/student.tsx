@@ -4,7 +4,6 @@ import { useControlField } from 'remix-validated-form'
 import { Button } from '#/app/components/ui/button'
 import {
 	Command,
-	CommandEmpty,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
@@ -23,7 +22,10 @@ export function Student({
 	onDelete,
 }: {
 	name: string
-	students: { email: string }[]
+	students: {
+		email: string
+		studentProfile: { workshopLeader: { email: string } | null } | null
+	}[]
 	onDelete: () => void
 }) {
 	const [open, setOpen] = useState(false)
@@ -59,10 +61,9 @@ export function Student({
 				<PopoverContent className="w-[320px] p-0" align="start">
 					<Command>
 						<CommandInput placeholder="Search students..." />
-						<CommandEmpty>No students found.</CommandEmpty>
 						<CommandGroup>
 							{students.length ? (
-								students.map(({ email }) => (
+								students.map(({ email, studentProfile }) => (
 									<CommandItem
 										key={email}
 										value={email}
@@ -77,12 +78,20 @@ export function Student({
 												value === email ? 'opacity-100' : 'opacity-0',
 											)}
 										/>
-										{email}
+										<div className="flex flex-col gap-0.5">
+											{email}
+											{studentProfile?.workshopLeader ? (
+												<span className="text-xs text-muted-foreground">
+													{studentProfile.workshopLeader.email} - Current
+													teacher
+												</span>
+											) : null}
+										</div>
 									</CommandItem>
 								))
 							) : (
 								<p className="w-full p-2 text-center text-sm text-muted-foreground">
-									No students found
+									No students found.
 								</p>
 							)}
 						</CommandGroup>

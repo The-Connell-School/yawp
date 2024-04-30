@@ -158,7 +158,15 @@ function checkWord(replaceMap, keepMap, rules, bool) {
  * @param  {boolean} inclusive Whether to prefix with the number (e.g. 3 ducks)
  * @return {string}
  */
-function pluralize(word, count, inclusive) {
+function pluralize({
+	word,
+	count,
+	inclusive,
+}: {
+	word: string
+	count: number
+	inclusive?: boolean
+}) {
 	var pluralized =
 		count === 1 ? pluralize.singular(word) : pluralize.plural(word)
 

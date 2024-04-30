@@ -222,13 +222,15 @@ model CourseModuleSession {
   id                    String                       @id @default(cuid())
   createdAt             DateTime                     @default(now())
   updatedAt             DateTime                     @updatedAt
+  deletedAt             DateTime?
+  title                 String                       @default("Untitled")
+  instructionsCompleted Int
   courseModuleId        String
   courseModule          CourseModule                 @relation(fields: [courseModuleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId                String
   user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  instructionsCompleted Int
-  documentId            String?
-  document              Document?                    @relation(fields: [documentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  documentId            String
+  document              Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   messages              CourseModuleSessionMessage[]
 }
 
@@ -248,6 +250,8 @@ model Document {
   id                   String                @id @default(cuid())
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  title                String                @default("Untitled")
   text                 String?
   html                 String?
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)

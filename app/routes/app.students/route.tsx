@@ -1,6 +1,5 @@
-import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
+import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import {
-	NavLink,
 	Outlet,
 	useLoaderData,
 	useMatch,
@@ -9,114 +8,90 @@ import {
 } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { SearchInput } from '#app/components/search-input'
+import { SettingsNavLink } from '#app/components/settings-list-item.js'
 import { Drawer, DrawerContent } from '#app/components/ui/drawer'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { DEFAULT_ROUTE, cn, getUserImgSrc } from '#app/utils/misc'
+import { getUserImgSrc } from '#app/utils/misc'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
 
-	const user = await prisma.user.findUnique({
+	const students = await prisma.studentProfile.findMany({
 		where: {
-			id: userId,
-			OR: [
-				{ teacherProfile: { isNot: null } },
-				{ roles: { some: { name: 'admin' } } },
-			],
+			workshopLeaderId: userId,
+			...(query && {
+				OR: [
+					{ user: { name: { contains: query } } },
+					{ user: { email: { contains: query } } },
+				],
+			}),
 		},
-		include: {
-			studentProfiles: {
-				include: { user: { include: { image: true } } },
-				where: query
-					? {
-							OR: [
-								{ user: { name: { contains: query } } },
-								{ user: { email: { contains: query } } },
-							],
-						}
-					: {},
-			},
-			teacherProfile: true,
-		},
+		include: { user: { select: { image: true, name: true, email: true } } },
 	})
 
-	if (!user) {
-		return redirect(DEFAULT_ROUTE)
-	}
-
-	return json({ user })
+	return json({ students })
 }
 
 export default function Route() {
-	const { user } = useLoaderData<typeof loader>()
+	const data = useLoaderData<typeof loader>()
 	const navigate = useNavigate()
-	const [searchParams] = useSearchParams()
 	const breakpoint = useBreakpoint()
-	const showSidePanel = ['lg', 'xl', '2xl'].includes(breakpoint ?? '')
-	const isChildRoute = !!useMatch('/app/students/:id')
+	const [searchParams] = useSearchParams()
+	const isViewingStudent = !!useMatch('/app/students/:id')
+	const showDrawer = ['base', 'sm', 'md'].includes(breakpoint ?? '')
 
 	return (
-		<main className="h-full w-full overflow-y-scroll p-6">
-			<h2>My Students</h2>
-			<div className="mt-4 flex w-full rounded-sm">
-				<div className={cn('flex h-full w-full flex-col md:w-1/2 md:border-r')}>
-					<div className="flex items-center justify-between pb-3 pr-3">
-						<SearchInput />
-					</div>
-					<div className="flex h-[calc(100vh-345px)] min-h-0 w-full flex-col gap-2 overflow-y-scroll border-t py-3 pr-3 sm:h-[calc(100vh-155px)] sm:min-h-[400px]">
-						{user.studentProfiles.length ? (
-							user.studentProfiles.map(studentProfile => (
-								<NavLink
-									key={studentProfile.id}
-									to={`/app/students/${studentProfile.id}?q=${searchParams.get('q') ?? ''}`}
-									className={({ isActive }) =>
-										cn(
-											'flex cursor-pointer gap-2 rounded-sm border p-2 transition-opacity hover:opacity-80 md:p-3',
-											{ 'border-primary/50 bg-primary/5': isActive },
-										)
-									}
-								>
-									<img
-										src={getUserImgSrc(studentProfile.user.image?.id)}
-										alt={studentProfile.user.name ?? studentProfile.user.email}
-										className="h-10 w-10 rounded-full object-cover"
-									/>
-									<div>
-										<h4 className="text-sm">Student</h4>
-										<p>{studentProfile.user.name}</p>
-									</div>
-								</NavLink>
-							))
-						) : (
-							<div className="flex h-full w-full flex-col items-center justify-center gap-1">
-								<h3>No students found.</h3>
-								<p>Students assigned to you will show up here.</p>
-							</div>
-						)}
-					</div>
+		<main className="flex h-full">
+			<div className="flex w-full flex-col md:w-1/2 md:border-r">
+				<div className="px-3 pt-3">
+					<h3>Your students</h3>
+					<p className="text-sm text-muted-foreground">
+						View and manage students assigned to you.
+					</p>
 				</div>
-				{showSidePanel ? (
-					<div className="hidden h-[calc(100vh-345px)] w-1/2 overflow-y-scroll sm:h-[calc(100vh-207px)] sm:min-h-[400px] md:block">
-						<Outlet />
-					</div>
-				) : (
-					<Drawer
-						open={isChildRoute && !showSidePanel}
-						onClose={() => navigate('/app/students')}
-					>
-						<DrawerContent
-							className="pb-4"
-							onInteractOutside={() => navigate('/app/students')}
-						>
-							<Outlet />
-						</DrawerContent>
-					</Drawer>
-				)}
+				<div className="flex items-center justify-between gap-2 p-3">
+					<SearchInput />
+				</div>
+				<div className="flex flex-col gap-2 overflow-auto border-t p-3 pb-14">
+					{data.students.length > 0 ? (
+						data.students.map(sp => (
+							<SettingsNavLink
+								key={sp.id}
+								to={`/app/students/${sp.id}?q=${searchParams.get('q') ?? ''}`}
+								title={sp.user.name ?? sp.user.email}
+								imageSrc={getUserImgSrc(sp.user.image?.id)}
+								imageStyle="rounded"
+							/>
+						))
+					) : (
+						<div className="flex h-full w-full flex-col items-center justify-center gap-1">
+							<h3>No courses found.</h3>
+							<p>
+								Hit the <code className="bg-foreground/10 px-1">+</code> button
+								above to create one.
+							</p>
+						</div>
+					)}
+				</div>
 			</div>
+			<div className="hidden h-full w-1/2 overflow-y-scroll lg:block">
+				<Outlet />
+			</div>
+			<Drawer
+				open={showDrawer && isViewingStudent}
+				onClose={() => navigate(`/app/students`)}
+			>
+				<DrawerContent
+					className="pb-4"
+					onInteractOutside={() => navigate(`/app/students`)}
+				>
+					<Outlet />
+				</DrawerContent>
+			</Drawer>
 		</main>
 	)
 }

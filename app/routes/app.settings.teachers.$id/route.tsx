@@ -32,7 +32,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 				},
 			},
 		}),
-		prisma.user.findMany({ where: { studentProfile: { isNot: null } } }),
+		prisma.user.findMany({
+			where: { studentProfile: { isNot: null } },
+			include: {
+				studentProfile: {
+					include: { workshopLeader: { select: { email: true } } },
+				},
+			},
+		}),
 	])
 
 	if (!teacherProfile) {

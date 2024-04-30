@@ -122,7 +122,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			}),
 		])
 
-		if (data.image && data.image.size > 0) {
+		if (data.image && data.image.size > 0 && data.courseImageSrc) {
 			if (data.courseImageSrc && update.image) {
 				await prisma.course.update({
 					where: { id: params.id },
@@ -166,7 +166,7 @@ export default function CoursesIdRoute() {
 						...data.course,
 						image: undefined,
 						courseImageSrc: data.course.image
-							? `/api/course-images/${data.course.image?.id}`
+							? `/api/image/course/${data.course.image?.id}`
 							: undefined,
 					}}
 					formId={formId}

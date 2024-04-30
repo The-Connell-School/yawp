@@ -48,6 +48,7 @@ export function FormSearchSelect({
 	const [value, setValue] = useControlField<string>(name)
 	const optLabel = options.find(opt => opt.value === value)?.label
 	const errorId = error?.length ? `${id}-error` : undefined
+	const pluralizedEntity = pluralize({ word: entity, count: 2 })
 
 	return (
 		<div className={cn('flex flex-col gap-1', className)}>
@@ -78,9 +79,7 @@ export function FormSearchSelect({
 				</PopoverTrigger>
 				<PopoverContent className="w-[320px] p-0" align="start">
 					<Command>
-						<CommandInput
-							placeholder={`Search ${pluralize(entity, 2, false)}...`}
-						/>
+						<CommandInput placeholder={`Search ${pluralizedEntity}...`} />
 						<CommandEmpty>No tutors found.</CommandEmpty>
 						<CommandGroup>
 							{options.length ? (

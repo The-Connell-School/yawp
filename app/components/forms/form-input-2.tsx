@@ -5,7 +5,6 @@ import { startCase } from '#app/utils/startCase'
 import { InfoCircledIcon } from '../icons'
 import { Input, type InputProps } from '../ui/input'
 import { Tooltip } from '../ui/tooltip'
-import { ErrorList } from './error-list'
 
 interface Props extends InputProps {
 	name: string
@@ -48,12 +47,15 @@ export function FormInput({
 				aria-invalid={errorId ? true : undefined}
 				aria-describedby={errorId}
 				variant={errorId ? 'destructive' : undefined}
+				className={props.type === 'email' ? 'lowercase' : ''}
 				{...getInputProps({ id, ...props })}
 			/>
 			{helperText ? (
 				<p className="text-xs text-muted-foreground">{helperText}</p>
 			) : null}
-			<div>{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}</div>
+			{error ? (
+				<p className="text-left text-[12px] text-destructive">{error}</p>
+			) : null}
 		</div>
 	)
 }

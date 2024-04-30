@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { staging } from '#app/routes/api+/seed.server'
+import { staging } from '#app/routes/api+/seed/seed.server.js'
 import { prisma } from '#app/utils/db.server.ts'
 import { cleanupDb } from '#tests/db-utils.ts'
 
@@ -94,6 +94,35 @@ Your response should be = "Ready, set, write!" (word for word)`,
 									answerTypeOptions: "I'm done",
 									canAskQuestion: true,
 									title: 'Write!',
+									interactiveType: 'dialogue',
+								},
+							],
+						},
+					},
+				},
+			},
+		}),
+		prisma.course.create({
+			data: {
+				title: 'Journalistic Writing',
+				description:
+					'In this course, you will learn how to write a news story. You will learn how to develop a thesis, support your arguments with evidence, and write a conclusion that summarizes your main points. By the end of this course, you will be able to write a well-organized, persuasive news story.',
+				position: 2,
+				courseModules: {
+					create: {
+						title: 'Pre-writing',
+						position: 1,
+						tutorInstructions: `You help students write a news story.`,
+						description: `Get started on your news story by exploring and imagining your own unique spin on the topic or prompt.`,
+						instructions: {
+							create: [
+								{
+									answerKey: ``,
+									position: 1,
+									prompt: `Get started writing about the news!`,
+									promptType: 'hardcoded',
+									answerType: 'hardcoded',
+									title: 'Opening',
 									interactiveType: 'dialogue',
 								},
 							],

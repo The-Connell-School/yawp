@@ -22,7 +22,15 @@ import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { GlobalLoading } from './components/global-loading.tsx'
 import { Toaster } from './components/toaster.tsx'
 import { useNonce } from './contexts/nonce.ts'
-import { useTheme } from './routes/api+/theme.tsx'
+import {
+	type NavState,
+	navStateCookie,
+} from './routes/api+/preferences+/nav/cookie.server.ts'
+import {
+	type Theme,
+	getTheme,
+} from './routes/api+/preferences+/theme/cookie.server.ts'
+import { useTheme } from './routes/api+/preferences+/theme/route.tsx'
 import tailwindStyleSheetUrl from './styles/tailwind.css?url'
 import { getUserId, logout } from './utils/auth.server.ts'
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx'
@@ -32,11 +40,6 @@ import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
 import { getHslFromVar, hslToHex } from './utils/hslToHex'
 import { cn, combineHeaders, getDomainUrl } from './utils/misc.tsx'
-import {
-	type NavState,
-	navStateCookie,
-} from './utils/state/nav-state.server.ts'
-import { type Theme, getTheme } from './utils/state/theme.server.ts'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
 
@@ -110,9 +113,9 @@ export async function loader({ request }: DataFunctionArgs) {
 	const { toast, headers: toastHeaders } = await getToast(request)
 	const honeyProps = honeypot.getInputProps()
 	const [csrfToken, csrfCookieHeader] = await csrf.commitToken()
-
 	const cookieHeader = request.headers.get('Cookie')
-	const cookie = (await navStateCookie.parse(cookieHeader)) || {}
+
+	const navCookie = (await navStateCookie.parse(cookieHeader)) || {}
 
 	return json(
 		{
@@ -123,7 +126,7 @@ export async function loader({ request }: DataFunctionArgs) {
 				path: new URL(request.url).pathname,
 				userPrefs: {
 					theme: getTheme(request),
-					navState: (cookie.state as NavState) ?? 'expanded',
+					navState: (navCookie.state as NavState) ?? 'expanded',
 				},
 			},
 			ENV: getEnv(),

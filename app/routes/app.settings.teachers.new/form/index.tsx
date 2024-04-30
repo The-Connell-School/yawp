@@ -1,4 +1,9 @@
-import { ValidatedForm, useField, useFieldArray } from 'remix-validated-form'
+import {
+	ValidatedForm,
+	useField,
+	useFieldArray,
+	useFormContext,
+} from 'remix-validated-form'
 import { type z } from 'zod'
 import { FormInput } from '#app/components/forms/form-input-2'
 import { Button } from '#app/components/ui/button'
@@ -7,7 +12,10 @@ import { Student } from './student'
 
 interface Props {
 	formId: string
-	allStudents: { email: string }[]
+	allStudents: {
+		email: string
+		studentProfile: { workshopLeader: { email: string } | null } | null
+	}[]
 	defaultValues?: z.infer<typeof Schema>
 }
 
@@ -18,8 +26,17 @@ export const TeacherForm = ({ allStudents, defaultValues, formId }: Props) => {
 		{ formId },
 	)
 
+	const context = useFormContext(formId)
+	const current = Object.fromEntries(context.getValues())
+	const currentStudentEmails = Object.keys(current)
+		.reduce(
+			(a, k) =>
+				/students\[\d+\]\.email/.test(k) ? [...a, current[k] as string] : a,
+			[] as string[],
+		)
+		.concat(defaultValues?.students?.map(s => s.email) ?? [])
 	const studentOptions = allStudents.filter(
-		s => students.find(s2 => s2.defaultValue.email === s.email) === undefined,
+		s => !currentStudentEmails.includes(s.email),
 	)
 
 	return (
@@ -69,7 +86,7 @@ export const TeacherForm = ({ allStudents, defaultValues, formId }: Props) => {
 								push({ email: '' })
 							}}
 						>
-							Add module
+							Add student
 						</Button>
 						{error && <p className="text-destructive-foreground">{error}</p>}
 					</div>

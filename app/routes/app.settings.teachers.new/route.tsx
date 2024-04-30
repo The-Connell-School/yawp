@@ -21,6 +21,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 	await requireUserWithRole(request, ['admin'])
 	const allStudents = await prisma.user.findMany({
 		where: { studentProfile: { isNot: null } },
+		include: {
+			studentProfile: {
+				include: { workshopLeader: { select: { email: true } } },
+			},
+		},
 	})
 	return json({ allStudents })
 }

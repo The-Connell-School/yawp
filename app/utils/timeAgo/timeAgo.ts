@@ -1,4 +1,5 @@
-export function timeAgo(date: Date): string {
+export function timeAgo(value: Date | string): string {
+	const date = typeof value === 'string' ? new Date(value) : value
 	const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
 	if (seconds < 60) return '< a minute ago'
 	const minutes = Math.floor(seconds / 60)

@@ -2,6 +2,8 @@ import {
 	Link,
 	NavLink,
 	Outlet,
+	json,
+	useLoaderData,
 	useLocation,
 	useMatches,
 } from '@remix-run/react'
@@ -39,39 +41,50 @@ import {
 } from '#app/utils/breadcrumb'
 import { cn } from '#app/utils/misc'
 import { startCase } from '#app/utils/startCase'
-import { NavStateSwitch, useNavState } from '../api+/preferences.nav/route'
-import { ThemeSwitch, useTheme } from '../api+/theme'
+import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
+import { ThemeSwitch, useTheme } from '../api+/preferences+/theme/route'
 
-const links: {
+const links = (
+	isStaging: boolean,
+): {
 	icon?: ReactElement
 	to: string
 	label: string
 	admin?: boolean
 	teacher?: boolean
 	end?: boolean
-}[] = [
-	// {
-	// 	to: '/app/courses',
-	// 	label: 'Courses',
-	// 	icon: <LayersIcon />,
-	// },
+}[] => [
+	...(isStaging
+		? [
+				{
+					to: '/app',
+					label: 'Dashboard',
+					end: true,
+					icon: <LayersIcon />,
+				},
+			]
+		: []),
 	{
 		to: '/app/assistants',
 		label: 'Assistants',
 		icon: <AssistantIcon />,
 	},
-	{
-		to: '/app/students',
-		label: 'Students',
-		icon: <PersonIcon />,
-		teacher: true,
-	},
-	{
-		to: '/app/settings',
-		label: 'Settings',
-		icon: <GearIcon />,
-		admin: true,
-	},
+	...(isStaging
+		? [
+				{
+					to: '/app/students',
+					label: 'Students',
+					icon: <PersonIcon />,
+					teacher: true,
+				},
+				{
+					to: '/app/settings',
+					label: 'Settings',
+					icon: <GearIcon />,
+					admin: true,
+				},
+			]
+		: []),
 ]
 
 export const NavExpandedContext = createContext({
@@ -83,12 +96,17 @@ export const handle: BreadcrumbHandle = {
 	breadcrumb: 'Home',
 }
 
+export async function loader() {
+	return json({ isStaging: process.env.ENV === 'staging' })
+}
+
 export default function Route() {
 	const theme = useTheme()
 	const location = useLocation()
 	const user = useUser()
 	const isAdmin = user.roles.find(r => r.name === 'admin')
 	const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+	const { isStaging } = useLoaderData<typeof loader>()
 
 	const matches = useMatches()
 	const isInAssistants = !!matches.find(m => m.id.includes('app.assistants'))
@@ -160,8 +178,8 @@ export default function Route() {
 						<img
 							src={
 								theme === 'dark'
-									? '/img/yawp_white_logo.png'
-									: '/img/yawp_black_logo.png'
+									? '/img/logo_for_dark_mode.png'
+									: '/img/logo_for_light_mode.png'
 							}
 							alt="Logo on white background"
 							className={cn('h-auto w-10 rounded object-cover py-2', {
@@ -179,7 +197,7 @@ export default function Route() {
 					</Button>
 				</div>
 				<div className="grid gap-1 p-3">
-					{links
+					{links(isStaging)
 						.filter(
 							link =>
 								(!link.admin && !link.teacher) ||
