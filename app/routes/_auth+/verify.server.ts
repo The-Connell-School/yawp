@@ -5,8 +5,8 @@ import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { getDomainUrl } from '#app/utils/misc'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { twoFAVerificationType } from '../app.profile.two-factor/route'
-import { type twoFAVerifyVerificationType } from '../app.profile.two-factor.verify/route'
+import { twoFAVerificationType } from '../app+/profile+/two-factor/route'
+import { type twoFAVerifyVerificationType } from '../app+/profile+/two-factor.verify/route'
 import { shouldRequestTwoFA } from './login/utils.server'
 import {
 	type VerifySchema,

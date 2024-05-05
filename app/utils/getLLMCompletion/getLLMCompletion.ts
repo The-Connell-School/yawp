@@ -2,6 +2,13 @@
 import { anthropic } from '#app/services/anthropic'
 import { openai } from '#app/services/openai'
 
+export enum AgentType {
+	User = 'user',
+	Assistant = 'assistant',
+}
+
+export type Message = { role: AgentType; content: string; name?: string }
+
 interface Params {
 	messages: { role: 'user' | 'assistant'; content: string; name?: string }[]
 	system?: string
@@ -17,16 +24,27 @@ export async function getLLMCompletion(params: Params) {
 
 	if (['claude-3-opus-20240229'].includes(params.model)) {
 		console.time('🧪 LLM completion finished')
+		const system = params.system?.replace(/\t/g, '')
+		const messages = params.messages.map(({ name: _, ...m }) => ({
+			...m,
+			content: m.content.replace(/\t/g, ''),
+		}))
+
 		const message = await anthropic.messages.create({
 			max_tokens: params.maxTokens ?? 1024,
 			model: params.model,
-			system: params.system,
-			messages: params.messages.map(({ name: _, ...m }) => m),
+			system,
+			messages,
 			temperature: 0.6,
 		})
 
 		if (process.env.NODE_ENV === 'development' && message) {
-			console.log({ ...params, response: message.content[0].text ?? '' })
+			console.log({
+				...params,
+				system,
+				messages,
+				response: message.content[0].text ?? '',
+			})
 			console.timeEnd('🧪 LLM completion finished')
 		}
 
@@ -41,16 +59,26 @@ export async function getLLMCompletion(params: Params) {
 			temperature: 0.6,
 			messages: [
 				...(params.system
-					? [{ role: 'system' as const, content: params.system }]
+					? [
+							{
+								role: 'system' as const,
+								content: params.system.replace(/\t/g, ''),
+							},
+						]
 					: []),
-				...params.messages,
+				...params.messages.map(m => ({
+					...m,
+					content: m.content.replace(/\t/g, ''),
+				})),
 			],
 		})
 
 		if (process.env.NODE_ENV === 'development' && message) {
 			console.log({
 				...params,
+				system: params.system?.replace(/\t/g, ''),
 				response: message.choices[0].message.content ?? '',
+				messages: message.choices.map(c => c.message.content),
 			})
 			console.timeEnd('🧪 LLM completion finished')
 		}

@@ -36,6 +36,10 @@ export default defineConfig({
 				})
 			},
 		}),
-		sentryVitePlugin({ org: 'yawp', project: 'yawp-school' }),
+		sentryVitePlugin({
+			org: 'yawp',
+			project: 'yawp-school',
+			disable: process.env.NODE_ENV !== 'production',
+		}),
 	],
 })

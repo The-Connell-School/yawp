@@ -1,6 +1,6 @@
 import { type LoaderFunctionArgs, redirect } from '@remix-run/node'
 import { prisma } from '../../../utils/db.server'
-import { production, staging } from './seed.server'
+import { preview } from './seed.server'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const url = new URL(request.url)
@@ -8,19 +8,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	const token = url.searchParams.get('token')
 
 	if (
-		!['staging', 'production'].includes(mode ?? '') ||
+		!['preview'].includes(mode ?? '') ||
 		token !== process.env.INTERNAL_COMMAND_TOKEN
 	) {
 		return redirect('/')
 	}
 
-	const data = mode === 'staging' ? await staging() : await production()
-	const existing = await prisma.user.count({
-		where: { email: data.users[0].email },
-	})
+	const data = await preview()
+	const dataExists = await prisma.user.count()
 
-	if (existing) {
-		return redirect('/')
+	if (dataExists) {
+		return redirect('/', { status: 500 })
 	}
 
 	await Promise.all(
@@ -30,6 +28,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	)
 	await Promise.all(data.roles.map(role => prisma.role.create({ data: role })))
 	await Promise.all(data.users.map(user => prisma.user.create({ data: user })))
+	await Promise.all(
+		data.courses.map(course => prisma.course.create({ data: course })),
+	)
 
 	return new Response('OK')
 }

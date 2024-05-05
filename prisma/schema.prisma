@@ -199,23 +199,20 @@ model CourseModule {
 }
 
 model CourseModuleInstruction {
-  id                   String       @id @default(cuid())
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  courseModuleId       String
-  courseModule         CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  title                String
-  answerKey            String?
-  hasAnswerKey         Boolean      @default(false)
-  prompt               String
-  promptType           String // 'ai' | 'hardcoded'
-  answerType           String // 'textarea' | 'select'
-  answerTypeOptions    String? // comma separated list of options
-  concludingPrompt     String?
-  concludingPromptType String? // 'ai' | 'hardcoded'
-  canAskQuestion       Boolean      @default(false)
-  interactiveType      String // 'answer' | 'dialogue'
-  position             Int
+  id                String       @id @default(cuid())
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  courseModuleId    String
+  courseModule      CourseModule @relation(fields: [courseModuleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  position          Int
+  title             String
+  interactiveType   String // 'answer' | 'dialogue'
+  prompt            String
+  tutorInstructions String?
+  answerType        String? // 'textarea' | 'select'
+  answerKey         String?
+  answerTypeOptions String? // comma separated list of options
+  canAskQuestion    Boolean?     @default(false)
 }
 
 model CourseModuleSession {

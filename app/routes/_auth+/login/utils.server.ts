@@ -1,12 +1,12 @@
 import { redirect } from '@remix-run/node'
 import { safeRedirect } from 'remix-utils/safe-redirect'
+import { twoFAVerificationType } from '#app/routes/app+/profile+/two-factor/route.js'
 import { getUserId, sessionKey } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { combineResponseInits } from '#app/utils/misc'
 import { authSessionStorage } from '#app/utils/session.server'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { verifySessionStorage } from '#app/utils/verification.server'
-import { twoFAVerificationType } from '../../app.profile.two-factor/route'
 import { type VerifyFunctionArgs, getRedirectToUrl } from '../verify.server'
 
 export const verifiedTimeKey = 'verified-time'

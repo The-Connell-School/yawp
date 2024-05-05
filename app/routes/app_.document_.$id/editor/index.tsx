@@ -95,7 +95,7 @@ export const Editor = ({ document: { html: initialHtml, id } }: Props) => {
 	})
 
 	return (
-		<div className="w-full overflow-hidden border-r font-times md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-133px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none md:[&>div:nth-child(2)>div]:h-[calc(100vh-93px)]">
+		<div className="w-full overflow-hidden border-r font-times md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-93px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none">
 			<EditorProvider
 				extensions={extensions}
 				content={initialHtml}

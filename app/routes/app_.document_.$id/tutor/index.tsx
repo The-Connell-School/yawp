@@ -5,11 +5,12 @@ import {
 } from '@prisma/client'
 import { useFetcher } from '@remix-run/react'
 import { ArrowRightIcon } from 'lucide-react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { RichTextarea } from '#app/components/rich-textarea.js'
 import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
-import { cn, parseAIResponse } from '#app/utils/misc'
+import { InstructionInteraction } from '#app/routes/api+/domain+/tutor-response.js'
+import { cn } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo/timeAgo'
 import { HardcodedResponseOptions } from './hardcoded-response-options'
 import { Loading } from './loading'
@@ -76,6 +77,17 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 		)
 	}
 
+	const messages = currentCms.messages
+		.filter(m => ['user', 'assistant'].includes(m.agent))
+		.concat(optimisticMessage ?? [])
+
+	useEffect(() => {
+		messagesRef.current?.scrollTo({
+			top: messagesRef.current.scrollHeight,
+			behavior: 'smooth',
+		})
+	}, [messages])
+
 	return (
 		<div className="flex w-full flex-col border-r pb-2 md:w-3/5">
 			<div className="flex items-center justify-between gap-8 border-b py-1 pl-4 pr-4">
@@ -98,38 +110,31 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 				ref={messagesRef}
 				id="course-module-session-messages"
 			>
-				{currentCms.messages
-					.filter(m => ['user', 'assistant'].includes(m.agent))
-					.concat(optimisticMessage ?? [])
-					.map(message => (
-						<div
-							key={message.id}
-							className={cn('w-auto max-w-[92%] rounded-xl px-3 py-2', {
-								'mr-auto rounded-bl-none bg-primary/20':
-									message.agent === 'assistant',
-								'ml-auto rounded-br-none bg-muted': message.agent === 'user',
-							})}
-						>
-							<div className="mt-1 flex items-center gap-2">
-								<p className="text-xs font-bold">
-									{message.agent === 'assistant' ? 'Tutor' : 'You'}
-								</p>
-								<p className="text-xs text-muted-foreground/80">
-									{timeAgo(new Date(message.createdAt))}
-								</p>
-							</div>
-							{message.agent === 'assistant' ? (
-								parseAIResponse(message.content)
-							) : (
-								<p>{message.content}</p>
-							)}
+				{messages.map(message => (
+					<div
+						key={message.id}
+						className={cn('w-auto max-w-[92%] rounded-xl px-3 py-2', {
+							'mr-auto rounded-bl-none bg-primary/20':
+								message.agent === 'assistant',
+							'ml-auto rounded-br-none bg-muted': message.agent === 'user',
+						})}
+					>
+						<div className="mt-1 flex items-center gap-2">
+							<p className="text-xs font-bold">
+								{message.agent === 'assistant' ? 'Tutor' : 'You'}
+							</p>
+							<p className="text-xs text-muted-foreground/80">
+								{timeAgo(new Date(message.createdAt))}
+							</p>
 						</div>
-					))}
+						<p className="whitespace-pre-wrap">{message.content}</p>
+					</div>
+				))}
 				{tutorResponseFetcher.state !== 'idle' && optimistic ? (
 					<Loading />
 				) : null}
 			</div>
-			{!hasNextInstruction ? (
+			{!hasNextInstruction && finishedCurrentCmsInstructions ? (
 				<p className="border-t p-2 text-center text-sm text-muted-foreground">
 					You have completed all the modules in this course.
 				</p>
@@ -142,14 +147,10 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 						Next <ArrowRightIcon />
 					</Button>
 				</div>
-			) : answerType === 'select' && answerTypeOptions ? (
-				<HardcodedResponseOptions
-					options={answerTypeOptions}
-					respond={respond}
-				/>
-			) : (
+			) : interactiveType === InstructionInteraction.Dialogue ||
+			  answerType === 'textarea' ? (
 				<div className="flex w-full flex-col px-3">
-					{interactiveType === 'dialogue' ? (
+					{hasNextInstruction && interactiveType === 'dialogue' ? (
 						<Button
 							variant="link"
 							className="w-fit p-0 text-muted-foreground"
@@ -160,9 +161,14 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 							<ArrowRightIcon className="ml-1.5" />
 						</Button>
 					) : null}
-					<RichTextarea onCmdEnter={respond} />
+					<RichTextarea onCmdEnter={respond} className="text-base" />
 				</div>
-			)}
+			) : answerTypeOptions ? (
+				<HardcodedResponseOptions
+					options={answerTypeOptions}
+					respond={respond}
+				/>
+			) : null}
 		</div>
 	)
 }

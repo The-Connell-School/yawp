@@ -19,6 +19,7 @@ export function FormSwitch({
 	labelInfo,
 	name,
 	hideLabel,
+	className,
 	...props
 }: Props) {
 	const fallbackId = useId()
@@ -27,7 +28,7 @@ export function FormSwitch({
 	const errorId = error?.length ? `${id}-error` : undefined
 
 	return (
-		<div className={cn('flex items-center gap-1')}>
+		<div className={cn('flex items-center gap-1', className)}>
 			{labelInfo ? (
 				<label htmlFor={id}>
 					<span className="flex items-center gap-2">

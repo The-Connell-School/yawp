@@ -22,7 +22,7 @@ export const Comments = ({ comments }: Props) => {
 		: []
 
 	return (
-		<div className="h-full w-full overflow-scroll md:h-full md:w-3/5">
+		<div className="h-full w-full overflow-scroll md:w-3/5">
 			{comments.length > 0 ? (
 				<div className="flex flex-col gap-2 p-2">
 					{comments.concat(optimisticComment).map(comment => (
