@@ -3,10 +3,11 @@ import {
 	json,
 	type ActionFunctionArgs,
 } from '@remix-run/node'
-import { Form, Link, useFetcher, useLoaderData } from '@remix-run/react'
+import { Form, Link, useLoaderData } from '@remix-run/react'
 import { PlusIcon } from 'lucide-react'
+import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { CaretLeftIcon, DotsVerticalIcon } from '#app/components/icons'
+import { CaretLeftIcon } from '#app/components/icons'
 import {
 	Accordion,
 	AccordionContent,
@@ -14,16 +15,8 @@ import {
 	AccordionTrigger,
 } from '#app/components/ui/accordion'
 import { Button } from '#app/components/ui/button'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '#app/components/ui/dropdown-menu'
-import { Tooltip } from '#app/components/ui/tooltip'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { timeAgo } from '#app/utils/timeAgo/timeAgo'
 import { redirectWithToast } from '#app/utils/toast.server'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -112,7 +105,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AppCoursesIdRoute() {
 	const data = useLoaderData<typeof loader>()
-	const deleteDocumentFetcher = useFetcher()
 	const hasModules = data.course.courseModules.length > 0
 
 	return (
@@ -163,70 +155,7 @@ export default function AppCoursesIdRoute() {
 				) : null}
 				<div className="grid grid-cols-1 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
 					{data.documents.map(doc => (
-						<Link
-							key={doc.id}
-							to={`/app/document/${doc.id}`}
-							className="relative flex h-48 flex-col overflow-hidden rounded-lg border transition-shadow hover:shadow"
-						>
-							<span className="absolute right-1 top-1 z-20 rounded-full border bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-								{doc.courseModuleSessions[0].courseModule.title}
-							</span>
-							{doc.html ? (
-								<div
-									dangerouslySetInnerHTML={{ __html: doc.html }}
-									className="z-10 flex-1 scale-90 overflow-hidden p-3 font-times text-sm"
-								/>
-							) : (
-								<p className="flex w-full flex-1 items-center justify-center p-3 text-lg text-muted-foreground/60">
-									No preview.
-								</p>
-							)}
-							<div className="flex items-center justify-between border-t bg-muted p-2 text-sm">
-								<Tooltip
-									delayDuration={200}
-									text={new Date(doc.createdAt).toLocaleString('en-US', {
-										year: 'numeric',
-										month: '2-digit',
-										day: '2-digit',
-										hour: '2-digit',
-										minute: '2-digit',
-										second: '2-digit',
-									})}
-								>
-									<p>
-										Created{' '}
-										<span className="underline">{timeAgo(doc.createdAt)}</span>
-									</p>
-								</Tooltip>
-								<DropdownMenu>
-									<DropdownMenuTrigger>
-										<Button
-											size="icon-sm"
-											variant="ghost"
-											onClick={e => e.stopPropagation()}
-										>
-											<DotsVerticalIcon />
-										</Button>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end">
-										<deleteDocumentFetcher.Form
-											method="DELETE"
-											action={`/api/model/document/${doc.id}`}
-										>
-											<DropdownMenuItem asChild>
-												<Button
-													variant="ghost"
-													className="w-full justify-start"
-													onClick={e => e.stopPropagation()}
-												>
-													Delete
-												</Button>
-											</DropdownMenuItem>
-										</deleteDocumentFetcher.Form>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							</div>
-						</Link>
+						<DocumentLink key={doc.id} doc={doc} />
 					))}
 					{!hasModules ? (
 						<div className="col-span-full flex flex-col items-center justify-center rounded-lg border p-5">

@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import { Link, redirect, useLoaderData } from '@remix-run/react'
+import { DocumentLink } from '#app/components/document-link.js'
 import { useUser } from '#app/hooks/useUser.js'
 import { requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
@@ -7,12 +8,19 @@ import { prisma } from '#app/utils/db.server.js'
 export async function loader({ request }: LoaderFunctionArgs) {
 	if (process.env.ENV !== 'staging') return redirect('/app/assistants')
 
-	await requireUserId(request)
-	const courses = await prisma.course.findMany({
-		select: { image: { select: { id: true } }, id: true, title: true },
-	})
+	const userId = await requireUserId(request)
 
-	return json({ courses })
+	const [courses, documents] = await Promise.all([
+		prisma.course.findMany({
+			select: { image: { select: { id: true } }, id: true, title: true },
+		}),
+		prisma.document.findMany({
+			where: { userId, deletedAt: null },
+			include: { courseModuleSessions: { include: { courseModule: true } } },
+		}),
+	])
+
+	return json({ courses, documents })
 }
 
 export default function AppRoute() {
@@ -21,7 +29,10 @@ export default function AppRoute() {
 	const isTeacher = user.teacherProfile !== null
 
 	return (
-		<section data-testid="app._index" className="flex h-full w-full flex-col">
+		<section
+			data-testid="app._index"
+			className="flex h-full w-full flex-col overflow-scroll"
+		>
 			<div className="flex w-full justify-between border-b bg-muted">
 				<div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
 					<div className="flex flex-col">
@@ -34,10 +45,10 @@ export default function AppRoute() {
 					</div>
 				</div>
 			</div>
-			<div className="mx-auto w-full max-w-screen-lg px-3 py-3 sm:px-5">
+			<div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
 				<div className="flex flex-col">
-					<h2 className="my-2 text-foreground/70">Courses</h2>
-					<div className="flex gap-2">
+					<p className="my-2 text-foreground/60">Courses</p>
+					<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 						{data.courses.map(course => (
 							<Link
 								to={`/app/courses/${course.id}`}
@@ -48,15 +59,23 @@ export default function AppRoute() {
 									<img
 										src={`/api/image/course/${course.image.id}`}
 										alt=""
-										className="h-32 w-48 rounded-t-lg object-cover"
+										className="h-32 w-auto rounded-t-lg object-cover"
 									/>
 								) : (
-									<div className="h-32 w-48 rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
+									<div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
 								)}
 								<div className="max-w-42 flex items-center justify-between p-3">
 									<h4 className="text-foreground/90">{course.title}</h4>
 								</div>
 							</Link>
+						))}
+					</div>
+				</div>
+				<div className="mt-8 flex flex-col">
+					<p className="my-2 text-foreground/60">Documents</p>
+					<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+						{data.documents.map(doc => (
+							<DocumentLink key={doc.id} doc={doc} />
 						))}
 					</div>
 				</div>
