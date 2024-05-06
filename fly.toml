@@ -1,4 +1,4 @@
-app = "yawp-school"
+app = "yawp-school-staging"
 primary_region = "atl"
 kill_signal = "SIGINT"
 kill_timeout = "5s"

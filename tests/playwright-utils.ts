@@ -59,6 +59,7 @@ export const test = base.extend<{
 		let userId: string | undefined = undefined
 		await use(async options => {
 			const user = await getOrInsertUser(options)
+			// eslint-disable-next-line no-console
 			console.log(user)
 			userId = user.id
 			return user

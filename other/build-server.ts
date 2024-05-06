@@ -27,11 +27,14 @@ for (const file of allFiles) {
 		const dest = file.replace(here('../server'), here('../server-build'))
 		fsExtra.ensureDirSync(path.parse(dest).dir)
 		fsExtra.copySync(file, dest)
+		// eslint-disable-next-line no-console
 		console.log(`copied: ${file.replace(`${here('../server')}/`, '')}`)
 	}
 }
 
+// eslint-disable-next-line no-console
 console.log()
+// eslint-disable-next-line no-console
 console.log('building...')
 
 esbuild
@@ -45,6 +48,7 @@ esbuild
 		logLevel: 'info',
 	})
 	.catch((error: unknown) => {
+		// eslint-disable-next-line no-console
 		console.error(error)
 		process.exit(1)
 	})

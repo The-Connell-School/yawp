@@ -23,7 +23,9 @@ installGlobals()
 
 closeWithGrace(async ({ err }) => {
 	if (err) {
+		// eslint-disable-next-line no-console
 		console.error(chalk.red(err))
+		// eslint-disable-next-line no-console
 		console.error(chalk.red(err.stack))
 		process.exit(1)
 	}

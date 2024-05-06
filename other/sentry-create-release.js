@@ -15,6 +15,7 @@ if (
 ) {
 	createRelease({}, DEFAULT_URL_PREFIX, DEFAULT_BUILD_PATH)
 } else {
+	// eslint-disable-next-line no-console
 	console.log(
 		'Missing Sentry environment variables, skipping sourcemap upload.',
 	)
