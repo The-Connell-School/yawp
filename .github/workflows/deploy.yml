@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - main
-      - staging
-  pull_request: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -72,14 +70,14 @@ jobs:
       - name: ⚡ Run vitest
         run: bun i && bun test -- --coverage
 
-  deploy:
-    name: 🚀 Deploy
+  deploy-staging:
+    name: 🚀 Deploy to Staging
     runs-on: ubuntu-22.04
     needs: [lint, typecheck, vitest]
-    # only build/deploy main branch on pushes
-    if:
-      ${{ (github.ref == 'refs/heads/main' || github.ref ==
-      'refs/heads/staging') && github.event_name == 'push' }}
+
+    environment:
+      name: staging
+      url: https://staging.yawp.school
 
     steps:
       - name: ⬇️ Checkout repo
@@ -92,7 +90,6 @@ jobs:
           file: 'fly.toml'
           field: 'app'
 
-      # move Dockerfile to root
       - name: 🚚 Move Dockerfile
         run: |
           mv ./other/Dockerfile ./Dockerfile
@@ -101,16 +98,42 @@ jobs:
       - name: 🎈 Setup Fly
         uses: superfly/flyctl-actions/setup-flyctl@v1.4
 
-      - name: 🚀 Deploy Staging
-        if: ${{ github.ref == 'refs/heads/staging' }}
+      - name: 🚀 Deploy
         run:
           flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
           --app ${{ steps.app_name.outputs.value }}-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+  deploy-production:
+    name: 🚀 Deploy to Production
+    runs-on: ubuntu-22.04
+    needs: [deploy-staging]
+
+    environment:
+      name: production
+      url: https://yawp.school
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 👀 Read app name
+        uses: SebRollen/toml-action@v1.0.2
+        id: app_name
+        with:
+          file: 'fly.toml'
+          field: 'app'
+
+      - name: 🚚 Move Dockerfile
+        run: |
+          mv ./other/Dockerfile ./Dockerfile
+          mv ./other/.dockerignore ./.dockerignore
+
+      - name: 🎈 Setup Fly
+        uses: superfly/flyctl-actions/setup-flyctl@v1.4
+
       - name: 🚀 Deploy Production
-        if: ${{ github.ref == 'refs/heads/main' }}
         run:
           echo "No production deployments allowed."
           # flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
