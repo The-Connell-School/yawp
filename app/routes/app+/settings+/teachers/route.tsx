@@ -6,7 +6,7 @@ import {
 import { Form, NavLink, useLoaderData, useSearchParams } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { TrashIcon } from '#app/components/icons'
-import { SettingsLayout } from '#app/components/settings-layout.js'
+import { ListLayout } from '#app/components/list-layout.js'
 import { Badge } from '#app/components/ui/badge.js'
 import { Button } from '#app/components/ui/button'
 import { UserImage } from '#app/components/user-image'
@@ -56,7 +56,7 @@ export default function TeachersRoute() {
 	const [searchParams] = useSearchParams()
 
 	return (
-		<SettingsLayout path="teachers">
+		<ListLayout path="settings/teachers">
 			{data.teachers.length === 0 && data.invitations.length === 0 ? (
 				<div className="flex h-full w-full flex-col items-center justify-center gap-1">
 					<h3>No teachers found.</h3>
@@ -111,7 +111,7 @@ export default function TeachersRoute() {
 						</NavLink>
 					))
 				: null}
-		</SettingsLayout>
+		</ListLayout>
 	)
 }
 

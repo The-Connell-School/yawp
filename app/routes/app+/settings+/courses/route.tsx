@@ -2,7 +2,7 @@ import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { NavLink, useLoaderData, useSearchParams } from '@remix-run/react'
 import { ImageIcon } from 'lucide-react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { SettingsLayout } from '#app/components/settings-layout.js'
+import { ListLayout } from '#app/components/list-layout.js'
 import { prisma } from '#app/utils/db.server'
 import { cn } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
@@ -35,7 +35,7 @@ export default function CoursesRoute() {
 	const [searchParams] = useSearchParams()
 
 	return (
-		<SettingsLayout path="courses">
+		<ListLayout path="settings/courses">
 			{courses.length > 0 ? (
 				courses.map(course => (
 					<NavLink
@@ -85,7 +85,7 @@ export default function CoursesRoute() {
 					</p>
 				</div>
 			)}
-		</SettingsLayout>
+		</ListLayout>
 	)
 }
 

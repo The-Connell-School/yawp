@@ -1,6 +1,7 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import { Link, redirect, useLoaderData } from '@remix-run/react'
 import { DocumentLink } from '#app/components/document-link.js'
+import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
 import { useUser } from '#app/hooks/useUser.js'
 import { requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
@@ -73,11 +74,18 @@ export default function AppRoute() {
 				</div>
 				<div className="mt-8 flex flex-col">
 					<p className="my-2 text-foreground/60">Documents</p>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-						{data.documents.map(doc => (
-							<DocumentLink key={doc.id} doc={doc} />
-						))}
-					</div>
+					{data.documents.length ? (
+						<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+							{data.documents.map(doc => (
+								<DocumentLink key={doc.id} doc={doc} />
+							))}
+						</div>
+					) : (
+						<NoDataPlaceholder
+							title="No documents"
+							subtitle="Select a course above to get started."
+						/>
+					)}
 				</div>
 			</div>
 		</section>

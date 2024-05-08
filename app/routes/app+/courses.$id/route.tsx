@@ -8,6 +8,7 @@ import { PlusIcon } from 'lucide-react'
 import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { CaretLeftIcon } from '#app/components/icons'
+import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
 import {
 	Accordion,
 	AccordionContent,
@@ -139,7 +140,7 @@ export default function AppCoursesIdRoute() {
 					<>
 						<h3 className="mb-2 text-foreground/75">Modules</h3>
 						<div className="border-b" />
-						<Accordion type="multiple">
+						<Accordion type="multiple" className="pb-6">
 							{data.course.courseModules.map(cm => (
 								<AccordionItem key={cm.id} value={cm.id}>
 									<AccordionTrigger className="py-2 text-base">
@@ -153,27 +154,28 @@ export default function AppCoursesIdRoute() {
 						</Accordion>
 					</>
 				) : null}
-				<div className="grid grid-cols-1 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
-					{data.documents.map(doc => (
-						<DocumentLink key={doc.id} doc={doc} />
-					))}
-					{!hasModules ? (
-						<div className="col-span-full flex flex-col items-center justify-center rounded-lg border p-5">
-							<h4 className="text-foreground/80">No modules</h4>
-							<p className="text-muted-foreground">
-								Come back later to check for modules to work through.
-							</p>
-						</div>
-					) : data.documents.length === 0 ? (
-						<div className="col-span-full flex flex-col items-center justify-center rounded-lg border border-dashed p-5">
-							<h4 className="text-foreground/80">No documents</h4>
-							<p className="text-muted-foreground">
+				{data.documents.length ? (
+					<div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
+						{data.documents.map(doc => (
+							<DocumentLink key={doc.id} doc={doc} />
+						))}
+					</div>
+				) : !hasModules ? (
+					<NoDataPlaceholder
+						title="No modules"
+						subtitle="Come back later to check for modules to work through."
+					/>
+				) : (
+					<NoDataPlaceholder
+						title="No documents"
+						subtitle={
+							<>
 								Hit the <code className="px-1">New +</code> button above to
 								create your first document.
-							</p>
-						</div>
-					) : null}
-				</div>
+							</>
+						}
+					/>
+				)}
 			</div>
 		</div>
 	)

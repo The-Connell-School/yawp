@@ -40,7 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			],
 		},
 		include: {
-			user: true,
+			user: { include: { studentProfile: true } },
 			courseModuleSessions: {
 				orderBy: { courseModule: { position: 'asc' } },
 				include: {
@@ -87,6 +87,8 @@ export default function Route() {
 	const [searchParams, setSearchParams] = useSearchParams()
 	const tab = searchParams.get('tab') ?? 'tutor'
 
+	const isViewingAsTeacher = data.doc && user.id !== data.doc?.userId
+
 	const updateDocumentFetcher = useFetchers().find(
 		f => f.key === 'update-document',
 	)
@@ -107,14 +109,18 @@ export default function Route() {
 				<div className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 px-3 py-2">
 					<Link
 						className={button({ variant: 'secondary', size: 'sm' })}
-						to={`/app/courses/${data.doc.courseModuleSessions[0]?.courseModule.courseId}`}
+						to={
+							isViewingAsTeacher
+								? `/app/students/${data.doc.user.studentProfile?.id}`
+								: `/app/courses/${data.doc.courseModuleSessions[0]?.courseModule.courseId}`
+						}
 					>
 						<ArrowLeft className="h-4" />
 						Exit
 					</Link>
 					{/* TODO: Make title editable with an inline input */}
 					<h4>Document</h4>
-					{data.doc && user.id !== data.doc?.userId ? (
+					{isViewingAsTeacher ? (
 						<Badge variant="info-outlined" className="md:text-md text-xs">
 							{isMobile
 								? data.doc.user.name

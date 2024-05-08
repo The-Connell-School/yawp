@@ -1,7 +1,9 @@
 import { invariant } from '@epic-web/invariant'
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { Link, useLoaderData } from '@remix-run/react'
+import { useLoaderData } from '@remix-run/react'
+import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { getUserImgSrc } from '#app/utils/misc'
@@ -17,19 +19,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			user: {
 				include: {
 					image: true,
-					courseModuleSessions: {
-						include: { courseModule: { include: { instructions: true } } },
+					documents: {
+						where: { deletedAt: null },
+						include: {
+							courseModuleSessions: { include: { courseModule: true } },
+						},
 					},
 				},
 			},
 		},
 	})
 
-	if (!studentProfile)
+	if (!studentProfile) {
 		return redirectWithToast('/app/students', {
 			type: 'error',
 			description: 'Student not found',
 		})
+	}
 
 	return json({ studentProfile })
 }
@@ -54,23 +60,17 @@ export default function Route() {
 				</div>
 			</div>
 			<div className="mt-6">
-				{studentProfile.user.courseModuleSessions.length === 0 ? (
-					<p>No progress to show.</p>
+				{studentProfile.user.documents.length === 0 ? (
+					<NoDataPlaceholder
+						title="No documents"
+						subtitle={`${studentProfile.user.name} has not started any documents yet.`}
+					/>
 				) : null}
-				{studentProfile.user.courseModuleSessions.map(ms => (
-					<Link
-						key={ms.id}
-						className="flex w-fit flex-col items-center justify-center rounded border p-4"
-						to={`/app/modules/${ms.courseModuleId}?studentProfileId=${studentProfile.id}`}
-					>
-						<p>{ms.courseModule.title}</p>
-						<p className="text-muted-foreground">
-							{ms.instructionsCompleted === ms.courseModule.instructions.length
-								? 'Completed'
-								: 'Not completed'}
-						</p>
-					</Link>
-				))}
+				<div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-3">
+					{studentProfile.user.documents.map(doc => (
+						<DocumentLink key={doc.id} doc={doc} />
+					))}
+				</div>
 			</div>
 		</div>
 	)
