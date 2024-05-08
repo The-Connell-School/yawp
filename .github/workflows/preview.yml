@@ -41,13 +41,15 @@ jobs:
       - name: 🎈 Setup Fly
         uses: superfly/flyctl-actions/setup-flyctl@v1.4
 
-      - name: ✨ Add Environment Variables & Consul
-        if: ${{ github.event_name != 'closed' }}
+      - name: ✨ Finalize
         run: |
-          flyctl secrets set ENV=staging ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_ORG=${{ secrets.OPENAI_ORG }} ALLOW_INDEXING=false SESSION_SECRET=$(openssl rand -hex 32) INTERNAL_COMMAND_TOKEN=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }} HONEYPOT_SECRET=$(openssl rand -hex 32) --app ${{ steps.deploy.outputs.name }}
-          flyctl consul attach --app ${{ steps.deploy.outputs.name }}
+          if [ "${{ github.event_name }}" != "closed" ]; then
+            flyctl secrets set ENV=staging ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_ORG=${{ secrets.OPENAI_ORG }} ALLOW_INDEXING=false SESSION_SECRET=$(openssl rand -hex 32) INTERNAL_COMMAND_TOKEN=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }} HONEYPOT_SECRET=$(openssl rand -hex 32) --app ${{ steps.deploy.outputs.name }}
+            flyctl consul attach --app ${{ steps.deploy.outputs.name }}
+          fi
 
       - name: 🌱 Seed Preview
-        if: ${{ github.event_name != 'closed' }}
         run: |
-          curl '${{ steps.deploy.outputs.url }}/api/seed?mode=preview&token=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }}'
+          if [ "${{ github.event_name }}" != "closed" ]; then
+            curl '${{ steps.deploy.outputs.url }}/api/seed?mode=preview&token=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }}'
+          fi
