@@ -141,10 +141,7 @@ export function CourseModule({ name, onDelete }: Props) {
 										answerType: 'textarea',
 										answerTypeOptions: '',
 										prompt: '',
-										promptType: 'hardcoded',
 										canAskQuestion: false,
-										concludingPrompt: '',
-										concludingPromptType: 'hardcoded',
 										title: 'New instruction',
 										interactiveType: 'answer',
 									})

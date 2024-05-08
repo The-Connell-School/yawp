@@ -118,7 +118,7 @@ export default function Route() {
 
 	const currentRouteMatch = matches[matches.length - 1]
 	const currentRouteId = currentRouteMatch.id
-	const isChild = currentRouteId !== 'routes/app.assistants.$id/route'
+	const isChild = currentRouteId !== 'routes/app+/assistants+/$id/route'
 
 	const [form, fields] = useForm({
 		id: 'create-thread-form',

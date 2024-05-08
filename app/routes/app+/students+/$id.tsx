@@ -1,11 +1,12 @@
 import { invariant } from '@epic-web/invariant'
-import { json, redirect, type LoaderFunctionArgs } from '@remix-run/node'
+import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { Link, useLoaderData } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { DEFAULT_ROUTE, getUserImgSrc } from '#app/utils/misc'
+import { getUserImgSrc } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
+import { redirectWithToast } from '#app/utils/toast.server.js'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'No student profile id provided')
@@ -24,7 +25,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		},
 	})
 
-	if (!studentProfile) return redirect(DEFAULT_ROUTE)
+	if (!studentProfile)
+		return redirectWithToast('/app/students', {
+			type: 'error',
+			description: 'Student not found',
+		})
 
 	return json({ studentProfile })
 }
