@@ -62,7 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		})
 	}
 
-	return redirectWithToast(`/app/settings/courses/${created.id}`, {
+	return redirectWithToast(`/app/admin/courses/${created.id}`, {
 		type: 'success',
 		description: 'Course created successfully',
 		closeButton: false,
@@ -87,7 +87,7 @@ export default function Route() {
 					asChild
 					className="md:hidden"
 				>
-					<Link to="/app/settings/courses">Cancel</Link>
+					<Link to="/app/admin/courses">Cancel</Link>
 				</Button>
 			</div>
 		</div>

@@ -113,6 +113,15 @@ model Connection {
   @@unique([providerName, providerId])
 }
 
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String   @unique
+  description String?
+  isEnabled   Boolean  @default(false)
+}
+
 // Custom
 
 model AssistantConfiguration {

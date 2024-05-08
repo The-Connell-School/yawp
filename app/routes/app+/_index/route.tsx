@@ -5,9 +5,13 @@ import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
 import { useUser } from '#app/hooks/useUser.js'
 import { requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
+import { FeatureFlags } from '#app/utils/featureFlags/index.js'
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	if (process.env.ENV !== 'staging') return redirect('/app/assistants')
+	const ff = await prisma.featureFlag.findUnique({
+		where: { name: FeatureFlags.Courses },
+	})
+	if (!ff?.isEnabled) return redirect('/app/assistants')
 
 	const userId = await requireUserId(request)
 

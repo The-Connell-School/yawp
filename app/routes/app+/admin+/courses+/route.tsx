@@ -35,12 +35,12 @@ export default function CoursesRoute() {
 	const [searchParams] = useSearchParams()
 
 	return (
-		<ListLayout path="settings/courses">
+		<ListLayout path="admin/courses">
 			{courses.length > 0 ? (
 				courses.map(course => (
 					<NavLink
 						key={course.id}
-						to={`/app/settings/courses/${course.id}?q=${searchParams.get('q') ?? ''}`}
+						to={`/app/admin/courses/${course.id}?q=${searchParams.get('q') ?? ''}`}
 						className={({ isActive }) =>
 							cn(
 								'flex cursor-pointer items-center rounded border transition hover:bg-muted/50',

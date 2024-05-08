@@ -7,20 +7,18 @@ import {
 	useLocation,
 	useMatches,
 } from '@remix-run/react'
-import { AwardIcon } from 'lucide-react'
+import { AwardIcon, WrenchIcon } from 'lucide-react'
 import {
 	useCallback,
 	useEffect,
 	useState,
 	cloneElement,
-	type ReactElement,
 	createContext,
 } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import {
 	AssistantIcon,
 	ExitIcon,
-	GearIcon,
 	HamburgerIcon,
 	LayersIcon,
 	LockClosedIcon,
@@ -31,7 +29,7 @@ import {
 } from '#app/components/icons'
 import { Button, button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
-import { UserImage } from '#app/components/user-image.js'
+import { UserImage } from '#app/components/user-image'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { useOnSwipe } from '#app/hooks/useHorizontalSwipe'
 import { useUser } from '#app/hooks/useUser'
@@ -39,65 +37,22 @@ import {
 	BreadcrumbHandleMatch,
 	type BreadcrumbHandle,
 } from '#app/utils/breadcrumb'
+import { prisma } from '#app/utils/db.server'
 import { cn } from '#app/utils/misc'
 import { startCase } from '#app/utils/startCase'
 import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
 import { ThemeSwitch, useTheme } from '../api+/preferences+/theme/route'
-
-const links = (
-	isStaging: boolean,
-): {
-	icon?: ReactElement
-	to: string
-	label: string
-	admin?: boolean
-	teacher?: boolean
-	end?: boolean
-}[] => [
-	...(isStaging
-		? [
-				{
-					to: '/app',
-					label: 'Dashboard',
-					end: true,
-					icon: <LayersIcon />,
-				},
-			]
-		: []),
-	{
-		to: '/app/assistants',
-		label: 'Assistants',
-		icon: <AssistantIcon />,
-	},
-	...(isStaging
-		? [
-				{
-					to: '/app/students',
-					label: 'Students',
-					icon: <PersonIcon />,
-					teacher: true,
-				},
-				{
-					to: '/app/settings',
-					label: 'Settings',
-					icon: <GearIcon />,
-					admin: true,
-				},
-			]
-		: []),
-]
 
 export const NavExpandedContext = createContext({
 	isMobileNavOpen: false,
 	setIsMobileNavOpen: (() => {}) as any,
 })
 
-export const handle: BreadcrumbHandle = {
-	breadcrumb: 'Home',
-}
+export const handle: BreadcrumbHandle = { breadcrumb: 'Home' }
 
 export async function loader() {
-	return json({ isStaging: process.env.ENV === 'staging' })
+	const ff = await prisma.featureFlag.findUnique({ where: { name: 'courses' } })
+	return json({ enableCourses: ff?.isEnabled })
 }
 
 export default function Route() {
@@ -106,7 +61,41 @@ export default function Route() {
 	const user = useUser()
 	const isAdmin = user.roles.find(r => r.name === 'admin')
 	const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
-	const { isStaging } = useLoaderData<typeof loader>()
+	const { enableCourses } = useLoaderData<typeof loader>()
+
+	const links = [
+		...(enableCourses
+			? [
+					{
+						to: '/app',
+						label: 'Courses',
+						end: true,
+						icon: <LayersIcon />,
+					},
+				]
+			: []),
+		{
+			to: '/app/assistants',
+			label: 'Assistants',
+			icon: <AssistantIcon strokeWidth={1.25} />,
+		},
+		...(enableCourses
+			? [
+					{
+						to: '/app/students',
+						label: 'Students',
+						icon: <PersonIcon />,
+						teacher: true,
+					},
+				]
+			: []),
+		{
+			to: '/app/admin',
+			label: 'Admin',
+			icon: <WrenchIcon strokeWidth={1.5} />,
+			admin: true,
+		},
+	]
 
 	const matches = useMatches()
 	const isInAssistants = !!matches.find(m => m.id.includes('app.assistants'))
@@ -197,7 +186,7 @@ export default function Route() {
 					</Button>
 				</div>
 				<div className="grid gap-1 p-3">
-					{links(isStaging)
+					{links
 						.filter(
 							link =>
 								(!link.admin && !link.teacher) ||

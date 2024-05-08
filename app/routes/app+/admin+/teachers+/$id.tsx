@@ -14,8 +14,8 @@ import { prisma } from '#app/utils/db.server'
 import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { TeacherForm } from '../teachers.new/form'
-import { validator } from '../teachers.new/form/schema'
+import { TeacherForm } from './form'
+import { validator } from './form/schema'
 
 const deleteValidator = withZod(z.object({ id: z.string() }))
 
@@ -43,7 +43,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	])
 
 	if (!teacherProfile) {
-		return redirect('/app/settings/teachers')
+		return redirect('/app/admin/teachers')
 	}
 
 	return json({
@@ -70,7 +70,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				data: { workshopLeaderId: null },
 			}),
 		])
-		return redirectWithToast('/app/settings/teachers', {
+		return redirectWithToast('/app/admin/teachers', {
 			type: 'success',
 			description: 'Teacher deleted successfully.',
 			closeButton: false,
@@ -110,7 +110,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			}),
 		])
 
-		return redirectWithToast(`/app/settings/teachers/${params.id}`, {
+		return redirectWithToast(`/app/admin/teachers/${params.id}`, {
 			type: 'success',
 			description: 'Teacher updated successfully.',
 			closeButton: false,
@@ -144,7 +144,7 @@ export default function TeachersIdRoute() {
 					asChild
 					className="md:hidden"
 				>
-					<Link to="/app/settings/teachers">Cancel</Link>
+					<Link to="/app/admin/teachers">Cancel</Link>
 				</Button>
 				<ValidatedForm
 					validator={deleteValidator}

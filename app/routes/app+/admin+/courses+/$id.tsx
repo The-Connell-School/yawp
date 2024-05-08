@@ -17,8 +17,8 @@ import { prisma } from '#app/utils/db.server'
 import { useDoubleCheck, useIsPending } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { CourseForm } from '../courses.new/form'
-import { MAX_SIZE, validator } from '../courses.new/form/schema'
+import { CourseForm } from './form'
+import { MAX_SIZE, validator } from './form/schema'
 
 const deleteValidator = withZod(z.object({ id: z.string() }))
 
@@ -34,7 +34,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	})
 
 	if (!course) {
-		return redirect('/app/settings/courses')
+		return redirect('/app/admin/courses')
 	}
 
 	return json({ course })
@@ -53,7 +53,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		const { error, data } = await deleteValidator.validate(formData)
 		if (error) return validationError(error)
 		await prisma.course.delete({ where: { id: data.id } })
-		return redirectWithToast('/app/settings/courses', {
+		return redirectWithToast('/app/admin/courses', {
 			type: 'success',
 			description: 'Course deleted successfully.',
 			closeButton: false,
@@ -142,7 +142,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			})
 		}
 
-		return redirectWithToast(`/app/settings/courses/${params.id}`, {
+		return redirectWithToast(`/app/admin/courses/${params.id}`, {
 			type: 'success',
 			description: 'Course updated successfully.',
 			closeButton: false,
@@ -181,7 +181,7 @@ export default function CoursesIdRoute() {
 					asChild
 					className="md:hidden"
 				>
-					<Link to="/app/settings/courses">Cancel</Link>
+					<Link to="/app/admin/courses">Cancel</Link>
 				</Button>
 				<ValidatedForm
 					validator={deleteValidator}

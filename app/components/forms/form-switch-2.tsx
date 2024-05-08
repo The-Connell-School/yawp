@@ -41,8 +41,8 @@ export function FormSwitch({
 			) : hideLabel ? null : (
 				<label htmlFor={id}>{label ?? startCase(name)}</label>
 			)}
-			<Switch {...getInputProps({ id, ...props })} />
 			{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}
+			<Switch {...getInputProps({ id, ...props })} />
 		</div>
 	)
 }

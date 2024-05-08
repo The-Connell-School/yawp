@@ -56,7 +56,7 @@ export default function TeachersRoute() {
 	const [searchParams] = useSearchParams()
 
 	return (
-		<ListLayout path="settings/teachers">
+		<ListLayout path="admin/teachers">
 			{data.teachers.length === 0 && data.invitations.length === 0 ? (
 				<div className="flex h-full w-full flex-col items-center justify-center gap-1">
 					<h3>No teachers found.</h3>
@@ -95,7 +95,7 @@ export default function TeachersRoute() {
 				? data.teachers.map(teacher => (
 						<NavLink
 							key={teacher.id}
-							to={`/app/settings/teachers/${teacher.teacherProfile?.id}?q=${searchParams.get('q') ?? ''}`}
+							to={`/app/admin/teachers/${teacher.teacherProfile?.id}?q=${searchParams.get('q') ?? ''}`}
 							className={({ isActive }) =>
 								cn(
 									'flex cursor-pointer items-center gap-2 rounded border p-1.5 shadow-sm transition hover:bg-muted/50 md:p-3',

@@ -6,12 +6,13 @@ import { cn } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 
 const tabs = [
-	{ label: 'Courses', to: '/app/settings/courses' },
-	{ label: 'Teachers', to: '/app/settings/teachers' },
+	{ label: 'Courses', to: '/app/admin/courses' },
+	{ label: 'Teachers', to: '/app/admin/teachers' },
+	{ label: 'Feature Flags', to: '/app/admin/feature-flags' },
 ]
 
 export const handle: BreadcrumbHandle = {
-	breadcrumb: 'Settings',
+	breadcrumb: 'Admin',
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {

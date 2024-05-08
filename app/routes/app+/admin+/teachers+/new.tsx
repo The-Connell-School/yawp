@@ -61,7 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			include: { teacherProfile: true },
 		})
 
-		return redirectWithToast(`/app/settings/teachers/${update.id}`, {
+		return redirectWithToast(`/app/admin/teachers/${update.id}`, {
 			type: 'success',
 			description: 'Teacher updated successfully',
 			closeButton: false,
@@ -96,13 +96,13 @@ export async function action({ request }: ActionFunctionArgs) {
 		})
 
 		if (response.status === 'success') {
-			return redirectWithToast('/app/settings/teachers', {
+			return redirectWithToast('/app/admin/teachers', {
 				type: 'success',
 				description: 'Teacher invitation sent.',
 				closeButton: false,
 			})
 		} else {
-			return redirectWithToast('/app/settings/teachers', {
+			return redirectWithToast('/app/admin/teachers', {
 				type: 'error',
 				description: 'Teacher invitation was not sent. Please try again.',
 				closeButton: false,
@@ -130,7 +130,7 @@ export default function Route() {
 					asChild
 					className="md:hidden"
 				>
-					<Link to="/app/settings/teachers">Cancel</Link>
+					<Link to="/app/admin/teachers">Cancel</Link>
 				</Button>
 			</div>
 		</div>
