@@ -4,9 +4,9 @@ import { Color } from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
 import ListItem from '@tiptap/extension-list-item'
 import TextStyle from '@tiptap/extension-text-style'
-import { EditorProvider } from '@tiptap/react'
+import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useDebounce } from '#app/hooks/useDebounce'
 import { Bar, type BarProps } from './bar'
 import { LineHeight } from './extensions/line-height'
@@ -33,26 +33,25 @@ const extensions = [
 	}),
 ]
 
-type Props = { document: JsonifyObject<Document> }
+type Props = { doc: JsonifyObject<Document> }
 
-export const Editor = ({ document: { html: initialHtml, id } }: Props) => {
+export const Editor = ({ doc }: Props) => {
 	const updateDocumentFetcher = useFetcher({ key: 'update-document' })
 	const createDocumentCommentFetcher = useFetcher({
 		key: 'create-document-comment',
 	})
 
-	const [text, setText] = useState<string>()
-	const [html, setHtml] = useState<string>()
+	const editor = useEditor({ extensions, content: doc.html })
 	const debounce = 800
-	const [debouncedText] = useDebounce(text, debounce)
-	const [debouncedHtml] = useDebounce(html, debounce)
+	const [debouncedText] = useDebounce(editor?.getText(), debounce)
+	const [debouncedHtml] = useDebounce(editor?.getHTML(), debounce)
 
 	const handleHighlight: BarProps['onHighlight'] = ({
 		highlightId,
 		content,
 	}) => {
 		createDocumentCommentFetcher.submit(
-			{ highlightId, content, documentId: id },
+			{ highlightId, content, documentId: doc.id },
 			{ method: 'POST', action: '/api/model/document-comment' },
 		)
 
@@ -63,13 +62,20 @@ export const Editor = ({ document: { html: initialHtml, id } }: Props) => {
 	}
 
 	useEffect(() => {
+		if (doc.html !== editor?.getHTML()) {
+			editor?.commands.setContent(doc.html)
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [doc.html])
+
+	useEffect(() => {
 		if (!debouncedHtml) {
 			return
 		}
 
 		updateDocumentFetcher.submit(
 			{ html: debouncedHtml ?? '', text: debouncedText ?? '' },
-			{ method: 'PUT', action: `/api/model/document/${id}` },
+			{ method: 'PUT', action: `/api/model/document/${doc.id}` },
 		)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [debouncedHtml, debouncedText])
@@ -95,17 +101,14 @@ export const Editor = ({ document: { html: initialHtml, id } }: Props) => {
 	})
 
 	return (
-		<div className="w-full overflow-hidden border-r font-times md:h-full [&>div:nth-child(2)>div]:h-[calc(100vh-93px)] [&>div:nth-child(2)>div]:overflow-scroll [&>div:nth-child(2)>div]:p-5 focus-visible:[&>div:nth-child(2)>div]:outline-none">
-			<EditorProvider
-				extensions={extensions}
-				content={initialHtml}
-				slotBefore={<Bar onHighlight={handleHighlight} />}
-				children={undefined}
-				onUpdate={({ editor }) => {
-					setText(editor.getText())
-					setHtml(editor.getHTML())
-				}}
-			/>
+		<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
+			<Bar onHighlight={handleHighlight} editor={editor} />
+			<div className="grow overflow-y-scroll p-5 font-times">
+				<EditorContent
+					editor={editor}
+					className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
+				/>
+			</div>
 		</div>
 	)
 }

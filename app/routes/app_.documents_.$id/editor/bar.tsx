@@ -1,4 +1,4 @@
-import { useCurrentEditor } from '@tiptap/react'
+import { type Editor } from '@tiptap/react'
 import { MessageCircleIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { v4 } from 'uuid'
@@ -21,10 +21,11 @@ const GAP_WIDTH = 3
 const PADDING = 8
 
 export type BarProps = {
+	editor: Editor | null
 	onHighlight?: (params: { highlightId: string; content: string }) => void
 }
 
-export const Bar = ({ onHighlight }: BarProps) => {
+export const Bar = ({ onHighlight, editor }: BarProps) => {
 	const [visibleCommands, setVisibleCommands] = useState(commands)
 	const [hiddenCommands, setHiddenCommands] = useState<Command[]>([])
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -48,17 +49,15 @@ export const Bar = ({ onHighlight }: BarProps) => {
 			}
 		}
 
-		updateButtonVisibility()
+		// Delay to ensure the container has been rendered
+		setTimeout(() => updateButtonVisibility(), 100)
+
 		window.addEventListener('resize', updateButtonVisibility)
 
 		return () => window.removeEventListener('resize', updateButtonVisibility)
 	}, [])
 
-	const { editor } = useCurrentEditor()
-
-	if (!editor) {
-		return null
-	}
+	if (!editor) return null
 
 	return (
 		<div

@@ -4,9 +4,11 @@ import {
 	Link,
 	useFetchers,
 	useLoaderData,
+	useNavigate,
 	useSearchParams,
 } from '@remix-run/react'
 import { ArrowLeft, Check, Loader2 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useSpinDelay } from 'spin-delay'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Badge } from '#app/components/ui/badge'
@@ -17,6 +19,7 @@ import { useUser } from '#app/hooks/useUser'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { redirectWithToast } from '#app/utils/toast.server'
+import { DocumentVersions } from './_components/document-versions'
 import { Comments } from './comments'
 import { Editor } from './editor'
 import { Tutor } from './tutor'
@@ -24,6 +27,8 @@ import { Tutor } from './tutor'
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'No document id found')
 	const userId = await requireUserId(request)
+	const url = new URL(request.url)
+	const shouldSaveVersion = url.searchParams.get('ssv') === '1'
 
 	const doc = await prisma.document.findFirst({
 		where: {
@@ -40,6 +45,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			],
 		},
 		include: {
+			versions: { orderBy: { createdAt: 'desc' } },
 			user: { include: { studentProfile: true } },
 			courseModuleSessions: {
 				orderBy: { courseModule: { position: 'asc' } },
@@ -68,6 +74,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		})
 	}
 
+	if (shouldSaveVersion) {
+		const latestVersion = doc.versions[0]
+		if (doc.html && doc.text && latestVersion?.html !== doc.html) {
+			prisma.documentVersion
+				.create({
+					data: { documentId: doc.id, html: doc.html, text: doc.text },
+				})
+				.catch(() => {})
+		}
+	}
+
 	const totalInstructions = await prisma.courseModuleInstruction.count({
 		where: {
 			courseModule: {
@@ -76,32 +93,45 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		},
 	})
 
-	return json({ doc, totalInstructions })
+	return json({ doc, totalInstructions, shouldSaveVersion })
+}
+
+const useIsUpdatingDocument = () => {
+	const updateDocumentFetcher = useFetchers().find(
+		f => f.key === 'update-document',
+	)
+
+	return useSpinDelay(
+		!!updateDocumentFetcher && updateDocumentFetcher?.state !== 'idle',
+		{ minDuration: 500, delay: 0 },
+	)
 }
 
 export default function Route() {
 	const data = useLoaderData<typeof loader>()
 	const user = useUser()
+	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
 	const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const tab = searchParams.get('tab') ?? 'tutor'
-
 	const isViewingAsTeacher = data.doc && user.id !== data.doc?.userId
+	const isUpdatingDocument = useIsUpdatingDocument()
 
-	const updateDocumentFetcher = useFetchers().find(
-		f => f.key === 'update-document',
-	)
-	const isPending = useSpinDelay(
-		!!updateDocumentFetcher && updateDocumentFetcher?.state !== 'idle',
-		{ minDuration: 500, delay: 0 },
-	)
-
-	const setValueInSearchParams = (value: string) => {
+	const changeTab = (value: string) => {
 		const params = new URLSearchParams(searchParams)
 		params.set('tab', value)
 		setSearchParams(params)
 	}
+
+	useEffect(() => {
+		if (data.shouldSaveVersion) {
+			const { pathname, search } = window.location
+			const searchParams = new URLSearchParams(search)
+			searchParams.delete('ssv')
+			navigate(`${pathname}?${searchParams}`, { replace: true })
+		}
+	}, [data.shouldSaveVersion, navigate])
 
 	return (
 		<main className="flex h-screen w-screen flex-col overflow-hidden">
@@ -120,6 +150,11 @@ export default function Route() {
 					</Link>
 					{/* TODO: Make title editable with an inline input */}
 					<h4>Document</h4>
+					<div className="h-[20px] border-r" />
+					<DocumentVersions
+						documentId={data.doc.id}
+						versions={data.doc.versions}
+					/>
 					{isViewingAsTeacher ? (
 						<Badge variant="info-outlined" className="md:text-md text-xs">
 							{isMobile
@@ -127,7 +162,7 @@ export default function Route() {
 								: `Viewing work by ${data.doc.user.name}`}
 						</Badge>
 					) : null}
-					{isPending ? (
+					{isUpdatingDocument ? (
 						<div className="flex flex-grow items-center justify-end gap-1 text-muted-foreground/70">
 							<Loader2 className="h-4 w-4 animate-spin" />
 							<p className="text-sm">Saving</p>{' '}
@@ -140,11 +175,7 @@ export default function Route() {
 					)}
 				</div>
 			</nav>
-			<Tabs
-				onValueChange={setValueInSearchParams}
-				value={tab}
-				className="md:hidden"
-			>
+			<Tabs onValueChange={changeTab} value={tab} className="md:hidden">
 				<TabsList className="w-full rounded-none border-b px-3">
 					<TabsTrigger value="tutor" className="w-full">
 						Tutor
@@ -165,7 +196,7 @@ export default function Route() {
 						totalInstructions={data.totalInstructions}
 					/>
 				)}
-				{isMobile && tab !== 'editor' ? null : <Editor document={data.doc} />}
+				{isMobile && tab !== 'editor' ? null : <Editor doc={data.doc} />}
 				{isMobile && tab !== 'comments' ? null : (
 					<Comments comments={data.doc.comments} />
 				)}

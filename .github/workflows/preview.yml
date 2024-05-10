@@ -2,7 +2,15 @@ name: 🚁 Preview
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
 
 env:
   FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -10,8 +18,66 @@ env:
   FLY_ORG: yawp
 
 jobs:
+  lint:
+    name: ⬣ ESLint
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
+
+      - name: 🔬 Lint
+        run: bun i && bun lint
+
+  typecheck:
+    name: ʦ TypeScript
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
+
+      - name: 🔎 Type check
+        run: bun i && bun typecheck
+
+  vitest:
+    name: ⚡ Vitest
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
+
+      - name: 🏄 Copy test env vars
+        run: cp .env.example .env
+
+      - name: ⚡ Run vitest
+        run: bun i && bun test -- --coverage
+
   deploy:
     name: 🚀 Deploy
+    needs: [lint, typecheck, vitest]
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -43,13 +109,9 @@ jobs:
 
       - name: ✨ Finalize
         run: |
-          if [ "${{ github.event_name }}" != "closed" ]; then
-            flyctl secrets set ENV=staging ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_ORG=${{ secrets.OPENAI_ORG }} ALLOW_INDEXING=false SESSION_SECRET=$(openssl rand -hex 32) INTERNAL_COMMAND_TOKEN=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }} HONEYPOT_SECRET=$(openssl rand -hex 32) --app ${{ steps.deploy.outputs.name }}
-            flyctl consul attach --app ${{ steps.deploy.outputs.name }}
-          fi
+          flyctl secrets set ENV=staging ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} OPENAI_ORG=${{ secrets.OPENAI_ORG }} ALLOW_INDEXING=false SESSION_SECRET=$(openssl rand -hex 32) INTERNAL_COMMAND_TOKEN=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }} HONEYPOT_SECRET=$(openssl rand -hex 32) --app ${{ steps.deploy.outputs.name }}
+          flyctl consul attach --app ${{ steps.deploy.outputs.name }}
 
       - name: 🌱 Seed Preview
         run: |
-          if [ "${{ github.event_name }}" != "closed" ]; then
-            curl '${{ steps.deploy.outputs.url }}/api/seed?mode=preview&token=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }}'
-          fi
+          curl '${{ steps.deploy.outputs.url }}/api/seed?mode=preview&token=${{ secrets.PREVIEW_INTERNAL_COMMAND_TOKEN }}'

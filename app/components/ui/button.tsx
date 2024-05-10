@@ -2,7 +2,6 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Loader2 } from 'lucide-react'
 import * as React from 'react'
-import { cn } from '#app/utils/misc'
 
 const button = cva(
 	'inline-flex items-center text-sm justify-center whitespace-nowrap rounded-md font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 transition-opacity',
@@ -46,14 +45,14 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 	({ isLoading, className, variant, size, asChild = false, ...props }, ref) => {
 		return asChild ? (
 			<Slot
-				className={cn(button({ variant, size, className }))}
+				className={button({ variant, size, className })}
 				ref={ref}
 				disabled={isLoading}
 				{...props}
 			/>
 		) : (
 			<button
-				className={cn(button({ variant, size, className }))}
+				className={button({ variant, size, className })}
 				ref={ref}
 				disabled={isLoading}
 				{...props}

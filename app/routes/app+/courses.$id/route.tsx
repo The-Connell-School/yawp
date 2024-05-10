@@ -98,7 +98,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		},
 	})
 
-	return redirectWithToast(`/app/document/${doc.id}`, {
+	return redirectWithToast(`/app/documents/${doc.id}`, {
 		type: 'success',
 		description: 'Document created successfully.',
 	})
@@ -109,7 +109,7 @@ export default function AppCoursesIdRoute() {
 	const hasModules = data.course.courseModules.length > 0
 
 	return (
-		<div className="h-full w-full overflow-scroll">
+		<div className="h-full w-full overflow-y-scroll">
 			<div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
 				<div className="mb-4 flex justify-between gap-2">
 					<Button asChild variant="outline">
@@ -123,7 +123,7 @@ export default function AppCoursesIdRoute() {
 						</Button>
 					</Form>
 				</div>
-				<div className="flex flex-col items-start gap-6 pb-6 sm:flex-row lg:items-end">
+				<div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
 					{data.course.image ? (
 						<img
 							src={`/api/image/course/${data.course.image.id}`}

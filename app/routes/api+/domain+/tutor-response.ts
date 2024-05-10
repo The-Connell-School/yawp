@@ -15,7 +15,7 @@ export enum InstructionInteraction {
 	Dialogue = 'dialogue',
 }
 
-const schema = withZod(
+const POST = withZod(
 	z.object({
 		context: z.string().nullish(),
 		response: z.string().min(1),
@@ -26,7 +26,7 @@ const schema = withZod(
 export async function action({ request }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
 	const formData = await request.formData()
-	const { error, data } = await schema.validate(formData)
+	const { error, data } = await POST.validate(formData)
 	if (error) return validationError(error)
 
 	const cms = await prisma.courseModuleSession.findUnique({

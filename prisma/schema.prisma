@@ -264,6 +264,7 @@ model Document {
   userId               String
   courseModuleSessions CourseModuleSession[]
   comments             DocumentComment[]
+  versions             DocumentVersion[]
 }
 
 model DocumentComment {
@@ -286,6 +287,15 @@ model DocumentCommentResponse {
   userId    String
   user      User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   content   String
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  documentId String
+  text       String
+  html       String
 }
 
 model Upload {

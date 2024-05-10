@@ -24,6 +24,12 @@ async function seed() {
 	await Promise.all(data.roles.map(role => prisma.role.create({ data: role })))
 	console.timeEnd('👑 Created roles...')
 
+	console.time('🏴‍☠️ Created feature flags...')
+	await Promise.all(
+		data.featureFlags.map(data => prisma.featureFlag.create({ data })),
+	)
+	console.timeEnd('🏴‍☠️ Created feature flags...')
+
 	console.time(`🔒 Created users`)
 	await Promise.all(data.users.map(user => prisma.user.create({ data: user })))
 	console.timeEnd(`🔒 Created users`)

@@ -5,6 +5,7 @@ import { createPassword } from '#tests/db-utils'
 type SeedData = {
 	users: Prisma.UserCreateInput[]
 	roles: Prisma.RoleCreateInput[]
+	featureFlags: Prisma.FeatureFlagCreateInput[]
 	permissions: Prisma.PermissionCreateInput[]
 	courses: Prisma.CourseCreateInput[]
 }
@@ -16,6 +17,10 @@ export const permissions: SeedData['permissions'] = [
 	{ entity: 'user', action: 'update', access: 'any' },
 	{ entity: 'user', action: 'read', access: 'any' },
 	{ entity: 'user', action: 'delete', access: 'any' },
+]
+
+export const featureFlags: SeedData['featureFlags'] = [
+	{ name: 'courses', isEnabled: true },
 ]
 
 const roles: () => Promise<SeedData['roles']> = async () => [
@@ -97,6 +102,7 @@ After the user writes on a diamond of their choice, Connell responds with: "Take
 
 export const preview: () => Promise<SeedData> = async () => ({
 	roles: await roles(),
+	featureFlags,
 	permissions,
 	users: [
 		// Admins

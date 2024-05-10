@@ -26,8 +26,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			prisma.permission.create({ data: permission }),
 		),
 	)
-	await Promise.all(data.roles.map(role => prisma.role.create({ data: role })))
-	await Promise.all(data.users.map(user => prisma.user.create({ data: user })))
+	await Promise.all(data.roles.map(data => prisma.role.create({ data })))
+	await Promise.all(
+		data.featureFlags.map(data => prisma.featureFlag.create({ data })),
+	)
+	await Promise.all(data.users.map(data => prisma.user.create({ data })))
 	await Promise.all(
 		data.courses.map(course => prisma.course.create({ data: course })),
 	)

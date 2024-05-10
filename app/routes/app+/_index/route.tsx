@@ -36,7 +36,7 @@ export default function AppRoute() {
 	return (
 		<section
 			data-testid="app._index"
-			className="flex h-full w-full flex-col overflow-scroll"
+			className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
 		>
 			<div className="flex w-full justify-between border-b bg-muted">
 				<div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
