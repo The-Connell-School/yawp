@@ -37,6 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		data: {
 			...omit(data, ['image', 'courseImageSrc']),
 			position: count,
+			resources: { createMany: { data: data.resources ?? [] } },
 			courseModules: {
 				create: (data.courseModules ?? []).map((cm, index) => ({
 					...omit(cm, ['id']),

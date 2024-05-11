@@ -4,7 +4,7 @@ import {
 	type ActionFunctionArgs,
 } from '@remix-run/node'
 import { Form, Link, useLoaderData } from '@remix-run/react'
-import { PlusIcon } from 'lucide-react'
+import { ExternalLinkIcon, PlusIcon } from 'lucide-react'
 import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { CaretLeftIcon } from '#app/components/icons'
@@ -16,13 +16,15 @@ import {
 	AccordionTrigger,
 } from '#app/components/ui/accordion'
 import { Button } from '#app/components/ui/button'
+import { useUser } from '#app/hooks/useUser.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
+import { cn } from '#app/utils/misc.js'
 import { redirectWithToast } from '#app/utils/toast.server'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
-	const [course, documents] = await Promise.all([
+	const [course, documents, resources] = await Promise.all([
 		prisma.course.findUnique({
 			where: { id: params.id },
 			include: { image: true, courseModules: true },
@@ -43,6 +45,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 				},
 			},
 		}),
+		prisma.courseResource.findMany({ where: { courseId: params.id } }),
 	])
 
 	if (!course) {
@@ -52,7 +55,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		})
 	}
 
-	return json({ course, documents })
+	return json({ course, documents, resources })
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -105,7 +108,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AppCoursesIdRoute() {
+	const user = useUser()
 	const data = useLoaderData<typeof loader>()
+	const isTeacher = !!user.teacherProfile
 	const hasModules = data.course.courseModules.length > 0
 
 	return (
@@ -117,11 +122,13 @@ export default function AppCoursesIdRoute() {
 							<CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
 						</Link>
 					</Button>
-					<Form method="post">
-						<Button type="submit" className="w-fit" disabled={!hasModules}>
-							New <PlusIcon className="ml-1 h-5 w-5" />
-						</Button>
-					</Form>
+					{isTeacher ? null : (
+						<Form method="post">
+							<Button type="submit" className="w-fit" disabled={!hasModules}>
+								New <PlusIcon className="ml-1 h-5 w-5" />
+							</Button>
+						</Form>
+					)}
 				</div>
 				<div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
 					{data.course.image ? (
@@ -154,7 +161,44 @@ export default function AppCoursesIdRoute() {
 						</Accordion>
 					</>
 				) : null}
-				{data.documents.length ? (
+				{isTeacher ? (
+					<div>
+						<h3 className="text-foreground/75">Resources</h3>
+						<p className="mb-2 text-sm text-muted-foreground">
+							Explore documents and resources.
+						</p>
+						{data.resources.length ? (
+							<div>
+								{data.resources.map((resource, index) => (
+									<div
+										key={resource.id}
+										className={cn('flex-flex-col py-2', {
+											'border-t': index !== 0,
+										})}
+									>
+										<a
+											href={resource.url!}
+											className="flex items-center gap-1 text-primary hover:underline"
+											target="_blank"
+											rel="noreferrer"
+										>
+											{resource.title}
+											<ExternalLinkIcon size={14} />
+										</a>
+										<p className="text-sm text-muted-foreground">
+											{resource.description}
+										</p>
+									</div>
+								))}
+							</div>
+						) : (
+							<NoDataPlaceholder
+								title="No resources"
+								subtitle="Come back later to check for newly added resources."
+							/>
+						)}
+					</div>
+				) : data.documents.length ? (
 					<div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
 						{data.documents.map(doc => (
 							<DocumentLink key={doc.id} doc={doc} />

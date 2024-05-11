@@ -1,16 +1,10 @@
 import { type ActionFunctionArgs, json } from '@remix-run/node'
-import { useFetcher, useFetchers } from '@remix-run/react'
+import { type Fetcher, useFetcher, useFetchers } from '@remix-run/react'
 import { withZod } from '@remix-validated-form/with-zod'
 import { ValidatedForm, validationError } from 'remix-validated-form'
 import { z } from 'zod'
-import {
-	DoubleArrowLeftIcon,
-	DoubleArrowRightIcon,
-} from '#app/components/icons'
-import { Button, type ButtonProps } from '#app/components/ui/button'
-import { Tooltip } from '#app/components/ui/tooltip'
 import { useRequestInfo } from '#app/hooks/useRequestInfo'
-import { navStateCookie } from './cookie.server'
+import { type NavState, navStateCookie } from './cookie.server'
 
 // Preference:
 // for left navigation menu width (collapsed or expanded).
@@ -48,16 +42,16 @@ function useOptimisticNavState() {
 		return f.formData.get('state') === 'collapsed' ? 'collapsed' : 'expanded'
 }
 
-export function NavStateSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
+type Props = {
+	children: (params: { state: NavState; fetcher: Fetcher }) => React.ReactNode
+}
+
+export function NavStateSwitch({ children }: Props) {
 	const fetcher = useFetcher<typeof action>()
 	const navState = useNavState()
 	const optimistic = useOptimisticNavState()
 	const state = optimistic ?? navState ?? 'expanded'
 	const nextState = state === 'expanded' ? 'collapsed' : 'expanded'
-	const stateLabel = {
-		expanded: <DoubleArrowLeftIcon />,
-		collapsed: <DoubleArrowRightIcon />,
-	}
 
 	return (
 		<ValidatedForm
@@ -67,18 +61,7 @@ export function NavStateSwitch({ buttonProps }: { buttonProps?: ButtonProps }) {
 			fetcher={fetcher}
 		>
 			<input type="hidden" name="state" value={nextState} />
-			<div className="flex gap-2">
-				<Tooltip text={state ? 'Collapse navigation' : 'Expand navigation'}>
-					<Button
-						size="icon-sm"
-						type="submit"
-						disabled={['submitting', 'loading'].includes(fetcher.state)}
-						{...buttonProps}
-					>
-						{stateLabel[state]}
-					</Button>
-				</Tooltip>
-			</div>
+			{children({ fetcher, state })}
 		</ValidatedForm>
 	)
 }

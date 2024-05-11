@@ -7,22 +7,23 @@ import {
 	useLocation,
 	useMatches,
 } from '@remix-run/react'
-import { AwardIcon, WrenchIcon } from 'lucide-react'
 import {
-	useCallback,
-	useEffect,
-	useState,
-	cloneElement,
-	createContext,
-} from 'react'
+	AwardIcon,
+	GaugeIcon,
+	GraduationCapIcon,
+	MoonIcon,
+	SunIcon,
+	WrenchIcon,
+} from 'lucide-react'
+import { useCallback, useEffect, useState, createContext } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import {
 	AssistantIcon,
+	DoubleArrowLeftIcon,
+	DoubleArrowRightIcon,
 	ExitIcon,
 	HamburgerIcon,
-	LayersIcon,
 	LockClosedIcon,
-	PersonIcon,
 	ReloadIcon,
 	SlashIcon,
 	XIcon,
@@ -39,7 +40,6 @@ import {
 } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
 import { cn } from '#app/utils/misc'
-import { startCase } from '#app/utils/startCase'
 import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
 import { ThemeSwitch, useTheme } from '../api+/preferences+/theme/route'
 
@@ -68,9 +68,9 @@ export default function Route() {
 			? [
 					{
 						to: '/app',
-						label: 'Courses',
+						label: 'Dashboard',
 						end: true,
-						icon: <LayersIcon />,
+						icon: <GaugeIcon strokeWidth={1.5} />,
 					},
 				]
 			: []),
@@ -84,7 +84,7 @@ export default function Route() {
 					{
 						to: '/app/students',
 						label: 'Students',
-						icon: <PersonIcon />,
+						icon: <GraduationCapIcon strokeWidth={1.5} size={24} />,
 						teacher: true,
 					},
 				]
@@ -211,7 +211,7 @@ export default function Route() {
 							>
 								{link.icon ? (
 									navExpanded ? (
-										cloneElement(link.icon, { className: 'w-5 h-5' })
+										link.icon
 									) : (
 										<Tooltip
 											key={link.to}
@@ -219,7 +219,7 @@ export default function Route() {
 											open={navExpanded ? false : undefined}
 											contentProps={{ side: 'right' }}
 										>
-											{cloneElement(link.icon, { className: 'w-5 h-5' })}
+											{link.icon}
 										</Tooltip>
 									)
 								) : null}
@@ -228,12 +228,12 @@ export default function Route() {
 										<span className="w-full">{link.label}</span>
 										{link.teacher ? (
 											<Tooltip text="Teachers only">
-												<AwardIcon className="h-5 w-5" />
+												<AwardIcon className="h-5 w-5 opacity-50" />
 											</Tooltip>
 										) : null}
 										{link.admin ? (
 											<Tooltip text="Admin only">
-												<LockClosedIcon className="h-5 w-5" />
+												<LockClosedIcon className="h-5 w-5 opacity-50" />
 											</Tooltip>
 										) : null}
 									</>
@@ -241,36 +241,74 @@ export default function Route() {
 							</NavLink>
 						))}
 				</div>
-				<div className="flex flex-grow flex-col justify-end gap-2">
-					<div className={cn('flex px-2', { 'flex-col': !navExpanded })}>
-						<Tooltip text="Sign out">
-							<Button size="icon-sm" variant="ghost" asChild>
-								<Link to="/logout">
-									<ExitIcon />
-								</Link>
+				<div className="flex flex-grow flex-col justify-end gap-1 p-1 px-3">
+					<Button
+						asChild
+						size="sm"
+						variant="ghost"
+						className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+					>
+						<Link to="/logout">
+							<ExitIcon />
+							{navExpanded ? <span>Logout</span> : null}
+						</Link>
+					</Button>
+					<ThemeSwitch>
+						{({ mode, fetcher }) => (
+							<Button
+								size="sm"
+								variant="ghost"
+								className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+								disabled={['submitting', 'loading'].includes(fetcher.state)}
+							>
+								{mode === 'light' ? (
+									<SunIcon size={15} />
+								) : (
+									<MoonIcon size={15} />
+								)}
+								{navExpanded ? <span>Theme</span> : null}
 							</Button>
-						</Tooltip>
-						<ThemeSwitch buttonProps={{ variant: 'ghost' }} />
-						{!isMobile ? (
-							<div className={navExpanded ? 'ml-auto' : undefined}>
-								<NavStateSwitch buttonProps={{ variant: 'ghost' }} />
+						)}
+					</ThemeSwitch>
+					{!isMobile ? (
+						<NavStateSwitch>
+							{({ state, fetcher }) => (
+								<Button
+									size="sm"
+									variant="ghost"
+									className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+									disabled={['submitting', 'loading'].includes(fetcher.state)}
+								>
+									{state === 'expanded' ? (
+										<>
+											<DoubleArrowLeftIcon />
+											<span>Collapse</span>
+										</>
+									) : (
+										<DoubleArrowRightIcon />
+									)}
+								</Button>
+							)}
+						</NavStateSwitch>
+					) : null}
+				</div>
+				<Link to="/app/profile">
+					<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
+						<UserImage user={user} size="xs" />
+						{navExpanded ? (
+							<div>
+								<p className="text-sm font-bold">{user.name}</p>
+								<p className="text-xs text-muted-foreground">
+									{user.roles.some(r => r.name === 'admin')
+										? 'Admin'
+										: user.teacherProfile
+											? 'Teacher'
+											: 'Student'}
+								</p>
 							</div>
 						) : null}
 					</div>
-					<Link to="/app/profile">
-						<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
-							<UserImage user={user} size="xs" />
-							{navExpanded ? (
-								<div>
-									<p className="text-sm font-bold">{user.name}</p>
-									<p className="text-sm text-muted-foreground">
-										{startCase(user.roles[0]?.name)}
-									</p>
-								</div>
-							) : null}
-						</div>
-					</Link>
-				</div>
+				</Link>
 			</nav>
 			<div
 				className={cn(

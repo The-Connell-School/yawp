@@ -27,7 +27,7 @@ type Props = {
 }
 
 export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
-	const tutorResponseFetcher = useFetcher()
+	const tutorResponseFetcher = useFetcher<{ error?: string }>()
 	const incrementInstructionFetcher = useFetcher()
 	const messagesRef = useRef<HTMLDivElement>(null)
 	const currentCms = cmss[0]
@@ -132,6 +132,11 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 				))}
 				{tutorResponseFetcher.state !== 'idle' && optimistic ? (
 					<Loading />
+				) : null}
+				{tutorResponseFetcher.data?.error ? (
+					<p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
+						{tutorResponseFetcher.data.error}
+					</p>
 				) : null}
 			</div>
 			{!hasNextInstruction && finishedCurrentCmsInstructions ? (

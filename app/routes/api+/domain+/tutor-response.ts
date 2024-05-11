@@ -10,6 +10,8 @@ import {
 	getLLMCompletion,
 } from '#app/utils/getLLMCompletion'
 
+const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.'
+
 export enum InstructionInteraction {
 	Answer = 'answer',
 	Dialogue = 'dialogue',
@@ -100,12 +102,17 @@ export async function action({ request }: ActionFunctionArgs) {
 				},
 			]
 
-			const completion = await getLLMCompletion({
-				model: 'claude-3-opus-20240229',
-				messages,
-				system,
-				maxTokens: 500,
-			})
+			let completion: string | undefined
+			try {
+				completion = await getLLMCompletion({
+					model: 'claude-3-opus-20240229',
+					messages,
+					system,
+					maxTokens: 500,
+				})
+			} catch {
+				return json({ error: LLM_FAILED }, { status: 500 })
+			}
 
 			if (completion === 'true') {
 				const nextInstruction =
@@ -155,12 +162,17 @@ export async function action({ request }: ActionFunctionArgs) {
 					},
 				]
 
-				const correction = await getLLMCompletion({
-					model: 'claude-3-opus-20240229',
-					messages,
-					system,
-					maxTokens: 500,
-				})
+				let correction: string | undefined
+				try {
+					correction = await getLLMCompletion({
+						model: 'claude-3-opus-20240229',
+						messages,
+						system,
+						maxTokens: 500,
+					})
+				} catch {
+					return json({ error: LLM_FAILED }, { status: 500 })
+				}
 
 				const updated = await prisma.courseModuleSession.update({
 					where: { id: cms.id },
@@ -210,12 +222,17 @@ export async function action({ request }: ActionFunctionArgs) {
 			.concat(currentMessages)
 			.concat([{ role: AgentType.User, content: data.context + data.response }])
 
-		const completion = await getLLMCompletion({
-			model: 'claude-3-opus-20240229',
-			messages,
-			system,
-			maxTokens: 500,
-		})
+		let completion: string | undefined
+		try {
+			completion = await getLLMCompletion({
+				model: 'claude-3-opus-20240229',
+				messages,
+				system,
+				maxTokens: 500,
+			})
+		} catch {
+			return json({ error: LLM_FAILED }, { status: 500 })
+		}
 
 		const updated = await prisma.courseModuleSession.update({
 			where: { id: cms.id },

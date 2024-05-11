@@ -1,6 +1,15 @@
 import { withZod } from '@remix-validated-form/with-zod'
 import { z } from 'zod'
 
+export const CourseResourceSchema = z.object({
+	title: z.string(),
+	description: z.string().nullish(),
+	url: z
+		.string()
+		.regex(/^https:\/\//, 'The URL must start with https://')
+		.nullable(),
+})
+
 export const CourseModuleInstructionSchema = z.object({
 	title: z.string(),
 	answerKey: z.string().nullish(),
@@ -35,6 +44,7 @@ export const Schema = z.object({
 	courseModules: z.array(CourseModuleSchema).nullish(),
 	courseImageSrc: z.string().nullish(),
 	image: z.instanceof(File).nullish(),
+	resources: z.array(CourseResourceSchema).nullish(),
 })
 
 export const validator = withZod(Schema)

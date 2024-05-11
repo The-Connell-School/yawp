@@ -68,7 +68,7 @@ export default function CoursesRoute() {
 						<div className="overflow-hidden p-2">
 							<p className="font-bold">{course.title || 'Untitled course'}</p>
 							<p
-								className="truncate text-muted-foreground/80"
+								className="truncate text-sm text-muted-foreground/80"
 								style={{ maxWidth: '100%' }}
 							>
 								{course.description || 'No description available.'}

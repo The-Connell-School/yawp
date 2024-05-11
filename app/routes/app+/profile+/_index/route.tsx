@@ -10,6 +10,7 @@ import {
 	json,
 } from '@remix-run/node'
 import { Link, useFetcher, useLoaderData } from '@remix-run/react'
+import { ImageIcon } from 'lucide-react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
 import { FormInput } from '#app/components/forms/form-input'
@@ -19,11 +20,12 @@ import {
 	LockClosedIcon,
 } from '#app/components/icons'
 import { Button, button } from '#app/components/ui/button'
+import { UserImage } from '#app/components/user-image.js'
 import { useUser } from '#app/hooks/useUser'
 import { requireUserId, sessionKey } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { getUserImgSrc, useDoubleCheck } from '#app/utils/misc.tsx'
+import { useDoubleCheck } from '#app/utils/misc.tsx'
 import { NameSchema } from '#app/utils/schemas/user'
 import { authSessionStorage } from '#app/utils/session.server.ts'
 import { twoFAVerificationType } from '../two-factor/route'
@@ -101,17 +103,23 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function EditUserProfile() {
 	const data = useLoaderData<typeof loader>()
-	const isAdmin = useUser()?.roles.some(role => role.name === 'admin')
+	const user = useUser()
+	const isAdmin = user?.roles.some(role => role.name === 'admin')
 
 	return (
 		<div>
 			<div className="flex flex-col gap-4 lg:flex-row">
 				<div className="relative h-52 w-52">
-					<img
-						src={getUserImgSrc(data.user.image?.id)}
-						alt={data.user.name ?? data.user.email}
-						className="h-48 w-48 rounded-full object-cover"
-					/>
+					{user.image ? (
+						<UserImage user={user} className="h-48 w-48" />
+					) : (
+						<div className="flex h-48 w-48 min-w-16 items-center justify-center rounded-full bg-muted">
+							<ImageIcon
+								size={45}
+								className="text-muted-foreground opacity-30"
+							/>
+						</div>
+					)}
 					<Link
 						preventScrollReset
 						to="photo"

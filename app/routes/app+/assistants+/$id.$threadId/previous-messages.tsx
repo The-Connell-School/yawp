@@ -3,8 +3,8 @@ import { type ReactNode } from 'react'
 import useSWR from 'swr'
 import { AssistantIcon } from '#app/components/icons'
 import { Button, type ButtonProps } from '#app/components/ui/button'
+import { UserImage } from '#app/components/user-image.js'
 import { useUser } from '#app/hooks/useUser'
-import { getUserImgSrc } from '#app/utils/misc'
 
 type Props = {
 	lastId: string
@@ -89,11 +89,7 @@ export const Message = ({
 			<div className="mx-auto flex max-w-[700px] gap-4">
 				<div>
 					{isUser ? (
-						<img
-							src={getUserImgSrc(user.image?.id)}
-							alt={user.name ?? user.email}
-							className="h-8 w-8 min-w-8 rounded-full object-cover"
-						/>
+						<UserImage user={user} size="xs" />
 					) : (
 						<div className="flex items-center justify-center rounded-full bg-primary/50 p-2">
 							<AssistantIcon />

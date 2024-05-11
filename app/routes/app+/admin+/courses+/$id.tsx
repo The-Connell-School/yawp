@@ -30,6 +30,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		include: {
 			courseModules: { include: { instructions: true } },
 			image: { select: { id: true } },
+			resources: true,
 		},
 	})
 
@@ -66,6 +67,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			prisma.courseModule.findMany({
 				where: { courseId: params.id },
 				select: { id: true },
+			}),
+			// Delete (and recreate later) all course resources
+			prisma.courseResource.deleteMany({
+				where: { courseId: params.id },
 			}),
 			// Create and update course modules
 			...(data.courseModules ?? []).map(async ({ id, ...cm }, CMIdx) => {
@@ -112,7 +117,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			prisma.course.update({
 				include: { image: true },
 				where: { id: params.id },
-				data: omit(data, ['image', 'courseImageSrc', 'courseModules']),
+				data: {
+					...omit(data, [
+						'image',
+						'courseImageSrc',
+						'courseModules',
+						'resources',
+					]),
+					resources: { createMany: { data: data.resources ?? [] } },
+				},
 			}),
 			// Delete removed course modules
 			prisma.courseModule.deleteMany({

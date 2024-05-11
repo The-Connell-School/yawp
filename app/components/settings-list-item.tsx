@@ -1,14 +1,14 @@
 import { NavLink } from '@remix-run/react'
+import { type ReactNode } from 'react'
 import { cn } from '#app/utils/misc'
 
 type Props = {
-	imageSrc?: string
-	imageStyle?: 'rounded'
+	image?: ReactNode
 	to: string
 	title: string
 }
 
-export const SettingsNavLink = ({ imageSrc, imageStyle, to, title }: Props) => {
+export const SettingsNavLink = ({ image, to, title }: Props) => {
 	return (
 		<NavLink
 			to={to}
@@ -22,17 +22,7 @@ export const SettingsNavLink = ({ imageSrc, imageStyle, to, title }: Props) => {
 				)
 			}
 		>
-			{imageSrc ? (
-				<img
-					src={imageSrc}
-					alt=""
-					className={cn('h-16 w-16 rounded-l object-cover', {
-						'h-12 w-12 rounded-full p-2': imageStyle === 'rounded',
-					})}
-				/>
-			) : (
-				<div className="h-16 w-16" />
-			)}
+			{image ?? <div className="h-16 w-16" />}
 			<p className="font-bold">{title || 'Untitled course'}</p>
 		</NavLink>
 	)

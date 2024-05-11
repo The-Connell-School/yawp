@@ -1,11 +1,11 @@
 import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import { useLoaderData, useSearchParams } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { ListLayout } from '#app/components/list-layout.js'
-import { SettingsNavLink } from '#app/components/settings-list-item.js'
+import { ListLayout } from '#app/components/list-layout'
+import { SettingsNavLink } from '#app/components/settings-list-item'
+import { UserImage } from '#app/components/user-image.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { getUserImgSrc } from '#app/utils/misc'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
@@ -40,8 +40,11 @@ export default function Route() {
 						key={sp.id}
 						to={`/app/students/${sp.id}?q=${searchParams.get('q') ?? ''}`}
 						title={sp.user.name ?? sp.user.email}
-						imageSrc={getUserImgSrc(sp.user.image?.id)}
-						imageStyle="rounded"
+						image={
+							<div className="py-2 pl-2">
+								<UserImage user={sp.user} size="xs" />
+							</div>
+						}
 					/>
 				))
 			) : (

@@ -6,8 +6,8 @@ import { twMerge } from 'tailwind-merge'
 
 export const DEFAULT_ROUTE = '/app'
 
-export function getUserImgSrc(imageId?: string | null) {
-	return imageId ? `/api/image/user/${imageId}` : '/img/user.png'
+export function getUserImgSrc(imageId: string) {
+	return `/api/image/user/${imageId}`
 }
 
 export function getErrorMessage(error: unknown) {

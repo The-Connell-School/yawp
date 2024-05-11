@@ -171,14 +171,15 @@ model TeacherProfile {
 }
 
 model Course {
-  id            String         @id @default(cuid())
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id            String           @id @default(cuid())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
   title         String
   description   String?
   position      Int
   image         CourseImage?
   courseModules CourseModule[]
+  resources     CourseResource[]
 }
 
 model CourseImage {
@@ -250,6 +251,17 @@ model CourseModuleSessionMessage {
   agent                 String // 'user' | 'assistant' | 'system'
   factCheckPrompt       String?
   context               String?
+}
+
+model CourseResource {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  title       String
+  description String?
+  url         String?
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
 model Document {

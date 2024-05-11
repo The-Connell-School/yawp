@@ -2,26 +2,27 @@ import {
 	type DocumentCommentResponse,
 	type DocumentComment,
 	type User,
-	type UserImage,
+	type UserImage as PrismaUserImage,
 } from '@prisma/client'
 import { useFetcher } from '@remix-run/react'
 import { useRef, useState, type MouseEvent } from 'react'
 import { CheckIcon, TrashIcon } from '#app/components/icons'
 import { RichTextarea } from '#app/components/rich-textarea.js'
 import { Button } from '#app/components/ui/button'
+import { UserImage } from '#app/components/user-image'
 import { useOnClickOutside } from '#app/hooks/useClickOutside'
 import { useUser } from '#app/hooks/useUser'
-import { cn, getUserImgSrc, useDoubleCheck } from '#app/utils/misc'
+import { cn, useDoubleCheck } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
 
 export type Comment = JsonifyObject<
 	DocumentComment & {
 		user: Omit<User, 'createdAt' | 'updatedAt'> & {
-			image: Pick<UserImage, 'id'> | null
+			image: Pick<PrismaUserImage, 'id'> | null
 		}
 		responses: (DocumentCommentResponse & {
 			user: Omit<User, 'createdAt' | 'updatedAt'> & {
-				image: Pick<UserImage, 'id'> | null
+				image: Pick<PrismaUserImage, 'id'> | null
 			}
 		})[]
 	}
@@ -130,11 +131,7 @@ export const Comment = (comment: Comment) => {
 					.map(response => (
 						<div key={response.id}>
 							<div className="mt-1 flex items-center gap-2">
-								<img
-									src={getUserImgSrc(response.user.image?.id)}
-									alt={response.user.name ?? response.user.email}
-									className="h-5 w-5 min-w-5 rounded-full object-cover"
-								/>
+								<UserImage user={response.user} size="xxs" />
 								<div>
 									<p className="text-xs font-semibold">{response.user.name}</p>
 									<p className="text-xs text-muted-foreground">

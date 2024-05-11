@@ -11,7 +11,13 @@ import {
 	HiddenValuesProvider,
 } from '#app/contexts/hidden-values'
 import { CourseModule } from './course-module'
-import { type Schema, validator, type CourseModuleSchema } from './schema'
+import { CourseResource } from './resource'
+import {
+	type Schema,
+	validator,
+	type CourseModuleSchema,
+	type CourseResourceSchema,
+} from './schema'
 
 interface Props {
 	formId: string
@@ -19,10 +25,16 @@ interface Props {
 }
 
 export const CourseForm = ({ defaultValues, formId }: Props) => {
-	const { error } = useField('courseModules', { formId })
+	const { error: courseModulesError } = useField('courseModules', { formId })
 	const [courseModules, { push, remove }] = useFieldArray<
 		z.infer<typeof CourseModuleSchema>
-	>('courseModules', { formId })
+	>('courseModules', {
+		formId,
+	})
+
+	const { error: courseResourcesError } = useField('resources', { formId })
+	const [courseResources, { push: pushResource, remove: removeResource }] =
+		useFieldArray<z.infer<typeof CourseResourceSchema>>('resources', { formId })
 
 	return (
 		<HiddenValuesProvider>
@@ -94,7 +106,7 @@ export const CourseForm = ({ defaultValues, formId }: Props) => {
 							/>
 						))}
 						<Button
-							variant="outline"
+							variant="secondary"
 							onClick={e => {
 								e.preventDefault()
 								push({
@@ -107,7 +119,46 @@ export const CourseForm = ({ defaultValues, formId }: Props) => {
 						>
 							Add module
 						</Button>
-						{error && <p className="text-destructive-foreground">{error}</p>}
+						{courseModulesError && (
+							<p className="text-destructive-foreground">
+								{courseModulesError}
+							</p>
+						)}
+					</div>
+				</div>
+				<div className="flex flex-col gap-1">
+					<label>Resources</label>
+					<p className="mb-1 text-sm text-muted-foreground">
+						Resources are additional materials that teachers can use to enhance
+						their understanding of this course. This could be a PDF, a video, or
+						a website.
+					</p>
+					<div className="flex flex-col gap-1">
+						{courseResources.map(({ key }, i) => (
+							<CourseResource
+								key={key}
+								onDelete={() => removeResource(i)}
+								name={`resources[${i}]`}
+							/>
+						))}
+						<Button
+							variant="secondary"
+							onClick={e => {
+								e.preventDefault()
+								pushResource({
+									title: 'New Resource',
+									description: '',
+									url: '',
+								})
+							}}
+						>
+							Add resource
+						</Button>
+						{courseResourcesError && (
+							<p className="text-destructive-foreground">
+								{courseResourcesError}
+							</p>
+						)}
 					</div>
 				</div>
 			</ValidatedForm>

@@ -4,9 +4,9 @@ import { useLoaderData } from '@remix-run/react'
 import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
+import { UserImage } from '#app/components/user-image.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { getUserImgSrc } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
 import { redirectWithToast } from '#app/utils/toast.server.js'
 
@@ -44,32 +44,30 @@ export default function Route() {
 	const { studentProfile } = useLoaderData<typeof loader>()
 
 	return (
-		<div className="w-full p-4">
-			<div className="flex gap-8">
-				<img
-					src={getUserImgSrc(studentProfile.user.image?.id)}
-					alt={studentProfile.user.name ?? studentProfile.user.email}
-					className="h-24 w-24 min-w-24 rounded-full object-cover"
-				/>
-				<div>
-					<h2>{studentProfile.user.name}</h2>
-					<p className="text-muted-foreground">{studentProfile.user.email}</p>
-					<p className="text-muted-foreground">
-						Joined {timeAgo(new Date(studentProfile.createdAt))}
-					</p>
+		<div className="mt-4 border-t">
+			<div className="w-full p-4">
+				<div className="flex gap-8">
+					<UserImage user={studentProfile.user} />
+					<div>
+						<h2>{studentProfile.user.name}</h2>
+						<p className="text-muted-foreground">{studentProfile.user.email}</p>
+						<p className="text-muted-foreground">
+							Joined {timeAgo(new Date(studentProfile.createdAt))}
+						</p>
+					</div>
 				</div>
-			</div>
-			<div className="mt-6">
-				{studentProfile.user.documents.length === 0 ? (
-					<NoDataPlaceholder
-						title="No documents"
-						subtitle={`${studentProfile.user.name} has not started any documents yet.`}
-					/>
-				) : null}
-				<div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-3">
-					{studentProfile.user.documents.map(doc => (
-						<DocumentLink key={doc.id} doc={doc} />
-					))}
+				<div className="mt-6">
+					{studentProfile.user.documents.length === 0 ? (
+						<NoDataPlaceholder
+							title="No documents"
+							subtitle={`${studentProfile.user.name} has not started any documents yet.`}
+						/>
+					) : null}
+					<div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-3">
+						{studentProfile.user.documents.map(doc => (
+							<DocumentLink key={doc.id} doc={doc} />
+						))}
+					</div>
 				</div>
 			</div>
 		</div>

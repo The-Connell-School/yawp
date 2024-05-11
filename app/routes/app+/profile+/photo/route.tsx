@@ -10,6 +10,7 @@ import {
 	unstable_parseMultipartFormData,
 } from '@remix-run/node'
 import { Form, Link, useActionData, useLoaderData } from '@remix-run/react'
+import { ImageIcon } from 'lucide-react'
 import { useState } from 'react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { z } from 'zod'
@@ -137,13 +138,20 @@ export default function PhotoRoute() {
 				{...getFormProps(form)}
 			>
 				<AuthenticityTokenInput />
-				<img
-					src={
-						newImageSrc ?? (data.user ? getUserImgSrc(data.user.image?.id) : '')
-					}
-					className="h-48 w-48 rounded-full object-cover"
-					alt={data.user?.name ?? data.user?.email}
-				/>
+				{newImageSrc || data.user.image ? (
+					<img
+						src={
+							newImageSrc ??
+							(data.user.image ? getUserImgSrc(data.user.image?.id) : '')
+						}
+						className="h-48 w-48 rounded-full object-cover"
+						alt={data.user?.name ?? data.user?.email}
+					/>
+				) : (
+					<div className="flex h-48 w-48 min-w-16 items-center justify-center rounded-full bg-muted">
+						<ImageIcon size={45} className="text-muted-foreground opacity-30" />
+					</div>
+				)}
 				<ErrorList errors={fields.photoFile.errors} id={fields.photoFile.id} />
 				<div className="flex flex-col justify-center gap-2">
 					{/*
