@@ -73,7 +73,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 				where: { courseId: params.id },
 			}),
 			// Create and update course modules
-			...(data.courseModules ?? []).map(async ({ id, ...cm }, CMIdx) => {
+			...(data.courseModules ?? []).map(async ({ id, ...cm }, position) => {
 				if (id) {
 					await prisma.courseModuleInstruction.deleteMany({
 						where: { courseModuleId: id },
@@ -82,11 +82,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 						where: { id },
 						data: {
 							...cm,
-							position: CMIdx,
+							position,
 							instructions: {
-								create: (cm.instructions ?? []).map((i, IIdx) => ({
+								create: (cm.instructions ?? []).map((i, p) => ({
 									...i,
-									position: IIdx,
+									position: p,
 								})),
 							},
 						},
@@ -95,11 +95,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 					return prisma.courseModule.create({
 						data: {
 							...cm,
-							position: CMIdx,
+							position,
+							course: { connect: { id: params.id } },
 							instructions: {
-								create: (cm.instructions ?? []).map((i, IIdx) => ({
+								create: (cm.instructions ?? []).map((i, p) => ({
 									...i,
-									position: IIdx,
+									position: p,
 								})),
 							},
 						},
