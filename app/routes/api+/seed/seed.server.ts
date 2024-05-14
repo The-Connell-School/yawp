@@ -125,6 +125,12 @@ export const preview: () => Promise<SeedData> = async () => ({
 			password: { create: createPassword('calebpaul') },
 			roles: { connect: [{ name: 'admin' }] },
 		},
+		{
+			email: 'ineace@brock.software',
+			name: 'Isaace Neace',
+			password: { create: createPassword('isaacneace') },
+			roles: { connect: [{ name: 'admin' }] },
+		},
 		// Students
 		{
 			email: 'jdoe@brock.software',
