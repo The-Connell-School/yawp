@@ -63,76 +63,62 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		const { error, data } = await validator.validate(formData)
 		if (error) return validationError(error)
 
-		const [currentCourseModules] = await Promise.all([
-			prisma.courseModule.findMany({
-				where: { courseId: params.id },
-				select: { id: true },
-			}),
-			// Delete (and recreate later) all course resources
+		// Delete array data
+		await Promise.all([
 			prisma.courseResource.deleteMany({
 				where: { courseId: params.id },
 			}),
-			// Create and update course modules
-			...(data.courseModules ?? []).map(async ({ id, ...cm }, position) => {
-				if (id) {
-					await prisma.courseModuleInstruction.deleteMany({
-						where: { courseModuleId: id },
-					})
-					return prisma.courseModule.update({
-						where: { id },
-						data: {
-							...cm,
-							position,
-							instructions: {
-								create: (cm.instructions ?? []).map((i, p) => ({
-									...i,
-									position: p,
-								})),
-							},
-						},
-					})
-				} else {
-					return prisma.courseModule.create({
-						data: {
-							...cm,
-							position,
-							course: { connect: { id: params.id } },
-							instructions: {
-								create: (cm.instructions ?? []).map((i, p) => ({
-									...i,
-									position: p,
-								})),
-							},
-						},
-					})
-				}
+			prisma.courseModuleInstruction.deleteMany({
+				where: { courseModule: { courseId: params.id } },
 			}),
-		])
-
-		const currentCourseModuleIds = currentCourseModules.map(cm => cm.id)
-		const courseModulesToDelete = currentCourseModuleIds.filter(
-			id => !data.courseModules?.some(cm => cm.id === id),
-		)
-
-		const [update] = await Promise.all([
-			prisma.course.update({
-				include: { image: true },
-				where: { id: params.id },
-				data: {
-					...omit(data, [
-						'image',
-						'courseImageSrc',
-						'courseModules',
-						'resources',
-					]),
-					resources: { createMany: { data: data.resources ?? [] } },
+			prisma.courseModule.deleteMany({
+				where: {
+					courseId: params.id,
+					NOT: {
+						id: {
+							// Keep these so we don't loose associated records (e.g. course module sessions)
+							in: data.courseModules?.map(cm => cm.id).filter(Boolean) ?? [],
+						},
+					},
 				},
 			}),
-			// Delete removed course modules
-			prisma.courseModule.deleteMany({
-				where: { id: { in: courseModulesToDelete } },
-			}),
 		])
+
+		// Update & create array data
+		await Promise.all([
+			prisma.courseResource.createMany({
+				data: data.resources?.map(r => ({ ...r, courseId: params.id! })) ?? [],
+			}),
+			...(data.courseModules?.map(({ id, ...cm }, position) => {
+				const instructions = {
+					create:
+						cm.instructions?.map((i, p) => ({
+							...i,
+							id: undefined,
+							position: p,
+						})) ?? [],
+				}
+
+				return prisma.courseModule.upsert({
+					where: { id: id ?? '' },
+					create: { ...cm, courseId: params.id, position, instructions },
+					update: { ...cm, courseId: params.id, position, instructions },
+				})
+			}) ?? []),
+		])
+
+		const update = await prisma.course.update({
+			include: { image: true },
+			where: { id: params.id },
+			data: {
+				...omit(data, [
+					'image',
+					'courseImageSrc',
+					'courseModules',
+					'resources',
+				]),
+			},
+		})
 
 		if (data.image && data.image.size > 0 && data.courseImageSrc) {
 			if (data.courseImageSrc && update.image) {
