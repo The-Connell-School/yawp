@@ -40,7 +40,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			include: {
 				courseModuleSessions: {
 					take: 1,
-					orderBy: { courseModule: { position: 'asc' } },
+					orderBy: { courseModule: { position: 'desc' } },
 					include: { courseModule: true },
 				},
 			},

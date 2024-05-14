@@ -24,7 +24,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		}),
 		prisma.document.findMany({
 			where: { userId, deletedAt: null },
-			include: { courseModuleSessions: { include: { courseModule: true } } },
+			include: {
+				courseModuleSessions: {
+					include: { courseModule: true },
+					orderBy: { courseModule: { position: 'desc' } },
+				},
+			},
 		}),
 		prisma.studentProfile.findMany({
 			where: { workshopLeaderId: userId },

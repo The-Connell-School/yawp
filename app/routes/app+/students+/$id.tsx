@@ -22,7 +22,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 					documents: {
 						where: { deletedAt: null },
 						include: {
-							courseModuleSessions: { include: { courseModule: true } },
+							courseModuleSessions: {
+								include: { courseModule: true },
+								orderBy: { courseModule: { position: 'desc' } },
+							},
 						},
 					},
 				},

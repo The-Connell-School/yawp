@@ -17,37 +17,33 @@ import { Loading } from './loading'
 
 type Props = {
 	context: string | null
-	totalInstructions: number
-	cmss: JsonifyObject<
+	docId: string
+	nextCmId?: string
+	cms: JsonifyObject<
 		PrismaCMS & {
 			courseModule: { instructions: CourseModuleInstruction[] }
 			messages: CourseModuleSessionMessage[]
 		}
-	>[]
+	>
 }
 
-export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
+export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 	const tutorResponseFetcher = useFetcher<{ error?: string }>()
 	const incrementInstructionFetcher = useFetcher()
+	const advanceCourseModuleFetcher = useFetcher()
 	const messagesRef = useRef<HTMLDivElement>(null)
-	const currentCms = cmss[0]
+	const totalInstructions = cms.courseModule.instructions.length
 
-	const finishedCurrentCmsInstructions =
-		currentCms.instructionsCompleted ===
-		currentCms.courseModule.instructions.length
+	const finishedCms =
+		cms.instructionsCompleted === cms.courseModule.instructions.length
 
 	const { answerType, answerTypeOptions, interactiveType } =
-		currentCms.courseModule.instructions[currentCms.instructionsCompleted] ?? {}
+		cms.courseModule.instructions[cms.instructionsCompleted] ?? {}
 
-	const hasNextInstruction =
-		currentCms.instructionsCompleted + 1 < totalInstructions
+	const hasNextInstruction = cms.instructionsCompleted + 1 < totalInstructions
 
-	const completedInstructions = cmss.reduce(
-		(acc, cms) => acc + cms.instructionsCompleted,
-		0,
-	)
 	const completedInstructionsPct = Math.min(
-		(completedInstructions / totalInstructions) * 100,
+		(cms.instructionsCompleted / totalInstructions) * 100,
 		100,
 	)
 
@@ -62,7 +58,7 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 
 	const respond = (response: string) => {
 		tutorResponseFetcher.submit(
-			{ context, response, cmsId: currentCms.id },
+			{ context, response, cmsId: cms.id },
 			{ method: 'POST', action: '/api/domain/tutor-response' },
 		)
 	}
@@ -72,12 +68,22 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 			{ 'instructionsCompleted.increment': 1 },
 			{
 				method: 'POST',
-				action: `/api/model/course-module-session/${currentCms.id}`,
+				action: `/api/model/course-module-session/${cms.id}`,
 			},
 		)
 	}
 
-	const messages = currentCms.messages
+	const advanceToNextCourseModule = () => {
+		advanceCourseModuleFetcher.submit(
+			{ courseModuleId: nextCmId ?? '', documentId: docId },
+			{
+				method: 'POST',
+				action: '/api/model/course-module-session',
+			},
+		)
+	}
+
+	const messages = cms.messages
 		.filter(m => ['user', 'assistant'].includes(m.agent))
 		.concat(optimisticMessage ?? [])
 
@@ -96,7 +102,9 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 						{completedInstructionsPct === 100 ? 'Completed' : 'Progress'}
 					</p>
 					<div className="h-2 w-full rounded-full border bg-muted">
-						<Tooltip text={`${completedInstructions} of ${totalInstructions}`}>
+						<Tooltip
+							text={`${cms.instructionsCompleted} of ${totalInstructions}`}
+						>
 							<div
 								className="h-full rounded-full bg-primary transition-all duration-200 ease-in-out"
 								style={{ width: `${completedInstructionsPct}%` }}
@@ -139,19 +147,19 @@ export const Tutor = ({ context, cmss, totalInstructions }: Props) => {
 					</p>
 				) : null}
 			</div>
-			{!hasNextInstruction && finishedCurrentCmsInstructions ? (
-				<p className="border-t p-2 text-center text-sm text-muted-foreground">
-					You have completed all the modules in this course.
-				</p>
-			) : finishedCurrentCmsInstructions ? (
-				<div className="flex items-center gap-2 border-t p-2">
+			{finishedCms && nextCmId ? (
+				<div className="flex items-center gap-4 border-t p-2">
 					<p className="text-sm text-muted-foreground">
 						You have completed all the instructions in this module.
 					</p>
-					<Button onClick={incrementInstruction}>
-						Next <ArrowRightIcon />
+					<Button onClick={advanceToNextCourseModule}>
+						Next <ArrowRightIcon size={18} className="ml-2" />
 					</Button>
 				</div>
+			) : finishedCms ? (
+				<p className="border-t p-2 text-center text-sm text-muted-foreground">
+					You have completed all the modules in this course.
+				</p>
 			) : interactiveType === InstructionInteraction.Dialogue ||
 			  answerType === 'textarea' ? (
 				<div className="flex w-full flex-col px-3">

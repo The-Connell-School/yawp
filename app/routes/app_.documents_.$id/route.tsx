@@ -48,9 +48,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 			versions: { orderBy: { createdAt: 'desc' } },
 			user: { include: { studentProfile: true } },
 			courseModuleSessions: {
-				orderBy: { courseModule: { position: 'asc' } },
+				orderBy: { courseModule: { position: 'desc' } },
 				include: {
-					courseModule: { include: { instructions: true } },
+					courseModule: {
+						include: {
+							instructions: true,
+							course: {
+								select: {
+									courseModules: { select: { id: true, position: true } },
+								},
+							},
+						},
+					},
 					messages: true,
 				},
 			},
@@ -85,15 +94,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		}
 	}
 
-	const totalInstructions = await prisma.courseModuleInstruction.count({
-		where: {
-			courseModule: {
-				courseId: doc.courseModuleSessions[0].courseModule.courseId,
-			},
-		},
-	})
+	const currentCms = doc.courseModuleSessions[0]
+	const nextCmId = currentCms.courseModule.course?.courseModules.find(
+		cm => cm.position === currentCms.courseModule.position + 1,
+	)?.id
 
-	return json({ doc, totalInstructions, shouldSaveVersion })
+	return json({ doc, currentCms, nextCmId, shouldSaveVersion })
 }
 
 const useIsUpdatingDocument = () => {
@@ -191,9 +197,10 @@ export default function Route() {
 			<div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
 				{isMobile && tab !== 'tutor' ? null : (
 					<Tutor
-						context={data.doc.html}
-						cmss={data.doc.courseModuleSessions}
-						totalInstructions={data.totalInstructions}
+						docId={data.doc.id}
+						context={data.doc.text}
+						cms={data.currentCms}
+						nextCmId={data.nextCmId}
 					/>
 				)}
 				{isMobile && tab !== 'editor' ? null : <Editor doc={data.doc} />}
