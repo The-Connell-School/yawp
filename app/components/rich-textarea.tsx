@@ -26,6 +26,7 @@ export const RichTextarea = ({
 					{ 'p-2': size === 'sm' },
 				)}
 				style={{ height, maxHeight: '200px', minHeight: height }}
+				size={size}
 				placeholder="Ask a question or respond"
 				ref={textareaRef}
 				onChange={handleTextareaChange}

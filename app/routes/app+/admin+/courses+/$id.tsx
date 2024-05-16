@@ -157,8 +157,8 @@ export default function CoursesIdRoute() {
 	const formId = `edit-course-${data.course.id}`
 
 	return (
-		<div className="flex flex-col">
-			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+		<div className="flex h-full flex-col">
+			<div className="grow overflow-y-scroll p-6">
 				<CourseForm
 					defaultValues={{
 						...data.course,

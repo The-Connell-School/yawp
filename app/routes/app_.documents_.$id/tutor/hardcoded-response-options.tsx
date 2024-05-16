@@ -1,20 +1,29 @@
-import { ChevronLeft } from 'lucide-react'
+import {
+	CheckIcon,
+	ChevronLeft,
+	ChevronRightIcon,
+	MessageCircleIcon,
+} from 'lucide-react'
 import { useState } from 'react'
 import { RichTextarea } from '#app/components/rich-textarea'
 import { Button } from '#app/components/ui/button'
+import { Tooltip } from '#app/components/ui/tooltip.js'
 
 type Props = {
 	options: string
 	canAskQuestion?: boolean
+	advanceInstruction?: () => void
 	respond: (response: string) => void
 }
 
 export const HardcodedResponseOptions = ({
 	options,
 	canAskQuestion,
+	advanceInstruction,
 	respond,
 }: Props) => {
 	const [isAskingQuestion, setIsAskingQuestion] = useState(false)
+	const [check, setCheck] = useState(false)
 
 	return isAskingQuestion ? (
 		<div className="flex w-full items-center justify-center px-3">
@@ -33,24 +42,35 @@ export const HardcodedResponseOptions = ({
 	) : (
 		<div className="flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4">
 			{options?.split(',').map(opt => (
-				<Button
-					key={opt}
-					size="lg"
-					className="text-lg"
-					onClick={() => respond(opt)}
-				>
+				<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
 					{opt}
 				</Button>
 			))}
 			{canAskQuestion ? (
 				<Button
-					size="lg"
 					variant="secondary"
+					size="icon"
 					className="text-lg"
 					onClick={() => setIsAskingQuestion(true)}
 				>
-					Ask a question
+					<MessageCircleIcon />
 				</Button>
+			) : null}
+			{advanceInstruction ? (
+				<Tooltip
+					text="Next step"
+					delayDuration={200}
+					open={check === true || undefined}
+				>
+					<Button
+						variant={check ? 'success' : 'secondary'}
+						size="icon"
+						onClick={() => (check ? advanceInstruction() : setCheck(true))}
+						onBlur={() => check && setCheck(false)}
+					>
+						{check ? <CheckIcon /> : <ChevronRightIcon />}
+					</Button>
+				</Tooltip>
 			) : null}
 		</div>
 	)

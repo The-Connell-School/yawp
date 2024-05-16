@@ -9,7 +9,6 @@ import { useEffect, useRef } from 'react'
 import { RichTextarea } from '#app/components/rich-textarea.js'
 import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
-import { InstructionInteraction } from '#app/routes/api+/domain+/tutor-response.js'
 import { cn } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo/timeAgo'
 import { HardcodedResponseOptions } from './hardcoded-response-options'
@@ -37,7 +36,7 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 	const finishedCms =
 		cms.instructionsCompleted === cms.courseModule.instructions.length
 
-	const { answerType, answerTypeOptions, interactiveType } =
+	const { answerTypeOptions, interactiveType, canAskQuestion } =
 		cms.courseModule.instructions[cms.instructionsCompleted] ?? {}
 
 	const hasNextInstruction = cms.instructionsCompleted + 1 < totalInstructions
@@ -160,8 +159,16 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 				<p className="border-t p-2 text-center text-sm text-muted-foreground">
 					You have completed all the modules in this course.
 				</p>
-			) : interactiveType === InstructionInteraction.Dialogue ||
-			  answerType === 'textarea' ? (
+			) : answerTypeOptions ? (
+				<HardcodedResponseOptions
+					options={answerTypeOptions}
+					respond={respond}
+					canAskQuestion={!!canAskQuestion}
+					advanceInstruction={
+						interactiveType === 'dialogue' ? incrementInstruction : undefined
+					}
+				/>
+			) : (
 				<div className="flex w-full flex-col px-3">
 					{hasNextInstruction && interactiveType === 'dialogue' ? (
 						<Button
@@ -176,12 +183,7 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 					) : null}
 					<RichTextarea onCmdEnter={respond} className="text-base" />
 				</div>
-			) : answerTypeOptions ? (
-				<HardcodedResponseOptions
-					options={answerTypeOptions}
-					respond={respond}
-				/>
-			) : null}
+			)}
 		</div>
 	)
 }

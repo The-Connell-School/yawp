@@ -1,21 +1,17 @@
 import { type LoaderFunctionArgs, json } from '@remix-run/node'
-import { Link, redirect, useLoaderData } from '@remix-run/react'
+import { Link, useLoaderData } from '@remix-run/react'
 import { ArrowUpRight, FileIcon } from 'lucide-react'
 import { DocumentLink } from '#app/components/document-link.js'
 import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
 import { UserImage } from '#app/components/user-image.js'
 import { useUser } from '#app/hooks/useUser.js'
-import { requireUserId } from '#app/utils/auth.server.js'
+import { redirectIfDisabled, requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
 import { FeatureFlags } from '#app/utils/featureFlags/index.js'
 import pluralize from '#app/utils/pluralize/pluralize.js'
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	const ff = await prisma.featureFlag.findUnique({
-		where: { name: FeatureFlags.Courses },
-	})
-	if (!ff?.isEnabled) return redirect('/app/assistants')
-
+	await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants')
 	const userId = await requireUserId(request)
 
 	const [courses, documents, studentProfiles] = await Promise.all([

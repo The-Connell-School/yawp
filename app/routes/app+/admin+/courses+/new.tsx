@@ -74,8 +74,8 @@ export default function Route() {
 	const isPending = useIsPending()
 
 	return (
-		<div className="flex flex-col">
-			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+		<div className="flex h-full flex-col">
+			<div className="grow overflow-y-scroll p-6">
 				<CourseForm formId="create-module" />
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">

@@ -19,6 +19,7 @@ const button = cva(
 				ghost: 'hover:bg-accent hover:text-accent-foreground',
 				link: 'text-primary underline-offset-4 hover:underline px-0.5 py-0',
 				sidebar: 'bg-foreground/15 text-foreground hover:bg-foreground/10',
+				success: 'bg-success text-success-foreground hover:bg-success/90',
 			},
 			size: {
 				default: 'h-10 px-4 py-2',

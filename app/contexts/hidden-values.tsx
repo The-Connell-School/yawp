@@ -37,12 +37,14 @@ interface Params {
 	hiddenValues: { [key: string]: string | number | null | boolean }
 	upsert: (value: Params['hiddenValues'], prefix?: string) => any
 	remove: (key: string) => any
+	move: (key: string, newKey: string) => any
 }
 
 export const HiddenValuesContext = React.createContext<Params>({
 	hiddenValues: {},
 	upsert: () => {},
 	remove: () => {},
+	move: () => {},
 })
 
 export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
@@ -53,6 +55,93 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 	const value = React.useMemo(
 		() => ({
 			hiddenValues,
+			move: (key: string, newKey: string) => {
+				setHiddenValues(prev => {
+					let moved: Params['hiddenValues'] = {}
+					const withoutKey = Object.keys(prev).reduce(
+						(acc, prevK) => {
+							if (prevK.startsWith(key) && prev[prevK]) {
+								const newKeyWithSuffix = newKey + prevK.slice(newKey.length)
+								moved[newKeyWithSuffix] = prev[prevK]
+								return acc
+							}
+
+							const keyPrefix = key.endsWith(']')
+								? key.split('[').slice(0, -1).join('[')
+								: key
+
+							if (!prevK.startsWith(keyPrefix)) {
+								acc[prevK] = prev[prevK]
+								return acc
+							}
+
+							const kIdxStr = key
+								.slice(0, keyPrefix.length + 3)
+								.match(/\[\d+\]/g)
+								?.pop()
+								?.slice(1, -1)
+							const prevKIdxStr = prevK
+								.slice(0, keyPrefix.length + 3)
+								.match(/\[\d+\]/g)
+								?.pop()
+								?.slice(1, -1)
+
+							const kIdx = kIdxStr ? parseInt(kIdxStr) : null
+							const prevKIdx = prevKIdxStr ? parseInt(prevKIdxStr) : null
+
+							if (prevKIdx != null && kIdx !== null && prevKIdx > kIdx) {
+								const newPrevK =
+									keyPrefix + `[${prevKIdx - 1}]` + prevK.slice(key.length)
+								acc[newPrevK] = prev[prevK]
+							} else {
+								acc[prevK] = prev[prevK]
+							}
+							return acc
+						},
+						{} as Params['hiddenValues'],
+					)
+
+					const shiftedUp = Object.keys(withoutKey).reduce(
+						(acc, prevK) => {
+							const keyPrefix = newKey.endsWith(']')
+								? newKey.split('[').slice(0, -1).join('[')
+								: newKey
+
+							if (!prevK.startsWith(keyPrefix)) {
+								acc[prevK] = prev[prevK]
+								return acc
+							}
+
+							const newKIdxStr = newKey
+								.slice(0, keyPrefix.length + 3)
+								.match(/\[\d+\]/g)
+								?.pop()
+								?.slice(1, -1)
+							const prevKIdxStr = prevK
+								.slice(0, keyPrefix.length + 3)
+								.match(/\[\d+\]/g)
+								?.pop()
+								?.slice(1, -1)
+
+							const newKIdx = newKIdxStr ? parseInt(newKIdxStr) : null
+							const prevKIdx = prevKIdxStr ? parseInt(prevKIdxStr) : null
+
+							if (prevKIdx != null && newKIdx !== null && prevKIdx >= newKIdx) {
+								const newPrevK =
+									keyPrefix + `[${prevKIdx + 1}]` + prevK.slice(key.length)
+								acc[newPrevK] = prev[prevK]
+							} else {
+								acc[prevK] = prev[prevK]
+							}
+
+							return acc
+						},
+						{} as Params['hiddenValues'],
+					)
+
+					return Object.assign(shiftedUp, moved)
+				})
+			},
 			remove: (key: string) => {
 				setHiddenValues(prev =>
 					Object.keys(prev).reduce(

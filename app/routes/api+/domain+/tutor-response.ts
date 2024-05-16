@@ -220,7 +220,12 @@ export async function action({ request }: ActionFunctionArgs) {
 			},
 		]
 			.concat(currentMessages)
-			.concat([{ role: AgentType.User, content: data.context + data.response }])
+			.concat([
+				{
+					role: AgentType.User,
+					content: `content = '${data.context}', response = ${data.response}`,
+				},
+			])
 
 		let completion: string | undefined
 		try {

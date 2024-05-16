@@ -3,14 +3,15 @@ import { json, type ActionFunctionArgs } from '@remix-run/node'
 import { withZod } from '@remix-validated-form/with-zod'
 import { validationError } from 'remix-validated-form'
 import { z } from 'zod'
+import { zfd } from 'zod-form-data'
 import { requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
 
 const validator = withZod(
 	z.object({
 		instructionsCompleted: z.union([
-			z.object({ increment: z.number() }),
-			z.number(),
+			z.object({ increment: zfd.numeric() }),
+			zfd.numeric(),
 		]),
 	}),
 )
@@ -27,5 +28,5 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		data,
 	})
 
-	return json(updated, { status: 204 })
+	return json(updated, { status: 200 })
 }

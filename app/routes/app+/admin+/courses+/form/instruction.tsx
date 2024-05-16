@@ -1,3 +1,4 @@
+import { GripIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useControlField } from 'remix-validated-form'
 import { type z } from 'zod'
@@ -37,9 +38,20 @@ import { type CourseModuleInstructionSchema } from './schema'
 interface Props {
 	name: string
 	onDelete: () => void
+	onDragStart: (e: React.DragEvent) => void
+	onDrop: (e: React.DragEvent) => void
+	onDragOver: (e: React.DragEvent) => void
+	onDragLeave: (e: React.DragEvent) => void
 }
 
-export function Instruction({ name, onDelete }: Props) {
+export function Instruction({
+	name,
+	onDelete,
+	onDragStart,
+	onDrop,
+	onDragOver,
+	onDragLeave,
+}: Props) {
 	const [value, setValue] =
 		useControlField<z.infer<typeof CourseModuleInstructionSchema>>(name)
 
@@ -54,8 +66,19 @@ export function Instruction({ name, onDelete }: Props) {
 	return (
 		<Sheet open={isOpen} onOpenChange={() => setIsOpen(!isOpen)}>
 			<SheetTrigger asChild>
-				<div className="flex w-full cursor-pointer items-center justify-between rounded-lg border p-1 pl-3 pr-1 hover:bg-foreground/[2%]">
-					<span>{value.title}</span>
+				<div
+					className={`
+						transition-margin flex w-full cursor-pointer items-center rounded-lg
+						border p-1 pl-3 pr-1 duration-300 ease-in-out hover:bg-foreground/[2%]
+					`}
+					draggable
+					onDragStart={onDragStart}
+					onDrop={onDrop}
+					onDragOver={onDragOver}
+					onDragLeave={onDragLeave}
+				>
+					<span className="grow">{value.title}</span>
+					<GripIcon size={15} className="cursor-grab opacity-50" />
 					<DropdownMenu>
 						<DropdownMenuTrigger>
 							<Button
@@ -100,6 +123,26 @@ export function Instruction({ name, onDelete }: Props) {
 						value={value.prompt}
 						onChange={e => setValue({ ...value, prompt: e.target.value })}
 					/>
+					<FormRadioGroup
+						options={[
+							{ value: 'textarea', label: 'Text Area' },
+							{ value: 'select', label: 'Select' },
+						]}
+						className="gap-1"
+						label="Response type"
+						name={`${name}.answerType`}
+					/>
+					{value.answerType === 'select' ? (
+						<FormInput
+							label="Response options"
+							name={`${name}.answerTypeOptions`}
+							placeholder="I'm done, I need help, Give a hint"
+							value={value.answerTypeOptions ?? ''}
+							onChange={e =>
+								setValue({ ...value, answerTypeOptions: e.target.value })
+							}
+						/>
+					) : null}
 					<Tabs
 						className="w-full"
 						value={value.interactiveType}
@@ -130,26 +173,6 @@ export function Instruction({ name, onDelete }: Props) {
 								they've reached the answer, the tutor will consider this
 								instruction satisifed.
 							</p>
-							<FormRadioGroup
-								options={[
-									{ value: 'textarea', label: 'Text Area' },
-									{ value: 'select', label: 'Select' },
-								]}
-								className="gap-1"
-								label="Answer type"
-								name={`${name}.answerType`}
-							/>
-							{value.answerType === 'select' ? (
-								<FormInput
-									label="Answer options"
-									name={`${name}.answerTypeOptions`}
-									placeholder="I'm done, I need help, Give a hint"
-									value={value.answerTypeOptions ?? ''}
-									onChange={e =>
-										setValue({ ...value, answerTypeOptions: e.target.value })
-									}
-								/>
-							) : null}
 							{value.answerType === 'select' ? (
 								<FormSwitch
 									label="Can ask a question?"

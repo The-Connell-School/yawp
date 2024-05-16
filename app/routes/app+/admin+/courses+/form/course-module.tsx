@@ -1,5 +1,5 @@
 import omit from 'lodash/omit'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useControlField, useField, useFieldArray } from 'remix-validated-form'
 import { type z } from 'zod'
 import { FormInput } from '#app/components/forms/form-input-2'
@@ -38,7 +38,11 @@ export function CourseModule({ name, onDelete }: Props) {
 	const [value, setValue] =
 		useControlField<z.infer<typeof CourseModuleSchema>>(name)
 
-	const { upsert, remove: removeHiddenFields } = useHiddenValues()
+	const {
+		upsert,
+		remove: removeHiddenFields,
+		move: moveHiddenFields,
+	} = useHiddenValues()
 	useCallDebouncedCallback(
 		() => upsert(omit(value, ['instructions']), name),
 		300,
@@ -49,9 +53,38 @@ export function CourseModule({ name, onDelete }: Props) {
 	const originalValue = useOriginalValue({ isOpen, value })
 
 	const { error } = useField(`${name}.instructions`)
-	const [instructions, { push, remove }] = useFieldArray<
+	const [instructions, { push, remove, move }] = useFieldArray<
 		z.infer<typeof CourseModuleInstructionSchema>
 	>(`${name}.instructions`)
+
+	const dragOverItemIndex = useRef<number | null>(null)
+	const [overIndex, setOverIndex] = useState<number | null>(null)
+
+	const handleDragStart = (index: number) => {
+		dragOverItemIndex.current = index
+	}
+
+	const handleDragOver = (index: number) => (e: any) => {
+		e.preventDefault()
+		if (index !== overIndex) {
+			setOverIndex(index)
+		}
+	}
+
+	const handleDragLeave = () => {
+		setOverIndex(null)
+	}
+
+	const handleDrop = (index: number) => (e: any) => {
+		e.preventDefault()
+		if (dragOverItemIndex.current === null) return
+		move(dragOverItemIndex.current, index)
+		moveHiddenFields(
+			`${name}.instructions[${dragOverItemIndex.current}]`,
+			`${name}.instructions[${index}]`,
+		)
+		setOverIndex(null)
+	}
 
 	if (!value) return null
 
@@ -124,12 +157,19 @@ export function CourseModule({ name, onDelete }: Props) {
 						<p className="mb-1 text-sm text-muted-foreground">
 							Instructions are the building block of a module.
 						</p>
-						<div className="flex flex-col gap-1">
+						<div
+							className="flex flex-col gap-1"
+							onDragOver={e => e.preventDefault()}
+						>
 							{instructions.map(({ key }, i) => (
 								<Instruction
 									key={key}
 									onDelete={() => remove(i)}
 									name={`${name}.instructions[${i}]`}
+									onDragStart={() => handleDragStart(i)}
+									onDragOver={handleDragOver(i)}
+									onDragLeave={handleDragLeave}
+									onDrop={handleDrop(i)}
 								/>
 							))}
 							<Button

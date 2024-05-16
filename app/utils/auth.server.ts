@@ -3,7 +3,8 @@ import { redirect } from '@remix-run/node'
 import bcrypt from 'bcryptjs'
 import { safeRedirect } from 'remix-utils/safe-redirect'
 import { prisma } from './db.server.ts'
-import { combineHeaders, downloadFile } from './misc.tsx'
+import { type FeatureFlags } from './featureFlags/index.ts'
+import { DEFAULT_ROUTE, combineHeaders, downloadFile } from './misc.tsx'
 import { authSessionStorage } from './session.server.ts'
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 30
@@ -264,4 +265,12 @@ export async function verifyUserPassword(
 	}
 
 	return { id: userWithPassword.id }
+}
+
+export async function redirectIfDisabled(
+	name: FeatureFlags,
+	redirectUrl?: string,
+) {
+	const ff = await prisma.featureFlag.findUnique({ where: { name } })
+	if (!ff?.isEnabled) return redirect(redirectUrl ?? DEFAULT_ROUTE)
 }
