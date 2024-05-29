@@ -60,7 +60,7 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 					let moved: Params['hiddenValues'] = {}
 					const withoutKey = Object.keys(prev).reduce(
 						(acc, prevK) => {
-							if (prevK.startsWith(key) && prev[prevK]) {
+							if (prevK.startsWith(key)) {
 								const newKeyWithSuffix = newKey + prevK.slice(newKey.length)
 								moved[newKeyWithSuffix] = prev[prevK]
 								return acc
@@ -108,7 +108,7 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 								: newKey
 
 							if (!prevK.startsWith(keyPrefix)) {
-								acc[prevK] = prev[prevK]
+								acc[prevK] = withoutKey[prevK]
 								return acc
 							}
 
@@ -129,9 +129,9 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 							if (prevKIdx != null && newKIdx !== null && prevKIdx >= newKIdx) {
 								const newPrevK =
 									keyPrefix + `[${prevKIdx + 1}]` + prevK.slice(key.length)
-								acc[newPrevK] = prev[prevK]
+								acc[newPrevK] = withoutKey[prevK]
 							} else {
-								acc[prevK] = prev[prevK]
+								acc[prevK] = withoutKey[prevK]
 							}
 
 							return acc

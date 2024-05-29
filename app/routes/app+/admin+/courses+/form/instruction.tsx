@@ -132,17 +132,30 @@ export function Instruction({
 						label="Response type"
 						name={`${name}.answerType`}
 					/>
-					{value.answerType === 'select' ? (
-						<FormInput
-							label="Response options"
-							name={`${name}.answerTypeOptions`}
-							placeholder="I'm done, I need help, Give a hint"
-							value={value.answerTypeOptions ?? ''}
-							onChange={e =>
-								setValue({ ...value, answerTypeOptions: e.target.value })
-							}
-						/>
-					) : null}
+					<div className="flex flex-col gap-1">
+						{value.answerType === 'select' ? (
+							<FormInput
+								label="Response options"
+								name={`${name}.answerTypeOptions`}
+								placeholder="I'm done, I need help, Give a hint"
+								value={value.answerTypeOptions ?? ''}
+								onChange={e =>
+									setValue({ ...value, answerTypeOptions: e.target.value })
+								}
+							/>
+						) : null}
+						{value.answerType === 'select' ? (
+							<FormSwitch
+								label="Can ask a question?"
+								className="flex w-full items-center justify-between gap-2 rounded-lg border bg-muted/50 p-2"
+								name={`${name}.canAskQuestion`}
+								checked={value.canAskQuestion ?? false}
+								onCheckedChange={canAskQuestion =>
+									setValue({ ...value, canAskQuestion })
+								}
+							/>
+						) : null}
+					</div>
 					<Tabs
 						className="w-full"
 						value={value.interactiveType}
@@ -173,17 +186,6 @@ export function Instruction({
 								they've reached the answer, the tutor will consider this
 								instruction satisifed.
 							</p>
-							{value.answerType === 'select' ? (
-								<FormSwitch
-									label="Can ask a question?"
-									className="flex w-full items-center justify-between gap-2 rounded-lg border p-2"
-									name={`${name}.canAskQuestion`}
-									checked={value.canAskQuestion ?? false}
-									onCheckedChange={canAskQuestion =>
-										setValue({ ...value, canAskQuestion })
-									}
-								/>
-							) : null}
 							<div>
 								<FormTextarea
 									subLabel={

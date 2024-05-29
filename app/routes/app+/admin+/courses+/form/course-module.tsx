@@ -1,5 +1,5 @@
 import omit from 'lodash/omit'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useControlField, useField, useFieldArray } from 'remix-validated-form'
 import { type z } from 'zod'
 import { FormInput } from '#app/components/forms/form-input-2'
@@ -22,6 +22,7 @@ import {
 } from '#app/components/ui/sheet'
 import { useHiddenValues } from '#app/contexts/hidden-values'
 import { useCallDebouncedCallback } from '#app/hooks/useCallDebouncedCallback'
+import { useDragAndDrop } from '#app/hooks/useDragAndDrop.js'
 import { useOriginalValue } from '#app/hooks/useOriginalValue'
 import { Instruction } from './instruction'
 import {
@@ -57,34 +58,15 @@ export function CourseModule({ name, onDelete }: Props) {
 		z.infer<typeof CourseModuleInstructionSchema>
 	>(`${name}.instructions`)
 
-	const dragOverItemIndex = useRef<number | null>(null)
-	const [overIndex, setOverIndex] = useState<number | null>(null)
-
-	const handleDragStart = (index: number) => {
-		dragOverItemIndex.current = index
-	}
-
-	const handleDragOver = (index: number) => (e: any) => {
-		e.preventDefault()
-		if (index !== overIndex) {
-			setOverIndex(index)
-		}
-	}
-
-	const handleDragLeave = () => {
-		setOverIndex(null)
-	}
-
-	const handleDrop = (index: number) => (e: any) => {
-		e.preventDefault()
-		if (dragOverItemIndex.current === null) return
-		move(dragOverItemIndex.current, index)
-		moveHiddenFields(
-			`${name}.instructions[${dragOverItemIndex.current}]`,
-			`${name}.instructions[${index}]`,
-		)
-		setOverIndex(null)
-	}
+	const getDragHandlers = useDragAndDrop({
+		onDrop: (from, to) => {
+			move(from, to)
+			moveHiddenFields(
+				`${name}.instructions[${from}]`,
+				`${name}.instructions[${to}]`,
+			)
+		},
+	})
 
 	if (!value) return null
 
@@ -166,10 +148,7 @@ export function CourseModule({ name, onDelete }: Props) {
 									key={key}
 									onDelete={() => remove(i)}
 									name={`${name}.instructions[${i}]`}
-									onDragStart={() => handleDragStart(i)}
-									onDragOver={handleDragOver(i)}
-									onDragLeave={handleDragLeave}
-									onDrop={handleDrop(i)}
+									{...getDragHandlers(i)}
 								/>
 							))}
 							<Button
