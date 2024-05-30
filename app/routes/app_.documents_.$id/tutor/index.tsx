@@ -6,13 +6,12 @@ import {
 import { useFetcher } from '@remix-run/react'
 import { ArrowRightIcon } from 'lucide-react'
 import { useEffect, useRef } from 'react'
-import { RichTextarea } from '#app/components/rich-textarea.js'
 import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip'
 import { cn } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo/timeAgo'
-import { HardcodedResponseOptions } from './hardcoded-response-options'
 import { Loading } from './loading'
+import { ResponseBar } from './response-bar'
 
 type Props = {
 	context: string | null
@@ -38,8 +37,6 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 
 	const { answerTypeOptions, interactiveType, canAskQuestion } =
 		cms.courseModule.instructions[cms.instructionsCompleted] ?? {}
-
-	const hasNextInstruction = cms.instructionsCompleted + 1 < totalInstructions
 
 	const completedInstructionsPct = Math.min(
 		(cms.instructionsCompleted / totalInstructions) * 100,
@@ -159,30 +156,13 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 				<p className="border-t p-2 text-center text-sm text-muted-foreground">
 					You have completed all the modules in this course.
 				</p>
-			) : answerTypeOptions ? (
-				<HardcodedResponseOptions
+			) : (
+				<ResponseBar
 					options={answerTypeOptions}
 					respond={respond}
-					canAskQuestion={!!canAskQuestion}
-					advanceInstruction={
-						interactiveType === 'dialogue' ? incrementInstruction : undefined
-					}
+					canAskQuestion={!!canAskQuestion || interactiveType === 'dialogue'}
+					advanceInstruction={incrementInstruction}
 				/>
-			) : (
-				<div className="flex w-full flex-col px-3">
-					{hasNextInstruction && interactiveType === 'dialogue' ? (
-						<Button
-							variant="link"
-							className="w-fit p-0 text-muted-foreground"
-							size="sm"
-							onClick={incrementInstruction}
-						>
-							{hasNextInstruction ? 'Next step' : 'Finish'}{' '}
-							<ArrowRightIcon className="ml-1.5" />
-						</Button>
-					) : null}
-					<RichTextarea onCmdEnter={respond} className="text-base" />
-				</div>
 			)}
 		</div>
 	)

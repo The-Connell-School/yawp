@@ -10,13 +10,13 @@ import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip.js'
 
 type Props = {
-	options: string
+	options: string | null
 	canAskQuestion?: boolean
 	advanceInstruction?: () => void
 	respond: (response: string) => void
 }
 
-export const HardcodedResponseOptions = ({
+export const ResponseBar = ({
 	options,
 	canAskQuestion,
 	advanceInstruction,
@@ -49,11 +49,11 @@ export const HardcodedResponseOptions = ({
 			{canAskQuestion ? (
 				<Button
 					variant="secondary"
-					size="icon"
-					className="text-lg"
+					className="flex items-center gap-2 text-lg"
 					onClick={() => setIsAskingQuestion(true)}
 				>
 					<MessageCircleIcon />
+					{options ? '' : 'Respond'}
 				</Button>
 			) : null}
 			{advanceInstruction ? (
