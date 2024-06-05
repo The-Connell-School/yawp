@@ -40,21 +40,25 @@ export const DocumentLink = ({ doc }: Props) => {
 				</p>
 			)}
 			<div className="flex items-center justify-between border-t bg-muted p-2 text-sm">
-				<Tooltip
-					delayDuration={200}
-					text={new Date(doc.createdAt).toLocaleString('en-US', {
-						year: 'numeric',
-						month: '2-digit',
-						day: '2-digit',
-						hour: '2-digit',
-						minute: '2-digit',
-						second: '2-digit',
-					})}
-				>
-					<p>
-						Created <span className="underline">{timeAgo(doc.createdAt)}</span>
-					</p>
-				</Tooltip>
+				<div className="flex flex-col">
+					<h4>{doc.title || 'Untitled document'}</h4>
+					<Tooltip
+						delayDuration={200}
+						text={new Date(doc.createdAt).toLocaleString('en-US', {
+							year: 'numeric',
+							month: '2-digit',
+							day: '2-digit',
+							hour: '2-digit',
+							minute: '2-digit',
+							second: '2-digit',
+						})}
+					>
+						<p>
+							Created{' '}
+							<span className="underline">{timeAgo(doc.createdAt)}</span>
+						</p>
+					</Tooltip>
+				</div>
 				<DropdownMenu>
 					<DropdownMenuTrigger>
 						<Button

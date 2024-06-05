@@ -8,8 +8,9 @@ import { prisma } from '#app/utils/db.server.js'
 
 const POST = withZod(
 	z.object({
-		text: z.string(),
-		html: z.string(),
+		text: z.string().optional(),
+		html: z.string().optional(),
+		title: z.string().optional(),
 	}),
 )
 

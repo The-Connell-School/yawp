@@ -80,6 +80,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			userId,
 			text: '',
 			html: '',
+			title: '',
 			courseModuleSessions: {
 				create: {
 					userId,

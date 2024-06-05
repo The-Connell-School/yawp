@@ -2,6 +2,7 @@ import { invariant } from '@epic-web/invariant'
 import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import {
 	Link,
+	useFetcher,
 	useFetchers,
 	useLoaderData,
 	useNavigate,
@@ -13,6 +14,7 @@ import { useSpinDelay } from 'spin-delay'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Badge } from '#app/components/ui/badge'
 import { button } from '#app/components/ui/button'
+import { Input } from '#app/components/ui/input.js'
 import { Tabs, TabsList, TabsTrigger } from '#app/components/ui/tabs'
 import useBreakpoint from '#app/hooks/useBreakpoint'
 import { useUser } from '#app/hooks/useUser'
@@ -116,6 +118,7 @@ const useIsUpdatingDocument = () => {
 export default function Route() {
 	const data = useLoaderData<typeof loader>()
 	const user = useUser()
+	const fetcher = useFetcher()
 	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
 	const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '')
@@ -141,8 +144,8 @@ export default function Route() {
 
 	return (
 		<main className="flex h-screen w-screen flex-col overflow-hidden">
-			<nav className="border-b">
-				<div className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 px-3 py-2">
+			<nav className="mx-auto flex w-full max-w-screen-2xl items-center border-b px-3 py-2">
+				<div className="flex items-center gap-4">
 					<Link
 						className={button({ variant: 'secondary', size: 'sm' })}
 						to={
@@ -154,8 +157,45 @@ export default function Route() {
 						<ArrowLeft className="h-4" />
 						Exit
 					</Link>
-					{/* TODO: Make title editable with an inline input */}
-					<h4>Document</h4>
+					<Input
+						size="sm"
+						className="rounded-lg border border-transparent font-bold transition hover:border-border"
+						defaultValue={data.doc.title}
+						placeholder="Untitled document"
+						onBlur={e =>
+							e.target.value !== data.doc.title
+								? fetcher.submit(
+										{ title: e.target.value },
+										{
+											method: 'POST',
+											action: `/api/model/document/${data.doc.id}`,
+										},
+									)
+								: undefined
+						}
+					/>
+				</div>
+				<div className="flex-grow text-center">
+					{isViewingAsTeacher ? (
+						<h4>
+							Module: {data.doc.courseModuleSessions[0].courseModule.title}
+						</h4>
+					) : (
+						<h4>Step: {data.doc.courseModuleSessions[0].courseModule.title}</h4>
+					)}
+				</div>
+				<div className="ml-auto flex items-center gap-4">
+					{isUpdatingDocument ? (
+						<div className="flex items-center gap-1 text-muted-foreground/70">
+							<Loader2 className="h-4 w-4 animate-spin" />
+							<p className="text-sm">Saving</p>
+						</div>
+					) : (
+						<div className="flex items-center gap-1 text-muted-foreground/70">
+							<Check className="h-4 w-4" />
+							<p className="mr-2 text-sm">Saved</p>
+						</div>
+					)}
 					<div className="h-[20px] border-r" />
 					<DocumentVersions
 						documentId={data.doc.id}
@@ -168,17 +208,6 @@ export default function Route() {
 								: `Viewing work by ${data.doc.user.name}`}
 						</Badge>
 					) : null}
-					{isUpdatingDocument ? (
-						<div className="flex flex-grow items-center justify-end gap-1 text-muted-foreground/70">
-							<Loader2 className="h-4 w-4 animate-spin" />
-							<p className="text-sm">Saving</p>{' '}
-						</div>
-					) : (
-						<div className="flex flex-grow items-center justify-end gap-1 text-muted-foreground/70">
-							<Check className="h-4 w-4" />
-							<p className="text-sm">Saved</p>
-						</div>
-					)}
 				</div>
 			</nav>
 			<Tabs onValueChange={changeTab} value={tab} className="md:hidden">
