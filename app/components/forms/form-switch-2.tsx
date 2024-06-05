@@ -12,6 +12,7 @@ interface Props extends SwitchProps {
 	labelInfo?: ReactNode
 	hideLabel?: boolean
 	name: string
+	helperText?: ReactNode
 }
 
 export function FormSwitch({
@@ -20,6 +21,7 @@ export function FormSwitch({
 	name,
 	hideLabel,
 	className,
+	helperText,
 	...props
 }: Props) {
 	const fallbackId = useId()
@@ -39,7 +41,12 @@ export function FormSwitch({
 					</span>
 				</label>
 			) : hideLabel ? null : (
-				<label htmlFor={id}>{label ?? startCase(name)}</label>
+				<div>
+					<label htmlFor={id}>{label ?? startCase(name)}</label>
+					{helperText ? (
+						<p className="text-sm text-muted-foreground">{helperText}</p>
+					) : null}
+				</div>
 			)}
 			{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}
 			<Switch {...getInputProps({ id, ...props })} />

@@ -136,7 +136,7 @@ export default function Route() {
 	return (
 		<main className="flex max-h-screen min-h-screen w-full flex-col pb-6">
 			<div
-				className="h-screen overflow-scroll pb-6 pt-16 sm:h-[calc(100vh-90px)]"
+				className="no-scrollbar h-screen overflow-scroll pb-6 pt-16 sm:h-[calc(100vh-90px)]"
 				ref={messagesRef}
 			>
 				{params.threadId

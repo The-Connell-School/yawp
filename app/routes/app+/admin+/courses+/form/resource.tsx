@@ -95,7 +95,7 @@ export function CourseResource({ name, onDelete }: Props) {
 				<SheetHeader className="px-1">
 					<SheetTitle>Resource</SheetTitle>
 				</SheetHeader>
-				<div className="flex flex-grow flex-col gap-3 overflow-scroll px-1">
+				<div className="no-scrollbar flex flex-grow flex-col gap-3 overflow-scroll px-1">
 					<FormInput
 						label="Title"
 						name={`${name}.title`}

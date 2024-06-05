@@ -63,7 +63,7 @@ export const DocumentVersions = ({ documentId, versions }: Props) => {
 					<SheetTitle>Version History</SheetTitle>
 				</SheetHeader>
 				<div className="flex grow flex-col overflow-hidden sm:flex-row">
-					<div className="mb-2 grid max-h-[300px] min-h-[200px] grid-cols-2 gap-1 overflow-scroll p-1 sm:mb-0 sm:flex sm:max-h-full sm:w-1/2 sm:flex-col">
+					<div className="no-scrollbar mb-2 grid max-h-[300px] min-h-[200px] grid-cols-2 gap-1 overflow-scroll p-1 sm:mb-0 sm:flex sm:max-h-full sm:w-1/2 sm:flex-col">
 						{versions.map(v => (
 							<div key={v.id} className="flex">
 								<Link
@@ -128,7 +128,7 @@ export const DocumentVersions = ({ documentId, versions }: Props) => {
 							</div>
 						))}
 					</div>
-					<div className="flex w-full grow flex-col gap-2 overflow-scroll rounded-lg bg-muted p-1">
+					<div className="no-scrollbar flex w-full grow flex-col gap-2 overflow-scroll rounded-lg bg-muted p-1">
 						{version ? (
 							<div
 								dangerouslySetInnerHTML={{ __html: version.html }}

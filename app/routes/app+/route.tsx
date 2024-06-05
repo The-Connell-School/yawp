@@ -13,6 +13,7 @@ import {
 	GraduationCapIcon,
 	MoonIcon,
 	SunIcon,
+	UserIcon,
 	WrenchIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, createContext } from 'react'
@@ -29,6 +30,11 @@ import {
 	XIcon,
 } from '#app/components/icons'
 import { Button, button } from '#app/components/ui/button'
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from '#app/components/ui/popover.js'
 import { Tooltip } from '#app/components/ui/tooltip'
 import { UserImage } from '#app/components/user-image'
 import useBreakpoint from '#app/hooks/useBreakpoint'
@@ -176,6 +182,22 @@ export default function Route() {
 							})}
 						/>
 					</Link>
+					<NavStateSwitch>
+						{({ state, fetcher }) => (
+							<Button
+								size="sm"
+								variant="ghost"
+								className="w-full justify-start gap-1 text-muted-foreground transition hover:text-current"
+								disabled={['submitting', 'loading'].includes(fetcher.state)}
+							>
+								{state === 'expanded' ? (
+									<DoubleArrowLeftIcon />
+								) : (
+									<DoubleArrowRightIcon />
+								)}
+							</Button>
+						)}
+					</NavStateSwitch>
 					<Button
 						variant="outline"
 						size="icon-sm"
@@ -241,74 +263,68 @@ export default function Route() {
 							</NavLink>
 						))}
 				</div>
-				<div className="flex flex-grow flex-col justify-end gap-1 p-1 px-3">
-					<Button
-						asChild
-						size="sm"
-						variant="ghost"
-						className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-					>
-						<Link to="/logout">
-							<ExitIcon />
-							{navExpanded ? <span>Logout</span> : null}
-						</Link>
-					</Button>
-					<ThemeSwitch>
-						{({ mode, fetcher }) => (
+				<div className="flex flex-grow flex-col justify-end">
+					<Popover>
+						<PopoverTrigger>
+							<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
+								<UserImage user={user} size="xs" />
+								{navExpanded ? (
+									<div>
+										<p className="text-sm font-bold">{user.name}</p>
+										<p className="text-left text-xs text-muted-foreground">
+											{user.roles.some(r => r.name === 'admin')
+												? 'Admin'
+												: user.teacherProfile
+													? 'Teacher'
+													: 'Student'}
+										</p>
+									</div>
+								) : null}
+							</div>
+						</PopoverTrigger>
+						<PopoverContent className="m-1 w-[170px] p-1">
 							<Button
+								asChild
 								size="sm"
 								variant="ghost"
 								className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-								disabled={['submitting', 'loading'].includes(fetcher.state)}
 							>
-								{mode === 'light' ? (
-									<SunIcon size={15} />
-								) : (
-									<MoonIcon size={15} />
-								)}
-								{navExpanded ? <span>Theme</span> : null}
+								<Link to="/app/profile">
+									<UserIcon size={15} />
+									Profile
+								</Link>
 							</Button>
-						)}
-					</ThemeSwitch>
-					{!isMobile ? (
-						<NavStateSwitch>
-							{({ state, fetcher }) => (
-								<Button
-									size="sm"
-									variant="ghost"
-									className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-									disabled={['submitting', 'loading'].includes(fetcher.state)}
-								>
-									{state === 'expanded' ? (
-										<>
-											<DoubleArrowLeftIcon />
-											<span>Collapse</span>
-										</>
-									) : (
-										<DoubleArrowRightIcon />
-									)}
-								</Button>
-							)}
-						</NavStateSwitch>
-					) : null}
+							<ThemeSwitch>
+								{({ mode, fetcher }) => (
+									<Button
+										size="sm"
+										variant="ghost"
+										className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+										disabled={['submitting', 'loading'].includes(fetcher.state)}
+									>
+										{mode === 'light' ? (
+											<SunIcon size={15} />
+										) : (
+											<MoonIcon size={15} />
+										)}
+										Theme
+									</Button>
+								)}
+							</ThemeSwitch>
+							<Button
+								asChild
+								size="sm"
+								variant="ghost"
+								className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+							>
+								<Link to="/logout">
+									<ExitIcon />
+									Logout
+								</Link>
+							</Button>
+						</PopoverContent>
+					</Popover>
 				</div>
-				<Link to="/app/profile">
-					<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
-						<UserImage user={user} size="xs" />
-						{navExpanded ? (
-							<div>
-								<p className="text-sm font-bold">{user.name}</p>
-								<p className="text-xs text-muted-foreground">
-									{user.roles.some(r => r.name === 'admin')
-										? 'Admin'
-										: user.teacherProfile
-											? 'Teacher'
-											: 'Student'}
-								</p>
-							</div>
-						) : null}
-					</div>
-				</Link>
 			</nav>
 			<div
 				className={cn(

@@ -100,7 +100,7 @@ export default function Route() {
 					))}
 				</div>
 				<h4 className="ml-4 mt-4 text-sm">Conversations</h4>
-				<div className="flex min-h-[90px] flex-grow flex-col gap-1 overflow-scroll p-2">
+				<div className="no-scrollbar flex min-h-[90px] flex-grow flex-col gap-1 overflow-scroll p-2">
 					{threads.flat().length > 0 ? (
 						threads
 							.flat()
@@ -122,7 +122,7 @@ export default function Route() {
 			</nav>
 			<div
 				className={cn(
-					'h-[100vh - 3rem] relative min-w-full flex-grow -translate-x-[250px] overflow-y-scroll bg-foreground/[2%] transition-all duration-300 ease-in-out sm:w-full sm:min-w-0 sm:translate-x-0',
+					'h-[100vh - 3rem] no-scrollbar relative min-w-full flex-grow -translate-x-[250px] overflow-y-scroll bg-foreground/[2%] transition-all duration-300 ease-in-out sm:w-full sm:min-w-0 sm:translate-x-0',
 					{ 'translate-x-0 opacity-50': isMobileNavOpen },
 				)}
 				onClick={isMobileNavOpen ? () => setIsMobileNavOpen(false) : undefined}

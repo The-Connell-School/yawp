@@ -103,7 +103,7 @@ export const Editor = ({ doc }: Props) => {
 	return (
 		<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
 			<Bar onHighlight={handleHighlight} editor={editor} />
-			<div className="grow overflow-y-scroll p-5 font-times">
+			<div className="no-scrollbar grow overflow-y-scroll p-5 font-times">
 				<EditorContent
 					editor={editor}
 					className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"

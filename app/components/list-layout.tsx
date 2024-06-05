@@ -31,11 +31,11 @@ export const ListLayout = ({ path, children, hideAddButton }: Props) => {
 						</Link>
 					)}
 				</div>
-				<div className="flex flex-col gap-2 overflow-auto border-t p-3 pb-14">
+				<div className="no-scrollbar flex flex-col gap-2 overflow-auto border-t p-3 pb-14">
 					{children}
 				</div>
 			</div>
-			<div className="hidden h-[calc(100vh-111px)] w-1/2 overflow-y-scroll md:block md:h-[calc(100vh-54px)]">
+			<div className="no-scrollbar hidden h-[calc(100vh-111px)] w-1/2 overflow-y-scroll md:block md:h-[calc(100vh-54px)]">
 				<Outlet />
 			</div>
 			<Drawer

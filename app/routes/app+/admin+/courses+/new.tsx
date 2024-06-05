@@ -37,7 +37,9 @@ export async function action({ request }: ActionFunctionArgs) {
 		data: {
 			...omit(data, ['image', 'courseImageSrc']),
 			position: count,
-			resources: { createMany: { data: data.resources ?? [] } },
+			resources: {
+				create: data.resources ?? [],
+			},
 			courseModules: {
 				create: (data.courseModules ?? []).map((cm, index) => ({
 					...omit(cm, ['id']),
@@ -75,7 +77,7 @@ export default function Route() {
 
 	return (
 		<div className="flex h-full flex-col">
-			<div className="grow overflow-y-scroll p-6">
+			<div className="no-scrollbar grow overflow-y-scroll p-6">
 				<CourseForm formId="create-module" />
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">

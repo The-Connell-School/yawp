@@ -61,7 +61,7 @@ export function Student({
 				<PopoverContent className="w-[320px] p-0" align="start">
 					<Command>
 						<CommandInput placeholder="Search students..." />
-						<CommandGroup>
+						<CommandGroup className="no-scrollbar max-h-64 overflow-y-auto">
 							{students.length ? (
 								students.map(({ email, studentProfile }) => (
 									<CommandItem

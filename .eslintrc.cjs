@@ -9,12 +9,14 @@ module.exports = {
 		'@remix-run/eslint-config/node',
 		'prettier',
 	],
+	plugins: ['unused-imports'],
 	rules: {
 		'react-refresh/only-export-components': 'off',
 		// playwright requires destructuring in fixtures even if you don't use anything 🤷‍♂️
 		'no-empty-pattern': 'off',
 		'no-console': 'warn',
-		'@typescript-eslint/no-unused-vars': [
+		'@typescript-eslint/no-unused-vars': 'off',
+		'unused-imports/no-unused-imports': [
 			'warn',
 			{ varsIgnorePattern: '^_', argsIgnorePattern: '^_' },
 		],

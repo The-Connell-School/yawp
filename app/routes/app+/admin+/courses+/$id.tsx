@@ -158,7 +158,7 @@ export default function CoursesIdRoute() {
 
 	return (
 		<div className="flex h-full flex-col">
-			<div className="grow overflow-y-scroll p-6">
+			<div className="no-scrollbar grow overflow-y-scroll p-6">
 				<CourseForm
 					defaultValues={{
 						...data.course,

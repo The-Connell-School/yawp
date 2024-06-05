@@ -8,12 +8,9 @@ import { requireUserWithRole } from '#app/utils/permissions'
 const tabs = [
 	{ label: 'Courses', to: '/app/admin/courses' },
 	{ label: 'Teachers', to: '/app/admin/teachers' },
-	{ label: 'Feature Flags', to: '/app/admin/feature-flags' },
 ]
 
-export const handle: BreadcrumbHandle = {
-	breadcrumb: 'Admin',
-}
+export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' }
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	await requireUserWithRole(request, ['admin'])

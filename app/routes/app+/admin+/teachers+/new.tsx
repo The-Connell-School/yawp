@@ -117,7 +117,7 @@ export default function Route() {
 
 	return (
 		<div className="flex flex-col">
-			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+			<div className="no-scrollbar h-[calc(100vh-122px)] overflow-y-scroll p-6">
 				<TeacherForm formId="create-module" allStudents={allStudents} />
 			</div>
 			<div className="flex gap-2 px-6 pb-6 pt-1">

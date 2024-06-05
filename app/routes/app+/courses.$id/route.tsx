@@ -114,7 +114,7 @@ export default function AppCoursesIdRoute() {
 	const hasModules = data.course.courseModules.length > 0
 
 	return (
-		<div className="h-full w-full overflow-y-scroll">
+		<div className="no-scrollbar h-full w-full overflow-y-scroll">
 			<div className="mx-auto flex h-full w-full max-w-screen-md flex-col p-3 sm:p-5">
 				<div className="mb-4 flex justify-between gap-2">
 					<Button asChild variant="outline">

@@ -126,7 +126,7 @@ export default function TeachersIdRoute() {
 
 	return (
 		<div className="flex flex-col">
-			<div className="h-[calc(100vh-122px)] overflow-y-scroll p-6">
+			<div className="no-scrollbar h-[calc(100vh-122px)] overflow-y-scroll p-6">
 				<TeacherForm
 					defaultValues={{ email, students }}
 					allStudents={allStudents}
