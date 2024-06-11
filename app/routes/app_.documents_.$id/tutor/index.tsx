@@ -146,7 +146,8 @@ export const Tutor = ({ context, cms, nextCmId, docId }: Props) => {
 			{finishedCms && nextCmId ? (
 				<div className="flex items-center gap-4 border-t p-2">
 					<p className="text-sm text-muted-foreground">
-						You have completed all the instructions in this module.
+						This will take you to the next step of the writing process. Click
+						the arrow again only if you're sure you're ready to move on!
 					</p>
 					<Button onClick={advanceToNextCourseModule}>
 						Next <ArrowRightIcon size={18} className="ml-2" />

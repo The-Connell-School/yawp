@@ -62,7 +62,7 @@ export default function AppRoute() {
 					<div className="flex flex-col">
 						<p className="my-2 text-foreground/60">Students</p>
 						{data.studentProfiles.length ? (
-							<div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+							<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
 								<Link
 									to="/app/students"
 									className="flex h-32 flex-col rounded-lg border border-primary/10 bg-primary/5 p-4 shadow-sm transition-shadow hover:shadow-md"
@@ -126,7 +126,7 @@ export default function AppRoute() {
 					</div>
 					<div className="mt-8 flex flex-col">
 						<p className="my-2 text-foreground/60">Resources (by course)</p>
-						<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+						<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
 							{data.courses.map(course => (
 								<Link
 									to={`/app/courses/${course.id}`}
@@ -173,7 +173,7 @@ export default function AppRoute() {
 			<div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
 				<div className="flex flex-col">
 					<p className="my-2 text-foreground/60">Courses</p>
-					<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+					<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
 						{data.courses.map(course => (
 							<Link
 								to={`/app/courses/${course.id}`}
@@ -199,7 +199,7 @@ export default function AppRoute() {
 				<div className="mt-8 flex flex-col">
 					<p className="my-2 text-foreground/60">Documents</p>
 					{data.documents.length ? (
-						<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+						<div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
 							{data.documents.map(doc => (
 								<DocumentLink key={doc.id} doc={doc} />
 							))}

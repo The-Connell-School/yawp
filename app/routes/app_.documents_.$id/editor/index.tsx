@@ -8,40 +8,55 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect } from 'react'
 import { useDebounce } from '#app/hooks/useDebounce'
+import { useUser } from '#app/hooks/useUser.js'
 import { Bar, type BarProps } from './bar'
 import { LineHeight } from './extensions/line-height'
-
-const extensions = [
-	LineHeight,
-	Color.configure({ types: [TextStyle.name, ListItem.name] }),
-	// @ts-ignore
-	TextStyle.configure({ types: [ListItem.name] }),
-	StarterKit.configure({
-		bulletList: { keepMarks: true, keepAttributes: false },
-		orderedList: { keepMarks: true, keepAttributes: false },
-	}),
-	Highlight.extend({
-		addAttributes() {
-			return {
-				id: { default: null, renderHTML: ({ id }) => ({ id }) },
-				class: {
-					default: null,
-					renderHTML: ({ class: cn }) => ({ class: cn }),
-				},
-			}
-		},
-	}),
-]
 
 type Props = { doc: JsonifyObject<Document> }
 
 export const Editor = ({ doc }: Props) => {
+	const user = useUser()
 	const updateDocumentFetcher = useFetcher({ key: 'update-document' })
 	const createDocumentCommentFetcher = useFetcher({
 		key: 'create-document-comment',
 	})
 
-	const editor = useEditor({ extensions, content: doc.html })
+	const editor = useEditor({
+		extensions: [
+			LineHeight,
+			Color.configure({ types: [TextStyle.name, ListItem.name] }),
+			// @ts-ignore
+			TextStyle.configure({ types: [ListItem.name] }),
+			StarterKit.configure({
+				bulletList: { keepMarks: true, keepAttributes: false },
+				orderedList: { keepMarks: true, keepAttributes: false },
+			}),
+			Highlight.extend({
+				addAttributes() {
+					return {
+						id: { default: null, renderHTML: ({ id }) => ({ id }) },
+						class: {
+							default: null,
+							renderHTML: ({ class: cn }) => ({ class: cn }),
+						},
+					}
+				},
+			}),
+			// Collaboration.configure({ document: ydoc }),
+			// CollaborationCursor.configure({
+			// 	provider: ydoc
+			// 		? new WebsocketProvider(
+			// 				'ws://localhost:3001',
+			// 				'document-editing',
+			// 				ydoc,
+			// 			)
+			// 		: null,
+			// 	user: { name: user.name, color: getRandomColor() },
+			// }),
+		],
+		content: doc.html,
+	})
+
 	const debounce = 800
 	const [debouncedText] = useDebounce(editor?.getText(), debounce)
 	const [debouncedHtml] = useDebounce(editor?.getHTML(), debounce)
@@ -111,4 +126,24 @@ export const Editor = ({ doc }: Props) => {
 			</div>
 		</div>
 	)
+}
+
+const colors = [
+	'#8B0000', // Dark Red
+	'#006400', // Dark Green
+	'#00008B', // Dark Blue
+	'#8B008B', // Dark Magenta
+	'#556B2F', // Dark Olive Green
+	'#2F4F4F', // Dark Slate Gray
+	'#4B0082', // Indigo
+	'#483D8B', // Dark Slate Blue
+	'#2E8B57', // Sea Green
+	'#6B8E23', // Olive Drab
+	'#4682B4', // Steel Blue
+	'#8B0000', // Crimson
+]
+
+const getRandomColor = () => {
+	const randomIndex = Math.floor(Math.random() * colors.length)
+	return colors[randomIndex]
 }
