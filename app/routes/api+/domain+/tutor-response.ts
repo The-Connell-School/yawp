@@ -2,6 +2,7 @@ import { json, type ActionFunctionArgs } from '@remix-run/node'
 import { withZod } from '@remix-validated-form/with-zod'
 import { validationError } from 'remix-validated-form'
 import { z } from 'zod'
+// import { openai } from '#app/services/openai.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import {
@@ -22,6 +23,7 @@ const POST = withZod(
 		context: z.string().nullish(),
 		response: z.string().min(1),
 		cmsId: z.string().min(1),
+		speechSpeed: z.string().optional(),
 	}),
 )
 
@@ -59,32 +61,44 @@ export async function action({ request }: ActionFunctionArgs) {
 			const nextInstruction =
 				cms.courseModule.instructions[cms.instructionsCompleted + 1]
 
-			const updated = await prisma.courseModuleSession.update({
-				where: { id: cms.id },
-				data: {
-					instructionsCompleted: { increment: 1 },
-					messages: {
-						create: [
-							{
-								content: data.response,
-								agent: AgentType.User,
-								instructionId: instruction.id,
-							},
-							...(nextInstruction
-								? [
-										{
-											agent: AgentType.Assistant,
-											content: nextInstruction.prompt,
-											instructionId: nextInstruction.id,
-										},
-									]
-								: []),
-						],
+			const [speech] = await Promise.all([
+				// openai.audio.speech.create({
+				// 	model: 'tts-1',
+				// 	input: nextInstruction.prompt,
+				// 	voice: 'echo',
+				// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
+				// }),
+				prisma.courseModuleSession.update({
+					where: { id: cms.id },
+					data: {
+						instructionsCompleted: { increment: 1 },
+						messages: {
+							create: [
+								{
+									content: data.response,
+									agent: AgentType.User,
+									instructionId: instruction.id,
+								},
+								...(nextInstruction
+									? [
+											{
+												agent: AgentType.Assistant,
+												content: nextInstruction.prompt,
+												instructionId: nextInstruction.id,
+											},
+										]
+									: []),
+							],
+						},
 					},
-				},
-			})
+				}),
+			])
 
-			return json(updated)
+			// return new Response(await speech.arrayBuffer(), {
+			// 	status: 200,
+			// 	headers: { 'Content-Type': 'audio/wav' },
+			// })
+			return json({ success: 'true' })
 		} else {
 			const system = `
 				${cms.courseModule.tutorInstructions}
@@ -118,32 +132,44 @@ export async function action({ request }: ActionFunctionArgs) {
 				const nextInstruction =
 					cms.courseModule.instructions[cms.instructionsCompleted + 1]
 
-				const updated = await prisma.courseModuleSession.update({
-					where: { id: cms.id },
-					data: {
-						instructionsCompleted: { increment: 1 },
-						messages: {
-							create: [
-								{
-									content: data.response,
-									agent: AgentType.User,
-									instructionId: instruction.id,
-								},
-								...(nextInstruction
-									? [
-											{
-												agent: AgentType.Assistant,
-												content: nextInstruction.prompt,
-												instructionId: nextInstruction.id,
-											},
-										]
-									: []),
-							],
+				const [speech] = await Promise.all([
+					// openai.audio.speech.create({
+					// 	model: 'tts-1',
+					// 	input: nextInstruction.prompt,
+					// 	voice: 'echo',
+					// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
+					// }),
+					prisma.courseModuleSession.update({
+						where: { id: cms.id },
+						data: {
+							instructionsCompleted: { increment: 1 },
+							messages: {
+								create: [
+									{
+										content: data.response,
+										agent: AgentType.User,
+										instructionId: instruction.id,
+									},
+									...(nextInstruction
+										? [
+												{
+													agent: AgentType.Assistant,
+													content: nextInstruction.prompt,
+													instructionId: nextInstruction.id,
+												},
+											]
+										: []),
+								],
+							},
 						},
-					},
-				})
+					}),
+				])
 
-				return json(updated)
+				// return new Response(await speech.arrayBuffer(), {
+				// 	status: 200,
+				// 	headers: { 'Content-Type': 'audio/wav' },
+				// })
+				return json({ success: 'true' })
 			} else {
 				const system = `
 				Encourage the user to try again. They attempted to satisfy the _answerKey_ with the _response_ or _content_ provided and it wasn't sufficient.
@@ -174,27 +200,39 @@ export async function action({ request }: ActionFunctionArgs) {
 					return json({ error: LLM_FAILED }, { status: 500 })
 				}
 
-				const updated = await prisma.courseModuleSession.update({
-					where: { id: cms.id },
-					data: {
-						messages: {
-							create: [
-								{
-									agent: AgentType.User,
-									content: data.response,
-									instructionId: instruction.id,
-								},
-								{
-									agent: AgentType.Assistant,
-									content: correction,
-									instructionId: instruction.id,
-								},
-							],
+				const [speech] = await Promise.all([
+					// openai.audio.speech.create({
+					// 	model: 'tts-1',
+					// 	input: correction,
+					// 	voice: 'echo',
+					// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
+					// }),
+					prisma.courseModuleSession.update({
+						where: { id: cms.id },
+						data: {
+							messages: {
+								create: [
+									{
+										agent: AgentType.User,
+										content: data.response,
+										instructionId: instruction.id,
+									},
+									{
+										agent: AgentType.Assistant,
+										content: correction,
+										instructionId: instruction.id,
+									},
+								],
+							},
 						},
-					},
-				})
+					}),
+				])
 
-				return json(updated)
+				// return new Response(await speech.arrayBuffer(), {
+				// 	status: 200,
+				// 	headers: { 'Content-Type': 'audio/wav' },
+				// })
+				return json({ success: 'true' })
 			}
 		}
 	}
@@ -239,28 +277,40 @@ export async function action({ request }: ActionFunctionArgs) {
 			return json({ error: LLM_FAILED }, { status: 500 })
 		}
 
-		const updated = await prisma.courseModuleSession.update({
-			where: { id: cms.id },
-			data: {
-				messages: {
-					create: [
-						{
-							agent: AgentType.User,
-							content: data.response,
-							context: data.context,
-							instructionId: instruction.id,
-						},
-						{
-							agent: AgentType.Assistant,
-							content: completion,
-							instructionId: instruction.id,
-						},
-					],
+		const [speech] = await Promise.all([
+			// openai.audio.speech.create({
+			// 	model: 'tts-1',
+			// 	input: completion,
+			// 	voice: 'echo',
+			// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
+			// }),
+			prisma.courseModuleSession.update({
+				where: { id: cms.id },
+				data: {
+					messages: {
+						create: [
+							{
+								agent: AgentType.User,
+								content: data.response,
+								context: data.context,
+								instructionId: instruction.id,
+							},
+							{
+								agent: AgentType.Assistant,
+								content: completion,
+								instructionId: instruction.id,
+							},
+						],
+					},
 				},
-			},
-		})
+			}),
+		])
 
-		return json(updated)
+		// return new Response(await speech.arrayBuffer(), {
+		// 	status: 200,
+		// 	headers: { 'Content-Type': 'audio/wav' },
+		// })
+		return json({ success: 'true' })
 	}
 
 	return json(

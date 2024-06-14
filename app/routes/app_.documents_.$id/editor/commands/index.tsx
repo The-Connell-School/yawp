@@ -96,7 +96,7 @@ export const commands: Command[] = [
 	{
 		override: editor => (
 			<DropdownMenu>
-				<Tooltip text="Line Height" delayDuration={300}>
+				<Tooltip text="Spacing" delayDuration={300}>
 					<DropdownMenuTrigger>
 						<div className={COMMAND_STYLE}>
 							<AlignVerticalSpaceAround className="h-4 w-4" />

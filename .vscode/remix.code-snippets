@@ -1,4 +1,17 @@
 {
+	"actionvalidation": {
+		"prefix": "/actionvalidation",
+		"scope": "typescriptreact,javascriptreact,typescript,javascript",
+		"body": [
+			"import { requireUserId } from '#app/utils/auth.server'",
+			"import { validationError } from 'remix-validated-form'",
+			"",
+			"const userId = await requireUserId(request)",
+			"const formData = await request.formData()",
+			"const { error, data } = await validator.validate(formData)",
+			"if (error) return validationError(error)",
+		],
+	},
 	"loader": {
 		"prefix": "/loader",
 		"scope": "typescriptreact,javascriptreact,typescript,javascript",
@@ -7,8 +20,8 @@
 			"",
 			"export async function loader({ request }: LoaderFunctionArgs) {",
 			"  return json({})",
-			"}"
-		]
+			"}",
+		],
 	},
 	"action": {
 		"prefix": "/action",
@@ -18,8 +31,8 @@
 			"",
 			"export async function action({ request }: ActionFunctionArgs) {",
 			"  return json({})",
-			"}"
-		]
+			"}",
+		],
 	},
 	"default": {
 		"prefix": "/default",
@@ -31,8 +44,8 @@
 			"    <h1>Unknown Route</h1>",
 			"  </div>",
 			" )",
-			"}"
-		]
+			"}",
+		],
 	},
 	"headers": {
 		"prefix": "/headers",
@@ -42,8 +55,8 @@
 			"",
 			"export const headers: HeadersFunction = ({ loaderHeaders }) => ({",
 			"  'Cache-Control': loaderHeaders.get('Cache-Control') ?? '',",
-			"})"
-		]
+			"})",
+		],
 	},
 	"links": {
 		"prefix": "/links",
@@ -53,8 +66,8 @@
 			"",
 			"export const links: LinksFunction = () => {",
 			"  return []",
-			"}"
-		]
+			"}",
+		],
 	},
 	"meta": {
 		"prefix": "/meta",
@@ -64,8 +77,8 @@
 			"",
 			"export const meta: MetaFunction<typeof loader> = ({ data }) => [{",
 			"  title: 'Title',",
-			"}]"
-		]
+			"}]",
+		],
 	},
 	"shouldRevalidate": {
 		"prefix": "/shouldRevalidate",
@@ -77,7 +90,7 @@
 			"  defaultShouldRevalidate",
 			"}) => {",
 			"  return defaultShouldRevalidate",
-			"}"
-		]
-	}
+			"}",
+		],
+	},
 }

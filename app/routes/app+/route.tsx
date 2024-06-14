@@ -45,6 +45,7 @@ import {
 	type BreadcrumbHandle,
 } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
+import { FeatureFlags } from '#app/utils/featureFlags/index.js'
 import { cn } from '#app/utils/misc'
 import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
 import { ThemeSwitch, useTheme } from '../api+/preferences+/theme/route'
@@ -57,8 +58,17 @@ export const NavExpandedContext = createContext({
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' }
 
 export async function loader() {
-	const ff = await prisma.featureFlag.findUnique({ where: { name: 'courses' } })
-	return json({ enableCourses: ff?.isEnabled })
+	const ffs = await prisma.featureFlag.findMany({
+		where: { name: { in: [FeatureFlags.Courses, FeatureFlags.Assistants] } },
+	})
+	return json({
+		enableCourses: ffs.some(
+			ff => ff.name === FeatureFlags.Courses && ff.isEnabled,
+		),
+		enableAssistants: ffs.some(
+			ff => ff.name === FeatureFlags.Assistants && ff.isEnabled,
+		),
+	})
 }
 
 export default function Route() {
@@ -67,10 +77,10 @@ export default function Route() {
 	const user = useUser()
 	const isAdmin = user.roles.find(r => r.name === 'admin')
 	const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
-	const { enableCourses } = useLoaderData<typeof loader>()
+	const data = useLoaderData<typeof loader>()
 
 	const links = [
-		...(enableCourses
+		...(data.enableCourses
 			? [
 					{
 						to: '/app',
@@ -80,12 +90,16 @@ export default function Route() {
 					},
 				]
 			: []),
-		{
-			to: '/app/assistants',
-			label: 'Assistants',
-			icon: <AssistantIcon strokeWidth={1.25} />,
-		},
-		...(enableCourses
+		...(data.enableAssistants
+			? [
+					{
+						to: '/app/assistants',
+						label: 'Assistants',
+						icon: <AssistantIcon strokeWidth={1.25} />,
+					},
+				]
+			: []),
+		...(data.enableCourses
 			? [
 					{
 						to: '/app/students',

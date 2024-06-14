@@ -26,6 +26,7 @@ export const CourseModuleInstructionSchema = z.object({
 			z.literal('false').transform(() => false),
 		])
 		.nullish(),
+	nextInstructionBtnLabel: z.string().nullish(),
 })
 
 export const CourseModuleSchema = z.object({

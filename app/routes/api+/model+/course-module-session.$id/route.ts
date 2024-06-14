@@ -11,6 +11,7 @@ const validator = withZod(
 	z.object({
 		instructionsCompleted: z.union([
 			z.object({ increment: zfd.numeric() }),
+			z.object({ decrement: zfd.numeric() }),
 			zfd.numeric(),
 		]),
 	}),

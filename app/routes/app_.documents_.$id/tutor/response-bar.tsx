@@ -12,6 +12,7 @@ import { Tooltip } from '#app/components/ui/tooltip.js'
 type Props = {
 	options: string | null
 	canAskQuestion?: boolean
+	advanceInstructionLabel?: string | null
 	advanceInstruction?: () => void
 	respond: (response: string) => void
 }
@@ -20,6 +21,7 @@ export const ResponseBar = ({
 	options,
 	canAskQuestion,
 	advanceInstruction,
+	advanceInstructionLabel,
 	respond,
 }: Props) => {
 	const [isAskingQuestion, setIsAskingQuestion] = useState(false)
@@ -41,11 +43,14 @@ export const ResponseBar = ({
 		</div>
 	) : (
 		<div className="flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4">
-			{options?.split(',').map(opt => (
-				<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
-					{opt}
-				</Button>
-			))}
+			{options
+				?.trim()
+				.split(',')
+				.map(opt => (
+					<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
+						{opt}
+					</Button>
+				))}
 			{canAskQuestion ? (
 				<Button
 					variant="secondary"
@@ -64,10 +69,19 @@ export const ResponseBar = ({
 				>
 					<Button
 						variant={check ? 'success' : 'secondary'}
-						size="icon"
-						onClick={() => (check ? advanceInstruction() : setCheck(true))}
+						size={advanceInstructionLabel ? undefined : 'icon'}
+						className="flex items-center gap-1 text-lg"
+						onClick={() => {
+							if (check) {
+								setCheck(false)
+								advanceInstruction()
+							} else {
+								setCheck(true)
+							}
+						}}
 						onBlur={() => check && setCheck(false)}
 					>
+						{check ? 'You sure?' : advanceInstructionLabel}
 						{check ? <CheckIcon /> : <ChevronRightIcon />}
 					</Button>
 				</Tooltip>

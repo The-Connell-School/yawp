@@ -175,7 +175,12 @@ export default function Route() {
 						}
 					/>
 				</div>
-				<div className="flex-grow text-center">
+				<div className="flex flex-grow items-center justify-center gap-4 text-center">
+					{/* <Tooltip text="Go back to last step">
+						<Button onClick={() => {}} variant="outline" size="sm">
+							<ArrowLeftIcon size={14} className="mr-2" /> Previous
+						</Button>
+					</Tooltip> */}
 					{isViewingAsTeacher ? (
 						<h4>
 							Module: {data.doc.courseModuleSessions[0].courseModule.title}
@@ -184,7 +189,7 @@ export default function Route() {
 						<h4>Step: {data.doc.courseModuleSessions[0].courseModule.title}</h4>
 					)}
 				</div>
-				<div className="ml-auto flex items-center gap-4">
+				<div className="ml-auto flex w-[135px] items-center gap-4">
 					{isUpdatingDocument ? (
 						<div className="flex items-center gap-1 text-muted-foreground/70">
 							<Loader2 className="h-4 w-4 animate-spin" />

@@ -226,7 +226,10 @@ export function Instruction({
 								</div>
 							</div>
 						</TabsContent>
-						<TabsContent value={InstructionInteraction.Dialogue}>
+						<TabsContent
+							value={InstructionInteraction.Dialogue}
+							className="flex flex-col gap-4"
+						>
 							<FormTextarea
 								label="Tutor Instructions"
 								name={`${name}.tutorInstructions`}
@@ -234,6 +237,18 @@ export function Instruction({
 								value={value.tutorInstructions ?? ''}
 								onChange={e =>
 									setValue({ ...value, tutorInstructions: e.target.value })
+								}
+							/>
+							<FormInput
+								label="Next instruction button label"
+								name={`${name}.nextInstructionBtnLabel`}
+								placeholder="E.g. 'Next step' or 'Next'"
+								value={value.nextInstructionBtnLabel ?? ''}
+								onChange={e =>
+									setValue({
+										...value,
+										nextInstructionBtnLabel: e.target.value,
+									})
 								}
 							/>
 						</TabsContent>

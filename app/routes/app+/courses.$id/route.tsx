@@ -123,13 +123,11 @@ export default function AppCoursesIdRoute() {
 							<CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
 						</Link>
 					</Button>
-					{isTeacher ? null : (
-						<Form method="post">
-							<Button type="submit" className="w-fit" disabled={!hasModules}>
-								New <PlusIcon className="ml-1 h-5 w-5" />
-							</Button>
-						</Form>
-					)}
+					<Form method="post">
+						<Button type="submit" className="w-fit" disabled={!hasModules}>
+							New <PlusIcon className="ml-1 h-5 w-5" />
+						</Button>
+					</Form>
 				</div>
 				<div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
 					{data.course.image ? (
@@ -199,7 +197,11 @@ export default function AppCoursesIdRoute() {
 							/>
 						)}
 					</div>
-				) : data.documents.length ? (
+				) : null}
+				{isTeacher ? (
+					<h3 className="mt-6 text-foreground/75">Documents</h3>
+				) : null}
+				{data.documents.length ? (
 					<div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
 						{data.documents.map(doc => (
 							<DocumentLink key={doc.id} doc={doc} />

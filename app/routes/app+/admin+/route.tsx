@@ -8,6 +8,7 @@ import { requireUserWithRole } from '#app/utils/permissions'
 const tabs = [
 	{ label: 'Courses', to: '/app/admin/courses' },
 	{ label: 'Teachers', to: '/app/admin/teachers' },
+	{ label: 'Features', to: '/app/admin/feature-flags' },
 ]
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' }
