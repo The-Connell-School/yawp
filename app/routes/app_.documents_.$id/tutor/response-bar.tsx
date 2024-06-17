@@ -44,8 +44,8 @@ export const ResponseBar = ({
 	) : (
 		<div className="flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4">
 			{options
-				?.trim()
-				.split(',')
+				?.split(',')
+				.filter(Boolean)
 				.map(opt => (
 					<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
 						{opt}
