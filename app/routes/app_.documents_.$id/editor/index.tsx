@@ -56,9 +56,9 @@ export const Editor = ({ doc }: Props) => {
 		)
 
 		setTimeout(() => {
-			const comment = document.getElementById(highlightId)
+			const comment = document.getElementById(`${highlightId}-comment`)
 			comment?.click()
-		}, 50)
+		}, 100)
 	}
 
 	useEffect(() => {

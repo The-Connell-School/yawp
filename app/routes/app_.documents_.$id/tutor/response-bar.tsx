@@ -58,7 +58,7 @@ export const ResponseBar = ({
 					onClick={() => setIsAskingQuestion(true)}
 				>
 					<MessageCircleIcon />
-					{options ? '' : 'Respond'}
+					{options ? '' : 'Chat'}
 				</Button>
 			) : null}
 			{advanceInstruction ? (

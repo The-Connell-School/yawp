@@ -24,9 +24,41 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const { error, data } = await validator.validate(formData)
 	if (error) return validationError(error)
 
+	const cms = await prisma.courseModuleSession.findUnique({
+		where: { id: params.id },
+		include: { courseModule: { include: { instructions: true } } },
+	})
+
+	if (!cms) {
+		return json({ error: 'No course module session found.' }, { status: 404 })
+	}
+
+	const hasCompletedAllInstructions =
+		cms.instructionsCompleted + 1 === cms.courseModule.instructions.length
+
+	const isIncrementing =
+		typeof data.instructionsCompleted === 'object' &&
+		'increment' in data.instructionsCompleted
+
 	const updated = await prisma.courseModuleSession.update({
 		where: { id: params.id, userId },
-		data,
+		data: {
+			...data,
+			...(!hasCompletedAllInstructions && isIncrementing
+				? {
+						messages: {
+							create: {
+								content:
+									cms.courseModule.instructions[cms.instructionsCompleted]
+										.prompt,
+								agent: 'assistant',
+								instructionId:
+									cms.courseModule.instructions[cms.instructionsCompleted].id,
+							},
+						},
+					}
+				: {}),
+		},
 	})
 
 	return json(updated, { status: 200 })
