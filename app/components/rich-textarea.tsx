@@ -27,7 +27,7 @@ export const RichTextarea = ({
 				)}
 				style={{ height, maxHeight: '200px', minHeight: height }}
 				size={size}
-				placeholder="Ask a question or respond"
+				placeholder="Chat..."
 				ref={textareaRef}
 				onChange={handleTextareaChange}
 				onKeyDown={handleKeyDown}

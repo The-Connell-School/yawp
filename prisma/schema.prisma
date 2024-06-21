@@ -218,6 +218,7 @@ model CourseModuleInstruction {
   title                   String
   interactiveType         String // 'answer' | 'dialogue'
   prompt                  String
+  promptAudio             Bytes?
   tutorInstructions       String?
   answerType              String? // 'textarea' | 'select'
   answerKey               String?

@@ -3,14 +3,12 @@ import { type LoaderFunctionArgs, json } from '@remix-run/node'
 import {
 	Link,
 	useFetcher,
-	useFetchers,
 	useLoaderData,
 	useNavigate,
 	useSearchParams,
 } from '@remix-run/react'
 import { ArrowLeft, Check, Loader2 } from 'lucide-react'
-import { useEffect } from 'react'
-import { useSpinDelay } from 'spin-delay'
+import { useEffect, useState } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Badge } from '#app/components/ui/badge'
 import { button } from '#app/components/ui/button'
@@ -104,28 +102,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	return json({ doc, currentCms, nextCmId, shouldSaveVersion })
 }
 
-const useIsUpdatingDocument = () => {
-	const updateDocumentFetcher = useFetchers().find(
-		f => f.key === 'update-document',
-	)
-
-	return useSpinDelay(
-		!!updateDocumentFetcher && updateDocumentFetcher?.state !== 'idle',
-		{ minDuration: 500, delay: 0 },
-	)
-}
-
 export default function Route() {
 	const data = useLoaderData<typeof loader>()
 	const user = useUser()
 	const fetcher = useFetcher()
 	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
+	const [isSaving, setIsSaving] = useState(false)
 	const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const tab = searchParams.get('tab') ?? 'tutor'
 	const isViewingAsTeacher = data.doc && user.id !== data.doc?.userId
-	const isUpdatingDocument = useIsUpdatingDocument()
 
 	const changeTab = (value: string) => {
 		const params = new URLSearchParams(searchParams)
@@ -190,7 +177,7 @@ export default function Route() {
 					)}
 				</div>
 				<div className="ml-auto flex w-[135px] items-center gap-4">
-					{isUpdatingDocument ? (
+					{isSaving ? (
 						<div className="flex items-center gap-1 text-muted-foreground/70">
 							<Loader2 className="h-4 w-4 animate-spin" />
 							<p className="text-sm">Saving</p>
@@ -232,12 +219,13 @@ export default function Route() {
 				{isMobile && tab !== 'tutor' ? null : (
 					<Tutor
 						docId={data.doc.id}
-						context={data.doc.text}
 						cms={data.currentCms}
 						nextCmId={data.nextCmId}
 					/>
 				)}
-				{isMobile && tab !== 'editor' ? null : <Editor doc={data.doc} />}
+				{isMobile && tab !== 'editor' ? null : (
+					<Editor doc={data.doc} setIsSaving={setIsSaving} />
+				)}
 				{isMobile && tab !== 'comments' ? null : (
 					<Comments comments={data.doc.comments} />
 				)}

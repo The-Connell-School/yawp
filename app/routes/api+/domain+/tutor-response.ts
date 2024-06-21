@@ -3,6 +3,7 @@ import { withZod } from '@remix-validated-form/with-zod'
 import { validationError } from 'remix-validated-form'
 import { z } from 'zod'
 // import { openai } from '#app/services/openai.js'
+import { getBase64Audio } from '#app/services/openai.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import {
@@ -20,10 +21,10 @@ export enum InstructionInteraction {
 
 const POST = withZod(
 	z.object({
-		context: z.string().nullish(),
 		response: z.string().min(1),
 		cmsId: z.string().min(1),
 		speechSpeed: z.string().optional(),
+		speechEnabled: z.union([z.literal('true'), z.literal('false')]),
 	}),
 )
 
@@ -44,6 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		include: {
 			courseModule: { include: { instructions: true } },
 			messages: true,
+			document: { select: { text: true } },
 		},
 	})
 
@@ -58,52 +60,55 @@ export async function action({ request }: ActionFunctionArgs) {
 
 	if (instruction.interactiveType === InstructionInteraction.Answer) {
 		if (!instruction.answerKey?.length) {
+			// Answer is correct, move on to next instruction
 			const nextInstruction =
 				cms.courseModule.instructions[cms.instructionsCompleted + 1]
 
-			const [speech] = await Promise.all([
-				// openai.audio.speech.create({
-				// 	model: 'tts-1',
-				// 	input: nextInstruction.prompt,
-				// 	voice: 'echo',
-				// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
-				// }),
-				prisma.courseModuleSession.update({
-					where: { id: cms.id },
-					data: {
-						instructionsCompleted: { increment: 1 },
-						messages: {
-							create: [
-								{
-									content: data.response,
-									agent: AgentType.User,
-									instructionId: instruction.id,
-								},
-								...(nextInstruction
-									? [
-											{
-												agent: AgentType.Assistant,
-												content: nextInstruction.prompt,
-												instructionId: nextInstruction.id,
-											},
-										]
-									: []),
-							],
-						},
+			await prisma.courseModuleSession.update({
+				where: { id: cms.id },
+				data: {
+					instructionsCompleted: { increment: 1 },
+					messages: {
+						create: [
+							{
+								content: data.response,
+								agent: AgentType.User,
+								instructionId: instruction.id,
+							},
+							...(nextInstruction
+								? [
+										{
+											agent: AgentType.Assistant,
+											content: nextInstruction.prompt,
+											instructionId: nextInstruction.id,
+										},
+									]
+								: []),
+						],
 					},
-				}),
-			])
+				},
+			})
 
-			// return new Response(await speech.arrayBuffer(), {
-			// 	status: 200,
-			// 	headers: { 'Content-Type': 'audio/wav' },
-			// })
-			return json({ success: 'true' })
+			let audio = ''
+			if (data.speechEnabled === 'true') {
+				if (nextInstruction.promptAudio === null) {
+					audio = await getBase64Audio(nextInstruction.prompt, data.speechSpeed)
+
+					await prisma.courseModuleInstruction.update({
+						where: { id: nextInstruction.id },
+						data: { promptAudio: Buffer.from(audio, 'base64') },
+					})
+				} else {
+					audio = nextInstruction.promptAudio.toString('base64')
+				}
+			}
+			return json({ audio })
 		} else {
+			// Answer needs to be verified by the ai tutor
 			const system = `
 				${cms.courseModule.tutorInstructions}
 				_response_ = '${data.response}'
-				_content_ = '${data.context}'
+				_content_ = '${cms.document.text}'
 				_answerKey_ = '${instruction.answerKey}
 				Respond with 'true' if the provided _response_ or _content_ satisfies the requirements of the _answerKey_. Else respond with 'false'.
 				`
@@ -129,48 +134,55 @@ export async function action({ request }: ActionFunctionArgs) {
 			}
 
 			if (completion === 'true') {
+				// Answer is correct, move on to next instruction
 				const nextInstruction =
 					cms.courseModule.instructions[cms.instructionsCompleted + 1]
 
-				const [speech] = await Promise.all([
-					// openai.audio.speech.create({
-					// 	model: 'tts-1',
-					// 	input: nextInstruction.prompt,
-					// 	voice: 'echo',
-					// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
-					// }),
-					prisma.courseModuleSession.update({
-						where: { id: cms.id },
-						data: {
-							instructionsCompleted: { increment: 1 },
-							messages: {
-								create: [
-									{
-										content: data.response,
-										agent: AgentType.User,
-										instructionId: instruction.id,
-									},
-									...(nextInstruction
-										? [
-												{
-													agent: AgentType.Assistant,
-													content: nextInstruction.prompt,
-													instructionId: nextInstruction.id,
-												},
-											]
-										: []),
-								],
-							},
+				await prisma.courseModuleSession.update({
+					where: { id: cms.id },
+					data: {
+						instructionsCompleted: { increment: 1 },
+						messages: {
+							create: [
+								{
+									content: data.response,
+									agent: AgentType.User,
+									instructionId: instruction.id,
+								},
+								...(nextInstruction
+									? [
+											{
+												agent: AgentType.Assistant,
+												content: nextInstruction.prompt,
+												instructionId: nextInstruction.id,
+											},
+										]
+									: []),
+							],
 						},
-					}),
-				])
+					},
+				})
 
-				// return new Response(await speech.arrayBuffer(), {
-				// 	status: 200,
-				// 	headers: { 'Content-Type': 'audio/wav' },
-				// })
-				return json({ success: 'true' })
+				let audio = ''
+				if (data.speechEnabled === 'true') {
+					if (nextInstruction.promptAudio === null) {
+						audio = await getBase64Audio(
+							nextInstruction.prompt,
+							data.speechSpeed,
+						)
+
+						await prisma.courseModuleInstruction.update({
+							where: { id: nextInstruction.id },
+							data: { promptAudio: Buffer.from(audio, 'base64') },
+						})
+					} else {
+						audio = nextInstruction.promptAudio.toString('base64')
+					}
+				}
+
+				return json({ audio })
 			} else {
+				// Answer is incorrect, tutor will provide feedback
 				const system = `
 				Encourage the user to try again. They attempted to satisfy the _answerKey_ with the _response_ or _content_ provided and it wasn't sufficient.
 				Do not include the value of _answerKey_ in your response.
@@ -178,7 +190,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				Begin your response with a message that encourages the user to keep going.
 				Keep your response short and concise.
 				_response_ = '${data.response}'
-				_content_ = '${data.context}'
+				_content_ = '${cms.document.text}'
 				_answerKey_ = '${instruction.answerKey}`
 
 				const messages: Message[] = [
@@ -200,39 +212,32 @@ export async function action({ request }: ActionFunctionArgs) {
 					return json({ error: LLM_FAILED }, { status: 500 })
 				}
 
-				const [speech] = await Promise.all([
-					// openai.audio.speech.create({
-					// 	model: 'tts-1',
-					// 	input: correction,
-					// 	voice: 'echo',
-					// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
-					// }),
-					prisma.courseModuleSession.update({
-						where: { id: cms.id },
-						data: {
-							messages: {
-								create: [
-									{
-										agent: AgentType.User,
-										content: data.response,
-										instructionId: instruction.id,
-									},
-									{
-										agent: AgentType.Assistant,
-										content: correction,
-										instructionId: instruction.id,
-									},
-								],
-							},
+				await prisma.courseModuleSession.update({
+					where: { id: cms.id },
+					data: {
+						messages: {
+							create: [
+								{
+									agent: AgentType.User,
+									content: data.response,
+									instructionId: instruction.id,
+								},
+								{
+									agent: AgentType.Assistant,
+									content: correction,
+									instructionId: instruction.id,
+								},
+							],
 						},
-					}),
-				])
+					},
+				})
 
-				// return new Response(await speech.arrayBuffer(), {
-				// 	status: 200,
-				// 	headers: { 'Content-Type': 'audio/wav' },
-				// })
-				return json({ success: 'true' })
+				return json({
+					audio:
+						data.speechEnabled === 'true'
+							? await getBase64Audio(correction, data.speechSpeed)
+							: '',
+				})
 			}
 		}
 	}
@@ -261,7 +266,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			.concat([
 				{
 					role: AgentType.User,
-					content: `content = '${data.context}', response = ${data.response}`,
+					content: `content = '${cms.document.text}', response = ${data.response}`,
 				},
 			])
 
@@ -277,40 +282,33 @@ export async function action({ request }: ActionFunctionArgs) {
 			return json({ error: LLM_FAILED }, { status: 500 })
 		}
 
-		const [speech] = await Promise.all([
-			// openai.audio.speech.create({
-			// 	model: 'tts-1',
-			// 	input: completion,
-			// 	voice: 'echo',
-			// 	speed: parseInt(data.speechSpeed ?? '') || undefined,
-			// }),
-			prisma.courseModuleSession.update({
-				where: { id: cms.id },
-				data: {
-					messages: {
-						create: [
-							{
-								agent: AgentType.User,
-								content: data.response,
-								context: data.context,
-								instructionId: instruction.id,
-							},
-							{
-								agent: AgentType.Assistant,
-								content: completion,
-								instructionId: instruction.id,
-							},
-						],
-					},
+		await prisma.courseModuleSession.update({
+			where: { id: cms.id },
+			data: {
+				messages: {
+					create: [
+						{
+							agent: AgentType.User,
+							content: data.response,
+							context: cms.document.text,
+							instructionId: instruction.id,
+						},
+						{
+							agent: AgentType.Assistant,
+							content: completion,
+							instructionId: instruction.id,
+						},
+					],
 				},
-			}),
-		])
+			},
+		})
 
-		// return new Response(await speech.arrayBuffer(), {
-		// 	status: 200,
-		// 	headers: { 'Content-Type': 'audio/wav' },
-		// })
-		return json({ success: 'true' })
+		return json({
+			audio:
+				data.speechEnabled === 'true'
+					? await getBase64Audio(completion, data.speechSpeed)
+					: '',
+		})
 	}
 
 	return json(

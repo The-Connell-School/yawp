@@ -53,7 +53,7 @@ export const DocumentLink = ({ doc }: Props) => {
 							second: '2-digit',
 						})}
 					>
-						<p>
+						<p className="mt-1 text-xs text-muted-foreground">
 							Created{' '}
 							<span className="underline">{timeAgo(doc.createdAt)}</span>
 						</p>

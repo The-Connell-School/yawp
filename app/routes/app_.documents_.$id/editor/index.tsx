@@ -33,11 +33,13 @@ const extensions = [
 	}),
 ]
 
-type Props = { doc: JsonifyObject<Document> }
+type Props = {
+	doc: JsonifyObject<Document>
+	setIsSaving: (isSaving: boolean) => void
+}
 
-export const Editor = ({ doc }: Props) => {
-	const updateDocumentFetcher = useFetcher({ key: 'update-document' })
-	const createDocumentCommentFetcher = useFetcher({
+export const Editor = ({ doc, setIsSaving }: Props) => {
+	const createDocumentCommentFetcher = useFetcher<{ highlightId: string }>({
 		key: 'create-document-comment',
 	})
 
@@ -46,20 +48,22 @@ export const Editor = ({ doc }: Props) => {
 	const [debouncedText] = useDebounce(editor?.getText(), debounce)
 	const [debouncedHtml] = useDebounce(editor?.getHTML(), debounce)
 
-	const handleHighlight: BarProps['onHighlight'] = ({
-		highlightId,
-		content,
-	}) => {
+	const createComment: BarProps['onHighlight'] = ({ highlightId, content }) => {
 		createDocumentCommentFetcher.submit(
 			{ highlightId, content, documentId: doc.id },
 			{ method: 'POST', action: '/api/model/document-comment' },
 		)
-
-		setTimeout(() => {
-			const comment = document.getElementById(`${highlightId}-comment`)
-			comment?.click()
-		}, 100)
 	}
+
+	useEffect(() => {
+		if (createDocumentCommentFetcher.data) {
+			const highlightId = createDocumentCommentFetcher.data.highlightId
+			setTimeout(() => {
+				const comment = document.getElementById(`${highlightId}-comment`)
+				comment?.click()
+			}, 200)
+		}
+	}, [createDocumentCommentFetcher.data])
 
 	useEffect(() => {
 		if (doc.html !== editor?.getHTML()) {
@@ -73,15 +77,21 @@ export const Editor = ({ doc }: Props) => {
 			return
 		}
 
-		updateDocumentFetcher.submit(
-			{ html: debouncedHtml ?? '', text: debouncedText ?? '' },
-			{ method: 'PUT', action: `/api/model/document/${doc.id}` },
-		)
+		setIsSaving(true)
+		const formData = new FormData()
+		formData.append('html', debouncedHtml ?? '')
+		formData.append('text', debouncedText ?? '')
+		fetch(`/api/model/document/${doc.id}`, {
+			method: 'PUT',
+			body: formData,
+		}).then(() => setIsSaving(false))
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [debouncedHtml, debouncedText])
 
 	useEffect(() => {
-		document.onclick = e => {
+		const marks = document.querySelectorAll('mark')
+
+		const handleClick = (e: MouseEvent) => {
 			const mark = (e.target as HTMLDivElement).closest('mark')
 			const highlightId = mark?.getAttribute('id')
 
@@ -95,14 +105,20 @@ export const Editor = ({ doc }: Props) => {
 			}
 		}
 
+		marks.forEach(mark => {
+			mark.addEventListener('click', handleClick)
+		})
+
 		return () => {
-			document.onclick = null
+			marks.forEach(mark => {
+				mark.removeEventListener('click', handleClick)
+			})
 		}
 	})
 
 	return (
 		<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
-			<Bar onHighlight={handleHighlight} editor={editor} />
+			<Bar onHighlight={createComment} editor={editor} />
 			<div className="no-scrollbar grow overflow-y-scroll p-5 font-times">
 				<EditorContent
 					editor={editor}

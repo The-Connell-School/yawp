@@ -3,8 +3,12 @@ import {
 	json,
 	type ActionFunctionArgs,
 } from '@remix-run/node'
-import { Form, Link, useLoaderData } from '@remix-run/react'
+import { Link, useLoaderData } from '@remix-run/react'
+import { withZod } from '@remix-validated-form/with-zod'
 import { ExternalLinkIcon, PlusIcon } from 'lucide-react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
+import { useLocalStorage } from 'usehooks-ts'
+import { z } from 'zod'
 import { DocumentLink } from '#app/components/document-link.js'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { CaretLeftIcon } from '#app/components/icons'
@@ -17,9 +21,10 @@ import {
 } from '#app/components/ui/accordion'
 import { Button } from '#app/components/ui/button'
 import { useUser } from '#app/hooks/useUser.js'
+import { getBase64Audio } from '#app/services/openai.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
-import { cn } from '#app/utils/misc.js'
+import { cn, useIsPending } from '#app/utils/misc.js'
 import { redirectWithToast } from '#app/utils/toast.server'
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -58,8 +63,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	return json({ course, documents, resources })
 }
 
+const validator = withZod(
+	z.object({
+		audioEnabled: z.union([z.literal('true'), z.literal('false')]),
+	}),
+)
+
 export async function action({ request, params }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
+	const formData = await request.formData()
+	const { error, data } = await validator.validate(formData)
+	if (error) return validationError(error)
+
 	const firstCourseModule = await prisma.courseModule.findFirst({
 		where: { courseId: params.id },
 		orderBy: { position: 'asc' },
@@ -74,35 +89,53 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	}
 
 	const firstInstruction = firstCourseModule.instructions[0]
+	const shouldFetchAudio =
+		data.audioEnabled &&
+		firstInstruction?.prompt &&
+		!firstInstruction.promptAudio
 
-	const doc = await prisma.document.create({
-		data: {
-			userId,
-			text: '',
-			html: '',
-			title: '',
-			courseModuleSessions: {
-				create: {
-					userId,
-					instructionsCompleted: 0,
-					courseModuleId: firstCourseModule.id,
-					...(firstInstruction && {
-						messages: {
-							create: [
-								{
-									content: firstInstruction.prompt,
-									agent: 'assistant',
-									instructionId: firstInstruction.id,
-								},
-							],
-						},
-					}),
+	const audio = shouldFetchAudio
+		? await getBase64Audio(firstInstruction.prompt, '1.5')
+		: null
+
+	const [doc] = await Promise.all([
+		prisma.document.create({
+			data: {
+				userId,
+				text: '',
+				html: '',
+				title: '',
+				courseModuleSessions: {
+					create: {
+						userId,
+						instructionsCompleted: 0,
+						courseModuleId: firstCourseModule.id,
+						...(firstInstruction && {
+							messages: {
+								create: [
+									{
+										content: firstInstruction.prompt,
+										agent: 'assistant',
+										instructionId: firstInstruction.id,
+									},
+								],
+							},
+						}),
+					},
 				},
 			},
-		},
-	})
+		}),
+		...(audio
+			? [
+					prisma.courseModuleInstruction.update({
+						where: { id: firstInstruction.id },
+						data: { promptAudio: Buffer.from(audio, 'base64') },
+					}),
+				]
+			: []),
+	])
 
-	return redirectWithToast(`/app/documents/${doc.id}`, {
+	return redirectWithToast(`/app/documents/${doc.id}?spa=1`, {
 		type: 'success',
 		description: 'Document created successfully.',
 	})
@@ -110,9 +143,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AppCoursesIdRoute() {
 	const user = useUser()
+	const isPending = useIsPending()
 	const data = useLoaderData<typeof loader>()
 	const isTeacher = !!user.teacherProfile
 	const hasModules = data.course.courseModules.length > 0
+	const [speechEnabled] = useLocalStorage('speechEnabled', false)
 
 	return (
 		<div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -123,11 +158,21 @@ export default function AppCoursesIdRoute() {
 							<CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
 						</Link>
 					</Button>
-					<Form method="post">
-						<Button type="submit" className="w-fit" disabled={!hasModules}>
+					<ValidatedForm method="post" validator={validator}>
+						<input
+							type="hidden"
+							value={speechEnabled ? 'true' : 'false'}
+							name="audioEnabled"
+						/>
+						<Button
+							type="submit"
+							className="w-fit"
+							disabled={!hasModules}
+							isLoading={isPending}
+						>
 							New <PlusIcon className="ml-1 h-5 w-5" />
 						</Button>
-					</Form>
+					</ValidatedForm>
 				</div>
 				<div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
 					{data.course.image ? (

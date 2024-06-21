@@ -121,6 +121,7 @@ app.use(
 				'font-src': ["'self'"],
 				'frame-src': ["'self'"],
 				'img-src': ["'self'", 'data:'],
+				'media-src': ["'self'", 'blob:'],
 				'script-src': [
 					"'strict-dynamic'",
 					"'self'",
