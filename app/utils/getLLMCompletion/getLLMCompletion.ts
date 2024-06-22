@@ -14,7 +14,10 @@ interface Params {
 	system?: string
 	temperature?: number
 	maxTokens?: number
-	model: 'gpt-4-turbo-preview' | 'claude-3-opus-20240229'
+	model:
+		| 'gpt-4-turbo-preview'
+		| 'claude-3-opus-20240229'
+		| 'claude-3-5-sonnet-20240620'
 }
 
 export async function getLLMCompletion(params: Params) {
@@ -22,7 +25,7 @@ export async function getLLMCompletion(params: Params) {
 		console.log('🧪 LLM completion started')
 	}
 
-	if (['claude-3-opus-20240229'].includes(params.model)) {
+	if (params.model.includes('claude')) {
 		console.time('🧪 LLM completion finished')
 		const system = params.system?.replace(/\t/g, '')
 		const messages = params.messages.map(({ name: _, ...m }) => ({

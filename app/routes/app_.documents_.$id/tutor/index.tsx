@@ -133,6 +133,7 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 			audioRef.current.src = audioUrl
 			audioRef.current.load()
 			audioRef.current.play()
+			audioRef.current.playbackRate = speechSpeed
 			audioRef.current.onended = () => audioControls.setIsPlaying(false)
 		}
 	}

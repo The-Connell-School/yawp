@@ -107,24 +107,23 @@ export async function action({ request }: ActionFunctionArgs) {
 			// Answer needs to be verified by the ai tutor
 			const system = `
 				${cms.courseModule.tutorInstructions}
-				_response_ = '${data.response}'
-				_content_ = '${cms.document.text}'
-				_answerKey_ = '${instruction.answerKey}
-				Respond with 'true' if the provided _response_ or _content_ satisfies the requirements of the _answerKey_. Else respond with 'false'.
+				response = '${data.response}'
+				content = '${cms.document.text}'
+				answerKey = '${instruction.answerKey}
+				Respond with 'true' if the answerKey is correctly addressed and answered by the provided response and/or content. Else respond with 'false'.
 				`
 
 			const messages: Message[] = [
 				{
 					role: AgentType.User,
-					content:
-						'Does the response satisfy the requirements of the answer key?',
+					content: 'Are the requirements of the answer key satisified?',
 				},
 			]
 
 			let completion: string | undefined
 			try {
 				completion = await getLLMCompletion({
-					model: 'claude-3-opus-20240229',
+					model: 'claude-3-5-sonnet-20240620',
 					messages,
 					system,
 					maxTokens: 500,
@@ -189,9 +188,9 @@ export async function action({ request }: ActionFunctionArgs) {
 				Do not include the word following words or phrases in your response: 'answerKey', 'true', 'false', 'requirements', 'do not worry'.
 				Begin your response with a message that encourages the user to keep going.
 				Keep your response short and concise.
-				_response_ = '${data.response}'
-				_content_ = '${cms.document.text}'
-				_answerKey_ = '${instruction.answerKey}`
+				response = '${data.response}'
+				content = '${cms.document.text}'
+				answerKey = '${instruction.answerKey}`
 
 				const messages: Message[] = [
 					{
@@ -203,7 +202,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				let correction: string | undefined
 				try {
 					correction = await getLLMCompletion({
-						model: 'claude-3-opus-20240229',
+						model: 'claude-3-5-sonnet-20240620',
 						messages,
 						system,
 						maxTokens: 500,
@@ -273,7 +272,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		let completion: string | undefined
 		try {
 			completion = await getLLMCompletion({
-				model: 'claude-3-opus-20240229',
+				model: 'claude-3-5-sonnet-20240620',
 				messages,
 				system,
 				maxTokens: 500,
