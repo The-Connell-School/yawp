@@ -28,7 +28,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const course = await prisma.course.findUnique({
 		where: { id: params.id },
 		include: {
-			courseModules: { include: { instructions: true } },
+			courseModules: {
+				include: {
+					instructions: {
+						select: {
+							title: true,
+							prompt: true,
+							interactiveType: true,
+							tutorInstructions: true,
+							answerKey: true,
+							answerType: true,
+							answerTypeOptions: true,
+							canAskQuestion: true,
+							nextInstructionBtnLabel: true,
+						},
+					},
+				},
+			},
 			image: { select: { id: true } },
 			resources: true,
 		},

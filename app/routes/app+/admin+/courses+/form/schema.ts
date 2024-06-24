@@ -17,8 +17,6 @@ export const CourseModuleInstructionSchema = z.object({
 	answerTypeOptions: z.string().nullish(),
 	prompt: z.string(),
 	tutorInstructions: z.string().nullish(),
-	concludingPrompt: z.string().nullish(),
-	concludingPromptType: z.string().nullish(),
 	interactiveType: z.string(),
 	canAskQuestion: z
 		.union([
