@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { RichTextarea } from '#app/components/rich-textarea'
 import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip.js'
+import { useIsPending } from '#app/utils/misc.js'
 
 type Props = {
 	options: string | null
@@ -26,6 +27,7 @@ export const ResponseBar = ({
 }: Props) => {
 	const [isAskingQuestion, setIsAskingQuestion] = useState(false)
 	const [check, setCheck] = useState(false)
+	const isPending = useIsPending()
 
 	return isAskingQuestion ? (
 		<div className="flex w-full items-center justify-center px-3">
@@ -70,7 +72,7 @@ export const ResponseBar = ({
 					<Button
 						variant={check ? 'success' : 'secondary'}
 						size={advanceInstructionLabel ? undefined : 'icon'}
-						className="flex items-center gap-1 text-lg"
+						className="flex min-w-fit items-center gap-1 text-lg"
 						onClick={() => {
 							if (check) {
 								setCheck(false)
@@ -80,6 +82,7 @@ export const ResponseBar = ({
 							}
 						}}
 						onBlur={() => check && setCheck(false)}
+						isLoading={isPending}
 					>
 						{check ? 'You sure?' : advanceInstructionLabel}
 						{check ? <CheckIcon /> : <ChevronRightIcon />}
