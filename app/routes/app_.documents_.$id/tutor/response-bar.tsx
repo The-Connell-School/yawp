@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { RichTextarea } from '#app/components/rich-textarea'
 import { Button } from '#app/components/ui/button'
 import { Tooltip } from '#app/components/ui/tooltip.js'
-import { useIsPending } from '#app/utils/misc.js'
+import { cn, useIsPending } from '#app/utils/misc.js'
 
 type Props = {
 	options: string | null
@@ -72,7 +72,9 @@ export const ResponseBar = ({
 					<Button
 						variant={check ? 'success' : 'secondary'}
 						size={advanceInstructionLabel ? undefined : 'icon'}
-						className="flex min-w-fit items-center gap-1 text-lg"
+						className={cn('flex items-center gap-1 text-lg', {
+							'min-w-[150px]': check,
+						})}
 						onClick={() => {
 							if (check) {
 								setCheck(false)

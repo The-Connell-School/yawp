@@ -6,7 +6,7 @@ export const getBase64Audio = async (input: string, speed?: string) => {
 	const mp3 = await openai.audio.speech.create({
 		model: 'tts-1',
 		input,
-		voice: 'echo',
+		voice: 'onyx',
 		speed: parseInt(speed ?? '') || undefined,
 	})
 

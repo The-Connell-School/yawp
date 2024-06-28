@@ -146,7 +146,7 @@ export function Instruction({
 						) : null}
 						{value.answerType === 'select' ? (
 							<FormSwitch
-								label="Can ask a question?"
+								label="Allow students to ask a question?"
 								className="flex w-full items-center justify-between gap-2 rounded-lg border bg-muted/50 p-2"
 								name={`${name}.canAskQuestion`}
 								checked={value.canAskQuestion ?? false}
