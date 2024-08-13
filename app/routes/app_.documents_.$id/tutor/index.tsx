@@ -53,6 +53,7 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 	const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>()
 	const incrementInstructionFetcher = useFetcher()
 	const advanceCourseModuleFetcher = useFetcher()
+	const audioFetcher = useFetcher<{ audio: string }>()
 	const messagesRef = useRef<HTMLDivElement>(null)
 	const audioRef = useRef<HTMLAudioElement>(null)
 	const totalInstructions = cms.courseModule.instructions.length
@@ -143,10 +144,7 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 		.concat(optimisticMessage ?? [])
 
 	useEffect(() => {
-		messagesRef.current?.scrollTo({
-			top: messagesRef.current.scrollHeight,
-			behavior: 'smooth',
-		})
+		messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight, behavior: 'smooth' })
 	}, [messages])
 
 	useEffect(() => {
@@ -164,21 +162,20 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 			searchParams.delete('spa')
 			navigate(`${pathname}?${searchParams}`, { replace: true })
 
-			if (instruction.promptAudio && speechEnabled) {
-				let uint8Array = new Uint8Array(instruction.promptAudio.data)
-				let binary = ''
-				for (let i = 0; i < uint8Array.length; i++) {
-					binary += String.fromCharCode(uint8Array[i])
-				}
-				const base64Audio = window.btoa(binary)
-				setTimeout(() => {
-					playBase64StringAudio(base64Audio)
-					audioControls.setIsPlaying(true)
-				}, 1000)
+			if (speechEnabled) {
+				audioFetcher.load(`/api/domain/audio/${instruction.id}`)
 			}
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [shouldPlayAudio, navigate, instruction.promptAudio])
+	}, [shouldPlayAudio, navigate])
+
+	useEffect(() => {
+		if (audioFetcher.data?.audio) {
+			playBase64StringAudio(audioFetcher.data.audio)
+			audioControls.setIsPlaying(true)
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [audioFetcher.data])
 
 	return (
 		<div className="flex w-full flex-col border-r pb-2 md:w-3/5">

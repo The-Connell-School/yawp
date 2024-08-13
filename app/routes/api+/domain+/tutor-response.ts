@@ -91,15 +91,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
 			let audio = ''
 			if (data.speechEnabled === 'true') {
-				if (nextInstruction.promptAudio === null) {
+				const audioData = await prisma.instructionAudio.findUnique({
+					where: { courseModuleInstructionId: nextInstruction.id },
+				})
+				if (!audioData) {
 					audio = await getBase64Audio(nextInstruction.prompt, data.speechSpeed)
 
-					await prisma.courseModuleInstruction.update({
-						where: { id: nextInstruction.id },
-						data: { promptAudio: Buffer.from(audio, 'base64') },
+					await prisma.instructionAudio.create({
+						data: {
+							courseModuleInstructionId: nextInstruction.id,
+							blob: Buffer.from(audio, 'base64'),
+						},
 					})
 				} else {
-					audio = nextInstruction.promptAudio.toString('base64')
+					audio = audioData.blob.toString('base64')
 				}
 			}
 			return json({ audio })
@@ -164,18 +169,20 @@ export async function action({ request }: ActionFunctionArgs) {
 
 				let audio = ''
 				if (data.speechEnabled === 'true') {
-					if (nextInstruction.promptAudio === null) {
-						audio = await getBase64Audio(
-							nextInstruction.prompt,
-							data.speechSpeed,
-						)
+					const audioData = await prisma.instructionAudio.findUnique({
+						where: { courseModuleInstructionId: nextInstruction.id },
+					})
+					if (!audioData) {
+						audio = await getBase64Audio(nextInstruction.prompt, data.speechSpeed)
 
-						await prisma.courseModuleInstruction.update({
-							where: { id: nextInstruction.id },
-							data: { promptAudio: Buffer.from(audio, 'base64') },
+						await prisma.instructionAudio.create({
+							data: {
+								courseModuleInstructionId: nextInstruction.id,
+								blob: Buffer.from(audio, 'base64'),
+							},
 						})
 					} else {
-						audio = nextInstruction.promptAudio.toString('base64')
+						audio = audioData.blob.toString('base64')
 					}
 				}
 

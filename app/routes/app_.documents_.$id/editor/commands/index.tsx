@@ -95,7 +95,7 @@ export const commands: Command[] = [
 	},
 	{
 		override: editor => (
-			<DropdownMenu>
+			<DropdownMenu key="spacing">
 				<Tooltip text="Spacing" delayDuration={300}>
 					<DropdownMenuTrigger>
 						<div className={COMMAND_STYLE}>
@@ -104,7 +104,7 @@ export const commands: Command[] = [
 					</DropdownMenuTrigger>
 				</Tooltip>
 				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
-					{['1', '1.15', '1.5', '2'].map(height => (
+					{['1', '1.15', '1.5', '2'].map((height) => (
 						<DropdownMenuItem
 							key={height}
 							onClick={e => {

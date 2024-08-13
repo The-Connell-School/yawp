@@ -92,7 +92,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const shouldFetchAudio =
 		data.audioEnabled &&
 		firstInstruction?.prompt &&
-		!firstInstruction.promptAudio
+		!(await prisma.instructionAudio.findUnique({
+			where: { courseModuleInstructionId: firstInstruction.id },
+		}))
 
 	const audio = shouldFetchAudio
 		? await getBase64Audio(firstInstruction.prompt, '1.5')
@@ -127,9 +129,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		}),
 		...(audio
 			? [
-					prisma.courseModuleInstruction.update({
-						where: { id: firstInstruction.id },
-						data: { promptAudio: Buffer.from(audio, 'base64') },
+					prisma.instructionAudio.create({
+						data: {
+							courseModuleInstructionId: firstInstruction.id,
+							blob: Buffer.from(audio, 'base64'),
+						},
 					}),
 				]
 			: []),

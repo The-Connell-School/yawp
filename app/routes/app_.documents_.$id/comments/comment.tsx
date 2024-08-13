@@ -73,14 +73,6 @@ export const Comment = (comment: Comment) => {
 			method: 'DELETE',
 			action: `/api/model/document-comment/${comment.id}`,
 		})
-
-		// Remove the associated highlight from the text
-		const mark = document.getElementById(comment.highlightId)
-		if (mark?.parentNode) {
-			while (mark.childNodes.length > 0) {
-				mark.parentNode.insertBefore(mark.childNodes[0], mark)
-			}
-		}
 	}
 
 	return (
@@ -93,10 +85,7 @@ export const Comment = (comment: Comment) => {
 			onClick={() => {
 				if (isFocused) return
 				setFocused(true)
-				document.getElementById(comment.id)?.scrollIntoView({
-					behavior: 'smooth',
-					block: 'center',
-				})
+				document.getElementById(comment.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 				document.getElementById(comment.highlightId)?.classList.add('focused')
 			}}
 			ref={ref}

@@ -25,7 +25,7 @@ export const ListLayout = ({ path, children, hideAddButton }: Props) => {
 					{hideAddButton ? null : (
 						<Link to={`/app/${path}/new`}>
 							<Button>
-								<PlusIcon className="mr-1" />
+								<PlusIcon className="mr-1" size={16} />
 								New
 							</Button>
 						</Link>

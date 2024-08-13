@@ -34,7 +34,7 @@ const extensions = [
 ]
 
 type Props = {
-	doc: JsonifyObject<Document>
+	doc: JsonifyObject<Omit<Document, 'createdAt' | 'deletedAt' | 'updatedAt' | 'userId'>>
 	setIsSaving: (isSaving: boolean) => void
 }
 
@@ -58,10 +58,10 @@ export const Editor = ({ doc, setIsSaving }: Props) => {
 	useEffect(() => {
 		if (createDocumentCommentFetcher.data) {
 			const highlightId = createDocumentCommentFetcher.data.highlightId
-			setTimeout(() => {
-				const comment = document.getElementById(`${highlightId}-comment`)
-				comment?.click()
-			}, 200)
+			// setTimeout(() => {
+			// 	const comment = document.getElementById(`${highlightId}-comment`)
+			// 	comment?.click()
+			// }, 200)
 		}
 	}, [createDocumentCommentFetcher.data])
 

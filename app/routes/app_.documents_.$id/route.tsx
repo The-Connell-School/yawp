@@ -44,7 +44,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 				},
 			],
 		},
-		include: {
+		select: {
+			id: true,
+			title: true,
+			html: true,
+			text: true,
 			versions: { orderBy: { createdAt: 'desc' } },
 			user: { include: { studentProfile: true } },
 			courseModuleSessions: {
@@ -112,7 +116,7 @@ export default function Route() {
 	const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const tab = searchParams.get('tab') ?? 'tutor'
-	const isViewingAsTeacher = data.doc && user.id !== data.doc?.userId
+	const isViewingAsTeacher = data.doc && user.id !== data.doc?.user.id
 
 	const changeTab = (value: string) => {
 		const params = new URLSearchParams(searchParams)
