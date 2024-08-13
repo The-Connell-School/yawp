@@ -21,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Route() {
 	return (
 		<main className="flex h-screen flex-col overflow-hidden">
-			<nav className="flex items-end border-b bg-background px-3 pt-3">
+			<div className="flex items-end border-b bg-background px-3 pt-3">
 				{tabs.map(tab => (
 					<NavLink
 						key={tab.to}
@@ -38,8 +38,10 @@ export default function Route() {
 						{tab.label}
 					</NavLink>
 				))}
-			</nav>
-			<Outlet />
+			</div>
+			<div className="flex-grow overflow-auto">
+				<Outlet />
+			</div>
 		</main>
 	)
 }
