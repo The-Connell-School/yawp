@@ -5,14 +5,13 @@ import {
 	type UserImage as PrismaUserImage,
 } from '@prisma/client'
 import { useFetcher } from '@remix-run/react'
-import { useRef, useState, type MouseEvent } from 'react'
+import { useRef, type MouseEvent } from 'react'
 import { CheckIcon, TrashIcon } from '#app/components/icons'
 import { RichTextarea } from '#app/components/rich-textarea.js'
 import { Button } from '#app/components/ui/button'
 import { UserImage } from '#app/components/user-image'
-import { useOnClickOutside } from '#app/hooks/useClickOutside'
 import { useUser } from '#app/hooks/useUser'
-import { cn, useDoubleCheck } from '#app/utils/misc'
+import { useDoubleCheck } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo'
 
 export type Comment = JsonifyObject<
@@ -34,12 +33,6 @@ export const Comment = (comment: Comment) => {
 	const dc = useDoubleCheck()
 	const user = useUser()
 	const ref = useRef(null)
-	const [isFocused, setFocused] = useState(false)
-
-	useOnClickOutside(ref, () => {
-		document.getElementById(comment.highlightId)?.classList.remove('focused')
-		setFocused(false)
-	})
 
 	const isTeacherOfCommentUser = user.studentProfiles.find(
 		sp => sp.userId === comment.userId,
@@ -73,20 +66,30 @@ export const Comment = (comment: Comment) => {
 			method: 'DELETE',
 			action: `/api/model/document-comment/${comment.id}`,
 		})
+
+		const mark = document.querySelector(`[data-comment-id="${comment.id}"]`)
+		if (mark?.parentNode) {
+			while (mark.childNodes.length > 0) {
+				mark.parentNode.insertBefore(mark.childNodes[0], mark)
+			}
+			mark.parentNode.removeChild(mark)
+		}
 	}
 
 	return (
 		<div
-			className={cn(
-				'relative flex flex-col rounded-lg bg-muted p-3 shadow-sm transition-all duration-200 ease-in-out',
-				{ 'bg-primary/20 shadow-lg': isFocused },
-			)}
-			id={`${comment.highlightId}-comment`}
+			className='relative flex flex-col rounded-lg bg-muted p-3 transition-all duration-200 ease-in-out'
+			id={`comment-${comment.id}`}
 			onClick={() => {
-				if (isFocused) return
-				setFocused(true)
-				document.getElementById(comment.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-				document.getElementById(comment.highlightId)?.classList.add('focused')
+				const commentNode = document.getElementById(`comment-${comment.id}`)
+				if (commentNode) {
+					commentNode.classList.add('bg-primary/20', 'shadow-lg')
+				}
+				const mark = document.querySelector(`[data-comment-id="${comment.id}"]`)
+				if (mark instanceof HTMLElement) {
+					mark.classList.add('focused')
+					mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+				}
 			}}
 			ref={ref}
 		>
@@ -133,16 +136,13 @@ export const Comment = (comment: Comment) => {
 							</p>
 						</div>
 					))}
-				{isFocused ? (
 					<RichTextarea
-						autoFocus
 						placeholder="Reply..."
 						name="content"
 						size="sm"
 						onCmdEnter={reply}
-						className="mt-2"
+						className="mt-2 bg-muted"
 					/>
-				) : null}
 			</div>
 		</div>
 	)

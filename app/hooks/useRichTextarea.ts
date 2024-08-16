@@ -54,5 +54,6 @@ export const useRichTextarea = ({ onCmdEnter, height = '50px' }: Params) => {
 		handleTextareaChange,
 		handleKeyDown,
 		hasText,
+		setHasText,
 	}
 }

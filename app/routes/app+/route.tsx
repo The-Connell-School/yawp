@@ -191,9 +191,10 @@ export default function Route() {
 									: '/img/logo_for_light_mode.png'
 							}
 							alt="Logo on white background"
-							className={cn('h-auto w-10 rounded object-cover py-2', {
-								'w-24': navExpanded,
-							})}
+							className={cn(
+								'h-auto w-0 rounded object-cover py-2',
+								{ 'w-24': navExpanded },
+							)}
 						/>
 					</Link>
 					<NavStateSwitch>

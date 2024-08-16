@@ -7,8 +7,8 @@ import { prisma } from '#app/utils/db.server.js'
 
 const validator = withZod(
 	z.object({
+		id: z.string(),
 		documentId: z.string(),
-		highlightId: z.string(),
 		content: z.string(),
 	}),
 )

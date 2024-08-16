@@ -1,7 +1,8 @@
+import { useFetcher } from '@remix-run/react';
 import { type Editor } from '@tiptap/react'
 import { MessageCircleIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
-import { v4 } from 'uuid'
+import { v4 } from 'uuid';
 import { DotsHorizontalIcon } from '#app/components/icons'
 import { Button } from '#app/components/ui/button'
 import {
@@ -22,13 +23,14 @@ const PADDING = 8
 
 export type BarProps = {
 	editor: Editor | null
-	onHighlight?: (params: { highlightId: string; content: string }) => void
+	documentId: string
 }
 
-export const Bar = ({ onHighlight, editor }: BarProps) => {
+export const Bar = ({ editor, documentId }: BarProps) => {
 	const [visibleCommands, setVisibleCommands] = useState(commands)
 	const [hiddenCommands, setHiddenCommands] = useState<Command[]>([])
 	const containerRef = useRef<HTMLDivElement>(null)
+	const createDocumentCommentFetcher = useFetcher<{ id: string }>({ key: 'create-document-comment' })
 
 	useEffect(() => {
 		const updateButtonVisibility = () => {
@@ -85,25 +87,23 @@ export const Bar = ({ onHighlight, editor }: BarProps) => {
 			)}
 			<Tooltip text="Comment" delayDuration={300}>
 				<div
-					onClick={async () => {
-						const isHighlighted = editor.isActive('highlight')
-
-						if (isHighlighted) {
-							editor.chain().focus().unsetHighlight().run()
+					onClick={() => {
+						if (editor.isActive('comment')) {
+							editor.chain().focus().unsetComment().run()
 						} else {
 							const id = v4()
 							const { from, to } = editor.state.selection
 							const content = editor.state.doc.textBetween(from, to, ' ')
-
 							if (!content) return
-
-							editor.chain().focus().setHighlight().run()
-							editor.commands.updateAttributes('highlight', { id })
-							onHighlight?.({ highlightId: id, content })
+							editor.chain().focus().setComment(id).run()
+							createDocumentCommentFetcher.submit(
+								{ id, content, documentId },
+								{ method: 'POST', action: '/api/model/document-comment' },
+							)
 						}
 					}}
 					className={cn(COMMAND_STYLE, {
-						'bg-muted': editor.isActive('highlight'),
+						'bg-muted': editor.isActive('comment'),
 					})}
 				>
 					<MessageCircleIcon className="h-4 w-4" />

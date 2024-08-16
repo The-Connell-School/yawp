@@ -71,6 +71,20 @@ code {
 .tiptap mark.focused {
 	@apply bg-yellow-300;
 }
+.comment-mark {
+  background-color: #fff30b38;
+  border-bottom: 2px dotted #f9e055fc;
+  transition: background-color 0.2s ease;
+	padding: 0 2px;
+}
+.comment-mark.focused {
+  background-color: #f9e055fc;
+}
+.comment-mark:hover,
+.comment-mark.focused,
+.comment-mark.ProseMirror-selectednode {
+  background-color: #f9e055fc;
+}
 
 /* UI Theme */
 
