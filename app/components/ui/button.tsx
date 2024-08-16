@@ -9,7 +9,7 @@ const button = cva(
 	{
 		variants: {
 			variant: {
-				default: 'shadow-sm bg-primary text-primary-foreground hover:bg-primary/90',
+				default: 'bg-primary text-primary-foreground hover:bg-primary/90',
 				destructive:
 					'bg-destructive text-destructive-foreground hover:bg-destructive/90',
 				outline:
@@ -22,11 +22,11 @@ const button = cva(
 				success: 'bg-success text-success-foreground hover:bg-success/90',
 			},
 			size: {
-				default: 'h-8 px-2.5',
-				sm: 'h-7 rounded-md px-2',
-				lg: 'h-10 rounded-md px-4',
-				icon: 'h-8 w-8',
-				'icon-sm': 'h-7 w-7',
+				default: 'h-10 px-2.5',
+				sm: 'h-8 rounded-md px-2',
+				lg: 'h-11 rounded-md px-4',
+				icon: 'h-10 w-10',
+				'icon-sm': 'h-8 w-8',
 			},
 		},
 		defaultVariants: {

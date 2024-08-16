@@ -135,7 +135,7 @@ export default function Route() {
 
 	return (
 		<main className="flex h-screen w-screen flex-col overflow-hidden">
-			<nav className="mx-auto flex w-full max-w-screen-2xl items-center border-b px-3 py-2">
+			<nav className="mx-auto flex w-full max-w-screen-2xl items-center border-b px-3 py-2 gap-4">
 				<div className="flex items-center gap-4">
 					<Link
 						className={button({ variant: 'secondary', size: 'sm' })}
@@ -166,20 +166,13 @@ export default function Route() {
 						}
 					/>
 				</div>
-				<div className="flex flex-grow items-center justify-center gap-4 text-center">
-					{/* <Tooltip text="Go back to last step">
-						<Button onClick={() => {}} variant="outline" size="sm">
-							<ArrowLeftIcon size={14} className="mr-2" /> Previous
-						</Button>
-					</Tooltip> */}
-					{isViewingAsTeacher ? (
-						<h4>
-							Module: {data.doc.courseModuleSessions[0].courseModule.title}
-						</h4>
-					) : (
-						<h4>Step: {data.doc.courseModuleSessions[0].courseModule.title}</h4>
-					)}
-				</div>
+				{isViewingAsTeacher ? (
+					<Badge variant="info-outlined" className="md:text-md text-xs">
+						{isMobile
+							? data.doc.user.name
+							: `Viewing work by ${data.doc.user.name}`}
+					</Badge>
+				) : null}
 				<div className="ml-auto flex w-[135px] items-center gap-4">
 					{isSaving ? (
 						<div className="flex items-center gap-1 text-muted-foreground/70">
@@ -197,13 +190,6 @@ export default function Route() {
 						documentId={data.doc.id}
 						versions={data.doc.versions}
 					/>
-					{isViewingAsTeacher ? (
-						<Badge variant="info-outlined" className="md:text-md text-xs">
-							{isMobile
-								? data.doc.user.name
-								: `Viewing work by ${data.doc.user.name}`}
-						</Badge>
-					) : null}
 				</div>
 			</nav>
 			<Tabs onValueChange={changeTab} value={tab} className="md:hidden">

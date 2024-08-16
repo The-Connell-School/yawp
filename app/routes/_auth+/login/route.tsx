@@ -99,7 +99,7 @@ export default function LoginPage() {
 							Forgot password?
 						</Link>
 					</div>
-					<Button className="w-full pt-3" type="submit" isLoading={isPending}>
+					<Button className="w-full" type="submit" isLoading={isPending}>
 						Log in
 					</Button>
 				</ValidatedForm>
