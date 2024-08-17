@@ -72,7 +72,13 @@ export const Comment = (comment: Comment) => {
 			while (mark.childNodes.length > 0) {
 				mark.parentNode.insertBefore(mark.childNodes[0], mark)
 			}
-			mark.parentNode.removeChild(mark)
+
+			try {
+				mark.parentNode.removeChild(mark)
+			} catch (error) {
+				// eslint-disable-next-line no-console
+				console.error(error)
+			}
 		}
 	}
 
