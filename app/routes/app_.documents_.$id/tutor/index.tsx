@@ -8,6 +8,8 @@ import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
 	AudioLines,
+	ChevronDownIcon,
+	ChevronUpIcon,
 	PauseCircleIcon,
 	PlayCircle,
 } from 'lucide-react'
@@ -50,6 +52,7 @@ function base64ToArrayBuffer(base64: string) {
 }
 
 export const Tutor = ({ cms, nextCmId, docId }: Props) => {
+	const [messagesExpanded, setMessagesExpanded] = useLocalStorage(`doc-${docId}-tutor-messages-expanded`, true)
 	const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>()
 	const incrementInstructionFetcher = useFetcher()
 	const advanceCourseModuleFetcher = useFetcher()
@@ -188,6 +191,7 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 					<div className="h-2 w-full rounded-full border bg-muted">
 						<Tooltip
 							text={`${cms.instructionsCompleted} of ${totalInstructions}`}
+							delayDuration={0}
 						>
 							<div
 								className="h-full rounded-full bg-primary transition-all duration-200 ease-in-out"
@@ -262,8 +266,27 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 					</Popover>
 				</div>
 			</div>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={() => setMessagesExpanded(!messagesExpanded)}
+				className={cn(
+					"w-full flex items-center justify-center py-2 rounded-none",
+					messagesExpanded && "border-b"
+				)}
+			>
+				{messagesExpanded ? (
+					<ChevronUpIcon size={20} />
+				) : (
+					<ChevronDownIcon size={20} />
+				)}
+				<span className="ml-2">{messagesExpanded ? "Hide" : "Show"} Messages</span>
+			</Button>
 			<div
-				className="no-scrollbar flex grow flex-col gap-3 overflow-scroll px-3 py-2 md:h-full"
+				className={cn(
+					"no-scrollbar flex grow flex-col gap-3 px-3 md:h-full transition-all duration-300",
+					messagesExpanded ? "max-h-full py-2 overflow-scroll" : "max-h-0 overflow-hidden"
+				)}
 				ref={messagesRef}
 				id="course-module-session-messages"
 			>

@@ -37,6 +37,11 @@ export const DocumentVersions = ({ documentId, versions }: Props) => {
 		const params = new URLSearchParams(searchParams)
 		params.delete('versionId')
 		setSearchParams(params)
+		localStorage.setItem(`document-${documentId}`, version?.html ?? '');
+		const editor = document.querySelector('div.tiptap');
+		if (editor) {
+			editor.innerHTML = version?.html ?? '';
+		}
 	}
 
 	const selectVersion = (versionId: string) => {
@@ -99,7 +104,7 @@ export const DocumentVersions = ({ documentId, versions }: Props) => {
 									</Tooltip>
 									<DialogContent>
 										<DialogHeader>
-											<h3>Restore Version</h3>
+											<h3>Restore Version?</h3>
 										</DialogHeader>
 										<DialogDescription>
 											Are you sure you want to restore this version? This will
@@ -116,7 +121,7 @@ export const DocumentVersions = ({ documentId, versions }: Props) => {
 													disabled={isPending}
 													onClick={() => (isPending ? undefined : closeSheet())}
 												>
-													Restore
+													{isPending ? "Restoring..." : "Restore"}
 												</Button>
 											</fetcher.Form>
 											<DialogClose>

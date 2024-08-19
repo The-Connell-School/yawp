@@ -1,6 +1,10 @@
 import { type Fetcher, useFetchers } from '@remix-run/react'
+import { ChevronUpIcon, ChevronDownIcon } from 'lucide-react'
 import { useEffect } from 'react';
+import { useLocalStorage } from 'usehooks-ts';
+import { Button } from '#app/components/ui/button'
 import { useUser } from '#app/hooks/useUser'
+import { cn } from '#app/utils/misc'
 import { Comment, type Comment as CommentType } from './comment'
 
 type Props = { comments: CommentType[] }
@@ -8,6 +12,7 @@ type Props = { comments: CommentType[] }
 export const Comments = ({ comments }: Props) => {
 	const user = useUser()
 	const fetcher = useFetchers().find(f => f.key === 'create-document-comment')
+	const [commentsExpanded, setCommentsExpanded] = useLocalStorage('commentsExpanded', true)
 
 	useBlurComments(comments)
 	useFocusOptimisticComment(fetcher)
@@ -26,18 +31,38 @@ export const Comments = ({ comments }: Props) => {
 		: []
 
 	return (
-		<div className="no-scrollbar no-scrollbar h-full w-full overflow-y-scroll md:w-3/5">
-			{comments.length > 0 ? (
-				<div className="flex flex-col gap-2 p-2">
-					{comments.concat(optimisticComment).map(comment => (
-						<Comment key={comment.id} {...comment} />
-					))}
-				</div>
-			) : (
-				<p className="my-auto h-full p-4 text-center text-muted-foreground">
-					No comments yet.
-				</p>
-			)}
+		<div className="no-scrollbar h-full w-full overflow-y-scroll md:w-3/5">
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={() => setCommentsExpanded(!commentsExpanded)}
+				className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
+			>
+				{commentsExpanded ? (
+					<ChevronUpIcon size={20} />
+				) : (
+					<ChevronDownIcon size={20} />
+				)}
+				<span className="ml-2">{commentsExpanded ? "Hide" : "Show"} Comments</span>
+			</Button>
+			<div
+				className={cn(
+					"no-scrollbar flex grow flex-col gap-2 transition-all duration-300",
+					commentsExpanded ? "max-h-full p-2 overflow-scroll" : "max-h-0 overflow-hidden"
+				)}
+			>
+				{comments.length > 0 ? (
+					<>
+						{comments.concat(optimisticComment).map(comment => (
+							<Comment key={comment.id} {...comment} />
+						))}
+					</>
+				) : (
+					<p className="my-auto h-full p-4 text-center text-muted-foreground">
+						No comments yet.
+					</p>
+				)}
+			</div>
 		</div>
 	)
 }

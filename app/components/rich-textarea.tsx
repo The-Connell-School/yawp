@@ -23,7 +23,7 @@ export const RichTextarea = ({
 				className={cn(
 					'no-scrollbar my-auto w-full resize-none rounded-lg border bg-background p-3 pr-14 focus:border-primary focus:outline-1 focus:outline-primary',
 					className,
-					{ 'p-2': size === 'sm' },
+					{ 'p-2 pr-10': size === 'sm' },
 				)}
 				style={{ height, maxHeight: '200px', minHeight: height }}
 				size={size}
