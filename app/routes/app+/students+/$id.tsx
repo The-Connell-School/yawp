@@ -20,6 +20,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 				include: {
 					image: true,
 					documents: {
+						orderBy: { createdAt: 'desc' },
 						where: { deletedAt: null },
 						include: {
 							courseModuleSessions: {

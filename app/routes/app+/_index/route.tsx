@@ -19,6 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			select: { image: { select: { id: true } }, id: true, title: true },
 		}),
 		prisma.document.findMany({
+			orderBy: { createdAt: 'desc' },
 			where: { userId, deletedAt: null },
 			include: {
 				courseModuleSessions: {

@@ -24,9 +24,9 @@ export const DocumentLink = ({ doc }: Props) => {
 		<Link
 			key={doc.id}
 			to={`/app/documents/${doc.id}?ssv=1`}
-			className="relative flex h-48 flex-col overflow-hidden rounded-lg border transition-shadow hover:shadow"
+			className="relative flex h-48 flex-col overflow-hidden rounded-lg border transition-all hover:shadow hover:border-primary/50"
 		>
-			<span className="absolute right-1 top-1 z-20 rounded-full border bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+			<span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
 				{doc.courseModuleSessions[0].courseModule.title}
 			</span>
 			{doc.html ? (
