@@ -7,7 +7,7 @@ kill_timeout = "5s"
   auto_rollback = true
 
 [deploy]
-  release_command = "npx prisma migrate deploy && node ./other/sentry-create-release"
+  release_command = "node ./other/sentry-create-release"
 
 [mounts]
   source = "data"
@@ -53,6 +53,9 @@ kill_timeout = "5s"
     grace_period = "10s"
     method = "GET"
     path = "/litefs/health"
+
+[processes]
+  backup = "./backup.sh"
 
 [[vm]]
   cpu_kind = "shared"
