@@ -12,7 +12,7 @@ type Props = { comments: CommentType[] }
 export const Comments = ({ comments }: Props) => {
 	const user = useUser()
 	const fetcher = useFetchers().find(f => f.key === 'create-document-comment')
-	const [commentsExpanded, setCommentsExpanded] = useLocalStorage('commentsExpanded', true)
+	const [commentsExpanded, setCommentsExpanded] = useLocalStorage(`commentsExpanded-${comments[0]?.documentId}`, true)
 
 	useBlurComments(comments)
 	useFocusOptimisticComment(fetcher)

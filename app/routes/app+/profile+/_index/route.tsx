@@ -1,19 +1,17 @@
-import { getInputProps, getFormProps, useForm } from '@conform-to/react'
-import {
-	getZodConstraint as getFieldsetConstraint,
-	parseWithZod as parse,
-} from '@conform-to/zod'
 import { invariantResponse } from '@epic-web/invariant'
 import {
 	type ActionFunctionArgs,
 	type LoaderFunctionArgs,
 	json,
 } from '@remix-run/node'
-import { Link, useFetcher, useLoaderData } from '@remix-run/react'
+import { Link, useLoaderData } from '@remix-run/react'
+import { withZod } from '@remix-validated-form/with-zod'
 import { ImageIcon } from 'lucide-react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
 import { z } from 'zod'
-import { FormInput } from '#app/components/forms/form-input'
+import { FormInput } from '#app/components/forms/form-input-2'
+import { FormSelect } from '#app/components/forms/form-select-2';
 import {
 	CameraIcon,
 	EnvelopeClosedIcon,
@@ -28,59 +26,63 @@ import { prisma } from '#app/utils/db.server.ts'
 import { useDoubleCheck } from '#app/utils/misc.tsx'
 import { NameSchema } from '#app/utils/schemas/user'
 import { authSessionStorage } from '#app/utils/session.server.ts'
+import { createToastHeaders } from '#app/utils/toast.server.js';
 import { twoFAVerificationType } from '../two-factor/route'
 
 const ProfileFormSchema = z.object({
 	name: NameSchema.optional(),
+	workshopLeaderId: z.string().optional(),
 })
+
+const validator = withZod(ProfileFormSchema)
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
-	const user = await prisma.user.findUniqueOrThrow({
-		where: { id: userId },
-		select: {
-			id: true,
-			name: true,
-			email: true,
-			image: {
-				select: { id: true },
-			},
-			_count: {
-				select: {
-					sessions: {
-						where: {
-							expirationDate: { gt: new Date() },
+	const [user, teachers, twoFactorVerification, password] = await Promise.all([
+		prisma.user.findUnique({
+			where: { id: userId },
+			select: {
+				id: true,
+				name: true,
+				email: true,
+				image: {
+					select: { id: true },
+				},
+				studentProfile: {
+					select: { workshopLeaderId: true },
+				},
+				_count: {
+					select: {
+						sessions: {
+							where: {
+								expirationDate: { gt: new Date() },
+							},
 						},
 					},
 				},
 			},
-		},
-	})
-
-	const twoFactorVerification = await prisma.verification.findUnique({
-		select: { id: true },
-		where: { target_type: { type: twoFAVerificationType, target: userId } },
-	})
-
-	const password = await prisma.password.findUnique({
-		select: { userId: true },
-		where: { userId },
-	})
+		}),
+		prisma.user.findMany({
+			where: { teacherProfile: { isNot: null } },
+			select: { id: true, name: true, email: true },
+		}),
+		prisma.verification.findUnique({
+			select: { id: true },
+			where: { target_type: { type: twoFAVerificationType, target: userId } },
+		}),
+		prisma.password.findUnique({
+			select: { userId: true },
+			where: { userId },
+		})
+	])
 
 	return json({
 		user,
+		teachers,
 		hasPassword: Boolean(password),
 		isTwoFactorEnabled: Boolean(twoFactorVerification),
 	})
 }
-
-type ProfileActionArgs = {
-	request: Request
-	userId: string
-	formData: FormData
-}
-const profileUpdateActionIntent = 'update-profile'
-const signOutOfSessionsActionIntent = 'sign-out-of-sessions'
 
 export async function action({ request }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
@@ -89,11 +91,48 @@ export async function action({ request }: ActionFunctionArgs) {
 	const intent = formData.get('intent')
 
 	switch (intent) {
-		case profileUpdateActionIntent: {
-			return profileUpdateAction({ request, userId, formData })
+		case 'update-profile': {
+			const result = await validator.validate(formData)
+			if (result.error) return validationError(result.error)
+
+			const { name, workshopLeaderId } = result.data
+
+			await prisma.user.update({
+				where: { id: userId },
+				data: { name },
+			})
+
+			if (workshopLeaderId) {
+				await prisma.user.update({
+					where: { id: userId },
+					data: { studentProfile: { update: { workshopLeaderId } } },
+				})
+			}
+
+			return json({ success: true }, {
+				headers: await createToastHeaders({
+					title: 'Profile updated',
+					description: 'Your profile has been successfully updated.',
+					type: 'success',
+				}),
+			})
 		}
-		case signOutOfSessionsActionIntent: {
-			return signOutOfSessionsAction({ request, userId, formData })
+		case 'sign-out-of-sessions': {
+			const authSession = await authSessionStorage.getSession(
+				request.headers.get('cookie'),
+			)
+			const sessionId = authSession.get(sessionKey)
+			invariantResponse(
+				sessionId,
+				'You must be authenticated to sign out of other sessions',
+			)
+			await prisma.session.deleteMany({
+				where: {
+					userId,
+					id: { not: sessionId },
+				},
+			})
+			return json({ status: 'success' } as const)
 		}
 		default: {
 			throw new Response(`Invalid intent "${intent}"`, { status: 400 })
@@ -105,6 +144,8 @@ export default function EditUserProfile() {
 	const data = useLoaderData<typeof loader>()
 	const user = useUser()
 	const isAdmin = user?.roles.some(role => role.name === 'admin')
+	const dc = useDoubleCheck()
+	const otherSessionsCount = (data.user?._count.sessions || 0) - 1
 
 	return (
 		<div>
@@ -134,7 +175,38 @@ export default function EditUserProfile() {
 					</Link>
 				</div>
 				<div className="flex flex-grow flex-col gap-2">
-					<UpdateProfile />
+					<ValidatedForm
+						validator={validator}
+						method="POST"
+						defaultValues={{ name: data.user?.name ?? '', workshopLeaderId: data.user?.studentProfile?.workshopLeaderId ?? '' }}
+						className="flex flex-col gap-2"
+					>
+						<AuthenticityTokenInput />
+						<div className='flex gap-2 flex-col sm:flex-row'>
+							<FormInput
+								name="name"
+								label="Name"
+								className="min-w-[200px]"
+							/>
+							{data.user?.studentProfile ? (
+								<FormSelect
+									name="workshopLeaderId"
+									label="Yawp! Teacher"
+									options={data.teachers.map(teacher => ({
+										value: teacher.id,
+										label: teacher.name,
+									}))}
+									className="min-w-[200px]"
+								/>
+							) : null}
+						</div>
+						<div className="mt-1">
+							<Button type="submit" name="intent" value="update-profile">
+								Save changes
+							</Button>
+						</div>
+					</ValidatedForm>
+					<div className="my-4 border-b" />
 					<div className="my-4 border-b" />
 					<div className="flex flex-wrap gap-2">
 						<Link
@@ -155,136 +227,31 @@ export default function EditUserProfile() {
 						</Link>
 					</div>
 					<div className="flex gap-2">
-						<SignOutOfSessions />
+						<div className="flex items-center gap-2">
+							{otherSessionsCount ? (
+								<ValidatedForm method="POST" validator={validator}>
+									<AuthenticityTokenInput />
+									<Button
+										className="flex-grow"
+										variant={dc.doubleCheck ? 'destructive' : 'secondary'}
+										{...dc.getButtonProps({
+											type: 'submit',
+											name: 'intent',
+											value: 'sign-out-of-sessions',
+										})}
+									>
+										{dc.doubleCheck
+											? `Are you sure?`
+											: `Sign out of ${otherSessionsCount} other sessions`}
+									</Button>
+								</ValidatedForm>
+							) : (
+								'This is your only session'
+							)}
+						</div>
 					</div>
 				</div>
 			</div>
-			{isAdmin ? (
-				<div className="mt-12">
-					<h2>Settings</h2>
-					<div className="my-4 w-full border-b" />
-					<Link to="/app/profile/assistants">
-						<div className="cursor-pointer rounded-lg bg-primary/10 p-4 transition-colors hover:bg-primary/15">
-							<h3 className="flex items-center gap-1.5">
-								<LockClosedIcon className="h-4 w-4" />
-								Manage assistants
-							</h3>
-							<p>
-								Set passwords and more for each assistant accessible to students
-								and teachers.
-							</p>
-						</div>
-					</Link>
-				</div>
-			) : null}
-		</div>
-	)
-}
-
-async function profileUpdateAction({ userId, formData }: ProfileActionArgs) {
-	const submission = await parse(formData, {
-		async: true,
-		schema: ProfileFormSchema,
-	})
-
-	if (submission.status !== 'success' || !submission.value) {
-		return json(submission.reply(), { status: 400 })
-	}
-
-	const data = submission.value
-
-	await prisma.user.update({
-		where: { id: userId },
-		data: { name: data.name },
-	})
-
-	return json(submission.reply())
-}
-
-function UpdateProfile() {
-	const data = useLoaderData<typeof loader>()
-	const fetcher = useFetcher<typeof profileUpdateAction>()
-
-	const [form, fields] = useForm({
-		id: 'edit-profile',
-		constraint: getFieldsetConstraint(ProfileFormSchema),
-		lastResult: fetcher.data,
-		onValidate({ formData }) {
-			return parse(formData, { schema: ProfileFormSchema })
-		},
-		defaultValue: { name: data.user.name ?? '' },
-	})
-
-	return (
-		<fetcher.Form
-			method="POST"
-			{...getFormProps(form)}
-			className="flex flex-col gap-2"
-		>
-			<AuthenticityTokenInput />
-			<FormInput
-				labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
-				inputProps={{
-					...getInputProps(fields.name, { type: 'text' }),
-					className: 'w-auto max-w-[400px] min-w-[200px]',
-				}}
-				errors={fields.name.errors}
-			/>
-			<div className="mt-1">
-				<Button type="submit" name="intent" value={profileUpdateActionIntent}>
-					Save changes
-				</Button>
-			</div>
-		</fetcher.Form>
-	)
-}
-
-async function signOutOfSessionsAction({ request, userId }: ProfileActionArgs) {
-	const authSession = await authSessionStorage.getSession(
-		request.headers.get('cookie'),
-	)
-	const sessionId = authSession.get(sessionKey)
-	invariantResponse(
-		sessionId,
-		'You must be authenticated to sign out of other sessions',
-	)
-	await prisma.session.deleteMany({
-		where: {
-			userId,
-			id: { not: sessionId },
-		},
-	})
-	return json({ status: 'success' } as const)
-}
-
-function SignOutOfSessions() {
-	const data = useLoaderData<typeof loader>()
-	const dc = useDoubleCheck()
-	const fetcher = useFetcher<typeof signOutOfSessionsAction>()
-	const otherSessionsCount = data.user._count.sessions - 1
-
-	return (
-		<div className="flex items-center gap-2">
-			{otherSessionsCount ? (
-				<fetcher.Form method="POST">
-					<AuthenticityTokenInput />
-					<Button
-						className="flex-grow"
-						variant={dc.doubleCheck ? 'destructive' : 'secondary'}
-						{...dc.getButtonProps({
-							type: 'submit',
-							name: 'intent',
-							value: signOutOfSessionsActionIntent,
-						})}
-					>
-						{dc.doubleCheck
-							? `Are you sure?`
-							: `Sign out of ${otherSessionsCount} other sessions`}
-					</Button>
-				</fetcher.Form>
-			) : (
-				'This is your only session'
-			)}
 		</div>
 	)
 }
