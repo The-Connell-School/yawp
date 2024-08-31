@@ -29,7 +29,7 @@ import { Tooltip } from '#app/components/ui/tooltip.js'
 import { cn } from '#app/utils/misc.js'
 
 export const COMMAND_STYLE =
-	'p-2 hover:bg-muted cursor-pointer rounded-sm transition-colors'
+	'p-2 hover:bg-muted cursor-pointer rounded-sm transition-colors h-8 flex items-center justify-center'
 
 export type Command = {
 	icon?: ReactNode

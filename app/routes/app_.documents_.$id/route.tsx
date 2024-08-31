@@ -29,6 +29,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
 	const url = new URL(request.url)
 	const shouldSaveVersion = url.searchParams.get('ssv') === '1'
+	const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0
 
 	const doc = await prisma.document.findFirst({
 		where: {
@@ -98,12 +99,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		}
 	}
 
-	const currentCms = doc.courseModuleSessions[0]
+	const currentCms = doc.courseModuleSessions[cmsIdx]
 	const nextCmId = currentCms.courseModule.course?.courseModules.find(
 		cm => cm.position === currentCms.courseModule.position + 1,
 	)?.id
 
-	return json({ doc, currentCms, nextCmId, shouldSaveVersion })
+	return json({
+		doc,
+		currentCms,
+		nextCmId,
+		shouldSaveVersion,
+		hasPreviousCms: doc.courseModuleSessions[cmsIdx + 1] !== undefined,
+	})
 }
 
 export default function Route() {
@@ -142,7 +149,7 @@ export default function Route() {
 						to={
 							isViewingAsTeacher
 								? `/app/students/${data.doc.user.studentProfile?.id}`
-								: `/app/courses/${data.doc.courseModuleSessions[0]?.courseModule.courseId}`
+								: `/app/courses/${data.currentCms.courseModule.courseId}`
 						}
 					>
 						<ArrowLeft className="h-4" />
@@ -211,6 +218,7 @@ export default function Route() {
 						docId={data.doc.id}
 						cms={data.currentCms}
 						nextCmId={data.nextCmId}
+						hasPreviousCms={data.hasPreviousCms}
 					/>
 				)}
 				{isMobile && tab !== 'editor' ? null : (

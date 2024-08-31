@@ -1,11 +1,15 @@
-import { json, type LoaderFunctionArgs } from '@remix-run/node'
-import { useLoaderData, useSearchParams } from '@remix-run/react'
+import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from '@remix-run/node'
+import { useLoaderData, useSearchParams, Form } from '@remix-run/react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { TrashIcon } from '#app/components/icons'
 import { ListLayout } from '#app/components/list-layout'
 import { SettingsNavLink } from '#app/components/settings-list-item'
+import { Button } from '#app/components/ui/button'
 import { UserImage } from '#app/components/user-image.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
+import { useDoubleCheck } from '#app/utils/misc'
+import { redirectWithToast } from '#app/utils/toast.server'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
@@ -28,6 +32,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	return json({ students })
 }
 
+export async function action({ request }: ActionFunctionArgs) {
+	await requireUserId(request)
+	const formData = await request.formData()
+	const studentId = formData.get('studentId')
+
+	if (typeof studentId !== 'string') {
+		return json({ error: 'Invalid student ID' }, { status: 400 })
+	}
+
+	await prisma.studentProfile.delete({ where: { id: studentId } })
+
+	return redirectWithToast('/app/students', {
+		type: 'success',
+		description: 'Student removed successfully.',
+		closeButton: false,
+	})
+}
+
 export default function Route() {
 	const data = useLoaderData<typeof loader>()
 	const [searchParams] = useSearchParams()
@@ -40,6 +62,7 @@ export default function Route() {
 						key={sp.id}
 						to={`/app/students/${sp.id}?q=${searchParams.get('q') ?? ''}`}
 						title={sp.user.name ?? sp.user.email}
+						deleteButton={<DeleteButton studentId={sp.id} />}
 						image={
 							<div className="py-2 pl-2">
 								<UserImage user={sp.user} size="xs" />
@@ -57,6 +80,28 @@ export default function Route() {
 				</div>
 			)}
 		</ListLayout>
+	)
+}
+
+function DeleteButton({ studentId }: { studentId: string }) {
+	const dc = useDoubleCheck()
+
+	return (
+		<Form method="POST">
+			<input type="hidden" name="studentId" value={studentId} />
+			<Button
+				type="submit"
+				variant="ghost"
+				size="sm"
+				{...dc.getButtonProps({ onClick: e => e.stopPropagation() })}
+			>
+				{dc.doubleCheck ? (
+					'Are you sure?'
+				) : (
+					<TrashIcon className="h-4 w-4" />
+				)}
+			</Button>
+		</Form>
 	)
 }
 

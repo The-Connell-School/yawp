@@ -8,8 +8,10 @@ import {
 	ArrowLeftIcon,
 	ArrowRightIcon,
 	AudioLines,
-	ChevronDownIcon,
-	ChevronUpIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
+	MessageSquareOff,
+	MessageSquareText,
 	PauseCircleIcon,
 	PlayCircle,
 } from 'lucide-react'
@@ -33,9 +35,10 @@ import { ResponseBar } from './response-bar'
 type Props = {
 	docId: string
 	nextCmId?: string
+	hasPreviousCms?: boolean
 	cms: JsonifyObject<
 		PrismaCMS & {
-			courseModule: { instructions: CourseModuleInstruction[] }
+			courseModule: { instructions: CourseModuleInstruction[]; title: string }
 			messages: CourseModuleSessionMessage[]
 		}
 	>
@@ -51,7 +54,7 @@ function base64ToArrayBuffer(base64: string) {
 	return bytes.buffer
 }
 
-export const Tutor = ({ cms, nextCmId, docId }: Props) => {
+export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 	const [messagesExpanded, setMessagesExpanded] = useLocalStorage(`doc-${docId}-tutor-messages-expanded`, true)
 	const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>()
 	const incrementInstructionFetcher = useFetcher()
@@ -59,11 +62,11 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 	const audioFetcher = useFetcher<{ audio: string }>()
 	const messagesRef = useRef<HTMLDivElement>(null)
 	const audioRef = useRef<HTMLAudioElement>(null)
-	const totalInstructions = cms.courseModule.instructions.length
 	const navigate = useNavigate()
 	const [searchParams] = useSearchParams()
 	const shouldPlayAudio = searchParams.get('spa') === '1'
 	const audioControls = useAudio(audioRef.current)
+	const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0
 
 	const [speechEnabled, setSpeechEnabled] = useLocalStorage(
 		'speechEnabled',
@@ -77,10 +80,8 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 	const instruction =
 		cms.courseModule.instructions[cms.instructionsCompleted] ?? {}
 
-	const completedInstructionsPct = Math.min(
-		(cms.instructionsCompleted / totalInstructions) * 100,
-		100,
-	)
+	const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined
+	const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined
 
 	const optimistic = tutorResponseFetcher.formData
 	const optimisticMessage = optimistic
@@ -184,27 +185,55 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 		<div className="flex w-full flex-col border-r pb-2 md:w-3/5">
 			<audio ref={audioRef} hidden />
 			<div className="flex items-center justify-between gap-8 border-b py-1 pl-4 pr-2">
-				<div className="flex h-[32px] w-full items-center gap-4">
-					<p className="min-w-fit text-sm">
-						{completedInstructionsPct === 100 ? 'Completed' : 'Progress'}
-					</p>
-					<div className="h-2 w-full rounded-full border bg-muted">
-						<Tooltip
-							text={`${cms.instructionsCompleted} of ${totalInstructions}`}
-							delayDuration={0}
-						>
-							<div
-								className="h-full rounded-full bg-primary transition-all duration-200 ease-in-out"
-								style={{ width: `${completedInstructionsPct}%` }}
-							/>
+				<div className="flex h-[32px] w-full items-center gap-1">
+					<div className="flex gap-2 items-center flex-grow">
+						<Tooltip text="Previous step" delayDuration={0}>
+							<Button
+								variant="secondary"
+								size="icon-sm"
+								disabled={prevCmsIdx === undefined}
+								onClick={() => prevCmsIdx !== undefined && navigate(`/app/documents/${docId}?cmsIdx=${prevCmsIdx}`)}
+							>
+								<ChevronLeftIcon size={20} />
+							</Button>
+						</Tooltip>
+						<p className="text-sm font-bold text-foreground/80">
+							{cms.courseModule.title}
+						</p>
+						<Tooltip text="Next step" delayDuration={0}>
+							<Button
+								variant="secondary"
+								size="icon-sm"
+								disabled={nextCmsIdx === undefined}
+								onClick={() => nextCmsIdx !== undefined && navigate(`/app/documents/${docId}?cmsIdx=${nextCmsIdx}`)}
+							>
+								<ChevronRightIcon size={20} />
+							</Button>
 						</Tooltip>
 					</div>
+					<Tooltip
+						text={messagesExpanded ? "Hide messages" : "Show messages"}
+						delayDuration={0}
+					>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							className="min-w-8"
+							onClick={() => setMessagesExpanded(!messagesExpanded)}
+						>
+							{messagesExpanded ? (
+								<MessageSquareOff size={20} />
+							) : (
+								<MessageSquareText size={20} />
+							)}
+						</Button>
+					</Tooltip>
 					<Popover>
 						<PopoverTrigger asChild>
 							<Button variant="ghost" size="icon-sm" className="min-w-8">
 								<AudioLines
 									size={20}
-									strokeWidth={2.5}
+									strokeWidth={2}
 									className={
 										audioControls.isPlaying ? 'text-primary' : undefined
 									}
@@ -266,22 +295,6 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 					</Popover>
 				</div>
 			</div>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={() => setMessagesExpanded(!messagesExpanded)}
-				className={cn(
-					"w-full flex items-center justify-center py-2 rounded-none",
-					messagesExpanded && "border-b"
-				)}
-			>
-				{messagesExpanded ? (
-					<ChevronUpIcon size={20} />
-				) : (
-					<ChevronDownIcon size={20} />
-				)}
-				<span className="ml-2">{messagesExpanded ? "Hide" : "Show"} Messages</span>
-			</Button>
 			<div
 				className={cn(
 					"no-scrollbar flex grow flex-col gap-3 px-3 md:h-full transition-all duration-300",
@@ -319,8 +332,17 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 					</p>
 				) : null}
 			</div>
-			{finishedCms && nextCmId ? (
-				<div className="flex flex-col items-center gap-4 border-t p-2 px-4">
+			{cmsIdx !== 0 ? (
+				<div className={cn("flex flex-col justify-center items-center p-4", messagesExpanded ? 'border-t' : undefined)}>
+					<p className="text-center text-sm text-muted-foreground mb-4">
+						This step has been completed. Click next to continue.
+					</p>
+					<Button onClick={() => navigate(`/app/documents/${docId}?cmsIdx=${nextCmsIdx}`)}>
+						Next <ArrowRightIcon size={18} className="ml-2" />
+					</Button>
+				</div>
+			) : finishedCms && nextCmId ? (
+				<div className={cn("flex flex-col items-center gap-4 border-t p-2 px-4", messagesExpanded ? 'border-t' : undefined)}>
 					<p className="text-center text-sm text-muted-foreground">
 						This will take you to the next step of the writing process. Click
 						next again only if you are ready to move on, or click back to stay
@@ -336,11 +358,12 @@ export const Tutor = ({ cms, nextCmId, docId }: Props) => {
 					</div>
 				</div>
 			) : finishedCms ? (
-				<p className="border-t p-2 text-center text-sm text-muted-foreground">
+				<p className={cn("p-2 text-center text-sm text-muted-foreground", messagesExpanded ? 'border-t' : undefined)}>
 					You have completed all the modules in this course.
 				</p>
 			) : (
 				<ResponseBar
+					className={messagesExpanded ? undefined : "border-t-0"}
 					options={instruction.answerTypeOptions}
 					respond={respond}
 					canAskQuestion={

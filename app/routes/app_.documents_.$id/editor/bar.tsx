@@ -1,6 +1,6 @@
 import { useFetcher } from '@remix-run/react';
 import { type Editor } from '@tiptap/react'
-import { MessageCircleIcon } from 'lucide-react'
+import { MessageCirclePlusIcon } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { v4 } from 'uuid';
 import { DotsHorizontalIcon } from '#app/components/icons'
@@ -106,7 +106,7 @@ export const Bar = ({ editor, documentId }: BarProps) => {
 						'bg-muted': editor.isActive('comment'),
 					})}
 				>
-					<MessageCircleIcon className="h-4 w-4" />
+					<MessageCirclePlusIcon className="h-5 w-5" />
 				</div>
 			</Tooltip>
 			{hiddenCommands.length > 0 && (

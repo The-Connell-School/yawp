@@ -1,5 +1,5 @@
 import { type Fetcher, useFetchers } from '@remix-run/react'
-import { ChevronUpIcon, ChevronDownIcon } from 'lucide-react'
+import { MessageCircleOff, MessageCircle } from 'lucide-react'
 import { useEffect } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '#app/components/ui/button'
@@ -39,9 +39,9 @@ export const Comments = ({ comments }: Props) => {
 				className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
 			>
 				{commentsExpanded ? (
-					<ChevronUpIcon size={20} />
+					<MessageCircleOff size={18} />
 				) : (
-					<ChevronDownIcon size={20} />
+					<MessageCircle size={18} />
 				)}
 				<span className="ml-2">{commentsExpanded ? "Hide" : "Show"} Comments</span>
 			</Button>

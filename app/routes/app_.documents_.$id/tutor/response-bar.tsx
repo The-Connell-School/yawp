@@ -14,6 +14,7 @@ type Props = {
 	options: string | null
 	canAskQuestion?: boolean
 	advanceInstructionLabel?: string | null
+	className?: string
 	advanceInstruction?: () => void
 	respond: (response: string) => void
 }
@@ -24,13 +25,14 @@ export const ResponseBar = ({
 	advanceInstruction,
 	advanceInstructionLabel,
 	respond,
+	className,
 }: Props) => {
 	const [isAskingQuestion, setIsAskingQuestion] = useState(false)
 	const [check, setCheck] = useState(false)
 	const isPending = useIsPending()
 
 	return isAskingQuestion ? (
-		<div className="flex w-full items-center justify-center px-3">
+		<div className={cn("flex w-full items-center justify-center px-3", className)}>
 			<Button
 				size="lg"
 				variant="secondary"
@@ -44,7 +46,7 @@ export const ResponseBar = ({
 			</div>
 		</div>
 	) : (
-		<div className="flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4">
+		<div className={cn("flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4", className)}>
 			{options
 				?.split(',')
 				.filter(Boolean)
