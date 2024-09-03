@@ -3,6 +3,10 @@ primary_region = "atl"
 kill_signal = "SIGINT"
 kill_timeout = "5s"
 
+[processes]
+  app = ""
+  cron = "supercronic crontab"
+
 [experimental]
   auto_rollback = true
 
@@ -53,9 +57,6 @@ kill_timeout = "5s"
     grace_period = "10s"
     method = "GET"
     path = "/litefs/health"
-
-[processes]
-  backup = "./backup.sh"
 
 [[vm]]
   cpu_kind = "shared"

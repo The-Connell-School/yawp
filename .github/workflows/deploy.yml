@@ -102,6 +102,9 @@ jobs:
         run:
           flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
           --app ${{ steps.app_name.outputs.value }}-staging
+          --build-secret SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+          --build-secret AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -137,5 +140,7 @@ jobs:
         run:
           flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
           --build-secret SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+          --build-secret AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
