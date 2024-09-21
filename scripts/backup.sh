@@ -1,29 +1,30 @@
 #!/bin/bash
 
-# Create backups directory if it doesn't exist
+# Setup variables
+bucket="yawp-school"
+db_url="http://e2866454b1d048.vm.yawp-school.internal:20202"
+s3_endpoint="https://fly.storage.tigris.dev"
+backup_file="$(date +%m-%d-%Y_%H-%M-%S).db"
+
+# Save a backup
 mkdir backups
-
-# Export the databasee
-litefs export --name sqlite.db --url http://e2866454b1d048.vm.yawp-school.internal:20202 backups/$(date +%m-%d-%Y).db
-
-# Compress the backup
-gzip backups/$(date +%m-%d-%Y).db
-
-# Upload to S3
-aws s3 cp backups/$(date +%m-%d-%Y).db.gz s3://yawp-school --endpoint-url https://fly.storage.tigris.dev
+litefs export --name sqlite.db --url "$db_url" "backups/$backup_file"
+gzip "backups/$backup_file"
+aws s3 cp "backups/$backup_file.gz" s3://"$bucket" --endpoint-url "$s3_endpoint"
+rm -rf backups
 
 # Remove backups older than 10 days
-aws s3 ls s3://ploductivity --endpoint-url https://fly.storage.tigris.dev | awk '{print $4}' | while read -r file; do
+aws s3 ls s3://"$bucket" --endpoint-url "$s3_endpoint" | awk '{print $4}' | while read -r file; do
     file_date=$(echo "$file" | grep -oP '\d{2}-\d{2}-\d{4}')
     if [[ ! -z "$file_date" ]]; then
-        file_timestamp=$(date -d "$file_date" +%s)
-        current_timestamp=$(date +%s)
-        age_days=$(( (current_timestamp - file_timestamp) / 86400 ))
-        if [[ $age_days -ge 10 ]]; then
-            aws s3 rm s3://ploductivity/"$file" --endpoint-url https://fly.storage.tigris.dev
+        current_date=$(date +%Y-%m-%d)
+        file_date_formatted=$(date -d "${file_date//-//}" +%Y-%m-%d 2>/dev/null)
+        if [[ $? -eq 0 && "$file_date_formatted" < "$current_date" ]]; then
+            days_diff=$(( ($(date -d "$current_date" +%s) - $(date -d "$file_date_formatted" +%s)) / 86400 ))
+            if [[ $days_diff -ge 10 ]]; then
+                aws s3 rm s3://"$bucket"/"$file" --endpoint-url "$s3_endpoint"
+                echo "Deleted: $file"
+            fi
         fi
     fi
 done
-
-# Clean up
-rm -rf backups
