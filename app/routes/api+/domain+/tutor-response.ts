@@ -2,7 +2,6 @@ import { json, type ActionFunctionArgs } from '@remix-run/node'
 import { withZod } from '@remix-validated-form/with-zod'
 import { validationError } from 'remix-validated-form'
 import { z } from 'zod'
-// import { openai } from '#app/services/openai.js'
 import { getBase64Audio } from '#app/services/openai.js'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
@@ -22,6 +21,7 @@ export enum InstructionInteraction {
 const POST = withZod(
 	z.object({
 		response: z.string().min(1),
+		content: z.string().optional(),
 		cmsId: z.string().min(1),
 		speechSpeed: z.string().optional(),
 		speechEnabled: z.union([z.literal('true'), z.literal('false')]),
@@ -272,7 +272,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			.concat([
 				{
 					role: AgentType.User,
-					content: `content = '${cms.document.text}', response = ${data.response}`,
+					content: `content = '${data.content}', response = '${data.response}'`,
 				},
 			])
 

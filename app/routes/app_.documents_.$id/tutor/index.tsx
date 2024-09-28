@@ -94,7 +94,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
 	const respond = (response: string) => {
 		tutorResponseFetcher.submit(
-			{ response, cmsId: cms.id, speechEnabled, speechSpeed: '1.5' },
+			{ response, cmsId: cms.id, speechEnabled, speechSpeed: '1.5', content: localStorage.getItem(`document-${docId}`) },
 			{ method: 'POST', action: '/api/domain/tutor-response' },
 		)
 	}
