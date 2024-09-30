@@ -87,7 +87,7 @@ export const Editor = ({ doc, setIsSaving }: Props) => {
 	return (
 		<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
 			<Bar editor={editor} documentId={doc.id} />
-			<div className="no-scrollbar grow overflow-y-scroll p-5 font-times">
+			<div className="no-scrollbar grow overflow-y-scroll p-5 font-times" key={`${doc.id}-editor`}>
 				<EditorContent
 					editor={editor}
 					className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
