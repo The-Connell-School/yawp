@@ -61,8 +61,19 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 					const withoutKey = Object.keys(prev).reduce(
 						(acc, prevK) => {
 							if (prevK.startsWith(key)) {
-								const newKeyWithSuffix = newKey + prevK.slice(newKey.length)
-								moved[newKeyWithSuffix] = prev[prevK]
+								const extension = prevK.slice(key.length)
+								const newKeyWithSuffix = newKey + extension
+								const newKIdxStr = newKey
+									.slice(0, key.length + 3)
+									.match(/\[\d+\]/g)
+									?.pop()
+									?.slice(1, -1)
+
+								if (extension === '.position') {
+									moved[newKeyWithSuffix] = newKIdxStr ? parseInt(newKIdxStr) : null
+								} else {
+									moved[newKeyWithSuffix] = prev[prevK]
+								}
 								return acc
 							}
 
@@ -90,9 +101,15 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 							const prevKIdx = prevKIdxStr ? parseInt(prevKIdxStr) : null
 
 							if (prevKIdx != null && kIdx !== null && prevKIdx > kIdx) {
-								const newPrevK =
-									keyPrefix + `[${prevKIdx - 1}]` + prevK.slice(key.length)
-								acc[newPrevK] = prev[prevK]
+								const extension = prevK.slice(key.length)
+								const newIndex = prevKIdx - 1
+								const newPrevK = keyPrefix + `[${newIndex}]` + extension
+
+								if (extension === '.position') {
+									acc[newPrevK] = newIndex
+								} else {
+									acc[newPrevK] = prev[prevK]
+								}
 							} else {
 								acc[prevK] = prev[prevK]
 							}
@@ -127,9 +144,16 @@ export const HiddenValuesProvider = (props: { children?: React.ReactNode }) => {
 							const prevKIdx = prevKIdxStr ? parseInt(prevKIdxStr) : null
 
 							if (prevKIdx != null && newKIdx !== null && prevKIdx >= newKIdx) {
+								const extension = prevK.slice(key.length)
+								const newIndex = prevKIdx + 1
 								const newPrevK =
-									keyPrefix + `[${prevKIdx + 1}]` + prevK.slice(key.length)
-								acc[newPrevK] = withoutKey[prevK]
+									keyPrefix + `[${newIndex}]` + extension
+
+								if (extension === '.position') {
+									acc[newPrevK] = newIndex
+								} else {
+									acc[newPrevK] = withoutKey[prevK]
+								}
 							} else {
 								acc[prevK] = withoutKey[prevK]
 							}

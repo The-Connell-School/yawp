@@ -2,7 +2,7 @@
 
 # Setup variables
 bucket="yawp-school"
-db_url="http://$FLY_MACHINE_ID.vm.yawp-school.internal:20202"
+db_url="http://784ee91c269098.vm.yawp-school.internal:20202"
 s3_endpoint="https://fly.storage.tigris.dev"
 backup_file="$(date +%m-%d-%Y_%H-%M-%S).db"
 

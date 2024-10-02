@@ -1,4 +1,5 @@
 import omit from 'lodash/omit'
+import { GripIcon } from 'lucide-react';
 import { useState } from 'react'
 import { useControlField, useField, useFieldArray } from 'remix-validated-form'
 import { type z } from 'zod'
@@ -33,9 +34,20 @@ import {
 interface Props {
 	name: string
 	onDelete: () => void
+	onDragStart: (e: React.DragEvent) => void
+	onDrop: (e: React.DragEvent) => void
+	onDragOver: (e: React.DragEvent) => void
+	onDragLeave: (e: React.DragEvent) => void
 }
 
-export function CourseModule({ name, onDelete }: Props) {
+export function CourseModule({
+	name,
+	onDelete,
+	onDragStart,
+	onDrop,
+	onDragOver,
+	onDragLeave,
+}: Props) {
 	const [value, setValue] =
 		useControlField<z.infer<typeof CourseModuleSchema>>(name)
 
@@ -44,6 +56,7 @@ export function CourseModule({ name, onDelete }: Props) {
 		remove: removeHiddenFields,
 		move: moveHiddenFields,
 	} = useHiddenValues()
+
 	useCallDebouncedCallback(
 		() => upsert(omit(value, ['instructions']), name),
 		300,
@@ -76,8 +89,19 @@ export function CourseModule({ name, onDelete }: Props) {
 				className="flex w-full items-center justify-between"
 				asChild
 			>
-				<div className="flex w-full cursor-pointer items-center justify-between rounded-lg border p-1 pl-3 pr-1 hover:bg-foreground/[2%]">
-					<span>{value.title}</span>
+				<div
+					className={`
+						transition-margin flex w-full cursor-pointer items-center rounded-lg
+						border p-1 pl-3 pr-1 duration-300 ease-in-out hover:bg-foreground/[2%]
+					`}
+					draggable
+					onDragStart={onDragStart}
+					onDrop={onDrop}
+					onDragOver={onDragOver}
+					onDragLeave={onDragLeave}
+				>
+					<span className="grow">{value.title}</span>
+					<GripIcon size={15} className="cursor-grab opacity-50" />
 					<DropdownMenu>
 						<DropdownMenuTrigger>
 							<Button

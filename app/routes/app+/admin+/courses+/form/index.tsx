@@ -10,12 +10,11 @@ import {
 	HiddenValuesInputs,
 	HiddenValuesProvider,
 } from '#app/contexts/hidden-values'
-import { CourseModule } from './course-module'
+import { CourseModules } from './course-modules';
 import { CourseResource } from './resource'
 import {
 	type Schema,
 	validator,
-	type CourseModuleSchema,
 	type CourseResourceSchema,
 } from './schema'
 
@@ -25,13 +24,6 @@ interface Props {
 }
 
 export const CourseForm = ({ defaultValues, formId }: Props) => {
-	const { error: courseModulesError } = useField('courseModules', { formId })
-	const [courseModules, { push, remove }] = useFieldArray<
-		z.infer<typeof CourseModuleSchema>
-	>('courseModules', {
-		formId,
-	})
-
 	const { error: courseResourcesError } = useField('resources', { formId })
 	const [courseResources, { push: pushResource, remove: removeResource }] =
 		useFieldArray<z.infer<typeof CourseResourceSchema>>('resources', { formId })
@@ -91,41 +83,7 @@ export const CourseForm = ({ defaultValues, formId }: Props) => {
 						<FormTextarea name="description" placeholder="Description" />
 					</div>
 				</div>
-				<div className="flex flex-col gap-1">
-					<label>Modules</label>
-					<p className="mb-1 text-sm text-muted-foreground">
-						Modules are the building block of a course. Break down your course
-						into session length topics to make it easier for students to digest.
-					</p>
-					<div className="flex flex-col gap-1">
-						{courseModules.map(({ key }, i) => (
-							<CourseModule
-								key={key}
-								onDelete={() => remove(i)}
-								name={`courseModules[${i}]`}
-							/>
-						))}
-						<Button
-							variant="secondary"
-							onClick={e => {
-								e.preventDefault()
-								push({
-									title: 'New module',
-									description: '',
-									tutorId: '',
-									instructions: [],
-								})
-							}}
-						>
-							Add module
-						</Button>
-						{courseModulesError && (
-							<p className="text-destructive-foreground">
-								{courseModulesError}
-							</p>
-						)}
-					</div>
-				</div>
+				<CourseModules />
 				<div className="flex flex-col gap-1">
 					<label>Resources</label>
 					<p className="mb-1 text-sm text-muted-foreground">

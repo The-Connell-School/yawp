@@ -44,6 +44,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 						},
 					},
 				},
+				orderBy: { position: 'asc' },
 			},
 			image: { select: { id: true } },
 			resources: true,
@@ -105,7 +106,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 			prisma.courseResource.createMany({
 				data: data.resources?.map(r => ({ ...r, courseId: params.id! })) ?? [],
 			}),
-			...(data.courseModules?.map(({ id, ...cm }, position) => {
+			...(data.courseModules?.map(({ id, position, ...cm }, p) => {
 				const instructions = {
 					create:
 						cm.instructions?.map((i, p) => ({
@@ -117,8 +118,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 				return prisma.courseModule.upsert({
 					where: { id: id ?? '' },
-					create: { ...cm, courseId: params.id, position, instructions },
-					update: { ...cm, courseId: params.id, position, instructions },
+					create: { ...cm, courseId: params.id, position: position ?? 0, instructions },
+					update: { ...cm, courseId: params.id, position: position ?? 0, instructions },
 				})
 			}) ?? []),
 		])
