@@ -15,12 +15,14 @@ import {
 	useLoaderData,
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
+import { AlertTriangle, FlaskConical } from 'lucide-react';
 import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { GlobalLoading } from './components/global-loading.tsx'
 import { Toaster } from './components/toaster.tsx'
+import { Tooltip } from './components/ui/tooltip.tsx';
 import { useNonce } from './contexts/nonce.ts'
 import {
 	type NavState,
@@ -130,6 +132,7 @@ export async function loader({ request }: DataFunctionArgs) {
 				},
 			},
 			ENV: getEnv(),
+			bannerWarning: request.url.includes('staging') ? 'staging' : request.url.includes('localhost') ? 'localhost' : null,
 			toast,
 			honeyProps,
 			csrfToken,
@@ -158,7 +161,7 @@ function Document({
 	children: React.ReactNode
 	nonce: string
 	theme?: Theme
-	env?: Record<string, string>
+	env?: Record<string, string | boolean>
 }) {
 	return (
 		<html
@@ -205,6 +208,19 @@ function App() {
 
 	return (
 		<Document nonce={nonce} theme={theme} env={data.ENV}>
+			{data.bannerWarning === 'staging' ? (
+				<Tooltip text="This is a staging environment. Do not use real data." delayDuration={0}>
+					<div className="absolute top-4 right-4 rounded-full bg-yellow-400 shadow p-3 z-30">
+						<AlertTriangle size={26} />
+					</div>
+				</Tooltip>
+			) : data.bannerWarning === 'localhost' ? (
+				<Tooltip text="This is a local environment. Do not use real data." delayDuration={0}>
+					<div className="absolute top-4 right-4 rounded-full bg-blue-200 shadow p-3 z-30">
+						<FlaskConical size={26} />
+					</div>
+				</Tooltip>
+			) : null}
 			<GlobalLoading />
 			<div className="flex h-screen min-h-screen flex-col justify-between">
 				<div className="flex-1">

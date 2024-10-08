@@ -32,7 +32,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const [course, documents, resources] = await Promise.all([
 		prisma.course.findUnique({
 			where: { id: params.id },
-			include: { image: true, courseModules: true },
+			include: { image: true, courseModules: { orderBy: { position: 'asc' } } },
 		}),
 		prisma.document.findMany({
 			orderBy: { createdAt: 'desc' },

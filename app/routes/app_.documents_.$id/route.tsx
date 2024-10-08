@@ -60,7 +60,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 							instructions: true,
 							course: {
 								select: {
-									courseModules: { select: { id: true, position: true } },
+									courseModules: {
+										select: { id: true, position: true },
+										orderBy: { position: 'asc' },
+									},
 								},
 							},
 						},
