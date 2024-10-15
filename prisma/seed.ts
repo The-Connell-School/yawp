@@ -8,7 +8,7 @@ async function seed() {
 	console.time(`🌱 Database has been seeded`)
 
 	console.time('🧹 Cleaned up the database...')
-	await cleanupDb(prisma)
+	await cleanupDb()
 	const data = await preview()
 	console.timeEnd('🧹 Cleaned up the database...')
 

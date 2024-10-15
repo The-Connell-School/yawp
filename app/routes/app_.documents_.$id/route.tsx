@@ -19,7 +19,7 @@ import { useUser } from '#app/hooks/useUser'
 import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { redirectWithToast } from '#app/utils/toast.server'
-import { DocumentVersions } from './_components/document-versions'
+import { RestoreDataFromLocalStorageModal } from './_components/restore-data-from-local-storage-modal'
 import { Comments } from './comments'
 import { Editor } from './editor'
 import { Tutor } from './tutor'
@@ -47,6 +47,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		},
 		select: {
 			id: true,
+			createdAt: true,
 			title: true,
 			html: true,
 			text: true,
@@ -144,94 +145,107 @@ export default function Route() {
 	}, [data.shouldSaveVersion, navigate])
 
 	return (
-		<main className="flex h-screen w-screen flex-col overflow-hidden">
-			<nav className="mx-auto flex w-full max-w-screen-2xl items-center border-b px-3 py-2 gap-4">
-				<div className="flex items-center gap-4">
-					<Link
-						className={button({ variant: 'secondary', size: 'sm' })}
-						to={
-							isViewingAsTeacher
-								? `/app/students/${data.doc.user.studentProfile?.id}`
-								: `/app/courses/${data.currentCms.courseModule.courseId}`
-						}
-					>
-						<ArrowLeft className="h-4" />
-						Exit
-					</Link>
-					<Input
-						size="sm"
-						className="rounded-lg border border-transparent font-bold transition hover:border-border"
-						defaultValue={data.doc.title}
-						placeholder="Untitled document"
-						onBlur={e =>
-							e.target.value !== data.doc.title
-								? fetcher.submit(
-										{ title: e.target.value },
-										{
-											method: 'POST',
-											action: `/api/model/document/${data.doc.id}`,
-										},
-									)
-								: undefined
-						}
-					/>
-				</div>
-				{isViewingAsTeacher ? (
-					<Badge variant="info-outlined" className="md:text-md text-xs">
-						{isMobile
-							? data.doc.user.name
-							: `Viewing work by ${data.doc.user.name}`}
-					</Badge>
-				) : null}
-				<div className="ml-auto flex w-[135px] items-center gap-4">
-					{isSaving ? (
-						<div className="flex items-center gap-1 text-muted-foreground/70">
-							<Loader2 className="h-4 w-4 animate-spin" />
-							<p className="text-sm">Saving</p>
-						</div>
-					) : (
-						<div className="flex items-center gap-1 text-muted-foreground/70">
-							<Check className="h-4 w-4" />
-							<p className="mr-2 text-sm">Saved</p>
-						</div>
-					)}
-					<div className="h-[20px] border-r" />
-					<DocumentVersions
+		<>
+			<main className="flex h-screen w-screen flex-col overflow-hidden">
+				<nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
+					<div className="flex items-center gap-4">
+						<Link
+							className={button({ variant: 'secondary', size: 'sm' })}
+							to={
+								isViewingAsTeacher
+									? `/app/students/${data.doc.user.studentProfile?.id}`
+									: `/app/courses/${data.currentCms.courseModule.courseId}`
+							}
+						>
+							<ArrowLeft className="h-4" />
+							Exit
+						</Link>
+						<Input
+							size="sm"
+							className="rounded-lg border border-transparent font-bold transition hover:border-border"
+							defaultValue={data.doc.title}
+							placeholder="Untitled document"
+							onBlur={e =>
+								e.target.value !== data.doc.title
+									? fetcher.submit(
+											{ title: e.target.value },
+											{
+												method: 'POST',
+												action: `/api/model/document/${data.doc.id}`,
+											},
+										)
+									: undefined
+							}
+						/>
+					</div>
+					{isViewingAsTeacher ? (
+						<Badge variant="info-outlined" className="md:text-md text-xs">
+							{isMobile
+								? data.doc.user.name
+								: `Viewing work by ${data.doc.user.name}`}
+						</Badge>
+					) : null}
+					<div className="ml-auto flex w-[135px] items-center gap-4">
+						{isSaving ? (
+							<div className="flex items-center gap-1 text-muted-foreground/70">
+								<Loader2 className="h-4 w-4 animate-spin" />
+								<p className="text-sm">Saving</p>
+							</div>
+						) : (
+							<div className="flex items-center gap-1 text-muted-foreground/70">
+								<Check className="h-4 w-4" />
+								<p className="mr-2 text-sm">Saved</p>
+							</div>
+						)}
+						<div className="h-[20px] border-r" />
+						{/* <DocumentVersions
 						documentId={data.doc.id}
 						versions={data.doc.versions}
-					/>
+					/> */}
+					</div>
+				</nav>
+				<Tabs onValueChange={changeTab} value={tab} className="md:hidden">
+					<TabsList className="w-full rounded-none border-b px-3">
+						<TabsTrigger value="tutor" className="w-full">
+							Tutor
+						</TabsTrigger>
+						<TabsTrigger value="editor" className="w-full">
+							Editor
+						</TabsTrigger>
+						<TabsTrigger value="comments" className="w-full">
+							Comments
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
+				<div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+					{isMobile && tab !== 'tutor' ? null : (
+						<Tutor
+							docId={data.doc.id}
+							cms={data.currentCms}
+							nextCmId={data.nextCmId}
+							hasPreviousCms={data.hasPreviousCms}
+						/>
+					)}
+					{isMobile && tab !== 'editor' ? null : (
+						<Editor
+							docId={data.doc.id}
+							docHtml={data.doc.html}
+							setIsSaving={setIsSaving}
+						/>
+					)}
+					{isMobile && tab !== 'comments' ? null : (
+						<Comments comments={data.doc.comments} />
+					)}
 				</div>
-			</nav>
-			<Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-				<TabsList className="w-full rounded-none border-b px-3">
-					<TabsTrigger value="tutor" className="w-full">
-						Tutor
-					</TabsTrigger>
-					<TabsTrigger value="editor" className="w-full">
-						Editor
-					</TabsTrigger>
-					<TabsTrigger value="comments" className="w-full">
-						Comments
-					</TabsTrigger>
-				</TabsList>
-			</Tabs>
-			<div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
-				{isMobile && tab !== 'tutor' ? null : (
-					<Tutor
-						docId={data.doc.id}
-						cms={data.currentCms}
-						nextCmId={data.nextCmId}
-						hasPreviousCms={data.hasPreviousCms}
-					/>
-				)}
-				{isMobile && tab !== 'editor' ? null : (
-					<Editor doc={data.doc} setIsSaving={setIsSaving} />
-				)}
-				{isMobile && tab !== 'comments' ? null : (
-					<Comments comments={data.doc.comments} />
-				)}
-			</div>
-		</main>
+			</main>
+			{/* TODO: Remove this after we have fixed the data loss bug (likely in a week, or once confirmed they've all logged on again and opened the doc) */}
+			{/* This only exsits because we had a bug when we were trying to be fancy and store all text in local storage */}
+			{/* Unfortunately, we lost data due to it not being sent to our database so we are seeing if we can capture the data this way */}
+			<RestoreDataFromLocalStorageModal
+				docId={data.doc.id}
+				docCreatedAt={data.doc.createdAt}
+			/>
+		</>
 	)
 }
 

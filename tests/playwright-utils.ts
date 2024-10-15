@@ -1,6 +1,7 @@
 import { test as base } from '@playwright/test'
-import { type User as UserModel } from '@prisma/client'
+import { type Course, type User as UserModel } from '@prisma/client'
 import * as setCookieParser from 'set-cookie-parser'
+import { preview } from '#app/routes/api+/seed/seed.server.js'
 import {
 	getPasswordHash,
 	getSessionExpirationDate,
@@ -52,15 +53,21 @@ async function getOrInsertUser({
 }
 
 export const test = base.extend<{
+	createCourse: (options?: Partial<Course>) => Promise<Course>
 	insertNewUser(options?: GetOrInsertUserOptions): Promise<User>
 	login(options?: GetOrInsertUserOptions): Promise<User>
 }>({
+	createCourse: async ({}, use) => {
+		await use(async () => {
+			return await prisma.course.create({
+				data: (await preview()).courses[0],
+			})
+		})
+	},
 	insertNewUser: async ({}, use) => {
 		let userId: string | undefined = undefined
 		await use(async options => {
 			const user = await getOrInsertUser(options)
-			// eslint-disable-next-line no-console
-			console.log(user)
 			userId = user.id
 			return user
 		})
@@ -83,10 +90,14 @@ export const test = base.extend<{
 			authSession.set(sessionKey, session.id)
 			const cookieConfig = setCookieParser.parseString(
 				await authSessionStorage.commitSession(authSession),
-			) as any
-			await page
-				.context()
-				.addCookies([{ ...cookieConfig, domain: 'localhost' }])
+			)
+			const newConfig = {
+				...cookieConfig,
+				domain: 'localhost',
+				expires: cookieConfig.expires?.getTime(),
+				sameSite: cookieConfig.sameSite as 'Strict' | 'Lax' | 'None',
+			}
+			await page.context().addCookies([newConfig])
 			return user
 		})
 		await prisma.user.deleteMany({ where: { id: userId } })

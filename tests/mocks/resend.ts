@@ -10,7 +10,6 @@ export const handlers: Array<HttpHandler> = [
 		const body = await request.json()
 		// eslint-disable-next-line no-console
 		console.info('🔶 mocked email contents:', body)
-
 		const email = await writeEmail(body)
 
 		return json({

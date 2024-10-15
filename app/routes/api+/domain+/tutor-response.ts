@@ -21,7 +21,6 @@ export enum InstructionInteraction {
 const POST = withZod(
 	z.object({
 		response: z.string().min(1),
-		content: z.string().optional(),
 		cmsId: z.string().min(1),
 		speechSpeed: z.string().optional(),
 		speechEnabled: z.union([z.literal('true'), z.literal('false')]),
@@ -173,7 +172,10 @@ export async function action({ request }: ActionFunctionArgs) {
 						where: { courseModuleInstructionId: nextInstruction.id },
 					})
 					if (!audioData) {
-						audio = await getBase64Audio(nextInstruction.prompt, data.speechSpeed)
+						audio = await getBase64Audio(
+							nextInstruction.prompt,
+							data.speechSpeed,
+						)
 
 						await prisma.instructionAudio.create({
 							data: {
@@ -272,7 +274,7 @@ export async function action({ request }: ActionFunctionArgs) {
 			.concat([
 				{
 					role: AgentType.User,
-					content: `content = '${data.content}', response = '${data.response}'`,
+					content: `content = '${cms.document.text}', response = '${data.response}'`,
 				},
 			])
 
