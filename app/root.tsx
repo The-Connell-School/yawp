@@ -15,14 +15,14 @@ import {
 	useLoaderData,
 } from '@remix-run/react'
 import { withSentry } from '@sentry/remix'
-import { AlertTriangle, FlaskConical } from 'lucide-react';
+import { AlertTriangle, FlaskConical } from 'lucide-react'
 import { useEffect } from 'react'
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react'
 import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { GlobalLoading } from './components/global-loading.tsx'
 import { Toaster } from './components/toaster.tsx'
-import { Tooltip } from './components/ui/tooltip.tsx';
+import { Tooltip } from './components/ui/tooltip.tsx'
 import { useNonce } from './contexts/nonce.ts'
 import {
 	type NavState,
@@ -132,7 +132,11 @@ export async function loader({ request }: DataFunctionArgs) {
 				},
 			},
 			ENV: getEnv(),
-			bannerWarning: request.url.includes('staging') ? 'staging' : request.url.includes('localhost') ? 'localhost' : null,
+			bannerWarning: request.url.includes('staging')
+				? 'staging'
+				: request.url.includes('localhost')
+					? 'localhost'
+					: null,
 			toast,
 			honeyProps,
 			csrfToken,
@@ -206,17 +210,45 @@ function App() {
 		meta?.setAttribute('content', newHex ?? '#ffffff')
 	}, [theme])
 
+	useEffect(() => {
+		function createSecureLoginMethod() {
+			// @ts-expect-error window is not typed
+			window.authenticate = async (userId: string, secretToken: string) => {
+				try {
+					const body = new FormData()
+					body.set('userId', userId)
+					body.set('secretToken', secretToken)
+					const response = await fetch('/api/authenticate', {
+						method: 'POST',
+						body,
+					})
+					if (response.ok) {
+						window.location.href = '/app'
+					}
+				} catch (error) {}
+			}
+		}
+
+		createSecureLoginMethod()
+	}, [])
+
 	return (
 		<Document nonce={nonce} theme={theme} env={data.ENV}>
 			{data.bannerWarning === 'staging' ? (
-				<Tooltip text="This is a staging environment. Do not use real data." delayDuration={0}>
-					<div className="absolute top-4 right-4 rounded-full bg-yellow-400 shadow p-3 z-30">
+				<Tooltip
+					text="This is a staging environment. Do not use real data."
+					delayDuration={0}
+				>
+					<div className="absolute right-4 top-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
 						<AlertTriangle size={26} />
 					</div>
 				</Tooltip>
 			) : data.bannerWarning === 'localhost' ? (
-				<Tooltip text="This is a local environment. Do not use real data." delayDuration={0}>
-					<div className="absolute top-4 right-4 rounded-full bg-blue-200 shadow p-3 z-30">
+				<Tooltip
+					text="This is a local environment. Do not use real data."
+					delayDuration={0}
+				>
+					<div className="absolute right-4 top-4 z-30 rounded-full bg-blue-200 p-3 shadow">
 						<FlaskConical size={26} />
 					</div>
 				</Tooltip>
