@@ -10,11 +10,13 @@ import { requireUserId } from '#app/utils/auth.server'
 import { prisma } from '#app/utils/db.server'
 import { useDoubleCheck } from '#app/utils/misc'
 import { redirectWithToast } from '#app/utils/toast.server'
+import { PeriodFilter } from './_components/period-filter';
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
+	const period = url.searchParams.get('period')
 
 	const students = await prisma.studentProfile.findMany({
 		where: {
@@ -25,6 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 					{ user: { email: { contains: query } } },
 				],
 			}),
+			...(period && { period: period }),
 		},
 		include: { user: { select: { image: true, name: true, email: true } } },
 	})
@@ -53,14 +56,15 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function Route() {
 	const data = useLoaderData<typeof loader>()
 	const [searchParams] = useSearchParams()
+	const strSearchParams = searchParams.toString()
 
 	return (
-		<ListLayout path="students" hideAddButton>
+		<ListLayout path="students" hideAddButton filters={<div><PeriodFilter /></div>}>
 			{data.students.length > 0 ? (
 				data.students.map(sp => (
 					<SettingsNavLink
 						key={sp.id}
-						to={`/app/students/${sp.id}?q=${searchParams.get('q') ?? ''}`}
+						to={`/app/students/${sp.id}${strSearchParams ? `?${strSearchParams}` : ''}`}
 						title={sp.user.name ?? sp.user.email}
 						deleteButton={<DeleteButton studentId={sp.id} />}
 						image={

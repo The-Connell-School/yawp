@@ -1,5 +1,5 @@
-import { Outlet, Link, useMatch, useNavigate } from '@remix-run/react'
-import { PlusIcon } from 'lucide-react'
+import { Outlet, Link, useMatch, useNavigate, useSearchParams } from '@remix-run/react'
+import { PlusIcon, XCircleIcon } from 'lucide-react'
 import useBreakpoint from '#app/hooks/useBreakpoint.js'
 import { SearchInput } from './search-input'
 import { Button } from './ui/button'
@@ -8,20 +8,35 @@ import { DrawerContent, Drawer } from './ui/drawer'
 type Props = {
 	path: string
 	children: React.ReactNode
+	filters?: React.ReactNode
 	hideAddButton?: boolean
 }
 
-export const ListLayout = ({ path, children, hideAddButton }: Props) => {
+export const ListLayout = ({ path, children, hideAddButton, filters }: Props) => {
 	const navigate = useNavigate()
 	const isEditing = !!useMatch(`/app/${path}/:id`)
 	const breakpoint = useBreakpoint()
 	const showDrawer = ['base', 'sm', 'md'].includes(breakpoint ?? '')
+	const [searchParams, setSearchParams] = useSearchParams()
+
+	const handleClearFilters = () => {
+		setSearchParams({})
+	}
 
 	return (
 		<main className="flex h-full">
 			<div className="flex w-full flex-col md:w-1/2 md:border-r">
 				<div className="flex items-center justify-between gap-2 p-3">
-					<SearchInput />
+					<div className="flex gap-2">
+						<SearchInput />
+						{filters}
+						{searchParams.toString() && (
+							<Button variant="ghost" onClick={handleClearFilters}>
+								<XCircleIcon className="mr-1" size={16} />
+								Clear
+							</Button>
+						)}
+					</div>
 					{hideAddButton ? null : (
 						<Link to={`/app/${path}/new`}>
 							<Button>
