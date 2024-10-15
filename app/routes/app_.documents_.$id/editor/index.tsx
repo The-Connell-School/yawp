@@ -6,6 +6,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useEffect } from 'react'
 import { Bar } from './bar'
+import { ErrorBoundary } from './error-boundry'
 import { Comment, CommentExtension } from './extensions/comment'
 import { LineHeight } from './extensions/line-height'
 
@@ -74,17 +75,19 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
 	}, [editor, docId, setIsSaving])
 
 	return (
-		<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
-			<Bar editor={editor} documentId={docId} />
-			<div
-				className="no-scrollbar grow overflow-y-scroll p-5 font-times"
-				key={`${docId}-editor`}
-			>
-				<EditorContent
-					editor={editor}
-					className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
-				/>
+		<ErrorBoundary>
+			<div className="flex w-full flex-col overflow-hidden border-r md:h-full">
+				<Bar editor={editor} documentId={docId} />
+				<div
+					className="no-scrollbar grow overflow-y-scroll p-5 font-times"
+					key={`${docId}-editor`}
+				>
+					<EditorContent
+						editor={editor}
+						className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
+					/>
+				</div>
 			</div>
-		</div>
+		</ErrorBoundary>
 	)
 }
