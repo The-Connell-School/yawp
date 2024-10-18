@@ -21,7 +21,6 @@ const deleteValidator = withZod(z.object({ id: z.string() }))
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing teacher profile id')
-	await requireUserWithRole(request, ['admin'])
 	const [teacherProfile, allStudents] = await Promise.all([
 		prisma.teacherProfile.findUnique({
 			where: { id: params.id },

@@ -12,11 +12,8 @@ import { Button } from '#app/components/ui/button'
 import { UserImage } from '#app/components/user-image'
 import { prisma } from '#app/utils/db.server'
 import { cn, useDoubleCheck, useIsPending } from '#app/utils/misc'
-import { requireUserWithRole } from '#app/utils/permissions'
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	await requireUserWithRole(request, ['admin'])
-
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
 
@@ -40,7 +37,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
 	const id = formData.get('id')?.toString()
 

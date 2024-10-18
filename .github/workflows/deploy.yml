@@ -68,7 +68,7 @@ jobs:
         run: cp .env.example .env
 
       - name: ⚡ Run vitest
-        run: bun i && bun test -- --coverage
+        run: bun i && bun run test -- --coverage
 
   deploy-staging:
     name: 🚀 Deploy to Staging
@@ -103,8 +103,8 @@ jobs:
           flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
           --build-secret SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
           --build-secret AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          --app ${{ steps.app_name.outputs.value }}-staging
+          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY
+          }} --app ${{ steps.app_name.outputs.value }}-staging
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -141,6 +141,7 @@ jobs:
           flyctl deploy --remote-only --build-arg COMMIT_SHA=${{ github.sha }}
           --build-secret SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
           --build-secret AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
-          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          --build-secret AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY
+          }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

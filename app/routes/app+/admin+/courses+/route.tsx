@@ -5,11 +5,8 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { ListLayout } from '#app/components/list-layout.js'
 import { prisma } from '#app/utils/db.server'
 import { cn } from '#app/utils/misc'
-import { requireUserWithRole } from '#app/utils/permissions'
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	await requireUserWithRole(request, ['admin'])
-
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q')
 

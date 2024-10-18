@@ -15,7 +15,6 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Button } from '#app/components/ui/button'
 import { prisma } from '#app/utils/db.server'
 import { useDoubleCheck, useIsPending } from '#app/utils/misc'
-import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { CourseForm } from './form'
 import { MAX_SIZE, validator } from './form/schema'
@@ -24,7 +23,6 @@ const deleteValidator = withZod(z.object({ id: z.string() }))
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
 	invariant(params.id, 'Missing course id')
-	await requireUserWithRole(request, ['admin'])
 	const course = await prisma.course.findUnique({
 		where: { id: params.id },
 		include: {
@@ -60,7 +58,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
 	invariant(params.id, 'Missing course id')
-	await requireUserWithRole(request, ['admin'])
 	const formData = await unstable_parseMultipartFormData(
 		request,
 		unstable_createMemoryUploadHandler({ maxPartSize: MAX_SIZE }),
@@ -118,8 +115,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 				return prisma.courseModule.upsert({
 					where: { id: id ?? '' },
-					create: { ...cm, courseId: params.id, position: position ?? 0, instructions },
-					update: { ...cm, courseId: params.id, position: position ?? 0, instructions },
+					create: {
+						...cm,
+						courseId: params.id,
+						position: position ?? 0,
+						instructions,
+					},
+					update: {
+						...cm,
+						courseId: params.id,
+						position: position ?? 0,
+						instructions,
+					},
 				})
 			}) ?? []),
 		])

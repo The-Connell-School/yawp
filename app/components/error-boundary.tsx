@@ -1,47 +1,44 @@
-import {
-	type ErrorResponse,
-	isRouteErrorResponse,
-	useParams,
-	useRouteError,
-} from '@remix-run/react'
+import { Link, useLocation, useRouteError } from '@remix-run/react'
 import { captureRemixErrorBoundaryError } from '@sentry/remix'
-import { getErrorMessage } from '#app/utils/misc.tsx'
+import { ChevronRight } from 'lucide-react'
+import { Button } from './ui/button'
 
-type StatusHandler = (info: {
-	error: ErrorResponse
-	params: Record<string, string | undefined>
-}) => JSX.Element | null
-
-export function GeneralErrorBoundary({
-	defaultStatusHandler = ({ error }) => (
-		<p>
-			{error.status} {error.data}
-		</p>
-	),
-	statusHandlers,
-	unexpectedErrorHandler = error => <p>{getErrorMessage(error)}</p>,
-}: {
-	defaultStatusHandler?: StatusHandler
-	statusHandlers?: Record<number, StatusHandler>
-	unexpectedErrorHandler?: (error: unknown) => JSX.Element | null
-}) {
+export function GeneralErrorBoundary() {
 	const error = useRouteError()
+	const location = useLocation()
+	const isAppDocumentRoute = location.pathname.startsWith('/app/documents')
 	captureRemixErrorBoundaryError(error)
-	const params = useParams()
 
 	if (typeof document !== 'undefined') {
 		// eslint-disable-next-line no-console
 		console.error(error)
 	}
 
-	return (
-		<div className="flex items-center justify-center p-20">
-			{isRouteErrorResponse(error)
-				? (statusHandlers?.[error.status] ?? defaultStatusHandler)({
-						error,
-						params,
-					})
-				: unexpectedErrorHandler(error)}
+	return isAppDocumentRoute ? (
+		<div className="mx-auto flex max-w-screen-sm flex-col gap-4 p-20">
+			<h2>Oops! Something didn't work quite right.</h2>
+			<p className="text-lg text-muted-foreground">
+				Don't worry though; all your writing has been saved. Head back to the
+				dashboard and then open your document again.
+			</p>
+			<Button asChild size="lg">
+				<Link to="/app">
+					Go to dashboard <ChevronRight size={18} className="ml-2" />
+				</Link>
+			</Button>
+		</div>
+	) : (
+		<div className="mx-auto flex max-w-screen-sm flex-col gap-4 p-20">
+			<h2>Oops! Something didn't work quite right.</h2>
+			<p className="text-lg text-muted-foreground">
+				Don't worry though; all your data has been saved. Head back to the
+				dashboard and try again.
+			</p>
+			<Button asChild size="lg">
+				<Link to="/app">
+					Go to dashboard <ChevronRight size={18} className="ml-2" />
+				</Link>
+			</Button>
 		</div>
 	)
 }

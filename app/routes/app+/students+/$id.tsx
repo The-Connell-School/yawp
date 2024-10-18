@@ -69,7 +69,11 @@ export default function Route() {
 					) : null}
 					<div className="grid grid-cols-2 gap-1 md:gap-2 xl:grid-cols-3">
 						{studentProfile.user.documents.map(doc => (
-							<DocumentLink key={doc.id} doc={doc} />
+							<DocumentLink
+								key={doc.id}
+								doc={doc}
+								exitTo={`/app/students/${studentProfile.id}`}
+							/>
 						))}
 					</div>
 				</div>

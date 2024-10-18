@@ -106,7 +106,7 @@
     "litefs-js": "^1.1.2",
     "lodash": "^4.17.21",
     "lru-cache": "^10.1.0",
-    "lucide-react": "^0.309.0",
+    "lucide-react": "^0.453.0",
     "morgan": "^1.10.0",
     "openai": "^4.24.7",
     "prisma": "^5.6.0",

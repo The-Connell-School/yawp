@@ -1,7 +1,7 @@
 import { type Document } from '@prisma/client'
 import { Link, useFetcher } from '@remix-run/react'
+import { EllipsisVertical } from 'lucide-react'
 import { timeAgo } from '../utils/timeAgo'
-import { DotsVerticalIcon } from './icons'
 import { Button } from './ui/button'
 import {
 	DropdownMenu,
@@ -12,18 +12,19 @@ import {
 import { Tooltip } from './ui/tooltip'
 
 type Props = JsonifyObject<{
+	exitTo: string
 	doc: Document & {
 		courseModuleSessions: { courseModule: { title: string } }[]
 	}
 }>
 
-export const DocumentLink = ({ doc }: Props) => {
+export const DocumentLink = ({ doc, exitTo }: Props) => {
 	const deleteDocumentFetcher = useFetcher()
 
 	return (
 		<Link
 			key={doc.id}
-			to={`/app/documents/${doc.id}?ssv=1`}
+			to={`/app/documents/${doc.id}?ssv=1&exitTo=${exitTo}`}
 			className="relative flex h-48 flex-col overflow-hidden rounded-lg border transition-all hover:border-primary/50 hover:shadow"
 		>
 			<span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
@@ -62,12 +63,11 @@ export const DocumentLink = ({ doc }: Props) => {
 				<DropdownMenu>
 					<DropdownMenuTrigger>
 						<Button
-							asChild
 							size="icon-sm"
-							variant="ghost"
+							variant="outline"
 							onClick={e => e.stopPropagation()}
 						>
-							<DotsVerticalIcon />
+							<EllipsisVertical size={16} />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">

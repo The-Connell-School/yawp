@@ -73,7 +73,7 @@ jobs:
         run: cp .env.example .env
 
       - name: ⚡ Run vitest
-        run: bun i && bun test -- --coverage
+        run: bun i && bun run test -- --coverage
 
   deploy:
     name: 🚀 Deploy

@@ -254,7 +254,11 @@ export default function AppCoursesIdRoute() {
 				{data.documents.length ? (
 					<div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
 						{data.documents.map(doc => (
-							<DocumentLink key={doc.id} doc={doc} />
+							<DocumentLink
+								key={doc.id}
+								doc={doc}
+								exitTo={`/app/courses/${data.course.id}`}
+							/>
 						))}
 					</div>
 				) : !hasModules ? (

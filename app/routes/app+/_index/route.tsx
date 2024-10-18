@@ -155,7 +155,7 @@ export default function AppRoute() {
 						{data.documents.length ? (
 							<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 								{data.documents.map(doc => (
-									<DocumentLink key={doc.id} doc={doc} />
+									<DocumentLink key={doc.id} doc={doc} exitTo="/app" />
 								))}
 							</div>
 						) : (
@@ -217,7 +217,7 @@ export default function AppRoute() {
 					{data.documents.length ? (
 						<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
 							{data.documents.map(doc => (
-								<DocumentLink key={doc.id} doc={doc} />
+								<DocumentLink key={doc.id} doc={doc} exitTo="/app" />
 							))}
 						</div>
 					) : (

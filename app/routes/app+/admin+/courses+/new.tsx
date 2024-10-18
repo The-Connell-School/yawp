@@ -1,7 +1,5 @@
 import {
 	type ActionFunctionArgs,
-	json,
-	type LoaderFunctionArgs,
 	unstable_parseMultipartFormData,
 	unstable_createMemoryUploadHandler,
 } from '@remix-run/node'
@@ -12,18 +10,11 @@ import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { Button } from '#app/components/ui/button'
 import { prisma } from '#app/utils/db.server'
 import { useIsPending } from '#app/utils/misc'
-import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { CourseForm } from './form'
 import { MAX_SIZE, validator } from './form/schema'
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-	await requireUserWithRole(request, ['admin'])
-	return json({})
-}
-
 export async function action({ request }: ActionFunctionArgs) {
-	await requireUserWithRole(request, ['admin'])
 	const formData = await unstable_parseMultipartFormData(
 		request,
 		unstable_createMemoryUploadHandler({ maxPartSize: MAX_SIZE }),

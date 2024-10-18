@@ -23,7 +23,6 @@ import { requireUserWithRole } from '#app/utils/permissions.js'
 import { redirectWithToast } from '#app/utils/toast.server.js'
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	await requireUserWithRole(request, 'admin')
 	const featureFlags = await prisma.featureFlag.findMany()
 	return json({ featureFlags })
 }

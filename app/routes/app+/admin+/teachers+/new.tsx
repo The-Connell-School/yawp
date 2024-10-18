@@ -12,13 +12,11 @@ import { prepareVerification } from '#app/routes/_auth+/verify.server.js'
 import { prisma } from '#app/utils/db.server'
 import { sendEmail } from '#app/utils/email.server.js'
 import { useIsPending } from '#app/utils/misc'
-import { requireUserWithRole } from '#app/utils/permissions'
 import { redirectWithToast } from '#app/utils/toast.server'
 import { TeacherForm } from './form'
 import { validator } from './form/schema'
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-	await requireUserWithRole(request, ['admin'])
 	const allStudents = await prisma.user.findMany({
 		where: { studentProfile: { isNot: null } },
 		include: {
@@ -31,7 +29,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-	await requireUserWithRole(request, ['admin'])
 	const formData = await request.formData()
 	const { error, data, formId } = await validator.validate(formData)
 	if (error) return validationError(error)

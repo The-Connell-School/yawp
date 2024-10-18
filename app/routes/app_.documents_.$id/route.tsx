@@ -30,20 +30,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const url = new URL(request.url)
 	const shouldSaveVersion = url.searchParams.get('ssv') === '1'
 	const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0
+	const user = await prisma.user.findUnique({
+		where: { id: userId },
+		select: { roles: { select: { name: true } } },
+	})
 
 	const doc = await prisma.document.findFirst({
 		where: {
 			id: params.id,
-			OR: [
-				{ userId },
-				{
-					user: {
-						studentProfile: {
-							workshopLeaderId: userId,
-						},
-					},
-				},
-			],
+			...(user?.roles.some(role => role.name === 'admin')
+				? {}
+				: {
+						OR: [
+							{ userId },
+							{
+								user: {
+									studentProfile: {
+										workshopLeaderId: userId,
+									},
+								},
+							},
+						],
+					}),
 		},
 		select: {
 			id: true,
@@ -127,6 +135,7 @@ export default function Route() {
 	const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '')
 	const [searchParams, setSearchParams] = useSearchParams()
 	const tab = searchParams.get('tab') ?? 'tutor'
+	const exitTo = searchParams.get('exitTo')
 	const isViewingAsTeacher = data.doc && user.id !== data.doc?.user.id
 
 	const changeTab = (value: string) => {
@@ -151,11 +160,7 @@ export default function Route() {
 					<div className="flex items-center gap-4">
 						<Link
 							className={button({ variant: 'secondary', size: 'sm' })}
-							to={
-								isViewingAsTeacher
-									? `/app/students/${data.doc.user.studentProfile?.id}`
-									: `/app/courses/${data.currentCms.courseModule.courseId}`
-							}
+							to={exitTo ?? '/app'}
 						>
 							<ArrowLeft className="h-4" />
 							Exit

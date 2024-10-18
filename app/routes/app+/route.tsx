@@ -9,6 +9,7 @@ import {
 } from '@remix-run/react'
 import {
 	AwardIcon,
+	Database,
 	GaugeIcon,
 	GraduationCapIcon,
 	MoonIcon,
@@ -86,7 +87,7 @@ export default function Route() {
 						to: '/app',
 						label: 'Dashboard',
 						end: true,
-						icon: <GaugeIcon strokeWidth={1.5} />,
+						icon: <GaugeIcon strokeWidth={1.5} size={20} />,
 					},
 				]
 			: []),
@@ -112,7 +113,13 @@ export default function Route() {
 		{
 			to: '/app/admin',
 			label: 'Admin',
-			icon: <WrenchIcon strokeWidth={1.5} />,
+			icon: <WrenchIcon strokeWidth={1.5} size={20} />,
+			admin: true,
+		},
+		{
+			to: '/app/data',
+			label: 'Data',
+			icon: <Database strokeWidth={1.5} size={20} />,
 			admin: true,
 		},
 	]
@@ -191,10 +198,9 @@ export default function Route() {
 									: '/img/logo_for_light_mode.png'
 							}
 							alt="Logo on white background"
-							className={cn(
-								'h-auto w-0 rounded object-cover py-2',
-								{ 'w-24': navExpanded },
-							)}
+							className={cn('h-auto w-0 rounded object-cover py-2', {
+								'w-24': navExpanded,
+							})}
 						/>
 					</Link>
 					<NavStateSwitch>
@@ -235,7 +241,7 @@ export default function Route() {
 								key={link.to}
 								className={({ isActive }) =>
 									cn(
-										'flex w-full items-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
+										'flex w-full items-center justify-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
 										{
 											'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
 												isActive,
