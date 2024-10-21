@@ -4,12 +4,16 @@ import {
 	parseWithZod as parse,
 } from '@conform-to/zod'
 import { type ActionFunctionArgs, json } from '@remix-run/node'
-import { Form, useActionData, useSearchParams } from '@remix-run/react'
+import {
+	Form,
+	useActionData,
+	useNavigate,
+	useSearchParams,
+} from '@remix-run/react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
-import { ErrorList } from '#app/components/forms/error-list.tsx'
 import { FormInput } from '#app/components/forms/form-input.tsx'
 import { Button } from '#app/components/ui/button.tsx'
 import { handleVerification as handleChangeEmailVerification } from '#app/routes/app+/profile+/change-email/route.tsx'
@@ -109,6 +113,7 @@ async function validateRequest(
 
 export default function VerifyRoute() {
 	const [searchParams] = useSearchParams()
+	const navigate = useNavigate()
 	const isPending = useIsPending()
 	const actionData = useActionData<typeof action>()
 	const parsedType = VerificationTypeSchema.safeParse(
@@ -158,11 +163,8 @@ export default function VerifyRoute() {
 	return (
 		<main className="mx-auto w-full max-w-[400px] pt-20">
 			<div className="flex flex-col gap-3">
-				<p>{type ? headings[type] : 'Invalid Verification Type'}</p>
+				<div>{type ? headings[type] : 'Invalid Verification Type'}</div>
 				<div className="mt-12 flex flex-col justify-center gap-1">
-					<div>
-						<ErrorList errors={form.errors} id={form.errorId} />
-					</div>
 					<div className="flex w-full gap-2 px-8">
 						<Form method="POST" {...getFormProps(form)} className="flex-1">
 							<AuthenticityTokenInput />
