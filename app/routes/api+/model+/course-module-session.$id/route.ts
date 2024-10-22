@@ -40,8 +40,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		typeof data.instructionsCompleted === 'object' &&
 		'increment' in data.instructionsCompleted
 
+	const user = await prisma.user.findUnique({
+		where: { id: userId },
+		select: { roles: { select: { name: true } } },
+	})
+
 	const updated = await prisma.courseModuleSession.update({
-		where: { id: params.id, userId },
+		where: {
+			id: params.id,
+			...(user?.roles.some(role => role.name === 'admin')
+				? {}
+				: {
+						OR: [
+							{ userId },
+							{
+								user: {
+									studentProfile: {
+										workshopLeaderId: userId,
+									},
+								},
+							},
+						],
+					}),
+		},
 		data: {
 			...data,
 			...(!hasCompletedAllInstructions && isIncrementing
