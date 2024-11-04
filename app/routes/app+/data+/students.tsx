@@ -170,7 +170,6 @@ export default function StudentsRoute() {
 						<p>
 							<strong>Email:</strong> {selectedStudent?.user.email}
 						</p>
-						{/* Add more student information here */}
 					</div>
 					<div className="mt-8">
 						<h3 className="mb-4 text-lg font-semibold">Documents</h3>

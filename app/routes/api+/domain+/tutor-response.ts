@@ -29,6 +29,10 @@ const POST = withZod(
 
 export async function action({ request }: ActionFunctionArgs) {
 	const userId = await requireUserId(request)
+	const user = await prisma.user.findUnique({
+		where: { id: userId },
+		include: { roles: true },
+	})
 	const formData = await request.formData()
 	const { error, data } = await POST.validate(formData)
 	if (error) return validationError(error)
@@ -36,10 +40,14 @@ export async function action({ request }: ActionFunctionArgs) {
 	const cms = await prisma.courseModuleSession.findUnique({
 		where: {
 			id: data.cmsId,
-			OR: [
-				{ userId },
-				{ user: { studentProfile: { workshopLeaderId: userId } } },
-			],
+			// ...(user?.roles.some(r => r.name === 'admin')
+			// 	? {}
+			// 	: {
+			// 			OR: [
+			// 				{ userId },
+			// 				{ user: { studentProfile: { workshopLeaderId: userId } } },
+			// 			],
+			// 		}),
 		},
 		include: {
 			courseModule: { include: { instructions: true } },
