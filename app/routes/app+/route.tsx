@@ -1,4 +1,5 @@
 import {
+	Form,
 	Link,
 	NavLink,
 	Outlet,
@@ -332,17 +333,17 @@ export default function Route() {
 									</Button>
 								)}
 							</ThemeSwitch>
-							<Button
-								asChild
-								size="sm"
-								variant="ghost"
-								className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-							>
-								<Link to="/logout">
+							<Form action="/logout" method="POST">
+								<Button
+									type="submit"
+									size="sm"
+									variant="ghost"
+									className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+								>
 									<ExitIcon />
 									Logout
-								</Link>
-							</Button>
+								</Button>
+							</Form>
 						</PopoverContent>
 					</Popover>
 				</div>

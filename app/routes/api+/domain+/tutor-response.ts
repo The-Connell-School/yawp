@@ -40,6 +40,7 @@ export async function action({ request }: ActionFunctionArgs) {
 	const cms = await prisma.courseModuleSession.findUnique({
 		where: {
 			id: data.cmsId,
+			// TODO: once all cms are assigned to the student and not the teacher, uncomment this ode
 			// ...(user?.roles.some(r => r.name === 'admin')
 			// 	? {}
 			// 	: {

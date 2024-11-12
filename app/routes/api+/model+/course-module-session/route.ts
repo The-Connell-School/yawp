@@ -18,13 +18,18 @@ export async function action({ request }: ActionFunctionArgs) {
 	const { error, data } = await POST.validate(formData)
 	if (error) return validationError(error)
 
-	const courseModule = await prisma.courseModule.findUnique({
-		where: { id: data.courseModuleId },
-		include: { instructions: true },
-	})
+	const [document, courseModule] = await Promise.all([
+		prisma.document.findUnique({ where: { id: data.documentId } }),
+		prisma.courseModule.findUnique({
+			where: { id: data.courseModuleId },
+			include: { instructions: true },
+		}),
+	])
 
 	if (!courseModule) {
 		return json({ error: 'No course module found.' }, { status: 404 })
+	} else if (!document) {
+		return json({ error: 'No document found.' }, { status: 404 })
 	}
 
 	const firstInstruction = courseModule.instructions[0]
@@ -32,7 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
 		data: {
 			...data,
 			instructionsCompleted: 0,
-			userId,
+			userId: document.userId,
 			...(firstInstruction && {
 				messages: {
 					create: [

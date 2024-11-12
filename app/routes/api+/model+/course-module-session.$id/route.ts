@@ -48,20 +48,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
 	const updated = await prisma.courseModuleSession.update({
 		where: {
 			id: params.id,
-			...(user?.roles.some(role => role.name === 'admin')
-				? {}
-				: {
-						OR: [
-							{ userId },
-							{
-								user: {
-									studentProfile: {
-										workshopLeaderId: userId,
-									},
-								},
-							},
-						],
-					}),
+			// TODO: once all cms are assigned to the student and not the teacher, uncomment this ode
+			// ...(user?.roles.some(role => role.name === 'admin')
+			// 	? {}
+			// 	: {
+			// 			OR: [
+			// 				{ userId },
+			// 				{
+			// 					user: {
+			// 						studentProfile: {
+			// 							workshopLeaderId: userId,
+			// 						},
+			// 					},
+			// 				},
+			// 			],
+			// 		}),
 		},
 		data: {
 			...data,
