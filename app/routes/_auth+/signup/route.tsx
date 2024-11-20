@@ -17,12 +17,13 @@ import { useTheme } from '#app/routes/api+/preferences+/theme/route.js'
 import { validateCSRF } from '#app/utils/csrf.server'
 import { prisma } from '#app/utils/db.server'
 import { sendEmail } from '#app/utils/email.server'
+import { Setting } from '#app/utils/enums.ts'
 import { checkHoneypot } from '#app/utils/honeypot.server'
 import { useIsPending } from '#app/utils/misc'
 import { EmailSchema } from '#app/utils/schemas/user'
 import { prepareVerification } from '../verify.server'
 
-const Schema = z.object({ email: EmailSchema })
+const Schema = z.object({ email: EmailSchema, passcode: z.string() })
 const validator = withZod(Schema)
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -31,6 +32,18 @@ export async function action({ request }: ActionFunctionArgs) {
 	checkHoneypot(formData)
 	const { error, data } = await validator.validate(formData)
 	if (error) return validationError(error)
+
+	const passcodeSetting = await prisma.setting.findUnique({
+		where: { name: Setting.SignupPasscode },
+		select: { value: true },
+	})
+
+	if (passcodeSetting?.value !== data.passcode) {
+		return validationError(
+			{ fieldErrors: { passcode: 'Invalid passcode.' } },
+			data,
+		)
+	}
 
 	const existingUser = await prisma.user.findUnique({
 		where: { email: data.email },
@@ -101,7 +114,7 @@ export default function SignupRoute() {
 					className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
 				/>
 				<h1>Welcome!</h1>
-				<p>Please enter your email.</p>
+				<p>Please enter your email & passcode.</p>
 			</div>
 			<div className="mx-auto mt-10 w-full max-w-md px-8">
 				<ValidatedForm
@@ -112,6 +125,7 @@ export default function SignupRoute() {
 					<AuthenticityTokenInput />
 					<HoneypotInputs />
 					<FormInput type="email" name="email" autoFocus />
+					<FormInput type="text" name="passcode" />
 					<Button className="w-full" type="submit" disabled={isPending}>
 						Submit
 					</Button>

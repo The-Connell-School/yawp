@@ -6,6 +6,7 @@ import { cn } from '#app/utils/misc'
 import { requireUserWithRole } from '#app/utils/permissions'
 
 const tabs = [
+	{ label: 'General', to: '/app/admin/general' },
 	{ label: 'Courses', to: '/app/admin/courses' },
 	{ label: 'Teachers', to: '/app/admin/teachers' },
 	{ label: 'Features', to: '/app/admin/feature-flags' },
@@ -20,19 +21,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function Route() {
 	return (
-		<main className="flex h-screen flex-col overflow-hidden">
-			<div className="flex items-end border-b bg-background px-3 pt-3">
+		<main className="flex h-screen">
+			<div className="flex w-48 flex-col bg-background py-3">
 				{tabs.map(tab => (
 					<NavLink
 						key={tab.to}
 						to={tab.to}
 						className={({ isActive }) =>
-							cn(
-								'mr-8 border-b border-b-transparent pb-2 text-muted-foreground',
-								{
-									'border-b-foreground font-semibold text-foreground': isActive,
-								},
-							)
+							cn('px-3 py-2 text-muted-foreground', {
+								'font-semibold text-foreground': isActive,
+							})
 						}
 					>
 						{tab.label}

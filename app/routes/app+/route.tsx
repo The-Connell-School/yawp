@@ -109,6 +109,12 @@ export default function Route() {
 						icon: <GraduationCapIcon strokeWidth={1.5} size={24} />,
 						teacher: true,
 					},
+					// {
+					// 	to: '/app/grading',
+					// 	label: 'Grading',
+					// 	icon: <NotebookPen strokeWidth={1.5} size={24} />,
+					// 	teacher: true,
+					// },
 				]
 			: []),
 		{

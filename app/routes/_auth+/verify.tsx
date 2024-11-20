@@ -6,6 +6,7 @@ import {
 import { type ActionFunctionArgs, json } from '@remix-run/node'
 import {
 	Form,
+	Link,
 	useActionData,
 	useNavigate,
 	useSearchParams,
@@ -199,6 +200,11 @@ export default function VerifyRoute() {
 								Submit
 							</Button>
 						</Form>
+					</div>
+					<div className="px-8 text-center">
+						<Button asChild variant="link">
+							<Link to="/login">Back to login</Link>
+						</Button>
 					</div>
 				</div>
 			</div>
