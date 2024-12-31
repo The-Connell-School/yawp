@@ -1,7 +1,17 @@
+import bcrypt from 'bcryptjs'
+import { prisma } from '#app/utils/db.server'
 import { expect, test } from '#tests/playwright-utils.ts'
 
 test('Admin can bulk upsert student profiles', async ({ page, login }) => {
 	await login({ role: 'admin' })
+
+	const workshopLeader = await prisma.user.create({
+		data: {
+			email: 'workshop-leader@example.com',
+			password: { create: { hash: await bcrypt.hash('pass123', 10) } },
+			roles: { connect: { name: 'admin' } },
+		},
+	})
 
 	const testData = [
 		{
@@ -11,6 +21,7 @@ test('Admin can bulk upsert student profiles', async ({ page, login }) => {
 			grade: '10',
 			period: '3',
 			userPassword: 'pass123',
+			workshopLeaderId: workshopLeader.id,
 		},
 		{
 			email: 'student2@example.com',
@@ -19,6 +30,7 @@ test('Admin can bulk upsert student profiles', async ({ page, login }) => {
 			grade: '11',
 			period: '4',
 			userPassword: 'pass456',
+			workshopLeaderId: workshopLeader.id,
 		},
 	]
 

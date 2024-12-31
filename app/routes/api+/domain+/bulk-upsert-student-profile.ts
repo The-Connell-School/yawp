@@ -8,7 +8,7 @@ const StudentProfileSchema = z.array(
 	z.object({
 		email: z.string().email(),
 		name: z.string().optional(),
-		workshopLeaderId: z.string().optional(),
+		workshopLeaderId: z.string().min(1, 'Workshop leader is required'),
 		school: z.string().optional(),
 		grade: z.string().optional(),
 		period: z.string().optional(),
