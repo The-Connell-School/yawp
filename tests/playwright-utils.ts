@@ -17,6 +17,7 @@ type GetOrInsertUserOptions = {
 	id?: string
 	password?: string
 	email?: UserModel['email']
+	role?: 'user' | 'admin'
 }
 
 type User = {
@@ -29,6 +30,7 @@ async function getOrInsertUser({
 	id,
 	password,
 	email,
+	role = 'user',
 }: GetOrInsertUserOptions = {}): Promise<User> {
 	const select = { id: true, email: true, name: true }
 	if (id) {
@@ -45,7 +47,7 @@ async function getOrInsertUser({
 			data: {
 				...userData,
 				email,
-				roles: { connect: { name: 'user' } },
+				roles: { connect: { name: role } },
 				password: { create: { hash: await getPasswordHash(password) } },
 			},
 		})
