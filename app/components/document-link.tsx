@@ -16,9 +16,10 @@ type Props = JsonifyObject<{
 	doc: Document & {
 		courseModuleSessions: { courseModule: { title: string } }[]
 	}
+	noPreviewBgColor?: string
 }>
 
-export const DocumentLink = ({ doc, exitTo }: Props) => {
+export const DocumentLink = ({ doc, exitTo, noPreviewBgColor }: Props) => {
 	const deleteDocumentFetcher = useFetcher()
 
 	return (
@@ -36,7 +37,7 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
 					className="z-10 flex-1 scale-90 overflow-hidden p-3 font-times text-sm"
 				/>
 			) : (
-				<p className="flex w-full flex-1 items-center justify-center p-3 text-lg text-muted-foreground/60">
+				<p className="flex w-full flex-1 items-center justify-center bg-white p-3 text-lg text-muted-foreground/60">
 					No preview.
 				</p>
 			)}

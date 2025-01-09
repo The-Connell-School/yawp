@@ -10,13 +10,9 @@ import {
 	HiddenValuesInputs,
 	HiddenValuesProvider,
 } from '#app/contexts/hidden-values'
-import { CourseModules } from './course-modules';
+import { CourseModules } from './course-modules'
 import { CourseResource } from './resource'
-import {
-	type Schema,
-	validator,
-	type CourseResourceSchema,
-} from './schema'
+import { type Schema, validator, type CourseResourceSchema } from './schema'
 
 interface Props {
 	formId: string

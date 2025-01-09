@@ -9,24 +9,20 @@ import {
 	useMatches,
 } from '@remix-run/react'
 import {
-	AwardIcon,
-	Database,
 	GaugeIcon,
-	GraduationCapIcon,
 	MoonIcon,
+	Settings2,
 	SunIcon,
+	User,
 	UserIcon,
-	WrenchIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, createContext } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import {
-	AssistantIcon,
 	DoubleArrowLeftIcon,
 	DoubleArrowRightIcon,
 	ExitIcon,
 	HamburgerIcon,
-	LockClosedIcon,
 	ReloadIcon,
 	SlashIcon,
 	XIcon,
@@ -82,52 +78,23 @@ export default function Route() {
 	const data = useLoaderData<typeof loader>()
 
 	const links = [
-		...(data.enableCourses
-			? [
-					{
-						to: '/app',
-						label: 'Dashboard',
-						end: true,
-						icon: <GaugeIcon strokeWidth={1.5} size={20} />,
-					},
-				]
-			: []),
-		...(data.enableAssistants
-			? [
-					{
-						to: '/app/assistants',
-						label: 'Assistants',
-						icon: <AssistantIcon strokeWidth={1.25} />,
-					},
-				]
-			: []),
-		...(data.enableCourses
-			? [
-					{
-						to: '/app/students',
-						label: 'Students',
-						icon: <GraduationCapIcon strokeWidth={1.5} size={24} />,
-						teacher: true,
-					},
-					// {
-					// 	to: '/app/grading',
-					// 	label: 'Grading',
-					// 	icon: <NotebookPen strokeWidth={1.5} size={24} />,
-					// 	teacher: true,
-					// },
-				]
-			: []),
 		{
-			to: '/app/admin',
-			label: 'Admin',
-			icon: <WrenchIcon strokeWidth={1.5} size={20} />,
-			admin: true,
+			to: '/app',
+			label: 'Dashboard',
+			end: true,
+			icon: <GaugeIcon size={20} />,
 		},
 		{
-			to: '/app/data',
-			label: 'Data',
-			icon: <Database strokeWidth={1.5} size={20} />,
-			admin: true,
+			to: '/app/admin',
+			label: 'Settings',
+			icon: <Settings2 size={20} />,
+			requiredRole: ['admin'],
+		},
+		{
+			to: '/app/students',
+			label: 'Students',
+			icon: <User size={20} />,
+			requiredRole: ['teacher', 'admin'],
 		},
 	]
 
@@ -239,9 +206,10 @@ export default function Route() {
 					{links
 						.filter(
 							link =>
-								(!link.admin && !link.teacher) ||
-								(link.admin && isAdmin) ||
-								(link.teacher && (user.teacherProfile || isAdmin)),
+								!link.requiredRole ||
+								link.requiredRole.some(role =>
+									user.roles.some(r => r.name === role),
+								),
 						)
 						.map(link => (
 							<NavLink
@@ -274,19 +242,7 @@ export default function Route() {
 									)
 								) : null}
 								{navExpanded ? (
-									<>
-										<span className="w-full">{link.label}</span>
-										{link.teacher ? (
-											<Tooltip text="Teachers only">
-												<AwardIcon className="h-5 w-5 opacity-50" />
-											</Tooltip>
-										) : null}
-										{link.admin ? (
-											<Tooltip text="Admin only">
-												<LockClosedIcon className="h-5 w-5 opacity-50" />
-											</Tooltip>
-										) : null}
-									</>
+									<span className="w-full">{link.label}</span>
 								) : null}
 							</NavLink>
 						))}

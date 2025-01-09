@@ -28,7 +28,7 @@ import { Button } from '#app/components/ui/button.tsx'
 import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { Period } from '#app/utils/enums.js';
+import { Period } from '#app/utils/enums.js'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import {
@@ -196,23 +196,23 @@ export default function SignupRoute() {
 						className="w-full"
 					/>
 					<FormSelect
-					labelProps={{
-						htmlFor: fields.period.id,
-						children: 'Period',
-					}}
-					selectProps={{
-						...getInputProps(fields.period, { type: 'text' }),
-						autoComplete: 'period',
-						required: true,
-						className: 'w-full',
-						options: Object.values(Period).map(period => ({
-							value: period,
-							label: period,
-						})),
-					}}
-					errors={fields.period.errors}
-					className="w-full"
-				/>
+						labelProps={{
+							htmlFor: fields.period.id,
+							children: 'Period',
+						}}
+						selectProps={{
+							...getInputProps(fields.period, { type: 'text' }),
+							autoComplete: 'period',
+							required: true,
+							className: 'w-full',
+							options: Object.values(Period).map(period => ({
+								value: period,
+								label: period,
+							})),
+						}}
+						errors={fields.period.errors}
+						className="w-full"
+					/>
 				</div>
 				<FormSelect
 					labelProps={{

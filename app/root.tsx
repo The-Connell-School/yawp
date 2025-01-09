@@ -239,7 +239,7 @@ function App() {
 					text="This is a staging environment. Do not use real data."
 					delayDuration={0}
 				>
-					<div className="absolute right-4 top-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
+					<div className="absolute bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
 						<AlertTriangle size={26} />
 					</div>
 				</Tooltip>
@@ -248,7 +248,7 @@ function App() {
 					text="This is a local environment. Do not use real data."
 					delayDuration={0}
 				>
-					<div className="absolute right-4 top-4 z-30 rounded-full bg-red-300 p-3 shadow">
+					<div className="absolute bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
 						<FlaskConical size={26} />
 					</div>
 				</Tooltip>

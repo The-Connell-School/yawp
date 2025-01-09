@@ -1,5 +1,5 @@
 import omit from 'lodash/omit'
-import { GripIcon } from 'lucide-react';
+import { GripIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useControlField, useField, useFieldArray } from 'remix-validated-form'
 import { type z } from 'zod'
@@ -21,6 +21,12 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from '#app/components/ui/sheet'
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from '#app/components/ui/tabs'
 import { useHiddenValues } from '#app/contexts/hidden-values'
 import { useCallDebouncedCallback } from '#app/hooks/useCallDebouncedCallback'
 import { useDragAndDrop } from '#app/hooks/useDragAndDrop.js'
@@ -148,53 +154,79 @@ export function CourseModule({
 						value={value.description ?? ''}
 						onChange={e => setValue({ ...value, description: e.target.value })}
 					/>
-					<FormTextarea
-						label="Context"
-						subLabel="Add instructions & context for the tutor."
-						name={`${name}.tutorInstructions`}
-						placeholder="You are a helpful tutor..."
-						value={value.tutorInstructions ?? ''}
-						onChange={e =>
-							setValue({ ...value, tutorInstructions: e.target.value })
+					<Tabs
+						defaultValue={value.isSelfGuided ? 'self' : 'tutor'}
+						className="w-full"
+						onValueChange={val =>
+							setValue({ ...value, isSelfGuided: val === 'self' })
 						}
-					/>
-					<div className="flex w-full flex-col gap-1">
-						<label>Instructions</label>
-						<p className="mb-1 text-sm text-muted-foreground">
-							Instructions are the building block of a module.
-						</p>
-						<div
-							className="flex flex-col gap-1"
-							onDragOver={e => e.preventDefault()}
-						>
-							{instructions.map(({ key }, i) => (
-								<Instruction
-									key={key}
-									onDelete={() => remove(i)}
-									name={`${name}.instructions[${i}]`}
-									{...getDragHandlers(i)}
-								/>
-							))}
-							<Button
-								variant="outline"
-								onClick={e => {
-									e.preventDefault()
-									push({
-										answerKey: '',
-										answerType: 'textarea',
-										answerTypeOptions: '',
-										prompt: '',
-										canAskQuestion: false,
-										title: 'New instruction',
-										interactiveType: 'answer',
-									})
-								}}
-							>
-								Add instruction
-							</Button>
-							{error && <p className="text-destructive-foreground">{error}</p>}
-						</div>
-					</div>
+					>
+						<TabsList className="w-full">
+							<TabsTrigger value="tutor" className="w-full">
+								Tutor-guided
+							</TabsTrigger>
+							<TabsTrigger value="self" className="w-full">
+								Self-guided
+							</TabsTrigger>
+						</TabsList>
+						<TabsContent value="tutor" className="flex flex-col gap-4">
+							<FormTextarea
+								label="Context"
+								subLabel="Add instructions & context for the tutor."
+								name={`${name}.tutorInstructions`}
+								placeholder="You are a helpful tutor..."
+								value={value.tutorInstructions ?? ''}
+								onChange={e =>
+									setValue({ ...value, tutorInstructions: e.target.value })
+								}
+							/>
+							<div className="flex w-full flex-col gap-1">
+								<label>Instructions</label>
+								<p className="mb-1 text-sm text-muted-foreground">
+									Instructions are the building block of a module.
+								</p>
+								<div
+									className="flex flex-col gap-1"
+									onDragOver={e => e.preventDefault()}
+								>
+									{instructions.map(({ key }, i) => (
+										<Instruction
+											key={key}
+											onDelete={() => remove(i)}
+											name={`${name}.instructions[${i}]`}
+											{...getDragHandlers(i)}
+										/>
+									))}
+									<Button
+										variant="outline"
+										onClick={e => {
+											e.preventDefault()
+											push({
+												answerKey: '',
+												answerType: 'textarea',
+												answerTypeOptions: '',
+												prompt: '',
+												canAskQuestion: false,
+												title: 'New instruction',
+												interactiveType: 'answer',
+											})
+										}}
+									>
+										Add instruction
+									</Button>
+									{error && (
+										<p className="text-destructive-foreground">{error}</p>
+									)}
+								</div>
+							</div>
+						</TabsContent>
+						<TabsContent value="self" className="flex flex-col gap-4">
+							<p className="text-sm text-muted-foreground">
+								This module will be self-guided. Students will work through the
+								content independently without tutor assistance.
+							</p>
+						</TabsContent>
+					</Tabs>
 				</div>
 				<SheetFooter className="mb-4 px-1 sm:mb-0">
 					<Button

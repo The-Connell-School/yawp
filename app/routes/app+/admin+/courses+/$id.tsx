@@ -119,12 +119,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 						...cm,
 						courseId: params.id,
 						position: position ?? 0,
+						isSelfGuided: cm.isSelfGuided === 'true',
 						instructions,
 					},
 					update: {
 						...cm,
 						courseId: params.id,
 						position: position ?? 0,
+						isSelfGuided: cm.isSelfGuided === 'true',
 						instructions,
 					},
 				})

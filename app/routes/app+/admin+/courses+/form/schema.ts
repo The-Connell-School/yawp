@@ -1,6 +1,6 @@
 import { withZod } from '@remix-validated-form/with-zod'
 import { z } from 'zod'
-import { zfd } from 'zod-form-data';
+import { zfd } from 'zod-form-data'
 
 export const CourseResourceSchema = z.object({
 	title: z.string(),
@@ -32,8 +32,9 @@ export const CourseModuleSchema = z.object({
 	id: z.string().nullish(),
 	title: z.string().min(1, 'Title is required'),
 	position: zfd.numeric().nullish(),
-	description: z.string().nullish(),
-	tutorInstructions: z.string().nullish(),
+	description: z.any(),
+	tutorInstructions: z.any(),
+	isSelfGuided: z.any(),
 	instructions: z.array(CourseModuleInstructionSchema).optional(),
 })
 

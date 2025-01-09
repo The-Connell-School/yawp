@@ -210,6 +210,7 @@ model CourseModule {
   position             Int
   description          String?
   tutorInstructions    String?
+  isSelfGuided         Boolean                   @default(false)
   courseId             String?
   course               Course?                   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   instructions         CourseModuleInstruction[]

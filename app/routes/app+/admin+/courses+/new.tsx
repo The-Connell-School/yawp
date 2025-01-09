@@ -35,6 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
 				create: (data.courseModules ?? []).map((cm, index) => ({
 					...omit(cm, ['id']),
 					position: index,
+					isSelfGuided: cm.isSelfGuided === 'true',
 					instructions: {
 						create: (cm.instructions ?? []).map((instruction, i) => ({
 							...instruction,

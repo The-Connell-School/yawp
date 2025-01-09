@@ -1,120 +1,347 @@
+import { json, type LoaderFunctionArgs } from '@remix-run/node'
 import {
-	json,
-	type LoaderFunctionArgs,
-	type ActionFunctionArgs,
-} from '@remix-run/node'
-import { useLoaderData, useSearchParams, Form } from '@remix-run/react'
+	Outlet,
+	useLoaderData,
+	useNavigate,
+	useSearchParams,
+} from '@remix-run/react'
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
-import { TrashIcon } from '#app/components/icons'
-import { ListLayout } from '#app/components/list-layout'
-import { SettingsNavLink } from '#app/components/settings-list-item'
+import { MultiSelect } from '#app/components/multi-select.tsx'
+import { SearchInput } from '#app/components/search-input'
+import { Pagination } from '#app/components/table/pagination.tsx'
 import { Button } from '#app/components/ui/button'
-import { UserImage } from '#app/components/user-image.js'
-import { requireUserId } from '#app/utils/auth.server'
+import {
+	Table,
+	TableHeader,
+	TableBody,
+	TableHead,
+	TableRow,
+	TableCell,
+} from '#app/components/ui/table'
+import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
-import { useDoubleCheck } from '#app/utils/misc'
-import { redirectWithToast } from '#app/utils/toast.server'
-import { PeriodFilter } from './_components/period-filter'
+
+export const handle: BreadcrumbHandle = { breadcrumb: 'Students' }
+
+type SortField = 'name' | 'email' | 'school' | 'grade' | 'period' | 'createdAt'
+type SortDirection = 'asc' | 'desc'
+
+const SORT_FIELDS: Array<{ label: string; value: SortField }> = [
+	{ label: 'Name', value: 'name' },
+	{ label: 'Email', value: 'email' },
+	{ label: 'School', value: 'school' },
+	{ label: 'Grade', value: 'grade' },
+	{ label: 'Period', value: 'period' },
+	{ label: 'Created At', value: 'createdAt' },
+]
 
 export async function loader({ request }: LoaderFunctionArgs) {
-	const userId = await requireUserId(request)
 	const url = new URL(request.url)
-	const query = url.searchParams.get('q')
-	const period = url.searchParams.get('period')
+	const query = url.searchParams.get('q') ?? ''
+	const page = parseInt(url.searchParams.get('page') ?? '1')
+	const take = parseInt(url.searchParams.get('take') ?? '10')
+	const skip = (page - 1) * take
+	const selectedStudentId = url.searchParams.get('id')
+	const sortField = (url.searchParams.get('sort') as SortField) ?? 'name'
+	const sortDirection =
+		(url.searchParams.get('direction') as SortDirection) ?? 'asc'
+	const selectedSchools = url.searchParams.get('school')?.split(',') ?? []
+	const selectedGrades = url.searchParams.get('grade')?.split(',') ?? []
+	const selectedPeriods = url.searchParams.get('period')?.split(',') ?? []
 
-	const students = await prisma.studentProfile.findMany({
-		where: {
-			workshopLeaderId: userId,
-			...(query && {
+	const where = {
+		AND: [
+			{
 				OR: [
 					{ user: { name: { contains: query } } },
 					{ user: { email: { contains: query } } },
+					{ school: { contains: query } },
+					{ grade: { contains: query } },
+					{ period: { contains: query } },
 				],
-			}),
-			...(period && { period: period }),
-		},
-		include: { user: { select: { image: true, name: true, email: true } } },
-		orderBy: { user: { name: 'asc' } },
-	})
-
-	return json({ students })
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-	await requireUserId(request)
-	const formData = await request.formData()
-	const studentId = formData.get('studentId')
-
-	if (typeof studentId !== 'string') {
-		return json({ error: 'Invalid student ID' }, { status: 400 })
+			},
+			selectedSchools.length > 0 && !selectedSchools.includes('all')
+				? {
+						OR: selectedSchools.map(school =>
+							school === 'none'
+								? { school: null }
+								: { school: { equals: school } },
+						),
+					}
+				: {},
+			selectedGrades.length > 0 && !selectedGrades.includes('all')
+				? {
+						OR: selectedGrades.map(grade =>
+							grade === 'none' ? { grade: null } : { grade: { equals: grade } },
+						),
+					}
+				: {},
+			selectedPeriods.length > 0 && !selectedPeriods.includes('all')
+				? {
+						OR: selectedPeriods.map(period =>
+							period === 'none'
+								? { period: null }
+								: { period: { equals: period } },
+						),
+					}
+				: {},
+		],
 	}
 
-	await prisma.studentProfile.delete({ where: { id: studentId } })
+	const orderBy =
+		sortField === 'name' || sortField === 'email'
+			? { user: { [sortField]: sortDirection } }
+			: { [sortField]: sortDirection }
 
-	return redirectWithToast('/app/students', {
-		type: 'success',
-		description: 'Student removed successfully.',
-		closeButton: false,
+	const [students, totalCount, selectedStudent, filters] = await Promise.all([
+		prisma.studentProfile.findMany({
+			where,
+			include: {
+				user: {
+					include: {
+						documents: {
+							include: {
+								courseModuleSessions: {
+									include: {
+										courseModule: true,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			take,
+			skip,
+			orderBy,
+		}),
+		prisma.studentProfile.count({ where }),
+		selectedStudentId
+			? prisma.studentProfile.findUnique({
+					where: { id: selectedStudentId },
+					include: {
+						user: {
+							include: {
+								documents: {
+									include: {
+										courseModuleSessions: {
+											include: {
+												courseModule: true,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				})
+			: null,
+		prisma.studentProfile.findMany({
+			select: {
+				school: true,
+				grade: true,
+				period: true,
+			},
+			distinct: ['school', 'grade', 'period'],
+		}),
+	])
+
+	const totalPages = Math.ceil(totalCount / take)
+
+	// Get unique filter values
+	const schools = [...new Set(filters.map(f => f.school).filter(Boolean))]
+	const grades = [...new Set(filters.map(f => f.grade).filter(Boolean))]
+	const periods = [...new Set(filters.map(f => f.period).filter(Boolean))]
+
+	return json({
+		students,
+		totalPages,
+		currentPage: page,
+		selectedStudent,
+		sortField,
+		sortDirection,
+		totalCount,
+		filters: {
+			schools,
+			grades,
+			periods,
+		},
 	})
 }
 
-export default function Route() {
-	const data = useLoaderData<typeof loader>()
-	const [searchParams] = useSearchParams()
-	const strSearchParams = searchParams.toString()
+export default function StudentsRoute() {
+	const navigate = useNavigate()
+	const [searchParams, setSearchParams] = useSearchParams()
+	const {
+		students,
+		totalPages,
+		currentPage,
+		selectedStudent,
+		sortField,
+		sortDirection,
+		filters,
+		totalCount,
+	} = useLoaderData<typeof loader>()
 
-	return (
-		<ListLayout
-			path="students"
-			hideAddButton
-			filters={
-				<div>
-					<PeriodFilter />
-				</div>
+	const handleSort = (field: SortField) => {
+		setSearchParams(prev => {
+			if (prev.get('sort') === field) {
+				prev.set('direction', prev.get('direction') === 'asc' ? 'desc' : 'asc')
+			} else {
+				prev.set('sort', field)
+				prev.set('direction', 'asc')
 			}
-		>
-			{data.students.length > 0 ? (
-				data.students.map(sp => (
-					<SettingsNavLink
-						key={sp.id}
-						to={`/app/students/${sp.id}${strSearchParams ? `?${strSearchParams}` : ''}`}
-						title={sp.user.name ?? sp.user.email}
-						deleteButton={<DeleteButton studentId={sp.id} />}
-						image={
-							<div className="py-2 pl-2">
-								<UserImage user={sp.user} size="xs" />
-							</div>
-						}
-					/>
-				))
-			) : (
-				<div className="mt-14 flex h-full w-full flex-col items-center justify-center gap-1">
-					<h3>No students found.</h3>
-					<p className="w-1/2 text-center text-sm text-muted-foreground">
-						Students assigned to you will show up here. If you are expecting
-						students to be here, contact your administrator.
-					</p>
-				</div>
-			)}
-		</ListLayout>
-	)
-}
+			return prev
+		})
+	}
 
-function DeleteButton({ studentId }: { studentId: string }) {
-	const dc = useDoubleCheck()
+	const handleFilter = (key: string, values: string[]) => {
+		setSearchParams(prev => {
+			if (values.length > 0) {
+				prev.set(key, values.join(','))
+			} else {
+				prev.delete(key)
+			}
+			return prev
+		})
+	}
+
+	const getSelectedValues = (key: string) => {
+		const value = searchParams.get(key)
+		return value ? value.split(',') : []
+	}
+
+	const hasActiveFilters = ['school', 'grade', 'period'].some(
+		key => getSelectedValues(key).length > 0,
+	)
+
+	const clearFilters = () => {
+		setSearchParams(prev => {
+			prev.delete('school')
+			prev.delete('grade')
+			prev.delete('period')
+			return prev
+		})
+	}
 
 	return (
-		<Form method="POST">
-			<input type="hidden" name="studentId" value={studentId} />
-			<Button
-				type="submit"
-				variant="ghost"
-				size="sm"
-				{...dc.getButtonProps({ onClick: e => e.stopPropagation() })}
-			>
-				{dc.doubleCheck ? 'Are you sure?' : <TrashIcon className="h-4 w-4" />}
-			</Button>
-		</Form>
+		<main className="flex h-screen overflow-hidden">
+			<div className="flex-1">
+				<h1 className="mb-4 px-4 pt-4 text-2xl font-bold">Students</h1>
+				<div className="mb-4 flex flex-col gap-2 px-4">
+					<div className="flex-1">
+						<SearchInput />
+					</div>
+					<div className="flex items-start gap-2">
+						<MultiSelect
+							label="School"
+							options={[
+								...filters.schools.map(school => ({
+									value: school ?? 'none',
+									label: school ?? 'None',
+								})),
+							]}
+							queryKey="school"
+							onChange={values => handleFilter('school', values)}
+						/>
+						<MultiSelect
+							label="Grade"
+							options={[
+								...filters.grades.map(grade => ({
+									value: grade ?? 'none',
+									label: grade ?? 'None',
+								})),
+							]}
+							queryKey="grade"
+							onChange={values => handleFilter('grade', values)}
+						/>
+						<MultiSelect
+							label="Period"
+							options={[
+								...filters.periods.map(period => ({
+									value: period ?? 'none',
+									label: period ?? 'None',
+								})),
+							]}
+							queryKey="period"
+							onChange={values => handleFilter('period', values)}
+						/>
+						{hasActiveFilters && (
+							<Button variant="link" size="sm" onClick={clearFilters}>
+								Clear
+							</Button>
+						)}
+					</div>
+				</div>
+				<Table>
+					<TableHeader>
+						<TableRow>
+							{SORT_FIELDS.map(({ label, value }, index) => (
+								<TableHead
+									key={value}
+									className={
+										index === 0
+											? 'pl-4'
+											: index === SORT_FIELDS.length - 1
+												? 'pr-4'
+												: ''
+									}
+								>
+									<Button
+										variant="unstyled"
+										className="h-8 p-0"
+										onClick={() => handleSort(value)}
+									>
+										{label}
+										{sortField === value ? (
+											sortDirection === 'desc' ? (
+												<ArrowUp
+													className="ml-2 h-4 w-4 text-primary"
+													strokeWidth={3}
+												/>
+											) : (
+												<ArrowDown
+													className="ml-2 h-4 w-4 text-primary"
+													strokeWidth={3}
+												/>
+											)
+										) : (
+											<ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+										)}
+									</Button>
+								</TableHead>
+							))}
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{students.map(student => (
+							<TableRow
+								key={student.id}
+								onClick={() => {
+									const params = new URLSearchParams(window.location.search)
+									navigate(`/app/students/${student.id}?${params}`)
+								}}
+								className="cursor-pointer hover:bg-muted/50"
+							>
+								<TableCell className="pl-4">{student.user.name}</TableCell>
+								<TableCell>{student.user.email}</TableCell>
+								<TableCell>{student.school}</TableCell>
+								<TableCell>{student.grade}</TableCell>
+								<TableCell>{student.period}</TableCell>
+								<TableCell className="pr-4">
+									{new Date(student.createdAt).toLocaleDateString()}
+								</TableCell>
+							</TableRow>
+						))}
+					</TableBody>
+				</Table>
+				<div className="p-4">
+					<Pagination totalCount={totalCount} />
+				</div>
+			</div>
+			<Outlet />
+		</main>
 	)
 }
 
