@@ -35,7 +35,7 @@ export default function StudentRoute() {
 	const { student } = useLoaderData<typeof loader>()
 
 	return (
-		<div className="flex h-full w-full max-w-[400px] flex-col border-l bg-background bg-muted/50 p-4">
+		<div className="flex h-full w-full max-w-[400px] flex-col border-l bg-muted/30 p-4">
 			<div className="flex flex-col gap-4">
 				<div>
 					<h2 className="text-xl font-bold">{student.user.name}</h2>

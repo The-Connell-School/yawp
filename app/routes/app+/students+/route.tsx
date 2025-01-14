@@ -3,6 +3,7 @@ import {
 	Outlet,
 	useLoaderData,
 	useNavigate,
+	useParams,
 	useSearchParams,
 } from '@remix-run/react'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
@@ -21,6 +22,7 @@ import {
 } from '#app/components/ui/table'
 import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
+import { cn } from '#app/utils/misc.tsx'
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Students' }
 
@@ -39,9 +41,8 @@ const SORT_FIELDS: Array<{ label: string; value: SortField }> = [
 export async function loader({ request }: LoaderFunctionArgs) {
 	const url = new URL(request.url)
 	const query = url.searchParams.get('q') ?? ''
-	const page = parseInt(url.searchParams.get('page') ?? '1')
+	const skip = parseInt(url.searchParams.get('skip') ?? '1')
 	const take = parseInt(url.searchParams.get('take') ?? '10')
-	const skip = (page - 1) * take
 	const selectedStudentId = url.searchParams.get('id')
 	const sortField = (url.searchParams.get('sort') as SortField) ?? 'name'
 	const sortDirection =
@@ -94,7 +95,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			? { user: { [sortField]: sortDirection } }
 			: { [sortField]: sortDirection }
 
-	const [students, totalCount, selectedStudent, filters] = await Promise.all([
+	const [students, totalCount, filters] = await Promise.all([
 		prisma.studentProfile.findMany({
 			where,
 			include: {
@@ -117,26 +118,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			orderBy,
 		}),
 		prisma.studentProfile.count({ where }),
-		selectedStudentId
-			? prisma.studentProfile.findUnique({
-					where: { id: selectedStudentId },
-					include: {
-						user: {
-							include: {
-								documents: {
-									include: {
-										courseModuleSessions: {
-											include: {
-												courseModule: true,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				})
-			: null,
 		prisma.studentProfile.findMany({
 			select: {
 				school: true,
@@ -147,8 +128,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		}),
 	])
 
-	const totalPages = Math.ceil(totalCount / take)
-
 	// Get unique filter values
 	const schools = [...new Set(filters.map(f => f.school).filter(Boolean))]
 	const grades = [...new Set(filters.map(f => f.grade).filter(Boolean))]
@@ -156,9 +135,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 	return json({
 		students,
-		totalPages,
-		currentPage: page,
-		selectedStudent,
 		sortField,
 		sortDirection,
 		totalCount,
@@ -172,17 +148,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function StudentsRoute() {
 	const navigate = useNavigate()
+	const params = useParams()
 	const [searchParams, setSearchParams] = useSearchParams()
-	const {
-		students,
-		totalPages,
-		currentPage,
-		selectedStudent,
-		sortField,
-		sortDirection,
-		filters,
-		totalCount,
-	} = useLoaderData<typeof loader>()
+	const { students, sortField, sortDirection, filters, totalCount } =
+		useLoaderData<typeof loader>()
 
 	const handleSort = (field: SortField) => {
 		setSearchParams(prev => {
@@ -322,7 +291,12 @@ export default function StudentsRoute() {
 									const params = new URLSearchParams(window.location.search)
 									navigate(`/app/students/${student.id}?${params}`)
 								}}
-								className="cursor-pointer hover:bg-muted/50"
+								className={cn(
+									'cursor-pointer',
+									params?.id === student.id
+										? 'bg-primary/10 hover:bg-primary/10'
+										: 'hover:bg-primary/5',
+								)}
 							>
 								<TableCell className="pl-4">{student.user.name}</TableCell>
 								<TableCell>{student.user.email}</TableCell>

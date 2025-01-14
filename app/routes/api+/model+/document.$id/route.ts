@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
 
-const POST = withZod(
+const PUT = withZod(
 	z.object({
 		text: z.string().optional(),
 		html: z.string().optional(),
@@ -32,16 +32,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
 		}
 	}
 
-	const { error, data } = await POST.validate(formData)
+	const { error, data } = await PUT.validate(formData)
 	if (error) return validationError(error)
+
+	const user = await prisma.user.findUniqueOrThrow({
+		where: { id: userId },
+		include: { roles: true },
+	})
 
 	const update = await prisma.document.update({
 		where: {
 			id: params.id,
-			OR: [
-				{ userId },
-				{ user: { studentProfile: { workshopLeaderId: userId } } },
-			],
+			...(user.roles.some(r => r.name === 'admin')
+				? {}
+				: {
+						OR: [
+							{ userId },
+							{ user: { studentProfile: { workshopLeaderId: userId } } },
+						],
+					}),
 		},
 		data,
 	})
