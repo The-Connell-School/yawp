@@ -6,6 +6,7 @@ import {
 } from '@remix-run/node'
 import { Link, useSearchParams } from '@remix-run/react'
 import { withZod } from '@remix-validated-form/with-zod'
+import { ArrowRightIcon } from 'lucide-react'
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
 import { HoneypotInputs } from 'remix-utils/honeypot/react'
 import { ValidatedForm, validationError } from 'remix-validated-form'
@@ -103,17 +104,24 @@ export default function LoginPage() {
 						Log in
 					</Button>
 				</ValidatedForm>
-				<div className="flex items-center justify-center gap-2 pt-6">
-					<span>New here?</span>
+				<div className="mt-8 rounded-xl border bg-muted p-6">
+					<p className="text-xl font-bold">New here?</p>
+					<p className="text-muted-foreground">
+						Create an account to get started.
+					</p>
 					<Link
-						className={button({ variant: 'link' })}
+						className={button({
+							variant: 'outline',
+							size: 'lg',
+							className: 'mt-4 w-full shadow',
+						})}
 						to={
 							redirectTo
 								? `/signup?${encodeURIComponent(redirectTo)}`
 								: '/signup'
 						}
 					>
-						Create an account
+						Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />
 					</Link>
 				</div>
 			</div>
