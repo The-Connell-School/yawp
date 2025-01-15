@@ -455,10 +455,13 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 					advanceInstructionLabel={
 						instruction.interactiveType === 'dialogue'
 							? instruction.nextInstructionBtnLabel
-							: undefined
+							: !instruction.answerTypeOptions
+								? 'Next'
+								: undefined
 					}
 					advanceInstruction={
-						instruction.interactiveType === 'dialogue'
+						instruction.interactiveType === 'dialogue' ||
+						!instruction.answerTypeOptions
 							? incrementInstruction
 							: undefined
 					}
