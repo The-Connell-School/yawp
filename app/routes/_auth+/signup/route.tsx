@@ -23,7 +23,11 @@ import { useIsPending } from '#app/utils/misc'
 import { EmailSchema } from '#app/utils/schemas/user'
 import { prepareVerification } from '../verify.server'
 
-const Schema = z.object({ email: EmailSchema, passcode: z.string() })
+const Schema = z.object({
+	email: EmailSchema,
+	passcode: z.string().min(1, 'Passcode is required'),
+})
+
 const validator = withZod(Schema)
 
 export async function action({ request }: ActionFunctionArgs) {

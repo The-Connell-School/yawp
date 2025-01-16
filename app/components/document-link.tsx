@@ -26,7 +26,7 @@ export const DocumentLink = ({ doc, exitTo, noPreviewBgColor }: Props) => {
 		<Link
 			key={doc.id}
 			to={`/app/documents/${doc.id}?ssv=1&exitTo=${exitTo}`}
-			className="relative flex h-48 flex-col overflow-hidden rounded-lg border transition-all hover:border-primary/50 hover:shadow"
+			className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
 		>
 			<span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
 				{doc.courseModuleSessions[0]?.courseModule.title}

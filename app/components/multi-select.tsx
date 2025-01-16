@@ -6,7 +6,6 @@ import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import {
 	Command,
-	CommandEmpty,
 	CommandGroup,
 	CommandInput,
 	CommandItem,
@@ -72,34 +71,41 @@ export function MultiSelect({ label, options, onChange, queryKey }: Props) {
 				<Command>
 					<CommandInput placeholder={`Search ${label.toLowerCase()}`} />
 					<CommandList>
-						<CommandEmpty>No results found.</CommandEmpty>
 						<CommandGroup>
-							{options.map(option => {
-								const isSelected = selectedValues.includes(option.value)
-								return (
-									<CommandItem
-										key={option.value}
-										onSelect={() => {
-											const newValues = isSelected
-												? selectedValues.filter(value => value !== option.value)
-												: [...selectedValues, option.value]
-											onChange?.(newValues)
-										}}
-									>
-										<div
-											className={cn(
-												'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
-												isSelected
-													? 'bg-primary text-primary-foreground'
-													: 'opacity-50 [&_svg]:invisible',
-											)}
+							{options.length > 0 ? (
+								options.map(option => {
+									const isSelected = selectedValues.includes(option.value)
+									return (
+										<CommandItem
+											key={option.value}
+											onSelect={() => {
+												const newValues = isSelected
+													? selectedValues.filter(
+															value => value !== option.value,
+														)
+													: [...selectedValues, option.value]
+												onChange?.(newValues)
+											}}
 										>
-											<Check />
-										</div>
-										<span>{option.label}</span>
-									</CommandItem>
-								)
-							})}
+											<div
+												className={cn(
+													'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+													isSelected
+														? 'bg-primary text-primary-foreground'
+														: 'opacity-50 [&_svg]:invisible',
+												)}
+											>
+												<Check />
+											</div>
+											<span>{option.label}</span>
+										</CommandItem>
+									)
+								})
+							) : (
+								<div className="py-6 text-center text-sm">
+									No results found.
+								</div>
+							)}
 						</CommandGroup>
 						{selectedValues.length > 0 && (
 							<>
