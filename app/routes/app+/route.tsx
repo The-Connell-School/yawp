@@ -250,12 +250,12 @@ export default function Route() {
 				<div className="flex flex-grow flex-col justify-end">
 					<Popover>
 						<PopoverTrigger>
-							<div className="flex items-center gap-4 border-t p-3 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
-								<UserImage user={user} size="xs" />
+							<div className="flex items-center justify-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
+								<UserImage user={user} size="sm" />
 								{navExpanded ? (
 									<div>
-										<p className="text-sm font-bold">{user.name}</p>
-										<p className="text-left text-xs text-muted-foreground">
+										<p className="font-bold">{user.name}</p>
+										<p className="text-left text-sm text-muted-foreground">
 											{user.roles.some(r => r.name === 'admin')
 												? 'Admin'
 												: user.teacherProfile

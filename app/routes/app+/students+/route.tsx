@@ -6,7 +6,6 @@ import {
 	useNavigate,
 	useParams,
 	useSearchParams,
-	useLocation,
 } from '@remix-run/react'
 import {
 	ArrowDown,
@@ -226,7 +225,6 @@ export default function StudentsRoute() {
 	const navigate = useNavigate()
 	const params = useParams()
 	const [searchParams, setSearchParams] = useSearchParams()
-	const location = useLocation()
 	const {
 		students,
 		sortField,
@@ -239,9 +237,7 @@ export default function StudentsRoute() {
 
 	const [storedFilter, setStoredFilter] = useLocalStorage<{ query: string }>(
 		'students-filter',
-		{
-			query: '',
-		},
+		{ query: '' },
 	)
 
 	const handleSort = (field: SortField) => {
@@ -310,11 +306,11 @@ export default function StudentsRoute() {
 
 	return (
 		<main className="flex h-screen overflow-hidden">
-			<div className="flex-1">
+			<div className="flex flex-1 flex-col">
 				<div className="mb-4 flex items-center justify-between px-4 pt-4">
 					<h1 className="text-2xl font-bold">Students</h1>
 				</div>
-				<div className="mb-4 flex flex-col gap-2 px-4">
+				<div className="mb-2 flex flex-col gap-2 px-4">
 					<div className="flex-1">
 						<SearchInput />
 					</div>
@@ -472,144 +468,146 @@ export default function StudentsRoute() {
 						</div>
 					</div>
 				</div>
-				{students.length === 0 ? (
-					<div className="mx-4 flex flex-col items-center justify-center rounded-lg border border-dashed py-10">
-						<span className="text-lg font-bold">No results</span>
-						<span className="text-sm text-muted-foreground">
-							Try adjusting your filters
-						</span>
-						{currentPage !== 1 ? (
-							<div className="mt-4 max-w-[300px] rounded-lg border border-yellow-300/50 bg-yellow-100/50 p-4">
-								<h4 className="font-bold">Heads up!</h4>
-								<p className="text-sm">
-									You are currently on page <strong>{currentPage}</strong> of{' '}
-									<strong>
-										{Math.ceil(
-											totalCount /
-												parseInt(searchParams.get('take') ?? '10', 10),
-										)}
-									</strong>
-									. Results might show on the first page.
-								</p>
-							</div>
-						) : null}
-					</div>
-				) : viewMode === 'table' ? (
-					<TableComponent>
-						<TableHeader>
-							<TableRow>
-								{SORT_FIELDS.map(({ label, value }, index) => (
-									<TableHead
-										key={value}
-										className={
-											index === 0
-												? 'pl-4'
-												: index === SORT_FIELDS.length - 1
-													? 'pr-4'
-													: ''
-										}
-									>
-										<Button
-											variant="unstyled"
-											className="h-8 p-0"
-											onClick={() => handleSort(value)}
-										>
-											{label}
-											{sortField === value ? (
-												sortDirection === 'desc' ? (
-													<ArrowUp
-														className="ml-2 h-4 w-4 text-primary"
-														strokeWidth={3}
-													/>
-												) : (
-													<ArrowDown
-														className="ml-2 h-4 w-4 text-primary"
-														strokeWidth={3}
-													/>
-												)
-											) : (
-												<ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+				<div className="flex-1 overflow-y-auto border-b border-t">
+					{students.length === 0 ? (
+						<div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
+							<span className="text-lg font-bold">No results</span>
+							<span className="text-sm text-muted-foreground">
+								Try adjusting your filters
+							</span>
+							{currentPage !== 1 ? (
+								<div className="mt-4 max-w-[300px] rounded-lg border border-yellow-300/50 bg-yellow-100/50 p-4">
+									<h4 className="font-bold">Heads up!</h4>
+									<p className="text-sm">
+										You are currently on page <strong>{currentPage}</strong> of{' '}
+										<strong>
+											{Math.ceil(
+												totalCount /
+													parseInt(searchParams.get('take') ?? '10', 10),
 											)}
-										</Button>
-									</TableHead>
+										</strong>
+										. Results might show on the first page.
+									</p>
+								</div>
+							) : null}
+						</div>
+					) : viewMode === 'table' ? (
+						<TableComponent>
+							<TableHeader>
+								<TableRow>
+									{SORT_FIELDS.map(({ label, value }, index) => (
+										<TableHead
+											key={value}
+											className={
+												index === 0
+													? 'pl-4'
+													: index === SORT_FIELDS.length - 1
+														? 'pr-4'
+														: ''
+											}
+										>
+											<Button
+												variant="unstyled"
+												className="h-8 p-0"
+												onClick={() => handleSort(value)}
+											>
+												{label}
+												{sortField === value ? (
+													sortDirection === 'desc' ? (
+														<ArrowUp
+															className="ml-2 h-4 w-4 text-primary"
+															strokeWidth={3}
+														/>
+													) : (
+														<ArrowDown
+															className="ml-2 h-4 w-4 text-primary"
+															strokeWidth={3}
+														/>
+													)
+												) : (
+													<ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+												)}
+											</Button>
+										</TableHead>
+									))}
+								</TableRow>
+							</TableHeader>
+							<TableBody>
+								{students.map(student => (
+									<TableRow
+										key={student.id}
+										onClick={() => {
+											const params = new URLSearchParams(window.location.search)
+											navigate(`/app/students/${student.id}?${params}`)
+										}}
+										className={cn(
+											'cursor-pointer',
+											params?.id === student.id
+												? 'bg-primary/10 hover:bg-primary/10'
+												: 'hover:bg-primary/5',
+										)}
+									>
+										<TableCell className="pl-4">{student.user.name}</TableCell>
+										<TableCell>{student.user.email}</TableCell>
+										<TableCell>{student.school}</TableCell>
+										<TableCell>{student.grade}</TableCell>
+										<TableCell>{student.period}</TableCell>
+										<TableCell className="pr-4">
+											{new Date(student.createdAt).toLocaleDateString()}
+										</TableCell>
+									</TableRow>
 								))}
-							</TableRow>
-						</TableHeader>
-						<TableBody>
+							</TableBody>
+						</TableComponent>
+					) : (
+						<div className="my-2 grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-5">
 							{students.map(student => (
-								<TableRow
+								<div
 									key={student.id}
 									onClick={() => {
 										const params = new URLSearchParams(window.location.search)
 										navigate(`/app/students/${student.id}?${params}`)
 									}}
 									className={cn(
-										'cursor-pointer',
-										params?.id === student.id
-											? 'bg-primary/10 hover:bg-primary/10'
-											: 'hover:bg-primary/5',
+										'flex h-32 cursor-pointer flex-col rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md',
+										params?.id === student.id && 'bg-primary/10',
 									)}
 								>
-									<TableCell className="pl-4">{student.user.name}</TableCell>
-									<TableCell>{student.user.email}</TableCell>
-									<TableCell>{student.school}</TableCell>
-									<TableCell>{student.grade}</TableCell>
-									<TableCell>{student.period}</TableCell>
-									<TableCell className="pr-4">
-										{new Date(student.createdAt).toLocaleDateString()}
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</TableComponent>
-				) : (
-					<div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-5">
-						{students.map(student => (
-							<div
-								key={student.id}
-								onClick={() => {
-									const params = new URLSearchParams(window.location.search)
-									navigate(`/app/students/${student.id}?${params}`)
-								}}
-								className={cn(
-									'flex h-32 cursor-pointer flex-col rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md',
-									params?.id === student.id && 'bg-primary/10',
-								)}
-							>
-								<span className="flex gap-2 pb-2">
-									<UserImage
-										user={student.user}
-										size="xs"
-										className="h-9 w-9 rounded-md"
-									/>
-									<span className="flex flex-col">
-										<span className="text-sm font-bold">
-											{student.user.name}
-										</span>
-										<span className="text-xs text-muted-foreground">
-											{student.grade !== null ? `${student.grade} grade` : ''}
-											{student.period !== null
-												? `, period ${student.period}`
-												: ''}
-											{student.grade === null && student.period === null
-												? `No grade`
-												: ''}
+									<span className="flex gap-2 pb-2">
+										<UserImage
+											user={student.user}
+											size="xs"
+											className="h-9 w-9 rounded-md"
+										/>
+										<span className="flex flex-col">
+											<span className="text-sm font-bold">
+												{student.user.name}
+											</span>
+											<span className="text-xs text-muted-foreground">
+												{student.grade !== null ? `${student.grade} grade` : ''}
+												{student.period !== null
+													? `, period ${student.period}`
+													: ''}
+												{student.grade === null && student.period === null
+													? `No grade`
+													: ''}
+											</span>
 										</span>
 									</span>
-								</span>
-								<span className="mt-auto flex items-center gap-2 text-sm text-muted-foreground">
-									<FileIcon size={18} />
-									{student.user.documents.length}{' '}
-									{pluralize({
-										word: 'document',
-										count: student.user.documents.length,
-									})}
-								</span>
-							</div>
-						))}
-					</div>
-				)}
-				<div className="p-4">
+									<span className="mt-auto flex items-center gap-2 text-sm text-muted-foreground">
+										<FileIcon size={18} />
+										{student.user.documents.length}{' '}
+										{pluralize({
+											word: 'document',
+											count: student.user.documents.length,
+										})}
+									</span>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+				<div className="px-4 pb-8 pt-2">
 					<Pagination totalCount={totalCount} />
 				</div>
 			</div>
