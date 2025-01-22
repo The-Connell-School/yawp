@@ -19,6 +19,14 @@ import { useEffect, useRef } from 'react'
 import { useLocalStorage } from 'usehooks-ts'
 import { Button } from '#app/components/ui/button'
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#app/components/ui/dialog'
+import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -26,7 +34,9 @@ import {
 import { Slider } from '#app/components/ui/slider.js'
 import { Switch } from '#app/components/ui/switch'
 import { Tooltip } from '#app/components/ui/tooltip'
+import { useAsyncFetcherSubmit } from '#app/hooks/useAsyncFetcher.ts'
 import { useAudio } from '#app/hooks/useAudio.js'
+import { useUser } from '#app/hooks/useUser'
 import { cn } from '#app/utils/misc'
 import { timeAgo } from '#app/utils/timeAgo/timeAgo'
 import { Loading } from './loading'
@@ -63,6 +73,10 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 		`doc-${docId}-tutor-messages-expanded`,
 		true,
 	)
+	const [showResetConfirmation, setShowResetConfirmation] = useLocalStorage(
+		`doc-${docId}-reset-confirmation`,
+		false,
+	)
 	const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>()
 	const incrementInstructionFetcher = useFetcher()
 	const advanceCourseModuleFetcher = useFetcher()
@@ -70,7 +84,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 	const messagesRef = useRef<HTMLDivElement>(null)
 	const audioRef = useRef<HTMLAudioElement>(null)
 	const navigate = useNavigate()
-	const [searchParams] = useSearchParams()
+	const [searchParams, setSearchParams] = useSearchParams()
 	const shouldPlayAudio = searchParams.get('spa') === '1'
 	const audioControls = useAudio(audioRef.current)
 	const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0
@@ -99,6 +113,11 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 				content: optimistic.get('response'),
 			} as any)
 		: null
+
+	const user = useUser()
+	const userIsAdmin = user.roles.some(role => role.name === 'admin')
+	const userIsTeacher = user.teacherProfile !== null
+	const { submit, isLoading } = useAsyncFetcherSubmit()
 
 	const respond = (response: string) => {
 		tutorResponseFetcher.submit(
@@ -197,6 +216,25 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [audioFetcher.data])
+
+	const handleReset = () => {
+		setShowResetConfirmation(true)
+	}
+
+	const confirmReset = async () => {
+		await submit(
+			{ cmsId: cms.id },
+			{
+				method: 'POST',
+				action: '/api/domain/delete-subsequent-cms',
+			},
+		)
+		setShowResetConfirmation(false)
+		setSearchParams(prev => {
+			prev.delete('cmsIdx')
+			return prev
+		})
+	}
 
 	return (
 		<div className="flex w-full flex-col border-r pb-2 md:w-3/5">
@@ -394,9 +432,24 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 							: undefined,
 					)}
 				>
-					<p className="mb-4 text-center text-sm text-muted-foreground">
-						This step has been completed. Click next to continue.
-					</p>
+					<div className="mb-4 text-center text-sm text-muted-foreground">
+						{userIsAdmin || userIsTeacher ? (
+							<>
+								This step has been completed. Click next to continue <br />
+								or
+								<Button
+									variant="link"
+									onClick={handleReset}
+									className="h-4 pl-1 pr-0"
+								>
+									reset back to this point
+								</Button>
+								.
+							</>
+						) : (
+							'This step has been completed. Click next to continue.'
+						)}
+					</div>
 					<Button
 						onClick={() =>
 							navigate(`/app/documents/${docId}?cmsIdx=${nextCmsIdx}`)
@@ -467,6 +520,35 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 					}
 				/>
 			)}
+			<Dialog
+				open={showResetConfirmation}
+				onOpenChange={setShowResetConfirmation}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Confirm Reset</DialogTitle>
+						<DialogDescription>
+							This action cannot be undone. It will permanently remove all
+							progress in later steps. Are you sure you want to continue?
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button
+							variant="secondary"
+							onClick={() => setShowResetConfirmation(false)}
+						>
+							Cancel
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={confirmReset}
+							isLoading={isLoading}
+						>
+							Reset Progress
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	)
 }

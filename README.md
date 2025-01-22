@@ -12,8 +12,8 @@ built in OpenAI.
 
 ## Backups
 
-All backups are automated (if the aws variables `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` are in github action secrets).
-They will happen daily.
+All backups are automated (if the aws variables `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY` are in github action secrets). They will happen daily.
 
 ## Restore
 
@@ -22,6 +22,17 @@ To restore the latest database in case of emergency, run the following commands:
 ```
 fly ssh console -C "./scripts/restore-latest-backup.sh"
 ```
+
+# Workflows
+
+## Copy production database for local troubleshooting
+
+1. SSH into the app machine w `fly ssh console --machine <id>`
+2. Run the backup script `./scripts/backup.sh`
+3. Go download the backup in console.tigris.dev
+4. Unzip the downloaded with command `gunzip <filename>.db.gz`
+5. Rename it to `data.db` and replace the current `prisma/data.db` with the
+   backup
 
 # Code Troubleshooting
 

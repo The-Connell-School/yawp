@@ -111,7 +111,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 		}
 	}
 
-	const currentCms = doc.courseModuleSessions[cmsIdx]
+	let currentCms = doc.courseModuleSessions[cmsIdx]
+
+	if (!currentCms) {
+		currentCms = doc.courseModuleSessions[0]
+	}
+
 	const nextCmId = currentCms.courseModule.course?.courseModules.find(
 		cm => cm.position === currentCms.courseModule.position + 1,
 	)?.id
