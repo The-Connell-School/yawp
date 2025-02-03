@@ -1,14 +1,11 @@
 import { useEffect } from 'react'
 import { Toaster as SonnerToaster, toast as showToast } from 'sonner'
-import { useTheme } from '#app/routes/api+/preferences+/theme/route.js'
 import { type Toast } from '#app/utils/toast.server.ts'
 
 export function Toaster({ toast }: { toast?: Toast | null }) {
-	const theme = useTheme()
-
 	return (
 		<>
-			<SonnerToaster closeButton position="bottom-right" theme={theme} />
+			<SonnerToaster closeButton position="bottom-right" theme="light" />
 			{toast ? <ShowToast toast={toast} /> : null}
 		</>
 	)

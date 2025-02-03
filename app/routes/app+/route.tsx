@@ -8,14 +8,7 @@ import {
 	useLocation,
 	useMatches,
 } from '@remix-run/react'
-import {
-	GaugeIcon,
-	MoonIcon,
-	Settings2,
-	SunIcon,
-	User,
-	UserIcon,
-} from 'lucide-react'
+import { GaugeIcon, Settings2, User, UserIcon } from 'lucide-react'
 import { useCallback, useEffect, useState, createContext } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import {
@@ -46,7 +39,6 @@ import { prisma } from '#app/utils/db.server'
 import { FeatureFlags } from '#app/utils/featureFlags/index.js'
 import { cn } from '#app/utils/misc'
 import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
-import { ThemeSwitch, useTheme } from '../api+/preferences+/theme/route'
 
 export const NavExpandedContext = createContext({
 	isMobileNavOpen: false,
@@ -70,7 +62,6 @@ export async function loader() {
 }
 
 export default function Route() {
-	const theme = useTheme()
 	const location = useLocation()
 	const user = useUser()
 	const isAdmin = user.roles.find(r => r.name === 'admin')
@@ -166,12 +157,8 @@ export default function Route() {
 				>
 					<Link to=".">
 						<img
-							src={
-								theme === 'dark'
-									? '/img/logo_for_dark_mode.png'
-									: '/img/logo_for_light_mode.png'
-							}
-							alt="Logo on white background"
+							src="/img/logo_for_light_mode.png"
+							alt="Logo"
 							className={cn('h-auto w-0 rounded object-cover py-2', {
 								'w-24': navExpanded,
 							})}
@@ -250,7 +237,7 @@ export default function Route() {
 				<div className="flex flex-grow flex-col justify-end">
 					<Popover>
 						<PopoverTrigger>
-							<div className="flex items-center justify-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 dark:hover:bg-foreground/10 sm:pb-3">
+							<div className="flex items-center justify-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
 								<UserImage user={user} size="sm" />
 								{navExpanded ? (
 									<div>
@@ -278,23 +265,6 @@ export default function Route() {
 									Profile
 								</Link>
 							</Button>
-							<ThemeSwitch>
-								{({ mode, fetcher }) => (
-									<Button
-										size="sm"
-										variant="ghost"
-										className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-										disabled={['submitting', 'loading'].includes(fetcher.state)}
-									>
-										{mode === 'light' ? (
-											<SunIcon size={15} />
-										) : (
-											<MoonIcon size={15} />
-										)}
-										Theme
-									</Button>
-								)}
-							</ThemeSwitch>
 							<Form action="/logout" method="POST">
 								<Button
 									type="submit"

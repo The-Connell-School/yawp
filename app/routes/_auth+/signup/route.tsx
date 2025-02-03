@@ -13,7 +13,6 @@ import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { FormInput } from '#app/components/forms/form-input-2'
 import { Button } from '#app/components/ui/button'
-import { useTheme } from '#app/routes/api+/preferences+/theme/route.js'
 import { validateCSRF } from '#app/utils/csrf.server'
 import { prisma } from '#app/utils/db.server'
 import { sendEmail } from '#app/utils/email.server'
@@ -103,18 +102,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function SignupRoute() {
 	const isPending = useIsPending()
-	const theme = useTheme()
 
 	return (
 		<div className="mx-auto w-full max-w-md">
 			<div className="mt-8 flex flex-col gap-3 text-center">
 				<img
-					src={
-						theme === 'dark'
-							? '/img/logo_for_dark_mode.png'
-							: '/img/logo_for_light_mode.png'
-					}
-					alt="Logo on white background"
+					src="/img/logo_for_light_mode.png"
+					alt="Logo"
 					className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
 				/>
 				<h1>Welcome!</h1>

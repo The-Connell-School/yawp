@@ -16,8 +16,8 @@ import { cn } from '#app/utils/misc'
 
 const getLinkStyles = ({ isActive }: { isActive: boolean }) =>
 	cn(
-		'flex w-full items-center gap-2 rounded px-2 py-1 transition-colors hover:bg-primary/15 dark:hover:bg-primary/20',
-		{ 'bg-primary/10 dark:bg-primary/15 text-primary': isActive },
+		'flex w-full items-center gap-2 rounded px-2 py-1 transition-colors hover:bg-primary/15',
+		{ 'bg-primary/10 text-primary': isActive },
 	)
 
 export async function loader({ request }: LoaderFunctionArgs) {

@@ -28,11 +28,6 @@ import {
 	type NavState,
 	navStateCookie,
 } from './routes/api+/preferences+/nav/cookie.server.ts'
-import {
-	type Theme,
-	getTheme,
-} from './routes/api+/preferences+/theme/cookie.server.ts'
-import { useTheme } from './routes/api+/preferences+/theme/route.tsx'
 import tailwindStyleSheetUrl from './styles/tailwind.css?url'
 import { getUserId, logout } from './utils/auth.server.ts'
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx'
@@ -40,8 +35,7 @@ import { csrf } from './utils/csrf.server.ts'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
 import { honeypot } from './utils/honeypot.server.ts'
-import { getHslFromVar, hslToHex } from './utils/hslToHex'
-import { cn, combineHeaders, getDomainUrl } from './utils/misc.tsx'
+import { combineHeaders, getDomainUrl } from './utils/misc.tsx'
 import { makeTimings, time } from './utils/timing.server.ts'
 import { getToast } from './utils/toast.server.ts'
 
@@ -127,7 +121,6 @@ export async function loader({ request }: DataFunctionArgs) {
 				origin: getDomainUrl(request),
 				path: new URL(request.url).pathname,
 				userPrefs: {
-					theme: getTheme(request),
 					navState: (navCookie.state as NavState) ?? 'expanded',
 				},
 			},
@@ -159,19 +152,14 @@ export const headers: HeadersFunction = ({ loaderHeaders }) => {
 function Document({
 	children,
 	nonce,
-	theme = 'light',
 	env = {},
 }: {
 	children: React.ReactNode
 	nonce: string
-	theme?: Theme
 	env?: Record<string, string | boolean>
 }) {
 	return (
-		<html
-			lang="en"
-			className={cn('h-full overflow-x-hidden', { dark: theme === 'dark' })}
-		>
+		<html lang="en" className="h-full overflow-x-hidden">
 			<head>
 				<ClientHintCheck nonce={nonce} />
 				<Meta />
@@ -201,14 +189,6 @@ function Document({
 function App() {
 	const data = useLoaderData<typeof loader>()
 	const nonce = useNonce()
-	const theme = useTheme()
-
-	useEffect(() => {
-		const meta = document.querySelector('meta[name="theme-color"]')
-		const newHex = hslToHex(getHslFromVar('--background'))
-
-		meta?.setAttribute('content', newHex ?? '#ffffff')
-	}, [theme])
 
 	useEffect(() => {
 		function createSecureLoginMethod() {
@@ -233,7 +213,7 @@ function App() {
 	}, [])
 
 	return (
-		<Document nonce={nonce} theme={theme} env={data.ENV}>
+		<Document nonce={nonce} env={data.ENV}>
 			{data.bannerWarning === 'staging' ? (
 				<Tooltip
 					text="This is a staging environment. Do not use real data."

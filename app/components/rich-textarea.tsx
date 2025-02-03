@@ -14,8 +14,13 @@ export const RichTextarea = ({
 	...textareaProps
 }: RichTextareaProps) => {
 	const height = size === 'sm' ? '40px' : '50px'
-	const { textareaRef, handleKeyDown, handleTextareaChange, setHasText, hasText } =
-		useRichTextarea({ onCmdEnter, height })
+	const {
+		textareaRef,
+		handleKeyDown,
+		handleTextareaChange,
+		setHasText,
+		hasText,
+	} = useRichTextarea({ onCmdEnter, height })
 
 	return (
 		<div className="relative mx-auto flex w-full max-w-[700px] items-center">
@@ -38,34 +43,36 @@ export const RichTextarea = ({
 				open={!hasText || textareaProps?.disabled ? undefined : false}
 				delayDuration={200}
 			>
-				{hasText ? <button
-					className={cn(
-						'absolute bottom-2 right-2 cursor-pointer rounded-md bg-primary/80 p-2 text-background shadow transition hover:bg-primary/90 active:bg-primary dark:text-foreground',
-						{
-							'cursor-default bg-primary/20 text-opacity-10 hover:bg-primary/20 active:bg-primary/20':
-								!hasText || textareaProps?.disabled,
-							'bottom-1 right-1': size === 'sm',
-						},
-					)}
-					onClick={() => {
-						if (textareaRef.current?.value) {
-							onCmdEnter?.(textareaRef.current.value)
-							setHasText(false)
-							setTimeout(() => {
-								textareaRef.current!.value = ''
-							}, 100)
-						}
-					}}
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="currentColor"
-						className={size === 'sm' ? 'h-4 w-4' : 'h-4 w-4'}
+				{hasText ? (
+					<button
+						className={cn(
+							'absolute bottom-2 right-2 cursor-pointer rounded-md bg-primary/80 p-2 text-background shadow transition hover:bg-primary/90 active:bg-primary',
+							{
+								'cursor-default bg-primary/20 text-opacity-10 hover:bg-primary/20 active:bg-primary/20':
+									!hasText || textareaProps?.disabled,
+								'bottom-1 right-1': size === 'sm',
+							},
+						)}
+						onClick={() => {
+							if (textareaRef.current?.value) {
+								onCmdEnter?.(textareaRef.current.value)
+								setHasText(false)
+								setTimeout(() => {
+									textareaRef.current!.value = ''
+								}, 100)
+							}
+						}}
 					>
-						<path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-					</svg>
-				</button> : null}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="currentColor"
+							className={size === 'sm' ? 'h-4 w-4' : 'h-4 w-4'}
+						>
+							<path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+						</svg>
+					</button>
+				) : null}
 			</Tooltip>
 		</div>
 	)

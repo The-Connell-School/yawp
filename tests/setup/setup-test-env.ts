@@ -15,6 +15,7 @@ afterEach(() => cleanup())
 export let consoleError: MockInstance<(typeof console)['error']>
 
 beforeEach(() => {
+	// eslint-disable-next-line no-console
 	const originalConsoleError = console.error
 	consoleError = vi.spyOn(console, 'error')
 	consoleError.mockImplementation(

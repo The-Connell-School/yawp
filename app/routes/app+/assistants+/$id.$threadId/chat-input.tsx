@@ -69,7 +69,7 @@ export const ChatInput = ({ isDisabled, textareaProps, onSubmit }: Props) => {
 				<button
 					type="submit"
 					className={cn(
-						'absolute bottom-2 right-2 cursor-pointer rounded-md bg-primary/80 p-2 text-background shadow transition hover:bg-primary/90 active:bg-primary dark:text-foreground',
+						'absolute bottom-2 right-2 cursor-pointer rounded-md bg-primary/80 p-2 text-background shadow transition hover:bg-primary/90 active:bg-primary',
 						{
 							'cursor-default bg-primary/20 text-opacity-10 hover:bg-primary/20 active:bg-primary/20':
 								!hasText || isDisabled,
