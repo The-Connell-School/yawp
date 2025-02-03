@@ -16,6 +16,7 @@ import {
 	QuoteIcon,
 	Undo2Icon,
 	Redo2Icon,
+	Palette,
 } from 'lucide-react'
 import { type ReactNode } from 'react'
 import { ListBulletIcon, DividerHorizontalIcon } from '#app/components/icons.js'
@@ -62,6 +63,58 @@ export const commands: Command[] = [
 		checkDisabled: true,
 	},
 	{
+		override: editor => (
+			<DropdownMenu key="text-color">
+				<Tooltip text="Text Color" delayDuration={300}>
+					<DropdownMenuTrigger>
+						<div className={COMMAND_STYLE}>
+							<Palette className="h-4 w-4" />
+						</div>
+					</DropdownMenuTrigger>
+				</Tooltip>
+				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
+					{[
+						{ color: '#000000' },
+						{ color: '#0000FF' },
+						{ color: '#FF0000' },
+					].map(({ color }) => (
+						<DropdownMenuItem
+							key={color}
+							onClick={e => {
+								e.preventDefault()
+								e.stopPropagation()
+								editor.chain().focus().setColor(color).run()
+							}}
+							className={cn(COMMAND_STYLE, 'flex w-[65px] items-center gap-3', {
+								'bg-muted':
+									color === '#000000'
+										? !editor.isActive('textStyle', { color: '#0000FF' }) &&
+											!editor.isActive('textStyle', { color: '#FF0000' })
+										: editor.isActive('textStyle', { color }),
+							})}
+						>
+							<Check
+								className={cn('h-4 w-4', {
+									invisible:
+										color === '#000000'
+											? editor.isActive('textStyle', { color: '#0000FF' }) ||
+												editor.isActive('textStyle', { color: '#FF0000' })
+											: !editor.isActive('textStyle', { color }),
+								})}
+							/>
+							<span className="flex items-center gap-2">
+								<div
+									className="h-4 w-4 rounded-full border border-gray-300"
+									style={{ backgroundColor: color }}
+								/>
+							</span>
+						</DropdownMenuItem>
+					))}
+				</DropdownMenuContent>
+			</DropdownMenu>
+		),
+	},
+	{
 		icon: <Trash className="h-4 w-4" />,
 		label: 'Clear marks',
 		command: 'unsetAllMarks',
@@ -104,7 +157,7 @@ export const commands: Command[] = [
 					</DropdownMenuTrigger>
 				</Tooltip>
 				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
-					{['1', '1.15', '1.5', '2'].map((height) => (
+					{['1', '1.15', '1.5', '2'].map(height => (
 						<DropdownMenuItem
 							key={height}
 							onClick={e => {
