@@ -43,6 +43,13 @@ export type Command = {
 	override?: (editor: TiptapEditor) => ReactNode
 }
 
+const COLOR_OPTIONS = {
+	black: '#000000',
+	blue: '#2563eb',
+	red: '#dc2626',
+	green: '#16a34a',
+}
+
 export const commands: Command[] = [
 	{
 		icon: <BoldIcon className="h-4 w-4" />,
@@ -73,11 +80,7 @@ export const commands: Command[] = [
 					</DropdownMenuTrigger>
 				</Tooltip>
 				<DropdownMenuContent className="grid w-fit min-w-0 gap-1">
-					{[
-						{ color: '#000000' },
-						{ color: '#0000FF' },
-						{ color: '#FF0000' },
-					].map(({ color }) => (
+					{Object.entries(COLOR_OPTIONS).map(([color]) => (
 						<DropdownMenuItem
 							key={color}
 							onClick={e => {
@@ -87,19 +90,36 @@ export const commands: Command[] = [
 							}}
 							className={cn(COMMAND_STYLE, 'flex w-[65px] items-center gap-3', {
 								'bg-muted':
-									color === '#000000'
-										? !editor.isActive('textStyle', { color: '#0000FF' }) &&
-											!editor.isActive('textStyle', { color: '#FF0000' })
+									color === COLOR_OPTIONS.black
+										? !editor.isActive('textStyle', {
+												color: COLOR_OPTIONS.blue,
+											}) &&
+											!editor.isActive('textStyle', {
+												color: COLOR_OPTIONS.red,
+											}) &&
+											!editor.isActive('textStyle', {
+												color: COLOR_OPTIONS.green,
+											})
 										: editor.isActive('textStyle', { color }),
 							})}
 						>
 							<Check
 								className={cn('h-4 w-4', {
 									invisible:
-										color === '#000000'
-											? editor.isActive('textStyle', { color: '#0000FF' }) ||
-												editor.isActive('textStyle', { color: '#FF0000' })
-											: !editor.isActive('textStyle', { color }),
+										color === COLOR_OPTIONS.black
+											? editor.isActive('textStyle', {
+													color: COLOR_OPTIONS.blue,
+												}) ||
+												editor.isActive('textStyle', {
+													color: COLOR_OPTIONS.red,
+												}) ||
+												editor.isActive('textStyle', {
+													color: COLOR_OPTIONS.green,
+												})
+											: !editor.isActive('textStyle', {
+													color:
+														COLOR_OPTIONS[color as keyof typeof COLOR_OPTIONS],
+												}),
 								})}
 							/>
 							<span className="flex items-center gap-2">

@@ -73,7 +73,6 @@ const SORT_FIELDS: Array<{ label: string; value: SortField }> = [
 	{ label: 'School', value: 'school' },
 	{ label: 'Grade', value: 'grade' },
 	{ label: 'Period', value: 'period' },
-	{ label: 'Created At', value: 'createdAt' },
 ]
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -662,14 +661,11 @@ export default function StudentsRoute() {
 										<TableCell onClick={() => onCellClick(student)}>
 											{student.grade}
 										</TableCell>
-										<TableCell onClick={() => onCellClick(student)}>
-											{student.period}
-										</TableCell>
 										<TableCell
 											onClick={() => onCellClick(student)}
 											className="pr-4"
 										>
-											{new Date(student.createdAt).toLocaleDateString()}
+											{student.period}
 										</TableCell>
 									</TableRow>
 								))}
