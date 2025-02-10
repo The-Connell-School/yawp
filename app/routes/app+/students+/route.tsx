@@ -58,6 +58,7 @@ import { UserImage } from '#app/components/user-image'
 import { requireUserId } from '#app/utils/auth.server'
 import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
+import { Period, Grade, Setting } from '#app/utils/enums.ts'
 import { cn } from '#app/utils/misc.tsx'
 import pluralize from '#app/utils/pluralize/pluralize'
 
@@ -168,7 +169,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			? { user: { [sortField]: sortDirection } }
 			: { [sortField]: sortDirection }
 
-	const [students, totalCount, filters, workshopLeaders] = await Promise.all([
+	const [students, totalCount, settings, workshopLeaders] = await Promise.all([
 		prisma.studentProfile.findMany({
 			where,
 			include: {
@@ -192,15 +193,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			orderBy,
 		}),
 		prisma.studentProfile.count({ where }),
-		prisma.studentProfile.findMany({
-			select: {
-				school: true,
-				grade: true,
-				period: true,
-				schoolTeacher: true,
-			},
-			distinct: ['school', 'grade', 'period', 'schoolTeacher'],
-		}),
+		prisma.setting.findMany(),
 		isAdmin
 			? prisma.user.findMany({
 					where: {
@@ -214,13 +207,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			: [],
 	])
 
-	// Get unique filter values
-	const schools = [...new Set(filters.map(f => f.school).filter(Boolean))]
-	const grades = [...new Set(filters.map(f => f.grade).filter(Boolean))]
-	const periods = [...new Set(filters.map(f => f.period).filter(Boolean))]
-	const teachers = [
-		...new Set(filters.map(t => t.schoolTeacher).filter(Boolean)),
-	]
+	const schools =
+		settings.find(s => s.name === Setting.Schools)?.value.split(',') ?? []
+	const teachers =
+		settings.find(s => s.name === Setting.Teachers)?.value.split(',') ?? []
 
 	return json({
 		students,
@@ -229,8 +219,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 		totalCount,
 		filters: {
 			schools,
-			grades,
-			periods,
+			grades: Object.values(Grade),
+			periods: Object.values(Period),
 			teachers,
 			workshopLeaders: isAdmin ? workshopLeaders : [],
 		},

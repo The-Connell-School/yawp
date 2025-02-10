@@ -28,7 +28,7 @@ import { Button } from '#app/components/ui/button.tsx'
 import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
 import { validateCSRF } from '#app/utils/csrf.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
-import { Period } from '#app/utils/enums.js'
+import { Grade, Period, Setting } from '#app/utils/enums.js'
 import { checkHoneypot } from '#app/utils/honeypot.server.ts'
 import { useIsPending } from '#app/utils/misc.tsx'
 import {
@@ -66,11 +66,27 @@ async function requireOnboardingEmail(request: Request) {
 }
 export async function loader({ request }: LoaderFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
-	const workshopTeachers = await prisma.user.findMany({
-		where: { teacherProfile: { isNot: null } },
-	})
+	const [workshopTeachers, settings] = await Promise.all([
+		prisma.user.findMany({
+			where: { teacherProfile: { isNot: null } },
+		}),
+		prisma.setting.findMany({
+			where: {
+				name: {
+					in: [Setting.Schools, Setting.Teachers],
+				},
+			},
+		}),
+	])
 
-	return json({ email, workshopTeachers })
+	return json({
+		email,
+		workshopTeachers,
+		teachers:
+			settings.find(s => s.name === Setting.Teachers)?.value.split(',') ?? [],
+		schools:
+			settings.find(s => s.name === Setting.Schools)?.value.split(',') ?? [],
+	})
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -163,36 +179,60 @@ export default function SignupRoute() {
 					errors={fields.name.errors}
 				/>
 				<div className="flex gap-2">
-					<FormInput
-						labelProps={{ htmlFor: fields.school.id, children: 'School' }}
-						inputProps={{
+					<FormSelect
+						labelProps={{
+							htmlFor: fields.school.id,
+							children: 'School',
+						}}
+						selectProps={{
 							...getInputProps(fields.school, { type: 'text' }),
 							autoComplete: 'name',
 							required: true,
+							className: 'w-full',
+							options: data.schools.map(school => ({
+								value: school,
+								label: school,
+							})),
 						}}
-						errors={fields.school.errors}
+						errors={fields.period.errors}
 						className="w-full"
 					/>
-					<FormInput
-						labelProps={{ htmlFor: fields.teacher.id, children: 'Teacher' }}
-						inputProps={{
+					<FormSelect
+						labelProps={{
+							htmlFor: fields.teacher.id,
+							children: 'Teacher',
+						}}
+						selectProps={{
 							...getInputProps(fields.teacher, { type: 'text' }),
 							autoComplete: 'name',
 							required: true,
+							className: 'w-full',
+							options: data.teachers.map(teacher => ({
+								value: teacher,
+								label: teacher,
+							})),
 						}}
-						errors={fields.teacher.errors}
+						errors={fields.period.errors}
 						className="w-full"
 					/>
 				</div>
 				<div className="flex gap-3">
-					<FormInput
-						labelProps={{ htmlFor: fields.grade.id, children: 'Grade' }}
-						inputProps={{
-							...getInputProps(fields.grade, { type: 'text' }),
-							autoComplete: 'name',
-							required: true,
+					<FormSelect
+						labelProps={{
+							htmlFor: fields.grade.id,
+							children: 'Grade',
 						}}
-						errors={fields.grade.errors}
+						selectProps={{
+							...getInputProps(fields.grade, { type: 'text' }),
+							autoComplete: 'grade',
+							required: true,
+							className: 'w-full',
+							options: Object.values(Grade).map(grade => ({
+								value: grade,
+								label: grade,
+							})),
+						}}
+						errors={fields.period.errors}
 						className="w-full"
 					/>
 					<FormSelect

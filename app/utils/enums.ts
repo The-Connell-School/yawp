@@ -10,6 +10,15 @@ export enum Period {
 	Ninth = '9th',
 }
 
+export enum Grade {
+	Ninth = '9th',
+	Tenth = '10th',
+	Eleventh = '11th',
+	Twelfth = '12th',
+}
+
 export enum Setting {
 	SignupPasscode = 'signup_passcode',
+	Schools = 'schools',
+	Teachers = 'teachers',
 }
