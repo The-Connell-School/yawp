@@ -1,11 +1,16 @@
 import { useLocalStorage } from '#node_modules/usehooks-ts/dist'
-import { json, type LoaderFunctionArgs } from '@remix-run/node'
+import {
+	json,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from '@remix-run/node'
 import {
 	Outlet,
 	useLoaderData,
 	useNavigate,
 	useParams,
 	useSearchParams,
+	useFetcher,
 } from '@remix-run/react'
 import {
 	ArrowDown,
@@ -15,12 +20,25 @@ import {
 	LayoutGrid,
 	ChevronDown,
 	List,
+	PencilIcon,
+	Trash2,
 } from 'lucide-react'
+import { useState } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
+import { FormMultiSelect } from '#app/components/forms/form-multi-select.tsx'
 import { MultiSelect } from '#app/components/multi-select.tsx'
 import { SearchInput } from '#app/components/search-input'
 import { Pagination } from '#app/components/table/pagination.tsx'
 import { Button } from '#app/components/ui/button'
+import { Checkbox } from '#app/components/ui/checkbox'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#app/components/ui/dialog'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -221,6 +239,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	})
 }
 
+export async function action({ request }: ActionFunctionArgs) {
+	const formData = await request.formData()
+	const intent = formData.get('intent')
+	const studentIds = formData.get('studentIds')?.toString().split(',') ?? []
+
+	if (intent === 'delete') {
+		await prisma.studentProfile.deleteMany({
+			where: { id: { in: studentIds } },
+		})
+		return json({ success: true })
+	}
+
+	if (intent === 'update') {
+		const school = formData.get('school')?.toString()
+		const grade = formData.get('grade')?.toString()
+		const period = formData.get('period')?.toString()
+		const teacher = formData.get('teacher')?.toString()
+
+		await prisma.studentProfile.updateMany({
+			where: { id: { in: studentIds } },
+			data: {
+				...(school ? { school } : {}),
+				...(grade ? { grade } : {}),
+				...(period ? { period } : {}),
+				...(teacher ? { schoolTeacher: teacher } : {}),
+			},
+		})
+		return json({ success: true })
+	}
+
+	return json({ error: 'Invalid action' }, { status: 400 })
+}
+
 export default function StudentsRoute() {
 	const navigate = useNavigate()
 	const params = useParams()
@@ -234,6 +285,10 @@ export default function StudentsRoute() {
 		viewMode,
 		isAdmin,
 	} = useLoaderData<typeof loader>()
+	const [selectedStudents, setSelectedStudents] = useState<string[]>([])
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+	const fetcher = useFetcher()
 
 	const [storedFilter, setStoredFilter] = useLocalStorage<{ query: string }>(
 		'students-filter',
@@ -304,6 +359,43 @@ export default function StudentsRoute() {
 				(parseInt(searchParams.get('take') ?? '10') ?? 10),
 		) + 1
 
+	const handleSelectAll = () => {
+		setSelectedStudents(prev =>
+			prev.length === students.length ? [] : students.map(s => s.id),
+		)
+	}
+
+	const handleSelect = (id: string) => {
+		setSelectedStudents(prev =>
+			prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id],
+		)
+	}
+
+	const handleBulkDelete = () => {
+		fetcher.submit(
+			{
+				intent: 'delete',
+				studentIds: selectedStudents.join(','),
+			},
+			{ method: 'POST' },
+		)
+		setIsDeleteModalOpen(false)
+		setSelectedStudents([])
+	}
+
+	const handleBulkUpdate = (formData: FormData) => {
+		formData.append('intent', 'update')
+		formData.append('studentIds', selectedStudents.join(','))
+		fetcher.submit(formData, { method: 'POST' })
+		setIsEditModalOpen(false)
+		setSelectedStudents([])
+	}
+
+	const onCellClick = (student: { id: string }) => {
+		const params = new URLSearchParams(window.location.search)
+		navigate(`/app/students/${student.id}?${params}`)
+	}
+
 	return (
 		<main className="flex h-screen overflow-hidden">
 			<div className="flex flex-1 flex-col">
@@ -314,8 +406,24 @@ export default function StudentsRoute() {
 					<div className="flex-1">
 						<SearchInput />
 					</div>
-					<div className="flex items-start justify-between gap-2">
+					<div className="flex items-start justify-between gap-1">
 						<div className="flex items-start gap-2">
+							{selectedStudents.length === 0 ? null : (
+								<>
+									<Button size="sm" onClick={() => setIsEditModalOpen(true)}>
+										<PencilIcon className="mr-2 h-3.5 w-3.5" />
+										Edit
+									</Button>
+									<Button
+										size="sm"
+										variant="destructive"
+										onClick={() => setIsDeleteModalOpen(true)}
+									>
+										<Trash2 className="mr-2 h-3.5 w-3.5" />
+										Delete
+									</Button>
+								</>
+							)}
 							<MultiSelect
 								label="School"
 								options={[
@@ -495,16 +603,16 @@ export default function StudentsRoute() {
 						<TableComponent>
 							<TableHeader>
 								<TableRow>
+									<TableHead className="w-[50px] pl-4">
+										<Checkbox
+											checked={selectedStudents.length === students.length}
+											onCheckedChange={handleSelectAll}
+										/>
+									</TableHead>
 									{SORT_FIELDS.map(({ label, value }, index) => (
 										<TableHead
 											key={value}
-											className={
-												index === 0
-													? 'pl-4'
-													: index === SORT_FIELDS.length - 1
-														? 'pr-4'
-														: ''
-											}
+											className={index === SORT_FIELDS.length - 1 ? 'pr-4' : ''}
 										>
 											<Button
 												variant="unstyled"
@@ -536,10 +644,6 @@ export default function StudentsRoute() {
 								{students.map(student => (
 									<TableRow
 										key={student.id}
-										onClick={() => {
-											const params = new URLSearchParams(window.location.search)
-											navigate(`/app/students/${student.id}?${params}`)
-										}}
 										className={cn(
 											'cursor-pointer',
 											params?.id === student.id
@@ -547,12 +651,34 @@ export default function StudentsRoute() {
 												: 'hover:bg-primary/5',
 										)}
 									>
-										<TableCell className="pl-4">{student.user.name}</TableCell>
-										<TableCell>{student.user.email}</TableCell>
-										<TableCell>{student.school}</TableCell>
-										<TableCell>{student.grade}</TableCell>
-										<TableCell>{student.period}</TableCell>
-										<TableCell className="pr-4">
+										<TableCell
+											className="max-h-[37px] pl-4"
+											onClick={e => e.stopPropagation()}
+										>
+											<Checkbox
+												checked={selectedStudents.includes(student.id)}
+												onCheckedChange={() => handleSelect(student.id)}
+											/>
+										</TableCell>
+										<TableCell onClick={() => onCellClick(student)}>
+											{student.user.name}
+										</TableCell>
+										<TableCell onClick={() => onCellClick(student)}>
+											{student.user.email}
+										</TableCell>
+										<TableCell onClick={() => onCellClick(student)}>
+											{student.school}
+										</TableCell>
+										<TableCell onClick={() => onCellClick(student)}>
+											{student.grade}
+										</TableCell>
+										<TableCell onClick={() => onCellClick(student)}>
+											{student.period}
+										</TableCell>
+										<TableCell
+											onClick={() => onCellClick(student)}
+											className="pr-4"
+										>
 											{new Date(student.createdAt).toLocaleDateString()}
 										</TableCell>
 									</TableRow>
@@ -612,6 +738,100 @@ export default function StudentsRoute() {
 				</div>
 			</div>
 			<Outlet />
+
+			<Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Edit Students</DialogTitle>
+						<DialogDescription>
+							Update details for {selectedStudents.length} selected students
+						</DialogDescription>
+					</DialogHeader>
+					<fetcher.Form
+						onSubmit={e => {
+							e.preventDefault()
+							handleBulkUpdate(new FormData(e.currentTarget))
+						}}
+					>
+						<div className="grid gap-4 py-4">
+							<FormMultiSelect
+								multiple={false}
+								label="School"
+								name="school"
+								options={[
+									...filters.schools.map(school => ({
+										value: school ?? 'none',
+										label: school ?? 'None',
+									})),
+								]}
+								queryKey="school"
+							/>
+							<FormMultiSelect
+								multiple={false}
+								label="Grade"
+								name="grade"
+								options={[
+									...filters.grades.map(grade => ({
+										value: grade ?? 'none',
+										label: grade ?? 'None',
+									})),
+								]}
+								queryKey="grade"
+							/>
+							<FormMultiSelect
+								multiple={false}
+								label="Period"
+								name="period"
+								options={[
+									...filters.periods.map(period => ({
+										value: period ?? 'none',
+										label: period ?? 'None',
+									})),
+								]}
+								queryKey="period"
+							/>
+							<FormMultiSelect
+								multiple={false}
+								label="Teacher"
+								name="teacher"
+								options={[
+									...filters.teachers.map(teacher => ({
+										value: teacher ?? 'none',
+										label: teacher ?? 'None',
+									})),
+								]}
+								queryKey="teacher"
+							/>
+						</div>
+						<DialogFooter>
+							<Button type="submit">Save changes</Button>
+						</DialogFooter>
+					</fetcher.Form>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Delete Students</DialogTitle>
+						<DialogDescription>
+							Are you sure you want to delete {selectedStudents.length}{' '}
+							students? This action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setIsDeleteModalOpen(false)}
+						>
+							Cancel
+						</Button>
+						<Button variant="destructive" onClick={handleBulkDelete}>
+							Delete
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</main>
 	)
 }
