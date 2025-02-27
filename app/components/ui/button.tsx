@@ -20,6 +20,8 @@ const button = cva(
 				link: 'text-primary underline-offset-4 hover:underline px-0.5 py-0',
 				sidebar: 'bg-foreground/15 text-foreground hover:bg-foreground/10',
 				success: 'bg-success text-success-foreground hover:bg-success/90',
+				'outline-primary':
+					'border border-primary text-primary hover:bg-primary/10',
 				unstyled: '',
 			},
 			size: {

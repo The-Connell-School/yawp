@@ -1,20 +1,38 @@
-import { type LoaderFunctionArgs, json } from '@remix-run/node'
-import { Link, useLoaderData } from '@remix-run/react'
-import { ArrowUpRight, FileIcon } from 'lucide-react'
+import {
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+	json,
+} from '@remix-run/node'
+import { Link, useLoaderData, useFetcher } from '@remix-run/react'
+import { BookmarkIcon, EllipsisVertical, PlusIcon } from 'lucide-react'
+import { useState } from 'react'
 import { DocumentLink } from '#app/components/document-link.js'
 import { NoDataPlaceholder } from '#app/components/no-data-placeholder.js'
-import { UserImage } from '#app/components/user-image.js'
+import { Button } from '#app/components/ui/button.js'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '#app/components/ui/dialog'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '#app/components/ui/dropdown-menu.js'
 import { useUser } from '#app/hooks/useUser.js'
 import { redirectIfDisabled, requireUserId } from '#app/utils/auth.server.js'
 import { prisma } from '#app/utils/db.server.js'
 import { FeatureFlags } from '#app/utils/featureFlags/index.js'
-import pluralize from '#app/utils/pluralize/pluralize.js'
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants')
 	const userId = await requireUserId(request)
 
-	const [courses, documents, studentProfiles] = await Promise.all([
+	const [courses, documents, studentProfiles, views] = await Promise.all([
 		prisma.course.findMany({
 			select: { image: { select: { id: true } }, id: true, title: true },
 		}),
@@ -32,15 +50,46 @@ export async function loader({ request }: LoaderFunctionArgs) {
 			where: { workshopLeaderId: userId },
 			include: { user: { include: { image: true, documents: true } } },
 		}),
+		prisma.studentView.findMany({
+			where: { userId },
+			orderBy: { createdAt: 'desc' },
+		}),
 	])
 
-	return json({ courses, documents, studentProfiles })
+	return json({
+		courses,
+		documents,
+		studentProfiles,
+		views,
+	})
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+	try {
+		const formData = await request.formData()
+		const intent = formData.get('intent')
+
+		if (intent === 'deleteView') {
+			const viewId = formData.get('viewId')
+			await prisma.studentView.delete({
+				where: { id: viewId as string },
+			})
+
+			return json({ success: true } as const)
+		}
+
+		return json({ success: false } as const)
+	} catch (error) {
+		throw error
+	}
 }
 
 export default function AppRoute() {
 	const data = useLoaderData<typeof loader>()
 	const user = useUser()
 	const isTeacher = user.teacherProfile !== null
+	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+	const fetcher = useFetcher<typeof action>()
 
 	if (isTeacher) {
 		return (
@@ -60,68 +109,77 @@ export default function AppRoute() {
 					</div>
 				</div>
 				<div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-					<div className="flex flex-col">
-						<p className="my-2 text-foreground/60">Students</p>
-						{data.studentProfiles.length ? (
-							<div className="grid grid-cols-2 gap-2 md:grid-cols-6">
-								<Link
-									to="/app/students"
-									className="flex h-32 flex-col rounded-lg border border-primary/10 bg-primary/5 p-4 shadow-sm transition-shadow hover:shadow-md"
-								>
-									<span className="grow">
-										<span className="flex items-end text-muted-foreground">
-											<span className="text-xl font-bold">All Students</span>
-											<ArrowUpRight size={28} strokeWidth={2.5} />
-										</span>
-									</span>
-									<span className="text-muted-foreground/70">
-										{data.studentProfiles.length} total{' '}
-										{pluralize({
-											word: 'student',
-											count: data.studentProfiles.length,
-										})}
-									</span>
-								</Link>
-								{data.studentProfiles.map(sp => (
+					<div className="mt-8 flex flex-col">
+						<div className="mb-1 flex items-center gap-1">
+							<p className="text-foreground/60">Folders</p>
+							<Button
+								variant="ghost"
+								size="icon-sm"
+								onClick={() => setIsCreateModalOpen(true)}
+							>
+								<PlusIcon className="h-5 w-5" />
+							</Button>
+						</div>
+						{data.views.length ? (
+							<div className="flex flex-wrap gap-2">
+								{data.views.map(view => (
 									<Link
-										key={sp.id}
-										to={`/app/students/${sp.id}`}
-										className="flex h-32 flex-col rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md"
+										key={view.id}
+										to={`/app/students?view=cards${
+											view.school ? `&school=${view.school}` : ''
+										}${view.grade ? `&grade=${view.grade}` : ''}${
+											view.period ? `&period=${view.period}` : ''
+										}${view.workshopLeader ? `&workshopLeader=${view.workshopLeader}` : ''}${
+											view.schoolTeacher ? `&teacher=${view.schoolTeacher}` : ''
+										}`}
+										className="align-center flex justify-between gap-2 rounded-lg border bg-muted/50 p-2 shadow-sm transition-shadow hover:shadow-md"
 									>
-										<span className="flex gap-2 pb-2">
-											<UserImage
-												user={sp.user}
-												size="xs"
-												className="h-9 w-9 rounded-md"
-											/>
-											<span className="flex flex-col">
-												<span className="text-sm font-bold">
-													{sp.user.name}
-												</span>
-												<span className="text-xs text-muted-foreground">
-													{sp.grade !== null ? `${sp.grade} grade` : ''}
-													{sp.period !== null ? `, period ${sp.period}` : ''}
-													{sp.grade === null && sp.period === null
-														? `No grade`
-														: ''}
-												</span>
-											</span>
-										</span>
-										<span className="mt-auto flex items-center gap-2 text-sm text-muted-foreground">
-											<FileIcon size={18} />
-											{sp.user.documents.length}{' '}
-											{pluralize({
-												word: 'document',
-												count: sp.user.documents.length,
-											})}
-										</span>
+										<BookmarkIcon className="my-auto h-5 w-5 fill-white text-gray-400" />
+										<div className="my-auto min-w-fit font-medium">
+											{view.name}
+										</div>
+										<DropdownMenu>
+											<DropdownMenuTrigger>
+												<Button
+													size="icon-sm"
+													variant="ghost"
+													onClick={(e: React.MouseEvent) => e.stopPropagation()}
+												>
+													<EllipsisVertical
+														size={16}
+														className="text-muted-foreground"
+													/>
+												</Button>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end">
+												<fetcher.Form method="post">
+													<input
+														type="hidden"
+														name="intent"
+														value="deleteView"
+													/>
+													<input type="hidden" name="viewId" value={view.id} />
+													<DropdownMenuItem asChild>
+														<Button
+															variant="ghost"
+															className="w-full justify-start"
+															onClick={(e: React.MouseEvent) =>
+																e.stopPropagation()
+															}
+														>
+															Delete
+														</Button>
+													</DropdownMenuItem>
+												</fetcher.Form>
+											</DropdownMenuContent>
+										</DropdownMenu>
 									</Link>
 								))}
 							</div>
 						) : (
 							<NoDataPlaceholder
-								title="No students"
-								subtitle="Students assigned to you will show up here."
+								title="No saved views"
+								subtitle="Create a view to quickly access filtered student lists."
 							/>
 						)}
 					</div>
@@ -166,6 +224,22 @@ export default function AppRoute() {
 						)}
 					</div>
 				</div>
+				<Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+					<DialogContent>
+						<DialogHeader>
+							<DialogTitle>Create a Student View</DialogTitle>
+							<DialogDescription>
+								Go to the Students page, add your desired filters, and hit the
+								'Save' button to create a new Student View from those filters.
+							</DialogDescription>
+						</DialogHeader>
+						<DialogFooter>
+							<Button asChild>
+								<Link to="/app/students">Go to Students</Link>
+							</Button>
+						</DialogFooter>
+					</DialogContent>
+				</Dialog>
 			</section>
 		)
 	}

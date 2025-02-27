@@ -32,6 +32,7 @@ model User {
   comments             DocumentComment[]
   commentResponses     DocumentCommentResponse[]
   documents            Document[]
+  views                StudentView[]
 }
 
 model UserImage {
@@ -43,6 +44,20 @@ model UserImage {
   blob        Bytes
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId      String   @unique
+}
+
+model StudentView {
+  id             String   @id @default(cuid())
+  name           String
+  school         String?
+  grade          String?
+  period         String?
+  workshopLeader String?
+  schoolTeacher  String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model Password {

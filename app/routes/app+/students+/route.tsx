@@ -12,6 +12,7 @@ import {
 	useSearchParams,
 	useFetcher,
 } from '@remix-run/react'
+import { withZod } from '@remix-validated-form/with-zod'
 import {
 	ArrowDown,
 	ArrowUp,
@@ -23,7 +24,10 @@ import {
 	PencilIcon,
 	Trash2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
+import { toast as showToast } from 'sonner'
+import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary'
 import { FormMultiSelect } from '#app/components/forms/form-multi-select.tsx'
 import { MultiSelect } from '#app/components/multi-select.tsx'
@@ -45,6 +49,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '#app/components/ui/dropdown-menu'
+import { Input } from '#app/components/ui/input'
 import {
 	Table as TableComponent,
 	TableHeader,
@@ -53,8 +58,8 @@ import {
 	TableRow,
 	TableCell,
 } from '#app/components/ui/table'
-import { Tooltip } from '#app/components/ui/tooltip.tsx'
 import { UserImage } from '#app/components/user-image'
+import { useUser } from '#app/hooks/useUser'
 import { requireUserId } from '#app/utils/auth.server'
 import { type BreadcrumbHandle } from '#app/utils/breadcrumb'
 import { prisma } from '#app/utils/db.server'
@@ -74,6 +79,20 @@ const SORT_FIELDS: Array<{ label: string; value: SortField }> = [
 	{ label: 'Grade', value: 'grade' },
 	{ label: 'Period', value: 'period' },
 ]
+
+const saveViewValidator = withZod(
+	z.object({
+		name: z.string().min(1),
+		intent: z.string(),
+		school: z.string(),
+		grade: z.string(),
+		period: z.string(),
+		workshopLeader: z.string(),
+		schoolTeacher: z.string(),
+	}),
+)
+
+type ActionResponse = { success: boolean; message?: string }
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	const userId = await requireUserId(request)
@@ -229,36 +248,65 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+	const userId = await requireUserId(request)
 	const formData = await request.formData()
 	const intent = formData.get('intent')
-	const studentIds = formData.get('studentIds')?.toString().split(',') ?? []
+
+	if (intent === 'createView') {
+		const { error, data } = await saveViewValidator.validate(formData)
+		if (error) return validationError(error)
+
+		await prisma.studentView.create({
+			data: {
+				name: data.name,
+				school: data.school,
+				grade: data.grade,
+				period: data.period,
+				workshopLeader: data.workshopLeader,
+				schoolTeacher: data.schoolTeacher,
+				userId,
+			},
+		})
+
+		return json<ActionResponse>({ success: true })
+	}
 
 	if (intent === 'delete') {
 		await prisma.studentProfile.deleteMany({
-			where: { id: { in: studentIds } },
+			where: {
+				id: { in: formData.get('studentIds')?.toString().split(',') ?? [] },
+			},
 		})
-		return json({ success: true })
+		return json<ActionResponse>({ success: true })
 	}
 
 	if (intent === 'update') {
-		const school = formData.get('school')?.toString()
-		const grade = formData.get('grade')?.toString()
-		const period = formData.get('period')?.toString()
-		const teacher = formData.get('teacher')?.toString()
-
 		await prisma.studentProfile.updateMany({
-			where: { id: { in: studentIds } },
+			where: {
+				id: { in: formData.get('studentIds')?.toString().split(',') ?? [] },
+			},
 			data: {
-				...(school ? { school } : {}),
-				...(grade ? { grade } : {}),
-				...(period ? { period } : {}),
-				...(teacher ? { schoolTeacher: teacher } : {}),
+				...(formData.get('school')?.toString()
+					? { school: formData.get('school')?.toString() }
+					: {}),
+				...(formData.get('grade')?.toString()
+					? { grade: formData.get('grade')?.toString() }
+					: {}),
+				...(formData.get('period')?.toString()
+					? { period: formData.get('period')?.toString() }
+					: {}),
+				...(formData.get('teacher')?.toString()
+					? { schoolTeacher: formData.get('teacher')?.toString() }
+					: {}),
 			},
 		})
-		return json({ success: true })
+		return json<ActionResponse>({ success: true })
 	}
 
-	return json({ error: 'Invalid action' }, { status: 400 })
+	return json<ActionResponse>(
+		{ success: false, message: 'Unknown action intent' },
+		{ status: 400 },
+	)
 }
 
 export default function StudentsRoute() {
@@ -277,7 +325,10 @@ export default function StudentsRoute() {
 	const [selectedStudents, setSelectedStudents] = useState<string[]>([])
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-	const fetcher = useFetcher()
+	const fetcher = useFetcher<typeof action>()
+	const [isSaveViewOpen, setIsSaveViewOpen] = useState(false)
+	const user = useUser()
+	const isTeacher = user.teacherProfile !== null
 
 	const [storedFilter, setStoredFilter] = useLocalStorage<{ query: string }>(
 		'students-filter',
@@ -385,6 +436,20 @@ export default function StudentsRoute() {
 		navigate(`/app/students/${student.id}?${params}`)
 	}
 
+	useEffect(() => {
+		if (
+			fetcher.state === 'idle' &&
+			fetcher.data &&
+			!('fieldErrors' in fetcher.data) &&
+			fetcher.data.success
+		) {
+			setIsSaveViewOpen(false)
+			showToast.success('View Saved', {
+				description: 'Your Student View is now available on your Dashboard.',
+			})
+		}
+	}, [fetcher.state, fetcher.data])
+
 	return (
 		<main className="flex h-screen overflow-hidden">
 			<div className="flex flex-1 flex-col">
@@ -471,42 +536,18 @@ export default function StudentsRoute() {
 								onChange={values => handleFilter('teacher', values)}
 							/>
 							{hasActiveFilters && (
-								<Button variant="link" size="sm" onClick={clearFilters}>
+								<Button variant="outline" size="sm" onClick={clearFilters}>
 									Clear
 								</Button>
 							)}
-							{storedFilter.query && !searchParams.toString() && (
-								<Tooltip
-									text={
-										<span>
-											Restore filters from last visit <br /> or{' '}
-											<Button
-												variant="link"
-												size="sm"
-												className="h-5 pl-1"
-												onClick={() => setStoredFilter({ query: '' })}
-											>
-												remove stored filter
-											</Button>
-										</span>
-									}
-									delayDuration={0}
+							{hasActiveFilters && isTeacher && (
+								<Button
+									variant="outline-primary"
+									size="sm"
+									onClick={() => setIsSaveViewOpen(true)}
 								>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() =>
-											navigate(`/app/students?${storedFilter.query}`)
-										}
-										className="flex items-center gap-2 border-yellow-300/75 bg-yellow-50/75 pr-4 hover:border-yellow-400/75 hover:bg-yellow-100/75"
-									>
-										<span>Restore filters</span>
-										<div className="relative mb-1.5">
-											<span className="absolute inset-0 left-[1px] top-[1px] z-10 h-1.5 w-1.5 rounded-full bg-yellow-500" />
-											<span className="absolute inset-0 h-2 w-2 animate-ping rounded-full bg-yellow-400" />
-										</div>
-									</Button>
-								</Tooltip>
+									Save
+								</Button>
 							)}
 						</div>
 						<div className="flex items-center gap-2">
@@ -816,6 +857,63 @@ export default function StudentsRoute() {
 							Delete
 						</Button>
 					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={isSaveViewOpen} onOpenChange={setIsSaveViewOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Student View</DialogTitle>
+						<DialogDescription>
+							Save your current filters and sorting preferences for quick access
+							in the Sections of your Dashboard.
+						</DialogDescription>
+					</DialogHeader>
+					<ValidatedForm
+						validator={saveViewValidator}
+						method="post"
+						fetcher={fetcher}
+					>
+						<div className="grid gap-4 py-4">
+							<Input
+								name="name"
+								placeholder="Enter view name"
+								autoFocus
+								required
+							/>
+							<input type="hidden" name="intent" value="createView" />
+							<input
+								type="hidden"
+								name="school"
+								value={searchParams.get('school') || ''}
+							/>
+							<input
+								type="hidden"
+								name="grade"
+								value={searchParams.get('grade') || ''}
+							/>
+							<input
+								type="hidden"
+								name="period"
+								value={searchParams.get('period') || ''}
+							/>
+							<input
+								type="hidden"
+								name="workshopLeader"
+								value={searchParams.get('workshopLeader') || ''}
+							/>
+							<input
+								type="hidden"
+								name="schoolTeacher"
+								value={searchParams.get('teacher') || ''}
+							/>
+						</div>
+						<DialogFooter>
+							<Button type="submit" disabled={fetcher.state === 'submitting'}>
+								{fetcher.state === 'submitting' ? 'Saving...' : 'Save'}
+							</Button>
+						</DialogFooter>
+					</ValidatedForm>
 				</DialogContent>
 			</Dialog>
 		</main>
