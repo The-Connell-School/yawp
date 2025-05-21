@@ -1,0 +1,2 @@
+Don't import from @react-router/node, import from 'react-router' itself
+react-router v7, server-side rendered, tailwindcss, shadcn ui, not remix, bun package manager

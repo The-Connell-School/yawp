@@ -1,0 +1,27 @@
+{
+  "include": ["**/*.ts", "**/*.tsx", "**/*.css"],
+  "exclude": ["node_modules", "dist", "build", "public", "public/**/*", "public/**/.*"],
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "target": "ES2022",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "rootDirs": [".", "./.react-router/types"],
+    "noImplicitAny": true,
+    "allowJs": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "~/*": ["./app/*"],
+      "@app/prisma": ["./../../packages/prisma/dist"]
+    },
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "noErrorTruncation": true
+  }
+}

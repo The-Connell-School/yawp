@@ -1,0 +1,368 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "./dist"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  email       String       @unique
+  name        String?
+  image       UserImage?
+  password    Password?
+  roles       Role[]
+  sessions    Session[]
+  connections Connection[]
+
+  // Custom
+  uploads              Upload[]
+  assistants           AssistantMetadata[]
+  studentProfile       StudentProfile?
+  teacherProfile       TeacherProfile?
+  studentProfiles      StudentProfile[]          @relation("Students")
+  courseModuleSessions CourseModuleSession[]
+  comments             DocumentComment[]
+  commentResponses     DocumentCommentResponse[]
+  documents            Document[]
+  views                StudentView[]
+  organization         Organization?             @relation(fields: [organizationId], references: [id])
+  organizationId       String?
+}
+
+model UserImage {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  altText     String?
+  contentType String
+  blob        Bytes
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId      String   @unique
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  users     User[]
+}
+
+model StudentView {
+  id             String   @id @default(cuid())
+  name           String
+  school         String?
+  grade          String?
+  period         String?
+  workshopLeader String?
+  schoolTeacher  String?
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Password {
+  hash   String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String @unique
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  expirationDate DateTime
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId         String
+
+  @@index([userId])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  action      String // e.g. create, read, update, delete
+  entity      String // e.g. note, user, etc.
+  access      String // e.g. own or any
+  description String   @default("")
+  roles       Role[]
+
+  @@unique([action, entity, access])
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  name        String       @unique
+  description String       @default("")
+  users       User[]
+  permissions Permission[]
+}
+
+model Verification {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  type      String /// The type of verification, e.g. "email" or "phone"
+  target    String /// The thing we're trying to verify, e.g. a user's email or phone number
+  secret    String /// The secret key used to generate the otp
+  algorithm String /// The algorithm used to generate the otp
+  digits    Int /// The number of digits in the otp
+  period    Int /// The number of seconds the otp is valid for
+  charSet   String /// The valid characters for the otp
+  metadata  String? /// Additional JSON data to instruct actions to take after verification, e.g. create a teacher '{ "createTeacherProfile": ... }'
+  expiresAt DateTime?
+
+  @@unique([target, type])
+}
+
+model Connection {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  providerName String
+  providerId   String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId       String
+
+  @@unique([providerName, providerId])
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  name        String   @unique
+  description String?
+  isEnabled   Boolean  @default(false)
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String   @unique
+  value     String
+  valueType String   @default("string") // 'string' | 'arrayOfStrings'
+}
+
+// Custom
+
+model AssistantConfiguration {
+  id          String  @id @default(cuid())
+  assistantId String  @unique
+  pin         String
+  actionText  String?
+  description String?
+}
+
+model AssistantMetadata {
+  id          String   @id @default(cuid())
+  assistantId String
+  isVerified  Boolean  @default(false)
+  threads     Thread[]
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Thread {
+  id                  String            @id @default(cuid())
+  threadId            String            @unique
+  name                String
+  assistantMetadataId String
+  assistantMetadata   AssistantMetadata @relation(fields: [assistantMetadataId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model StudentProfile {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  workshopLeaderId String?
+  workshopLeader   User?    @relation("Students", fields: [workshopLeaderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  school           String?
+  schoolTeacher    String?
+  grade            String?
+  period           String?
+}
+
+model TeacherProfile {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  isActive  Boolean  @default(true)
+}
+
+model Course {
+  id            String           @id @default(cuid())
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  title         String
+  description   String?
+  position      Int
+  image         CourseImage?
+  courseModules CourseModule[]
+  resources     CourseResource[]
+}
+
+model CourseImage {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  altText     String?
+  contentType String
+  blob        Bytes
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  courseId    String   @unique
+}
+
+model CourseModule {
+  id                   String                    @id @default(cuid())
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  deletedAt            DateTime?
+  title                String
+  position             Int
+  description          String?
+  tutorInstructions    String?
+  isSelfGuided         Boolean                   @default(false)
+  courseId             String?
+  course               Course?                   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  instructions         CourseModuleInstruction[]
+  courseModuleSessions CourseModuleSession[]
+}
+
+model CourseModuleInstruction {
+  id                      String            @id @default(cuid())
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  courseModuleId          String
+  courseModule            CourseModule      @relation(fields: [courseModuleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  position                Int
+  title                   String
+  interactiveType         String // 'answer' | 'dialogue'
+  prompt                  String
+  promptAudio             InstructionAudio?
+  tutorInstructions       String?
+  answerType              String? // 'textarea' | 'select'
+  answerKey               String?
+  answerTypeOptions       String? // comma separated list of options
+  canAskQuestion          Boolean?          @default(false)
+  nextInstructionBtnLabel String?
+}
+
+model CourseModuleSession {
+  id                    String                       @id @default(cuid())
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  deletedAt             DateTime?
+  title                 String                       @default("Untitled")
+  instructionsCompleted Int
+  courseModuleId        String
+  courseModule          CourseModule                 @relation(fields: [courseModuleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId                String
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  documentId            String
+  document              Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  messages              CourseModuleSessionMessage[]
+}
+
+model CourseModuleSessionMessage {
+  id                    String              @id @default(cuid())
+  createdAt             DateTime            @default(now())
+  courseModuleSessionId String
+  courseModuleSession   CourseModuleSession @relation(fields: [courseModuleSessionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  instructionId         String
+  content               String
+  agent                 String // 'user' | 'assistant' | 'system'
+  factCheckPrompt       String?
+  context               String?
+}
+
+model CourseResource {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  title       String
+  description String?
+  url         String?
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model Document {
+  id                   String                @id @default(cuid())
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  title                String                @default("Untitled")
+  text                 String?
+  html                 String?
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId               String
+  courseModuleSessions CourseModuleSession[]
+  comments             DocumentComment[]
+  versions             DocumentVersion[]
+}
+
+model DocumentComment {
+  id          String                    @id @default(cuid())
+  createdAt   DateTime                  @default(now())
+  userId      String
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  content     String
+  highlightId String?
+  responses   DocumentCommentResponse[]
+  document    Document                  @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  documentId  String
+}
+
+model DocumentCommentResponse {
+  id        String          @id @default(cuid())
+  createdAt DateTime        @default(now())
+  commentId String
+  comment   DocumentComment @relation(fields: [commentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  content   String
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  documentId String
+  text       String
+  html       String
+}
+
+model Upload {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  name        String
+  contentType String
+  blob        Bytes
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId      String
+}
+
+model InstructionAudio {
+  id                        String                  @id @default(cuid())
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
+  blob                      Bytes
+  courseModuleInstructionId String                  @unique
+  courseModuleInstruction   CourseModuleInstruction @relation(fields: [courseModuleInstructionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}

@@ -1,0 +1,132 @@
+import {
+	data as dataResponse,
+	type MetaFunction,
+	type LoaderFunctionArgs,
+	type ActionFunctionArgs,
+} from 'react-router'
+import { Link, useSearchParams } from 'react-router'
+import { withZod } from '@remix-validated-form/with-zod'
+import { ArrowRightIcon } from 'lucide-react'
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
+import { HoneypotInputs } from 'remix-utils/honeypot/react'
+import { ValidatedForm, validationError } from 'remix-validated-form'
+import { z } from 'zod'
+import { GeneralErrorBoundary } from '~/components/error-boundary'
+import { FormInput } from '~/components/forms/form-input-2'
+import { Button, button } from '~/components/ui/button'
+import { login, requireAnonymous } from '~/utils/auth.server'
+import { validateCSRF } from '~/utils/csrf.server'
+import { checkHoneypot } from '~/utils/honeypot.server'
+import { DEFAULT_ROUTE, useIsPending } from '~/utils/misc'
+import { EmailSchema, PasswordSchema } from '~/utils/schemas/user'
+import { handleNewSession } from './utils.server'
+
+const Schema = z.object({
+	email: EmailSchema,
+	password: PasswordSchema,
+	redirectTo: z.string().nullish(),
+})
+const validator = withZod(Schema)
+
+export async function loader({ request }: LoaderFunctionArgs) {
+	await requireAnonymous(request)
+	return dataResponse({})
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+	await requireAnonymous(request)
+	const formData = await request.formData()
+	await validateCSRF(formData, request.headers)
+	checkHoneypot(formData)
+	const { error, data } = await validator.validate(formData)
+	if (error) return validationError(error)
+
+	const session = await login(data)
+
+	if (session) {
+		return handleNewSession({
+			request,
+			session,
+			redirectTo: data.redirectTo ?? DEFAULT_ROUTE,
+		})
+	} else {
+		return validationError(
+			{ fieldErrors: { email: 'Invalid email or password' } },
+			data,
+		)
+	}
+}
+
+export default function LoginPage() {
+	const isPending = useIsPending()
+	const [searchParams] = useSearchParams()
+	const redirectTo = searchParams.get('redirectTo')
+
+	return (
+		<div className="mx-auto w-full max-w-md">
+			<div className="mt-8 flex flex-col gap-3 text-center">
+				<img
+					src="/img/logo_for_light_mode.png"
+					alt="Logo"
+					className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
+				/>
+				<h1>Welcome back!</h1>
+				<p>Please enter your details.</p>
+			</div>
+			<div className="mx-auto mt-10 w-full max-w-md px-8">
+				<ValidatedForm
+					validator={validator}
+					method="POST"
+					defaultValues={{ redirectTo, email: '', password: '' }}
+					className="flex flex-col gap-3"
+				>
+					<AuthenticityTokenInput />
+					<HoneypotInputs />
+					<input type="hidden" name="redirectTo" />
+					<FormInput type="email" name="email" autoComplete="email" autoFocus />
+					<FormInput
+						type="password"
+						name="password"
+						autoComplete="current-password"
+					/>
+					<div className="flex items-center justify-end">
+						<Link to="/forgot-password" className={button({ variant: 'link' })}>
+							Forgot password?
+						</Link>
+					</div>
+					<Button className="w-full" type="submit" isLoading={isPending}>
+						Log in
+					</Button>
+				</ValidatedForm>
+				<div className="mt-8 rounded-xl border bg-muted p-6">
+					<p className="text-xl font-bold">New here?</p>
+					<p className="text-muted-foreground">
+						Create an account to get started.
+					</p>
+					<Link
+						className={button({
+							variant: 'outline',
+							size: 'lg',
+							className: 'mt-4 w-full shadow',
+						})}
+						to={
+							redirectTo
+								? `/signup?${encodeURIComponent(redirectTo)}`
+								: '/signup'
+						}
+					>
+						Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />
+					</Link>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+export const meta: MetaFunction = () => {
+	return [{ title: 'Login to Yawp!' }]
+}
+
+export function ErrorBoundary() {
+	return <GeneralErrorBoundary />
+}

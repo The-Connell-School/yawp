@@ -1,0 +1,98 @@
+import {
+	CheckIcon,
+	ChevronLeft,
+	ChevronRightIcon,
+	MessageCircleIcon,
+} from 'lucide-react'
+import { useState } from 'react'
+import { RichTextarea } from '~/components/rich-textarea'
+import { Button } from '~/components/ui/button'
+import { Tooltip } from '~/components/ui/tooltip.js'
+import { cn, useIsPending } from '~/utils/misc.js'
+
+type Props = {
+	options: string | null
+	canAskQuestion?: boolean
+	advanceInstructionLabel?: string | null
+	className?: string
+	advanceInstruction?: () => void
+	respond: (response: string) => void
+}
+
+export const ResponseBar = ({
+	options,
+	canAskQuestion,
+	advanceInstruction,
+	advanceInstructionLabel,
+	respond,
+	className,
+}: Props) => {
+	const [isAskingQuestion, setIsAskingQuestion] = useState(false)
+	const [check, setCheck] = useState(false)
+	const isPending = useIsPending()
+
+	return isAskingQuestion ? (
+		<div className={cn("flex w-full items-center justify-center px-3", className)}>
+			<Button
+				size="lg"
+				variant="secondary"
+				className="px-2"
+				onClick={() => setIsAskingQuestion(false)}
+			>
+				<ChevronLeft />
+			</Button>
+			<div className="flex w-full items-center justify-center px-3">
+				<RichTextarea onCmdEnter={respond} />
+			</div>
+		</div>
+	) : (
+		<div className={cn("flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4", className)}>
+			{options
+				?.split(',')
+				.filter(Boolean)
+				.map(opt => (
+					<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
+						{opt}
+					</Button>
+				))}
+			{canAskQuestion ? (
+				<Button
+					variant="secondary"
+					className="flex items-center gap-2 text-lg"
+					onClick={() => setIsAskingQuestion(true)}
+				>
+					<MessageCircleIcon />
+					{options ? '' : 'Chat'}
+				</Button>
+			) : null}
+			{advanceInstruction ? (
+				<Tooltip
+					text="Next step"
+					delayDuration={200}
+					open={check === true || undefined}
+				>
+					<Button
+						variant={check ? 'success' : 'secondary'}
+						size={advanceInstructionLabel ? undefined : 'icon'}
+						className={cn('flex items-center gap-1 text-lg', {
+							'min-w-[150px]': check,
+						})}
+						onClick={() => {
+							if (check) {
+								setCheck(false)
+								advanceInstruction()
+							} else {
+								setCheck(true)
+							}
+						}}
+						onBlur={() => check && setCheck(false)}
+						isLoading={isPending}
+					>
+						{check ? 'You sure?' : advanceInstructionLabel}
+						{check ? <CheckIcon /> : <ChevronRightIcon />}
+					</Button>
+				</Tooltip>
+			) : null}
+		</div>
+	)
+}

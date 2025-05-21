@@ -1,0 +1,24 @@
+{
+  "name": "@app/prisma",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "prisma": {
+    "schema": "schema.prisma",
+    "seed": "bun run seed.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "postinstall": "prisma generate"
+  },
+  "devDependencies": {
+    "bun-types": "^1.2.12",
+    "prisma": "^6.7.0",
+    "typescript": "^5.4.2",
+    "@aws-sdk/client-cognito-identity-provider": "^3.804.0"
+  },
+  "dependencies": {
+    "@prisma/client": "6.8.2"
+  }
+}

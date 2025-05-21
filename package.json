@@ -1,0 +1,16 @@
+{
+  "name": "app",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd services/web-app dev",
+    "build": "bun run --cwd services/web-app build",
+    "start": "bun run --cwd services/web-app start",
+    "typecheck": "bun run --cwd services/web-app typecheck",
+    "prisma:generate": "bun run --cwd packages/prisma generate"
+  }
+}
