@@ -11,6 +11,10 @@
     "build": "bun run --cwd services/web-app build",
     "start": "bun run --cwd services/web-app start",
     "typecheck": "bun run --cwd services/web-app typecheck",
-    "prisma:generate": "bun run --cwd packages/prisma generate"
+    "prisma:generate": "bun run --cwd packages/prisma generate",
+    "prisma:reset": "bun run --cwd packages/prisma prisma migrate reset"
+  },
+  "dependencies": {
+    "remix-utils": "^8.7.0"
   }
 }

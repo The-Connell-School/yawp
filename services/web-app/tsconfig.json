@@ -17,7 +17,7 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "~/*": ["./app/*"],
-      "@app/prisma": ["./../../packages/prisma/dist"]
+      "@app/prisma": ["./../../packages/prisma"]
     },
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,

@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "bun run index.ts",
-    "build": "bun build ./index.ts --outdir ./dist",
-    "postinstall": "bun run --cwd ../../packages/prisma generate"
+    "build": "bun build ./index.ts --outdir ./dist"
   },
   "devDependencies": {
     "bun-types": "latest"

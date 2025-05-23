@@ -4,13 +4,21 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "prisma": {
     "schema": "schema.prisma",
     "seed": "bun run seed.ts"
   },
   "scripts": {
     "generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "build": "tsc"
   },
   "devDependencies": {
     "bun-types": "^1.2.12",
@@ -19,6 +27,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.804.0"
   },
   "dependencies": {
+    "@faker-js/faker": "^9.8.0",
     "@prisma/client": "6.8.2"
   }
 }

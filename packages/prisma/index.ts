@@ -1,1 +1,1 @@
-export * from './dist';
+export * from '@prisma/client';
