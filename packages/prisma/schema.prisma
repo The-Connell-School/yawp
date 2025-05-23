@@ -8,7 +8,7 @@ datasource db {
 }
 
 model AssistantConfiguration {
-  id          String  @id
+  id          String  @id @default(cuid())
   assistantId String  @unique
   pin         String
   actionText  String?
@@ -16,67 +16,67 @@ model AssistantConfiguration {
 }
 
 model AssistantMetadata {
-  id          String   @id
+  id          String   @id @default(cuid())
   assistantId String
   isVerified  Boolean  @default(false)
   userId      String
-  User        User     @relation(fields: [userId], references: [id])
-  Thread      Thread[]
+  user        User     @relation(fields: [userId], references: [id])
+  threads     Thread[]
 }
 
 model Connection {
-  id           String   @id
+  id           String   @id @default(cuid())
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime @default(now()) @db.Timestamptz(6)
   providerName String
   providerId   String
   userId       String
-  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([providerName, providerId])
 }
 
 model Course {
-  id             String           @id
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime         @default(now()) @db.Timestamptz(6)
-  title          String
-  description    String?
-  position       Int
-  CourseImage    CourseImage?
-  CourseModule   CourseModule[]
-  CourseResource CourseResource[]
+  id            String           @id @default(cuid())
+  createdAt     DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime         @default(now()) @db.Timestamptz(6)
+  title         String
+  description   String?
+  position      Int
+  image         CourseImage?
+  courseModules CourseModule[]
+  resources     CourseResource[]
 }
 
 model CourseImage {
-  id          String   @id
+  id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @db.Timestamptz(6)
   altText     String?
   contentType String
   blob        Bytes
   courseId    String   @unique
-  Course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 model CourseModule {
-  id                      String                    @id
-  createdAt               DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime                  @default(now()) @db.Timestamptz(6)
-  deletedAt               DateTime?                 @db.Timestamptz(6)
-  title                   String
-  position                Int
-  description             String?
-  tutorInstructions       String?
-  isSelfGuided            Boolean                   @default(false)
-  courseId                String?
-  Course                  Course?                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  CourseModuleInstruction CourseModuleInstruction[]
-  CourseModuleSession     CourseModuleSession[]
+  id                   String                    @id @default(cuid())
+  createdAt            DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                  @default(now()) @db.Timestamptz(6)
+  deletedAt            DateTime?                 @db.Timestamptz(6)
+  title                String
+  position             Int
+  description          String?
+  tutorInstructions    String?
+  isSelfGuided         Boolean                   @default(false)
+  courseId             String?
+  course               Course?                   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  instructions         CourseModuleInstruction[]
+  courseModuleSessions CourseModuleSession[]
 }
 
 model CourseModuleInstruction {
-  id                      String            @id
+  id                      String            @id @default(cuid())
   createdAt               DateTime          @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime          @default(now()) @db.Timestamptz(6)
   courseModuleId          String
@@ -90,28 +90,28 @@ model CourseModuleInstruction {
   answerTypeOptions       String?
   canAskQuestion          Boolean?          @default(false)
   nextInstructionBtnLabel String?
-  CourseModule            CourseModule      @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
-  InstructionAudio        InstructionAudio?
+  courseModule            CourseModule      @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  instructionAudio        InstructionAudio?
 }
 
 model CourseModuleSession {
-  id                         String                       @id
-  createdAt                  DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                  DateTime                     @default(now()) @db.Timestamptz(6)
-  deletedAt                  DateTime?                    @db.Timestamptz(6)
-  title                      String                       @default("Untitled")
-  instructionsCompleted      Int
-  courseModuleId             String
-  userId                     String
-  documentId                 String
-  CourseModule               CourseModule                 @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
-  Document                   Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  User                       User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  CourseModuleSessionMessage CourseModuleSessionMessage[]
+  id                    String                       @id @default(cuid())
+  createdAt             DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                     @default(now()) @db.Timestamptz(6)
+  deletedAt             DateTime?                    @db.Timestamptz(6)
+  title                 String                       @default("Untitled")
+  instructionsCompleted Int
+  courseModuleId        String
+  userId                String
+  documentId            String
+  courseModule          CourseModule                 @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  document              Document                     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user                  User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages              CourseModuleSessionMessage[]
 }
 
 model CourseModuleSessionMessage {
-  id                    String              @id
+  id                    String              @id @default(cuid())
   createdAt             DateTime            @default(now()) @db.Timestamptz(6)
   courseModuleSessionId String
   instructionId         String
@@ -119,68 +119,68 @@ model CourseModuleSessionMessage {
   agent                 String
   factCheckPrompt       String?
   context               String?
-  CourseModuleSession   CourseModuleSession @relation(fields: [courseModuleSessionId], references: [id], onDelete: Cascade)
+  courseModuleSession   CourseModuleSession @relation(fields: [courseModuleSessionId], references: [id], onDelete: Cascade)
 }
 
 model CourseResource {
-  id          String   @id
+  id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @db.Timestamptz(6)
   title       String
   description String?
   url         String?
   courseId    String
-  Course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 }
 
 model Document {
-  id                  String                @id
-  createdAt           DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime              @default(now()) @db.Timestamptz(6)
-  deletedAt           DateTime?             @db.Timestamptz(6)
-  title               String                @default("Untitled")
-  text                String?
-  html                String?
-  userId              String
-  CourseModuleSession CourseModuleSession[]
-  User                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  DocumentComment     DocumentComment[]
-  DocumentVersion     DocumentVersion[]
+  id                   String                @id @default(cuid())
+  createdAt            DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime              @default(now()) @db.Timestamptz(6)
+  deletedAt            DateTime?             @db.Timestamptz(6)
+  title                String                @default("Untitled")
+  text                 String?
+  html                 String?
+  userId               String
+  courseModuleSessions CourseModuleSession[]
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments             DocumentComment[]
+  versions             DocumentVersion[]
 }
 
 model DocumentComment {
-  id                      String                    @id
-  createdAt               DateTime                  @default(now()) @db.Timestamptz(6)
-  userId                  String
-  content                 String
-  highlightId             String?
-  documentId              String
-  Document                Document                  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  User                    User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  DocumentCommentResponse DocumentCommentResponse[]
+  id          String                    @id @default(cuid())
+  createdAt   DateTime                  @default(now()) @db.Timestamptz(6)
+  userId      String
+  content     String
+  highlightId String?
+  documentId  String
+  document    Document                  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses   DocumentCommentResponse[]
 }
 
 model DocumentCommentResponse {
-  id              String          @id
+  id              String          @id @default(cuid())
   createdAt       DateTime        @default(now()) @db.Timestamptz(6)
   commentId       String
   userId          String
   content         String
-  DocumentComment DocumentComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  User            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentComment DocumentComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model DocumentVersion {
-  id         String   @id
+  id         String   @id @default(cuid())
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   documentId String
   text       String
   html       String
-  Document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }
 
 model FeatureFlag {
-  id          String   @id
+  id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @db.Timestamptz(6)
   name        String   @unique
@@ -189,56 +189,56 @@ model FeatureFlag {
 }
 
 model InstructionAudio {
-  id                        String                  @id
+  id                        String                  @id @default(cuid())
   createdAt                 DateTime                @default(now()) @db.Timestamptz(6)
   updatedAt                 DateTime                @default(now()) @db.Timestamptz(6)
   blob                      Bytes
   courseModuleInstructionId String                  @unique
-  CourseModuleInstruction   CourseModuleInstruction @relation(fields: [courseModuleInstructionId], references: [id], onDelete: Cascade)
+  courseModuleInstruction   CourseModuleInstruction @relation(fields: [courseModuleInstructionId], references: [id], onDelete: Cascade)
 }
 
 model Password {
   hash   String
   userId String @unique
-  User   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Permission {
-  id          String   @id
+  id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @db.Timestamptz(6)
   action      String
   entity      String
   access      String
   description String   @default("")
-  Role        Role[]
+  roles       Role[]
 
   @@unique([action, entity, access])
 }
 
 model Role {
-  id          String       @id
+  id          String       @id @default(cuid())
   createdAt   DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime     @default(now()) @db.Timestamptz(6)
   name        String       @unique
   description String       @default("")
-  Permission  Permission[]
-  User        User[]
+  permissions Permission[]
+  users       User[]
 }
 
 model Session {
-  id             String   @id
+  id             String   @id @default(cuid())
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime @default(now()) @db.Timestamptz(6)
   expirationDate DateTime @default(now()) @db.Timestamptz(6)
   userId         String
-  User           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Setting {
-  id        String   @id
+  id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @db.Timestamptz(6)
   name      String   @unique
@@ -247,20 +247,20 @@ model Setting {
 }
 
 model StudentProfile {
-  id                                         String   @id
-  createdAt                                  DateTime @default(now()) @db.Timestamptz(6)
-  userId                                     String   @unique
-  workshopLeaderId                           String?
-  school                                     String?
-  schoolTeacher                              String?
-  grade                                      String?
-  period                                     String?
-  User_StudentProfile_userIdToUser           User     @relation("StudentProfile_userIdToUser", fields: [userId], references: [id], onDelete: Cascade)
-  User_StudentProfile_workshopLeaderIdToUser User?    @relation("StudentProfile_workshopLeaderIdToUser", fields: [workshopLeaderId], references: [id])
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  userId           String   @unique
+  workshopLeaderId String?
+  school           String?
+  schoolTeacher    String?
+  grade            String?
+  period           String?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  workshopLeader   User?    @relation("Students", fields: [workshopLeaderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 }
 
 model StudentView {
-  id             String   @id
+  id             String   @id @default(cuid())
   name           String
   school         String?
   grade          String?
@@ -270,27 +270,27 @@ model StudentView {
   userId         String
   createdAt      DateTime @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime @default(now()) @db.Timestamptz(6)
-  User           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model TeacherProfile {
-  id        String   @id
+  id        String   @id @default(cuid())
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   userId    String   @unique
   isActive  Boolean  @default(true)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Thread {
-  id                  String            @id
+  id                  String            @id @default(cuid())
   threadId            String            @unique
   name                String
   assistantMetadataId String
-  AssistantMetadata   AssistantMetadata @relation(fields: [assistantMetadataId], references: [id], onDelete: Cascade)
+  assistantMetadata   AssistantMetadata @relation(fields: [assistantMetadataId], references: [id], onDelete: Cascade)
 }
 
 model Upload {
-  id          String    @id
+  id          String    @id @default(cuid())
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime  @default(now()) @db.Timestamptz(6)
   deletedAt   DateTime? @db.Timestamptz(6)
@@ -298,45 +298,45 @@ model Upload {
   contentType String
   blob        Bytes
   userId      String
-  User        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
-  id                                                   String                    @id
-  createdAt                                            DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt                                            DateTime                  @default(now()) @db.Timestamptz(6)
-  email                                                String                    @unique
-  name                                                 String?
-  AssistantMetadata                                    AssistantMetadata[]
-  Connection                                           Connection[]
-  CourseModuleSession                                  CourseModuleSession[]
-  Document                                             Document[]
-  DocumentComment                                      DocumentComment[]
-  DocumentCommentResponse                              DocumentCommentResponse[]
-  Password                                             Password?
-  Session                                              Session[]
-  StudentProfile_StudentProfile_userIdToUser           StudentProfile?           @relation("StudentProfile_userIdToUser")
-  StudentProfile_StudentProfile_workshopLeaderIdToUser StudentProfile[]          @relation("StudentProfile_workshopLeaderIdToUser")
-  StudentView                                          StudentView[]
-  TeacherProfile                                       TeacherProfile?
-  Upload                                               Upload[]
-  UserImage                                            UserImage?
-  Role                                                 Role[]
+  id                       String                    @id @default(cuid())
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  email                    String                    @unique
+  name                     String?
+  assistants               AssistantMetadata[]
+  connections              Connection[]
+  courseModuleSessions     CourseModuleSession[]
+  documents                Document[]
+  documentComments         DocumentComment[]
+  documentCommentResponses DocumentCommentResponse[]
+  password                 Password?
+  sessions                 Session[]
+  studentProfile           StudentProfile?
+  studentProfiles          StudentProfile[]          @relation("Students")
+  studentViews             StudentView[]
+  teacherProfile           TeacherProfile?
+  uploads                  Upload[]
+  image                    UserImage?
+  roles                    Role[]
 }
 
 model UserImage {
-  id          String   @id
+  id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @default(now()) @db.Timestamptz(6)
   altText     String?
   contentType String
   blob        Bytes
   userId      String   @unique
-  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Verification {
-  id        String    @id
+  id        String    @id @default(cuid())
   createdAt DateTime  @default(now()) @db.Timestamptz(6)
   type      String
   target    String

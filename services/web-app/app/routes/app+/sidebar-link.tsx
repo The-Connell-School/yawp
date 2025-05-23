@@ -36,7 +36,6 @@ export const SidebarSection = ({ links, title }: Props) => {
 					}
 				>
 					{cloneElement(icon, {
-						// @ts-expect-error - TODO: fix this
 						className: cn('mr-2 text-foreground h-4', {
 							'text-foreground/40': isDisabled,
 						}),

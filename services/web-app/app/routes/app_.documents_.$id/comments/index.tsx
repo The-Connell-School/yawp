@@ -17,7 +17,6 @@ export const Comments = ({ comments }: Props) => {
 	useBlurComments(comments)
 	useFocusOptimisticComment(fetcher)
 
-	// @ts-expect-error - TODO: fix this
 	const optimisticComment: CommentType | [] = fetcher?.formData
 		? {
 				user,
