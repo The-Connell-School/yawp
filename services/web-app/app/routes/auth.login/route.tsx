@@ -18,8 +18,6 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { login, requireAnonymous } from '~/utils/auth.server';
-import { validateCSRF } from '~/utils/csrf.server';
-import { checkHoneypot } from '~/utils/honeypot.server';
 import { DEFAULT_ROUTE, useIsPending } from '~/utils/misc';
 import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { handleNewSession } from './utils.server';
@@ -37,9 +35,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireAnonymous(request);
-  const formData = await request.formData();
-  await validateCSRF(formData, request.headers);
-  checkHoneypot(formData);
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
@@ -100,7 +95,7 @@ export default function LoginPage() {
             Log in
           </Button>
         </ValidatedForm>
-        <div className="mt-8 rounded-xl border bg-muted p-6">
+        <div className="my-8 rounded-xl border bg-muted p-6">
           <p className="text-xl font-bold">New here?</p>
           <p className="text-muted-foreground">
             Create an account to get started.

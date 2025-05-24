@@ -12,8 +12,6 @@ export function GeneralErrorBoundary() {
     console.error(error);
   }
 
-  console.log('general error boundary', error)
-
   return isAppDocumentRoute ? (
     <div className="mx-auto flex max-w-screen-sm flex-col gap-4 p-20">
       <h2>Oops! Something didn't work quite right.</h2>

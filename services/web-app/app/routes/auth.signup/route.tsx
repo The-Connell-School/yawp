@@ -133,7 +133,7 @@ export default function SignupRoute() {
             Submit
           </Button>
           <Button variant="link" asChild className="mx-auto mt-2 w-full">
-            <Link to="/login">Already have an account?</Link>
+            <Link to="/auth/login">Already have an account?</Link>
           </Button>
         </ValidatedForm>
       </div>
