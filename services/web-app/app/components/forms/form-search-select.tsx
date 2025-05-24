@@ -1,6 +1,6 @@
 import { ChevronsUpDownIcon, Check } from 'lucide-react'
 import { useId, useState } from 'react'
-import { useControlField, useField } from 'remix-validated-form'
+import { useControlField, useField } from '@rvf/react-router'
 import { cn } from '~/utils/misc'
 import pluralize from '~/utils/pluralize/pluralize'
 import { startCase } from '~/utils/startCase'
@@ -114,7 +114,7 @@ export function FormSearchSelect({
 			{helperText ? (
 				<p className="text-muted-foreground">{helperText}</p>
 			) : null}
-			<div>{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}</div>
+			<div>{error() ? <ErrorList id={errorId} errors={[error()]} /> : null}</div>
 		</div>
 	)
 }

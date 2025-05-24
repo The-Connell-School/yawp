@@ -20,9 +20,9 @@ import { useNonce } from './contexts/nonce.ts';
 import {
   type NavState,
   navStateCookie,
-} from './routes/api+/preferences+/nav/cookie.server.ts';
+} from './routes/api.preferences.nav/cookie.server.ts';
 // @ts-expect-error - TODO: fix this
-import tailwindStyleSheetUrl from './styles/tailwind.css?url';
+import appCssUrl from './app.css?url';
 import { getUserId, logout } from './utils/auth.server.ts';
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx';
 import { csrf } from './utils/csrf.server.ts';
@@ -33,10 +33,11 @@ import { combineHeaders, getDomainUrl } from './utils/misc.tsx';
 import { makeTimings, time } from './utils/timing.server.ts';
 import { getToast } from './utils/toast.server.ts';
 import type { Route } from './+types/root.ts';
+import { AuthenticityTokenProvider } from 'remix-utils/csrf/react';
 
 export const links: LinksFunction = () => {
   return [
-    { rel: 'preload', href: tailwindStyleSheetUrl, as: 'style' },
+    { rel: 'preload', href: appCssUrl, as: 'style' },
     { rel: 'mask-icon', href: '/favicons/mask-icon.svg' },
     {
       rel: 'alternate icon',
@@ -51,7 +52,7 @@ export const links: LinksFunction = () => {
     } as const, // necessary to make typescript happy
     //These should match the css preloads above to avoid css as render blocking resource
     { rel: 'icon', type: 'image/svg+xml', href: '/favicons/favicon.svg' },
-    { rel: 'stylesheet', href: tailwindStyleSheetUrl },
+    { rel: 'stylesheet', href: appCssUrl },
   ];
 };
 
@@ -191,7 +192,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           const body = new FormData();
           body.set('userId', userId);
           body.set('secretToken', secretToken);
-          const response = await fetch('/api/authenticate', {
+          const response = await fetch('/api/impersonate', {
             method: 'POST',
             body,
           });
@@ -206,35 +207,36 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   }, []);
 
   return (
-    <Document nonce={nonce} env={data.ENV}>
-      {/* {data.bannerWarning === 'staging' ? (
-        <Tooltip
-          text="This is a staging environment. Do not use real data."
-          delayDuration={0}
-        >
-          <div className="absolute bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
-            <AlertTriangle size={26} />
+    <AuthenticityTokenProvider token={data.csrfToken}>
+      <Document nonce={nonce} env={data.ENV}>
+        {data.bannerWarning === 'staging' ? (
+          <Tooltip
+            text="This is a staging environment. Do not use real data."
+            delayDuration={0}
+          >
+            <div className="absolute bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
+              <AlertTriangle size={26} />
+            </div>
+          </Tooltip>
+        ) : data.bannerWarning === 'localhost' ? (
+          <Tooltip
+            text="This is a local environment. Do not use real data."
+            delayDuration={0}
+          >
+            <div className="absolute bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
+              <FlaskConical size={26} />
+            </div>
+          </Tooltip>
+        ) : null}
+        <GlobalLoading />
+        <div className="flex h-screen min-h-screen flex-col justify-between">
+          <div className="flex-1">
+            <Outlet />
           </div>
-        </Tooltip>
-      ) : data.bannerWarning === 'localhost' ? (
-        <Tooltip
-          text="This is a local environment. Do not use real data."
-          delayDuration={0}
-        >
-          <div className="absolute bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
-            <FlaskConical size={26} />
-          </div>
-        </Tooltip>
-      ) : null}
-      <GlobalLoading />
-      <div className="flex h-screen min-h-screen flex-col justify-between">
-        <div className="flex-1">
-          <Outlet />
         </div>
-      </div>
-      <Toaster toast={data.toast} /> */}
-      <div>Hello</div>
-    </Document>
+        <Toaster toast={data.toast} />
+      </Document>
+    </AuthenticityTokenProvider>
   );
 }
 

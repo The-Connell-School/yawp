@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { useControlField } from 'remix-validated-form'
+import { useControlField } from '@rvf/react-router'
 
 interface Props
 	extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'children'> {

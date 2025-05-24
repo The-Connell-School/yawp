@@ -1,6 +1,6 @@
 import { type Root } from '@radix-ui/react-select'
 import { type ReactNode, useId, type ComponentPropsWithoutRef } from 'react'
-import { useField } from 'remix-validated-form'
+import { useField } from '@rvf/react-router'
 import { cn } from '~/utils/misc'
 import { startCase } from '~/utils/startCase'
 import { InfoCircledIcon } from '../icons'
@@ -65,7 +65,7 @@ export function FormSelect({
 				{...getInputProps({ id, ...props })}
 			>
 				<SelectTrigger
-					className={cn(error && 'border-destructive')}
+					className={cn(error() && 'border-destructive')}
 					type="button"
 				>
 					<div className="flex items-center gap-1">
@@ -91,8 +91,8 @@ export function FormSelect({
 			{helperText ? (
 				<p className="text-xs text-muted-foreground">{helperText}</p>
 			) : null}
-			{error ? (
-				<p className="text-left text-[12px] text-destructive">{error}</p>
+			{error() ? (
+				<p className="text-left text-[12px] text-destructive">{error()}</p>
 			) : null}
 		</div>
 	)

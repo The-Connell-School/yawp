@@ -1,5 +1,5 @@
 import React, { type ReactNode, useId } from 'react'
-import { useField } from 'remix-validated-form'
+import { useField } from '@rvf/react-router'
 import { cn } from '~/utils/misc'
 import { startCase } from '~/utils/startCase'
 import { InfoCircledIcon } from '../icons'
@@ -48,7 +48,7 @@ export function FormSwitch({
 					) : null}
 				</div>
 			)}
-			{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}
+			{error() ? <ErrorList id={errorId} errors={[error()]} /> : null}
 			<Switch {...getInputProps({ id, ...props })} />
 		</div>
 	)

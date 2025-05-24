@@ -1,7 +1,7 @@
 import { Link, Outlet } from 'react-router'
 import { LockClosedIcon } from '~/components/icons'
 import { button } from '~/components/ui/button'
-import { type VerificationTypes } from '~/routes/_auth+/verify_props.js'
+import { type VerificationTypes } from '~/routes/auth.verify/constants'
 import { type BreadcrumbHandle } from '~/utils/breadcrumb'
 
 export const handle: BreadcrumbHandle = {

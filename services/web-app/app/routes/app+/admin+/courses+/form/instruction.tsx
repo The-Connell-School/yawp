@@ -1,6 +1,6 @@
 import { GripIcon } from 'lucide-react'
 import { useState } from 'react'
-import { useControlField } from 'remix-validated-form'
+import { useControlField } from '@rvf/react-router'
 import { type z } from 'zod'
 import { FormInput } from '~/components/forms/form-input-2'
 import { FormRadioGroup } from '~/components/forms/form-radio-group-2'
@@ -32,7 +32,7 @@ import { Tooltip } from '~/components/ui/tooltip'
 import { useHiddenValues } from '~/contexts/hidden-values'
 import { useCallDebouncedCallback } from '~/hooks/useCallDebouncedCallback'
 import { useOriginalValue } from '~/hooks/useOriginalValue'
-import { InstructionInteraction } from '~/routes/api+/domain+/tutor-response.js'
+import { InstructionInteraction } from '~/routes/api.domain.tutor-response/route.js'
 import { type CourseModuleInstructionSchema } from './schema'
 
 interface Props {

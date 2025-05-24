@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { useControlField, useField } from 'remix-validated-form'
+import { useControlField, useField } from '@rvf/react-router'
 import { v4 } from 'uuid'
 import { cn } from '~/utils/misc'
 import { startCase } from '~/utils/startCase'
@@ -82,7 +82,7 @@ export function BaseRadioGroup({
 						</div>
 					))}
 				</RadioGroup>
-				{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}
+				{error() ? <ErrorList id={errorId} errors={[error()]} /> : null}
 			</div>
 		</>
 	)

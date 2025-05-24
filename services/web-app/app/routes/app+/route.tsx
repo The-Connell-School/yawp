@@ -37,7 +37,7 @@ import {
 import { prisma } from '~/utils/db.server'
 import { FeatureFlags } from '~/utils/featureFlags/index.js'
 import { cn } from '~/utils/misc'
-import { NavStateSwitch, useNavState } from '../api+/preferences+/nav/route'
+import { NavStateSwitch, useNavState } from '../api.preferences.nav/route'
 
 export const NavExpandedContext = createContext({
 	isMobileNavOpen: false,

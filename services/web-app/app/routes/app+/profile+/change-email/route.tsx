@@ -21,7 +21,7 @@ import {
 	prepareVerification,
 	requireRecentVerification,
 	type VerifyFunctionArgs,
-} from '~/routes/_auth+/verify.server'
+} from '~/routes/auth.verify/utils.server'
 import { requireUserId } from '~/utils/auth.server.ts'
 import { type BreadcrumbHandle } from '~/utils/breadcrumb'
 import { validateCSRF } from '~/utils/csrf.server.ts'

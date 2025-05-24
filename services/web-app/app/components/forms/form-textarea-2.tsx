@@ -1,5 +1,5 @@
 import { type Ref, forwardRef, useId, type ReactNode } from 'react'
-import { useField } from 'remix-validated-form'
+import { useField } from '@rvf/react-router'
 import { cn } from '~/utils/misc'
 import { startCase } from '~/utils/startCase'
 import { InfoCircledIcon } from '../icons'
@@ -63,7 +63,7 @@ function Base(
 			{helperText ? (
 				<p className="text-muted-foreground">{helperText}</p>
 			) : null}
-			<div>{errorId ? <ErrorList id={errorId} errors={[error]} /> : null}</div>
+			<div>{error() ? <ErrorList id={errorId} errors={[error()]} /> : null}</div>
 		</div>
 	)
 }

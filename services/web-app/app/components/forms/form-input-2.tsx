@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { useField } from 'remix-validated-form'
+import { useField } from '@rvf/react-router'
 import { cn } from '~/utils/misc'
 import { startCase } from '~/utils/startCase'
 import { InfoCircledIcon } from '../icons'
@@ -53,8 +53,8 @@ export function FormInput({
 			{helperText ? (
 				<p className="text-xs text-muted-foreground">{helperText}</p>
 			) : null}
-			{error ? (
-				<p className="text-left text-[12px] text-destructive">{error}</p>
+			{error() ? (
+				<p className="text-left text-[12px] text-destructive">{error()}</p>
 			) : null}
 		</div>
 	)
