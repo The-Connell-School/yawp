@@ -1,0 +1,260 @@
+data "aws_availability_zones" "available" {}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = ">= 3.14.0"
+
+  name = "yawp-${var.env}"
+  cidr = "10.0.0.0/16"
+
+  azs             = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1]]
+  public_subnets  = ["10.0.0.0/24",  "10.0.1.0/24"]
+  private_subnets = ["10.0.10.0/24", "10.0.11.0/24"]
+
+  enable_nat_gateway = true
+  single_nat_gateway = true
+
+  tags = {
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+ resource "aws_security_group" "apprunner" {
+  name        = "yawp-${var.env}-apprunner-connector"
+  description = "Allows App Runner tasks to egress into the VPC"
+  vpc_id      = module.vpc.vpc_id
+
+  tags = {
+    Name        = "yawp-${var.env}-apprunner-sg"
+    Environment = var.env
+    Project     = "yawp"
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ }
+
+ resource "aws_security_group" "rds" {
+  name        = "yawp-${var.env}-rds"
+  description = "Postgres access from App Runner"
+  vpc_id      = module.vpc.vpc_id
+
+  tags = {
+    Name        = "yawp-${var.env}-rds-sg"
+    Environment = var.env
+    Project     = "yawp"
+  }
+
+  ingress {
+    description     = "Postgres"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.apprunner.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+ }
+
+
+resource "aws_ecr_repository" "web_app" {
+  name                 = "yawp-${var.env}-web-app"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+resource "random_password" "db_master" {
+  length           = 16
+  special          = true
+}
+
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name        = "yawp-${var.env}-db-creds"
+  description = "Master credentials for ${var.env} RDS"
+}
+
+resource "aws_secretsmanager_secret_version" "db_creds_version" {
+  secret_id     = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = random_password.db_master.result
+  })
+}
+
+resource "aws_db_subnet_group" "db_subnets" {
+  name       = "yawp-${var.env}-db-subnet-group"
+  subnet_ids = module.vpc.private_subnets
+
+  tags = {
+    Name        = "yawp-${var.env}-db-subnet-group"
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier             = "yawp-${var.env}-postgres"
+  engine                 = "postgres"
+  instance_class         = var.db_instance_class
+  allocated_storage      = var.db_allocated_storage
+  db_name                   = var.db_name
+  username               = var.db_username
+  password               = random_password.db_master.result
+  db_subnet_group_name   = aws_db_subnet_group.db_subnets.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+
+  skip_final_snapshot     = true
+  publicly_accessible     = false
+  multi_az                = false
+  storage_encrypted       = true
+  backup_retention_period = 7
+
+  tags = {
+    Name        = "yawp-${var.env}-rds-instance"
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+resource "aws_apprunner_vpc_connector" "vpc_connector" {
+  vpc_connector_name = "yawp-${var.env}-vpc-connector"
+  subnets            = module.vpc.private_subnets
+  security_groups    = [aws_security_group.apprunner.id]
+
+  tags = {
+    Name        = "yawp-${var.env}-vpc-connector"
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+resource "aws_iam_role" "apprunner_access" {
+  name = "yawp-${var.env}-apprunner-access-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "build.apprunner.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "apprunner_ecr_policy" {
+  name = "yawp-${var.env}-apprunner-ecr-policy"
+  role = aws_iam_role.apprunner_access.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = aws_ecr_repository.web_app.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.db_credentials.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "apprunner_instance" {
+  name = "yawp-${var.env}-apprunner-instance-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "tasks.apprunner.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "apprunner_instance_policy" {
+  name = "yawp-${var.env}-apprunner-instance-policy"
+  role = aws_iam_role.apprunner_instance.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = aws_secretsmanager_secret.db_credentials.arn
+      }
+    ]
+  })
+}
+
+resource "aws_apprunner_service" "web" {
+  service_name = "yawp-${var.env}-web"
+
+  source_configuration {
+    authentication_configuration {
+      access_role_arn = aws_iam_role.apprunner_access.arn
+    }
+
+    image_repository {
+      image_identifier      = "${aws_ecr_repository.web_app.repository_url}:latest"
+      image_repository_type = "ECR"
+
+      image_configuration {
+        # your app’s listening port
+        port = "8080"
+
+        # pass NODE_ENV so you know it’s staging
+        runtime_environment_variables = {
+          NODE_ENV = var.env
+        }
+
+        # (Optional) inject your DB creds secret
+        runtime_environment_secrets = {
+          DB_CREDS = aws_secretsmanager_secret.db_credentials.arn
+        }
+      }
+    }
+
+    auto_deployments_enabled = true
+  }
+
+  instance_configuration {
+    cpu    = "1024"
+    memory = "2048"
+    instance_role_arn = aws_iam_role.apprunner_instance.arn
+  }
+
+  network_configuration {
+    egress_configuration {
+      egress_type       = "VPC"
+      vpc_connector_arn = aws_apprunner_vpc_connector.vpc_connector.arn
+    }
+  }
+
+  tags = {
+    Environment = var.env
+    Project     = "yawp"
+  }
+}

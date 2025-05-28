@@ -1,22 +1,22 @@
-FROM oven/bun:1 AS development-dependencies-env
-COPY . /app
-WORKDIR /app
-RUN bun install
+FROM oven/bun:1 AS base
 
-FROM oven/bun:1 AS production-dependencies-env
-COPY ./package.json bun.lockb /app/
+FROM base AS build
 WORKDIR /app
-RUN bun install --production
+COPY package.json bun.lockb ./
+COPY services/web-app ./services/web-app
+COPY packages/prisma ./packages/prisma
 
-FROM oven/bun:1 AS build-env
-COPY . /app/
-COPY --from=development-dependencies-env /app/node_modules /app/node_modules
-WORKDIR /app
-RUN bun run build
+RUN bun install --filter "./services/web-app" --filter "./packages/prisma"
+RUN bun web-app:build
 
-FROM oven/bun:1
-COPY ./package.json bun.lockb /app/
-COPY --from=production-dependencies-env /app/node_modules /app/node_modules
-COPY --from=build-env /app/build /app/build
+FROM base AS production
 WORKDIR /app
-CMD ["bun", "run", "start"]
+COPY package.json bun.lockb ./
+COPY packages/prisma ./packages/prisma
+COPY --from=build /app/services/web-app/build ./services/web-app/build
+COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
+ARG DATABASE_URL
+ENV DATABASE_URL=${DATABASE_URL}
+RUN bun install --filter "./services/web-app" --filter "./packages/prisma" --production
+RUN bun prisma:generate
+CMD ["bun", "web-app:start"]

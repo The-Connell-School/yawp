@@ -93,8 +93,6 @@ const saveViewValidator = z.object({
   schoolTeacher: z.string(),
 });
 
-type ActionResponse = { success: boolean; message?: string };
-
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const url = new URL(request.url);

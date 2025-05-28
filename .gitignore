@@ -186,3 +186,4 @@ packages/prisma/client
 services/web-app/.react-router
 services/web-app/build
 sandbox.ts
+infra/.terraform

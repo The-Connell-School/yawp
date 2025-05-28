@@ -7,15 +7,15 @@
     "services/*"
   ],
   "scripts": {
-    "dev": "bun run --cwd services/web-app dev",
-    "build": "bun run --cwd services/web-app build",
-    "start": "bun run --cwd services/web-app start",
-    "typecheck": "bun run --cwd services/web-app typecheck",
+    "web-app:dev": "bun run --cwd services/web-app dev",
+    "web-app:build": "bun run --cwd services/web-app build",
+    "web-app:start": "bun run --cwd services/web-app start",
+    "web-app:typecheck": "bun run --cwd services/web-app typecheck",
+    "web-app:docker:build": "docker build -t yawp-web-app:latest -f services/web-app/Dockerfile .",
     "prisma:generate": "bun run --cwd packages/prisma generate",
-    "prisma:reset": "bun run --cwd packages/prisma prisma migrate reset"
-  },
-  "dependencies": {
-    "@rvf/react-router": "^7.1.5",
-    "remix-utils": "^8.7.0"
+    "prisma:reset": "bun run --cwd packages/prisma prisma migrate reset",
+    "infra:staging:init": "bun run --cwd infra terraform init -backend-config=envs/backends/staging.backend",
+    "infra:staging:plan": "bun run --cwd infra terraform plan -var-file=envs/variables/staging.tfvars",
+    "infra:staging:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/staging.tfvars"
   }
 }
