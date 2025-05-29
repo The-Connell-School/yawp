@@ -66,6 +66,62 @@ module "vpc" {
   }
  }
 
+resource "aws_security_group" "bastion" {
+  name        = "yawp-${var.env}-bastion"
+  description = "Security group for bastion host"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "yawp-${var.env}-bastion-sg"
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+resource "aws_key_pair" "bastion" {
+  key_name   = "yawp-${var.env}-bastion-key"
+  public_key = var.bastion_public_key
+}
+
+resource "aws_instance" "bastion" {
+  ami           = "ami-0c7217cdde317cfec"  # Amazon Linux 2023 AMI
+  instance_type = "t3.micro"
+  subnet_id     = module.vpc.public_subnets[0]
+  key_name      = aws_key_pair.bastion.key_name
+  associate_public_ip_address = true
+
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+
+  tags = {
+    Name        = "yawp-${var.env}-bastion"
+    Environment = var.env
+    Project     = "yawp"
+  }
+}
+
+# Update RDS security group to allow access from bastion
+resource "aws_security_group_rule" "rds_from_bastion" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.bastion.id
+  security_group_id        = aws_security_group.rds.id
+}
 
 resource "aws_ecr_repository" "web_app" {
   name                 = "yawp-${var.env}-web-app"
@@ -148,8 +204,8 @@ resource "aws_iam_role" "apprunner_access" {
     Statement = [
       {
         Effect    = "Allow"
-        Principal = { Service = "build.apprunner.amazonaws.com" }
         Action    = "sts:AssumeRole"
+        Principal = { Service = "build.apprunner.amazonaws.com" }
       }
     ]
   })
@@ -167,9 +223,12 @@ resource "aws_iam_role_policy" "apprunner_ecr_policy" {
           "ecr:GetAuthorizationToken",
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage"
+          "ecr:BatchGetImage",
+          "ecr:DescribeImages",
+          "ecr:GetRepositoryPolicy",
+          "ecr:ListImages"
         ]
-        Resource = aws_ecr_repository.web_app.arn
+        Resource = "*"
       },
       {
         Effect   = "Allow"
@@ -210,7 +269,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
 }
 
 resource "aws_apprunner_service" "web" {
-  service_name = "yawp-${var.env}-web"
+  service_name = "yawp-staging"
 
   source_configuration {
     authentication_configuration {
@@ -222,12 +281,17 @@ resource "aws_apprunner_service" "web" {
       image_repository_type = "ECR"
 
       image_configuration {
-        # your app’s listening port
-        port = "8080"
+        port = "3000"
 
-        # pass NODE_ENV so you know it’s staging
         runtime_environment_variables = {
           NODE_ENV = var.env
+          DATABASE_URL = "postgresql://${var.db_username}:${random_password.db_master.result}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
+          SESSION_SECRET = var.session_secret
+          INTERNAL_COMMAND_TOKEN = var.internal_command_token
+          HONEYPOT_SECRET = var.honeypot_secret
+          OPENAI_ORG_ID = var.openai_org_id
+          OPENAI_API_KEY = var.openai_api_key
+          ANTHROPIC_API_KEY = var.anthropic_api_key
         }
 
         # (Optional) inject your DB creds secret
@@ -251,6 +315,15 @@ resource "aws_apprunner_service" "web" {
       egress_type       = "VPC"
       vpc_connector_arn = aws_apprunner_vpc_connector.vpc_connector.arn
     }
+  }
+
+  health_check_configuration {
+    protocol = "HTTP"
+    path     = "/api/healthcheck"
+    interval = 10
+    timeout  = 5
+    healthy_threshold   = 1
+    unhealthy_threshold = 5
   }
 
   tags = {

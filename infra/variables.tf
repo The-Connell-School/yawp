@@ -38,6 +38,41 @@ variable "db_allocated_storage" {
   default     = 20
 }
 
+variable "session_secret" {
+  type        = string
+  description = "Secret used for session encryption"
+}
+
+variable "internal_command_token" {
+  type        = string
+  description = "Token for internal commands"
+}
+
+variable "honeypot_secret" {
+  type        = string
+  description = "Secret for honeypot encryption"
+}
+
+variable "openai_org_id" {
+  type        = string
+  description = "OpenAI organization ID"
+}
+
+variable "openai_api_key" {
+  type        = string
+  description = "OpenAI API key"
+}
+
+variable "anthropic_api_key" {
+  type        = string
+  description = "Anthropic API key"
+}
+
+variable "bastion_public_key" {
+  description = "Public SSH key for bastion host access"
+  type        = string
+}
+
 output "web_service_arn" {
   description = "ARN of the App Runner service"
   value       = aws_apprunner_service.web.arn

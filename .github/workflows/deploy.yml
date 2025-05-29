@@ -1,0 +1,54 @@
+name: 🚀 Deploy
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  typecheck-web-app:
+    name: ʦ TypeScript
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
+
+      - name: 🔎 Type check
+        run: bun i && bun web-app:typecheck
+
+  deploy-web-app-staging:
+    name: 🚀 Deploy Web App (Staging)
+    runs-on: ubuntu-22.04
+    needs: [typecheck-web-app]
+
+    environment:
+      name: staging
+      url: https://staging.yawp.school
+
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 📦 Build Docker image
+        run: bun web-app:docker:build --build-arg DATABASE_URL=${{ secrets.DATABASE_STAGING_URL }}
+
+      - name: 🏷️ Tag Docker image
+        run: bun web-app:docker:staging:tag
+
+      - name: 📦 Push Docker image
+        run: bun web-app:docker:staging:push

@@ -17,7 +17,6 @@
   },
   "scripts": {
     "generate": "prisma generate",
-    "postinstall": "prisma generate",
     "build": "tsc"
   },
   "dependencies": {

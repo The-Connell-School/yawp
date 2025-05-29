@@ -22,3 +22,23 @@ output "db_secret_arn" {
   description = "ARN of the Secrets Manager secret holding DB creds"
   value       = aws_secretsmanager_secret.db_credentials.arn
 }
+
+output "bastion_public_ip" {
+  description = "Public IP address of the bastion host"
+  value       = aws_instance.bastion.public_ip
+}
+
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.postgres.endpoint
+}
+
+output "rds_security_group_id" {
+  description = "RDS security group ID"
+  value       = aws_security_group.rds.id
+}
+
+output "bastion_security_group_id" {
+  description = "Bastion security group ID"
+  value       = aws_security_group.bastion.id
+}
