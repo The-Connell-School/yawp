@@ -3,7 +3,7 @@
 1. Docker build: `bun web-app:docker:build --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/yawp`
 
 
-### Using the Bastion Host
+### Connecting to the Bastion Host
 
 1. Generate an SSH key pair if you haven't already:
 ```bash
@@ -24,4 +24,15 @@ terraform apply && terraform output bastion_public_ip
 5. You can connect to your RDS instance through the bastion:
 ```bash
 ssh -i ~/.ssh/yawp-{env}-bastion ubuntu@<bastion-public-ip>
+```
+
+### Connecting to an AWS database from a .ts script
+
+2. Open a tunnel to the db
+```bash
+ssh -N -L 3306:yawp-staging-postgres.cafmse4qcmw7.us-east-1.rds.amazonaws.com:5432 ubuntu@44.201.78.216 -i ~/.ssh/yawp-staging-bastion
+```
+2. Then, in another terminal, connect to the database (using actual creds)
+```bash
+DATABASE_URL="postgresql://<user>:<password>@localhost:3306/<db_name>"
 ```

@@ -19,8 +19,8 @@ output "db_port" {
 }
 
 output "db_secret_arn" {
-  description = "ARN of the Secrets Manager secret holding DB creds"
-  value       = aws_secretsmanager_secret.db_credentials.arn
+  description = "ARN of the database URL secret"
+  value       = aws_secretsmanager_secret.db_url.arn
 }
 
 output "bastion_public_ip" {

@@ -2,12 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { Database } from 'bun:sqlite';
 
 const sqliteDb = new Database('./dump.db');
-
-const psqlPrisma = new PrismaClient({
-  datasources: {
-    db: { url: 'postgresql://postgres:postgres@localhost:5432/yawp' },
-  },
-});
+const psqlPrisma = new PrismaClient();
 
 async function migrateData() {
   try {

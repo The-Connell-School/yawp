@@ -137,16 +137,15 @@ resource "random_password" "db_master" {
   special          = true
 }
 
-resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "yawp-${var.env}-db-creds"
-  description = "Master credentials for ${var.env} RDS"
+resource "aws_secretsmanager_secret" "db_url" {
+  name        = "yawp-${var.env}-db-url"
+  description = "URL for ${var.env} RDS"
 }
 
-resource "aws_secretsmanager_secret_version" "db_creds_version" {
-  secret_id     = aws_secretsmanager_secret.db_credentials.id
+resource "aws_secretsmanager_secret_version" "db_url_version" {
+  secret_id     = aws_secretsmanager_secret.db_url.id
   secret_string = jsonencode({
-    username = var.db_username
-    password = random_password.db_master.result
+    url = "postgresql://${var.db_username}:${random_password.db_master.result}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
   })
 }
 
@@ -233,7 +232,7 @@ resource "aws_iam_role_policy" "apprunner_ecr_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_secretsmanager_secret.db_credentials.arn
+        Resource = aws_secretsmanager_secret.db_url.arn
       }
     ]
   })
@@ -262,7 +261,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_secretsmanager_secret.db_credentials.arn
+        Resource = aws_secretsmanager_secret.db_url.arn
       },
       {
         Effect = "Allow"
@@ -305,7 +304,6 @@ resource "aws_apprunner_service" "web" {
 
         runtime_environment_variables = {
           NODE_ENV = var.env
-          DATABASE_URL = "postgresql://${var.db_username}:${random_password.db_master.result}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
           SESSION_SECRET = var.session_secret
           INTERNAL_COMMAND_TOKEN = var.internal_command_token
           HONEYPOT_SECRET = var.honeypot_secret
@@ -316,7 +314,7 @@ resource "aws_apprunner_service" "web" {
         }
 
         runtime_environment_secrets = {
-          DB_CREDS = aws_secretsmanager_secret.db_credentials.arn
+          DB_CREDS = aws_secretsmanager_secret.db_url.arn
         }
       }
     }
