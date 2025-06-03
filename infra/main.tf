@@ -263,9 +263,29 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = aws_secretsmanager_secret.db_credentials.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "${aws_cloudwatch_log_group.apprunner.arn}:*"
       }
     ]
   })
+}
+
+resource "aws_cloudwatch_log_group" "apprunner" {
+  name              = "/aws/apprunner/yawp-staging"
+  retention_in_days = 30
+
+  tags = {
+    Environment = var.env
+    Project     = "yawp"
+  }
 }
 
 resource "aws_apprunner_service" "web" {
@@ -295,7 +315,6 @@ resource "aws_apprunner_service" "web" {
           PORT = "8080"
         }
 
-        # (Optional) inject your DB creds secret
         runtime_environment_secrets = {
           DB_CREDS = aws_secretsmanager_secret.db_credentials.arn
         }

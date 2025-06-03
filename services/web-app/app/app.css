@@ -1,10 +1,7 @@
-@import "tailwindcss";
-
-@import "tw-animate-css";
-
+@import 'tailwindcss';
+@import 'tw-animate-css';
 @custom-variant dark (&:is(.dark *));
-
-@config '../tailwind.config.ts';
+@reference "tailwindcss"
 
 @layer base {
   :root {
@@ -83,72 +80,86 @@
   --color-success-foreground: hsl(var(--success-foreground));
 }
 
-@layer base {
+@layer components {
   * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-@layer utilities {
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    --font-sans: 'Roboto', sans-serif;
+    border-color: hsl(var(--border));
+    overscroll-behavior: none;
+    outline-color: hsl(var(--ring) / 0.5);
   }
 }
 
-* {
-  --font-sans: 'Roboto', sans-serif;
-  @apply overscroll-none;
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
-h1, h2, h3, h4 {
-  @apply text-foreground;
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: hsl(var(--foreground));
 }
 
 h1 {
-  @apply text-4xl font-bold;
+  font-size: 2.25rem; /* equivalent to text-4xl */
+  font-weight: bold;
 }
 h2 {
-  @apply text-2xl font-bold;
+  font-size: 1.5rem; /* equivalent to text-2xl */
+  font-weight: bold;
 }
 h3 {
-  @apply text-lg font-bold;
+  font-size: 1.125rem; /* equivalent to text-lg */
+  font-weight: bold;
 }
 h4 {
-  @apply font-bold;
+  font-weight: bold;
 }
 
 code {
-  @apply rounded bg-primary/20 p-0.5 text-sm;
+  border-radius: 0.25rem; /* equivalent to rounded */
+  font-size: 0.875rem; /* equivalent to text-sm */
+  padding: 0.125rem;
+  background-color: hsl(var(--primary) / 0.2);
 }
 
 #course-module-session-messages ul {
-  @apply list-disc;
+  list-style-type: disc;
 }
 #course-module-session-messages ol {
-  @apply list-decimal;
+  list-style-type: decimal;
 }
 
 .tiptap blockquote {
-  @apply my-2 border-l-4 border-muted-foreground p-2 text-muted-foreground;
+  margin-top: 0.5rem; /* equivalent to my-2 */
+  margin-bottom: 0.5rem;
+  border-left-width: 0.25rem; /* equivalent to border-l-4 */
+  border-left-color: hsl(var(--muted-foreground));
+  padding: 0.5rem; /* equivalent to p-2 */
+  color: hsl(var(--muted-foreground));
 }
 .tiptap ul {
-  @apply list-disc pl-6;
+  list-style-type: disc;
+  padding-left: 1.5rem; /* equivalent to pl-6 */
 }
 .tiptap ol {
-  @apply list-decimal pl-6;
+  list-style-type: decimal;
+  padding-left: 1.5rem; /* equivalent to pl-6 */
 }
 .tiptap mark {
-  @apply bg-yellow-100;
+  background-color: #fef3c7; /* equivalent to bg-yellow-100 */
 }
 .tiptap mark.focused {
-  @apply bg-yellow-300;
+  background-color: #fde68a; /* equivalent to bg-yellow-300 */
 }
 
 .comment-mark {
