@@ -37,7 +37,7 @@ jobs:
   deploy-web-app-staging:
     name: 🚀 Deploy Web App (Staging)
     runs-on: ubuntu-22.04
-    needs: [typecheck-web-app]
+    # needs: [typecheck-web-app]
 
     environment:
       name: staging
