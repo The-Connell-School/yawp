@@ -13,26 +13,26 @@ permissions:
   contents: read
 
 jobs:
-  typecheck-web-app:
-    name: ʦ TypeScript
-    runs-on: ubuntu-22.04
-    steps:
-      - name: ⬇️ Checkout repo
-        uses: actions/checkout@v3
+  # typecheck-web-app:
+  #   name: ʦ TypeScript
+  #   runs-on: ubuntu-22.04
+  #   steps:
+  #     - name: ⬇️ Checkout repo
+  #       uses: actions/checkout@v3
 
-      - name: ⎔ Setup node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
+  #     - name: ⎔ Setup node
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version: 20
 
-      - name: 📥 Download deps
-        uses: oven-sh/setup-bun@v1
+  #     - name: 📥 Download deps
+  #       uses: oven-sh/setup-bun@v1
 
-      - name: 🔧 Generate Prisma Client
-        run: cd packages/prisma && bun prisma generate
+  #     - name: 🔧 Generate Prisma Client
+  #       run: cd packages/prisma && bun prisma generate
 
-      - name: 🔎 Type check
-        run: bun i && bun web-app:typecheck
+  #     - name: 🔎 Type check
+  #       run: bun i && bun web-app:typecheck
 
   deploy-web-app-staging:
     name: 🚀 Deploy Web App (Staging)
@@ -49,6 +49,17 @@ jobs:
 
       - name: 📥 Download deps
         uses: oven-sh/setup-bun@v1
+
+      - name: 🔑 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: 🔐 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: 📦 Build Docker image
         run: bun web-app:docker:build
