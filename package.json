@@ -7,6 +7,7 @@
     "services/*"
   ],
   "scripts": {
+    "dev": "bun web-app:dev",
     "web-app:dev": "bun run --cwd services/web-app dev",
     "web-app:build": "bun run --cwd services/web-app build",
     "web-app:start": "bun run --cwd services/web-app start",
