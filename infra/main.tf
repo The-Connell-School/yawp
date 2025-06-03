@@ -281,7 +281,7 @@ resource "aws_apprunner_service" "web" {
       image_repository_type = "ECR"
 
       image_configuration {
-        port = "3000"
+        port = "8080"
 
         runtime_environment_variables = {
           NODE_ENV = var.env
@@ -292,6 +292,7 @@ resource "aws_apprunner_service" "web" {
           OPENAI_ORG_ID = var.openai_org_id
           OPENAI_API_KEY = var.openai_api_key
           ANTHROPIC_API_KEY = var.anthropic_api_key
+          PORT = "8080"
         }
 
         # (Optional) inject your DB creds secret

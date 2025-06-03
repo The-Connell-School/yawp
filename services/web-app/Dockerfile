@@ -20,4 +20,5 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/services/web-app/build ./services/web-app/build
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
 COPY --from=build /app/packages/prisma ./packages/prisma
+EXPOSE 8080
 CMD ["bun", "run", "web-app:start"]
