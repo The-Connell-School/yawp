@@ -19,7 +19,7 @@ import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
 import { useDoubleCheck, useIsPending } from '~/utils/misc';
 import { redirectWithToast } from '~/utils/toast.server';
-import { CourseForm } from './form';
+// import { CourseForm } from './form';
 import { validator } from './form/schema';
 
 const deleteValidator = z.object({ id: z.string() });
@@ -185,7 +185,7 @@ export default function CoursesIdRoute() {
   return (
     <div className="flex h-full flex-col">
       <div className="no-scrollbar grow overflow-y-scroll p-6">
-        <CourseForm
+        {/* <CourseForm
           defaultValues={{
             ...data.course,
             image: undefined,
@@ -195,7 +195,7 @@ export default function CoursesIdRoute() {
           }}
           formId={formId}
           key={formId}
-        />
+        /> */}
       </div>
       <div className="flex gap-2 px-6 pb-6 pt-1">
         <Button type="submit" disabled={isPending} form={formId}>
