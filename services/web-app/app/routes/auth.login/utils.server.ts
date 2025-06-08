@@ -10,7 +10,7 @@ import { verifySessionStorage } from '~/utils/verification.server';
 import {
   type VerifyFunctionArgs,
   getRedirectToUrl,
-} from '../auth.verify/utils.server';
+} from '../auth.verify/utils';
 
 export const verifiedTimeKey = 'verified-time';
 export const unverifiedSessionIdKey = 'unverified-session-id';

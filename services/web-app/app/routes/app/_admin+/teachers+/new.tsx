@@ -8,7 +8,7 @@ import { Link, useLoaderData } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
-import { prepareVerification } from '~/routes/auth.verify/utils.server';
+import { prepareVerification } from '~/routes/auth.verify/utils';
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server.js';
 import { useIsPending } from '~/utils/misc';

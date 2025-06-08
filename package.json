@@ -16,11 +16,17 @@
     "web-app:docker:staging:tag": "docker tag yawp-web-app:latest 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-staging-web-app:latest",
     "web-app:docker:staging:login": "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 422348803522.dkr.ecr.us-east-1.amazonaws.com",
     "web-app:docker:staging:push": "bun web-app:docker:staging:login && docker push 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-staging-web-app:latest",
+    "web-app:docker:production:tag": "docker tag yawp-web-app:latest 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-production-web-app:latest",
+    "web-app:docker:production:login": "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 422348803522.dkr.ecr.us-east-1.amazonaws.com",
+    "web-app:docker:production:push": "bun web-app:docker:production:login && docker push 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-production-web-app:latest",
     "prisma:generate": "bun run --cwd packages/prisma generate",
     "prisma:reset": "bun run --cwd packages/prisma prisma migrate reset",
     "infra:staging:init": "bun run --cwd infra terraform init -backend-config=envs/backends/staging.backend",
     "infra:staging:plan": "bun run --cwd infra terraform plan -var-file=envs/variables/staging.tfvars",
-    "infra:staging:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/staging.tfvars"
+    "infra:staging:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/staging.tfvars",
+    "infra:production:init": "bun run --cwd infra terraform init -backend-config=envs/backends/production.backend",
+    "infra:production:plan": "bun run --cwd infra terraform plan -var-file=envs/variables/production.tfvars",
+    "infra:production:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars"
   },
   "devDependencies": {
     "@types/ssh2": "^1.15.5"

@@ -1,7 +1,19 @@
-### Shortcuts
+### Setting Up Checklist
 
-1. Docker build: `bun web-app:docker:build --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/yawp`
+- [ ] Configure the backend on s3 (replace vars, only 1 per app {not per env})
+```bash
+aws s3api create-bucket \
+  --bucket <app_name>-tf-state \
+  --region us-east-2 \
+  --create-bucket-configuration LocationConstraint=us-east-2
 
+aws s3api put-bucket-versioning --bucket <app_name>-tf-state --versioning-configuration Status=Enabled
+```
+- [ ] Create a variables file (in infra/envs/variables), e.g. infra/envs/variables/<env>.tfvars
+- [ ] Run `bun infra:<env>:apply` (the app runner will fail, needs an image)
+- [ ] Build, tag, and push a new web app docker image
+- [ ] Delete the first app runner from the AWS console (when if fails to create, it doesn't pick up new ecr pushes)
+- [ ] Re-run `bun infra:<env>:apply`
 
 ### Connecting to the Bastion Host
 

@@ -73,6 +73,11 @@ variable "bastion_public_key" {
   type        = string
 }
 
+variable "app_name" {
+  type        = string
+  description = "Name of the application (e.g. AirBnB, Yawp, etc.)"
+}
+
 output "web_service_arn" {
   description = "ARN of the App Runner service"
   value       = aws_apprunner_service.web.arn

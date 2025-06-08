@@ -23,7 +23,7 @@ import { prisma } from '~/utils/db.server.ts';
 import { sendEmail } from '~/utils/email.server.ts';
 import { checkHoneypot } from '~/utils/honeypot.server.ts';
 import { EmailSchema } from '~/utils/schemas/user.ts';
-import { prepareVerification } from '../auth.verify/utils.server';
+import { prepareVerification } from '../auth.verify/utils';
 
 const ForgotPasswordSchema = z.object({
   email: EmailSchema,

@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { FormInput } from '~/components/forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
-import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/route.tsx';
+import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/utils.server';
 import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { checkHoneypot } from '~/utils/honeypot.server.ts';
@@ -26,7 +26,7 @@ import { handleVerification as handleLoginTwoFactorVerification } from '../auth.
 import { handleVerification as handleOnboardingVerification } from '../auth.onboarding/utils.server';
 import { handleVerification as handleResetPasswordVerification } from '../auth.reset-password/utils.server';
 import { handleVerification as handleTeacherOnboardingVerification } from '../auth.teacher-onboarding/utils.server';
-import { isCodeValid } from './utils.server.ts';
+import { isCodeValid } from './utils';
 import {
   codeQueryParam,
   redirectToQueryParam,

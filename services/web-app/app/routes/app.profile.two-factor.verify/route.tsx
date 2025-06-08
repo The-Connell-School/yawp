@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { ErrorList } from '~/components/forms/error-list.tsx';
 import { FormInput } from '~/components/forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
-import { isCodeValid } from '~/routes/auth.verify/utils.server';
+import { isCodeValid } from '~/routes/auth.verify/utils.ts';
 import { requireUserId } from '~/utils/auth.server.ts';
 import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';

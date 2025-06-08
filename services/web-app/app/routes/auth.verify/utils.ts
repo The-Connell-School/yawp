@@ -7,7 +7,7 @@ import { getDomainUrl } from '~/utils/misc';
 import { redirectWithToast } from '~/utils/toast.server';
 import { twoFAVerificationType } from '../app.profile.two-factor/route.tsx';
 import { type twoFAVerifyVerificationType } from '../app.profile.two-factor.verify/route.tsx';
-import { shouldRequestTwoFA } from '../auth.login/utils.server';
+import { shouldRequestTwoFA } from '../auth.login/utils.server.ts';
 import {
   type VerifySchema,
   codeQueryParam,
@@ -15,7 +15,7 @@ import {
   targetQueryParam,
   typeQueryParam,
   type VerificationTypes,
-} from './constants';
+} from './constants.ts';
 
 export function getRedirectToUrl({
   request,

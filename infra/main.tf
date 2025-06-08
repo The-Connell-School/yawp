@@ -4,7 +4,7 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = ">= 3.14.0"
 
-  name = "yawp-${var.env}"
+  name = "${var.app_name}-${var.env}"
   cidr = "10.0.0.0/16"
 
   azs             = [data.aws_availability_zones.available.names[0], data.aws_availability_zones.available.names[1]]
@@ -16,19 +16,19 @@ module "vpc" {
 
   tags = {
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
  resource "aws_security_group" "apprunner" {
-  name        = "yawp-${var.env}-apprunner-connector"
+  name        = "${var.app_name}-${var.env}-apprunner-connector"
   description = "Allows App Runner tasks to egress into the VPC"
   vpc_id      = module.vpc.vpc_id
 
   tags = {
-    Name        = "yawp-${var.env}-apprunner-sg"
+    Name        = "${var.app_name}-${var.env}-apprunner-sg"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 
   egress {
@@ -40,14 +40,14 @@ module "vpc" {
  }
 
  resource "aws_security_group" "rds" {
-  name        = "yawp-${var.env}-rds"
+  name        = "${var.app_name}-${var.env}-rds"
   description = "Postgres access from App Runner"
   vpc_id      = module.vpc.vpc_id
 
   tags = {
-    Name        = "yawp-${var.env}-rds-sg"
+    Name        = "${var.app_name}-${var.env}-rds-sg"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 
   ingress {
@@ -67,7 +67,7 @@ module "vpc" {
  }
 
 resource "aws_security_group" "bastion" {
-  name        = "yawp-${var.env}-bastion"
+  name        = "${var.app_name}-${var.env}-bastion"
   description = "Security group for bastion host"
   vpc_id      = module.vpc.vpc_id
 
@@ -86,14 +86,14 @@ resource "aws_security_group" "bastion" {
   }
 
   tags = {
-    Name        = "yawp-${var.env}-bastion-sg"
+    Name        = "${var.app_name}-${var.env}-bastion-sg"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
 resource "aws_key_pair" "bastion" {
-  key_name   = "yawp-${var.env}-bastion-key"
+  key_name   = "${var.app_name}-${var.env}-bastion-key"
   public_key = var.bastion_public_key
 }
 
@@ -107,9 +107,9 @@ resource "aws_instance" "bastion" {
   vpc_security_group_ids = [aws_security_group.bastion.id]
 
   tags = {
-    Name        = "yawp-${var.env}-bastion"
+    Name        = "${var.app_name}-${var.env}-bastion"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
@@ -124,7 +124,7 @@ resource "aws_security_group_rule" "rds_from_bastion" {
 }
 
 resource "aws_ecr_repository" "web_app" {
-  name                 = "yawp-${var.env}-web-app"
+  name                 = "${var.app_name}-${var.env}-web-app"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {
@@ -138,7 +138,7 @@ resource "random_password" "db_master" {
 }
 
 resource "aws_secretsmanager_secret" "db_url" {
-  name        = "yawp-${var.env}-db-url"
+  name        = "${var.app_name}-${var.env}-db-url"
   description = "URL for ${var.env} RDS"
 }
 
@@ -150,18 +150,18 @@ resource "aws_secretsmanager_secret_version" "db_url_version" {
 }
 
 resource "aws_db_subnet_group" "db_subnets" {
-  name       = "yawp-${var.env}-db-subnet-group"
+  name       = "${var.app_name}-${var.env}-db-subnet-group"
   subnet_ids = module.vpc.private_subnets
 
   tags = {
-    Name        = "yawp-${var.env}-db-subnet-group"
+    Name        = "${var.app_name}-${var.env}-db-subnet-group"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier             = "yawp-${var.env}-postgres"
+  identifier             = "${var.app_name}-${var.env}-postgres"
   engine                 = "postgres"
   instance_class         = var.db_instance_class
   allocated_storage      = var.db_allocated_storage
@@ -178,26 +178,26 @@ resource "aws_db_instance" "postgres" {
   backup_retention_period = 7
 
   tags = {
-    Name        = "yawp-${var.env}-rds-instance"
+    Name        = "${var.app_name}-${var.env}-rds-instance"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
 resource "aws_apprunner_vpc_connector" "vpc_connector" {
-  vpc_connector_name = "yawp-${var.env}-vpc-connector"
+  vpc_connector_name = "${var.app_name}-${var.env}-vpc-connector"
   subnets            = module.vpc.private_subnets
   security_groups    = [aws_security_group.apprunner.id]
 
   tags = {
-    Name        = "yawp-${var.env}-vpc-connector"
+    Name        = "${var.app_name}-${var.env}-vpc-connector"
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
 resource "aws_iam_role" "apprunner_access" {
-  name = "yawp-${var.env}-apprunner-access-role"
+  name = "${var.app_name}-${var.env}-apprunner-access-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -211,7 +211,7 @@ resource "aws_iam_role" "apprunner_access" {
 }
 
 resource "aws_iam_role_policy" "apprunner_ecr_policy" {
-  name = "yawp-${var.env}-apprunner-ecr-policy"
+  name = "${var.app_name}-${var.env}-apprunner-ecr-policy"
   role = aws_iam_role.apprunner_access.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -239,7 +239,7 @@ resource "aws_iam_role_policy" "apprunner_ecr_policy" {
 }
 
 resource "aws_iam_role" "apprunner_instance" {
-  name = "yawp-${var.env}-apprunner-instance-role"
+  name = "${var.app_name}-${var.env}-apprunner-instance-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -253,7 +253,7 @@ resource "aws_iam_role" "apprunner_instance" {
 }
 
 resource "aws_iam_role_policy" "apprunner_instance_policy" {
-  name = "yawp-${var.env}-apprunner-instance-policy"
+  name = "${var.app_name}-${var.env}-apprunner-instance-policy"
   role = aws_iam_role.apprunner_instance.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -278,17 +278,17 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
 }
 
 resource "aws_cloudwatch_log_group" "apprunner" {
-  name              = "/aws/apprunner/yawp-staging"
+  name              = "/aws/apprunner/${var.app_name}-${var.env}"
   retention_in_days = 30
 
   tags = {
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }
 
 resource "aws_apprunner_service" "web" {
-  service_name = "yawp-staging"
+  service_name = "${var.app_name}-${var.env}"
 
   source_configuration {
     authentication_configuration {
@@ -304,17 +304,17 @@ resource "aws_apprunner_service" "web" {
 
         runtime_environment_variables = {
           NODE_ENV = var.env
-          SESSION_SECRET = var.session_secret
-          INTERNAL_COMMAND_TOKEN = var.internal_command_token
-          HONEYPOT_SECRET = var.honeypot_secret
-          OPENAI_ORG_ID = var.openai_org_id
-          OPENAI_API_KEY = var.openai_api_key
-          ANTHROPIC_API_KEY = var.anthropic_api_key
           PORT = "8080"
         }
 
         runtime_environment_secrets = {
-          DB_CREDS = aws_secretsmanager_secret.db_url.arn
+          HONEYPOT_SECRET = var.honeypot_secret
+          OPENAI_ORG_ID = var.openai_org_id
+          OPENAI_API_KEY = var.openai_api_key
+          ANTHROPIC_API_KEY = var.anthropic_api_key
+          SESSION_SECRET = var.session_secret
+          INTERNAL_COMMAND_TOKEN = var.internal_command_token
+          DATABASE_URL = aws_secretsmanager_secret.db_url.arn
         }
       }
     }
@@ -346,6 +346,6 @@ resource "aws_apprunner_service" "web" {
 
   tags = {
     Environment = var.env
-    Project     = "yawp"
+    Project     = var.app_name
   }
 }

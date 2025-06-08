@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import { redirectWithToast } from '~/utils/toast.server';
 import { verifySessionStorage } from '~/utils/verification.server';
-import { type VerifyFunctionArgs } from '../auth.verify/utils.server';
+import { type VerifyFunctionArgs } from '../auth.verify/utils';
 
 export const onboardingEmailSessionKey = 'teacherOnboardingEmail';
 

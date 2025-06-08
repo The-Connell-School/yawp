@@ -23,7 +23,7 @@ import { Setting } from '~/utils/enums.ts';
 import { checkHoneypot } from '~/utils/honeypot.server';
 import { useIsPending } from '~/utils/misc';
 import { EmailSchema } from '~/utils/schemas/user';
-import { prepareVerification } from '../auth.verify/utils.server';
+import { prepareVerification } from '../auth.verify/utils';
 
 const Schema = z.object({
   email: EmailSchema,
