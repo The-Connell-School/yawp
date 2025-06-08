@@ -1,6 +1,6 @@
 import { redirect } from 'react-router';
 import { safeRedirect } from 'remix-utils/safe-redirect';
-import { twoFAVerificationType } from '~/routes/app/profile+/two-factor/route.js';
+import { twoFAVerificationType } from '~/routes/app.profile.two-factor/route.tsx';
 import { getUserId, sessionKey } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { combineResponseInits } from '~/utils/misc';

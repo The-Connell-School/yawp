@@ -3,13 +3,13 @@ import {
   data as dataResponse,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
+  useSearchParams,
 } from 'react-router';
 import {
   Outlet,
   useLoaderData,
   useNavigate,
   useParams,
-  useSearchParams,
   useFetcher,
 } from 'react-router';
 import {
@@ -22,14 +22,12 @@ import {
   List,
   PencilIcon,
   Trash2,
+  Bookmark,
+  BookmarkIcon,
+  ArrowUpDownIcon,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
-import {
-  parseFormData,
-  ValidatedForm,
-  validationError,
-} from '@rvf/react-router';
-import { toast as showToast } from 'sonner';
+import { useEffect, useState } from 'react';
+import { ValidatedForm } from '@rvf/react-router';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormMultiSelect } from '~/components/forms/form-multi-select.tsx';
@@ -69,11 +67,17 @@ import { prisma } from '~/utils/db.server';
 import { Period, Grade, Setting } from '~/utils/enums.ts';
 import { cn } from '~/utils/misc.tsx';
 import pluralize from '~/utils/pluralize/pluralize';
+import {
+  getStudentFilters,
+  getStudentFiltersValue,
+  setStudentFilters,
+  type StudentFilters,
+} from '~/utils/cookies.server';
+import { createToastHeaders } from '~/utils/toast.server';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Students' };
 
 type SortField = 'name' | 'email' | 'school' | 'grade' | 'period' | 'createdAt';
-type SortDirection = 'asc' | 'desc';
 
 const SORT_FIELDS: Array<{ label: string; value: SortField }> = [
   { label: 'Name', value: 'name' },
@@ -95,20 +99,15 @@ const saveViewValidator = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const studentFilters = await getStudentFilters(request);
   const url = new URL(request.url);
-  const query = url.searchParams.get('q') ?? '';
-  const skip = parseInt(url.searchParams.get('skip') ?? '0');
-  const take = parseInt(url.searchParams.get('take') ?? '10');
-  const sortField = (url.searchParams.get('sort') as SortField) ?? 'name';
-  const sortDirection =
-    (url.searchParams.get('direction') as SortDirection) ?? 'asc';
-  const selectedSchools = url.searchParams.get('school')?.split(',') ?? [];
-  const selectedGrades = url.searchParams.get('grade')?.split(',') ?? [];
-  const selectedPeriods = url.searchParams.get('period')?.split(',') ?? [];
-  const selectedWorkshopLeaders =
-    url.searchParams.get('workshopLeader')?.split(',') ?? [];
-  const selectedTeachers = url.searchParams.get('teacher')?.split(',') ?? [];
-  const viewMode = url.searchParams.get('view') ?? 'table';
+  const newFiltersRaw = url.searchParams.get('filters');
+  const parsedFilters = newFiltersRaw
+    ? (JSON.parse(decodeURIComponent(newFiltersRaw)) as StudentFilters)
+    : ({} as Partial<StudentFilters>);
+  const filters = { ...studentFilters, ...parsedFilters };
+
+  url.searchParams.delete('filters');
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -125,66 +124,65 @@ export async function loader({ request }: LoaderFunctionArgs) {
     AND: [
       {
         OR: [
-          { user: { name: { contains: query } } },
-          { user: { email: { contains: query } } },
-          { school: { contains: query } },
-          { grade: { contains: query } },
-          { period: { contains: query } },
+          { user: { name: { contains: filters.query } } },
+          { user: { email: { contains: filters.query } } },
+          { school: { contains: filters.query } },
+          { grade: { contains: filters.query } },
+          { period: { contains: filters.query } },
         ],
       },
-      selectedSchools.length > 0 && !selectedSchools.includes('all')
+      filters.school.length > 0 && !filters.school.includes('all')
         ? {
-            OR: selectedSchools.map((school) =>
+            OR: filters.school.map((school) =>
               school === 'none'
                 ? { school: null }
                 : { school: { equals: school } }
             ),
           }
         : {},
-      selectedGrades.length > 0 && !selectedGrades.includes('all')
+      filters.grade.length > 0 && !filters.grade.includes('all')
         ? {
-            OR: selectedGrades.map((grade) =>
+            OR: filters.grade.map((grade) =>
               grade === 'none' ? { grade: null } : { grade: { equals: grade } }
             ),
           }
         : {},
-      selectedPeriods.length > 0 && !selectedPeriods.includes('all')
+      filters.period.length > 0 && !filters.period.includes('all')
         ? {
-            OR: selectedPeriods.map((period) =>
+            OR: filters.period.map((period) =>
               period === 'none'
                 ? { period: null }
                 : { period: { equals: period } }
             ),
           }
         : {},
-      selectedWorkshopLeaders.length > 0 &&
-      !selectedWorkshopLeaders.includes('all')
+      filters.workshopLeader.length > 0 &&
+      !filters.workshopLeader.includes('all')
         ? {
-            OR: selectedWorkshopLeaders.map((workshopLeader) =>
+            OR: filters.workshopLeader.map((workshopLeader) =>
               workshopLeader === 'none'
                 ? { workshopLeaderId: null }
                 : { workshopLeaderId: { equals: workshopLeader } }
             ),
           }
         : {},
-      selectedTeachers.length > 0 && !selectedTeachers.includes('all')
+      filters.teacher.length > 0 && !filters.teacher.includes('all')
         ? {
-            OR: selectedTeachers.map((teacher) =>
+            OR: filters.teacher.map((teacher) =>
               teacher === 'none'
                 ? { schoolTeacher: null }
                 : { schoolTeacher: { equals: teacher } }
             ),
           }
         : {},
-      // If user is a teacher (not admin), only show their students
       !isAdmin && isTeacher ? { workshopLeaderId: userId } : {},
     ],
   };
 
   const orderBy =
-    sortField === 'name' || sortField === 'email'
-      ? { user: { [sortField]: sortDirection } }
-      : { [sortField]: sortDirection };
+    filters.sort === 'name' || filters.sort === 'email'
+      ? { user: { [filters.sort]: filters.direction } }
+      : { [filters.sort]: filters.direction };
 
   const [students, totalCount, settings, workshopLeaders] = await Promise.all([
     prisma.studentProfile.findMany({
@@ -205,8 +203,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
       },
-      take,
-      skip,
+      take: filters.take,
+      skip: filters.skip,
       orderBy,
     }),
     prisma.studentProfile.count({ where }),
@@ -229,21 +227,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const teachers =
     settings.find((s) => s.name === Setting.Teachers)?.value.split(',') ?? [];
 
-  return dataResponse({
-    students,
-    sortField,
-    sortDirection,
-    totalCount,
-    filters: {
-      schools,
-      grades: Object.values(Grade),
-      periods: Object.values(Period),
-      teachers,
-      workshopLeaders: isAdmin ? workshopLeaders : [],
+  return dataResponse(
+    {
+      students,
+      filters: {
+        schools,
+        grades: Object.values(Grade),
+        periods: Object.values(Period),
+        teachers,
+        workshopLeaders: isAdmin ? workshopLeaders : [],
+      },
+      isAdmin,
+      cookieFilters: filters,
+      totalCount,
     },
-    viewMode,
-    isAdmin,
-  });
+    newFiltersRaw
+      ? {
+          headers: {
+            'Set-Cookie': await setStudentFilters(request, parsedFilters),
+          },
+        }
+      : {}
+  );
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -251,23 +256,46 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent');
 
-  if (intent === 'createView') {
-    const { error, data } = await parseFormData(request, saveViewValidator);
-    if (error) return validationError(error);
+  if (intent === 'updateFilters') {
+    let filters = await getStudentFilters(request);
+    const key = formData.get('key') as keyof StudentFilters | 'reset';
+    const value = formData.get('value') as string;
 
+    if (key === 'reset') {
+      filters = JSON.parse(value) as StudentFilters;
+    } else {
+      filters[key] = getStudentFiltersValue(key, value) as never;
+    }
+
+    const cookie = await setStudentFilters(request, filters);
+    return dataResponse(
+      { success: true },
+      { headers: { 'Set-Cookie': cookie } }
+    );
+  }
+
+  if (intent === 'createView') {
     await prisma.studentView.create({
       data: {
-        name: data.name,
-        school: data.school,
-        grade: data.grade,
-        period: data.period,
-        workshopLeader: data.workshopLeader,
-        schoolTeacher: data.schoolTeacher,
+        name: formData.get('name') as string,
+        school: formData.get('school') as string,
+        grade: formData.get('grade') as string,
+        period: formData.get('period') as string,
+        workshopLeader: formData.get('workshopLeader') as string,
+        schoolTeacher: formData.get('schoolTeacher') as string,
         userId,
       },
     });
 
-    return dataResponse({ success: true });
+    return dataResponse(
+      { success: true },
+      {
+        headers: await createToastHeaders({
+          title: 'View Saved',
+          description: 'Your Student View is now available on your Dashboard.',
+        }),
+      }
+    );
   }
 
   if (intent === 'delete') {
@@ -312,15 +340,8 @@ export default function StudentsRoute() {
   const navigate = useNavigate();
   const params = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const {
-    students,
-    sortField,
-    sortDirection,
-    filters,
-    totalCount,
-    viewMode,
-    isAdmin,
-  } = useLoaderData<typeof loader>();
+  const { students, filters, isAdmin, cookieFilters, totalCount } =
+    useLoaderData<typeof loader>();
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -329,39 +350,53 @@ export default function StudentsRoute() {
   const user = useUser();
   const isTeacher = user.teacherProfile !== null;
 
-  const [storedFilter, setStoredFilter] = useLocalStorage<{ query: string }>(
-    'students-filter',
-    { query: '' }
-  );
+  useEffect(() => {
+    if (searchParams.get('filters')) {
+      setSearchParams((prev) => {
+        prev.delete('filters');
+        return prev;
+      });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data?.success) {
+      setIsSaveViewOpen(false);
+    }
+  }, [fetcher.state, fetcher.data]);
 
   const handleSort = (field: SortField) => {
-    setSearchParams((prev) => {
-      if (prev.get('sort') === field) {
-        prev.set('direction', prev.get('direction') === 'asc' ? 'desc' : 'asc');
-      } else {
-        prev.set('sort', field);
-        prev.set('direction', 'asc');
-      }
-      setStoredFilter({ query: prev.toString() });
-      return prev;
-    });
+    fetcher.submit(
+      {
+        intent: 'updateFilters',
+        key: 'sort',
+        value: field,
+      },
+      { method: 'POST' }
+    );
+
+    fetcher.submit(
+      {
+        intent: 'updateFilters',
+        key: 'direction',
+        value:
+          cookieFilters.sort === field && cookieFilters.direction === 'asc'
+            ? 'desc'
+            : 'asc',
+      },
+      { method: 'POST' }
+    );
   };
 
-  const handleFilter = (key: string, values: string[]) => {
-    setSearchParams((prev) => {
-      if (values.length > 0) {
-        prev.set(key, values.join(','));
-      } else {
-        prev.delete(key);
-      }
-      setStoredFilter({ query: prev.toString() });
-      return prev;
-    });
-  };
-
-  const getSelectedValues = (key: string) => {
-    const value = searchParams.get(key);
-    return value ? value.split(',') : [];
+  const handleFilter = (key: keyof StudentFilters, values: string[]) => {
+    fetcher.submit(
+      {
+        intent: 'updateFilters',
+        key,
+        value: values.join(','),
+      },
+      { method: 'POST' }
+    );
   };
 
   const hasActiveFilters = [
@@ -370,33 +405,46 @@ export default function StudentsRoute() {
     'period',
     'workshopLeader',
     'teacher',
-  ].some((key) => getSelectedValues(key).length > 0);
+  ].some((key) => {
+    const value = cookieFilters[key as keyof StudentFilters];
+    return Array.isArray(value) && value.length > 0;
+  });
 
   const clearFilters = () => {
-    setSearchParams((prev) => {
-      prev.delete('school');
-      prev.delete('grade');
-      prev.delete('period');
-      prev.delete('workshopLeader');
-      prev.delete('teacher');
-      setStoredFilter({ query: prev.toString() });
-      return prev;
-    });
+    const defaultFilters: StudentFilters = {
+      query: '',
+      school: [],
+      grade: [],
+      period: [],
+      workshopLeader: [],
+      teacher: [],
+      view: 'table',
+      sort: 'name',
+      direction: 'asc',
+      skip: 0,
+      take: 10,
+    };
+
+    fetcher.submit(
+      {
+        intent: 'updateFilters',
+        key: 'reset',
+        value: JSON.stringify(defaultFilters),
+      },
+      { method: 'POST' }
+    );
   };
 
   const toggleView = (view?: 'table' | 'cards') => {
-    setSearchParams((prev) => {
-      prev.set('view', view ?? (viewMode === 'table' ? 'cards' : 'table'));
-      setStoredFilter({ query: prev.toString() });
-      return prev;
-    });
+    fetcher.submit(
+      {
+        intent: 'updateFilters',
+        key: 'view',
+        value: view ?? (cookieFilters.view === 'table' ? 'cards' : 'table'),
+      },
+      { method: 'POST' }
+    );
   };
-
-  const currentPage =
-    Math.ceil(
-      parseInt(searchParams.get('skip') ?? '0') /
-        (parseInt(searchParams.get('take') ?? '10') ?? 10)
-    ) + 1;
 
   const handleSelectAll = () => {
     setSelectedStudents((prev) =>
@@ -431,23 +479,8 @@ export default function StudentsRoute() {
   };
 
   const onCellClick = (student: { id: string }) => {
-    const params = new URLSearchParams(window.location.search);
-    navigate(`/app/students/${student.id}?${params}`);
+    navigate(`/app/students/${student.id}`);
   };
-
-  useEffect(() => {
-    if (
-      fetcher.state === 'idle' &&
-      fetcher.data &&
-      !('fieldErrors' in fetcher.data) &&
-      fetcher.data.success
-    ) {
-      setIsSaveViewOpen(false);
-      showToast.success('View Saved', {
-        description: 'Your Student View is now available on your Dashboard.',
-      });
-    }
-  }, [fetcher.state, fetcher.data]);
 
   return (
     <main className="flex h-screen overflow-hidden">
@@ -485,7 +518,7 @@ export default function StudentsRoute() {
                     label: school ?? 'None',
                   })),
                 ]}
-                queryKey="school"
+                values={cookieFilters.school}
                 onChange={(values) => handleFilter('school', values)}
               />
               <MultiSelect
@@ -496,7 +529,7 @@ export default function StudentsRoute() {
                     label: grade ?? 'None',
                   })),
                 ]}
-                queryKey="grade"
+                values={cookieFilters.grade}
                 onChange={(values) => handleFilter('grade', values)}
               />
               <MultiSelect
@@ -507,7 +540,7 @@ export default function StudentsRoute() {
                     label: period ?? 'None',
                   })),
                 ]}
-                queryKey="period"
+                values={cookieFilters.period}
                 onChange={(values) => handleFilter('period', values)}
               />
               {isAdmin && (
@@ -519,7 +552,7 @@ export default function StudentsRoute() {
                       label: leader.name ?? leader.id,
                     })),
                   ]}
-                  queryKey="workshopLeader"
+                  values={cookieFilters.workshopLeader}
                   onChange={(values) => handleFilter('workshopLeader', values)}
                 />
               )}
@@ -531,7 +564,7 @@ export default function StudentsRoute() {
                     label: teacher ?? 'None',
                   })),
                 ]}
-                queryKey="teacher"
+                values={cookieFilters.teacher}
                 onChange={(values) => handleFilter('teacher', values)}
               />
               {hasActiveFilters && (
@@ -542,20 +575,26 @@ export default function StudentsRoute() {
               {hasActiveFilters && isTeacher && (
                 <Button
                   variant="outline-primary"
-                  size="sm"
+                  size="icon-sm"
                   onClick={() => setIsSaveViewOpen(true)}
                 >
-                  Save
+                  <BookmarkIcon className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
             <div className="flex items-center gap-2">
-              {viewMode === 'cards' && (
+              {cookieFilters.view === 'cards' && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
-                      Sort by{' '}
-                      {SORT_FIELDS.find((f) => f.value === sortField)?.label}
+                      <ArrowUpDownIcon
+                        className="mr-1 h-3.5 w-3.5 opacity-50"
+                        strokeWidth={3}
+                      />{' '}
+                      {
+                        SORT_FIELDS.find((f) => f.value === cookieFilters.sort)
+                          ?.label
+                      }
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -567,8 +606,8 @@ export default function StudentsRoute() {
                         className="flex items-center justify-between"
                       >
                         {label}
-                        {sortField === value &&
-                          (sortDirection === 'desc' ? (
+                        {cookieFilters.sort === value &&
+                          (cookieFilters.direction === 'desc' ? (
                             <ArrowUp className="ml-2 h-4 w-4" />
                           ) : (
                             <ArrowDown className="ml-2 h-4 w-4" />
@@ -580,22 +619,28 @@ export default function StudentsRoute() {
               )}
               <div className="flex items-center rounded-full border bg-muted p-0.5">
                 <Button
-                  variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                  variant={
+                    cookieFilters.view === 'table' ? 'secondary' : 'ghost'
+                  }
                   size="icon"
                   className={cn(
                     'h-7 w-7 active:bg-white',
-                    viewMode === 'table' && 'bg-white shadow hover:bg-white'
+                    cookieFilters.view === 'table' &&
+                      'bg-white shadow hover:bg-white'
                   )}
                   onClick={() => toggleView('table')}
                 >
                   <List className="h-[18px] w-[18px]" />
                 </Button>
                 <Button
-                  variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+                  variant={
+                    cookieFilters.view === 'cards' ? 'secondary' : 'ghost'
+                  }
                   size="icon"
                   className={cn(
                     'h-7 w-7 active:bg-white',
-                    viewMode === 'cards' && 'bg-white shadow hover:bg-white'
+                    cookieFilters.view === 'cards' &&
+                      'bg-white shadow hover:bg-white'
                   )}
                   onClick={() => toggleView('cards')}
                 >
@@ -612,23 +657,8 @@ export default function StudentsRoute() {
               <span className="text-sm text-muted-foreground">
                 Try adjusting your filters
               </span>
-              {currentPage !== 1 ? (
-                <div className="mt-4 max-w-[300px] rounded-lg border border-yellow-300/50 bg-yellow-100/50 p-4">
-                  <h4 className="font-bold">Heads up!</h4>
-                  <p className="text-sm">
-                    You are currently on page <strong>{currentPage}</strong> of{' '}
-                    <strong>
-                      {Math.ceil(
-                        totalCount /
-                          parseInt(searchParams.get('take') ?? '10', 10)
-                      )}
-                    </strong>
-                    . Results might show on the first page.
-                  </p>
-                </div>
-              ) : null}
             </div>
-          ) : viewMode === 'table' ? (
+          ) : cookieFilters.view === 'table' ? (
             <TableComponent>
               <TableHeader>
                 <TableRow>
@@ -649,8 +679,8 @@ export default function StudentsRoute() {
                         onClick={() => handleSort(value)}
                       >
                         {label}
-                        {sortField === value ? (
-                          sortDirection === 'desc' ? (
+                        {cookieFilters.sort === value ? (
+                          cookieFilters.direction === 'desc' ? (
                             <ArrowUp
                               className="ml-2 h-4 w-4 text-primary"
                               strokeWidth={3}
@@ -716,10 +746,7 @@ export default function StudentsRoute() {
               {students.map((student) => (
                 <div
                   key={student.id}
-                  onClick={() => {
-                    const params = new URLSearchParams(window.location.search);
-                    navigate(`/app/students/${student.id}?${params}`);
-                  }}
+                  onClick={() => onCellClick(student)}
                   className={cn(
                     'flex h-32 cursor-pointer flex-col rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md',
                     params?.id === student.id && 'bg-primary/10'
@@ -875,11 +902,11 @@ export default function StudentsRoute() {
             defaultValues={{
               name: '',
               intent: 'createView',
-              school: '',
-              grade: '',
-              period: '',
-              workshopLeader: '',
-              schoolTeacher: '',
+              school: cookieFilters.school.join(','),
+              grade: cookieFilters.grade.join(','),
+              period: cookieFilters.period.join(','),
+              workshopLeader: cookieFilters.workshopLeader.join(','),
+              schoolTeacher: cookieFilters.teacher.join(','),
             }}
           >
             <div className="grid gap-4 py-4">
@@ -893,27 +920,27 @@ export default function StudentsRoute() {
               <input
                 type="hidden"
                 name="school"
-                value={searchParams.get('school') || ''}
+                value={cookieFilters.school.join(',')}
               />
               <input
                 type="hidden"
                 name="grade"
-                value={searchParams.get('grade') || ''}
+                value={cookieFilters.grade.join(',')}
               />
               <input
                 type="hidden"
                 name="period"
-                value={searchParams.get('period') || ''}
+                value={cookieFilters.period.join(',')}
               />
               <input
                 type="hidden"
                 name="workshopLeader"
-                value={searchParams.get('workshopLeader') || ''}
+                value={cookieFilters.workshopLeader.join(',')}
               />
               <input
                 type="hidden"
                 name="schoolTeacher"
-                value={searchParams.get('teacher') || ''}
+                value={cookieFilters.teacher.join(',')}
               />
             </div>
             <DialogFooter>

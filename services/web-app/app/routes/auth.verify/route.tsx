@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { FormInput } from '~/components/forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
-import { handleVerification as handleChangeEmailVerification } from '~/routes/app/profile+/change-email/route.tsx';
+import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/route.tsx';
 import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { checkHoneypot } from '~/utils/honeypot.server.ts';

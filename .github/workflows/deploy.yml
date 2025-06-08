@@ -28,13 +28,16 @@ jobs:
       - name: 📥 Download deps
         uses: oven-sh/setup-bun@v1
 
+      - name: 📦 Install dependencies
+        run: bun install
+
       - name: ⚙️ Generate Prisma Client
         run: bun prisma:generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: 🔎 Type check
-        run: bun i && bun web-app:typecheck
+        run: bun web-app:typecheck
 
   deploy-web-app-staging:
     name: 🚀 Deploy Web App (Staging)

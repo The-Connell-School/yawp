@@ -1,12 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 import { Database } from 'bun:sqlite';
 
-const sqliteDb = new Database('./dump.db');
+const sqliteDb = new Database(__dirname + '/test.db');
 const psqlPrisma = new PrismaClient();
 
 async function migrateData() {
   try {
     console.log('Starting data migration...');
+    const sanityCheck = sqliteDb
+      .prepare('SELECT name FROM sqlite_master WHERE type="table"')
+      .all();
+    if (sanityCheck.length === 0) {
+      throw new Error(
+        'Sanity check failed: No tables found in the SQLite database.'
+      );
+    }
+    console.log(
+      `Sanity check passed: Found ${sanityCheck.length} tables in the SQLite database.`
+    );
 
     // Users
     console.log('Starting Users migration...');
