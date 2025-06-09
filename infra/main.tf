@@ -142,9 +142,7 @@ resource "aws_secretsmanager_secret" "db_url" {
 
 resource "aws_secretsmanager_secret_version" "db_url_version" {
   secret_id     = aws_secretsmanager_secret.db_url.id
-  secret_string = jsonencode({
-    url = "postgresql://${var.db_username}:${random_password.db_master.result}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
-  })
+  secret_string = "postgresql://${var.db_username}:${random_password.db_master.result}@${aws_db_instance.postgres.endpoint}/${var.db_name}"
 }
 
 resource "aws_db_subnet_group" "db_subnets" {
