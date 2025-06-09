@@ -51,11 +51,19 @@ module "vpc" {
   }
 
   ingress {
-    description     = "Postgres"
+    description     = "Postgres from App Runner"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.apprunner.id]
+  }
+
+  ingress {
+    description     = "Postgres from Bastion"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
   }
 
   egress {
@@ -111,16 +119,6 @@ resource "aws_instance" "bastion" {
     Environment = var.env
     Project     = var.app_name
   }
-}
-
-# Update RDS security group to allow access from bastion
-resource "aws_security_group_rule" "rds_from_bastion" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  source_security_group_id = aws_security_group.bastion.id
-  security_group_id        = aws_security_group.rds.id
 }
 
 resource "aws_ecr_repository" "web_app" {
@@ -261,7 +259,15 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = aws_secretsmanager_secret.db_url.arn
+        Resource = [
+          aws_secretsmanager_secret.db_url.arn,
+          aws_secretsmanager_secret.honeypot.arn,
+          aws_secretsmanager_secret.openai_org.arn,
+          aws_secretsmanager_secret.openai_key.arn,
+          aws_secretsmanager_secret.anthropic_key.arn,
+          aws_secretsmanager_secret.session.arn,
+          aws_secretsmanager_secret.internal_token.arn
+        ]
       },
       {
         Effect = "Allow"
@@ -272,6 +278,14 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
           "logs:DescribeLogStreams"
         ]
         Resource = "${aws_cloudwatch_log_group.apprunner.arn}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -285,6 +299,60 @@ resource "aws_cloudwatch_log_group" "apprunner" {
     Environment = var.env
     Project     = var.app_name
   }
+}
+
+resource "aws_secretsmanager_secret" "honeypot" {
+  name = "${var.app_name}-${var.env}-honeypot-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "honeypot" {
+  secret_id     = aws_secretsmanager_secret.honeypot.id
+  secret_string = var.honeypot_secret
+}
+
+resource "aws_secretsmanager_secret" "openai_org" {
+  name = "${var.app_name}-${var.env}-openai-org"
+}
+
+resource "aws_secretsmanager_secret_version" "openai_org" {
+  secret_id     = aws_secretsmanager_secret.openai_org.id
+  secret_string = var.openai_org_id
+}
+
+resource "aws_secretsmanager_secret" "openai_key" {
+  name = "${var.app_name}-${var.env}-openai-key"
+}
+
+resource "aws_secretsmanager_secret_version" "openai_key" {
+  secret_id     = aws_secretsmanager_secret.openai_key.id
+  secret_string = var.openai_api_key
+}
+
+resource "aws_secretsmanager_secret" "anthropic_key" {
+  name = "${var.app_name}-${var.env}-anthropic-key"
+}
+
+resource "aws_secretsmanager_secret_version" "anthropic_key" {
+  secret_id     = aws_secretsmanager_secret.anthropic_key.id
+  secret_string = var.anthropic_api_key
+}
+
+resource "aws_secretsmanager_secret" "session" {
+  name = "${var.app_name}-${var.env}-session-secret"
+}
+
+resource "aws_secretsmanager_secret_version" "session" {
+  secret_id     = aws_secretsmanager_secret.session.id
+  secret_string = var.session_secret
+}
+
+resource "aws_secretsmanager_secret" "internal_token" {
+  name = "${var.app_name}-${var.env}-internal-token"
+}
+
+resource "aws_secretsmanager_secret_version" "internal_token" {
+  secret_id     = aws_secretsmanager_secret.internal_token.id
+  secret_string = var.internal_command_token
 }
 
 resource "aws_apprunner_service" "web" {
@@ -308,12 +376,12 @@ resource "aws_apprunner_service" "web" {
         }
 
         runtime_environment_secrets = {
-          HONEYPOT_SECRET = var.honeypot_secret
-          OPENAI_ORG_ID = var.openai_org_id
-          OPENAI_API_KEY = var.openai_api_key
-          ANTHROPIC_API_KEY = var.anthropic_api_key
-          SESSION_SECRET = var.session_secret
-          INTERNAL_COMMAND_TOKEN = var.internal_command_token
+          HONEYPOT_SECRET = aws_secretsmanager_secret.honeypot.arn
+          OPENAI_ORG_ID = aws_secretsmanager_secret.openai_org.arn
+          OPENAI_API_KEY = aws_secretsmanager_secret.openai_key.arn
+          ANTHROPIC_API_KEY = aws_secretsmanager_secret.anthropic_key.arn
+          SESSION_SECRET = aws_secretsmanager_secret.session.arn
+          INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
         }
       }

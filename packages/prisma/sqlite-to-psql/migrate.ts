@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { Database } from 'bun:sqlite';
+import { Prisma } from '@prisma/client';
 
 const sqliteDb = new Database(__dirname + '/test.db');
 const psqlPrisma = new PrismaClient();
@@ -30,17 +31,15 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${users.length} Users to migrate`);
-    for (const user of users) {
-      await psqlPrisma.user.create({
-        data: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          createdAt: new Date(user.createdAt),
-          updatedAt: new Date(user.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.user.createMany({
+      data: users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: new Date(user.createdAt),
+        updatedAt: new Date(user.updatedAt),
+      })),
+    });
     console.log('Finished Users migration');
 
     // Passwords
@@ -53,14 +52,12 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${passwords.length} Passwords to migrate`);
-    for (const password of passwords) {
-      await psqlPrisma.password.create({
-        data: {
-          hash: password.hash,
-          userId: password.userId,
-        },
-      });
-    }
+    await psqlPrisma.password.createMany({
+      data: passwords.map((password) => ({
+        hash: password.hash,
+        userId: password.userId,
+      })),
+    });
     console.log('Finished Passwords migration');
 
     // Permissions
@@ -78,19 +75,17 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${permissions.length} Permissions to migrate`);
-    for (const permission of permissions) {
-      await psqlPrisma.permission.create({
-        data: {
-          id: permission.id,
-          action: permission.action,
-          entity: permission.entity,
-          access: permission.access,
-          description: permission.description,
-          createdAt: new Date(permission.createdAt),
-          updatedAt: new Date(permission.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.permission.createMany({
+      data: permissions.map((permission) => ({
+        id: permission.id,
+        action: permission.action,
+        entity: permission.entity,
+        access: permission.access,
+        description: permission.description,
+        createdAt: new Date(permission.createdAt),
+        updatedAt: new Date(permission.updatedAt),
+      })),
+    });
     console.log('Finished Permissions migration');
 
     // Roles
@@ -104,17 +99,15 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${roles.length} Roles to migrate`);
-    for (const role of roles) {
-      await psqlPrisma.role.create({
-        data: {
-          id: role.id,
-          name: role.name,
-          description: role.description,
-          createdAt: new Date(role.createdAt),
-          updatedAt: new Date(role.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.role.createMany({
+      data: roles.map((role) => ({
+        id: role.id,
+        name: role.name,
+        description: role.description,
+        createdAt: new Date(role.createdAt),
+        updatedAt: new Date(role.updatedAt),
+      })),
+    });
     console.log('Finished Roles migration');
 
     // RoleToUser
@@ -127,16 +120,14 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${roleToUsers.length} RoleToUser mappings to migrate`);
-    for (const roleToUser of roleToUsers) {
-      await psqlPrisma.role.update({
-        where: { id: roleToUser.A },
-        data: {
-          users: {
-            connect: { id: roleToUser.B },
-          },
-        },
-      });
-    }
+    await psqlPrisma.$executeRaw`
+      INSERT INTO "_RoleToUser" ("A", "B")
+      VALUES ${Prisma.join(
+        roleToUsers.map(
+          (roleToUser) => Prisma.sql`(${roleToUser.A}, ${roleToUser.B})`
+        )
+      )}
+    `;
     console.log('Finished RoleToUser migration');
 
     // Verifications
@@ -158,25 +149,23 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${verifications.length} Verifications to migrate`);
-    for (const verification of verifications) {
-      await psqlPrisma.verification.create({
-        data: {
-          id: verification.id,
-          type: verification.type,
-          target: verification.target,
-          secret: verification.secret,
-          algorithm: verification.algorithm,
-          digits: verification.digits,
-          period: verification.period,
-          charSet: verification.charSet,
-          expiresAt: verification.expiresAt
-            ? new Date(verification.expiresAt)
-            : null,
-          metadata: verification.metadata,
-          createdAt: new Date(verification.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.verification.createMany({
+      data: verifications.map((verification) => ({
+        id: verification.id,
+        type: verification.type,
+        target: verification.target,
+        secret: verification.secret,
+        algorithm: verification.algorithm,
+        digits: verification.digits,
+        period: verification.period,
+        charSet: verification.charSet,
+        expiresAt: verification.expiresAt
+          ? new Date(verification.expiresAt)
+          : null,
+        metadata: verification.metadata,
+        createdAt: new Date(verification.createdAt),
+      })),
+    });
     console.log('Finished Verifications migration');
 
     // TeacherProfiles
@@ -191,16 +180,14 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${teacherProfiles.length} TeacherProfiles to migrate`);
-    for (const teacherProfile of teacherProfiles) {
-      await psqlPrisma.teacherProfile.create({
-        data: {
-          id: teacherProfile.id,
-          userId: teacherProfile.userId,
-          isActive: teacherProfile.isActive === 1,
-          createdAt: new Date(teacherProfile.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.teacherProfile.createMany({
+      data: teacherProfiles.map((teacherProfile) => ({
+        id: teacherProfile.id,
+        userId: teacherProfile.userId,
+        isActive: teacherProfile.isActive === 1,
+        createdAt: new Date(teacherProfile.createdAt),
+      })),
+    });
     console.log('Finished TeacherProfiles migration');
 
     // Courses
@@ -215,18 +202,16 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${courses.length} Courses to migrate`);
-    for (const course of courses) {
-      await psqlPrisma.course.create({
-        data: {
-          id: course.id,
-          title: course.title,
-          description: course.description,
-          position: course.position,
-          createdAt: new Date(course.createdAt),
-          updatedAt: new Date(course.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.course.createMany({
+      data: courses.map((course) => ({
+        id: course.id,
+        title: course.title,
+        description: course.description,
+        position: course.position,
+        createdAt: new Date(course.createdAt),
+        updatedAt: new Date(course.updatedAt),
+      })),
+    });
     console.log('Finished Courses migration');
 
     // FeatureFlags
@@ -243,18 +228,16 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${featureFlags.length} FeatureFlags to migrate`);
-    for (const featureFlag of featureFlags) {
-      await psqlPrisma.featureFlag.create({
-        data: {
-          id: featureFlag.id,
-          name: featureFlag.name,
-          description: featureFlag.description,
-          isEnabled: featureFlag.isEnabled === 1,
-          createdAt: new Date(featureFlag.createdAt),
-          updatedAt: new Date(featureFlag.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.featureFlag.createMany({
+      data: featureFlags.map((featureFlag) => ({
+        id: featureFlag.id,
+        name: featureFlag.name,
+        description: featureFlag.description,
+        isEnabled: featureFlag.isEnabled === 1,
+        createdAt: new Date(featureFlag.createdAt),
+        updatedAt: new Date(featureFlag.updatedAt),
+      })),
+    });
     console.log('Finished FeatureFlags migration');
 
     // Settings
@@ -271,18 +254,16 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${settings.length} Settings to migrate`);
-    for (const setting of settings) {
-      await psqlPrisma.setting.create({
-        data: {
-          id: setting.id,
-          name: setting.name,
-          value: setting.value,
-          valueType: setting.valueType,
-          createdAt: new Date(setting.createdAt),
-          updatedAt: new Date(setting.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.setting.createMany({
+      data: settings.map((setting) => ({
+        id: setting.id,
+        name: setting.name,
+        value: setting.value,
+        valueType: setting.valueType,
+        createdAt: new Date(setting.createdAt),
+        updatedAt: new Date(setting.updatedAt),
+      })),
+    });
     console.log('Finished Settings migration');
 
     // StudentViews
@@ -303,22 +284,20 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${studentViews.length} StudentViews to migrate`);
-    for (const studentView of studentViews) {
-      await psqlPrisma.studentView.create({
-        data: {
-          id: studentView.id,
-          name: studentView.name,
-          school: studentView.school,
-          grade: studentView.grade,
-          period: studentView.period,
-          workshopLeader: studentView.workshopLeader,
-          schoolTeacher: studentView.schoolTeacher,
-          userId: studentView.userId,
-          createdAt: new Date(studentView.createdAt),
-          updatedAt: new Date(studentView.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.studentView.createMany({
+      data: studentViews.map((studentView) => ({
+        id: studentView.id,
+        name: studentView.name,
+        school: studentView.school,
+        grade: studentView.grade,
+        period: studentView.period,
+        workshopLeader: studentView.workshopLeader,
+        schoolTeacher: studentView.schoolTeacher,
+        userId: studentView.userId,
+        createdAt: new Date(studentView.createdAt),
+        updatedAt: new Date(studentView.updatedAt),
+      })),
+    });
     console.log('Finished StudentViews migration');
 
     // UserImages
@@ -331,16 +310,14 @@ async function migrateData() {
     }[];
 
     console.log(`Found ${images.length} UserImages to migrate`);
-    for (const image of images) {
-      await psqlPrisma.userImage.create({
-        data: {
-          id: image.id,
-          contentType: image.contentType,
-          blob: image.blob,
-          userId: image.userId,
-        },
-      });
-    }
+    await psqlPrisma.userImage.createMany({
+      data: images.map((image) => ({
+        id: image.id,
+        contentType: image.contentType,
+        blob: image.blob,
+        userId: image.userId,
+      })),
+    });
     console.log('Finished UserImages migration');
 
     // StudentProfiles
@@ -359,19 +336,17 @@ async function migrateData() {
     }[];
 
     console.log(`Found ${studentProfiles.length} StudentProfiles to migrate`);
-    for (const studentProfile of studentProfiles) {
-      await psqlPrisma.studentProfile.create({
-        data: {
-          id: studentProfile.id,
-          userId: studentProfile.userId,
-          workshopLeaderId: studentProfile.workshopLeaderId,
-          school: studentProfile.school,
-          schoolTeacher: studentProfile.schoolTeacher,
-          grade: studentProfile.grade,
-          period: studentProfile.period,
-        },
-      });
-    }
+    await psqlPrisma.studentProfile.createMany({
+      data: studentProfiles.map((studentProfile) => ({
+        id: studentProfile.id,
+        userId: studentProfile.userId,
+        workshopLeaderId: studentProfile.workshopLeaderId,
+        school: studentProfile.school,
+        schoolTeacher: studentProfile.schoolTeacher,
+        grade: studentProfile.grade,
+        period: studentProfile.period,
+      })),
+    });
     console.log('Finished StudentProfiles migration');
 
     // CourseImages
@@ -386,16 +361,14 @@ async function migrateData() {
     }[];
 
     console.log(`Found ${courseImages.length} CourseImages to migrate`);
-    for (const courseImage of courseImages) {
-      await psqlPrisma.courseImage.create({
-        data: {
-          id: courseImage.id,
-          contentType: courseImage.contentType,
-          blob: courseImage.blob,
-          courseId: courseImage.courseId,
-        },
-      });
-    }
+    await psqlPrisma.courseImage.createMany({
+      data: courseImages.map((courseImage) => ({
+        id: courseImage.id,
+        contentType: courseImage.contentType,
+        blob: courseImage.blob,
+        courseId: courseImage.courseId,
+      })),
+    });
     console.log('Finished CourseImages migration');
 
     // CourseModules
@@ -416,24 +389,22 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${courseModules.length} CourseModules to migrate`);
-    for (const courseModule of courseModules) {
-      await psqlPrisma.courseModule.create({
-        data: {
-          id: courseModule.id,
-          courseId: courseModule.courseId,
-          title: courseModule.title,
-          description: courseModule.description,
-          tutorInstructions: courseModule.tutorInstructions,
-          isSelfGuided: courseModule.isSelfGuided === 1,
-          position: courseModule.position,
-          createdAt: new Date(courseModule.createdAt),
-          updatedAt: new Date(courseModule.updatedAt),
-          deletedAt: courseModule.deletedAt
-            ? new Date(courseModule.deletedAt)
-            : null,
-        },
-      });
-    }
+    await psqlPrisma.courseModule.createMany({
+      data: courseModules.map((courseModule) => ({
+        id: courseModule.id,
+        courseId: courseModule.courseId,
+        title: courseModule.title,
+        description: courseModule.description,
+        tutorInstructions: courseModule.tutorInstructions,
+        isSelfGuided: courseModule.isSelfGuided === 1,
+        position: courseModule.position,
+        createdAt: new Date(courseModule.createdAt),
+        updatedAt: new Date(courseModule.updatedAt),
+        deletedAt: courseModule.deletedAt
+          ? new Date(courseModule.deletedAt)
+          : null,
+      })),
+    });
     console.log('Finished CourseModules migration');
 
     // Documents
@@ -452,20 +423,18 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${documents.length} Documents to migrate`);
-    for (const document of documents) {
-      await psqlPrisma.document.create({
-        data: {
-          id: document.id,
-          title: document.title,
-          text: document.text,
-          html: document.html,
-          userId: document.userId,
-          deletedAt: document.deletedAt ? new Date(document.deletedAt) : null,
-          createdAt: new Date(document.createdAt),
-          updatedAt: new Date(document.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.document.createMany({
+      data: documents.map((document) => ({
+        id: document.id,
+        title: document.title,
+        text: document.text,
+        html: document.html,
+        userId: document.userId,
+        deletedAt: document.deletedAt ? new Date(document.deletedAt) : null,
+        createdAt: new Date(document.createdAt),
+        updatedAt: new Date(document.updatedAt),
+      })),
+    });
     console.log('Finished Documents migration');
 
     // CourseModuleSessions
@@ -487,21 +456,19 @@ async function migrateData() {
     console.log(
       `Found ${courseModuleSessions.length} CourseModuleSessions to migrate`
     );
-    for (const courseModuleSession of courseModuleSessions) {
-      await psqlPrisma.courseModuleSession.create({
-        data: {
-          id: courseModuleSession.id,
-          title: courseModuleSession.title,
-          deletedAt: courseModuleSession.deletedAt
-            ? new Date(courseModuleSession.deletedAt)
-            : null,
-          instructionsCompleted: courseModuleSession.instructionsCompleted,
-          courseModuleId: courseModuleSession.courseModuleId,
-          documentId: courseModuleSession.documentId,
-          userId: courseModuleSession.userId,
-        },
-      });
-    }
+    await psqlPrisma.courseModuleSession.createMany({
+      data: courseModuleSessions.map((courseModuleSession) => ({
+        id: courseModuleSession.id,
+        title: courseModuleSession.title,
+        deletedAt: courseModuleSession.deletedAt
+          ? new Date(courseModuleSession.deletedAt)
+          : null,
+        instructionsCompleted: courseModuleSession.instructionsCompleted,
+        courseModuleId: courseModuleSession.courseModuleId,
+        documentId: courseModuleSession.documentId,
+        userId: courseModuleSession.userId,
+      })),
+    });
     console.log('Finished CourseModuleSessions migration');
 
     // CourseModuleSessionMessages
@@ -522,21 +489,18 @@ async function migrateData() {
     console.log(
       `Found ${courseModuleSessionMessages.length} CourseModuleSessionMessages to migrate`
     );
-    for (const courseModuleSessionMessage of courseModuleSessionMessages) {
-      await psqlPrisma.courseModuleSessionMessage.create({
-        data: {
-          id: courseModuleSessionMessage.id,
-          courseModuleSessionId:
-            courseModuleSessionMessage.courseModuleSessionId,
-          instructionId: courseModuleSessionMessage.instructionId,
-          content: courseModuleSessionMessage.content,
-          agent: courseModuleSessionMessage.agent,
-          factCheckPrompt: courseModuleSessionMessage.factCheckPrompt,
-          context: courseModuleSessionMessage.context,
-          createdAt: new Date(courseModuleSessionMessage.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.courseModuleSessionMessage.createMany({
+      data: courseModuleSessionMessages.map((courseModuleSessionMessage) => ({
+        id: courseModuleSessionMessage.id,
+        courseModuleSessionId: courseModuleSessionMessage.courseModuleSessionId,
+        instructionId: courseModuleSessionMessage.instructionId,
+        content: courseModuleSessionMessage.content,
+        agent: courseModuleSessionMessage.agent,
+        factCheckPrompt: courseModuleSessionMessage.factCheckPrompt,
+        context: courseModuleSessionMessage.context,
+        createdAt: new Date(courseModuleSessionMessage.createdAt),
+      })),
+    });
     console.log('Finished CourseModuleSessionMessages migration');
 
     // DocumentComments
@@ -553,18 +517,16 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${documentComments.length} DocumentComments to migrate`);
-    for (const documentComment of documentComments) {
-      await psqlPrisma.documentComment.create({
-        data: {
-          id: documentComment.id,
-          content: documentComment.content,
-          highlightId: documentComment.highlightId,
-          documentId: documentComment.documentId,
-          userId: documentComment.userId,
-          createdAt: new Date(documentComment.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.documentComment.createMany({
+      data: documentComments.map((documentComment) => ({
+        id: documentComment.id,
+        content: documentComment.content,
+        highlightId: documentComment.highlightId,
+        documentId: documentComment.documentId,
+        userId: documentComment.userId,
+        createdAt: new Date(documentComment.createdAt),
+      })),
+    });
     console.log('Finished DocumentComments migration');
 
     // DocumentCommentResponses
@@ -582,17 +544,15 @@ async function migrateData() {
     console.log(
       `Found ${documentCommentResponses.length} DocumentCommentResponses to migrate`
     );
-    for (const response of documentCommentResponses) {
-      await psqlPrisma.documentCommentResponse.create({
-        data: {
-          id: response.id,
-          content: response.content,
-          commentId: response.commentId,
-          userId: response.userId,
-          createdAt: new Date(response.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.documentCommentResponse.createMany({
+      data: documentCommentResponses.map((response) => ({
+        id: response.id,
+        content: response.content,
+        commentId: response.commentId,
+        userId: response.userId,
+        createdAt: new Date(response.createdAt),
+      })),
+    });
     console.log('Finished DocumentCommentResponses migration');
 
     // DocumentVersions
@@ -608,17 +568,15 @@ async function migrateData() {
     }>;
 
     console.log(`Found ${documentVersions.length} DocumentVersions to migrate`);
-    for (const version of documentVersions) {
-      await psqlPrisma.documentVersion.create({
-        data: {
-          id: version.id,
-          text: version.text,
-          html: version.html,
-          documentId: version.documentId,
-          createdAt: new Date(version.createdAt),
-        },
-      });
-    }
+    await psqlPrisma.documentVersion.createMany({
+      data: documentVersions.map((version) => ({
+        id: version.id,
+        text: version.text,
+        html: version.html,
+        documentId: version.documentId,
+        createdAt: new Date(version.createdAt),
+      })),
+    });
     console.log('Finished DocumentVersions migration');
 
     // CourseModuleInstructions
@@ -645,26 +603,24 @@ async function migrateData() {
     console.log(
       `Found ${courseModuleInstructions.length} CourseModuleInstructions to migrate`
     );
-    for (const instruction of courseModuleInstructions) {
-      await psqlPrisma.courseModuleInstruction.create({
-        data: {
-          id: instruction.id,
-          title: instruction.title,
-          interactiveType: instruction.interactiveType,
-          prompt: instruction.prompt,
-          tutorInstructions: instruction.tutorInstructions,
-          answerType: instruction.answerType,
-          answerKey: instruction.answerKey,
-          answerTypeOptions: instruction.answerTypeOptions,
-          canAskQuestion: instruction.canAskQuestion === 1,
-          nextInstructionBtnLabel: instruction.nextInstructionBtnLabel,
-          position: instruction.position,
-          courseModuleId: instruction.courseModuleId,
-          createdAt: new Date(instruction.createdAt),
-          updatedAt: new Date(instruction.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.courseModuleInstruction.createMany({
+      data: courseModuleInstructions.map((instruction) => ({
+        id: instruction.id,
+        title: instruction.title,
+        interactiveType: instruction.interactiveType,
+        prompt: instruction.prompt,
+        tutorInstructions: instruction.tutorInstructions,
+        answerType: instruction.answerType,
+        answerKey: instruction.answerKey,
+        answerTypeOptions: instruction.answerTypeOptions,
+        canAskQuestion: instruction.canAskQuestion === 1,
+        nextInstructionBtnLabel: instruction.nextInstructionBtnLabel,
+        position: instruction.position,
+        courseModuleId: instruction.courseModuleId,
+        createdAt: new Date(instruction.createdAt),
+        updatedAt: new Date(instruction.updatedAt),
+      })),
+    });
     console.log('Finished CourseModuleInstructions migration');
 
     // InstructionAudio
@@ -682,17 +638,15 @@ async function migrateData() {
     console.log(
       `Found ${instructionAudio.length} InstructionAudio records to migrate`
     );
-    for (const audio of instructionAudio) {
-      await psqlPrisma.instructionAudio.create({
-        data: {
-          id: audio.id,
-          blob: audio.blob,
-          courseModuleInstructionId: audio.courseModuleInstructionId,
-          createdAt: new Date(audio.createdAt),
-          updatedAt: new Date(audio.updatedAt),
-        },
-      });
-    }
+    await psqlPrisma.instructionAudio.createMany({
+      data: instructionAudio.map((audio) => ({
+        id: audio.id,
+        blob: audio.blob,
+        courseModuleInstructionId: audio.courseModuleInstructionId,
+        createdAt: new Date(audio.createdAt),
+        updatedAt: new Date(audio.updatedAt),
+      })),
+    });
     console.log('Finished InstructionAudio migration');
 
     console.log('Migration completed successfully!');

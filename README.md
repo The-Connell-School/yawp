@@ -42,7 +42,7 @@ ssh -i ~/.ssh/yawp-{env}-bastion ubuntu@<bastion-public-ip>
 
 2. Open a tunnel to the db
 ```bash
-ssh -N -L 3306:yawp-staging-postgres.cafmse4qcmw7.us-east-1.rds.amazonaws.com:5432 ubuntu@44.201.78.216 -i ~/.ssh/yawp-staging-bastion
+ssh -N -L 3306:<db_host>:5432 ubuntu@<bastion_server_host> -i ~/.ssh/<app_name>-<env>-bastion
 ```
 2. Then, in another terminal, connect to the database (using actual creds)
 ```bash
