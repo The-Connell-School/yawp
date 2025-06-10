@@ -72,12 +72,12 @@ export default function Route() {
       end: true,
       icon: <GaugeIcon size={20} />,
     },
-    // {
-    // 	to: '/app/admin',
-    // 	label: 'Settings',
-    // 	icon: <Settings2 size={20} />,
-    // 	requiredRole: ['admin'],
-    // },
+    {
+      to: '/app/admin',
+      label: 'Settings',
+      icon: <Settings2 size={20} />,
+      requiredRole: ['admin'],
+    },
     {
       to: '/app/students',
       label: 'Students',
@@ -133,9 +133,12 @@ export default function Route() {
 
   return (
     <main
-      className={cn('flex h-screen min-h-screen overflow-hidden', {
-        'overflow-hidden': isMobileNavOpen,
-      })}
+      className={cn(
+        'flex h-screen min-h-screen overflow-hidden bg-background',
+        {
+          'overflow-hidden': isMobileNavOpen,
+        }
+      )}
     >
       {/* Left navigation panel */}
       <nav
@@ -262,7 +265,7 @@ export default function Route() {
                   Profile
                 </Link>
               </Button>
-              <Form action="/logout" method="POST">
+              <Form action="/auth/logout" method="POST">
                 <Button
                   type="submit"
                   size="sm"

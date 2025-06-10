@@ -25,7 +25,9 @@ const Schema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUserWithRole(request, 'admin');
-  const settings = await prisma.setting.findMany();
+  const settings = await prisma.setting.findMany({
+    orderBy: [{ valueType: 'desc' }, { name: 'desc' }],
+  });
   return dataResponse({ settings });
 }
 

@@ -108,8 +108,8 @@ export default function LoginPage() {
             })}
             to={
               redirectTo
-                ? `/signup?${encodeURIComponent(redirectTo)}`
-                : '/signup'
+                ? `/auth/signup?${encodeURIComponent(redirectTo)}`
+                : '/auth/signup'
             }
           >
             Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />

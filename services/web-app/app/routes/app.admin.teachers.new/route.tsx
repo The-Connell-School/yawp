@@ -13,8 +13,8 @@ import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server.js';
 import { useIsPending } from '~/utils/misc';
 import { redirectWithToast } from '~/utils/toast.server';
-// import { TeacherForm } from './form'
-import { validator } from './form/schema';
+import { TeacherForm } from '../app.admin.teachers/form';
+import { validator } from '../app.admin.teachers/form/schema';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const allStudents = await prisma.user.findMany({
@@ -29,8 +29,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export async function action({ request }: ActionFunctionArgs) {
-  const formData = await request.formData();
-  const { error, data, formId } = await parseFormData(formData, validator);
+  const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
   const [user, verification] = await Promise.all([
@@ -45,10 +44,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (user && user.teacherProfile) {
     const error = 'A teacher already exists with that email.';
-    return validationError({ fieldErrors: { email: error }, formId }, data);
+    return validationError({ fieldErrors: { email: error } }, data);
   } else if (verification) {
     const error = 'A teacher with that email has already been invited.';
-    return validationError({ fieldErrors: { email: error }, formId }, data);
+    return validationError({ fieldErrors: { email: error } }, data);
   }
 
   if (user) {
@@ -115,7 +114,11 @@ export default function Route() {
   return (
     <div className="flex flex-col">
       <div className="no-scrollbar h-[calc(100vh-122px)] overflow-y-scroll p-6">
-        {/* <TeacherForm formId="create-module" allStudents={allStudents} /> */}
+        <TeacherForm
+          formId="create-module"
+          allStudents={allStudents}
+          defaultValues={{ email: '', students: [] }}
+        />
       </div>
       <div className="flex gap-2 px-6 pb-6 pt-1">
         <Button type="submit" disabled={isPending} form="create-module">

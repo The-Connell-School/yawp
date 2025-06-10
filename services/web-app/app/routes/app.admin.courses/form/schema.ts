@@ -18,12 +18,7 @@ export const CourseModuleInstructionSchema = z.object({
   prompt: z.string(),
   tutorInstructions: z.string().nullish(),
   interactiveType: z.string(),
-  canAskQuestion: z
-    .union([
-      z.literal('true').transform(() => true),
-      z.literal('false').transform(() => false),
-    ])
-    .nullish(),
+  canAskQuestion: z.boolean().nullish(),
   nextInstructionBtnLabel: z.string().nullish(),
 });
 
@@ -45,7 +40,7 @@ export const Schema = z.object({
   courseModules: z.array(CourseModuleSchema).nullish(),
   courseImageSrc: z.string().nullish(),
   image: z.instanceof(File).nullish(),
-  resources: z.array(CourseResourceSchema).nullish(),
+  resources: z.array(CourseResourceSchema),
 });
 
 export const validator = Schema;

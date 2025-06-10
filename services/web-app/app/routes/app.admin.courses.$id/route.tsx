@@ -19,8 +19,8 @@ import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
 import { useDoubleCheck, useIsPending } from '~/utils/misc';
 import { redirectWithToast } from '~/utils/toast.server';
-// import { CourseForm } from './form';
-import { validator } from './form/schema';
+import { CourseForm } from '../app.admin.courses/form';
+import { validator } from '../app.admin.courses/form/schema';
 
 const deleteValidator = z.object({ id: z.string() });
 
@@ -146,27 +146,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
     });
 
-    if (data.image && data.image.size > 0 && data.courseImageSrc) {
-      if (data.courseImageSrc && update.image) {
-        await prisma.course.update({
-          where: { id: params.id },
-          data: { image: { delete: true } },
-        });
-      }
+    // if (data.image && data.image.size > 0 && data.courseImageSrc) {
+    //   if (data.courseImageSrc && update.image) {
+    //     await prisma.course.update({
+    //       where: { id: params.id },
+    //       data: { image: { delete: true } },
+    //     });
+    //   }
 
-      await prisma.courseImage.create({
-        data: {
-          contentType: data.image.type,
-          blob: Buffer.from(await data.image.arrayBuffer()),
-          course: { connect: { id: params.id } },
-        },
-      });
-    } else if (!data.courseImageSrc && update.image) {
-      await prisma.course.update({
-        where: { id: params.id },
-        data: { image: { delete: true } },
-      });
-    }
+    //   await prisma.courseImage.create({
+    //     data: {
+    //       contentType: data.image.type,
+    //       blob: Buffer.from(await data.image.arrayBuffer()),
+    //       course: { connect: { id: params.id } },
+    //     },
+    //   });
+    // } else if (!data.courseImageSrc && update.image) {
+    //   await prisma.course.update({
+    //     where: { id: params.id },
+    //     data: { image: { delete: true } },
+    //   });
+    // }
 
     return redirectWithToast(`/app/admin/courses/${params.id}`, {
       type: 'success',
@@ -185,7 +185,7 @@ export default function CoursesIdRoute() {
   return (
     <div className="flex h-full flex-col">
       <div className="no-scrollbar grow overflow-y-scroll p-6">
-        {/* <CourseForm
+        <CourseForm
           defaultValues={{
             ...data.course,
             image: undefined,
@@ -195,7 +195,7 @@ export default function CoursesIdRoute() {
           }}
           formId={formId}
           key={formId}
-        /> */}
+        />
       </div>
       <div className="flex gap-2 px-6 pb-6 pt-1">
         <Button type="submit" disabled={isPending} form={formId}>
@@ -212,7 +212,6 @@ export default function CoursesIdRoute() {
         <ValidatedForm
           schema={deleteValidator}
           method="DELETE"
-          encType="multipart/form-data"
           defaultValues={{ id: data.course.id }}
         >
           <input type="hidden" name="id" value={data.course.id} />

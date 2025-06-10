@@ -42,8 +42,6 @@ export function CourseResource({ name, onDelete }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const originalValue = useOriginalValue({ isOpen, value });
 
-  if (!value) return null;
-
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
       <SheetTrigger
@@ -57,7 +55,7 @@ export function CourseResource({ name, onDelete }: Props) {
           )}
         >
           <div className="flex items-center">
-            <span>{value.title}</span>
+            <span>{value?.title}</span>
             {urlError ? (
               <span className="ml-2 flex items-center gap-2 text-xs text-destructive">
                 <CaretRightIcon /> {urlError()}
@@ -100,14 +98,14 @@ export function CourseResource({ name, onDelete }: Props) {
             label="Title"
             name={`${name}.title`}
             placeholder="Title"
-            value={value.title}
+            value={value?.title}
             onChange={(e) => setValue({ ...value, title: e.target.value })}
           />
           <FormTextarea
             label="Description"
             name={`${name}.description`}
             placeholder="Description"
-            value={value.description ?? ''}
+            value={value?.description ?? ''}
             onChange={(e) =>
               setValue({ ...value, description: e.target.value })
             }
@@ -116,7 +114,7 @@ export function CourseResource({ name, onDelete }: Props) {
             label="Link"
             name={`${name}.url`}
             placeholder="https://example.com/resource.pdf"
-            value={value.url ?? ''}
+            value={value?.url ?? ''}
             onChange={(e) => setValue({ ...value, url: e.target.value })}
           />
         </div>

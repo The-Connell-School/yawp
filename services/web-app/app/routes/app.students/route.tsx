@@ -787,7 +787,31 @@ export default function StudentsRoute() {
           )}
         </div>
         <div className="px-4 pb-8 pt-2">
-          <Pagination totalCount={totalCount} />
+          <Pagination
+            totalCount={totalCount}
+            skip={cookieFilters.skip}
+            take={cookieFilters.take}
+            setSkip={(skip) => {
+              fetcher.submit(
+                {
+                  intent: 'updateFilters',
+                  key: 'skip',
+                  value: skip.toString(),
+                },
+                { method: 'POST' }
+              );
+            }}
+            setTake={(take) => {
+              fetcher.submit(
+                {
+                  intent: 'updateFilters',
+                  key: 'take',
+                  value: take.toString(),
+                },
+                { method: 'POST' }
+              );
+            }}
+          />
         </div>
       </div>
       <Outlet />
