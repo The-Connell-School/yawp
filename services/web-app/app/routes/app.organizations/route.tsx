@@ -20,8 +20,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ValidatedForm, validationError } from '@rvf/react-router';
-import { withZod } from '@rvf/zod';
+import { useForm } from '@rvf/react-router';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SearchInput } from '~/components/search-input';
@@ -59,6 +58,7 @@ import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { prisma } from '~/utils/db.server';
 import { cn } from '~/utils/misc.tsx';
 import { createToastHeaders } from '~/utils/toast.server';
+import { parseFormData, validationError } from '@rvf/react-router';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Organizations' };
 
@@ -72,10 +72,8 @@ const organizationSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),
   website: z.string().url().optional().or(z.literal('')),
-  isActive: z.boolean().optional(),
+  isActive: z.coerce.boolean().optional(),
 });
-
-const validator = withZod(organizationSchema);
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -143,10 +141,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'create' || intent === 'update') {
-    const result = await validator.validate(formData);
+    const result = await parseFormData(formData, organizationSchema);
     
     if (result.error) {
-      return validationError(result.error);
+      return validationError(result.error, result.submittedData);
     }
 
     const data = {
@@ -239,14 +237,65 @@ export default function OrganizationsRoute() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedOrganization, setSelectedOrganization] = useState<any>(null);
 
+  const createForm = useForm({
+    schema: organizationSchema,
+    defaultValues: {
+      name: '',
+      description: '',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      phone: '',
+      email: '',
+      website: '',
+      isActive: true,
+    },
+    id: 'create-organization-form',
+  });
+
+  const editForm = useForm({
+    schema: organizationSchema,
+    defaultValues: selectedOrganization || {
+      name: '',
+      description: '',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      phone: '',
+      email: '',
+      website: '',
+      isActive: true,
+    },
+    id: 'edit-organization-form',
+  });
+
+  useEffect(() => {
+    if (selectedOrganization) {
+      editForm.setValue('name', selectedOrganization.name || '');
+      editForm.setValue('description', selectedOrganization.description || '');
+      editForm.setValue('address', selectedOrganization.address || '');
+      editForm.setValue('city', selectedOrganization.city || '');
+      editForm.setValue('state', selectedOrganization.state || '');
+      editForm.setValue('zipCode', selectedOrganization.zipCode || '');
+      editForm.setValue('phone', selectedOrganization.phone || '');
+      editForm.setValue('email', selectedOrganization.email || '');
+      editForm.setValue('website', selectedOrganization.website || '');
+      editForm.setValue('isActive', selectedOrganization.isActive ?? true);
+    }
+  }, [selectedOrganization, editForm]);
+
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
       setIsCreateModalOpen(false);
       setIsEditModalOpen(false);
       setIsDeleteModalOpen(false);
       setSelectedOrganization(null);
+      createForm.resetForm();
+      editForm.resetForm();
     }
-  }, [fetcher.state, fetcher.data]);
+  }, [fetcher.state, fetcher.data, createForm, editForm]);
 
   const handleSort = (field: string) => {
     const currentSort = searchParams.get('sortBy');
@@ -301,7 +350,7 @@ export default function OrganizationsRoute() {
         </div>
         
         <div className="mb-4 px-4">
-          <SearchInput placeholder="Search organizations..." />
+          <SearchInput placeholder="Search organizations..." queryParam="q" />
         </div>
 
         <div className="flex-1 overflow-auto px-4">
@@ -398,67 +447,119 @@ export default function OrganizationsRoute() {
                 Add a new organization to the system.
               </DialogDescription>
             </DialogHeader>
-            <ValidatedForm
-              validator={validator}
+            <fetcher.Form
+              {...createForm.getFormProps()}
               method="post"
-              fetcher={fetcher}
               className="space-y-4"
             >
               <input type="hidden" name="intent" value="create" />
+              {createForm.renderFormIdInput()}
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name *</Label>
-                  <Input id="name" name="name" required />
+                  <Input 
+                    {...createForm.getInputProps('name')}
+                    id="name" 
+                    aria-describedby="name-error"
+                  />
+                  {createForm.error('name') && (
+                    <div id="name-error" className="text-sm text-red-500">
+                      {createForm.error('name')}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" />
+                  <Input 
+                    {...createForm.getInputProps('email')}
+                    id="email" 
+                    type="email"
+                    aria-describedby="email-error"
+                  />
+                  {createForm.error('email') && (
+                    <div id="email-error" className="text-sm text-red-500">
+                      {createForm.error('email')}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" name="description" rows={3} />
+                <Textarea 
+                  {...createForm.getInputProps('description')}
+                  id="description" 
+                  rows={3}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" name="phone" />
+                  <Input 
+                    {...createForm.getInputProps('phone')}
+                    id="phone"
+                  />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="website">Website</Label>
-                  <Input id="website" name="website" type="url" />
+                  <Input 
+                    {...createForm.getInputProps('website')}
+                    id="website" 
+                    type="url"
+                    aria-describedby="website-error"
+                  />
+                  {createForm.error('website') && (
+                    <div id="website-error" className="text-sm text-red-500">
+                      {createForm.error('website')}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address">Address</Label>
-                <Input id="address" name="address" />
+                <Input 
+                  {...createForm.getInputProps('address')}
+                  id="address"
+                />
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" name="city" />
+                  <Input 
+                    {...createForm.getInputProps('city')}
+                    id="city"
+                  />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="state">State</Label>
-                  <Input id="state" name="state" />
+                  <Input 
+                    {...createForm.getInputProps('state')}
+                    id="state"
+                  />
                 </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="zipCode">Zip Code</Label>
-                  <Input id="zipCode" name="zipCode" />
+                  <Input 
+                    {...createForm.getInputProps('zipCode')}
+                    id="zipCode"
+                  />
                 </div>
               </div>
 
               <div className="flex items-center space-x-2">
-                <Switch id="isActive" name="isActive" defaultChecked />
+                <Switch 
+                  {...createForm.getInputProps('isActive', { type: 'checkbox' })}
+                  id="isActive" 
+                  defaultChecked
+                />
                 <Label htmlFor="isActive">Active</Label>
               </div>
 
@@ -472,7 +573,7 @@ export default function OrganizationsRoute() {
                 </Button>
                 <Button type="submit">Create Organization</Button>
               </DialogFooter>
-            </ValidatedForm>
+            </fetcher.Form>
           </DialogContent>
         </Dialog>
 
@@ -486,70 +587,120 @@ export default function OrganizationsRoute() {
               </DialogDescription>
             </DialogHeader>
             {selectedOrganization && (
-              <ValidatedForm
-                validator={validator}
+              <fetcher.Form
+                {...editForm.getFormProps()}
                 method="post"
-                fetcher={fetcher}
                 className="space-y-4"
-                defaultValues={selectedOrganization}
               >
                 <input type="hidden" name="intent" value="update" />
                 <input type="hidden" name="id" value={selectedOrganization.id} />
+                {editForm.renderFormIdInput()}
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input id="name" name="name" required />
+                    <Label htmlFor="edit-name">Name *</Label>
+                    <Input 
+                      {...editForm.getInputProps('name')}
+                      id="edit-name"
+                      aria-describedby="edit-name-error"
+                    />
+                    {editForm.error('name') && (
+                      <div id="edit-name-error" className="text-sm text-red-500">
+                        {editForm.error('name')}
+                      </div>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" />
+                    <Label htmlFor="edit-email">Email</Label>
+                    <Input 
+                      {...editForm.getInputProps('email')}
+                      id="edit-email" 
+                      type="email"
+                      aria-describedby="edit-email-error"
+                    />
+                    {editForm.error('email') && (
+                      <div id="edit-email-error" className="text-sm text-red-500">
+                        {editForm.error('email')}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea id="description" name="description" rows={3} />
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea 
+                    {...editForm.getInputProps('description')}
+                    id="edit-description" 
+                    rows={3}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" name="phone" />
+                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Input 
+                      {...editForm.getInputProps('phone')}
+                      id="edit-phone"
+                    />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="website">Website</Label>
-                    <Input id="website" name="website" type="url" />
+                    <Label htmlFor="edit-website">Website</Label>
+                    <Input 
+                      {...editForm.getInputProps('website')}
+                      id="edit-website" 
+                      type="url"
+                      aria-describedby="edit-website-error"
+                    />
+                    {editForm.error('website') && (
+                      <div id="edit-website-error" className="text-sm text-red-500">
+                        {editForm.error('website')}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input id="address" name="address" />
+                  <Label htmlFor="edit-address">Address</Label>
+                  <Input 
+                    {...editForm.getInputProps('address')}
+                    id="edit-address"
+                  />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input id="city" name="city" />
+                    <Label htmlFor="edit-city">City</Label>
+                    <Input 
+                      {...editForm.getInputProps('city')}
+                      id="edit-city"
+                    />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="state">State</Label>
-                    <Input id="state" name="state" />
+                    <Label htmlFor="edit-state">State</Label>
+                    <Input 
+                      {...editForm.getInputProps('state')}
+                      id="edit-state"
+                    />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="zipCode">Zip Code</Label>
-                    <Input id="zipCode" name="zipCode" />
+                    <Label htmlFor="edit-zipCode">Zip Code</Label>
+                    <Input 
+                      {...editForm.getInputProps('zipCode')}
+                      id="edit-zipCode"
+                    />
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Switch id="isActive" name="isActive" />
-                  <Label htmlFor="isActive">Active</Label>
+                  <Switch 
+                    {...editForm.getInputProps('isActive', { type: 'checkbox' })}
+                    id="edit-isActive"
+                  />
+                  <Label htmlFor="edit-isActive">Active</Label>
                 </div>
 
                 <DialogFooter>
@@ -562,7 +713,7 @@ export default function OrganizationsRoute() {
                   </Button>
                   <Button type="submit">Update Organization</Button>
                 </DialogFooter>
-              </ValidatedForm>
+              </fetcher.Form>
             )}
           </DialogContent>
         </Dialog>

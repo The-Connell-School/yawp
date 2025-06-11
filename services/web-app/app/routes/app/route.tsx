@@ -7,15 +7,7 @@ import {
   useLocation,
   useMatches,
 } from 'react-router';
-import {
-  Building2,
-  CogIcon,
-  GaugeIcon,
-  LockIcon,
-  Settings2,
-  User,
-  UserIcon,
-} from 'lucide-react';
+import { CogIcon, GaugeIcon, LockIcon, User, UserIcon } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
