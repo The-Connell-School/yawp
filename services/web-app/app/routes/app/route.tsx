@@ -82,7 +82,6 @@ export default function Route() {
       to: '/app/students',
       label: 'Students',
       icon: <User size={20} />,
-      requiresIsAdmin: true,
       requiresTeacherProfile: true,
     },
   ];
