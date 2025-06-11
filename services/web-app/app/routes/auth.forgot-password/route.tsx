@@ -12,7 +12,6 @@ import {
 } from 'react-router';
 import { Link, useFetcher } from 'react-router';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
-import { HoneypotInputs } from 'remix-utils/honeypot/react';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { ErrorList } from '~/components/forms/error-list.tsx';
@@ -21,7 +20,6 @@ import { Button } from '~/components/ui/button.tsx';
 import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { sendEmail } from '~/utils/email.server.ts';
-import { checkHoneypot } from '~/utils/honeypot.server.ts';
 import { EmailSchema } from '~/utils/schemas/user.ts';
 import { prepareVerification } from '../auth.verify/utils';
 
@@ -32,7 +30,6 @@ const ForgotPasswordSchema = z.object({
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
-  checkHoneypot(formData);
   const submission = await parse(formData, {
     schema: ForgotPasswordSchema.superRefine(async (data, ctx) => {
       const user = await prisma.user.findFirst({
@@ -147,7 +144,6 @@ export default function ForgotPasswordRoute() {
         <div className="mx-auto mt-8 min-w-full max-w-sm px-8 sm:min-w-[368px]">
           <forgotPassword.Form method="POST" {...getFormProps(form)}>
             <AuthenticityTokenInput />
-            <HoneypotInputs />
             <FormInput
               labelProps={{
                 htmlFor: fields.email.id,

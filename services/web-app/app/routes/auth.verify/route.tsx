@@ -12,7 +12,6 @@ import {
   useSearchParams,
 } from 'react-router';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
-import { HoneypotInputs } from 'remix-utils/honeypot/react';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { FormInput } from '~/components/forms/form-input.tsx';
@@ -20,7 +19,6 @@ import { Button } from '~/components/ui/button.tsx';
 import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/utils.server';
 import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
-import { checkHoneypot } from '~/utils/honeypot.server.ts';
 import { useIsPending } from '~/utils/misc.tsx';
 import { handleVerification as handleLoginTwoFactorVerification } from '../auth.login/utils.server.ts';
 import { handleVerification as handleOnboardingVerification } from '../auth.onboarding/utils.server';
@@ -39,7 +37,6 @@ import {
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  checkHoneypot(formData);
   await validateCSRF(formData, request.headers);
   return validateRequest(request, formData);
 }
@@ -164,7 +161,6 @@ export default function VerifyRoute() {
           <div className="flex w-full gap-2 px-8">
             <Form method="POST" {...getFormProps(form)} className="flex-1">
               <AuthenticityTokenInput />
-              <HoneypotInputs />
               <FormInput
                 labelProps={{
                   htmlFor: fields[codeQueryParam].id,

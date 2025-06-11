@@ -28,7 +28,7 @@ export function getRedirectToUrl({
   target: string;
   redirectTo?: string;
 }) {
-  const redirectToUrl = new URL(`${getDomainUrl(request)}/verify`);
+  const redirectToUrl = new URL(`${getDomainUrl(request)}/auth/verify`);
   redirectToUrl.searchParams.set(typeQueryParam, type);
   redirectToUrl.searchParams.set(targetQueryParam, target);
   if (redirectTo) {
@@ -70,7 +70,7 @@ export async function prepareVerification({
   const redirectTo = new URL(verifyUrl.toString());
 
   const { otp, ...verificationConfig } = await generateTOTP({
-    algorithm: 'SHA256',
+    algorithm: 'SHA-256',
     // Leaving off 0 and O on purpose to avoid confusing users.
     charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
     period,

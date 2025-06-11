@@ -87,7 +87,10 @@ export default function LoginPage() {
             autoComplete="current-password"
           />
           <div className="flex items-center justify-end">
-            <Link to="/forgot-password" className={button({ variant: 'link' })}>
+            <Link
+              to="/auth/forgot-password"
+              className={button({ variant: 'link' })}
+            >
               Forgot password?
             </Link>
           </div>

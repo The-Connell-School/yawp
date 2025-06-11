@@ -135,7 +135,8 @@ export async function action({ request }: ActionFunctionArgs) {
         let completion: string | undefined;
         try {
           completion = await getLLMCompletion({
-            model: process.env.AI_MODEL as any,
+            model:
+              (process.env.AI_MODEL as any) ?? 'claude-3-5-sonnet-20240620',
             messages,
             system,
             maxTokens: 500,
@@ -219,7 +220,8 @@ export async function action({ request }: ActionFunctionArgs) {
           let correction: string;
           try {
             correction = await getLLMCompletion({
-              model: process.env.AI_MODEL as any,
+              model:
+                (process.env.AI_MODEL as any) ?? 'claude-3-5-sonnet-20240620',
               messages,
               system,
               maxTokens: 500,
@@ -289,7 +291,7 @@ export async function action({ request }: ActionFunctionArgs) {
       let completion: string;
       try {
         completion = await getLLMCompletion({
-          model: process.env.AI_MODEL as any,
+          model: (process.env.AI_MODEL as any) ?? 'claude-3-5-sonnet-20240620',
           messages,
           system,
           maxTokens: 500,

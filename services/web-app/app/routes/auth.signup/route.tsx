@@ -6,7 +6,6 @@ import {
 } from 'react-router';
 import { Link } from 'react-router';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
-import { HoneypotInputs } from 'remix-utils/honeypot/react';
 import {
   parseFormData,
   ValidatedForm,
@@ -20,7 +19,6 @@ import { validateCSRF } from '~/utils/csrf.server';
 import { prisma } from '~/utils/db.server';
 import { sendEmail } from '~/utils/email.server';
 import { Setting } from '~/utils/enums.ts';
-import { checkHoneypot } from '~/utils/honeypot.server';
 import { useIsPending } from '~/utils/misc';
 import { EmailSchema } from '~/utils/schemas/user';
 import { prepareVerification } from '../auth.verify/utils';
@@ -33,8 +31,7 @@ const Schema = z.object({
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   await validateCSRF(formData, request.headers);
-  checkHoneypot(formData);
-  const { error, data } = await parseFormData(request, Schema);
+  const { error, data } = await parseFormData(formData, Schema);
   if (error) return validationError(error);
 
   const passcodeSetting = await prisma.setting.findUnique({
@@ -112,7 +109,7 @@ export default function SignupRoute() {
           alt="Logo"
           className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
         />
-        <h1>Welcome!</h1>
+        <h1>Let's get started!</h1>
         <p>Please enter your email & passcode.</p>
       </div>
       <div className="mx-auto mt-10 w-full max-w-md px-8">
@@ -126,9 +123,16 @@ export default function SignupRoute() {
           }}
         >
           <AuthenticityTokenInput />
-          <HoneypotInputs />
           <FormInput type="email" name="email" autoFocus />
-          <FormInput type="text" name="passcode" />
+          <div className="flex w-full items-center rounded-lg border p-3 bg-white">
+            <FormInput
+              type="text"
+              label="App Passcode"
+              labelInfo="This is the passcode for the Yawp! app."
+              name="passcode"
+              className="w-full"
+            />
+          </div>
           <Button className="w-full" type="submit" disabled={isPending}>
             Submit
           </Button>
