@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Organization" ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "teacherSeats" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "studentSeats" INTEGER NOT NULL DEFAULT 0;

@@ -73,6 +73,12 @@ export default function Route() {
       icon: <GaugeIcon size={20} />,
     },
     {
+      to: '/app/organization',
+      label: 'Organization',
+      icon: <Settings2 size={20} />,
+      requiresIsOwner: true,
+    },
+    {
       to: '/app/admin',
       label: 'Settings',
       icon: <Settings2 size={20} />,
@@ -195,7 +201,8 @@ export default function Route() {
             .filter(
               (link) =>
                 (!link.requiresIsAdmin || user.isAdmin) &&
-                (!link.requiresTeacherProfile || user.teacherProfile)
+                (!link.requiresTeacherProfile || user.teacherProfile) &&
+                (!link.requiresIsOwner || user.isOwner)
             )
             .map((link) => (
               <NavLink

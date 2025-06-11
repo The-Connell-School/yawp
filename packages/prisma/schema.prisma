@@ -199,11 +199,14 @@ model InstructionAudio {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
-  name      String
-  users     User[]
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @db.Timestamptz(6)
+  name         String
+  isActive     Boolean  @default(true)
+  teacherSeats Int      @default(0)
+  studentSeats Int      @default(0)
+  users        User[]
 }
 
 model Password {
