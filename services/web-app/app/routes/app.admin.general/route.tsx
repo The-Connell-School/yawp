@@ -14,7 +14,7 @@ import { FormInput } from '~/components/forms/form-input-2';
 import { FormListInput } from '~/components/forms/form-list-input.tsx';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
-import { requireUserWithRole } from '~/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
 import { startCase } from '~/utils/startCase';
 import { redirectWithToast } from '~/utils/toast.server';
 
@@ -24,7 +24,7 @@ const Schema = z.object({
 });
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserWithRole(request, 'admin');
+  await requireAdmin(request);
   const settings = await prisma.setting.findMany({
     orderBy: [{ valueType: 'desc' }, { name: 'desc' }],
   });
@@ -32,7 +32,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  await requireUserWithRole(request, 'admin');
+  await requireAdmin(request);
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 

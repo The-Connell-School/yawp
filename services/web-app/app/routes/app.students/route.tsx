@@ -111,13 +111,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: {
-      roles: true,
-      teacherProfile: true,
-    },
+    select: { isAdmin: true, teacherProfile: true },
   });
 
-  const isAdmin = user?.roles.some((role) => role.name === 'admin');
+  const isAdmin = user?.isAdmin;
   const isTeacher = user?.teacherProfile !== null;
 
   const where = {

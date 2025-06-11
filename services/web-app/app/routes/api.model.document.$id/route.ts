@@ -33,13 +33,13 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    include: { roles: true },
+    select: { isAdmin: true },
   });
 
   const update = await prisma.document.update({
     where: {
       id: params.id,
-      ...(user.roles.some((r) => r.name === 'admin')
+      ...(user.isAdmin
         ? {}
         : {
             OR: [

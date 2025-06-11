@@ -76,13 +76,14 @@ export default function Route() {
       to: '/app/admin',
       label: 'Settings',
       icon: <Settings2 size={20} />,
-      requiredRole: ['admin'],
+      requiresIsAdmin: true,
     },
     {
       to: '/app/students',
       label: 'Students',
       icon: <User size={20} />,
-      requiredRole: ['teacher', 'admin'],
+      requiresIsAdmin: true,
+      requiresTeacherProfile: true,
     },
   ];
 
@@ -193,10 +194,8 @@ export default function Route() {
           {links
             .filter(
               (link) =>
-                !link.requiredRole ||
-                link.requiredRole.some((role) =>
-                  user.roles.some((r) => r.name === role)
-                )
+                (!link.requiresIsAdmin || user.isAdmin) &&
+                (!link.requiresTeacherProfile || user.teacherProfile)
             )
             .map((link) => (
               <NavLink
@@ -243,7 +242,7 @@ export default function Route() {
                   <div>
                     <p className="font-bold">{user.name}</p>
                     <p className="text-left text-sm text-muted-foreground">
-                      {user.roles.some((r) => r.name === 'admin')
+                      {user.isAdmin
                         ? 'Admin'
                         : user.teacherProfile
                           ? 'Teacher'

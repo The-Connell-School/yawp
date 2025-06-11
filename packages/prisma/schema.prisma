@@ -198,33 +198,18 @@ model InstructionAudio {
   courseModuleInstruction   CourseModuleInstruction @relation(fields: [courseModuleInstructionId], references: [id], onDelete: Cascade)
 }
 
+model Organization {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  name      String
+  users     User[]
+}
+
 model Password {
   hash   String
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Permission {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
-  action      String
-  entity      String
-  access      String
-  description String   @default("")
-  roles       Role[]
-
-  @@unique([action, entity, access])
-}
-
-model Role {
-  id          String       @id @default(cuid())
-  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime     @default(now()) @db.Timestamptz(6)
-  name        String       @unique
-  description String       @default("")
-  permissions Permission[]
-  users       User[]
 }
 
 model Session {
@@ -314,15 +299,18 @@ model User {
   documents                Document[]
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
+  organizationId           String?
+  organization             Organization?             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   password                 Password?
   sessions                 Session[]
+  studentViews             StudentView[]
   studentProfile           StudentProfile?
   studentProfiles          StudentProfile[]          @relation("Students")
-  studentViews             StudentView[]
   teacherProfile           TeacherProfile?
   uploads                  Upload[]
   image                    UserImage?
-  roles                    Role[]
+  isAdmin                  Boolean                   @default(false)
+  isOwner                  Boolean                   @default(false)
 }
 
 model UserImage {

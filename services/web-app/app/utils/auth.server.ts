@@ -127,7 +127,6 @@ export async function signup({
         create: {
           email: email.toLowerCase(),
           name,
-          roles: { connect: [{ name: 'user' }] },
           password: { create: { hash: hashedPassword } },
           studentProfile: {
             create: {
@@ -167,7 +166,6 @@ export async function signupAsTeacher({
         create: {
           email: email.toLowerCase(),
           name,
-          roles: { connect: [{ name: 'user' }] },
           password: { create: { hash: hashedPassword } },
           teacherProfile: { create: {} },
         },
@@ -199,7 +197,6 @@ export async function signupWithConnection({
         create: {
           email: email.toLowerCase(),
           name,
-          roles: { connect: { name: 'user' } },
           studentProfile: { create: {} },
           connections: { create: { providerId, providerName } },
           image: imageUrl

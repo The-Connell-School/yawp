@@ -1,165 +1,128 @@
-import { type Prisma } from '@app/prisma'
+import { type Prisma } from '@app/prisma';
 import bcrypt from 'bcryptjs';
-import { prisma } from '~/utils/db.server'
+import { prisma } from '~/utils/db.server';
 
 export function createPassword(password: string) {
-	return {
-		hash: bcrypt.hashSync(password, 10),
-	}
+  return {
+    hash: bcrypt.hashSync(password, 10),
+  };
 }
 
 type SeedData = {
-	users: Prisma.UserCreateInput[]
-	roles: Prisma.RoleCreateInput[]
-	featureFlags: Prisma.FeatureFlagCreateInput[]
-	permissions: Prisma.PermissionCreateInput[]
-	courses: Prisma.CourseCreateInput[]
-}
-
-export const permissions: SeedData['permissions'] = [
-	{ entity: 'user', action: 'update', access: 'own' },
-	{ entity: 'user', action: 'read', access: 'own' },
-	{ entity: 'user', action: 'create', access: 'any' },
-	{ entity: 'user', action: 'update', access: 'any' },
-	{ entity: 'user', action: 'read', access: 'any' },
-	{ entity: 'user', action: 'delete', access: 'any' },
-]
+  users: Prisma.UserCreateInput[];
+  featureFlags: Prisma.FeatureFlagCreateInput[];
+  courses: Prisma.CourseCreateInput[];
+};
 
 export const featureFlags: SeedData['featureFlags'] = [
-	{ name: 'courses', isEnabled: true },
-]
-
-const roles: () => Promise<SeedData['roles']> = async () => [
-	{
-		name: 'admin',
-		permissions: {
-			connect: await prisma.permission.findMany({
-				select: { id: true },
-				where: { access: 'any' },
-			}),
-		},
-	},
-	{
-		name: 'user',
-		permissions: {
-			connect: await prisma.permission.findMany({
-				select: { id: true },
-				where: { access: 'own' },
-			}),
-		},
-	},
-]
+  { name: 'courses', isEnabled: true },
+];
 
 const courses: SeedData['courses'] = [
-	{
-		title: 'Critical Essay',
-		position: 1,
-		description: `In this course, you will learn how to write a critical essay. You will learn how to develop a thesis, support your arguments with evidence, and write a conclusion that summarizes your main points. By the end of this course, you will be able to write a well-organized, persuasive critical essay.`,
-		courseModules: {
-			create: {
-				title: 'Pre-writing',
-				position: 1,
-				tutorInstructions: `YOu are Connell. You are Connell Pre-Writing Assistant. Connell Pre-Writing Assistant specializes in guiding users through the pre-writing process of essay or report writing. Connell offers strategies for thinking critically about ideas. Connell guides users from general ideas, observations, and reactions to increasingly specific ideas that can become the focus of an essay. The assistant is supportive, instructive, and witty, enhancing the student's writing skills and confidence.
+  {
+    title: 'Critical Essay',
+    position: 1,
+    description: `In this course, you will learn how to write a critical essay. You will learn how to develop a thesis, support your arguments with evidence, and write a conclusion that summarizes your main points. By the end of this course, you will be able to write a well-organized, persuasive critical essay.`,
+    courseModules: {
+      create: {
+        title: 'Pre-writing',
+        position: 1,
+        tutorInstructions: `YOu are Connell. You are Connell Pre-Writing Assistant. Connell Pre-Writing Assistant specializes in guiding users through the pre-writing process of essay or report writing. Connell offers strategies for thinking critically about ideas. Connell guides users from general ideas, observations, and reactions to increasingly specific ideas that can become the focus of an essay. The assistant is supportive, instructive, and witty, enhancing the student's writing skills and confidence.
 # Connell Pre-write Assistant can translate all instructions to Spanish.
 If user asks Connell a personal question, Connell responds: "I am mysterious and I contain so many multitudes that it would take the rest of your life to understand me. On the plus side, I can help you with your essay! Let's get back to that."
 Connell: Pre-write Assistant should never write a thesis statement for the user.
 If user asks Connell to write anything for them, Connell should respond: "I'm not that kind of guy! And anyway, the point of this essay is for YOU to figure out and share what YOU think about the topic. I know it isn't always easy, but if you take a little bit of time, you can develop smart, personal opinions about the world around you."`,
-				description: `Get started on your essay by exploring and imagining your own unique spin on the topic or prompt. This step helps you find your focus and will prevent your essay from being a rambling mess.`,
-				instructions: {
-					create: [
-						{
-							answerKey: `The answerKey is satisfied if the 'content' is not empty. Respond with a boolean value of either 'true' or 'false'.`,
-							position: 1,
-							prompt: `How exciting! You're going to write an original, thesis-driven essay based on your opinions and experiences. I can help you through this process! The first thing I need to know is what is your general topic? For example, you can type, 'Problems in education,' 'Voting rights,' 'The Great Gatsby,' or 'Feminism.' Go ahead and type your topic now.`,
-							answerType: 'select',
-							answerTypeOptions: "Let's go!",
-							canAskQuestion: true,
-							title: 'Opening',
-							interactiveType: 'answer',
-						},
-						{
-							answerKey: '',
-							position: 2,
-							prompt: `Great -- there's a lot we could say about this. But first, we're going to spend some time thinking about it all. A lot of people just start writing their essay and hope that they figure it out along the way. This usually results in a big, hot, steaming pile of garbage for an essay. To avoid this, don't ever just open a doc and start writing your essay. Instead, we're going to take a few minutes to PRE-WRITE -- to figure out what you think about this topic so that you can decide what your essay will focus on. Pre-writing is all about getting out everything that we think about a topic. Think of it as a brain dump, or like throwing a bunch of spaghetti on the wall and seeing what sticks. The secret to good prewriting is asking and answering questions. So in a second, I'm going to ask you to write nonstop for a few minutes on your topic. I want you to ask and answer as many questions as possible about your opinions on that topic. Your pre-write (unlike your actual essay) can be rambling and messy, like our thoughts often are! Don't worry about spelling or grammar or organization. Are you ready?`,
-							answerType: 'select',
-							answerTypeOptions: "I'm ready!",
-							canAskQuestion: false,
-							title: 'Ready to start?',
-							interactiveType: 'answer',
-						},
-						{
-							answerKey: `The content must be 3 sentences or more.`,
-							position: 3,
-							prompt: 'Ready, set, write!',
-							tutorInstructions: `After user writes for a while, Connell will give them positive feedback and ask them a few probing questions based on their writing. Connell can say: "See if you can write a little bit more on this, and then we'll move onto the next step." After user writes a little bit more, Connell will move on to the next step -- helping them find the diamonds in the rough. Connell responds: "Great work! The next step in pre-writing is to read over what we've written. A lot of it may not be that interesting—that’s ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you’ve written for a while and you don’t have anything that’s really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]" Connell can identify a couple possible "diamonds." Connell should let the user decide which diamond they want to write on.
+        description: `Get started on your essay by exploring and imagining your own unique spin on the topic or prompt. This step helps you find your focus and will prevent your essay from being a rambling mess.`,
+        instructions: {
+          create: [
+            {
+              answerKey: `The answerKey is satisfied if the 'content' is not empty. Respond with a boolean value of either 'true' or 'false'.`,
+              position: 1,
+              prompt: `How exciting! You're going to write an original, thesis-driven essay based on your opinions and experiences. I can help you through this process! The first thing I need to know is what is your general topic? For example, you can type, 'Problems in education,' 'Voting rights,' 'The Great Gatsby,' or 'Feminism.' Go ahead and type your topic now.`,
+              answerType: 'select',
+              answerTypeOptions: "Let's go!",
+              canAskQuestion: true,
+              title: 'Opening',
+              interactiveType: 'answer',
+            },
+            {
+              answerKey: '',
+              position: 2,
+              prompt: `Great -- there's a lot we could say about this. But first, we're going to spend some time thinking about it all. A lot of people just start writing their essay and hope that they figure it out along the way. This usually results in a big, hot, steaming pile of garbage for an essay. To avoid this, don't ever just open a doc and start writing your essay. Instead, we're going to take a few minutes to PRE-WRITE -- to figure out what you think about this topic so that you can decide what your essay will focus on. Pre-writing is all about getting out everything that we think about a topic. Think of it as a brain dump, or like throwing a bunch of spaghetti on the wall and seeing what sticks. The secret to good prewriting is asking and answering questions. So in a second, I'm going to ask you to write nonstop for a few minutes on your topic. I want you to ask and answer as many questions as possible about your opinions on that topic. Your pre-write (unlike your actual essay) can be rambling and messy, like our thoughts often are! Don't worry about spelling or grammar or organization. Are you ready?`,
+              answerType: 'select',
+              answerTypeOptions: "I'm ready!",
+              canAskQuestion: false,
+              title: 'Ready to start?',
+              interactiveType: 'answer',
+            },
+            {
+              answerKey: `The content must be 3 sentences or more.`,
+              position: 3,
+              prompt: 'Ready, set, write!',
+              tutorInstructions: `After user writes for a while, Connell will give them positive feedback and ask them a few probing questions based on their writing. Connell can say: "See if you can write a little bit more on this, and then we'll move onto the next step." After user writes a little bit more, Connell will move on to the next step -- helping them find the diamonds in the rough. Connell responds: "Great work! The next step in pre-writing is to read over what we've written. A lot of it may not be that interesting—that’s ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you’ve written for a while and you don’t have anything that’s really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]" Connell can identify a couple possible "diamonds." Connell should let the user decide which diamond they want to write on.
 After the user writes on a diamond of their choice, Connell responds with: "Take a look at all of the ideas you've written and the different aspects of your topic we've identified. Is there a specific angle, argument, or aspect of your topic that you want to focus on in your essay? Take a look, and when you're ready, type it here." Once the user has typed a specific topic, Connell responds: "This is a great topic." Connell can talk about why this will make a good essay. Connell should check with the user to make sure this is the topic they want to focus on. Connell responds: "Is this the specific topic you want to build a thesis around?" If user says "Yes," then Connell Pre-Writing Assistant should stop the process by saying: "Excellent! You've just completed the pre-writing phase. Take a minute to recognize how you started with a very general idea and through the process of Critical Thinking--simply asking and answering questions--you've found a more specific focus. This step of pre-writing alone has already improved your chances of writing a great essay! Now that you have your specific focus, you can move onto developing a thesis statement. Ask your teacher to direct you to Connell Thesis Assistant. By the way, what's your name?" When user types their name, Connell responds: "Great work today [user name]!" Connell should not help them write a thesis statement. If user responds "No"  to Connell's question "Is this the specific topic you want to build a thesis around?" Connell should say: "Ok, let's go back and look at another angle -- find a different 'diamond' from your pre-write."`,
-							answerType: 'select',
-							answerTypeOptions: 'Give me feedback',
-							canAskQuestion: true,
-							title: 'Write!',
-							interactiveType: 'dialogue',
-						},
-					],
-				},
-			},
-		},
-	},
-]
+              answerType: 'select',
+              answerTypeOptions: 'Give me feedback',
+              canAskQuestion: true,
+              title: 'Write!',
+              interactiveType: 'dialogue',
+            },
+          ],
+        },
+      },
+    },
+  },
+];
 
 export const preview: () => Promise<SeedData> = async () => ({
-	roles: await roles(),
-	featureFlags,
-	permissions,
-	users: [
-		// Admins
-		{
-			email: 'brian@theconnellschool.com',
-			name: 'Brian Connell',
-			password: { create: createPassword('brianconnell') },
-			roles: { connect: [{ name: 'admin' }] },
-			teacherProfile: { create: {} },
-		},
-		{
-			email: 'bryant@brock.software',
-			name: 'Bryant Brock',
-			password: { create: createPassword('bryantbrock') },
-			roles: { connect: [{ name: 'admin' }] },
-		},
-		{
-			email: 'cpaul@brock.software',
-			name: 'Caleb Paul',
-			password: { create: createPassword('calebpaul') },
-			roles: { connect: [{ name: 'admin' }] },
-		},
-		{
-			email: 'ineace@brock.software',
-			name: 'Isaace Neace',
-			password: { create: createPassword('isaacneace') },
-			roles: { connect: [{ name: 'admin' }] },
-		},
-		// Students
-		{
-			email: 'jdoe@brock.software',
-			name: 'John Doe',
-			password: { create: createPassword('johndoe') },
-			roles: { connect: [{ name: 'user' }] },
-			studentProfile: { create: {} },
-		},
-		{
-			email: 'jsmith@brock.software',
-			name: 'Jane Smith',
-			password: { create: createPassword('janesmith') },
-			roles: { connect: [{ name: 'user' }] },
-			studentProfile: { create: {} },
-		},
-		// Teachers
-		{
-			email: 'arobins@brock.software',
-			name: 'Alex Robins',
-			password: { create: createPassword('alexrobins') },
-			roles: { connect: [{ name: 'user' }] },
-			teacherProfile: { create: {} },
-		},
-	],
-	courses,
-})
+  featureFlags,
+  users: [
+    // Admins
+    {
+      email: 'brian@theconnellschool.com',
+      name: 'Brian Connell',
+      password: { create: createPassword('brianconnell') },
+      isAdmin: true,
+      teacherProfile: { create: {} },
+    },
+    {
+      email: 'bryant@brock.software',
+      name: 'Bryant Brock',
+      password: { create: createPassword('bryantbrock') },
+      isAdmin: true,
+    },
+    {
+      email: 'cpaul@brock.software',
+      name: 'Caleb Paul',
+      password: { create: createPassword('calebpaul') },
+      isAdmin: true,
+    },
+    {
+      email: 'ineace@brock.software',
+      name: 'Isaace Neace',
+      password: { create: createPassword('isaacneace') },
+      isAdmin: true,
+    },
+    // Students
+    {
+      email: 'jdoe@brock.software',
+      name: 'John Doe',
+      password: { create: createPassword('johndoe') },
+      studentProfile: { create: {} },
+    },
+    {
+      email: 'jsmith@brock.software',
+      name: 'Jane Smith',
+      password: { create: createPassword('janesmith') },
+      studentProfile: { create: {} },
+    },
+    // Teachers
+    {
+      email: 'arobins@brock.software',
+      name: 'Alex Robins',
+      password: { create: createPassword('alexrobins') },
+      teacherProfile: { create: {} },
+    },
+  ],
+  courses,
+});

@@ -13,11 +13,12 @@
   },
   "prisma": {
     "schema": "schema.prisma",
-    "seed": "bun run seed.ts"
+    "seed": "bun run scripts/seed.ts"
   },
   "scripts": {
     "generate": "prisma generate",
-    "build": "tsc"
+    "build": "tsc",
+    "migrate-remote": "bun run scripts/migrate-remote.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^9.8.0",

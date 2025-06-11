@@ -189,3 +189,4 @@ sandbox.ts
 infra/.terraform
 infra/envs/variables/
 **/*.db
+**/*.production

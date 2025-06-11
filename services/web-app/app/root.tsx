@@ -82,14 +82,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
               image: { select: { id: true } },
               studentProfiles: { select: { id: true, userId: true } },
               teacherProfile: { select: { id: true } },
-              roles: {
-                select: {
-                  name: true,
-                  permissions: {
-                    select: { entity: true, action: true, access: true },
-                  },
-                },
-              },
+              isAdmin: true,
+              isOwner: true,
+              organization: { select: { id: true } },
             },
             where: { id: userId },
           }),

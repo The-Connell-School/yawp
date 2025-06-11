@@ -17,14 +17,14 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
 import { useDoubleCheck, useIsPending } from '~/utils/misc';
-import { requireUserWithRole } from '~/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
 import { redirectWithToast } from '~/utils/toast.server';
 import { TeacherForm } from '../app.admin.teachers/form';
 import { validator } from '../app.admin.teachers/form/schema';
 
 const deleteValidator = z.object({ id: z.string() });
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   invariant(params.id, 'Missing teacher profile id');
   const [teacherProfile, allStudents] = await Promise.all([
     prisma.teacherProfile.findUnique({
@@ -60,7 +60,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'Missing teacher id');
-  await requireUserWithRole(request, ['admin']);
+  await requireAdmin(request);
 
   if (request.method === 'DELETE') {
     await prisma.$transaction([

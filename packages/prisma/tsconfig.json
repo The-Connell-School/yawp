@@ -9,6 +9,6 @@
     "rootDir": ".",
     "strict": true
   },
-  "include": ["*.ts"],
+  "include": ["*.ts", "scripts/utils.ts", "scripts/migrate-remote.ts"],
   "exclude": ["node_modules", "dist"]
 }

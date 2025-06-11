@@ -3,7 +3,7 @@ import { NavLink, Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
-import { requireUserWithRole } from '~/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
 
 const tabs = [
   { label: 'General', to: '/app/admin/general' },
@@ -14,7 +14,7 @@ const tabs = [
 export const handle: BreadcrumbHandle = { breadcrumb: 'Admin' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requireUserWithRole(request, ['admin']);
+  await requireAdmin(request);
   return dataResponse({});
 }
 

@@ -32,13 +32,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { roles: { select: { name: true } } },
+    select: { isAdmin: true },
   });
 
   const doc = await prisma.document.findFirst({
     where: {
       id: params.id,
-      ...(user?.roles.some((role) => role.name === 'admin')
+      ...(user?.isAdmin
         ? {}
         : {
             OR: [

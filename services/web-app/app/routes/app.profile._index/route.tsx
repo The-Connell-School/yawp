@@ -147,7 +147,6 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function EditUserProfile() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
-  const isAdmin = user?.roles.some((role) => role.name === 'admin');
   const dc = useDoubleCheck();
   const otherSessionsCount = (data.user?._count.sessions || 0) - 1;
 

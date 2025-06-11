@@ -113,7 +113,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
     : null;
 
   const user = useUser();
-  const userIsAdmin = user.roles.some((role) => role.name === 'admin');
+  const userIsAdmin = user.isAdmin;
   const userIsTeacher = user.teacherProfile !== null;
   const { submit, isLoading } = useAsyncFetcherSubmit();
 
