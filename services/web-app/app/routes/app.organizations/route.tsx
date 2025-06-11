@@ -5,15 +5,10 @@ import {
   useSearchParams,
   Outlet,
   useLoaderData,
-  useNavigate,
   useFetcher,
-  Link,
 } from 'react-router';
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpDown,
-  Building2,
   MoreHorizontal,
   PencilIcon,
   PlusIcon,
@@ -26,7 +21,6 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { SearchInput } from '~/components/search-input';
 import { Pagination } from '~/components/table/pagination.tsx';
 import { Button } from '~/components/ui/button';
-import { Checkbox } from '~/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -43,7 +37,6 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import { Textarea } from '~/components/ui/textarea';
 import {
   Table as TableComponent,
   TableHeader,
@@ -53,41 +46,21 @@ import {
   TableCell,
 } from '~/components/ui/table';
 import { Switch } from '~/components/ui/switch';
-import { requireUserId } from '~/utils/auth.server';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { prisma } from '~/utils/db.server';
-import { cn } from '~/utils/misc.tsx';
 import { createToastHeaders } from '~/utils/toast.server';
 import { parseFormData, validationError } from '@rvf/react-router';
+import { requireAdmin } from '~/utils/permissions';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Organizations' };
 
 const organizationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  website: z.string().url().optional().or(z.literal('')),
   isActive: z.coerce.boolean().optional(),
 });
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
-  
-  // Verify user is admin
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { roles: true },
-  });
-  
-  if (!user?.roles.some((role: { name: string }) => role.name === 'admin')) {
-    throw new Response('Unauthorized', { status: 403 });
-  }
-
+  await requireAdmin(request);
   const url = new URL(request.url);
   const searchQuery = url.searchParams.get('q') || '';
   const page = parseInt(url.searchParams.get('page') || '1');
@@ -96,13 +69,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const sortOrder = url.searchParams.get('sortOrder') || 'asc';
 
   const where = searchQuery
-    ? {
-        OR: [
-          { name: { contains: searchQuery, mode: 'insensitive' as const } },
-          { email: { contains: searchQuery, mode: 'insensitive' as const } },
-          { city: { contains: searchQuery, mode: 'insensitive' as const } },
-        ],
-      }
+    ? { name: { contains: searchQuery, mode: 'insensitive' as const } }
     : {};
 
   const [organizations, totalCount] = await Promise.all([
@@ -125,44 +92,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-  
-  // Verify user is admin
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { roles: true },
-  });
-  
-  if (!user?.roles.some((role: { name: string }) => role.name === 'admin')) {
-    throw new Response('Unauthorized', { status: 403 });
-  }
-
+  await requireAdmin(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
   if (intent === 'create' || intent === 'update') {
     const result = await parseFormData(formData, organizationSchema);
-    
+
     if (result.error) {
       return validationError(result.error, result.submittedData);
     }
 
     const data = {
       name: result.data.name,
-      description: result.data.description || null,
-      address: result.data.address || null,
-      city: result.data.city || null,
-      state: result.data.state || null,
-      zipCode: result.data.zipCode || null,
-      phone: result.data.phone || null,
-      email: result.data.email || null,
-      website: result.data.website || null,
       isActive: result.data.isActive ?? true,
     };
 
     if (intent === 'create') {
       await prisma.organization.create({ data });
-      
+
       return dataResponse(
         { success: true },
         {
@@ -178,7 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
         where: { id },
         data,
       });
-      
+
       return dataResponse(
         { success: true },
         {
@@ -194,7 +142,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'delete') {
     const id = formData.get('id') as string;
     await prisma.organization.delete({ where: { id } });
-    
+
     return dataResponse(
       { success: true },
       {
@@ -208,15 +156,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'toggleActive') {
     const id = formData.get('id') as string;
-    const organization = await prisma.organization.findUnique({ where: { id } });
-    
+    const organization = await prisma.organization.findUnique({
+      where: { id },
+    });
+
     if (organization) {
       await prisma.organization.update({
         where: { id },
         data: { isActive: !organization.isActive },
       });
     }
-    
+
     return dataResponse({ success: true });
   }
 
@@ -227,7 +177,6 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OrganizationsRoute() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { organizations, totalCount, page, limit, totalPages } =
     useLoaderData<typeof loader>();
@@ -239,55 +188,25 @@ export default function OrganizationsRoute() {
 
   const createForm = useForm({
     schema: organizationSchema,
-    defaultValues: {
-      name: '',
-      description: '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      phone: '',
-      email: '',
-      website: '',
-      isActive: true,
-    },
+    defaultValues: { name: '', isActive: true },
     id: 'create-organization-form',
   });
 
   const editForm = useForm({
     schema: organizationSchema,
-    defaultValues: selectedOrganization || {
-      name: '',
-      description: '',
-      address: '',
-      city: '',
-      state: '',
-      zipCode: '',
-      phone: '',
-      email: '',
-      website: '',
-      isActive: true,
-    },
+    defaultValues: selectedOrganization || { name: '', isActive: true },
     id: 'edit-organization-form',
   });
 
   useEffect(() => {
     if (selectedOrganization) {
       editForm.setValue('name', selectedOrganization.name || '');
-      editForm.setValue('description', selectedOrganization.description || '');
-      editForm.setValue('address', selectedOrganization.address || '');
-      editForm.setValue('city', selectedOrganization.city || '');
-      editForm.setValue('state', selectedOrganization.state || '');
-      editForm.setValue('zipCode', selectedOrganization.zipCode || '');
-      editForm.setValue('phone', selectedOrganization.phone || '');
-      editForm.setValue('email', selectedOrganization.email || '');
-      editForm.setValue('website', selectedOrganization.website || '');
       editForm.setValue('isActive', selectedOrganization.isActive ?? true);
     }
   }, [selectedOrganization, editForm]);
 
   useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data?.success) {
+    if (fetcher.state === 'idle' && fetcher.data && 'success' in fetcher.data) {
       setIsCreateModalOpen(false);
       setIsEditModalOpen(false);
       setIsDeleteModalOpen(false);
@@ -300,7 +219,7 @@ export default function OrganizationsRoute() {
   const handleSort = (field: string) => {
     const currentSort = searchParams.get('sortBy');
     const currentOrder = searchParams.get('sortOrder');
-    
+
     setSearchParams((prev: URLSearchParams) => {
       if (currentSort === field) {
         prev.set('sortOrder', currentOrder === 'asc' ? 'desc' : 'asc');
@@ -348,32 +267,22 @@ export default function OrganizationsRoute() {
             Add Organization
           </Button>
         </div>
-        
+
         <div className="mb-4 px-4">
-          <SearchInput placeholder="Search organizations..." queryParam="q" />
+          <SearchInput placeholder="Search organizations..." />
         </div>
 
         <div className="flex-1 overflow-auto px-4">
           <TableComponent>
             <TableHeader>
               <TableRow>
-                <TableHead 
+                <TableHead
                   className="cursor-pointer"
                   onClick={() => handleSort('name')}
                 >
                   Name
                   <ArrowUpDown className="ml-2 inline h-4 w-4" />
                 </TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead 
-                  className="cursor-pointer"
-                  onClick={() => handleSort('city')}
-                >
-                  City
-                  <ArrowUpDown className="ml-2 inline h-4 w-4" />
-                </TableHead>
-                <TableHead>State</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -384,10 +293,6 @@ export default function OrganizationsRoute() {
                   <TableCell className="font-medium">
                     {organization.name}
                   </TableCell>
-                  <TableCell>{organization.email || '-'}</TableCell>
-                  <TableCell>{organization.phone || '-'}</TableCell>
-                  <TableCell>{organization.city || '-'}</TableCell>
-                  <TableCell>{organization.state || '-'}</TableCell>
                   <TableCell>
                     <Switch
                       checked={organization.isActive}
@@ -403,11 +308,13 @@ export default function OrganizationsRoute() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(organization)}>
+                        <DropdownMenuItem
+                          onClick={() => handleEdit(organization)}
+                        >
                           <PencilIcon className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           onClick={() => handleDelete(organization)}
                           className="text-red-600"
                         >
@@ -425,13 +332,18 @@ export default function OrganizationsRoute() {
 
         <div className="mt-4 px-4 pb-4">
           <Pagination
-            page={page}
-            totalPages={totalPages}
-            pageSize={limit}
             totalCount={totalCount}
-            onPageChange={(newPage) => {
+            skip={(page - 1) * limit}
+            take={limit}
+            setSkip={(skip) => {
               setSearchParams((prev) => {
-                prev.set('page', newPage.toString());
+                prev.set('page', (skip / limit + 1).toString());
+                return prev;
+              });
+            }}
+            setTake={(take) => {
+              setSearchParams((prev) => {
+                prev.set('limit', take.toString());
                 return prev;
               });
             }}
@@ -440,7 +352,7 @@ export default function OrganizationsRoute() {
 
         {/* Create Modal */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Organization</DialogTitle>
               <DialogDescription>
@@ -454,110 +366,27 @@ export default function OrganizationsRoute() {
             >
               <input type="hidden" name="intent" value="create" />
               {createForm.renderFormIdInput()}
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
-                  <Input 
-                    {...createForm.getInputProps('name')}
-                    id="name" 
-                    aria-describedby="name-error"
-                  />
-                  {createForm.error('name') && (
-                    <div id="name-error" className="text-sm text-red-500">
-                      {createForm.error('name')}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input 
-                    {...createForm.getInputProps('email')}
-                    id="email" 
-                    type="email"
-                    aria-describedby="email-error"
-                  />
-                  {createForm.error('email') && (
-                    <div id="email-error" className="text-sm text-red-500">
-                      {createForm.error('email')}
-                    </div>
-                  )}
-                </div>
-              </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea 
-                  {...createForm.getInputProps('description')}
-                  id="description" 
-                  rows={3}
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  {...createForm.getInputProps('name')}
+                  id="name"
+                  aria-describedby="name-error"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input 
-                    {...createForm.getInputProps('phone')}
-                    id="phone"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <Input 
-                    {...createForm.getInputProps('website')}
-                    id="website" 
-                    type="url"
-                    aria-describedby="website-error"
-                  />
-                  {createForm.error('website') && (
-                    <div id="website-error" className="text-sm text-red-500">
-                      {createForm.error('website')}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input 
-                  {...createForm.getInputProps('address')}
-                  id="address"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input 
-                    {...createForm.getInputProps('city')}
-                    id="city"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input 
-                    {...createForm.getInputProps('state')}
-                    id="state"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="zipCode">Zip Code</Label>
-                  <Input 
-                    {...createForm.getInputProps('zipCode')}
-                    id="zipCode"
-                  />
-                </div>
+                {createForm.error('name') && (
+                  <div id="name-error" className="text-sm text-red-500">
+                    {createForm.error('name')}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
-                <Switch 
-                  {...createForm.getInputProps('isActive', { type: 'checkbox' })}
-                  id="isActive" 
+                <Switch
+                  {...createForm.getInputProps('isActive', {
+                    type: 'button',
+                  })}
+                  id="isActive"
                   defaultChecked
                 />
                 <Label htmlFor="isActive">Active</Label>
@@ -579,7 +408,7 @@ export default function OrganizationsRoute() {
 
         {/* Edit Modal */}
         <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit Organization</DialogTitle>
               <DialogDescription>
@@ -593,111 +422,32 @@ export default function OrganizationsRoute() {
                 className="space-y-4"
               >
                 <input type="hidden" name="intent" value="update" />
-                <input type="hidden" name="id" value={selectedOrganization.id} />
+                <input
+                  type="hidden"
+                  name="id"
+                  value={selectedOrganization.id}
+                />
                 {editForm.renderFormIdInput()}
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-name">Name *</Label>
-                    <Input 
-                      {...editForm.getInputProps('name')}
-                      id="edit-name"
-                      aria-describedby="edit-name-error"
-                    />
-                    {editForm.error('name') && (
-                      <div id="edit-name-error" className="text-sm text-red-500">
-                        {editForm.error('name')}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-email">Email</Label>
-                    <Input 
-                      {...editForm.getInputProps('email')}
-                      id="edit-email" 
-                      type="email"
-                      aria-describedby="edit-email-error"
-                    />
-                    {editForm.error('email') && (
-                      <div id="edit-email-error" className="text-sm text-red-500">
-                        {editForm.error('email')}
-                      </div>
-                    )}
-                  </div>
-                </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Textarea 
-                    {...editForm.getInputProps('description')}
-                    id="edit-description" 
-                    rows={3}
+                  <Label htmlFor="edit-name">Name *</Label>
+                  <Input
+                    {...editForm.getInputProps('name')}
+                    id="edit-name"
+                    aria-describedby="edit-name-error"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-phone">Phone</Label>
-                    <Input 
-                      {...editForm.getInputProps('phone')}
-                      id="edit-phone"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-website">Website</Label>
-                    <Input 
-                      {...editForm.getInputProps('website')}
-                      id="edit-website" 
-                      type="url"
-                      aria-describedby="edit-website-error"
-                    />
-                    {editForm.error('website') && (
-                      <div id="edit-website-error" className="text-sm text-red-500">
-                        {editForm.error('website')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-address">Address</Label>
-                  <Input 
-                    {...editForm.getInputProps('address')}
-                    id="edit-address"
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-city">City</Label>
-                    <Input 
-                      {...editForm.getInputProps('city')}
-                      id="edit-city"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-state">State</Label>
-                    <Input 
-                      {...editForm.getInputProps('state')}
-                      id="edit-state"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-zipCode">Zip Code</Label>
-                    <Input 
-                      {...editForm.getInputProps('zipCode')}
-                      id="edit-zipCode"
-                    />
-                  </div>
+                  {editForm.error('name') && (
+                    <div id="edit-name-error" className="text-sm text-red-500">
+                      {editForm.error('name')}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Switch 
-                    {...editForm.getInputProps('isActive', { type: 'checkbox' })}
+                  <Switch
+                    {...editForm.getInputProps('isActive', {
+                      type: 'button',
+                    })}
                     id="edit-isActive"
                   />
                   <Label htmlFor="edit-isActive">Active</Label>
@@ -724,7 +474,8 @@ export default function OrganizationsRoute() {
             <DialogHeader>
               <DialogTitle>Delete Organization</DialogTitle>
               <DialogDescription>
-                Are you sure you want to delete {selectedOrganization?.name}? This action cannot be undone.
+                Are you sure you want to delete {selectedOrganization?.name}?
+                This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -734,10 +485,7 @@ export default function OrganizationsRoute() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="destructive"
-                onClick={confirmDelete}
-              >
+              <Button variant="destructive" onClick={confirmDelete}>
                 Delete
               </Button>
             </DialogFooter>

@@ -14,8 +14,8 @@ export async function requireAdmin(request: Request) {
     throw data(
       {
         error: 'Unauthorized',
-        requiredRole: name,
-        message: `Unauthorized: required role: ${name}`,
+        requiredRole: 'admin',
+        message: `Unauthorized: required role: admin`,
       },
       { status: 403 }
     );

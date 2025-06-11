@@ -172,22 +172,6 @@ model FeatureFlag {
   isEnabled   Boolean  @default(false)
 }
 
-model Organization {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
-  name        String
-  description String?
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
-  phone       String?
-  email       String?
-  website     String?
-  isActive    Boolean  @default(true)
-}
-
 model InstructionAudio {
   id                        String                  @id @default(cuid())
   createdAt                 DateTime                @default(now()) @db.Timestamptz(6)
