@@ -29,7 +29,7 @@ variable "db_username" {
 variable "db_instance_class" {
   type        = string
   description = "RDS instance class"
-  default     = "db.t3.small"
+  default     = "db.t4g.micro"
 }
 
 variable "db_allocated_storage" {
@@ -73,17 +73,22 @@ variable "bastion_public_key" {
   type        = string
 }
 
+variable "resend_api_key" {
+  type        = string
+  description = "Resend API key"
+}
+
+variable "resend_from_email" {
+  type        = string
+  description = "Resend from email"
+}
+
 variable "app_name" {
   type        = string
   description = "Name of the application (e.g. AirBnB, Yawp, etc.)"
 }
 
-output "web_service_arn" {
-  description = "ARN of the App Runner service"
-  value       = aws_apprunner_service.web.arn
-}
-
-output "web_service_url" {
-  description = "Public URL of the App Runner service"
-  value       = aws_apprunner_service.web.service_url
+variable "sentry_dsn" {
+  type        = string
+  description = "Sentry DSN"
 }

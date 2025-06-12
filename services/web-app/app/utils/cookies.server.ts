@@ -25,7 +25,7 @@ export function getStudentFiltersValue(
     key === 'workshopLeader' ||
     key === 'teacher'
   ) {
-    return value.split(',');
+    return value.split(',').filter(Boolean);
   }
 
   if (key === 'skip' || key === 'take') {

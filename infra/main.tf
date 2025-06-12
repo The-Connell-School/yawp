@@ -106,8 +106,8 @@ resource "aws_key_pair" "bastion" {
 }
 
 resource "aws_instance" "bastion" {
-  ami           = "ami-0c7217cdde317cfec"  # Amazon Linux 2023 AMI
-  instance_type = "t3.micro"
+  ami           = "ami-09e6f87a47903347c"  # Amazon Linux 2023 AMI
+  instance_type = "t2.micro"
   subnet_id     = module.vpc.public_subnets[0]
   key_name      = aws_key_pair.bastion.key_name
   associate_public_ip_address = true
@@ -264,7 +264,9 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
           aws_secretsmanager_secret.openai_key.arn,
           aws_secretsmanager_secret.anthropic_key.arn,
           aws_secretsmanager_secret.session.arn,
-          aws_secretsmanager_secret.internal_token.arn
+          aws_secretsmanager_secret.internal_token.arn,
+          aws_secretsmanager_secret.sentry_dsn.arn,
+          aws_secretsmanager_secret.resend_api_key.arn
         ]
       },
       {
@@ -353,6 +355,24 @@ resource "aws_secretsmanager_secret_version" "internal_token" {
   secret_string = var.internal_command_token
 }
 
+resource "aws_secretsmanager_secret" "resend_api_key" {
+  name = "${var.app_name}-${var.env}-resend-api-key"
+}
+
+resource "aws_secretsmanager_secret_version" "resend_api_key" {
+  secret_id     = aws_secretsmanager_secret.resend_api_key.id
+  secret_string = var.resend_api_key
+}
+
+resource "aws_secretsmanager_secret" "sentry_dsn" {
+  name = "${var.app_name}-${var.env}-sentry-dsn"
+}
+
+resource "aws_secretsmanager_secret_version" "sentry_dsn" {
+  secret_id     = aws_secretsmanager_secret.sentry_dsn.id
+  secret_string = var.sentry_dsn
+}
+
 resource "aws_apprunner_service" "web" {
   service_name = "${var.app_name}-${var.env}"
 
@@ -372,6 +392,7 @@ resource "aws_apprunner_service" "web" {
           NODE_ENV = var.env
           PORT = "8080"
           AI_MODEL = "claude-3-5-sonnet-20240620"
+          RESEND_FROM_EMAIL = var.resend_from_email
         }
 
         runtime_environment_secrets = {
@@ -382,6 +403,8 @@ resource "aws_apprunner_service" "web" {
           SESSION_SECRET = aws_secretsmanager_secret.session.arn
           INTERNAL_COMMAND_TOKEN = aws_secretsmanager_secret.internal_token.arn
           DATABASE_URL = aws_secretsmanager_secret.db_url.arn
+          RESEND_API_KEY = aws_secretsmanager_secret.resend_api_key.arn
+          SENTRY_DSN = aws_secretsmanager_secret.sentry_dsn.arn
         }
       }
     }

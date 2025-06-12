@@ -74,6 +74,7 @@ import {
   type StudentFilters,
 } from '~/utils/cookies.server';
 import { createToastHeaders } from '~/utils/toast.server';
+import { Prisma } from '@app/prisma';
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Students' };
 
@@ -117,18 +118,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const isAdmin = user?.isAdmin;
   const isTeacher = user?.teacherProfile !== null;
 
-  const where = {
+  const where: Prisma.StudentProfileWhereInput = {
     AND: [
       {
         OR: [
           { user: { name: { contains: filters.query } } },
           { user: { email: { contains: filters.query } } },
+          // { user: { studentProfile: { school: { contains: filters.query } } } },
           { school: { contains: filters.query } },
           { grade: { contains: filters.query } },
           { period: { contains: filters.query } },
         ],
       },
-      filters.school.length > 0 && !filters.school.includes('all')
+      filters.school.filter(Boolean).length > 0 &&
+      !filters.school.includes('all')
         ? {
             OR: filters.school.map((school) =>
               school === 'none'
@@ -137,14 +140,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
             ),
           }
         : {},
-      filters.grade.length > 0 && !filters.grade.includes('all')
+      filters.grade.filter(Boolean).length > 0 && !filters.grade.includes('all')
         ? {
             OR: filters.grade.map((grade) =>
               grade === 'none' ? { grade: null } : { grade: { equals: grade } }
             ),
           }
         : {},
-      filters.period.length > 0 && !filters.period.includes('all')
+      filters.period.filter(Boolean).length > 0 &&
+      !filters.period.includes('all')
         ? {
             OR: filters.period.map((period) =>
               period === 'none'
@@ -153,7 +157,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             ),
           }
         : {},
-      filters.workshopLeader.length > 0 &&
+      filters.workshopLeader.filter(Boolean).length > 0 &&
       !filters.workshopLeader.includes('all')
         ? {
             OR: filters.workshopLeader.map((workshopLeader) =>
@@ -163,7 +167,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
             ),
           }
         : {},
-      filters.teacher.length > 0 && !filters.teacher.includes('all')
+      filters.teacher.filter(Boolean).length > 0 &&
+      !filters.teacher.includes('all')
         ? {
             OR: filters.teacher.map((teacher) =>
               teacher === 'none'
@@ -310,16 +315,16 @@ export async function action({ request }: ActionFunctionArgs) {
         id: { in: formData.get('studentIds')?.toString().split(',') ?? [] },
       },
       data: {
-        ...(formData.get('school')?.toString()
+        ...((formData.get('school')?.toString().length ?? 0) > 0
           ? { school: formData.get('school')?.toString() }
           : {}),
-        ...(formData.get('grade')?.toString()
+        ...((formData.get('grade')?.toString().length ?? 0) > 0
           ? { grade: formData.get('grade')?.toString() }
           : {}),
-        ...(formData.get('period')?.toString()
+        ...((formData.get('period')?.toString().length ?? 0) > 0
           ? { period: formData.get('period')?.toString() }
           : {}),
-        ...(formData.get('teacher')?.toString()
+        ...((formData.get('teacher')?.toString().length ?? 0) > 0
           ? { schoolTeacher: formData.get('teacher')?.toString() }
           : {}),
       },
@@ -346,6 +351,7 @@ export default function StudentsRoute() {
   const [isSaveViewOpen, setIsSaveViewOpen] = useState(false);
   const user = useUser();
   const isTeacher = user.teacherProfile !== null;
+  const isLoading = fetcher.state !== 'idle';
 
   useEffect(() => {
     if (searchParams.get('filters')) {
@@ -487,7 +493,19 @@ export default function StudentsRoute() {
         </div>
         <div className="mb-2 flex flex-col gap-2 px-4">
           <div className="flex-1">
-            <SearchInput />
+            <SearchInput
+              defaultQuery={cookieFilters.query}
+              onSearch={(query) => {
+                fetcher.submit(
+                  {
+                    intent: 'updateFilters',
+                    key: 'query',
+                    value: query,
+                  },
+                  { method: 'POST' }
+                );
+              }}
+            />
           </div>
           <div className="flex items-start justify-between gap-1">
             <div className="flex items-start gap-2">
@@ -517,6 +535,7 @@ export default function StudentsRoute() {
                 ]}
                 values={cookieFilters.school}
                 onChange={(values) => handleFilter('school', values)}
+                disabled={isLoading}
               />
               <MultiSelect
                 label="Grade"
@@ -528,6 +547,7 @@ export default function StudentsRoute() {
                 ]}
                 values={cookieFilters.grade}
                 onChange={(values) => handleFilter('grade', values)}
+                disabled={isLoading}
               />
               <MultiSelect
                 label="Period"
@@ -539,6 +559,7 @@ export default function StudentsRoute() {
                 ]}
                 values={cookieFilters.period}
                 onChange={(values) => handleFilter('period', values)}
+                disabled={isLoading}
               />
               {isAdmin && (
                 <MultiSelect
@@ -551,6 +572,7 @@ export default function StudentsRoute() {
                   ]}
                   values={cookieFilters.workshopLeader}
                   onChange={(values) => handleFilter('workshopLeader', values)}
+                  disabled={isLoading}
                 />
               )}
               <MultiSelect
@@ -563,9 +585,15 @@ export default function StudentsRoute() {
                 ]}
                 values={cookieFilters.teacher}
                 onChange={(values) => handleFilter('teacher', values)}
+                disabled={isLoading}
               />
               {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  disabled={isLoading}
+                >
                   Clear
                 </Button>
               )}
@@ -574,6 +602,7 @@ export default function StudentsRoute() {
                   variant="outline-primary"
                   size="icon-sm"
                   onClick={() => setIsSaveViewOpen(true)}
+                  disabled={isLoading}
                 >
                   <BookmarkIcon className="h-3.5 w-3.5" />
                 </Button>
@@ -583,7 +612,7 @@ export default function StudentsRoute() {
               {cookieFilters.view === 'cards' && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" disabled={isLoading}>
                       <ArrowUpDownIcon
                         className="mr-1 h-3.5 w-3.5 opacity-50"
                         strokeWidth={3}
@@ -601,6 +630,7 @@ export default function StudentsRoute() {
                         key={value}
                         onClick={() => handleSort(value)}
                         className="flex items-center justify-between"
+                        disabled={isLoading}
                       >
                         {label}
                         {cookieFilters.sort === value &&
@@ -626,6 +656,7 @@ export default function StudentsRoute() {
                       'bg-white shadow hover:bg-white'
                   )}
                   onClick={() => toggleView('table')}
+                  disabled={isLoading}
                 >
                   <List className="h-[18px] w-[18px]" />
                 </Button>
@@ -640,6 +671,7 @@ export default function StudentsRoute() {
                       'bg-white shadow hover:bg-white'
                   )}
                   onClick={() => toggleView('cards')}
+                  disabled={isLoading}
                 >
                   <LayoutGrid className="h-[18px] w-[18px]" />
                 </Button>
@@ -648,7 +680,14 @@ export default function StudentsRoute() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto border-b border-t">
-          {students.length === 0 ? (
+          {isLoading ? (
+            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span className="mt-2 text-sm text-muted-foreground">
+                Loading...
+              </span>
+            </div>
+          ) : students.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
               <span className="text-lg font-bold">No results</span>
               <span className="text-sm text-muted-foreground">

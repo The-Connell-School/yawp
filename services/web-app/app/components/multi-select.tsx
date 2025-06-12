@@ -21,6 +21,7 @@ interface Props {
   options: { value: string; label: string }[];
   onChange: (values: string[]) => void;
   values: string[];
+  disabled?: boolean;
 }
 
 export function MultiSelect({
@@ -29,6 +30,7 @@ export function MultiSelect({
   onChange,
   queryKey,
   values,
+  disabled,
 }: Props) {
   const [searchParams] = useSearchParams();
   const selectedValues =
@@ -37,7 +39,11 @@ export function MultiSelect({
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="h-8 gap-1 border-dashed px-2">
+        <Button
+          variant="outline"
+          className="h-8 gap-1 border-dashed px-2"
+          disabled={disabled}
+        >
           <PlusCircle size={16} />
           {label}
           {selectedValues?.length > 0 && (

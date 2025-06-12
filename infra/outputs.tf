@@ -42,3 +42,13 @@ output "bastion_security_group_id" {
   description = "Bastion security group ID"
   value       = aws_security_group.bastion.id
 }
+
+output "web_service_arn" {
+  description = "ARN of the App Runner service"
+  value       = aws_apprunner_service.web.arn
+}
+
+output "web_service_url" {
+  description = "Public URL of the App Runner service"
+  value       = aws_apprunner_service.web.service_url
+}

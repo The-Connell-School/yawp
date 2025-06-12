@@ -35,14 +35,14 @@ terraform apply && terraform output bastion_public_ip
 ```
 5. You can connect to your RDS instance through the bastion:
 ```bash
-ssh -i ~/.ssh/yawp-{env}-bastion ubuntu@<bastion-public-ip>
+ssh -i ~/.ssh/yawp-{env}-bastion ec2-user@<bastion-public-ip>
 ```
 
 ### Connecting to an AWS database from a .ts script
 
 2. Open a tunnel to the db
 ```bash
-ssh -N -L 3306:<db_host>:5432 ubuntu@<bastion_server_host> -i ~/.ssh/<app_name>-<env>-bastion
+ssh -N -L 3306:<db_host>:5432 ec2-user@<bastion_server_host> -i ~/.ssh/<app_name>-<env>-bastion
 ```
 2. Then, in another terminal, connect to the database (using actual creds)
 ```bash
