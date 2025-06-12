@@ -130,6 +130,27 @@ resource "aws_ecr_repository" "web_app" {
   }
 }
 
+resource "aws_ecr_lifecycle_policy" "web_app" {
+  repository = aws_ecr_repository.web_app.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last 5 images, expire everything older"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 5
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
 resource "random_password" "db_master" {
   length           = 16
   special          = true
