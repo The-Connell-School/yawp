@@ -21,214 +21,453 @@ import { useDoubleCheck, useIsPending } from '~/utils/misc';
 import { redirectWithToast } from '~/utils/toast.server';
 import { CourseForm } from '../app.admin.courses/form';
 import { validator } from '../app.admin.courses/form/schema';
+import { useFetcher } from 'react-router';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '~/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '~/components/ui/table';
+import { requireAdmin } from '~/utils/permissions';
+import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '~/components/ui/sheet';
+import { Label } from '~/components/ui/label';
+import { Input } from '~/components/ui/input';
+import { Textarea } from '~/components/ui/textarea';
+import { Switch } from '~/components/ui/switch';
+import React from 'react';
 
 const deleteValidator = z.object({ id: z.string() });
 
-export async function loader({ params }: LoaderFunctionArgs) {
-  invariant(params.id, 'Missing course id');
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
   const course = await prisma.course.findUnique({
     where: { id: params.id },
     include: {
       courseModules: {
         include: {
           instructions: {
-            select: {
-              title: true,
-              prompt: true,
-              interactiveType: true,
-              tutorInstructions: true,
-              answerKey: true,
-              answerType: true,
-              answerTypeOptions: true,
-              canAskQuestion: true,
-              nextInstructionBtnLabel: true,
-            },
+            orderBy: { position: 'asc' },
           },
         },
         orderBy: { position: 'asc' },
       },
-      image: { select: { id: true } },
-      resources: true,
+      resources: {
+        orderBy: { createdAt: 'desc' },
+      },
+      image: true,
     },
   });
 
   if (!course) {
-    return redirect('/app/admin/courses');
+    throw new Response('Not Found', { status: 404 });
   }
 
   return dataResponse({ course });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  invariant(params.id, 'Missing course id');
+  await requireAdmin(request);
+  const formData = await request.formData();
+  const intent = formData.get('intent');
 
-  if (request.method === 'DELETE') {
-    const { error, data } = await parseFormData(request, deleteValidator);
-    if (error) return validationError(error);
-    await prisma.course.delete({ where: { id: data.id } });
-    return redirectWithToast('/app/admin/courses', {
-      type: 'success',
-      description: 'Course deleted successfully.',
-      closeButton: false,
-    });
-  } else {
-    const { error, data } = await parseFormData(request, validator);
-    if (error) return validationError(error);
+  if (intent === 'updateCourse') {
+    const title = formData.get('title')?.toString();
+    const description = formData.get('description')?.toString();
 
-    // Delete array data
-    await Promise.all([
-      prisma.courseResource.deleteMany({
-        where: { courseId: params.id },
-      }),
-      prisma.courseModuleInstruction.deleteMany({
-        where: { courseModule: { courseId: params.id } },
-      }),
-      prisma.courseModule.deleteMany({
-        where: {
-          courseId: params.id,
-          NOT: {
-            id: {
-              // Keep these so we don't loose associated records (e.g. course module sessions)
-              in: (data.courseModules?.map((cm) => cm.id).filter(Boolean) ??
-                []) as string[],
-            },
-          },
-        },
-      }),
-    ]);
+    if (!title) {
+      throw new Response('Title is required', { status: 400 });
+    }
 
-    // Update & create array data
-    await Promise.all([
-      prisma.courseResource.createMany({
-        data:
-          data.resources?.map((r) => ({ ...r, courseId: params.id! })) ?? [],
-      }),
-      ...(data.courseModules?.map(({ id, position, ...cm }, p) => {
-        const instructions = {
-          create:
-            cm.instructions?.map((i, p) => ({
-              ...i,
-              id: undefined,
-              position: p,
-            })) ?? [],
-        };
-
-        return prisma.courseModule.upsert({
-          where: { id: id ?? '' },
-          create: {
-            ...cm,
-            courseId: params.id,
-            position: position ?? 0,
-            isSelfGuided: cm.isSelfGuided === 'true',
-            instructions,
-          },
-          update: {
-            ...cm,
-            courseId: params.id,
-            position: position ?? 0,
-            isSelfGuided: cm.isSelfGuided === 'true',
-            instructions,
-          },
-        });
-      }) ?? []),
-    ]);
-
-    const update = await prisma.course.update({
-      include: { image: true },
+    await prisma.course.update({
       where: { id: params.id },
       data: {
-        ...omit(data, [
-          'image',
-          'courseImageSrc',
-          'courseModules',
-          'resources',
-        ]),
+        title,
+        description: description || null,
       },
     });
 
-    // if (data.image && data.image.size > 0 && data.courseImageSrc) {
-    //   if (data.courseImageSrc && update.image) {
-    //     await prisma.course.update({
-    //       where: { id: params.id },
-    //       data: { image: { delete: true } },
-    //     });
-    //   }
-
-    //   await prisma.courseImage.create({
-    //     data: {
-    //       contentType: data.image.type,
-    //       blob: Buffer.from(await data.image.arrayBuffer()),
-    //       course: { connect: { id: params.id } },
-    //     },
-    //   });
-    // } else if (!data.courseImageSrc && update.image) {
-    //   await prisma.course.update({
-    //     where: { id: params.id },
-    //     data: { image: { delete: true } },
-    //   });
-    // }
-
-    return redirectWithToast(`/app/admin/courses/${params.id}`, {
-      type: 'success',
-      description: 'Course updated successfully.',
-      closeButton: false,
-    });
+    return dataResponse({ status: 'success' });
   }
+
+  if (intent === 'createModule') {
+    const title = formData.get('title')?.toString();
+    const description = formData.get('description')?.toString();
+    const isSelfGuided = formData.get('isSelfGuided') === 'true';
+
+    if (!title) {
+      throw new Response('Title is required', { status: 400 });
+    }
+
+    const moduleCount = await prisma.courseModule.count({
+      where: { courseId: params.id },
+    });
+
+    await prisma.courseModule.create({
+      data: {
+        title,
+        description: description || null,
+        isSelfGuided,
+        position: moduleCount,
+        courseId: params.id!,
+      },
+    });
+
+    return dataResponse({ status: 'success' });
+  }
+
+  if (intent === 'createResource') {
+    const title = formData.get('title')?.toString();
+    const description = formData.get('description')?.toString();
+    const url = formData.get('url')?.toString();
+
+    if (!title) {
+      throw new Response('Title is required', { status: 400 });
+    }
+
+    await prisma.courseResource.create({
+      data: {
+        title,
+        description: description || null,
+        url: url || null,
+        courseId: params.id!,
+      },
+    });
+
+    return dataResponse({ status: 'success' });
+  }
+
+  if (intent === 'reorderModules') {
+    const moduleIds = JSON.parse(formData.get('moduleIds')?.toString() || '[]');
+    
+    await Promise.all(
+      moduleIds.map((moduleId: string, index: number) =>
+        prisma.courseModule.update({
+          where: { id: moduleId },
+          data: { position: index },
+        })
+      )
+    );
+
+    return dataResponse({ status: 'success' });
+  }
+
+  return dataResponse({ status: 'error' });
 }
 
-export default function CoursesIdRoute() {
-  const data = useLoaderData<typeof loader>();
-  const isPending = useIsPending();
-  const dc = useDoubleCheck();
-  const formId = `edit-course-${data.course.id}`;
+export default function CourseRoute() {
+  const { course } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
+  const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
+  const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
+  const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (fetcher.data?.status === 'success') {
+      setIsCourseSheetOpen(false);
+      setIsModuleSheetOpen(false);
+      setIsResourceSheetOpen(false);
+    }
+  }, [fetcher.data]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="no-scrollbar grow overflow-y-scroll p-6">
-        <CourseForm
-          defaultValues={{
-            ...data.course,
-            image: undefined,
-            courseImageSrc: data.course.image
-              ? `/api/image/course/${data.course.image?.id}`
-              : undefined,
-          }}
-          formId={formId}
-          key={formId}
-        />
-      </div>
-      <div className="flex gap-2 px-6 pb-6 pt-1">
-        <Button type="submit" disabled={isPending} form={formId}>
-          Update
+    <div className="grid gap-4 p-3 md:p-5">
+      <div className="flex justify-between">
+        <Button variant="ghost" asChild>
+          <Link to="/app/admin/courses">
+            <ChevronLeft size={18} />
+            All courses
+          </Link>
         </Button>
-        <Button
-          disabled={isPending}
-          variant="secondary"
-          asChild
-          className="md:hidden"
-        >
-          <Link to="/app/admin/courses">Cancel</Link>
-        </Button>
-        <ValidatedForm
-          schema={deleteValidator}
-          method="DELETE"
-          defaultValues={{ id: data.course.id }}
-        >
-          <input type="hidden" name="id" value={data.course.id} />
-          <Button
-            {...dc.getButtonProps({ type: 'submit' })}
-            disabled={isPending}
-            size={dc.doubleCheck ? 'default' : 'icon'}
-            variant={dc.doubleCheck ? 'destructive' : 'secondary'}
-          >
-            {dc.doubleCheck ? (
-              'Are you sure?'
-            ) : (
-              <TrashIcon className="h-5 w-5" />
-            )}
-          </Button>
-        </ValidatedForm>
+        <Sheet open={isCourseSheetOpen} onOpenChange={setIsCourseSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline">
+              <Settings className="mr-2 h-4 w-4" />
+              Edit Course
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Edit Course</SheetTitle>
+            </SheetHeader>
+            <fetcher.Form method="post" className="mt-4 space-y-4">
+              <input type="hidden" name="intent" value="updateCourse" />
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  defaultValue={course.title}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  name="description"
+                  defaultValue={course.description || ''}
+                  rows={3}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={fetcher.state !== 'idle'}
+              >
+                {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </fetcher.Form>
+          </SheetContent>
+        </Sheet>
       </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-muted">
+          <CardHeader>
+            <CardTitle>Course Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Title
+                </dt>
+                <dd className="text-base font-medium">{course.title}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Description
+                </dt>
+                <dd className="text-base">
+                  {course.description || 'No description'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Created At
+                </dt>
+                <dd className="text-base">
+                  {new Date(course.createdAt).toLocaleDateString()}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-muted">
+          <CardHeader>
+            <CardTitle>Modules</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{course.courseModules.length}</div>
+            <p className="text-sm text-muted-foreground">Course modules</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-muted">
+          <CardHeader>
+            <CardTitle>Resources</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{course.resources.length}</div>
+            <p className="text-sm text-muted-foreground">Learning resources</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="bg-muted">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Course Modules</CardTitle>
+          <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
+            <SheetTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Module
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Create Module</SheetTitle>
+              </SheetHeader>
+              <fetcher.Form method="post" className="mt-4 space-y-4">
+                <input type="hidden" name="intent" value="createModule" />
+                <div className="space-y-2">
+                  <Label htmlFor="moduleTitle">Title</Label>
+                  <Input id="moduleTitle" name="title" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="moduleDescription">Description</Label>
+                  <Textarea id="moduleDescription" name="description" rows={3} />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch id="isSelfGuided" name="isSelfGuided" />
+                  <Label htmlFor="isSelfGuided">Self-guided module</Label>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={fetcher.state !== 'idle'}
+                >
+                  {fetcher.state !== 'idle' ? 'Creating...' : 'Create Module'}
+                </Button>
+              </fetcher.Form>
+            </SheetContent>
+          </Sheet>
+        </CardHeader>
+        <CardContent>
+          {course.courseModules.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No modules yet. Create your first module to get started.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Instructions</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {course.courseModules.map((module) => (
+                  <TableRow key={module.id}>
+                    <TableCell>
+                      <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {module.title}
+                    </TableCell>
+                    <TableCell>
+                      {module.isSelfGuided ? 'Self-guided' : 'Tutor-guided'}
+                    </TableCell>
+                    <TableCell>{module.instructions.length}</TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`modules/${module.id}`}>
+                          Edit
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-muted">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Course Resources</CardTitle>
+          <Sheet open={isResourceSheetOpen} onOpenChange={setIsResourceSheetOpen}>
+            <SheetTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Resource
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Create Resource</SheetTitle>
+              </SheetHeader>
+              <fetcher.Form method="post" className="mt-4 space-y-4">
+                <input type="hidden" name="intent" value="createResource" />
+                <div className="space-y-2">
+                  <Label htmlFor="resourceTitle">Title</Label>
+                  <Input id="resourceTitle" name="title" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="resourceDescription">Description</Label>
+                  <Textarea id="resourceDescription" name="description" rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="resourceUrl">URL</Label>
+                  <Input
+                    id="resourceUrl"
+                    name="url"
+                    type="url"
+                    placeholder="https://..."
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={fetcher.state !== 'idle'}
+                >
+                  {fetcher.state !== 'idle' ? 'Creating...' : 'Create Resource'}
+                </Button>
+              </fetcher.Form>
+            </SheetContent>
+          </Sheet>
+        </CardHeader>
+        <CardContent>
+          {course.resources.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No resources yet. Add your first resource to get started.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>URL</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {course.resources.map((resource) => (
+                  <TableRow key={resource.id}>
+                    <TableCell className="font-medium">
+                      {resource.title}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {resource.description || 'No description'}
+                    </TableCell>
+                    <TableCell>
+                      {resource.url ? (
+                        <a
+                          href={resource.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        'No URL'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm">
+                        Edit
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
