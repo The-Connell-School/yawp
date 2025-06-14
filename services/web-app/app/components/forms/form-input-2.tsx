@@ -27,13 +27,13 @@ export function FormInput({
   const fallbackId = useId();
   const id = props.id ?? fallbackId;
   const { error, getInputProps } = useField(name);
-  const errorId = error?.length ? `${id}-error` : undefined;
+  const hasError = error();
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       {labelInfo ? (
         <label htmlFor={id}>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 font-medium text-md mb-1">
             {label ?? startCase(name)}{' '}
             <Tooltip
               delayDuration={0}
@@ -47,17 +47,17 @@ export function FormInput({
         <label htmlFor={id}>{label ?? startCase(name)}</label>
       )}
       <Input
-        aria-invalid={errorId ? true : undefined}
-        aria-describedby={errorId}
-        variant={errorId ? 'destructive' : undefined}
+        aria-invalid={hasError ? true : undefined}
+        aria-describedby={hasError ? id : undefined}
+        variant={hasError ? 'destructive' : undefined}
         className={props.type === 'email' ? 'lowercase' : ''}
         {...getInputProps({ id, ...props })}
       />
       {helperText ? (
         <p className="text-xs text-muted-foreground">{helperText}</p>
       ) : null}
-      {error() ? (
-        <p className="text-left text-[12px] text-destructive">{error()}</p>
+      {hasError ? (
+        <p className="text-left text-[12px] text-destructive">{hasError}</p>
       ) : null}
     </div>
   );

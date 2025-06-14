@@ -53,8 +53,7 @@ export default function GeneralSettings() {
 
   return (
     <div className="p-3 sm:p-5">
-      <h3>Settings</h3>
-      <div className="mt-6 max-w-[500px]">
+      <div className="max-w-[500px]">
         {settings.map((setting) =>
           setting.valueType === 'string' ? (
             <ValidatedForm
@@ -65,12 +64,13 @@ export default function GeneralSettings() {
                 name: setting.name,
                 value: setting.value,
               }}
-              className="mb-4"
+              className="mb-4 rounded-xl border shadow-sm bg-muted p-4"
             >
               <div className="flex items-end gap-4">
                 <input type="hidden" name="name" value={setting.name} />
                 <FormInput
                   name="value"
+                  labelInfo={setting.description ?? undefined}
                   label={startCase(setting.name)}
                   className="flex-1"
                 />
@@ -86,7 +86,7 @@ export default function GeneralSettings() {
                 name: setting.name,
                 value: setting.value,
               }}
-              className="mb-4"
+              className="mb-4 rounded-xl border shadow-sm bg-muted p-4"
               id={setting.id}
             >
               <div className="flex flex-col gap-4">
@@ -96,6 +96,7 @@ export default function GeneralSettings() {
                   label={startCase(setting.name)}
                   defaultValue={setting.value}
                   formId={setting.id}
+                  description={setting.description}
                 />
               </div>
             </ValidatedForm>

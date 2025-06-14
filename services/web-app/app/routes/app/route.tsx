@@ -7,7 +7,7 @@ import {
   useLocation,
   useMatches,
 } from 'react-router';
-import { GaugeIcon, Settings2, User, UserIcon } from 'lucide-react';
+import { GaugeIcon, LockIcon, Settings2, User, UserIcon } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -60,31 +60,42 @@ export async function loader() {
   });
 }
 
+type RequiresOptions = 'isAdmin' | 'teacherProfile';
+
+const LINKS: {
+  to: string;
+  label: string;
+  end?: boolean;
+  icon: React.ReactNode;
+  requires?:
+    | { OR: RequiresOptions[] }
+    | { AND: RequiresOptions[] }
+    | RequiresOptions;
+}[] = [
+  {
+    to: '/app',
+    label: 'Dashboard',
+    end: true,
+    icon: <GaugeIcon size={20} />,
+  },
+  {
+    to: '/app/my-students',
+    label: 'My Students',
+    icon: <User size={20} />,
+    requires: 'teacherProfile',
+  },
+  {
+    to: '/app/admin',
+    label: 'Admin',
+    icon: <LockIcon size={20} />,
+    requires: 'isAdmin',
+  },
+];
+
 export default function Route() {
   const location = useLocation();
   const user = useUser();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-
-  const links = [
-    {
-      to: '/app',
-      label: 'Dashboard',
-      end: true,
-      icon: <GaugeIcon size={20} />,
-    },
-    {
-      to: '/app/admin',
-      label: 'Settings',
-      icon: <Settings2 size={20} />,
-      requiresIsAdmin: true,
-    },
-    {
-      to: '/app/students',
-      label: 'Students',
-      icon: <User size={20} />,
-      requiresTeacherProfile: true,
-    },
-  ];
 
   const matches = useMatches();
   const isInAssistants = !!matches.find((m) => m.id.includes('app.assistants'));
@@ -190,47 +201,49 @@ export default function Route() {
           </Button>
         </div>
         <div className="grid gap-1 p-3">
-          {links
-            .filter(
-              (link) =>
-                (!link.requiresIsAdmin || user.isAdmin) &&
-                (!link.requiresTeacherProfile || user.teacherProfile)
-            )
-            .map((link) => (
-              <NavLink
-                key={link.to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex w-full items-center justify-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
-                    {
-                      'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
-                        isActive,
-                      'py-2': !navExpanded,
-                    }
-                  )
-                }
-                to={link.to}
-                end={link.end}
-              >
-                {link.icon ? (
-                  navExpanded ? (
-                    link.icon
-                  ) : (
-                    <Tooltip
-                      key={link.to}
-                      text={link.label}
-                      open={navExpanded ? false : undefined}
-                      contentProps={{ side: 'right' }}
-                    >
-                      {link.icon}
-                    </Tooltip>
-                  )
-                ) : null}
-                {navExpanded ? (
-                  <span className="w-full">{link.label}</span>
-                ) : null}
-              </NavLink>
-            ))}
+          {LINKS.filter(
+            (link) =>
+              !link.requires ||
+              (typeof link.requires === 'object'
+                ? 'OR' in link.requires
+                  ? link.requires.OR.some((r) => user[r])
+                  : link.requires.AND.every((r) => user[r])
+                : user[link.requires])
+          ).map((link) => (
+            <NavLink
+              key={link.to}
+              className={({ isActive }) =>
+                cn(
+                  'flex w-full items-center justify-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
+                  {
+                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
+                      isActive,
+                    'py-2': !navExpanded,
+                  }
+                )
+              }
+              to={link.to}
+              end={link.end}
+            >
+              {link.icon ? (
+                navExpanded ? (
+                  link.icon
+                ) : (
+                  <Tooltip
+                    key={link.to}
+                    text={link.label}
+                    open={navExpanded ? false : undefined}
+                    contentProps={{ side: 'right' }}
+                  >
+                    {link.icon}
+                  </Tooltip>
+                )
+              ) : null}
+              {navExpanded ? (
+                <span className="w-full">{link.label}</span>
+              ) : null}
+            </NavLink>
+          ))}
         </div>
         <div className="flex flex-grow flex-col justify-end">
           <Popover>

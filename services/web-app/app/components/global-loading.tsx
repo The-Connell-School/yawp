@@ -5,7 +5,6 @@ import { cn } from '~/utils/misc';
 
 function GlobalLoading() {
   const navigation = useNavigation();
-  console.log('navigation', navigation);
   const [active] = useDebounce(navigation.state !== 'idle', 200);
 
   const ref = React.useRef<HTMLDivElement>(null);

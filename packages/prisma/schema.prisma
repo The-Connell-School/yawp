@@ -8,23 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AssistantConfiguration {
-  id          String  @id @default(cuid())
-  assistantId String  @unique
-  pin         String
-  actionText  String?
-  description String?
-}
-
-model AssistantMetadata {
-  id          String   @id @default(cuid())
-  assistantId String
-  isVerified  Boolean  @default(false)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  threads     Thread[]
-}
-
 model Connection {
   id           String   @id @default(cuid())
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
@@ -199,11 +182,14 @@ model InstructionAudio {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
-  name      String
-  users     User[]
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @db.Timestamptz(6)
+  name              String
+  accessExpiresAt   DateTime? @db.Timestamptz(6)
+  numOfStudentSeats Int       @default(10)
+  numOfTeacherSeats Int       @default(10)
+  users             User[]
 }
 
 model Password {
@@ -224,12 +210,13 @@ model Session {
 }
 
 model Setting {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
-  name      String   @unique
-  value     String
-  valueType String   @default("string")
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
+  name        String   @unique
+  description String?
+  value       String
+  valueType   String   @default("string")
 }
 
 model StudentProfile {
@@ -267,14 +254,6 @@ model TeacherProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model Thread {
-  id                  String            @id @default(cuid())
-  threadId            String            @unique
-  name                String
-  assistantMetadataId String
-  assistantMetadata   AssistantMetadata @relation(fields: [assistantMetadataId], references: [id], onDelete: Cascade)
-}
-
 model Upload {
   id          String    @id @default(cuid())
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
@@ -293,7 +272,6 @@ model User {
   updatedAt                DateTime                  @default(now()) @db.Timestamptz(6)
   email                    String                    @unique
   name                     String?
-  assistants               AssistantMetadata[]
   connections              Connection[]
   courseModuleSessions     CourseModuleSession[]
   documents                Document[]

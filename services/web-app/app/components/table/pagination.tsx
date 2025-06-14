@@ -9,21 +9,19 @@ export const Pagination = ({
   totalCount,
   skip,
   take,
-  setSkip,
-  setTake,
+  onChange,
 }: {
   totalCount: number;
   skip: number;
   take: number;
-  setSkip: (skip: number) => void;
-  setTake: (take: number) => void;
+  onChange: (skip: number, take: number) => void;
 }) => {
   return (
     <div className="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
       <div className="flex gap-1">
         <button
           className="rounded-md border bg-white p-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setSkip(0)}
+          onClick={() => onChange(0, take)}
           disabled={skip === 0}
           aria-label="go to start"
         >
@@ -31,7 +29,7 @@ export const Pagination = ({
         </button>
         <button
           className="rounded-md border bg-white p-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setSkip(Math.max(0, skip - take))}
+          onClick={() => onChange(Math.max(0, skip - take), take)}
           disabled={skip === 0}
           aria-label="go back"
         >
@@ -39,7 +37,7 @@ export const Pagination = ({
         </button>
         <button
           className="rounded-md border bg-white p-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setSkip(skip + take)}
+          onClick={() => onChange(skip + take, take)}
           disabled={skip + take >= totalCount}
           aria-label="go forward"
         >
@@ -47,7 +45,7 @@ export const Pagination = ({
         </button>
         <button
           className="rounded-md border bg-white p-2 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setSkip(Math.floor(totalCount / take) * take)}
+          onClick={() => onChange(Math.floor(totalCount / take) * take, take)}
           disabled={skip + take >= totalCount}
           aria-label="go to end"
         >
@@ -72,7 +70,7 @@ export const Pagination = ({
               value={Math.floor(skip / take) + 1}
               onChange={(e) => {
                 const page = e.target.value ? Number(e.target.value) - 1 : 0;
-                setSkip(page * take);
+                onChange(page * take, take);
               }}
             />
           </div>
@@ -82,8 +80,7 @@ export const Pagination = ({
           value={take}
           onChange={(e) => {
             const newTake = parseInt(e.target.value);
-            setTake(newTake);
-            setSkip(0);
+            onChange(0, newTake);
           }}
         >
           {[10, 20, 50, 100].map((pageSize) => (

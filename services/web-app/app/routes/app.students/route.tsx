@@ -260,10 +260,27 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'updateFilters') {
     let filters = await getStudentFilters(request);
-    const key = formData.get('key') as keyof StudentFilters | 'reset';
+    const key = formData.get('key') as
+      | keyof StudentFilters
+      | 'skip-take'
+      | 'reset';
     const value = formData.get('value') as string;
 
-    if (key === 'reset') {
+    if (key === 'sort') {
+      const [field, direction] = value.split('-');
+      filters.sort = field as
+        | 'name'
+        | 'email'
+        | 'school'
+        | 'grade'
+        | 'period'
+        | 'createdAt';
+      filters.direction = direction as 'asc' | 'desc';
+    } else if (key === 'skip-take') {
+      const [skip, take] = value.split('-');
+      filters.skip = Number(skip);
+      filters.take = Number(take);
+    } else if (key === 'reset') {
       filters = JSON.parse(value) as StudentFilters;
     } else {
       filters[key] = getStudentFiltersValue(key, value) as never;
@@ -827,22 +844,12 @@ export default function StudentsRoute() {
             totalCount={totalCount}
             skip={cookieFilters.skip}
             take={cookieFilters.take}
-            setSkip={(skip) => {
+            onChange={(skip, take) => {
               fetcher.submit(
                 {
                   intent: 'updateFilters',
-                  key: 'skip',
-                  value: skip.toString(),
-                },
-                { method: 'POST' }
-              );
-            }}
-            setTake={(take) => {
-              fetcher.submit(
-                {
-                  intent: 'updateFilters',
-                  key: 'take',
-                  value: take.toString(),
+                  key: 'skip-take',
+                  value: `${skip}-${take}`,
                 },
                 { method: 'POST' }
               );

@@ -21,7 +21,6 @@ export const CourseForm = ({ defaultValues, formId }: Props) => {
     schema: validator,
     submitSource: 'state',
     handleSubmit: (data) => {
-      console.log(data);
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         if (Array.isArray(value)) {
