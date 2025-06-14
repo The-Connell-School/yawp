@@ -10,6 +10,8 @@ const types = [
 	'change-email',
 	'2fa',
 	'teacher-onboarding',
+	'organization-teacher-invite',
+	'organization-student-invite',
 ] as const
 export const VerificationTypeSchema = z.enum(types)
 export type VerificationTypes = z.infer<typeof VerificationTypeSchema>

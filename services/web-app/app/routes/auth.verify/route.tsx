@@ -24,6 +24,7 @@ import { handleVerification as handleLoginTwoFactorVerification } from '../auth.
 import { handleVerification as handleOnboardingVerification } from '../auth.onboarding/utils.server';
 import { handleVerification as handleResetPasswordVerification } from '../auth.reset-password/utils.server';
 import { handleVerification as handleTeacherOnboardingVerification } from '../auth.teacher-onboarding/utils.server';
+import { handleVerification as handleOrganizationInviteVerification } from '../auth.organization-invite/utils.server';
 import { isCodeValid } from './utils';
 import {
   codeQueryParam,
@@ -101,6 +102,11 @@ async function validateRequest(
       await deleteVerification();
       return handleTeacherOnboardingVerification({ request, body, submission });
     }
+    case 'organization-teacher-invite':
+    case 'organization-student-invite': {
+      await deleteVerification();
+      return handleOrganizationInviteVerification({ request, body, submission });
+    }
   }
 }
 
@@ -126,6 +132,8 @@ export default function VerifyRoute() {
   const headings: Record<VerificationTypes, React.ReactNode> = {
     onboarding: checkEmail,
     'teacher-onboarding': checkEmail,
+    'organization-teacher-invite': checkEmail,
+    'organization-student-invite': checkEmail,
     'reset-password': checkEmail,
     'change-email': checkEmail,
     '2fa': (
