@@ -9,7 +9,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { requireAdmin } from '~/utils/permissions';
 import { Button } from '~/components/ui/button';
-import { Settings2, Book, User } from 'lucide-react';
+import { Settings2, Book, User, GraduationCap } from 'lucide-react';
 
 const tabs = [
   {
@@ -18,14 +18,19 @@ const tabs = [
     icon: <Settings2 size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Courses',
-    to: '/app/admin/courses',
-    icon: <Book size={16} className="opacity-75 mr-1" />,
-  },
-  {
     label: 'Organizations',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Student Courses',
+    to: '/app/admin/student-courses',
+    icon: <Book size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Teacher Courses',
+    to: '/app/admin/teacher-courses',
+    icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
   },
 ];
 
@@ -45,7 +50,7 @@ export default function Route() {
     <main className="flex flex-col h-screen">
       <div className="py-2 md:py-4 px-3 md:px-6 border-b">
         <h1 className="mb-3 text-2xl md:text-3xl">{currentTab?.label}</h1>
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
           {tabs.map((tab) => (
             <Button
               key={tab.to}

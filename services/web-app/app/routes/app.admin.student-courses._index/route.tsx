@@ -45,16 +45,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         resources: true,
-        image: true,
+        image: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.$queryRaw<{
-      total_courses: number;
-      total_modules: number;
-      total_instructions: number;
-      total_resources: number;
-    }[]>`
+    prisma.$queryRaw<
+      {
+        total_courses: number;
+        total_modules: number;
+        total_instructions: number;
+        total_resources: number;
+      }[]
+    >`
       SELECT
         COUNT(DISTINCT c.id)::int as total_courses,
         COUNT(DISTINCT cm.id)::int as total_modules,
@@ -95,7 +97,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return redirect(`/app/admin/courses/${course.id}`);
+    return redirect(`/app/admin/student-courses/${course.id}`);
   }
 
   return dataResponse({ status: 'error' });
@@ -115,43 +117,8 @@ export default function CoursesRoute() {
 
   return (
     <div className="p-3 sm:p-5">
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
-        <Card className="bg-muted">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_courses}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Modules</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_modules}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Instructions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_instructions}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Resources</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total_resources}</div>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="flex flex-1 flex-col">
-        <div className="flex justify-end mb-4">
+        <div className="mb-4">
           <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
             <SheetTrigger asChild>
               <Button>
@@ -185,7 +152,7 @@ export default function CoursesRoute() {
           </Sheet>
         </div>
 
-        <div className="flex-1 overflow-y-auto border-b border-t">
+        <div className="flex-1 overflow-y-auto">
           {fetcher.state !== 'idle' ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -201,38 +168,43 @@ export default function CoursesRoute() {
               </span>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead>Title</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Modules</TableHead>
-                  <TableHead>Resources</TableHead>
-                  <TableHead>Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {courses.map((course) => (
-                  <TableRow
-                    key={course.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => navigate(`/app/admin/courses/${course.id}`)}
-                  >
-                    <TableCell className="font-medium">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {courses.map((course) => (
+                <Card
+                  key={course.id}
+                  className="bg-muted cursor-pointer transition-shadow hover:shadow-lg"
+                  onClick={() =>
+                    navigate(`/app/admin/student-courses/${course.id}`)
+                  }
+                >
+                  <div className="aspect-video w-full overflow-hidden rounded-t-lg">
+                    {course.image ? (
+                      <img
+                        src={`/api/image/course/${course.image.id}`}
+                        alt={course.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-foreground/5 to-foreground/20" />
+                    )}
+                  </div>
+                  <CardHeader>
+                    <CardTitle className="line-clamp-1">
                       {course.title}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
                       {course.description || 'No description'}
-                    </TableCell>
-                    <TableCell>{course.courseModules.length}</TableCell>
-                    <TableCell>{course.resources.length}</TableCell>
-                    <TableCell>
-                      {new Date(course.createdAt).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </p>
+                    <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{course.courseModules.length} modules</span>
+                      <span>{course.resources.length} resources</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       </div>

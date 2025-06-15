@@ -97,7 +97,7 @@ export default function AppRoute() {
         data-testid="app._index"
         className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
       >
-        <div className="flex w-full justify-between border-b bg-muted">
+        <div className="flex w-full justify-between border-b bg-secondary">
           <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
             <div className="flex flex-col">
               <h2>Welcome, {user.name}!</h2>
@@ -195,7 +195,7 @@ export default function AppRoute() {
                 <Link
                   to={`/app/courses/${course.id}`}
                   key={course.id}
-                  className="flex flex-col rounded-lg border transition-shadow hover:shadow"
+                  className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
                 >
                   {course.image ? (
                     <img
@@ -254,7 +254,7 @@ export default function AppRoute() {
       data-testid="app._index"
       className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
     >
-      <div className="flex w-full justify-between border-b bg-muted">
+      <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
             <h2>Welcome, {user.name}!</h2>
@@ -273,7 +273,7 @@ export default function AppRoute() {
               <Link
                 to={`/app/courses/${course.id}`}
                 key={course.id}
-                className="flex flex-col rounded-lg border transition-shadow hover:shadow"
+                className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
               >
                 {course.image ? (
                   <img

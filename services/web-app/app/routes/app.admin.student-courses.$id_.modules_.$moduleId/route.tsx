@@ -121,7 +121,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const canAskQuestion = formData.get('canAskQuestion') === 'true';
 
     if (!title || !prompt || !interactiveType) {
-      throw new Response('Title, prompt, and interactive type are required', { status: 400 });
+      throw new Response('Title, prompt, and interactive type are required', {
+        status: 400,
+      });
     }
 
     const instructionCount = await prisma.courseModuleInstruction.count({
@@ -176,8 +178,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'reorderInstructions') {
-    const instructionIds = JSON.parse(formData.get('instructionIds')?.toString() || '[]');
-    
+    const instructionIds = JSON.parse(
+      formData.get('instructionIds')?.toString() || '[]'
+    );
+
     await Promise.all(
       instructionIds.map((instructionId: string, index: number) =>
         prisma.courseModuleInstruction.update({
@@ -197,7 +201,8 @@ export default function ModuleRoute() {
   const { course, module } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
-  const [isInstructionSheetOpen, setIsInstructionSheetOpen] = React.useState(false);
+  const [isInstructionSheetOpen, setIsInstructionSheetOpen] =
+    React.useState(false);
   const [editingInstruction, setEditingInstruction] = React.useState<any>(null);
 
   const moduleForm = useForm({
@@ -233,24 +238,24 @@ export default function ModuleRoute() {
   }, [fetcher.data, instructionForm]);
 
   React.useEffect(() => {
-    if (editingInstruction) {
-      instructionForm.setValues({
-        title: editingInstruction.title,
-        prompt: editingInstruction.prompt,
-        interactiveType: editingInstruction.interactiveType,
-        answerType: editingInstruction.answerType || 'textarea',
-        answerKey: editingInstruction.answerKey || '',
-        tutorInstructions: editingInstruction.tutorInstructions || '',
-        canAskQuestion: editingInstruction.canAskQuestion || false,
-      });
-    }
+    // if (editingInstruction) {
+    //   instructionForm.setValues({
+    //     title: editingInstruction.title,
+    //     prompt: editingInstruction.prompt,
+    //     interactiveType: editingInstruction.interactiveType,
+    //     answerType: editingInstruction.answerType || 'textarea',
+    //     answerKey: editingInstruction.answerKey || '',
+    //     tutorInstructions: editingInstruction.tutorInstructions || '',
+    //     canAskQuestion: editingInstruction.canAskQuestion || false,
+    //   });
+    // }
   }, [editingInstruction, instructionForm]);
 
   return (
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to={`/app/admin/courses/${course.id}`}>
+          <Link to={`/app/admin/student-courses/${course.id}`}>
             <ChevronLeft size={18} />
             Back to {course.title}
           </Link>
@@ -364,7 +369,9 @@ export default function ModuleRoute() {
             <CardTitle>Instructions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{module.instructions.length}</div>
+            <div className="text-2xl font-bold">
+              {module.instructions.length}
+            </div>
             <p className="text-sm text-muted-foreground">Module instructions</p>
           </CardContent>
         </Card>
@@ -384,8 +391,8 @@ export default function ModuleRoute() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Module Instructions</CardTitle>
           {!module.isSelfGuided && (
-            <Sheet 
-              open={isInstructionSheetOpen} 
+            <Sheet
+              open={isInstructionSheetOpen}
               onOpenChange={(open) => {
                 setIsInstructionSheetOpen(open);
                 if (!open) {
@@ -403,17 +410,27 @@ export default function ModuleRoute() {
               <SheetContent>
                 <SheetHeader>
                   <SheetTitle>
-                    {editingInstruction ? 'Edit Instruction' : 'Create Instruction'}
+                    {editingInstruction
+                      ? 'Edit Instruction'
+                      : 'Create Instruction'}
                   </SheetTitle>
                 </SheetHeader>
                 <fetcher.Form method="post" className="mt-4 space-y-4">
-                  <input 
-                    type="hidden" 
-                    name="intent" 
-                    value={editingInstruction ? 'updateInstruction' : 'createInstruction'} 
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value={
+                      editingInstruction
+                        ? 'updateInstruction'
+                        : 'createInstruction'
+                    }
                   />
                   {editingInstruction && (
-                    <input type="hidden" name="instructionId" value={editingInstruction.id} />
+                    <input
+                      type="hidden"
+                      name="instructionId"
+                      value={editingInstruction.id}
+                    />
                   )}
                   <div className="space-y-2">
                     <Label htmlFor="instructionTitle">Title</Label>
@@ -447,9 +464,11 @@ export default function ModuleRoute() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="interactiveType">Interactive Type</Label>
-                    <Select 
-                      value={instructionForm.value('interactiveType')} 
-                      onValueChange={(value) => instructionForm.setValue('interactiveType', value)}
+                    <Select
+                      value={instructionForm.value('interactiveType')}
+                      onValueChange={(value) =>
+                        instructionForm.setValue('interactiveType', value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -460,13 +479,19 @@ export default function ModuleRoute() {
                         <SelectItem value="write">Write</SelectItem>
                       </SelectContent>
                     </Select>
-                    <input type="hidden" name="interactiveType" value={instructionForm.value('interactiveType')} />
+                    <input
+                      type="hidden"
+                      name="interactiveType"
+                      value={instructionForm.value('interactiveType')}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="answerType">Answer Type</Label>
-                    <Select 
-                      value={instructionForm.value('answerType')} 
-                      onValueChange={(value) => instructionForm.setValue('answerType', value)}
+                    <Select
+                      value={instructionForm.value('answerType')}
+                      onValueChange={(value) =>
+                        instructionForm.setValue('answerType', value)
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -476,7 +501,11 @@ export default function ModuleRoute() {
                         <SelectItem value="select">Select</SelectItem>
                       </SelectContent>
                     </Select>
-                    <input type="hidden" name="answerType" value={instructionForm.value('answerType')} />
+                    <input
+                      type="hidden"
+                      name="answerType"
+                      value={instructionForm.value('answerType')}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="answerKey">Answer Key</Label>
@@ -489,7 +518,9 @@ export default function ModuleRoute() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="instructionTutorInstructions">Tutor Instructions</Label>
+                    <Label htmlFor="instructionTutorInstructions">
+                      Tutor Instructions
+                    </Label>
                     <Textarea
                       {...instructionForm.getInputProps('tutorInstructions')}
                       id="instructionTutorInstructions"
@@ -507,17 +538,22 @@ export default function ModuleRoute() {
                         instructionForm.setValue('canAskQuestion', checked)
                       }
                     />
-                    <Label htmlFor="canAskQuestion">Allow students to ask questions</Label>
+                    <Label htmlFor="canAskQuestion">
+                      Allow students to ask questions
+                    </Label>
                   </div>
                   <Button
                     type="submit"
                     className="w-full"
                     disabled={fetcher.state !== 'idle'}
                   >
-                    {fetcher.state !== 'idle' 
-                      ? (editingInstruction ? 'Updating...' : 'Creating...') 
-                      : (editingInstruction ? 'Update Instruction' : 'Create Instruction')
-                    }
+                    {fetcher.state !== 'idle'
+                      ? editingInstruction
+                        ? 'Updating...'
+                        : 'Creating...'
+                      : editingInstruction
+                        ? 'Update Instruction'
+                        : 'Create Instruction'}
                   </Button>
                 </fetcher.Form>
               </SheetContent>
@@ -556,8 +592,8 @@ export default function ModuleRoute() {
                     <TableCell>{instruction.interactiveType}</TableCell>
                     <TableCell>{instruction.answerType || 'N/A'}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="outline" 
+                      <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => {
                           setEditingInstruction(instruction);
