@@ -120,16 +120,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const where: Prisma.StudentProfileWhereInput = {
     AND: [
-      {
-        OR: [
-          { user: { name: { contains: filters.query } } },
-          { user: { email: { contains: filters.query } } },
-          // { user: { studentProfile: { school: { contains: filters.query } } } },
-          { school: { contains: filters.query } },
-          { grade: { contains: filters.query } },
-          { period: { contains: filters.query } },
-        ],
-      },
+      // Only apply search filter if query is not empty
+      filters.query && filters.query.trim().length > 0
+        ? {
+            OR: [
+              {
+                user: {
+                  name: { contains: filters.query.trim(), mode: 'insensitive' },
+                },
+              },
+              {
+                user: {
+                  email: {
+                    contains: filters.query.trim(),
+                    mode: 'insensitive',
+                  },
+                },
+              },
+              {
+                school: { contains: filters.query.trim(), mode: 'insensitive' },
+              },
+              {
+                grade: { contains: filters.query.trim(), mode: 'insensitive' },
+              },
+              {
+                period: { contains: filters.query.trim(), mode: 'insensitive' },
+              },
+            ],
+          }
+        : {},
       filters.school.filter(Boolean).length > 0 &&
       !filters.school.includes('all')
         ? {
