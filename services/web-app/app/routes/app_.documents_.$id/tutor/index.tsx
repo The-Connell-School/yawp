@@ -95,6 +95,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
   const finishedCms =
     cms.instructionsCompleted === cms.courseModule.instructions.length;
+  const isLastCmInstruction =
+    cms.instructionsCompleted === cms.courseModule.instructions.length - 1;
 
   const instruction =
     cms.courseModule.instructions[cms.instructionsCompleted] ?? {};
@@ -514,7 +516,12 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
           advanceInstruction={
             instruction.interactiveType === 'dialogue' ||
             !instruction.answerTypeOptions
-              ? incrementInstruction
+              ? isLastCmInstruction
+                ? () => {
+                    incrementInstruction();
+                    advanceToNextCourseModule();
+                  }
+                : incrementInstruction
               : undefined
           }
         />

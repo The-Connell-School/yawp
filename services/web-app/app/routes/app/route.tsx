@@ -79,7 +79,7 @@ const LINKS: {
     icon: <GaugeIcon size={20} />,
   },
   {
-    to: '/app/my-students',
+    to: '/app/students',
     label: 'My Students',
     icon: <User size={20} />,
     requires: 'teacherProfile',
