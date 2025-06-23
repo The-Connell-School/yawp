@@ -4,7 +4,7 @@ import {
   type LoaderFunctionArgs,
   data as dataResponse,
 } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useFetcher, useLoaderData } from 'react-router';
 import { ImageIcon } from 'lucide-react';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import {
@@ -13,8 +13,8 @@ import {
   validationError,
 } from '@rvf/react-router';
 import { z } from 'zod';
-import { FormInput } from '~/components/forms/form-input-2';
-import { FormSelect } from '~/components/forms/form-select-2';
+import { FormInput } from '~/components/rvf-forms/form-input';
+import { FormSelect } from '~/components/rvf-forms/form-select';
 import {
   CameraIcon,
   EnvelopeClosedIcon,
@@ -24,13 +24,13 @@ import { Button, button } from '~/components/ui/button';
 import { UserImage } from '~/components/user-image.js';
 import { useUser } from '~/hooks/useUser';
 import { requireUserId, sessionKey } from '~/utils/auth.server.ts';
-import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { useDoubleCheck } from '~/utils/misc.tsx';
 import { NameSchema } from '~/utils/schemas/user';
 import { authSessionStorage } from '~/utils/session.server.ts';
 import { createToastHeaders } from '~/utils/toast.server.js';
 import { twoFAVerificationType } from '../app.profile.two-factor/route';
+import { useForm } from '@rvf/react';
 
 const ProfileFormSchema = z.object({
   name: NameSchema.optional(),
@@ -88,7 +88,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const formData = await request.formData();
-  await validateCSRF(formData, request.headers);
   const intent = formData.get('intent');
 
   switch (intent) {
@@ -147,8 +146,20 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function EditUserProfile() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
+  const fetcher = useFetcher();
   const dc = useDoubleCheck();
   const otherSessionsCount = (data.user?._count.sessions || 0) - 1;
+
+  const form = useForm({
+    schema: ProfileFormSchema,
+    defaultValues: {
+      name: data.user?.name ?? '',
+      workshopLeaderId: data.user?.studentProfile?.workshopLeaderId ?? '',
+    },
+    handleSubmit: (_data, formData) => {
+      fetcher.submit(formData, { method: 'POST' });
+    },
+  });
 
   return (
     <div>
@@ -178,22 +189,16 @@ export default function EditUserProfile() {
           </Link>
         </div>
         <div className="flex flex-grow flex-col gap-2">
-          <ValidatedForm
-            schema={ProfileFormSchema}
-            method="POST"
-            defaultValues={{
-              name: data.user?.name ?? '',
-              workshopLeaderId:
-                data.user?.studentProfile?.workshopLeaderId ?? '',
-            }}
-            className="flex flex-col gap-2"
-          >
-            <AuthenticityTokenInput />
+          <form {...form.getFormProps()} className="flex flex-col gap-2">
             <div className="flex gap-2 flex-col sm:flex-row">
-              <FormInput name="name" label="Name" className="min-w-[200px]" />
+              <FormInput
+                scope={form.scope('name')}
+                label="Name"
+                className="min-w-[200px]"
+              />
               {data.user?.studentProfile ? (
                 <FormSelect
-                  name="workshopLeaderId"
+                  scope={form.scope('workshopLeaderId')}
                   label="Yawp! Teacher"
                   options={data.teachers.map((teacher) => ({
                     value: teacher.id,
@@ -208,8 +213,7 @@ export default function EditUserProfile() {
                 Save changes
               </Button>
             </div>
-          </ValidatedForm>
-          <div className="my-4 border-b" />
+          </form>
           <div className="my-4 border-b" />
           <div className="flex flex-wrap gap-2">
             <Link

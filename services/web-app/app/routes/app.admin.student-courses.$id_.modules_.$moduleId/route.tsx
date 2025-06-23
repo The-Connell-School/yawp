@@ -3,6 +3,7 @@ import {
   data as dataResponse,
   Link,
   type LoaderFunctionArgs,
+  redirect,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import { parseFormData, validationError, useForm } from '@rvf/react-router';
@@ -20,7 +21,13 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { requireAdmin } from '~/utils/permissions';
-import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
+import {
+  ChevronLeft,
+  Settings,
+  Plus,
+  GripVertical,
+  TrashIcon,
+} from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -39,9 +46,9 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import React from 'react';
-import { FormInput } from '~/components/forms/form-input-2';
-import { FormTextarea } from '~/components/forms/form-textarea-2';
-import { FormSwitch } from '~/components/forms/form-switch-2';
+import { FormInput } from '~/components/rvf-forms/form-input';
+import { FormTextarea } from '~/components/rvf-forms/form-textarea';
+import { FormSwitch } from '~/components/rvf-forms/form-switch';
 import { useSortableList } from '~/hooks/useSortableList';
 import { DndContext } from '@dnd-kit/core';
 import {
@@ -50,6 +57,8 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { FormSelect } from '~/components/rvf-forms/form-select';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -117,6 +126,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ status: 'success' });
   }
 
+  if (intent === 'deleteModule') {
+    await prisma.courseModule.delete({
+      where: { id: params.moduleId },
+    });
+
+    return redirect(`/app/admin/student-courses/${params.id}`);
+  }
+
   if (intent === 'createInstruction') {
     const title = formData.get('title')?.toString();
     const prompt = formData.get('prompt')?.toString();
@@ -178,6 +195,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         tutorInstructions: tutorInstructions || null,
         canAskQuestion,
       },
+    });
+
+    return dataResponse({ status: 'success' });
+  }
+
+  if (intent === 'deleteInstruction') {
+    const instructionId = formData.get('instructionId')?.toString();
+
+    if (!instructionId) {
+      throw new Response('Instruction ID is required', { status: 400 });
+    }
+
+    await prisma.courseModuleInstruction.delete({
+      where: { id: instructionId },
     });
 
     return dataResponse({ status: 'success' });
@@ -358,20 +389,47 @@ export default function ModuleRoute() {
         <TableCell>{instruction.interactiveType}</TableCell>
         <TableCell>{instruction.answerType || 'N/A'}</TableCell>
         <TableCell>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setEditingInstruction(instruction);
-              setIsInstructionSheetOpen(true);
-            }}
-          >
-            Edit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setEditingInstruction(instruction);
+                setIsInstructionSheetOpen(true);
+              }}
+            >
+              Edit
+            </Button>
+            <ConfirmationDialog
+              variant="destructive"
+              title="Delete Instruction"
+              description={`Are you sure you want to delete "${instruction.title}"? This action cannot be undone.`}
+              confirmText="Delete Instruction"
+              cancelText="Cancel"
+              onConfirm={() => {
+                instructionFetcher.submit(
+                  {
+                    intent: 'deleteInstruction',
+                    instructionId: instruction.id,
+                  },
+                  { method: 'post' }
+                );
+              }}
+              onCancel={() => {
+                // Dialog will close automatically
+              }}
+            >
+              <Button variant="destructive-outline" size="icon-sm">
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            </ConfirmationDialog>
+          </div>
         </TableCell>
       </TableRow>
     );
   }
+
+  console.log(instructionForm.value('interactiveType'));
 
   return (
     <div className="grid gap-4 p-3 md:p-5">
@@ -382,55 +440,79 @@ export default function ModuleRoute() {
             Back to {course.title}
           </Link>
         </Button>
-        <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline">
-              <Settings className="mr-2 h-4 w-4" />
-              Edit Module
-            </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Edit Module</SheetTitle>
-            </SheetHeader>
-            <form
-              {...moduleForm.getFormProps()}
-              method="post"
-              className="mt-4 space-y-4"
-            >
-              <input type="hidden" name="intent" value="updateModule" />
-              <FormInput
-                scope={moduleForm.scope('title')}
-                label="Title"
-                required
-              />
-              <FormTextarea
-                scope={moduleForm.scope('description')}
-                label="Description"
-                rows={3}
-              />
-              <FormSwitch
-                scope={moduleForm.scope('isSelfGuided')}
-                label="Self-guided module"
-              />
-              {!moduleForm.value('isSelfGuided') && (
-                <FormTextarea
-                  scope={moduleForm.scope('tutorInstructions')}
-                  label="Tutor Instructions"
-                  placeholder="Instructions for the tutor..."
-                  rows={4}
-                />
-              )}
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={moduleFetcher.state !== 'idle'}
-              >
-                {moduleFetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+        <div className="flex items-center gap-2">
+          <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Edit Module
               </Button>
-            </form>
-          </SheetContent>
-        </Sheet>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Edit Module</SheetTitle>
+              </SheetHeader>
+              <form
+                {...moduleForm.getFormProps()}
+                method="post"
+                className="mt-4 space-y-4"
+              >
+                <input type="hidden" name="intent" value="updateModule" />
+                <FormInput
+                  scope={moduleForm.scope('title')}
+                  label="Title"
+                  required
+                />
+                <FormTextarea
+                  scope={moduleForm.scope('description')}
+                  label="Description"
+                  rows={3}
+                />
+                <FormSwitch
+                  scope={moduleForm.scope('isSelfGuided')}
+                  label="Self-guided module"
+                />
+                {!moduleForm.value('isSelfGuided') && (
+                  <FormTextarea
+                    scope={moduleForm.scope('tutorInstructions')}
+                    label="Tutor Instructions"
+                    placeholder="Instructions for the tutor..."
+                    rows={4}
+                  />
+                )}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={moduleFetcher.state !== 'idle'}
+                >
+                  {moduleFetcher.state !== 'idle'
+                    ? 'Saving...'
+                    : 'Save Changes'}
+                </Button>
+              </form>
+            </SheetContent>
+          </Sheet>
+          <ConfirmationDialog
+            variant="destructive"
+            title="Delete Module"
+            description={`Are you sure you want to delete "${module.title}"? This action cannot be undone and will permanently remove the module and all its instructions.`}
+            confirmText="Delete Module"
+            cancelText="Cancel"
+            onConfirm={() => {
+              moduleFetcher.submit(
+                { intent: 'deleteModule' },
+                { method: 'post' }
+              );
+            }}
+            onCancel={() => {
+              // Dialog will close automatically
+            }}
+          >
+            <Button variant="destructive-outline" size="icon">
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </ConfirmationDialog>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row">
@@ -562,151 +644,71 @@ export default function ModuleRoute() {
                         value={editingInstruction.id}
                       />
                     )}
-                    <div className="space-y-2">
-                      <Label htmlFor="instructionTitle">Title</Label>
-                      <Input
-                        {...instructionForm.getInputProps('title')}
-                        id="instructionTitle"
-                        name="title"
-                        required
-                      />
-                      {instructionForm.error('title') && (
-                        <div className="text-sm text-destructive">
-                          {instructionForm.error('title')}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="prompt">Prompt</Label>
-                      <Textarea
-                        {...instructionForm.getInputProps('prompt')}
-                        id="prompt"
-                        name="prompt"
-                        placeholder="What should the student do?"
-                        rows={3}
-                        required
-                      />
-                      {instructionForm.error('prompt') && (
-                        <div className="text-sm text-destructive">
-                          {instructionForm.error('prompt')}
-                        </div>
-                      )}
-                    </div>
-                    {/* Response Type */}
-                    <div className="space-y-2">
-                      <Label htmlFor="answerType">Response Type</Label>
-                      <Select
-                        value={instructionForm.value('answerType') as string}
-                        onValueChange={(value) =>
-                          instructionForm.setValue('answerType', value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select response type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="textarea">Text Area</SelectItem>
-                          <SelectItem value="buttons">Buttons</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <input
-                        type="hidden"
-                        name="answerType"
-                        value={instructionForm.value('answerType') as string}
-                      />
-                    </div>
-                    {/* Response Options (only for buttons) */}
+                    <FormInput
+                      scope={instructionForm.scope('title')}
+                      label="Title"
+                      required
+                    />
+                    <FormTextarea
+                      scope={instructionForm.scope('prompt')}
+                      label="Prompt"
+                      placeholder="What should the student do?"
+                      rows={3}
+                      required
+                    />
+                    <FormSelect
+                      scope={instructionForm.scope('answerType')}
+                      label="Response Type"
+                      options={[
+                        { value: 'buttons', label: 'Buttons' },
+                        { value: 'text', label: 'Text' },
+                      ]}
+                    />
                     {instructionForm.value('answerType') === 'buttons' && (
-                      <div className="space-y-2">
-                        <Label htmlFor="answerTypeOptions">
-                          Response Options (comma separated)
-                        </Label>
-                        <Input
-                          {...instructionForm.getInputProps(
-                            'answerTypeOptions'
-                          )}
-                          id="answerTypeOptions"
-                          name="answerTypeOptions"
-                          placeholder="e.g. Yes,No,Maybe"
-                        />
-                      </div>
+                      <FormInput
+                        scope={instructionForm.scope('answerTypeOptions')}
+                        label="Response Options (comma separated)"
+                        placeholder="e.g. Yes,No,Maybe"
+                      />
                     )}
-                    {/* Allow students to ask questions */}
                     <div className="flex items-center space-x-2">
                       <FormSwitch
                         scope={instructionForm.scope('canAskQuestion')}
                         label="Allow students to ask questions"
                       />
                     </div>
-                    {/* Interactive Type */}
-                    <div className="space-y-2">
-                      <Label htmlFor="interactiveType">Interactive Type</Label>
-                      <Select
-                        value={
-                          instructionForm.value('interactiveType') as string
-                        }
-                        onValueChange={(value) =>
-                          instructionForm.setValue('interactiveType', value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="answer">Answer</SelectItem>
-                          <SelectItem value="dialogue">Dialogue</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <input
-                        type="hidden"
-                        name="interactiveType"
-                        value={
-                          instructionForm.value('interactiveType') as string
-                        }
-                      />
-                    </div>
+                    <FormSelect
+                      scope={instructionForm.scope('interactiveType')}
+                      label="Interactive Type"
+                      options={[
+                        { value: 'answer', label: 'Answer' },
+                        { value: 'dialogue', label: 'Dialogue' },
+                      ]}
+                    />
                     {instructionForm.value('interactiveType') === 'answer' && (
-                      <div className="space-y-2">
-                        <Label htmlFor="answerKey">Answer</Label>
-                        <Textarea
-                          {...instructionForm.getInputProps('answerKey')}
-                          id="answerKey"
-                          name="answerKey"
-                          placeholder="Expected answer or guidance..."
-                          rows={2}
-                        />
-                      </div>
+                      <FormTextarea
+                        scope={instructionForm.scope('answerKey')}
+                        label="Answer"
+                        placeholder="Expected answer or guidance..."
+                        rows={2}
+                      />
                     )}
                     {instructionForm.value('interactiveType') ===
                       'dialogue' && (
                       <>
-                        <div className="space-y-2">
-                          <Label htmlFor="instructionTutorInstructions">
-                            Tutor Instructions
-                          </Label>
-                          <Textarea
-                            {...instructionForm.getInputProps(
-                              'tutorInstructions'
-                            )}
-                            id="instructionTutorInstructions"
-                            name="tutorInstructions"
-                            placeholder="Special instructions for the tutor..."
-                            rows={2}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="nextInstructionBtnLabel">
-                            Next Instruction Button Label
-                          </Label>
-                          <Input
-                            {...instructionForm.getInputProps(
-                              'nextInstructionBtnLabel'
-                            )}
-                            id="nextInstructionBtnLabel"
-                            name="nextInstructionBtnLabel"
-                            placeholder="e.g. Next, Continue, etc."
-                          />
-                        </div>
+                        <FormTextarea
+                          scope={instructionForm.scope('tutorInstructions')}
+                          label="Tutor Instructions"
+                          placeholder="Special instructions for the tutor..."
+                          rows={2}
+                        />
+                        <FormInput
+                          scope={instructionForm.scope(
+                            'nextInstructionBtnLabel'
+                          )}
+                          label="Next Instruction Button Label"
+                          placeholder="e.g. Next, Continue, etc."
+                        />
                       </>
                     )}
                     <Button

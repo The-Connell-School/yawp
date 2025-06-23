@@ -263,7 +263,7 @@ export default function CourseRoute() {
         <TableCell>{module.instructions.length}</TableCell>
         <TableCell>
           <Button variant="outline" size="sm" asChild>
-            <Link to={`modules/${module.id}`}>Edit</Link>
+            <Link to={`modules/${module.id}`}>View</Link>
           </Button>
         </TableCell>
       </TableRow>
