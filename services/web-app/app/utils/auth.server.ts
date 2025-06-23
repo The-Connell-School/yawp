@@ -119,28 +119,23 @@ export async function signup({
   workshopTeacherId?: string;
 }) {
   const hashedPassword = await getPasswordHash(password);
+  const user = await prisma.user.upsert({
+    where: { email: email.toLowerCase() },
+    create: {
+      email: email.toLowerCase(),
+      name,
+      password: { create: { hash: hashedPassword } },
+    },
+    update: {
+      name,
+      password: { update: { hash: hashedPassword } },
+    },
+  });
 
   const session = await prisma.session.create({
     data: {
       expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          password: { create: { hash: hashedPassword } },
-          studentProfile: {
-            create: {
-              grade,
-              period,
-              school,
-              schoolTeacher: teacher,
-              ...(workshopTeacherId
-                ? { workshopLeader: { connect: { id: workshopTeacherId } } }
-                : {}),
-            },
-          },
-        },
-      },
+      user: { connect: { id: user.id } },
     },
     select: { id: true, expirationDate: true },
   });

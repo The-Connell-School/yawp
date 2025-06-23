@@ -192,9 +192,8 @@ export default function Route() {
           <NavStateSwitch>
             {({ state, fetcher }) => (
               <Button
-                size="sm"
+                size="icon-sm"
                 variant="ghost"
-                className="w-full justify-start gap-1 text-muted-foreground transition hover:text-current"
                 disabled={['submitting', 'loading'].includes(fetcher.state)}
               >
                 {state === 'expanded' ? (

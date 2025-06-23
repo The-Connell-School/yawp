@@ -1,4 +1,3 @@
-import { getInputProps, useForm, getFormProps } from '@conform-to/react';
 import {
   getZodConstraint as getFieldsetConstraint,
   parseWithZod as parse,
@@ -14,7 +13,7 @@ import {
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
-import { FormInput } from '~/components/forms/form-input.tsx';
+import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
 import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/utils.server';
 import { validateCSRF } from '~/utils/csrf.server.ts';
@@ -35,10 +34,10 @@ import {
   VerificationTypeSchema,
   type VerificationTypes,
 } from './constants.ts';
+import { useForm } from '@rvf/react-router';
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  await validateCSRF(formData, request.headers);
   return validateRequest(request, formData);
 }
 
@@ -64,6 +63,8 @@ async function validateRequest(
     }),
     async: true,
   });
+
+  console.log(submission);
 
   if (submission.status !== 'success' || !submission.value) {
     return dataResponse(submission.reply(), { status: 400 });
@@ -105,20 +106,23 @@ async function validateRequest(
     case 'organization-teacher-invite':
     case 'organization-student-invite': {
       await deleteVerification();
-      return handleOrganizationInviteVerification({ request, body, submission });
+      return handleOrganizationInviteVerification({
+        request,
+        body,
+        submission,
+      });
     }
   }
 }
 
 export default function VerifyRoute() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const isPending = useIsPending();
-  const actionData = useActionData<typeof action>();
   const parsedType = VerificationTypeSchema.safeParse(
     searchParams.get(typeQueryParam)
   );
   const type = parsedType.success ? parsedType.data : null;
+  const code = searchParams.get('code') ?? '';
 
   const checkEmail = (
     <>
@@ -146,16 +150,12 @@ export default function VerifyRoute() {
     ),
   };
 
-  const [form, fields] = useForm({
-    id: 'verify-form',
-    constraint: getFieldsetConstraint(VerifySchema),
-    lastResult: actionData,
-    onValidate({ formData }) {
-      return parse(formData, { schema: VerifySchema });
-    },
-    defaultValue: {
-      code: searchParams.get(codeQueryParam) ?? '',
-      type,
+  const form = useForm({
+    schema: VerifySchema,
+    method: 'POST',
+    defaultValues: {
+      code,
+      type: type ?? undefined,
       target: searchParams.get(targetQueryParam) ?? '',
       redirectTo: searchParams.get(redirectToQueryParam) ?? '',
     },
@@ -167,29 +167,19 @@ export default function VerifyRoute() {
         <div>{type ? headings[type] : 'Invalid Verification Type'}</div>
         <div className="mt-12 flex flex-col justify-center gap-1">
           <div className="flex w-full gap-2 px-8">
-            <Form method="POST" {...getFormProps(form)} className="flex-1">
+            <Form {...form.getFormProps()} className="flex-1">
               <AuthenticityTokenInput />
-              <FormInput
-                labelProps={{
-                  htmlFor: fields[codeQueryParam].id,
-                  children: 'Code',
-                }}
-                inputProps={{
-                  ...getInputProps(fields[codeQueryParam], { type: 'text' }),
-                  autoComplete: 'one-time-code',
-                }}
-                errors={fields[codeQueryParam].errors}
+              <FormInput scope={form.scope('code')} type="text" label="Code" />
+              <input type="hidden" name="type" value={type ?? undefined} />
+              <input
+                type="hidden"
+                name="target"
+                value={searchParams.get(targetQueryParam) ?? undefined}
               />
               <input
-                {...getInputProps(fields[typeQueryParam], { type: 'hidden' })}
-              />
-              <input
-                {...getInputProps(fields[targetQueryParam], { type: 'hidden' })}
-              />
-              <input
-                {...getInputProps(fields[redirectToQueryParam], {
-                  type: 'hidden',
-                })}
+                type="hidden"
+                name="redirectTo"
+                value={searchParams.get(redirectToQueryParam) ?? undefined}
               />
               <Button
                 className="mt-2 w-full"

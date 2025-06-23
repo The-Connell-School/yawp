@@ -16,7 +16,6 @@ import {
   useLoaderData,
   useSearchParams,
 } from 'react-router';
-import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { z } from 'zod';
 import { ErrorList } from '~/components/forms/error-list.tsx';
@@ -25,7 +24,6 @@ import { FormInput } from '~/components/forms/form-input.tsx';
 import { FormSelect } from '~/components/forms/form-select.tsx';
 import { Button } from '~/components/ui/button.tsx';
 import { requireAnonymous, sessionKey, signup } from '~/utils/auth.server.ts';
-import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { Grade, Period, Setting } from '~/utils/enums.js';
 import { useIsPending } from '~/utils/misc.tsx';
@@ -90,7 +88,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const email = await requireOnboardingEmail(request);
   const formData = await request.formData();
-  await validateCSRF(formData, request.headers);
   const submission = await parse(formData, {
     schema: SignupFormSchema.transform(async (data) => {
       const session = await signup({
@@ -165,7 +162,6 @@ export default function SignupRoute() {
         className="mx-auto mt-20 flex min-w-full max-w-lg flex-col gap-3 px-8 sm:min-w-[368px]"
         {...getFormProps(form)}
       >
-        <AuthenticityTokenInput />
         <FormInput
           labelProps={{ htmlFor: fields.name.id, children: 'Name' }}
           inputProps={{
