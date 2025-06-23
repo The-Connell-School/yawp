@@ -5,7 +5,7 @@ import {
   type ComponentPropsWithoutRef,
   forwardRef,
 } from 'react';
-import { useField, FormScope } from '@rvf/react';
+import { useField, FormScope } from '@rvf/react-router';
 import { cn } from '~/utils/misc';
 import { InfoCircledIcon } from '../icons';
 import {

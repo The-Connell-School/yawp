@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { useField, FormScope, ValueOfInputType } from '@rvf/react';
+import { useField, FormScope, ValueOfInputType } from '@rvf/react-router';
 import { ComponentPropsWithRef, forwardRef } from 'react';
 import { cn } from '~/utils/misc';
 import { InfoCircledIcon } from '../icons';

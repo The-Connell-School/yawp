@@ -3,22 +3,20 @@ import {
   type MetaFunction,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
+  useFetcher,
+  Form,
 } from 'react-router';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowRightIcon } from 'lucide-react';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { HoneypotInputs } from 'remix-utils/honeypot/react';
-import {
-  parseFormData,
-  ValidatedForm,
-  validationError,
-} from '@rvf/react-router';
+import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
 import { login, requireAnonymous } from '~/utils/auth.server';
-import { DEFAULT_ROUTE, useIsPending } from '~/utils/misc';
+import { DEFAULT_ROUTE } from '~/utils/misc';
 import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { handleNewSession } from './utils.server';
 
@@ -29,7 +27,7 @@ const Schema = z.object({
 });
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // await requireAnonymous(request)
+  await requireAnonymous(request);
   return dataResponse({});
 }
 
@@ -55,9 +53,18 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function LoginPage() {
-  const isPending = useIsPending();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirectTo');
+  const fetcher = useFetcher();
+  const isLoading = fetcher.state !== 'idle';
+
+  const form = useForm({
+    schema: Schema,
+    method: 'POST',
+    defaultValues: { redirectTo, email: '', password: '' },
+  });
+
+  console.log(form.formState.fieldErrors);
 
   return (
     <div className="mx-auto w-full max-w-md">
@@ -71,19 +78,21 @@ export default function LoginPage() {
         <p>Please enter your details.</p>
       </div>
       <div className="mx-auto mt-10 w-full max-w-md px-8">
-        <ValidatedForm
-          schema={Schema}
-          method="POST"
-          defaultValues={{ redirectTo, email: '', password: '' }}
-          className="flex flex-col gap-3"
-        >
+        <Form {...form.getFormProps()} className="flex flex-col gap-3">
           <AuthenticityTokenInput />
           <HoneypotInputs />
           <input type="hidden" name="redirectTo" />
-          <FormInput type="email" name="email" autoComplete="email" autoFocus />
           <FormInput
+            scope={form.scope('email')}
+            type="email"
+            label="Email"
+            autoComplete="email"
+            autoFocus
+          />
+          <FormInput
+            scope={form.scope('password')}
             type="password"
-            name="password"
+            label="Password"
             autoComplete="current-password"
           />
           <div className="flex items-center justify-end">
@@ -94,10 +103,10 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <Button className="w-full" type="submit" isLoading={isPending}>
+          <Button className="w-full" type="submit" isLoading={isLoading}>
             Log in
           </Button>
-        </ValidatedForm>
+        </Form>
         <div className="my-8 rounded-xl border bg-muted p-6">
           <p className="text-xl font-bold">New here?</p>
           <p className="text-muted-foreground">

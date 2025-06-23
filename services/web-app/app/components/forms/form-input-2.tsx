@@ -26,6 +26,7 @@ export function FormInput({
 }: Props) {
   const fallbackId = useId();
   const id = props.id ?? fallbackId;
+  const errorId = useId();
   const { error, getInputProps } = useField(scope);
   const hasError = error();
 
@@ -48,7 +49,7 @@ export function FormInput({
       )}
       <Input
         aria-invalid={hasError ? true : undefined}
-        aria-describedby={hasError ? id : undefined}
+        aria-describedby={hasError ? errorId : undefined}
         variant={hasError ? 'destructive' : undefined}
         className={props.type === 'email' ? 'lowercase' : ''}
         {...getInputProps({ id, ...props })}
@@ -57,7 +58,9 @@ export function FormInput({
         <p className="text-xs text-muted-foreground">{helperText}</p>
       ) : null}
       {hasError ? (
-        <p className="text-left text-[12px] text-destructive">{hasError}</p>
+        <p id={errorId} className="text-left text-[12px] text-destructive">
+          {hasError}
+        </p>
       ) : null}
     </div>
   );
