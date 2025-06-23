@@ -335,7 +335,7 @@ export default function OrganizationsRoute() {
           </Sheet>
         </div>
 
-        <div className="flex-1 overflow-y-auto border-b border-t">
+        <div className="flex-1 overflow-y-auto">
           {fetcher.state !== 'idle' ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -351,10 +351,10 @@ export default function OrganizationsRoute() {
               </span>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-[50px] pl-4">
+            <Table className="rounded-lg">
+              <TableHeader className="rounded-t-lg">
+                <TableRow className="bg-muted/50 rounded-t-lg">
+                  <TableHead className="w-[50px] pl-4 rounded-tl-lg">
                     <Checkbox
                       checked={selected.length === organizations.length}
                       onCheckedChange={handleSelectAll}

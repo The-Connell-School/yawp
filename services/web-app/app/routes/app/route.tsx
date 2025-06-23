@@ -7,7 +7,15 @@ import {
   useLocation,
   useMatches,
 } from 'react-router';
-import { GaugeIcon, LockIcon, Settings2, User, UserIcon } from 'lucide-react';
+import {
+  Building2,
+  CogIcon,
+  GaugeIcon,
+  LockIcon,
+  Settings2,
+  User,
+  UserIcon,
+} from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -60,7 +68,7 @@ export async function loader() {
   });
 }
 
-type RequiresOptions = 'isAdmin' | 'teacherProfile';
+type RequiresOptions = 'isAdmin' | 'teacherProfile' | 'isOwner';
 
 const LINKS: {
   to: string;
@@ -83,6 +91,12 @@ const LINKS: {
     label: 'My Students',
     icon: <User size={20} />,
     requires: 'teacherProfile',
+  },
+  {
+    to: '/app/organization',
+    label: 'Organization',
+    icon: <CogIcon size={20} />,
+    requires: 'isOwner',
   },
   {
     to: '/app/admin',

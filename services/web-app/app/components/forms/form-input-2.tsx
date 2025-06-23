@@ -7,7 +7,7 @@ import { Input, type InputProps } from '../ui/input';
 import { Tooltip } from '../ui/tooltip';
 
 interface Props extends InputProps {
-  name: string;
+  scope: any;
   label?: string;
   labelInfo?: string;
   hideLabel?: boolean;
@@ -21,12 +21,12 @@ export function FormInput({
   hideLabel,
   className,
   helperText,
-  name,
+  scope,
   ...props
 }: Props) {
   const fallbackId = useId();
   const id = props.id ?? fallbackId;
-  const { error, getInputProps } = useField(name);
+  const { error, getInputProps } = useField(scope);
   const hasError = error();
 
   return (
@@ -34,7 +34,7 @@ export function FormInput({
       {labelInfo ? (
         <label htmlFor={id}>
           <span className="flex items-center gap-2 font-medium text-md mb-1">
-            {label ?? startCase(name)}{' '}
+            {label ?? ''}
             <Tooltip
               delayDuration={0}
               text={<p className="max-w-[300px]">{labelInfo}</p>}
@@ -44,7 +44,7 @@ export function FormInput({
           </span>
         </label>
       ) : hideLabel ? null : (
-        <label htmlFor={id}>{label ?? startCase(name)}</label>
+        <label htmlFor={id}>{label ?? ''}</label>
       )}
       <Input
         aria-invalid={hasError ? true : undefined}

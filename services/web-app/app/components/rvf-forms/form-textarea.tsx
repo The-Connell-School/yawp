@@ -1,5 +1,5 @@
 import { forwardRef, useId } from 'react';
-import { useField } from '@rvf/react-router';
+import { useField, FormScope } from '@rvf/react';
 import { cn } from '~/utils/misc';
 import { startCase } from '~/utils/startCase';
 import { InfoCircledIcon } from '../icons';
@@ -7,7 +7,7 @@ import { Textarea, type TextareaProps } from '../ui/textarea';
 import { Tooltip } from '../ui/tooltip';
 
 interface Props extends TextareaProps {
-  scope: any;
+  scope: FormScope<any>;
   label?: string;
   labelInfo?: string;
   hideLabel?: boolean;
@@ -20,15 +20,16 @@ export const FormTextarea = forwardRef<HTMLTextAreaElement, Props>(
     { label, labelInfo, hideLabel, className, helperText, scope, ...props },
     ref
   ) => {
-    const fallbackId = useId();
-    const id = props.id ?? fallbackId;
-    const { error, getInputProps } = useField(scope);
-    const hasError = error();
+    const field = useField(scope);
+    const inputId = useId();
+    const errorId = useId();
+    const error = field.error();
+    const name = field.name();
 
     return (
       <div className={cn('flex flex-col gap-1', className)}>
         {labelInfo ? (
-          <label htmlFor={id}>
+          <label htmlFor={inputId}>
             <span className="flex items-center gap-2 font-medium text-md mb-1">
               {label ?? ''}
               <Tooltip
@@ -40,20 +41,26 @@ export const FormTextarea = forwardRef<HTMLTextAreaElement, Props>(
             </span>
           </label>
         ) : hideLabel ? null : (
-          <label htmlFor={id}>{label ?? ''}</label>
+          <label htmlFor={inputId}>{label ?? ''}</label>
         )}
         <Textarea
           ref={ref}
-          aria-invalid={hasError ? true : undefined}
-          aria-describedby={hasError ? id : undefined}
-          color={hasError ? 'red' : undefined}
-          {...getInputProps({ id, ...props })}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          color={error ? 'red' : undefined}
+          {...field.getInputProps({
+            id: inputId,
+            name,
+            ...props,
+          } as any)}
         />
         {helperText ? (
           <p className="text-xs text-muted-foreground">{helperText}</p>
         ) : null}
-        {hasError ? (
-          <p className="text-left text-[12px] text-destructive">{hasError}</p>
+        {error ? (
+          <p id={errorId} className="text-left text-[12px] text-destructive">
+            {error}
+          </p>
         ) : null}
       </div>
     );
