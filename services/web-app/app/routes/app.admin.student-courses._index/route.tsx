@@ -11,14 +11,6 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '~/components/ui/table';
 import { Plus } from 'lucide-react';
 import { requireAdmin } from '~/utils/permissions';
 import {

@@ -1,5 +1,10 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
-import { Link, data as dataResponse, useLoaderData } from 'react-router';
+import {
+  Link,
+  data as dataResponse,
+  useLoaderData,
+  redirect,
+} from 'react-router';
 import { TrashIcon, ImageIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
@@ -28,6 +33,24 @@ import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { Switch } from '~/components/ui/switch';
 import React from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -61,6 +84,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   await requireAdmin(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
+
+  if (intent === 'deleteCourse') {
+    await prisma.course.delete({
+      where: { id: params.id },
+    });
+
+    return redirect('/app/admin/student-courses');
+  }
 
   if (intent === 'updateCourse') {
     const title = formData.get('title')?.toString();
@@ -105,6 +136,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
     const isSelfGuided = formData.get('isSelfGuided') === 'true';
+    const tutorInstructions = formData.get('tutorInstructions')?.toString();
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
@@ -119,28 +151,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         title,
         description: description || null,
         isSelfGuided,
+        tutorInstructions: tutorInstructions || null,
         position: moduleCount,
-        courseId: params.id!,
-      },
-    });
-
-    return dataResponse({ status: 'success' });
-  }
-
-  if (intent === 'createResource') {
-    const title = formData.get('title')?.toString();
-    const description = formData.get('description')?.toString();
-    const url = formData.get('url')?.toString();
-
-    if (!title) {
-      throw new Response('Title is required', { status: 400 });
-    }
-
-    await prisma.courseResource.create({
-      data: {
-        title,
-        description: description || null,
-        url: url || null,
         courseId: params.id!,
       },
     });
@@ -171,20 +183,101 @@ export default function CourseRoute() {
   const fetcher = useFetcher();
   const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
-  const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [hasRemovedImage, setHasRemovedImage] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // --- Drag and drop state for modules ---
+  const [modules, setModules] = React.useState(course.courseModules);
   React.useEffect(() => {
-    if (fetcher.data?.status === 'success') {
+    setModules(course.courseModules);
+  }, [course.courseModules]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setModules((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+
+        const newModules = arrayMove(items, oldIndex, newIndex);
+
+        // Submit the new order to the server
+        fetcher.submit(
+          {
+            intent: 'reorderModules',
+            moduleIds: JSON.stringify(newModules.map((m) => m.id)),
+          },
+          { method: 'post' }
+        );
+
+        return newModules;
+      });
+    }
+  };
+
+  // Sortable row component
+  function SortableTableRow({ module, idx }: { module: any; idx: number }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: module.id });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <TableRow
+        ref={setNodeRef}
+        style={style}
+        className={isDragging ? 'bg-muted/50' : ''}
+      >
+        <TableCell>
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </TableCell>
+        <TableCell className="font-medium">{module.title}</TableCell>
+        <TableCell>
+          {module.isSelfGuided ? 'Self-guided' : 'Tutor-guided'}
+        </TableCell>
+        <TableCell>{module.instructions.length}</TableCell>
+        <TableCell>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`modules/${module.id}`}>Edit</Link>
+          </Button>
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  React.useEffect(() => {
+    if (fetcher.data?.status === 'success' && fetcher.state === 'idle') {
       setIsCourseSheetOpen(false);
       setIsModuleSheetOpen(false);
-      setIsResourceSheetOpen(false);
       setPreviewUrl(null);
       setHasRemovedImage(false);
     }
-  }, [fetcher.data]);
+  }, [fetcher.data, fetcher.state]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -211,108 +304,132 @@ export default function CourseRoute() {
             All courses
           </Link>
         </Button>
-        <Sheet open={isCourseSheetOpen} onOpenChange={setIsCourseSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline">
-              <Settings className="mr-2 h-4 w-4" />
-              Edit Course
-            </Button>
-          </SheetTrigger>
-          <SheetContent>
-            <SheetHeader>
-              <SheetTitle>Edit Course</SheetTitle>
-            </SheetHeader>
-            <fetcher.Form
-              method="post"
-              className="mt-4 space-y-4"
-              encType="multipart/form-data"
-            >
-              <input type="hidden" name="intent" value="updateCourse" />
-              <div className="space-y-2">
-                <Label>Course Image</Label>
-                <div className="flex flex-col items-center gap-4">
-                  {previewUrl || (course.image && !hasRemovedImage) ? (
-                    <div className="relative w-full">
-                      <img
-                        src={
-                          previewUrl || `/api/image/course/${course.image?.id}`
-                        }
-                        alt=""
-                        className="h-48 w-full rounded-lg object-cover"
-                      />
+        <div className="flex items-center gap-2">
+          <Sheet open={isCourseSheetOpen} onOpenChange={setIsCourseSheetOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Edit Course
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Edit Course</SheetTitle>
+              </SheetHeader>
+              <fetcher.Form
+                method="post"
+                className="mt-4 space-y-4"
+                encType="multipart/form-data"
+              >
+                <input type="hidden" name="intent" value="updateCourse" />
+                <div className="space-y-2">
+                  <Label>Course Image</Label>
+                  <div className="flex flex-col items-center gap-4">
+                    {previewUrl || (course.image && !hasRemovedImage) ? (
+                      <div className="relative w-full">
+                        <img
+                          src={
+                            previewUrl ||
+                            `/api/image/course/${course.image?.id}`
+                          }
+                          alt=""
+                          className="h-48 w-full rounded-lg object-cover"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="absolute right-2 top-2"
+                          onClick={handleRemoveImage}
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </Button>
+                        {course.image && !previewUrl && (
+                          <input
+                            type="hidden"
+                            name="deleteImage"
+                            value="true"
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex h-48 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 hover:bg-muted"
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            Click to upload image
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      name="image"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                    {!previewUrl && !course.image && (
                       <Button
                         type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="absolute right-2 top-2"
-                        onClick={handleRemoveImage}
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
                       >
-                        <TrashIcon className="h-4 w-4" />
+                        Upload Image
                       </Button>
-                      {course.image && !previewUrl && (
-                        <input type="hidden" name="deleteImage" value="true" />
-                      )}
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex h-48 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 hover:bg-muted"
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">
-                          Click to upload image
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    name="image"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
-                  />
-                  {!previewUrl && !course.image && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Upload Image
-                    </Button>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  name="title"
-                  defaultValue={course.title}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={course.description || ''}
-                  rows={3}
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={fetcher.state !== 'idle'}
-              >
-                {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </fetcher.Form>
-          </SheetContent>
-        </Sheet>
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    name="title"
+                    defaultValue={course.title}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    defaultValue={course.description || ''}
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={fetcher.state !== 'idle'}
+                >
+                  {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </fetcher.Form>
+            </SheetContent>
+          </Sheet>
+          <ConfirmationDialog
+            variant="destructive"
+            title="Delete Course"
+            description={`Are you sure you want to delete "${course.title}"? This action cannot be undone and will permanently remove the course and all its modules.`}
+            confirmText="Delete Course"
+            cancelText="Cancel"
+            onConfirm={() => {
+              fetcher.submit({ intent: 'deleteCourse' }, { method: 'post' });
+            }}
+            onCancel={() => {
+              // Dialog will close automatically
+            }}
+          >
+            <Button variant="destructive-outline" size="icon">
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </ConfirmationDialog>
+        </div>
       </div>
 
       <Card className="bg-muted">
@@ -379,6 +496,18 @@ export default function CourseRoute() {
                   <Switch id="isSelfGuided" name="isSelfGuided" />
                   <Label htmlFor="isSelfGuided">Self-guided module</Label>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tutorInstructions">Tutor Instructions</Label>
+                  <Textarea
+                    id="tutorInstructions"
+                    name="tutorInstructions"
+                    placeholder="Instructions for the tutor..."
+                    rows={4}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  You can add instructions after creating the module.
+                </p>
                 <Button
                   type="submit"
                   className="w-full"
@@ -391,43 +520,42 @@ export default function CourseRoute() {
           </Sheet>
         </CardHeader>
         <CardContent>
-          {course.courseModules.length === 0 ? (
+          {modules.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               No modules yet. Create your first module to get started.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Instructions</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {course.courseModules.map((module) => (
-                  <TableRow key={module.id}>
-                    <TableCell>
-                      <GripVertical className="h-4 w-4 cursor-grab text-muted-foreground" />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {module.title}
-                    </TableCell>
-                    <TableCell>
-                      {module.isSelfGuided ? 'Self-guided' : 'Tutor-guided'}
-                    </TableCell>
-                    <TableCell>{module.instructions.length}</TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`modules/${module.id}`}>Edit</Link>
-                      </Button>
-                    </TableCell>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-8"></TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Instructions</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <SortableContext
+                  items={modules.map((m) => m.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <TableBody>
+                    {modules.map((module, idx) => (
+                      <SortableTableRow
+                        key={module.id}
+                        module={module}
+                        idx={idx}
+                      />
+                    ))}
+                  </TableBody>
+                </SortableContext>
+              </Table>
+            </DndContext>
           )}
         </CardContent>
       </Card>

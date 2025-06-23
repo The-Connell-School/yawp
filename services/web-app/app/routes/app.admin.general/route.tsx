@@ -54,6 +54,9 @@ export default function GeneralSettings() {
   return (
     <div className="p-3 sm:p-5">
       <div className="max-w-[500px]">
+        {settings.length === 0 && (
+          <div className="text-sm text-muted-foreground">No settings found</div>
+        )}
         {settings.map((setting) =>
           setting.valueType === 'string' ? (
             <ValidatedForm
