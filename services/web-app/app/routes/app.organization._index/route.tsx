@@ -992,7 +992,6 @@ export default function OrganizationRoute() {
                           onClick={() => handleEditMember(user)}
                           disabled={!canEditMember(user)}
                         >
-                          <Edit className="mr-2 h-3.5 w-3.5" />
                           Edit
                         </Button>
                       </TableCell>
