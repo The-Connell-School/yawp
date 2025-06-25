@@ -299,23 +299,37 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'remove-members') {
     const memberIds = formData.getAll('memberIds') as string[];
+    const members = await prisma.user.findMany({
+      where: {
+        id: { in: memberIds },
+        organizationId: user.organization?.id,
+      },
+    });
+
+    if (members.length !== memberIds.length) {
+      return dataResponse(
+        { error: 'Some members are not in the organization' },
+        { status: 400 }
+      );
+    }
+
     if (!memberIds || memberIds.length === 0) {
       return dataResponse({ error: 'No members selected' }, { status: 400 });
     }
 
     // Prevent removing the last owner
     const owners = await prisma.user.count({
-      where: { 
-        organizationId: user.organization?.id, 
+      where: {
+        organizationId: user.organization?.id,
         isOwner: true,
-        id: { notIn: memberIds }
+        id: { notIn: memberIds },
       },
     });
 
     const removingOwners = await prisma.user.count({
-      where: { 
+      where: {
         id: { in: memberIds },
-        isOwner: true 
+        isOwner: true,
       },
     });
 
@@ -369,9 +383,10 @@ export default function OrganizationRoute() {
     React.useState(false);
   const [isOwnerInvitationsOpen, setIsOwnerInvitationsOpen] =
     React.useState(false);
-  const { selected, handleSelectAll, handleSort, handleSelect } = useTable({
-    rows: users,
-  });
+  const { selected, setSelected, handleSelectAll, handleSort, handleSelect } =
+    useTable({
+      rows: users,
+    });
 
   const owners = users.filter((user) => user.isOwner);
   const teachers = users.filter((user) => user.teacherProfile && !user.isOwner);
@@ -585,7 +600,6 @@ export default function OrganizationRoute() {
         {/* Remove Members Button */}
         {selected.length > 0 && (
           <fetcher.Form method="post" className="inline">
-            <AuthenticityTokenInput />
             <input type="hidden" name="intent" value="remove-members" />
             {selected.map((id) => (
               <input key={id} type="hidden" name="memberIds" value={id} />
@@ -595,9 +609,15 @@ export default function OrganizationRoute() {
               variant="destructive"
               disabled={fetcher.state !== 'idle'}
               onClick={(e) => {
-                if (!confirm(`Are you sure you want to remove ${selected.length} member(s) from the organization? They will lose access to the platform.`)) {
+                if (
+                  !confirm(
+                    `Are you sure you want to remove ${selected.length} member(s) from the organization? They will lose access to the platform.`
+                  )
+                ) {
                   e.preventDefault();
                 }
+                setSelected([]);
+                e.currentTarget.form?.submit();
               }}
             >
               <UserMinus className="mr-2 h-4 w-4" />

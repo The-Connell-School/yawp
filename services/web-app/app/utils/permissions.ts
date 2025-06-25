@@ -1,4 +1,4 @@
-import { data } from 'react-router';
+import { data, redirect } from 'react-router';
 import { type useUser } from '../hooks/useUser.ts';
 import { requireUserId } from './auth.server.ts';
 import { prisma } from './db.server.ts';
@@ -14,7 +14,7 @@ export async function requireAdmin(request: Request) {
     throw data(
       {
         error: 'Unauthorized',
-        requiredRole: name,
+        requiredRole: 'isAdmin',
         message: `Unauthorized: required role: ${name}`,
       },
       { status: 403 }
@@ -72,30 +72,13 @@ export async function requireOrganizationAccess(request: Request) {
   }
 
   // Check if user has no organization
-  if (!user.organizationId || !user.organization) {
-    throw data(
-      {
-        error: 'NO_ORGANIZATION',
-        message: "You don't have access. Contact your organization owner if you think this is a mistake.",
-      },
-      { status: 403 }
-    );
-  }
-
-  // Check if organization access has expired
-  if (user.organization.accessExpiresAt && new Date() > user.organization.accessExpiresAt) {
-    const message = user.isOwner 
-      ? "Your access has expired."
-      : "You don't have access. Contact your organization owner if you think this is a mistake.";
-    
-    throw data(
-      {
-        error: 'ACCESS_EXPIRED',
-        message,
-        isOwner: user.isOwner,
-      },
-      { status: 403 }
-    );
+  if (
+    !user.organizationId ||
+    !user.organization ||
+    (user.organization.accessExpiresAt &&
+      new Date() > user.organization.accessExpiresAt)
+  ) {
+    throw redirect('/app/access-denied');
   }
 
   return user;
