@@ -32,7 +32,6 @@ import {
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
-import { Form } from 'react-router';
 import React from 'react';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { prepareVerification } from '~/routes/auth.verify/utils';
@@ -137,6 +136,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     let successCount = 0;
     for (const email of emailList) {
       try {
+        // Check for existing verification and delete if found
+        const existingVerification = await prisma.verification.findFirst({
+          where: {
+            target: email,
+            type: 'organization-owner-invite',
+            organizationId: params.id,
+          },
+        });
+
+        if (existingVerification) {
+          await prisma.verification.delete({
+            where: { id: existingVerification.id },
+          });
+        }
+
         const { verifyUrl } = await prepareVerification({
           period: 3 * 24 * 60 * 60, // 3 days
           request,
@@ -190,8 +204,8 @@ function OrganizationInviteEmail({
         </h1>
         <p>
           <E.Text>
-            You've been invited to join {organizationName} as {userType === 'owner' ? 'an owner' : `a ${userType}`} on
-            Yawp!
+            You've been invited to join {organizationName} as{' '}
+            {userType === 'owner' ? 'an owner' : `a ${userType}`} on Yawp!
           </E.Text>
         </p>
         <p>
@@ -349,7 +363,9 @@ export default function OrganizationRoute() {
               className="w-full"
               disabled={inviteFetcher.state !== 'idle'}
             >
-              {inviteFetcher.state !== 'idle' ? 'Sending...' : 'Send Invitations'}
+              {inviteFetcher.state !== 'idle'
+                ? 'Sending...'
+                : 'Send Invitations'}
             </Button>
           </inviteFetcher.Form>
         </SheetContent>
@@ -445,8 +461,12 @@ export default function OrganizationRoute() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
-                    No owners found. Use the "Invite Owner" button to invite new owners.
+                  <TableCell
+                    colSpan={3}
+                    className="text-center text-muted-foreground"
+                  >
+                    No owners found. Use the "Invite Owner" button to invite new
+                    owners.
                   </TableCell>
                 </TableRow>
               )}

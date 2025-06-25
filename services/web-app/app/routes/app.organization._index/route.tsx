@@ -179,6 +179,21 @@ export async function action({ request }: ActionFunctionArgs) {
     let successCount = 0;
     for (const email of emailList) {
       try {
+        // Check for existing verification and delete if found
+        const existingVerification = await prisma.verification.findFirst({
+          where: {
+            target: email,
+            type: 'organization-teacher-invite',
+            organizationId: user.organization?.id,
+          },
+        });
+
+        if (existingVerification) {
+          await prisma.verification.delete({
+            where: { id: existingVerification.id },
+          });
+        }
+
         const { verifyUrl } = await prepareVerification({
           period: 3 * 24 * 60 * 60, // 3 days
           request,
@@ -223,9 +238,31 @@ export async function action({ request }: ActionFunctionArgs) {
       .map((email: string) => email.trim())
       .filter((email: string) => email && email.includes('@'));
 
+    if (emailList.length === 0) {
+      return dataResponse(
+        { error: 'No valid emails provided' },
+        { status: 400 }
+      );
+    }
+
     let successCount = 0;
     for (const email of emailList) {
       try {
+        // Check for existing verification and delete if found
+        const existingVerification = await prisma.verification.findFirst({
+          where: {
+            target: email,
+            type: 'organization-student-invite',
+            organizationId: user.organization?.id,
+          },
+        });
+
+        if (existingVerification) {
+          await prisma.verification.delete({
+            where: { id: existingVerification.id },
+          });
+        }
+
         const { verifyUrl } = await prepareVerification({
           period: 3 * 24 * 60 * 60, // 3 days
           request,
