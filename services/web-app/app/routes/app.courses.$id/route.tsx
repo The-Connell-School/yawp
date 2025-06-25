@@ -3,7 +3,7 @@ import {
   data as dataResponse,
   type ActionFunctionArgs,
 } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, useNavigation } from 'react-router';
 import { ExternalLinkIcon, PlusIcon } from 'lucide-react';
 import {
   parseFormData,
@@ -148,11 +148,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function AppCoursesIdRoute() {
   const user = useUser();
-  const isPending = useIsPending();
   const data = useLoaderData<typeof loader>();
   const isTeacher = !!user.teacherProfile;
   const hasModules = data.course.courseModules.length > 0;
   const [speechEnabled] = useLocalStorage('speechEnabled', false);
+  const navigation = useNavigation();
+  const isLoading = navigation.state !== 'idle';
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -176,8 +177,8 @@ export default function AppCoursesIdRoute() {
             <Button
               type="submit"
               className="w-fit"
-              disabled={!hasModules}
-              isLoading={isPending}
+              disabled={!hasModules || isLoading}
+              isLoading={isLoading}
             >
               New <PlusIcon className="ml-1 h-5 w-5" />
             </Button>

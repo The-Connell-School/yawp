@@ -103,7 +103,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         organizationId: user.organization?.id,
         type: {
-          in: ['organization-teacher-invite', 'organization-student-invite'],
+          in: [
+            'organization-teacher-invite',
+            'organization-student-invite',
+            'organization-owner-invite',
+          ],
         },
       },
     }),
@@ -267,6 +271,9 @@ export default function OrganizationRoute() {
   const studentInvitations = invitations.filter(
     (invitation) => invitation.type === 'organization-student-invite'
   );
+  const ownerInvitations = invitations.filter(
+    (invitation) => invitation.type === 'organization-owner-invite'
+  );
   const fetcher = useFetcher();
   const [isCreateTeachersOpen, setIsCreateTeachersOpen] = React.useState(false);
   const [isCreateStudentsOpen, setIsCreateStudentsOpen] = React.useState(false);
@@ -274,13 +281,16 @@ export default function OrganizationRoute() {
     React.useState(false);
   const [isStudentInvitationsOpen, setIsStudentInvitationsOpen] =
     React.useState(false);
+  const [isOwnerInvitationsOpen, setIsOwnerInvitationsOpen] =
+    React.useState(false);
   const { selected, handleSelectAll, handleSort, handleSelect } = useTable({
     rows: users,
   });
 
-  const teachers = users.filter((user) => user.teacherProfile);
+  const owners = users.filter((user) => user.isOwner);
+  const teachers = users.filter((user) => user.teacherProfile && !user.isOwner);
   const students = users.filter(
-    (user) => user.studentProfile && !user.teacherProfile
+    (user) => user.studentProfile && !user.teacherProfile && !user.isOwner
   );
 
   React.useEffect(() => {
@@ -355,6 +365,30 @@ export default function OrganizationRoute() {
                 disabled={studentInvitations.length === 0}
               >
                 ({studentInvitations.length} invited)
+              </button>
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-muted">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Owners</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{owners.length}</div>
+            <p className="text-xs text-muted-foreground">
+              <button
+                onClick={() => setIsOwnerInvitationsOpen(true)}
+                className={cn(
+                  'ml-1',
+                  ownerInvitations.length === 0
+                    ? 'text-muted-foreground cursor-not-allowed'
+                    : 'text-blue-600 hover:text-blue-800 underline'
+                )}
+                disabled={ownerInvitations.length === 0}
+              >
+                ({ownerInvitations.length} invited)
               </button>
             </p>
           </CardContent>
@@ -555,6 +589,52 @@ export default function OrganizationRoute() {
         </SheetContent>
       </Sheet>
 
+      {/* Owner Invitations Sheet */}
+      <Sheet
+        open={isOwnerInvitationsOpen}
+        onOpenChange={setIsOwnerInvitationsOpen}
+      >
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Pending Owner Invitations</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            {ownerInvitations.length === 0 ? (
+              <p className="text-muted-foreground">
+                No pending owner invitations
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {ownerInvitations.map((invitation) => (
+                  <div key={invitation.id} className="p-3 border rounded-lg">
+                    <p className="font-medium">{invitation.target}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Invitation is valid until{' '}
+                      {invitation.expiresAt
+                        ? new Date(invitation.expiresAt).toLocaleString([], {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        : 'Never'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              onClick={() => setIsOwnerInvitationsOpen(false)}
+              className="w-full mt-6"
+            >
+              Ok
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Members Table */}
       <Card className="bg-muted flex-1">
         <CardHeader>
@@ -658,6 +738,8 @@ export default function OrganizationRoute() {
                       <TableCell>
                         {user.teacherProfile ? (
                           <Badge variant="info-outlined">Teacher</Badge>
+                        ) : user.isOwner ? (
+                          <span className="text-muted-foreground">N/A</span>
                         ) : user.studentProfile ? (
                           <Badge variant="secondary">Student</Badge>
                         ) : (

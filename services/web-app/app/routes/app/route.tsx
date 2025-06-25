@@ -269,9 +269,11 @@ export default function Route() {
                     <p className="text-left text-sm text-muted-foreground">
                       {user.isAdmin
                         ? 'Admin'
-                        : user.teacherProfile
-                          ? 'Teacher'
-                          : 'Student'}
+                        : user.isOwner
+                          ? 'Owner'
+                          : user.teacherProfile
+                            ? 'Teacher'
+                            : 'Student'}
                     </p>
                   </div>
                 ) : null}
