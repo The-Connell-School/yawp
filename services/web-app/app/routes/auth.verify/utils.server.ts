@@ -9,6 +9,9 @@ export const onboardingTeacherOrganizationIdKey =
 export const onboardingStudentEmailKey = 'onboardingStudentEmail';
 export const onboardingStudentOrganizationIdKey =
   'onboardingStudentOrganizationId';
+export const onboardingOwnerEmailKey = 'onboardingOwnerEmail';
+export const onboardingOwnerOrganizationIdKey =
+  'onboardingOwnerOrganizationId';
 
 export async function handleVerification({
   submission,
@@ -39,6 +42,16 @@ export async function handleVerification({
     verifySession.set(onboardingStudentEmailKey, email);
     verifySession.set(onboardingStudentOrganizationIdKey, organizationId);
     return redirect('/auth/organization-student-onboarding', {
+      headers: {
+        'set-cookie': await verifySessionStorage.commitSession(verifySession),
+      },
+    });
+  }
+
+  if (type === 'organization-owner-invite') {
+    verifySession.set(onboardingOwnerEmailKey, email);
+    verifySession.set(onboardingOwnerOrganizationIdKey, organizationId);
+    return redirect('/auth/organization-owner-onboarding', {
       headers: {
         'set-cookie': await verifySessionStorage.commitSession(verifySession),
       },

@@ -141,6 +141,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               });
             }
             case 'organization-teacher-invite':
+            case 'organization-owner-invite':
             case 'organization-student-invite': {
               await deleteVerification();
               return handleOrganizationInviteVerification({
@@ -225,6 +226,7 @@ async function validateRequest(
       return handleTeacherOnboardingVerification({ request, body, submission });
     }
     case 'organization-teacher-invite':
+    case 'organization-owner-invite':
     case 'organization-student-invite': {
       await deleteVerification();
       return handleOrganizationInviteVerification({

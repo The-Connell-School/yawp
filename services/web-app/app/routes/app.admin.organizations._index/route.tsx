@@ -428,8 +428,9 @@ export default function OrganizationsRoute() {
                     <TableCell>{organization.users.length}</TableCell>
                     <TableCell>
                       {
-                        organization.users.filter((user) => user.studentProfile)
-                          .length
+                        organization.users.filter(
+                          (user) => user.studentProfile && !user.isOwner
+                        ).length
                       }{' '}
                       / {organization.numOfStudentSeats}
                     </TableCell>
