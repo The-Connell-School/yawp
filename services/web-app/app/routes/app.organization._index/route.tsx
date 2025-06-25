@@ -29,6 +29,7 @@ import { Textarea } from '~/components/ui/textarea';
 import {
   Users,
   UserPlus,
+  UserMinus,
   Mail,
   Calendar,
   ArrowDown,
@@ -296,6 +297,68 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  if (intent === 'remove-members') {
+    const memberIds = formData.getAll('memberIds') as string[];
+    const members = await prisma.user.findMany({
+      where: {
+        id: { in: memberIds },
+        organizationId: user.organization?.id,
+      },
+    });
+
+    if (members.length !== memberIds.length) {
+      return dataResponse(
+        { error: 'Some members are not in the organization' },
+        { status: 400 }
+      );
+    }
+
+    if (!memberIds || memberIds.length === 0) {
+      return dataResponse({ error: 'No members selected' }, { status: 400 });
+    }
+
+    // Prevent removing the last owner
+    const owners = await prisma.user.count({
+      where: {
+        organizationId: user.organization?.id,
+        isOwner: true,
+        id: { notIn: memberIds },
+      },
+    });
+
+    const removingOwners = await prisma.user.count({
+      where: {
+        id: { in: memberIds },
+        isOwner: true,
+      },
+    });
+
+    if (removingOwners > 0 && owners === 0) {
+      return dataResponse(
+        { error: 'Cannot remove all owners from the organization' },
+        { status: 400 }
+      );
+    }
+
+    // Remove members from organization (don't delete users, just disassociate)
+    const removedCount = await prisma.user.updateMany({
+      where: {
+        id: { in: memberIds },
+        organizationId: user.organization?.id,
+      },
+      data: {
+        organizationId: null,
+        isOwner: false,
+      },
+    });
+
+    return dataResponse({
+      success: true,
+      message: `${removedCount.count} member(s) removed from organization`,
+      removed: removedCount.count,
+    });
+  }
+
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
 }
 
@@ -320,9 +383,10 @@ export default function OrganizationRoute() {
     React.useState(false);
   const [isOwnerInvitationsOpen, setIsOwnerInvitationsOpen] =
     React.useState(false);
-  const { selected, handleSelectAll, handleSort, handleSelect } = useTable({
-    rows: users,
-  });
+  const { selected, setSelected, handleSelectAll, handleSort, handleSelect } =
+    useTable({
+      rows: users,
+    });
 
   const owners = users.filter((user) => user.isOwner);
   const teachers = users.filter((user) => user.teacherProfile && !user.isOwner);
@@ -532,6 +596,35 @@ export default function OrganizationRoute() {
             </fetcher.Form>
           </SheetContent>
         </Sheet>
+
+        {/* Remove Members Button */}
+        {selected.length > 0 && (
+          <fetcher.Form method="post" className="inline">
+            <input type="hidden" name="intent" value="remove-members" />
+            {selected.map((id) => (
+              <input key={id} type="hidden" name="memberIds" value={id} />
+            ))}
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={fetcher.state !== 'idle'}
+              onClick={(e) => {
+                if (
+                  !confirm(
+                    `Are you sure you want to remove ${selected.length} member(s) from the organization? They will lose access to the platform.`
+                  )
+                ) {
+                  e.preventDefault();
+                }
+                setSelected([]);
+                e.currentTarget.form?.submit();
+              }}
+            >
+              <UserMinus className="mr-2 h-4 w-4" />
+              Remove {selected.length} Member{selected.length !== 1 ? 's' : ''}
+            </Button>
+          </fetcher.Form>
+        )}
       </div>
 
       {/* Teacher Invitations Sheet */}

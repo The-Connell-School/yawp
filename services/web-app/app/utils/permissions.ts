@@ -1,4 +1,4 @@
-import { data } from 'react-router';
+import { data, redirect } from 'react-router';
 import { type useUser } from '../hooks/useUser.ts';
 import { requireUserId } from './auth.server.ts';
 import { prisma } from './db.server.ts';
@@ -14,7 +14,7 @@ export async function requireAdmin(request: Request) {
     throw data(
       {
         error: 'Unauthorized',
-        requiredRole: name,
+        requiredRole: 'isAdmin',
         message: `Unauthorized: required role: ${name}`,
       },
       { status: 403 }
@@ -44,6 +44,41 @@ export async function requireOwner(request: Request) {
       },
       { status: 403 }
     );
+  }
+
+  return user;
+}
+
+export async function requireOrganizationAccess(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      isOwner: true,
+      organizationId: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          accessExpiresAt: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw data({ error: 'User not found' }, { status: 404 });
+  }
+
+  // Check if user has no organization
+  if (
+    !user.organizationId ||
+    !user.organization ||
+    (user.organization.accessExpiresAt &&
+      new Date() > user.organization.accessExpiresAt)
+  ) {
+    throw redirect('/app/access-denied');
   }
 
   return user;
