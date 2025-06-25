@@ -159,8 +159,6 @@ function ArrayOfStringsSetting({ setting }: { setting: Setting }) {
     }
   };
 
-  console.log({ form: form.formState.fieldErrors });
-
   return (
     <form
       {...form.getFormProps()}

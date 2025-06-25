@@ -429,8 +429,6 @@ export default function ModuleRoute() {
     );
   }
 
-  console.log(instructionForm.value('interactiveType'));
-
   return (
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">

@@ -64,8 +64,6 @@ export default function LoginPage() {
     defaultValues: { redirectTo, email: '', password: '' },
   });
 
-  console.log(form.formState.fieldErrors);
-
   return (
     <div className="mx-auto w-full max-w-md">
       <div className="mt-8 flex flex-col gap-3 text-center">
