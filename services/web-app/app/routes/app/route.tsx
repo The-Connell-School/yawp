@@ -6,6 +6,7 @@ import {
   data,
   useLocation,
   useMatches,
+  type LoaderFunctionArgs,
 } from 'react-router';
 import {
   Building2,
@@ -46,6 +47,7 @@ import { prisma } from '~/utils/db.server';
 import { FeatureFlags } from '~/utils/featureFlags/index.js';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
+import { requireOrganizationAccess } from '~/utils/permissions';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -54,7 +56,29 @@ export const NavExpandedContext = createContext({
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
-export async function loader() {
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  
+  // Skip organization access check for the access-denied page to avoid redirect loops
+  if (!url.pathname.includes('/access-denied')) {
+    // Check organization access - redirect to access-denied page if no access
+    try {
+      await requireOrganizationAccess(request);
+    } catch (error) {
+      // If it's an access error, redirect to the access-denied page
+      if (error instanceof Response && error.status === 403) {
+        throw new Response(null, {
+          status: 302,
+          headers: {
+            Location: '/app/access-denied',
+          },
+        });
+      }
+      // Re-throw other errors (like authentication errors)
+      throw error;
+    }
+  }
+
   const ffs = await prisma.featureFlag.findMany({
     where: { name: { in: [FeatureFlags.Courses, FeatureFlags.Assistants] } },
   });

@@ -49,6 +49,58 @@ export async function requireOwner(request: Request) {
   return user;
 }
 
+export async function requireOrganizationAccess(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      isOwner: true,
+      organizationId: true,
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          accessExpiresAt: true,
+        },
+      },
+    },
+  });
+
+  if (!user) {
+    throw data({ error: 'User not found' }, { status: 404 });
+  }
+
+  // Check if user has no organization
+  if (!user.organizationId || !user.organization) {
+    throw data(
+      {
+        error: 'NO_ORGANIZATION',
+        message: "You don't have access. Contact your organization owner if you think this is a mistake.",
+      },
+      { status: 403 }
+    );
+  }
+
+  // Check if organization access has expired
+  if (user.organization.accessExpiresAt && new Date() > user.organization.accessExpiresAt) {
+    const message = user.isOwner 
+      ? "Your access has expired."
+      : "You don't have access. Contact your organization owner if you think this is a mistake.";
+    
+    throw data(
+      {
+        error: 'ACCESS_EXPIRED',
+        message,
+        isOwner: user.isOwner,
+      },
+      { status: 403 }
+    );
+  }
+
+  return user;
+}
+
 type Action = 'create' | 'read' | 'update' | 'delete';
 type Entity = 'user';
 type Access = 'own' | 'any' | 'own,any' | 'any,own';
