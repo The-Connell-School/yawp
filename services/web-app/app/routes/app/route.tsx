@@ -227,9 +227,9 @@ export default function Route() {
               key={link.to}
               className={({ isActive }) =>
                 cn(
-                  'flex w-full items-center justify-center gap-2 rounded px-2 py-1 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
+                  'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
                   {
-                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
+                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary font-bold':
                       isActive,
                     'py-2': !navExpanded,
                   }
@@ -261,11 +261,11 @@ export default function Route() {
         <div className="flex flex-grow flex-col justify-end">
           <Popover>
             <PopoverTrigger>
-              <div className="flex items-center justify-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
+              <div className="flex items-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
                 <UserImage user={user} size="sm" />
                 {navExpanded ? (
                   <div>
-                    <p className="font-bold">{user.name}</p>
+                    <p className="font-bold text-sm">{user.name}</p>
                     <p className="text-left text-sm text-muted-foreground">
                       {user.isAdmin
                         ? 'Admin'
@@ -282,7 +282,7 @@ export default function Route() {
                 asChild
                 size="sm"
                 variant="ghost"
-                className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+                className="rounded-xl w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
               >
                 <Link to="/app/profile">
                   <UserIcon size={15} />
@@ -294,7 +294,7 @@ export default function Route() {
                   type="submit"
                   size="sm"
                   variant="ghost"
-                  className="w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+                  className="rounded-lg w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
                 >
                   <ExitIcon />
                   Logout

@@ -16,6 +16,7 @@ import {
   typeQueryParam,
   type VerificationTypes,
 } from './constants.ts';
+import { Prisma, Verification } from '@app/prisma';
 
 export function getRedirectToUrl({
   request,
@@ -60,11 +61,13 @@ export async function prepareVerification({
   request,
   type,
   target,
+  organizationId,
 }: {
   period: number;
   request: Request;
   type: VerificationTypes;
   target: string;
+  organizationId?: string;
 }) {
   const verifyUrl = getRedirectToUrl({ request, type, target });
   const redirectTo = new URL(verifyUrl.toString());
@@ -75,11 +78,14 @@ export async function prepareVerification({
     charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
     period,
   });
-  const verificationData = {
+  const verificationData: Prisma.VerificationCreateInput = {
     type,
     target,
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
+    organization: organizationId
+      ? { connect: { id: organizationId } }
+      : undefined,
   };
   await prisma.verification.upsert({
     where: { target_type: { target, type } },
@@ -97,6 +103,7 @@ export type VerifyFunctionArgs = {
   request: Request;
   submission: Submission<z.infer<typeof VerifySchema>>;
   body: FormData | URLSearchParams;
+  verification?: Verification | null;
 };
 
 export async function isCodeValid({

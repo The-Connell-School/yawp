@@ -182,14 +182,15 @@ model InstructionAudio {
 }
 
 model Organization {
-  id                String    @id @default(cuid())
-  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime  @default(now()) @db.Timestamptz(6)
+  id                String         @id @default(cuid())
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @default(now()) @db.Timestamptz(6)
   name              String
-  accessExpiresAt   DateTime? @db.Timestamptz(6)
-  numOfStudentSeats Int       @default(10)
-  numOfTeacherSeats Int       @default(10)
+  accessExpiresAt   DateTime?      @db.Timestamptz(6)
+  numOfStudentSeats Int            @default(10)
+  numOfTeacherSeats Int            @default(10)
   users             User[]
+  verifications     Verification[]
 }
 
 model Password {
@@ -303,17 +304,19 @@ model UserImage {
 }
 
 model Verification {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  type      String
-  target    String
-  secret    String
-  algorithm String
-  digits    Int
-  period    Int
-  charSet   String
-  expiresAt DateTime? @db.Timestamptz(6)
-  metadata  String?
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  type           String
+  target         String
+  secret         String
+  algorithm      String
+  digits         Int
+  period         Int
+  charSet        String
+  expiresAt      DateTime?     @db.Timestamptz(6)
+  metadata       String?
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([target, type])
 }

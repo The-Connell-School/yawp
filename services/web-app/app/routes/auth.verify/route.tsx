@@ -1,29 +1,23 @@
+import { parseWithZod as parse } from '@conform-to/zod';
 import {
-  getZodConstraint as getFieldsetConstraint,
-  parseWithZod as parse,
-} from '@conform-to/zod';
-import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
-import {
-  Form,
-  Link,
-  useActionData,
-  useNavigate,
-  useSearchParams,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  data as dataResponse,
 } from 'react-router';
+import { Form, Link, useSearchParams } from 'react-router';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary.tsx';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { Button } from '~/components/ui/button.tsx';
 import { handleVerification as handleChangeEmailVerification } from '~/routes/app.profile.change-email/utils.server';
-import { validateCSRF } from '~/utils/csrf.server.ts';
 import { prisma } from '~/utils/db.server.ts';
 import { useIsPending } from '~/utils/misc.tsx';
 import { handleVerification as handleLoginTwoFactorVerification } from '../auth.login/utils.server.ts';
 import { handleVerification as handleOnboardingVerification } from '../auth.onboarding/utils.server';
 import { handleVerification as handleResetPasswordVerification } from '../auth.reset-password/utils.server';
 import { handleVerification as handleTeacherOnboardingVerification } from '../auth.teacher-onboarding/utils.server';
-import { handleVerification as handleOrganizationInviteVerification } from '../auth.organization-invite/utils.server';
+import { handleVerification as handleOrganizationInviteVerification } from './utils.server.ts';
 import { isCodeValid } from './utils';
 import {
   codeQueryParam,
@@ -35,6 +29,135 @@ import {
   type VerificationTypes,
 } from './constants.ts';
 import { useForm } from '@rvf/react-router';
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const url = new URL(request.url);
+  const code = url.searchParams.get(codeQueryParam);
+  const type = url.searchParams.get(typeQueryParam);
+  const target = url.searchParams.get(targetQueryParam);
+  const redirectTo = url.searchParams.get(redirectToQueryParam);
+
+  // If we have all required parameters, try to validate automatically
+  if (code && type && target) {
+    const parsedType = VerificationTypeSchema.safeParse(type);
+    if (parsedType.success) {
+      const codeIsValid = await isCodeValid({
+        code,
+        type: parsedType.data,
+        target,
+      });
+
+      if (codeIsValid) {
+        // Create form data for the verification handlers
+        const formData = new FormData();
+        formData.set(codeQueryParam, code);
+        formData.set(typeQueryParam, type);
+        formData.set(targetQueryParam, target);
+        if (redirectTo) {
+          formData.set(redirectToQueryParam, redirectTo);
+        }
+
+        // Parse the submission without CSRF validation for automatic verification
+        const submission = await parse(formData, {
+          schema: VerifySchema.superRefine(async (data, ctx) => {
+            const codeIsValid = await isCodeValid({
+              code: data[codeQueryParam],
+              type: data[typeQueryParam],
+              target: data[targetQueryParam],
+            });
+            if (!codeIsValid) {
+              ctx.addIssue({
+                path: ['code'],
+                code: z.ZodIssueCode.custom,
+                message: `Invalid code`,
+              });
+              return;
+            }
+          }),
+          async: true,
+        });
+
+        if (submission.status === 'success' && submission.value) {
+          const { value: submissionValue } = submission;
+          const verification = await prisma.verification.findUnique({
+            where: {
+              target_type: {
+                type: submissionValue[typeQueryParam],
+                target: submissionValue[targetQueryParam],
+              },
+            },
+          });
+
+          async function deleteVerification() {
+            await prisma.verification.delete({
+              where: {
+                target_type: {
+                  type: submissionValue[typeQueryParam],
+                  target: submissionValue[targetQueryParam],
+                },
+              },
+            });
+          }
+
+          // Handle the verification based on type
+          switch (submissionValue[typeQueryParam]) {
+            case 'reset-password': {
+              await deleteVerification();
+              return handleResetPasswordVerification({
+                request,
+                body: formData,
+                submission,
+              });
+            }
+            case 'onboarding': {
+              await deleteVerification();
+              return handleOnboardingVerification({
+                request,
+                body: formData,
+                submission,
+              });
+            }
+            case 'change-email': {
+              await deleteVerification();
+              return handleChangeEmailVerification?.({
+                request,
+                body: formData,
+                submission,
+              });
+            }
+            case '2fa': {
+              return handleLoginTwoFactorVerification({
+                request,
+                body: formData,
+                submission,
+              });
+            }
+            case 'teacher-onboarding': {
+              await deleteVerification();
+              return handleTeacherOnboardingVerification({
+                request,
+                body: formData,
+                submission,
+              });
+            }
+            case 'organization-teacher-invite':
+            case 'organization-student-invite': {
+              await deleteVerification();
+              return handleOrganizationInviteVerification({
+                request,
+                body: formData,
+                submission,
+                verification,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -63,8 +186,6 @@ async function validateRequest(
     }),
     async: true,
   });
-
-  console.log(submission);
 
   if (submission.status !== 'success' || !submission.value) {
     return dataResponse(submission.reply(), { status: 400 });

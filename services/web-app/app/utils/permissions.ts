@@ -24,6 +24,31 @@ export async function requireAdmin(request: Request) {
   return user;
 }
 
+export async function requireOwner(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findFirst({
+    select: {
+      id: true,
+      isOwner: true,
+      organization: { select: { name: true, id: true } },
+    },
+    where: { id: userId, isOwner: true, organizationId: { not: null } },
+  });
+
+  if (!user) {
+    throw data(
+      {
+        error: 'Unauthorized',
+        requiredRole: 'owner',
+        message: 'Unauthorized: required role: owner',
+      },
+      { status: 403 }
+    );
+  }
+
+  return user;
+}
+
 type Action = 'create' | 'read' | 'update' | 'delete';
 type Entity = 'user';
 type Access = 'own' | 'any' | 'own,any' | 'any,own';

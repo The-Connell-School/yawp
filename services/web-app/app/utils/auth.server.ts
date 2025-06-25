@@ -172,6 +172,70 @@ export async function signupAsTeacher({
   return session;
 }
 
+export async function signupAsOrganizationTeacher({
+  email,
+  name,
+  password,
+  organizationId,
+}: {
+  email: User['email'];
+  name: User['name'];
+  password: string;
+  organizationId: string;
+}) {
+  const hashedPassword = await getPasswordHash(password);
+
+  const session = await prisma.session.create({
+    data: {
+      expirationDate: getSessionExpirationDate(),
+      user: {
+        create: {
+          email: email.toLowerCase(),
+          name,
+          password: { create: { hash: hashedPassword } },
+          organization: { connect: { id: organizationId } },
+          teacherProfile: { create: {} },
+        },
+      },
+    },
+    select: { id: true, expirationDate: true },
+  });
+
+  return session;
+}
+
+export async function signupAsOrganizationStudent({
+  email,
+  name,
+  password,
+  organizationId,
+}: {
+  email: User['email'];
+  name: User['name'];
+  password: string;
+  organizationId: string;
+}) {
+  const hashedPassword = await getPasswordHash(password);
+
+  const session = await prisma.session.create({
+    data: {
+      expirationDate: getSessionExpirationDate(),
+      user: {
+        create: {
+          email: email.toLowerCase(),
+          name,
+          password: { create: { hash: hashedPassword } },
+          organization: { connect: { id: organizationId } },
+          studentProfile: { create: {} },
+        },
+      },
+    },
+    select: { id: true, expirationDate: true },
+  });
+
+  return session;
+}
+
 export async function signupWithConnection({
   email,
   name,
