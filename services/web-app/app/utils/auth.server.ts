@@ -250,6 +250,11 @@ export async function signupAsOrganizationOwner({
 }) {
   const hashedPassword = await getPasswordHash(password);
 
+  const existingUsers = await prisma.user.findMany({
+    where: { organizationId },
+    select: { id: true },
+  });
+
   const session = await prisma.session.create({
     data: {
       expirationDate: getSessionExpirationDate(),
@@ -261,6 +266,7 @@ export async function signupAsOrganizationOwner({
           organization: { connect: { id: organizationId } },
           studentProfile: { create: {} },
           isOwner: true,
+          ...(existingUsers.length === 0 ? { isSuperOwner: true } : {}),
         },
       },
     },

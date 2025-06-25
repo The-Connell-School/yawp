@@ -38,7 +38,6 @@ import {
   Edit,
 } from 'lucide-react';
 import React from 'react';
-import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
 import { prepareVerification } from '~/routes/auth.verify/utils';
 import { sendEmail } from '~/utils/email.server';
 import * as E from '@react-email/components';
@@ -396,6 +395,26 @@ export async function action({ request }: ActionFunctionArgs) {
         { error: 'Cannot manage super owners' },
         { status: 403 }
       );
+    }
+
+    // Students who are not owners and don't have teacher profiles cannot be made owners or given teacher profiles
+    if (
+      memberToEdit.studentProfile &&
+      !memberToEdit.isOwner &&
+      !memberToEdit.teacherProfile
+    ) {
+      if (isOwner) {
+        return dataResponse(
+          { error: 'Students without teacher profiles cannot be made owners' },
+          { status: 400 }
+        );
+      }
+      if (createTeacherProfile) {
+        return dataResponse(
+          { error: 'Students without teacher profiles cannot be given teacher profiles' },
+          { status: 400 }
+        );
+      }
     }
 
     // Students cannot be made owners unless they have a teacher profile
@@ -1058,7 +1077,6 @@ export default function OrganizationRoute() {
               </div>
 
               <editFetcher.Form method="post" className="space-y-4">
-                <AuthenticityTokenInput />
                 <input type="hidden" name="intent" value="edit-member" />
                 <input
                   type="hidden"
