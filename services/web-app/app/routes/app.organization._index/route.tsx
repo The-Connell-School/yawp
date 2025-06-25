@@ -35,6 +35,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Edit,
 } from 'lucide-react';
 import React from 'react';
 import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
@@ -45,6 +46,7 @@ import { Pagination } from '~/components/table/pagination';
 import { Checkbox } from '~/components/ui/checkbox';
 import { CookieColumns, useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
+import { Switch } from '~/components/ui/switch';
 import {
   getOrganizationMembersTableCookie,
   getOrganizationMembersTableCookieValue,
@@ -69,6 +71,9 @@ const COLUMNS: CookieColumns = {
       if (value.studentProfile) return 'Student';
       return 'Unassigned';
     },
+  },
+  actions: {
+    label: 'Actions',
   },
 };
 
@@ -119,6 +124,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     users,
     totalCount,
     table: { sort, direction, skip, take },
+    currentUser: user,
   });
 }
 
@@ -359,11 +365,90 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  if (intent === 'edit-member') {
+    const memberId = formData.get('memberId')?.toString();
+    const isOwner = formData.get('isOwner') === 'on';
+    const createTeacherProfile = formData.get('createTeacherProfile') === 'on';
+
+    if (!memberId) {
+      return dataResponse({ error: 'Member ID is required' }, { status: 400 });
+    }
+
+    // Get the member to edit
+    const memberToEdit = await prisma.user.findFirst({
+      where: {
+        id: memberId,
+        organizationId: user.organization?.id,
+      },
+      include: {
+        studentProfile: true,
+        teacherProfile: true,
+      },
+    });
+
+    if (!memberToEdit) {
+      return dataResponse({ error: 'Member not found' }, { status: 404 });
+    }
+
+    // Super owners cannot be managed by regular owners
+    if (memberToEdit.isSuperOwner && !user.isSuperOwner) {
+      return dataResponse(
+        { error: 'Cannot manage super owners' },
+        { status: 403 }
+      );
+    }
+
+    // Students cannot be made owners unless they have a teacher profile
+    if (
+      isOwner &&
+      memberToEdit.studentProfile &&
+      !memberToEdit.teacherProfile &&
+      !createTeacherProfile
+    ) {
+      return dataResponse(
+        { error: 'Students cannot be made owners without a teacher profile' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Create teacher profile if needed
+        if (createTeacherProfile && !memberToEdit.teacherProfile) {
+          await tx.teacherProfile.create({
+            data: {
+              userId: memberId,
+            },
+          });
+        }
+
+        // Update the user's owner status
+        await tx.user.update({
+          where: { id: memberId },
+          data: {
+            isOwner,
+          },
+        });
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Member updated successfully',
+      });
+    } catch (error) {
+      console.error('Failed to update member:', error);
+      return dataResponse(
+        { error: 'Failed to update member' },
+        { status: 500 }
+      );
+    }
+  }
+
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
 }
 
 export default function OrganizationRoute() {
-  const { users, totalCount, table, organization, invitations } =
+  const { users, totalCount, table, organization, invitations, currentUser } =
     useLoaderData<typeof loader>();
   const teacherInvitations = invitations.filter(
     (invitation) => invitation.type === 'organization-teacher-invite'
@@ -375,6 +460,7 @@ export default function OrganizationRoute() {
     (invitation) => invitation.type === 'organization-owner-invite'
   );
   const fetcher = useFetcher();
+  const editFetcher = useFetcher();
   const [isCreateTeachersOpen, setIsCreateTeachersOpen] = React.useState(false);
   const [isCreateStudentsOpen, setIsCreateStudentsOpen] = React.useState(false);
   const [isTeacherInvitationsOpen, setIsTeacherInvitationsOpen] =
@@ -383,6 +469,10 @@ export default function OrganizationRoute() {
     React.useState(false);
   const [isOwnerInvitationsOpen, setIsOwnerInvitationsOpen] =
     React.useState(false);
+  const [isEditMemberOpen, setIsEditMemberOpen] = React.useState(false);
+  const [selectedMember, setSelectedMember] = React.useState<
+    (typeof users)[0] | null
+  >(null);
   const { selected, setSelected, handleSelectAll, handleSort, handleSelect } =
     useTable({
       rows: users,
@@ -400,6 +490,30 @@ export default function OrganizationRoute() {
       setIsCreateStudentsOpen(false);
     }
   }, [fetcher.data]);
+
+  React.useEffect(() => {
+    if (editFetcher.data?.success) {
+      setIsEditMemberOpen(false);
+      setSelectedMember(null);
+    }
+  }, [editFetcher.data]);
+
+  const handleEditMember = (member: (typeof users)[0]) => {
+    setSelectedMember(member);
+    setIsEditMemberOpen(true);
+  };
+
+  const canEditMember = (member: (typeof users)[0]) => {
+    // Super owners cannot be managed by regular owners
+    if (member.isSuperOwner && !currentUser.isSuperOwner) {
+      return false;
+    }
+    // Users cannot edit themselves
+    if (member.id === currentUser.id) {
+      return false;
+    }
+    return true;
+  };
 
   return (
     <div className="flex flex-col gap-4 p-3 md:p-5 h-screen overflow-auto">
@@ -799,12 +913,7 @@ export default function OrganizationRoute() {
                     {Object.entries(COLUMNS).map(([key, { label, value }]) => (
                       <TableHead
                         key={key}
-                        className={
-                          key ===
-                          Object.keys(COLUMNS)[Object.keys(COLUMNS).length - 1]
-                            ? 'pr-4'
-                            : ''
-                        }
+                        className={key === 'actions' ? 'pr-4' : ''}
                       >
                         <Button
                           variant="unstyled"
@@ -876,6 +985,17 @@ export default function OrganizationRoute() {
                           <Badge variant="outline">Unassigned</Badge>
                         )}
                       </TableCell>
+                      <TableCell className="pr-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEditMember(user)}
+                          disabled={!canEditMember(user)}
+                        >
+                          <Edit className="mr-2 h-3.5 w-3.5" />
+                          Edit
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -901,6 +1021,131 @@ export default function OrganizationRoute() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Member Sheet */}
+      <Sheet open={isEditMemberOpen} onOpenChange={setIsEditMemberOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Edit Member</SheetTitle>
+          </SheetHeader>
+          {selectedMember && (
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Member Information</div>
+                <div className="text-sm text-muted-foreground">
+                  <div>
+                    <strong>Name:</strong> {selectedMember.name || 'Not set'}
+                  </div>
+                  <div>
+                    <strong>Email:</strong> {selectedMember.email}
+                  </div>
+                  <div>
+                    <strong>Current Status:</strong>{' '}
+                    {selectedMember.isOwner
+                      ? 'Owner'
+                      : selectedMember.teacherProfile
+                        ? 'Teacher'
+                        : selectedMember.studentProfile
+                          ? 'Student'
+                          : 'Unassigned'}
+                  </div>
+                  {selectedMember.isSuperOwner && (
+                    <div className="text-orange-600 font-medium">
+                      <strong>Super Owner</strong> - Cannot be managed by
+                      regular owners
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <editFetcher.Form method="post" className="space-y-4">
+                <AuthenticityTokenInput />
+                <input type="hidden" name="intent" value="edit-member" />
+                <input
+                  type="hidden"
+                  name="memberId"
+                  value={selectedMember.id}
+                />
+
+                <div className="space-y-4">
+                  {/* Create Teacher Profile Option */}
+                  {selectedMember.studentProfile &&
+                    !selectedMember.teacherProfile && (
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="createTeacherProfile"
+                            name="createTeacherProfile"
+                          />
+                          <Label htmlFor="createTeacherProfile">
+                            Create Teacher Profile
+                          </Label>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          This will allow the student to also be a teacher
+                        </p>
+                      </div>
+                    )}
+
+                  {/* Owner Toggle */}
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="isOwner"
+                        name="isOwner"
+                        defaultChecked={selectedMember.isOwner}
+                        disabled={
+                          selectedMember.isSuperOwner ||
+                          (!!selectedMember.studentProfile &&
+                            !selectedMember.teacherProfile)
+                        }
+                      />
+                      <Label htmlFor="isOwner">Is an Owner</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedMember.isSuperOwner
+                        ? 'Super owners cannot have their owner status changed'
+                        : selectedMember.studentProfile &&
+                            !selectedMember.teacherProfile
+                          ? 'Students must have a teacher profile to become owners'
+                          : 'Owners can manage organization members and settings'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    disabled={editFetcher.state !== 'idle'}
+                    className="flex-1"
+                  >
+                    {editFetcher.state !== 'idle'
+                      ? 'Saving...'
+                      : 'Save Changes'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsEditMemberOpen(false);
+                      setSelectedMember(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+
+                {editFetcher.data?.error && (
+                  <div className="text-sm text-red-600">
+                    {editFetcher.data.error}
+                  </div>
+                )}
+              </editFetcher.Form>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
