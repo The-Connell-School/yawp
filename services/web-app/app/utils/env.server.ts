@@ -16,6 +16,7 @@ const schema = z.object({
 	GITHUB_CLIENT_ID: z.string().default('MOCK_GITHUB_CLIENT_ID'),
 	GITHUB_CLIENT_SECRET: z.string().default('MOCK_GITHUB_CLIENT_SECRET'),
 	GITHUB_TOKEN: z.string().default('MOCK_GITHUB_TOKEN'),
+	COMMIT_HASH: z.string().optional(),
 })
 
 declare global {
@@ -51,6 +52,7 @@ export function getEnv() {
 	return {
 		MODE: process.env.NODE_ENV,
 		SENTRY_DSN: process.env.SENTRY_DSN,
+		COMMIT_HASH: process.env.COMMIT_HASH,
 	}
 }
 

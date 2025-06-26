@@ -92,3 +92,9 @@ variable "sentry_dsn" {
   type        = string
   description = "Sentry DSN"
 }
+
+variable "commit_hash" {
+  type        = string
+  description = "Git commit hash for the current deployment"
+  default     = "unknown"
+}

@@ -414,6 +414,7 @@ resource "aws_apprunner_service" "web" {
           PORT = "8080"
           AI_MODEL = "claude-3-5-sonnet-20240620"
           RESEND_FROM_EMAIL = var.resend_from_email
+          COMMIT_HASH = var.commit_hash
         }
 
         runtime_environment_secrets = {

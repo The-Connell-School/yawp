@@ -12,6 +12,7 @@ import {
 } from 'react-router';
 import { AlertTriangle, FlaskConical } from 'lucide-react';
 import { useEffect } from 'react';
+import { CommitHashDisplay } from './components/commit-hash-display.tsx';
 import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
@@ -223,6 +224,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
             </div>
           </Tooltip>
         ) : null}
+        <CommitHashDisplay commitHash={data.ENV.COMMIT_HASH} />
         <GlobalLoading />
         <div className="flex h-screen min-h-screen flex-col justify-between">
           <div className="flex-1 bg-background">
