@@ -1,7 +1,6 @@
 import { useId } from 'react';
 import { useField } from '@rvf/react-router';
 import { cn } from '~/utils/misc';
-import { startCase } from '~/utils/startCase';
 import { InfoCircledIcon } from '../icons';
 import { Input, type InputProps } from '../ui/input';
 import { Tooltip } from '../ui/tooltip';

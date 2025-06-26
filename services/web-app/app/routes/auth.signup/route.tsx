@@ -123,9 +123,10 @@ export default function SignupRoute() {
           }}
         >
           <AuthenticityTokenInput />
-          <FormInput type="email" name="email" autoFocus />
+          <FormInput scope="email" type="email" name="email" autoFocus />
           <div className="flex w-full items-center rounded-lg border p-3 bg-white">
             <FormInput
+              scope="passcode"
               type="text"
               label="App Passcode"
               labelInfo="This is the passcode for the Yawp! app."
