@@ -260,6 +260,7 @@ export default function VerifyRoute() {
     onboarding: checkEmail,
     'teacher-onboarding': checkEmail,
     'organization-teacher-invite': checkEmail,
+    'organization-owner-invite': checkEmail,
     'organization-student-invite': checkEmail,
     'reset-password': checkEmail,
     'change-email': checkEmail,

@@ -125,10 +125,30 @@ export async function signup({
       email: email.toLowerCase(),
       name,
       password: { create: { hash: hashedPassword } },
+      organization: { connect: { id: 'default-org' } },
+      studentProfile: {
+        create: {
+          grade,
+          period,
+          school,
+          schoolTeacher: teacher,
+          workshopLeaderId: workshopTeacherId,
+        },
+      },
     },
     update: {
       name,
       password: { update: { hash: hashedPassword } },
+      organization: { connect: { id: 'default-org' } },
+      studentProfile: {
+        update: {
+          grade,
+          period,
+          school,
+          schoolTeacher: teacher,
+          workshopLeaderId: workshopTeacherId,
+        },
+      },
     },
   });
 
