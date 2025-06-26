@@ -46,11 +46,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: { id: params.id },
       include: {
         users: {
-          include: {
-            studentProfile: true,
-            teacherProfile: true,
-            image: true,
-          },
+          where: { isOwner: true },
+          include: { image: true },
         },
       },
     }),
