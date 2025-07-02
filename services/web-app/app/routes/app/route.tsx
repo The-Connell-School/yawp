@@ -204,6 +204,7 @@ export default function Route() {
               <Button
                 size="icon-sm"
                 variant="ghost"
+                className="hidden sm:block"
                 disabled={['submitting', 'loading'].includes(fetcher.state)}
               >
                 {state === 'expanded' ? (

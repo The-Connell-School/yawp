@@ -7,18 +7,18 @@ import {
   useNavigate,
 } from 'react-router';
 import { Link } from 'react-router';
-import { 
-  ChevronLeft, 
-  Play, 
-  Pause, 
-  SkipForward, 
-  CheckCircle, 
-  Clock, 
-  FileText, 
+import {
+  ChevronLeft,
+  Play,
+  Pause,
+  SkipForward,
+  CheckCircle,
+  Clock,
+  FileText,
   Download,
-  X
+  X,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -26,6 +26,7 @@ import { Badge } from '~/components/ui/badge';
 import { Progress } from '~/components/ui/progress';
 import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
+import { YouTubePlayer } from './youtube-player';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -99,7 +100,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
-  return dataResponse({ 
+  return dataResponse({
     teacherCourse,
     currentModule,
     teacherProfileId: user.teacherProfile.id,
@@ -169,63 +170,94 @@ function formatTime(seconds: number): string {
 
 function getModuleStatus(sessions: any[]) {
   if (!sessions || sessions.length === 0) {
-    return { status: 'not-started', icon: Clock, color: 'text-muted-foreground' };
+    return {
+      status: 'not-started',
+      icon: Clock,
+      color: 'text-muted-foreground',
+    };
   }
-  
+
   const progress = sessions[0].videoProgress;
   if (progress >= 95) {
     return { status: 'completed', icon: CheckCircle, color: 'text-green-600' };
   } else if (progress > 0) {
     return { status: 'in-progress', icon: Play, color: 'text-blue-600' };
   } else {
-    return { status: 'not-started', icon: Clock, color: 'text-muted-foreground' };
+    return {
+      status: 'not-started',
+      icon: Clock,
+      color: 'text-muted-foreground',
+    };
   }
 }
 
 export default function TeacherCourseModuleRoute() {
-  const { teacherCourse, currentModule, teacherProfileId, currentSession } = useLoaderData<typeof loader>();
+  const { teacherCourse, currentModule, teacherProfileId, currentSession } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(currentSession?.videoTimestamp || 0);
+  const [currentTime, setCurrentTime] = useState(
+    currentSession?.videoTimestamp || 0
+  );
   const [duration, setDuration] = useState(0);
   const [progress, setProgress] = useState(currentSession?.videoProgress || 0);
   const [showAutoplayCountdown, setShowAutoplayCountdown] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [lastSavedTime, setLastSavedTime] = useState(0);
+  const [isYouTubeVideo, setIsYouTubeVideo] = useState(false);
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
 
   // Find current module index and next module
   const currentModuleIndex = teacherCourse.teacherCourseModules.findIndex(
-    m => m.id === currentModule.id
+    (m) => m.id === currentModule.id
   );
   const nextModule = teacherCourse.teacherCourseModules[currentModuleIndex + 1];
 
-  // Set initial video time when session data loads
+  // Extract YouTube video ID from URL
   useEffect(() => {
-    if (videoRef.current && currentSession?.videoTimestamp) {
+    if (
+      currentModule.videoLink &&
+      !currentModule.videoLink.startsWith('/api')
+    ) {
+      const youtubeRegex =
+        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
+      const match = currentModule.videoLink.match(youtubeRegex);
+      if (match) {
+        setYoutubeVideoId(match[1]);
+        setIsYouTubeVideo(true);
+      }
+    }
+  }, [currentModule.videoLink]);
+
+  // Set initial video time when session data loads (for non-YouTube videos)
+  useEffect(() => {
+    if (videoRef.current && currentSession?.videoTimestamp && !isYouTubeVideo) {
       videoRef.current.currentTime = currentSession.videoTimestamp;
       setCurrentTime(currentSession.videoTimestamp);
     }
-  }, [currentSession]);
+  }, [currentSession, isYouTubeVideo]);
 
-  // Progress tracking
+  // Progress tracking for non-YouTube videos
   useEffect(() => {
+    if (isYouTubeVideo) return; // YouTube progress is handled by the YouTubePlayer component
+
     const interval = setInterval(() => {
       if (videoRef.current && isPlaying) {
         const currentTime = videoRef.current.currentTime;
-        const duration = videoRef.current.duration;
-        
-        if (duration > 0) {
-          const newProgress = (currentTime / duration) * 100;
+        const videoDuration = videoRef.current.duration;
+
+        if (videoDuration > 0) {
+          const newProgress = (currentTime / videoDuration) * 100;
           setProgress(newProgress);
           setCurrentTime(currentTime);
 
           // Save progress every 10 seconds to avoid too many requests
           if (Math.abs(currentTime - lastSavedTime) >= 10) {
             setLastSavedTime(currentTime);
-            
+
             const formData = new FormData();
             formData.append('intent', 'updateProgress');
             formData.append('videoTimestamp', currentTime.toString());
@@ -233,7 +265,7 @@ export default function TeacherCourseModuleRoute() {
             if (currentSession?.id) {
               formData.append('sessionId', currentSession.id);
             }
-            
+
             fetcher.submit(formData, { method: 'post' });
           }
         }
@@ -241,18 +273,20 @@ export default function TeacherCourseModuleRoute() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, lastSavedTime, currentSession, fetcher]);
+  }, [isPlaying, lastSavedTime, currentSession, fetcher, isYouTubeVideo]);
 
   // Auto-play countdown when video ends
   useEffect(() => {
     let countdownInterval: NodeJS.Timeout;
-    
+
     if (showAutoplayCountdown && nextModule) {
       countdownInterval = setInterval(() => {
-        setCountdown(prev => {
+        setCountdown((prev) => {
           if (prev <= 1) {
             // Navigate to next module
-            navigate(`/app/teacher-courses/${teacherCourse.id}/modules/${nextModule.id}`);
+            navigate(
+              `/app/teacher-courses/${teacherCourse.id}/modules/${nextModule.id}`
+            );
             return 0;
           }
           return prev - 1;
@@ -267,7 +301,46 @@ export default function TeacherCourseModuleRoute() {
     };
   }, [showAutoplayCountdown, nextModule, navigate, teacherCourse.id]);
 
-  const handleVideoEnd = () => {
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && !isYouTubeVideo) {
+      setDuration(videoRef.current.duration);
+    }
+  };
+
+  // YouTube player event handlers
+  const handleYouTubeTimeUpdate = useCallback(
+    (currentTime: number, duration: number) => {
+      setCurrentTime(currentTime);
+      setDuration(duration);
+
+      if (duration > 0) {
+        const newProgress = (currentTime / duration) * 100;
+        setProgress(newProgress);
+
+        // Save progress every 10 seconds to avoid too many requests
+        if (Math.abs(currentTime - lastSavedTime) >= 10) {
+          setLastSavedTime(currentTime);
+
+          const formData = new FormData();
+          formData.append('intent', 'updateProgress');
+          formData.append('videoTimestamp', currentTime.toString());
+          formData.append('videoProgress', newProgress.toString());
+          if (currentSession?.id) {
+            formData.append('sessionId', currentSession.id);
+          }
+
+          fetcher.submit(formData, { method: 'post' });
+        }
+      }
+    },
+    [lastSavedTime, currentSession, fetcher]
+  );
+
+  const handleYouTubeStateChange = useCallback((isPlaying: boolean) => {
+    setIsPlaying(isPlaying);
+  }, []);
+
+  const handleVideoEnd = useCallback(() => {
     // Mark as completed and show auto-play if there's a next module
     const formData = new FormData();
     formData.append('intent', 'updateProgress');
@@ -276,31 +349,14 @@ export default function TeacherCourseModuleRoute() {
     if (currentSession?.id) {
       formData.append('sessionId', currentSession.id);
     }
-    
+
     fetcher.submit(formData, { method: 'post' });
 
     if (nextModule) {
       setShowAutoplayCountdown(true);
       setCountdown(5);
     }
-  };
-
-  const handlePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-    }
-  };
+  }, [duration, currentSession, fetcher, nextModule]);
 
   const downloadResource = (resourceId: string, fileName: string) => {
     const link = document.createElement('a');
@@ -323,9 +379,10 @@ export default function TeacherCourseModuleRoute() {
                 {teacherCourse.title}
               </Link>
             </Button>
-            
+
             <div className="text-sm text-muted-foreground">
-              Module {currentModuleIndex + 1} of {teacherCourse.teacherCourseModules.length}
+              Module {currentModuleIndex + 1} of{' '}
+              {teacherCourse.teacherCourseModules.length}
             </div>
           </div>
         </div>
@@ -336,10 +393,10 @@ export default function TeacherCourseModuleRoute() {
           {/* Main Content Area */}
           <div className="lg:col-span-3 space-y-6">
             {/* Video Player */}
-            <Card>
+            <Card className="bg-muted">
               <CardContent className="p-0">
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  {currentModule.videoLink ? (
+                  {currentModule.videoLink?.startsWith('/api') ? (
                     <video
                       ref={videoRef}
                       className="w-full h-full"
@@ -357,6 +414,21 @@ export default function TeacherCourseModuleRoute() {
                       <source src={currentModule.videoLink} type="video/mp4" />
                       Your browser does not support the video tag.
                     </video>
+                  ) : isYouTubeVideo && youtubeVideoId ? (
+                    <YouTubePlayer
+                      videoId={youtubeVideoId}
+                      initialTime={currentSession?.videoTimestamp || 0}
+                      onTimeUpdate={handleYouTubeTimeUpdate}
+                      onStateChange={handleYouTubeStateChange}
+                      onEnded={handleVideoEnd}
+                    />
+                  ) : currentModule.videoLink ? (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center text-muted-foreground">
+                        <Play className="mx-auto h-16 w-16 mb-4" />
+                        <p>Invalid video URL</p>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center text-muted-foreground">
@@ -380,7 +452,7 @@ export default function TeacherCourseModuleRoute() {
                           {nextModule.title}
                         </p>
                         <div className="flex gap-2">
-                          <Button 
+                          <Button
                             onClick={() => setShowAutoplayCountdown(false)}
                             variant="outline"
                             size="sm"
@@ -388,8 +460,12 @@ export default function TeacherCourseModuleRoute() {
                             <X className="mr-2 h-4 w-4" />
                             Cancel
                           </Button>
-                          <Button 
-                            onClick={() => navigate(`/app/teacher-courses/${teacherCourse.id}/modules/${nextModule.id}`)}
+                          <Button
+                            onClick={() =>
+                              navigate(
+                                `/app/teacher-courses/${teacherCourse.id}/modules/${nextModule.id}`
+                              )
+                            }
                             size="sm"
                           >
                             <SkipForward className="mr-2 h-4 w-4" />
@@ -400,28 +476,11 @@ export default function TeacherCourseModuleRoute() {
                     </div>
                   )}
                 </div>
-
-                {/* Video Progress Bar */}
-                {duration > 0 && (
-                  <div className="p-4 bg-card">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground min-w-fit">
-                        {formatTime(currentTime)}
-                      </span>
-                      <div className="flex-1">
-                        <Progress value={(currentTime / duration) * 100} className="h-2" />
-                      </div>
-                      <span className="text-sm text-muted-foreground min-w-fit">
-                        {formatTime(duration)}
-                      </span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
 
             {/* Module Info */}
-            <Card>
+            <Card className="bg-muted">
               <CardHeader>
                 <CardTitle>{currentModule.title}</CardTitle>
               </CardHeader>
@@ -431,7 +490,7 @@ export default function TeacherCourseModuleRoute() {
                     {currentModule.description}
                   </p>
                 )}
-                
+
                 <div className="flex items-center gap-4 text-sm">
                   {currentModule.videoDuration && (
                     <div className="flex items-center gap-1">
@@ -450,11 +509,10 @@ export default function TeacherCourseModuleRoute() {
 
             {/* Resources */}
             {currentModule.resources.length > 0 && (
-              <Card>
+              <Card className="bg-muted">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    Module Resources
+                    Resources
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -474,7 +532,9 @@ export default function TeacherCourseModuleRoute() {
                           </div>
                         </div>
                         <Button
-                          onClick={() => downloadResource(resource.id, resource.name)}
+                          onClick={() =>
+                            downloadResource(resource.id, resource.name)
+                          }
                           size="sm"
                           variant="outline"
                         >
@@ -491,16 +551,18 @@ export default function TeacherCourseModuleRoute() {
 
           {/* Sidebar - Module Navigation */}
           <div className="lg:col-span-1">
-            <Card className="sticky top-6">
+            <Card className="sticky top-6 bg-muted">
               <CardHeader>
                 <CardTitle className="text-base">Course Modules</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 max-h-96 overflow-y-auto">
                 {teacherCourse.teacherCourseModules.map((module, index) => {
-                  const moduleStatus = getModuleStatus(module.teacherCourseModuleSessions);
+                  const moduleStatus = getModuleStatus(
+                    module.teacherCourseModuleSessions
+                  );
                   const StatusIcon = moduleStatus.icon;
                   const isCurrentModule = module.id === currentModule.id;
-                  
+
                   return (
                     <Link
                       key={module.id}
@@ -511,18 +573,26 @@ export default function TeacherCourseModuleRoute() {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex flex-col items-center gap-1 min-w-fit">
-                          <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                            isCurrentModule ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                          }`}>
+                          <div
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
+                              isCurrentModule
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted'
+                            }`}
+                          >
                             {index + 1}
                           </div>
-                          <StatusIcon className={`h-3 w-3 ${moduleStatus.color}`} />
+                          <StatusIcon
+                            className={`h-3 w-3 ${moduleStatus.color}`}
+                          />
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
-                          <h4 className={`text-sm font-medium line-clamp-2 ${
-                            isCurrentModule ? 'text-primary' : ''
-                          }`}>
+                          <h4
+                            className={`text-sm font-medium line-clamp-2 ${
+                              isCurrentModule ? 'text-primary' : ''
+                            }`}
+                          >
                             {module.title}
                           </h4>
                           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -531,7 +601,11 @@ export default function TeacherCourseModuleRoute() {
                             )}
                             {module.teacherCourseModuleSessions.length > 0 && (
                               <span className="text-primary">
-                                {Math.round(module.teacherCourseModuleSessions[0].videoProgress)}%
+                                {Math.round(
+                                  module.teacherCourseModuleSessions[0]
+                                    .videoProgress
+                                )}
+                                %
                               </span>
                             )}
                           </div>
