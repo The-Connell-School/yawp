@@ -3,6 +3,7 @@ import {
   data as dataResponse,
   Link,
   type LoaderFunctionArgs,
+  redirect,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -20,7 +21,8 @@ import {
 } from '~/components/ui/table';
 import { UserImage } from '~/components/user-image';
 import { requireAdmin } from '~/utils/permissions';
-import { ChevronLeft, Settings, UserPlus } from 'lucide-react';
+import { ChevronLeft, Settings, UserPlus, TrashIcon } from 'lucide-react';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { Badge } from '~/components/ui/badge';
 import {
   Sheet,
@@ -78,6 +80,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (!user?.isAdmin) {
     throw new Response('Unauthorized', { status: 401 });
+  }
+
+  if (intent === 'deleteOrganization') {
+    await prisma.organization.delete({
+      where: { id: params.id },
+    });
+
+    return redirect('/app/admin/organizations');
   }
 
   if (intent === 'update') {
@@ -321,6 +331,23 @@ export default function OrganizationRoute() {
               </fetcher.Form>
             </SheetContent>
           </Sheet>
+          <ConfirmationDialog
+            variant="destructive"
+            title="Delete Organization"
+            description={`Are you sure you want to delete "${organization.name}"? This action cannot be undone and will permanently remove the organization and all its data.`}
+            confirmText="Delete Organization"
+            cancelText="Cancel"
+            onConfirm={() => {
+              fetcher.submit({ intent: 'deleteOrganization' }, { method: 'post' });
+            }}
+            onCancel={() => {
+              // Dialog will close automatically
+            }}
+          >
+            <Button variant="destructive-outline" size="icon">
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </ConfirmationDialog>
         </div>
       </div>
 
