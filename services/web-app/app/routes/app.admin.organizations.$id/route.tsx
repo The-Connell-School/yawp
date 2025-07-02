@@ -47,7 +47,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       include: {
         users: {
           where: { isOwner: true },
-          include: { image: true },
+          include: { image: { select: { id: true } } },
         },
       },
     }),

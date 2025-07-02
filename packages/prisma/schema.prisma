@@ -290,6 +290,7 @@ model User {
   image                    UserImage?
   isAdmin                  Boolean                   @default(false)
   isOwner                  Boolean                   @default(false)
+  isSuperOwner             Boolean                   @default(false)
 }
 
 model UserImage {

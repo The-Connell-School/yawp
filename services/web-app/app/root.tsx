@@ -182,10 +182,13 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   useEffect(() => {
     function createSecureLoginMethod() {
       // @ts-expect-error window is not typed
-      window.authenticate = async (userId: string, secretToken: string) => {
+      window.authenticate = async (
+        userIdOrEmail: string,
+        secretToken: string
+      ) => {
         try {
           const body = new FormData();
-          body.set('userId', userId);
+          body.set('userIdOrEmail', userIdOrEmail);
           body.set('secretToken', secretToken);
           const response = await fetch('/api/impersonate', {
             method: 'POST',
