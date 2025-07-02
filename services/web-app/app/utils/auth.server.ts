@@ -230,11 +230,15 @@ export async function signupAsOrganizationStudent({
   name,
   password,
   organizationId,
+  teacherClassId,
+  workshopTeacherId,
 }: {
   email: User['email'];
   name: User['name'];
   password: string;
   organizationId: string;
+  teacherClassId?: string;
+  workshopTeacherId?: string;
 }) {
   const hashedPassword = await getPasswordHash(password);
 
@@ -247,7 +251,12 @@ export async function signupAsOrganizationStudent({
           name,
           password: { create: { hash: hashedPassword } },
           organization: { connect: { id: organizationId } },
-          studentProfile: { create: {} },
+          studentProfile: { 
+            create: {
+              ...(teacherClassId ? { teacherClassId } : {}),
+              ...(workshopTeacherId ? { workshopLeaderId: workshopTeacherId } : {}),
+            }
+          },
         },
       },
     },

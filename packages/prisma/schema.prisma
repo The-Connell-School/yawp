@@ -221,31 +221,20 @@ model Setting {
 }
 
 model StudentProfile {
-  id               String   @id @default(cuid())
-  createdAt        DateTime @default(now()) @db.Timestamptz(6)
-  userId           String   @unique
+  id               String        @id @default(cuid())
+  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
+  userId           String        @unique
   workshopLeaderId String?
+  teacherClassId   String?
   school           String?
   schoolTeacher    String?
   grade            String?
   period           String?
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  workshopLeader   User?    @relation("Students", fields: [workshopLeaderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  workshopLeader   User?         @relation("Students", fields: [workshopLeaderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  teacherClass     TeacherClass? @relation(fields: [teacherClassId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 }
 
-model StudentView {
-  id             String   @id @default(cuid())
-  name           String
-  school         String?
-  grade          String?
-  period         String?
-  workshopLeader String?
-  schoolTeacher  String?
-  userId         String
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime @default(now()) @db.Timestamptz(6)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
 
 model TeacherProfile {
   id                          String                       @id @default(cuid())
@@ -254,6 +243,18 @@ model TeacherProfile {
   isActive                    Boolean                      @default(true)
   user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   teacherCourseModuleSessions TeacherCourseModuleSession[]
+  teacherClasses              TeacherClass[]
+}
+
+model TeacherClass {
+  id               String           @id @default(cuid())
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @db.Timestamptz(6)
+  name             String
+  description      String?
+  teacherProfileId String
+  teacherProfile   TeacherProfile   @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  students         StudentProfile[]
 }
 
 model Upload {
@@ -283,7 +284,6 @@ model User {
   organization             Organization?             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   password                 Password?
   sessions                 Session[]
-  studentViews             StudentView[]
   studentProfile           StudentProfile?
   studentProfiles          StudentProfile[]          @relation("Students")
   teacherProfile           TeacherProfile?

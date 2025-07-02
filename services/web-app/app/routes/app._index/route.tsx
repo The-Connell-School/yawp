@@ -4,7 +4,7 @@ import {
   data as dataResponse,
 } from 'react-router';
 import { Link, useLoaderData, useFetcher } from 'react-router';
-import { BookmarkIcon, EllipsisVertical, PlusIcon } from 'lucide-react';
+import { BookmarkIcon, EllipsisVertical, PlusIcon, Users, BookOpen, Chalkboard } from 'lucide-react';
 import { useState } from 'react';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
@@ -32,7 +32,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants');
   const userId = await requireUserId(request);
 
-  const [courses, documents, studentProfiles, views] = await Promise.all([
+  const [courses, documents, user] = await Promise.all([
     prisma.course.findMany({
       select: { image: { select: { id: true } }, id: true, title: true },
     }),
@@ -46,21 +46,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     }),
-    prisma.studentProfile.findMany({
-      where: { workshopLeaderId: userId },
-      include: { user: { include: { image: true, documents: true } } },
-    }),
-    prisma.studentView.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
+    prisma.user.findUnique({
+      where: { id: userId },
+      include: { 
+        teacherProfile: {
+          include: {
+            teacherClasses: {
+              include: {
+                students: {
+                  include: {
+                    user: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
     }),
   ]);
 
   return dataResponse({
     courses,
     documents,
-    studentProfiles,
-    views,
+    user,
   });
 }
 
@@ -68,11 +77,13 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const formData = await request.formData();
     const intent = formData.get('intent');
+    const userId = await requireUserId(request);
 
-    if (intent === 'deleteView') {
-      const viewId = formData.get('viewId');
-      await prisma.studentView.delete({
-        where: { id: viewId as string },
+    if (intent === 'createTeacherProfile') {
+      await prisma.teacherProfile.create({
+        data: {
+          userId,
+        },
       });
 
       return dataResponse({ success: true } as const);
@@ -85,113 +96,85 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AppRoute() {
-  const data = useLoaderData<typeof loader>();
+  const { courses, documents, user: userFromLoader } = useLoaderData<typeof loader>();
   const user = useUser();
-  const isTeacher = user.teacherProfile !== null;
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const fetcher = useFetcher<typeof action>();
+  
+  const isOwner = user.isOwner;
+  const hasTeacherProfile = user.teacherProfile !== null;
 
-  if (isTeacher) {
-    return (
-      <section
-        data-testid="app._index"
-        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-      >
-        <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-            <div className="flex flex-col">
-              <h2>Welcome, {user.name}!</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Welcome to your teacher dashboard. Manage students, view
-                resources, and more.
-              </p>
-            </div>
+  return (
+    <section
+      data-testid="app._index"
+      className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
+    >
+      <div className="flex w-full justify-between border-b bg-secondary">
+        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <div className="flex flex-col">
+            <h2>Welcome, {user.name}!</h2>
+            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+              Welcome to your dashboard. Here you can manage your classes, courses, and documents.
+            </p>
           </div>
         </div>
-        <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-          <div className="mt-8 flex flex-col">
-            <div className="mb-1 flex items-center gap-1">
-              <p className="text-foreground/60">Folders</p>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                <PlusIcon className="h-5 w-5" />
-              </Button>
+      </div>
+      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+        <div className="flex flex-col space-y-4">
+          {/* Create Teacher Profile Button - if user.isOwner && !user.teacherProfile */}
+          {isOwner && !hasTeacherProfile && (
+            <div className="flex items-center">
+              <fetcher.Form method="post">
+                <input type="hidden" name="intent" value="createTeacherProfile" />
+                <Button 
+                  type="submit" 
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={fetcher.state === 'submitting'}
+                >
+                  <Chalkboard className="mr-2 h-4 w-4" />
+                  {fetcher.state === 'submitting' ? 'Creating...' : 'Create Teacher Profile'}
+                </Button>
+              </fetcher.Form>
             </div>
-            {data.views.length ? (
-              <div className="flex flex-wrap gap-2">
-                {data.views.map((view) => (
-                  <Link
-                    key={view.id}
-                    to={`/app/students?filters=${encodeURIComponent(
-                      JSON.stringify({
-                        school: view.school?.split(',').filter(Boolean) ?? [],
-                        grade: view.grade?.split(',').filter(Boolean) ?? [],
-                        period: view.period?.split(',').filter(Boolean) ?? [],
-                        workshopLeader:
-                          view.workshopLeader?.split(',').filter(Boolean) ?? [],
-                        schoolTeacher:
-                          view.schoolTeacher?.split(',').filter(Boolean) ?? [],
-                        view: 'cards',
-                      })
-                    )}`}
-                    className="align-center flex justify-between gap-2 rounded-lg border bg-muted/50 p-2 shadow-sm transition-shadow hover:shadow-md"
-                  >
-                    <BookmarkIcon className="my-auto h-5 w-5 fill-white text-gray-400" />
-                    <div className="my-auto min-w-fit font-medium">
-                      {view.name}
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        >
-                          <EllipsisVertical
-                            size={16}
-                            className="text-muted-foreground"
-                          />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <fetcher.Form method="post">
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="deleteView"
-                          />
-                          <input type="hidden" name="viewId" value={view.id} />
-                          <DropdownMenuItem asChild>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start"
-                              onClick={(e: React.MouseEvent) =>
-                                e.stopPropagation()
-                              }
-                            >
-                              Delete
-                            </Button>
-                          </DropdownMenuItem>
-                        </fetcher.Form>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <NoDataPlaceholder
-                title="No saved views"
-                subtitle="Create a view to quickly access filtered student lists."
-              />
-            )}
-          </div>
+          )}
+
+          {/* Teacher Profile Cards - if user.teacherProfile exists */}
+          {hasTeacherProfile && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {/* Teacher's Lounge Card */}
+              <Link
+                to="/app/my-courses"
+                className="flex flex-col items-center justify-center rounded-lg border bg-gradient-to-br from-blue-50 to-blue-100 p-6 shadow-sm transition-shadow hover:shadow-md dark:from-blue-950 dark:to-blue-900"
+              >
+                <BookOpen className="mb-3 h-12 w-12 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  Teacher's Lounge
+                </h3>
+                <p className="mt-1 text-center text-sm text-blue-700 dark:text-blue-300">
+                  Access your teacher courses and professional development
+                </p>
+              </Link>
+
+              {/* My Classes Card */}
+              <Link
+                to="/app/my-classes"
+                className="flex flex-col items-center justify-center rounded-lg border bg-gradient-to-br from-green-50 to-green-100 p-6 shadow-sm transition-shadow hover:shadow-md dark:from-green-950 dark:to-green-900"
+              >
+                <Users className="mb-3 h-12 w-12 text-green-600 dark:text-green-400" />
+                <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">
+                  My Classes
+                </h3>
+                <p className="mt-1 text-center text-sm text-green-700 dark:text-green-300">
+                  Manage your classes and students
+                </p>
+              </Link>
+            </div>
+          )}
+
+          {/* Courses Section - for everyone */}
           <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Resources (by course)</p>
+            <h3 className="mb-4 text-xl font-bold text-foreground">Courses</h3>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.courses.map((course) => (
+              {courses.map((course) => (
                 <Link
                   to={`/app/courses/${course.id}`}
                   key={course.id}
@@ -213,11 +196,13 @@ export default function AppRoute() {
               ))}
             </div>
           </div>
+
+          {/* Documents Section */}
           <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Documents</p>
-            {data.documents.length ? (
+            <h3 className="mb-4 text-xl font-bold text-foreground">Documents</h3>
+            {documents.length ? (
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.documents.map((doc) => (
+                {documents.map((doc) => (
                   <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
                 ))}
               </div>
@@ -228,83 +213,6 @@ export default function AppRoute() {
               />
             )}
           </div>
-        </div>
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create a Student View</DialogTitle>
-              <DialogDescription>
-                Go to the Students page, add your desired filters, and hit the
-                'Save' button to create a new Student View from those filters.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button asChild>
-                <Link to="/app/students">Go to Students</Link>
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </section>
-    );
-  }
-
-  return (
-    <section
-      data-testid="app._index"
-      className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-    >
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>Welcome, {user.name}!</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Welcome to your dashboard. Here you can view and manage your
-              courses.
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="flex flex-col">
-          <p className="my-2 text-foreground/60">Courses</p>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            {data.courses.map((course) => (
-              <Link
-                to={`/app/courses/${course.id}`}
-                key={course.id}
-                className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-              >
-                {course.image ? (
-                  <img
-                    src={`/api/image/course/${course.image.id}`}
-                    alt=""
-                    className="h-32 w-auto rounded-t-lg object-cover"
-                  />
-                ) : (
-                  <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                )}
-                <div className="max-w-42 flex items-center justify-between p-3">
-                  <h4 className="text-foreground/90">{course.title}</h4>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-        <div className="mt-8 flex flex-col">
-          <p className="my-2 text-foreground/60">Documents</p>
-          {data.documents.length ? (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.documents.map((doc) => (
-                <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
-              ))}
-            </div>
-          ) : (
-            <NoDataPlaceholder
-              title="No documents"
-              subtitle="Select a course above to get started."
-            />
-          )}
         </div>
       </div>
     </section>

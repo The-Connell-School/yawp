@@ -16,6 +16,8 @@ import {
   Settings2,
   User,
   UserIcon,
+  Users,
+  BookOpen,
 } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -97,9 +99,15 @@ const LINKS: {
     icon: <GaugeIcon size={20} />,
   },
   {
-    to: '/app/students',
-    label: 'My Students',
-    icon: <User size={20} />,
+    to: '/app/my-classes',
+    label: 'My Classes',
+    icon: <Users size={20} />,
+    requires: 'teacherProfile',
+  },
+  {
+    to: '/app/my-courses',
+    label: 'My Courses',
+    icon: <BookOpen size={20} />,
     requires: 'teacherProfile',
   },
   {
