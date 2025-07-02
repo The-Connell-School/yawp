@@ -138,6 +138,7 @@ export const preview: (prisma: PrismaClient) => Promise<SeedData> = async (
       name: 'Bryant Brock',
       password: { create: createPassword('bryantbrock') },
       isAdmin: true,
+      isOwner: true,
       organization: { connect: { id: 'the-connell-school' } },
     },
     // Students
