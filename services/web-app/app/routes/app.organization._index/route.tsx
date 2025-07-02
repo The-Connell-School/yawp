@@ -53,6 +53,8 @@ import {
   setOrganizationMembersTableCookie,
 } from '~/utils/cookies.server';
 import { requireOwner } from '~/utils/permissions';
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
+import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -368,6 +370,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const memberId = formData.get('memberId')?.toString();
     const isOwner = formData.get('isOwner') === 'on';
     const createTeacherProfile = formData.get('createTeacherProfile') === 'on';
+    const createStudentProfile = formData.get('createStudentProfile') === 'on';
 
     if (!memberId) {
       return dataResponse({ error: 'Member ID is required' }, { status: 400 });
@@ -411,7 +414,10 @@ export async function action({ request }: ActionFunctionArgs) {
       }
       if (createTeacherProfile) {
         return dataResponse(
-          { error: 'Students without teacher profiles cannot be given teacher profiles' },
+          {
+            error:
+              'Students without teacher profiles cannot be given teacher profiles',
+          },
           { status: 400 }
         );
       }
@@ -440,7 +446,14 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           });
         }
-
+        // Create student profile if needed
+        if (createStudentProfile && !memberToEdit.studentProfile) {
+          await tx.studentProfile.create({
+            data: {
+              userId: memberId,
+            },
+          });
+        }
         // Update the user's owner status
         await tx.user.update({
           where: { id: memberId },
@@ -535,7 +548,7 @@ export default function OrganizationRoute() {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-3 md:p-5 h-screen overflow-auto">
+    <div className="flex flex-col gap-4 pb-16 p-3 md:p-5 h-screen overflow-auto">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold">Organization Dashboard</h1>
@@ -981,7 +994,9 @@ export default function OrganizationRoute() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span>{user.name || 'Not set'}</span>
+                          <TooltipIdCopy id={user.id}>
+                            {user.name || 'Not set'}
+                          </TooltipIdCopy>
                           {user.isOwner && (
                             <Badge
                               variant="outline"
@@ -1059,7 +1074,7 @@ export default function OrganizationRoute() {
                   </div>
                   <div>
                     <strong>Current Status:</strong>{' '}
-                    {selectedMember.isOwner
+                    {selectedMember.isOwner || selectedMember.isSuperOwner
                       ? 'Owner'
                       : selectedMember.teacherProfile
                         ? 'Teacher'
@@ -1086,7 +1101,8 @@ export default function OrganizationRoute() {
 
                 <div className="space-y-4">
                   {/* Create Teacher Profile Option */}
-                  {selectedMember.studentProfile &&
+                  {selectedMember.isOwner &&
+                    selectedMember.studentProfile &&
                     !selectedMember.teacherProfile && (
                       <div className="space-y-2">
                         <div className="flex items-center space-x-2">
@@ -1104,30 +1120,51 @@ export default function OrganizationRoute() {
                       </div>
                     )}
 
+                  {/* Create Student Profile Option */}
+                  {!selectedMember.teacherProfile &&
+                    !selectedMember.studentProfile && (
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="createStudentProfile"
+                            name="createStudentProfile"
+                          />
+                          <Label htmlFor="createStudentProfile">
+                            Create Student Profile
+                          </Label>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          This will allow the member to also be a student
+                        </p>
+                      </div>
+                    )}
+
                   {/* Owner Toggle */}
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="isOwner"
-                        name="isOwner"
-                        defaultChecked={selectedMember.isOwner}
-                        disabled={
-                          selectedMember.isSuperOwner ||
-                          (!!selectedMember.studentProfile &&
-                            !selectedMember.teacherProfile)
-                        }
-                      />
-                      <Label htmlFor="isOwner">Is an Owner</Label>
+                  {selectedMember.teacherProfile && (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="isOwner"
+                          name="isOwner"
+                          defaultChecked={selectedMember.isOwner}
+                          disabled={
+                            selectedMember.isSuperOwner ||
+                            (!!selectedMember.studentProfile &&
+                              !selectedMember.teacherProfile)
+                          }
+                        />
+                        <Label htmlFor="isOwner">Is an Owner</Label>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedMember.isSuperOwner
+                          ? 'Super owners cannot have their owner status changed'
+                          : selectedMember.studentProfile &&
+                              !selectedMember.teacherProfile
+                            ? 'Students must have a teacher profile to become owners'
+                            : 'Owners can manage organization members and settings'}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedMember.isSuperOwner
-                        ? 'Super owners cannot have their owner status changed'
-                        : selectedMember.studentProfile &&
-                            !selectedMember.teacherProfile
-                          ? 'Students must have a teacher profile to become owners'
-                          : 'Owners can manage organization members and settings'}
-                    </p>
-                  </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2">
