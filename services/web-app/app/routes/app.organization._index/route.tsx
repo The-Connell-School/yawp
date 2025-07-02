@@ -83,7 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const { sort, direction, skip, take } =
     await getOrganizationMembersTableCookie(request);
 
-  const [users, totalCount, organization, invitations] = await Promise.all([
+  const [users, totalCount, teacherCount, studentCount, organization, invitations] = await Promise.all([
     prisma.user.findMany({
       where: { organizationId: user.organization?.id },
       include: {
@@ -96,6 +96,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prisma.user.count({
       where: { organizationId: user.organization?.id },
+    }),
+    prisma.user.count({
+      where: { 
+        organizationId: user.organization?.id,
+        teacherProfile: { isNot: null }
+      },
+    }),
+    prisma.user.count({
+      where: { 
+        organizationId: user.organization?.id,
+        studentProfile: { isNot: null },
+        teacherProfile: null,
+        isOwner: false
+      },
     }),
     prisma.organization.findUniqueOrThrow({
       where: { id: user.organization?.id },
@@ -124,6 +138,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     invitations,
     users,
     totalCount,
+    teacherCount,
+    studentCount,
     table: { sort, direction, skip, take },
     currentUser: user,
   });
@@ -480,7 +496,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OrganizationRoute() {
-  const { users, totalCount, table, organization, invitations, currentUser } =
+  const { users, totalCount, teacherCount, studentCount, table, organization, invitations, currentUser } =
     useLoaderData<typeof loader>();
   const teacherInvitations = invitations.filter(
     (invitation) => invitation.type === 'organization-teacher-invite'
@@ -567,11 +583,11 @@ export default function OrganizationRoute() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter((user) => user.teacherProfile).length} /{' '}
+              {teacherCount} /{' '}
               {organization.numOfTeacherSeats}
             </div>
             <p className="text-xs text-muted-foreground">
-              {organization.numOfTeacherSeats - teachers.length} seats available
+              {organization.numOfTeacherSeats - teacherCount} seats available
               <button
                 onClick={() => setIsTeacherInvitationsOpen(true)}
                 className={cn(
@@ -597,10 +613,10 @@ export default function OrganizationRoute() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {students.length} / {organization.numOfStudentSeats}
+              {studentCount} / {organization.numOfStudentSeats}
             </div>
             <p className="text-xs text-muted-foreground">
-              {organization.numOfStudentSeats - students.length} seats available
+              {organization.numOfStudentSeats - studentCount} seats available
               <button
                 onClick={() => setIsStudentInvitationsOpen(true)}
                 className={cn(

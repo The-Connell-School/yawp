@@ -178,6 +178,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
   const messages = cms.messages
     .filter((m) => ['user', 'assistant'].includes(m.agent))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     .concat(optimisticMessage ?? []);
 
   useEffect(() => {

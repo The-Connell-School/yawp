@@ -123,7 +123,7 @@ export default function SignupRoute() {
           }}
         >
           <AuthenticityTokenInput />
-          <FormInput scope="email" type="email" name="email" autoFocus />
+          <FormInput scope="email" type="email" name="email" label="Email" autoFocus />
           <div className="flex w-full items-center rounded-lg border p-3 bg-white">
             <FormInput
               scope="passcode"
