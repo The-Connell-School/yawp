@@ -12,6 +12,7 @@ import { Badge } from '~/components/ui/badge';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
+import { cn } from '~/utils/misc';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -161,12 +162,12 @@ export default function TeacherCourseRoute() {
   const nextAction = getNextModule();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background max-w-4xl mx-auto">
       {/* Header */}
       <div className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" asChild>
+            <Button variant="outline" asChild>
               <Link to="/app">
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Dashboard
@@ -223,13 +224,21 @@ export default function TeacherCourseRoute() {
               <div className="mt-6">
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="font-medium">Course Progress</span>
-                  <span className="text-primary font-medium">
-                    {Math.round(progressPercentage)}% Complete
+                  <span
+                    className={cn(
+                      'font-medium',
+                      progressPercentage === 100 && 'text-green-600'
+                    )}
+                  >
+                    {Math.ceil(progressPercentage)}% Complete
                   </span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
                   <div
-                    className="bg-primary h-3 rounded-full transition-all duration-500"
+                    className={cn(
+                      'bg-primary h-3 rounded-full transition-all duration-500',
+                      progressPercentage === 100 && 'bg-green-600'
+                    )}
                     style={{ width: `${progressPercentage}%` }}
                   />
                 </div>
@@ -250,18 +259,6 @@ export default function TeacherCourseRoute() {
                   </Button>
                 </div>
               )}
-
-              {progressPercentage === 100 && (
-                <div className="mt-6 text-center py-4">
-                  <CheckCircle className="mx-auto h-8 w-8 text-green-600 mb-2" />
-                  <p className="text-sm font-medium text-green-600">
-                    Course Complete!
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Congratulations on finishing this course.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -269,108 +266,64 @@ export default function TeacherCourseRoute() {
 
       {/* Course Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 lg:grid-cols-2">
           {/* Modules List */}
-          <div className="lg:col-span-2">
-            <Card className="bg-muted">
-              <CardHeader>
-                <CardTitle>Course Modules</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {teacherCourse.teacherCourseModules.map((module, index) => {
-                  const moduleStatus = getModuleStatus(
-                    module.teacherCourseModuleSessions
-                  );
-                  const StatusIcon = moduleStatus.icon;
-                  const session = module.teacherCourseModuleSessions[0];
+          <div className="lg:col-span-2 space-y-2">
+            {teacherCourse.teacherCourseModules.map((module, index) => {
+              const session = module.teacherCourseModuleSessions[0];
 
-                  return (
-                    <Link
-                      key={module.id}
-                      to={`/app/teacher-courses/${teacherCourse.id}/modules/${module.id}`}
-                      className="group block"
-                    >
-                      <div className="flex items-center gap-4 rounded-lg border p-4 transition-all hover:bg-muted/50 hover:shadow-sm">
-                        {/* Circular Progress Indicator */}
-                        <div className="flex-shrink-0">
-                          <CircularProgress
-                            progress={session?.videoProgress || 0}
-                            index={index + 1}
-                            size="md"
-                          />
-                        </div>
+              return (
+                <Link
+                  key={module.id}
+                  to={`/app/teacher-courses/${teacherCourse.id}/modules/${module.id}`}
+                  className="group block"
+                >
+                  <div className="flex bg-muted shadow-sm items-center gap-4 rounded-lg border p-4 transition-all hover:bg-muted/50 hover:shadow-sm">
+                    {/* Circular Progress Indicator */}
+                    <div className="flex-shrink-0">
+                      <CircularProgress
+                        progress={session?.videoProgress || 0}
+                        index={index + 1}
+                        size="md"
+                      />
+                    </div>
 
-                        {/* Module Info */}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                            {module.title}
-                          </h3>
-                          {module.description && (
-                            <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
-                              {module.description}
-                            </p>
-                          )}
+                    {/* Module Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                        {module.title}
+                      </h3>
+                      {module.description && (
+                        <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                          {module.description}
+                        </p>
+                      )}
 
-                          <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                            {module.videoDuration && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {formatDuration(module.videoDuration)}
-                              </span>
-                            )}
-                            {module.resources.length > 0 && (
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                {module.resources.length} resource
-                                {module.resources.length > 1 ? 's' : ''}
-                              </span>
-                            )}
-                            {session && session.videoProgress > 0 && (
-                              <span className="text-primary font-medium">
-                                {Math.round(session.videoProgress)}% watched
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                      <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                        {module.videoDuration && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDuration(module.videoDuration)}
+                          </span>
+                        )}
+                        {module.resources.length > 0 && (
+                          <span className="flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            {module.resources.length} resource
+                            {module.resources.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {session && session.videoProgress > 0 && (
+                          <span className="text-primary font-medium">
+                            {Math.ceil(session.videoProgress)}% watched
+                          </span>
+                        )}
                       </div>
-                    </Link>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Course Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Progress</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-primary">
-                    {Math.round(progressPercentage)}%
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">Complete</div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span>Modules completed</span>
-                    <span className="font-medium">
-                      {completedModules}/{totalModules}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Total duration</span>
-                    <span className="font-medium">
-                      {formatDuration(totalDuration)}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
       </div>
