@@ -59,15 +59,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Teacher course not found', { status: 404 });
   }
 
-  return dataResponse({ 
+  return dataResponse({
     teacherCourse,
-    teacherProfileId: user.teacherProfile.id 
+    teacherProfileId: user.teacherProfile.id,
   });
 }
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return 'Duration unknown';
-  
+
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = seconds % 60;
@@ -81,16 +81,24 @@ function formatDuration(seconds: number | null): string {
 
 function getModuleStatus(session: any) {
   if (!session || session.length === 0) {
-    return { status: 'not-started', icon: Clock, color: 'text-muted-foreground' };
+    return {
+      status: 'not-started',
+      icon: Clock,
+      color: 'text-muted-foreground',
+    };
   }
-  
+
   const progress = session[0].videoProgress;
   if (progress >= 95) {
     return { status: 'completed', icon: CheckCircle, color: 'text-green-600' };
   } else if (progress > 0) {
     return { status: 'in-progress', icon: Play, color: 'text-blue-600' };
   } else {
-    return { status: 'not-started', icon: Clock, color: 'text-muted-foreground' };
+    return {
+      status: 'not-started',
+      icon: Clock,
+      color: 'text-muted-foreground',
+    };
   }
 }
 
@@ -99,14 +107,17 @@ export default function TeacherCourseRoute() {
 
   // Calculate overall progress
   const totalModules = teacherCourse.teacherCourseModules.length;
-  const completedModules = teacherCourse.teacherCourseModules.filter(
-    module => module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
+  const completedModules = teacherCourse.teacherCourseModules.filter((module) =>
+    module.teacherCourseModuleSessions.some(
+      (session) => session.videoProgress >= 95
+    )
   ).length;
-  const progressPercentage = totalModules > 0 ? (completedModules / totalModules) * 100 : 0;
+  const progressPercentage =
+    totalModules > 0 ? (completedModules / totalModules) * 100 : 0;
 
   // Calculate total duration
   const totalDuration = teacherCourse.teacherCourseModules.reduce(
-    (sum, module) => sum + (module.videoDuration || 0), 
+    (sum, module) => sum + (module.videoDuration || 0),
     0
   );
 
@@ -114,30 +125,37 @@ export default function TeacherCourseRoute() {
   const getNextModule = () => {
     // First, find any in-progress module
     const inProgressModule = teacherCourse.teacherCourseModules.find(
-      module => {
+      (module) => {
         const session = module.teacherCourseModuleSessions[0];
-        return session && session.videoProgress > 0 && session.videoProgress < 95;
+        return (
+          session && session.videoProgress > 0 && session.videoProgress < 95
+        );
       }
     );
-    
+
     if (inProgressModule) {
       return {
         module: inProgressModule,
         type: 'continue' as const,
-        session: inProgressModule.teacherCourseModuleSessions[0]
+        session: inProgressModule.teacherCourseModuleSessions[0],
       };
     }
-    
+
     // Otherwise, find first incomplete module
     const nextModule = teacherCourse.teacherCourseModules.find(
-      module => !module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
+      (module) =>
+        !module.teacherCourseModuleSessions.some(
+          (session) => session.videoProgress >= 95
+        )
     );
-    
-    return nextModule ? {
-      module: nextModule,
-      type: 'start' as const,
-      session: null
-    } : null;
+
+    return nextModule
+      ? {
+          module: nextModule,
+          type: 'start' as const,
+          session: null,
+        }
+      : null;
   };
 
   const nextAction = getNextModule();
@@ -155,7 +173,7 @@ export default function TeacherCourseRoute() {
               </Link>
             </Button>
           </div>
-          
+
           <div className="mt-6 flex flex-col lg:flex-row lg:items-start lg:gap-8">
             {/* Course Image */}
             <div className="w-full lg:w-80 xl:w-96">
@@ -179,7 +197,7 @@ export default function TeacherCourseRoute() {
               <h1 className="text-3xl font-bold text-foreground">
                 {teacherCourse.title}
               </h1>
-              
+
               {teacherCourse.description && (
                 <p className="mt-4 text-lg text-muted-foreground">
                   {teacherCourse.description}
@@ -210,8 +228,8 @@ export default function TeacherCourseRoute() {
                   </span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
-                  <div 
-                    className="bg-primary h-3 rounded-full transition-all duration-500" 
+                  <div
+                    className="bg-primary h-3 rounded-full transition-all duration-500"
                     style={{ width: `${progressPercentage}%` }}
                   />
                 </div>
@@ -221,12 +239,13 @@ export default function TeacherCourseRoute() {
               {nextAction && (
                 <div className="mt-6">
                   <Button asChild className="w-full" size="lg">
-                    <Link to={`/app/teacher-courses/${teacherCourse.id}/modules/${nextAction.module.id}`}>
+                    <Link
+                      to={`/app/teacher-courses/${teacherCourse.id}/modules/${nextAction.module.id}`}
+                    >
                       <Play className="mr-2 h-5 w-5" />
-                      {nextAction.type === 'continue' 
-                        ? `Continue "${nextAction.module.title}" (${Math.round(nextAction.session!.videoProgress)}% watched)` 
-                        : `Start "${nextAction.module.title}"`
-                      }
+                      {nextAction.type === 'continue'
+                        ? `Continue "${nextAction.module.title}" (${Math.round(nextAction.session!.videoProgress)}% watched)`
+                        : `Start "${nextAction.module.title}"`}
                     </Link>
                   </Button>
                 </div>
@@ -235,8 +254,12 @@ export default function TeacherCourseRoute() {
               {progressPercentage === 100 && (
                 <div className="mt-6 text-center py-4">
                   <CheckCircle className="mx-auto h-8 w-8 text-green-600 mb-2" />
-                  <p className="text-sm font-medium text-green-600">Course Complete!</p>
-                  <p className="text-xs text-muted-foreground">Congratulations on finishing this course.</p>
+                  <p className="text-sm font-medium text-green-600">
+                    Course Complete!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Congratulations on finishing this course.
+                  </p>
                 </div>
               )}
             </div>
@@ -249,16 +272,18 @@ export default function TeacherCourseRoute() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Modules List */}
           <div className="lg:col-span-2">
-            <Card>
+            <Card className="bg-muted">
               <CardHeader>
                 <CardTitle>Course Modules</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {teacherCourse.teacherCourseModules.map((module, index) => {
-                  const moduleStatus = getModuleStatus(module.teacherCourseModuleSessions);
+                  const moduleStatus = getModuleStatus(
+                    module.teacherCourseModuleSessions
+                  );
                   const StatusIcon = moduleStatus.icon;
                   const session = module.teacherCourseModuleSessions[0];
-                  
+
                   return (
                     <Link
                       key={module.id}
@@ -268,7 +293,7 @@ export default function TeacherCourseRoute() {
                       <div className="flex items-center gap-4 rounded-lg border p-4 transition-all hover:bg-muted/50 hover:shadow-sm">
                         {/* Circular Progress Indicator */}
                         <div className="flex-shrink-0">
-                          <CircularProgress 
+                          <CircularProgress
                             progress={session?.videoProgress || 0}
                             index={index + 1}
                             size="md"
@@ -285,7 +310,7 @@ export default function TeacherCourseRoute() {
                               {module.description}
                             </p>
                           )}
-                          
+
                           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
                             {module.videoDuration && (
                               <span className="flex items-center gap-1">
@@ -296,7 +321,8 @@ export default function TeacherCourseRoute() {
                             {module.resources.length > 0 && (
                               <span className="flex items-center gap-1">
                                 <FileText className="h-3 w-3" />
-                                {module.resources.length} resource{module.resources.length > 1 ? 's' : ''}
+                                {module.resources.length} resource
+                                {module.resources.length > 1 ? 's' : ''}
                               </span>
                             )}
                             {session && session.videoProgress > 0 && (
@@ -306,7 +332,6 @@ export default function TeacherCourseRoute() {
                             )}
                           </div>
                         </div>
-
                       </div>
                     </Link>
                   );
@@ -329,20 +354,23 @@ export default function TeacherCourseRoute() {
                   </div>
                   <div className="text-sm text-muted-foreground">Complete</div>
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span>Modules completed</span>
-                    <span className="font-medium">{completedModules}/{totalModules}</span>
+                    <span className="font-medium">
+                      {completedModules}/{totalModules}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Total duration</span>
-                    <span className="font-medium">{formatDuration(totalDuration)}</span>
+                    <span className="font-medium">
+                      {formatDuration(totalDuration)}
+                    </span>
                   </div>
                 </div>
               </CardContent>
             </Card>
-
           </div>
         </div>
       </div>

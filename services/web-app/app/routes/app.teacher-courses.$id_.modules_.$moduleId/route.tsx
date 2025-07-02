@@ -322,10 +322,10 @@ export default function TeacherCourseModuleRoute() {
       <div className="border-b bg-card">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" asChild>
+            <Button variant="outline" asChild>
               <Link to={`/app/teacher-courses/${teacherCourse.id}`}>
                 <ChevronLeft className="mr-2 h-4 w-4" />
-                {teacherCourse.title}
+                Back to Course
               </Link>
             </Button>
 
