@@ -6,7 +6,13 @@ import { prisma } from './db.server.ts';
 export async function requireAdmin(request: Request) {
   const userId = await requireUserId(request);
   const user = await prisma.user.findFirst({
-    select: { id: true, isAdmin: true, isOwner: true, isSuperOwner: true },
+    select: {
+      id: true,
+      isAdmin: true,
+      isOwner: true,
+      isSuperOwner: true,
+      organizationId: true,
+    },
     where: { id: userId, isAdmin: true },
   });
 

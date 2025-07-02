@@ -84,6 +84,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               teacherProfile: { select: { id: true } },
               isAdmin: true,
               isOwner: true,
+              isSuperOwner: true,
               organization: { select: { id: true } },
             },
             where: { id: userId },
