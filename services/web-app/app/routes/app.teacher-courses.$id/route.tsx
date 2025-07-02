@@ -9,6 +9,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
+import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
 
@@ -109,6 +110,38 @@ export default function TeacherCourseRoute() {
     0
   );
 
+  // Find next module to continue from where user left off
+  const getNextModule = () => {
+    // First, find any in-progress module
+    const inProgressModule = teacherCourse.teacherCourseModules.find(
+      module => {
+        const session = module.teacherCourseModuleSessions[0];
+        return session && session.videoProgress > 0 && session.videoProgress < 95;
+      }
+    );
+    
+    if (inProgressModule) {
+      return {
+        module: inProgressModule,
+        type: 'continue' as const,
+        session: inProgressModule.teacherCourseModuleSessions[0]
+      };
+    }
+    
+    // Otherwise, find first incomplete module
+    const nextModule = teacherCourse.teacherCourseModules.find(
+      module => !module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
+    );
+    
+    return nextModule ? {
+      module: nextModule,
+      type: 'start' as const,
+      session: null
+    } : null;
+  };
+
+  const nextAction = getNextModule();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -183,6 +216,29 @@ export default function TeacherCourseRoute() {
                   />
                 </div>
               </div>
+
+              {/* Quick Action - Continue Where Left Off */}
+              {nextAction && (
+                <div className="mt-6">
+                  <Button asChild className="w-full" size="lg">
+                    <Link to={`/app/teacher-courses/${teacherCourse.id}/modules/${nextAction.module.id}`}>
+                      <Play className="mr-2 h-5 w-5" />
+                      {nextAction.type === 'continue' 
+                        ? `Continue "${nextAction.module.title}" (${Math.round(nextAction.session!.videoProgress)}% watched)` 
+                        : `Start "${nextAction.module.title}"`
+                      }
+                    </Link>
+                  </Button>
+                </div>
+              )}
+
+              {progressPercentage === 100 && (
+                <div className="mt-6 text-center py-4">
+                  <CheckCircle className="mx-auto h-8 w-8 text-green-600 mb-2" />
+                  <p className="text-sm font-medium text-green-600">Course Complete!</p>
+                  <p className="text-xs text-muted-foreground">Congratulations on finishing this course.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -210,12 +266,13 @@ export default function TeacherCourseRoute() {
                       className="group block"
                     >
                       <div className="flex items-center gap-4 rounded-lg border p-4 transition-all hover:bg-muted/50 hover:shadow-sm">
-                        {/* Module Number & Status */}
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                            {index + 1}
-                          </div>
-                          <StatusIcon className={`h-4 w-4 ${moduleStatus.color}`} />
+                        {/* Circular Progress Indicator */}
+                        <div className="flex-shrink-0">
+                          <CircularProgress 
+                            progress={session?.videoProgress || 0}
+                            index={index + 1}
+                            size="md"
+                          />
                         </div>
 
                         {/* Module Info */}
@@ -250,17 +307,6 @@ export default function TeacherCourseRoute() {
                           </div>
                         </div>
 
-                        {/* Progress indicator for in-progress modules */}
-                        {session && session.videoProgress > 0 && session.videoProgress < 95 && (
-                          <div className="w-16">
-                            <div className="w-full bg-muted rounded-full h-2">
-                              <div 
-                                className="bg-primary h-2 rounded-full transition-all" 
-                                style={{ width: `${session.videoProgress}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </Link>
                   );
@@ -297,39 +343,6 @@ export default function TeacherCourseRoute() {
               </CardContent>
             </Card>
 
-            {/* Quick Actions */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Find next incomplete module */}
-                {(() => {
-                  const nextModule = teacherCourse.teacherCourseModules.find(
-                    module => !module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
-                  );
-                  
-                  if (nextModule) {
-                    return (
-                      <Button asChild className="w-full">
-                        <Link to={`/app/teacher-courses/${teacherCourse.id}/modules/${nextModule.id}`}>
-                          <Play className="mr-2 h-4 w-4" />
-                          Continue Learning
-                        </Link>
-                      </Button>
-                    );
-                  } else {
-                    return (
-                      <div className="text-center py-4">
-                        <CheckCircle className="mx-auto h-8 w-8 text-green-600 mb-2" />
-                        <p className="text-sm font-medium text-green-600">Course Complete!</p>
-                        <p className="text-xs text-muted-foreground">Congratulations on finishing this course.</p>
-                      </div>
-                    );
-                  }
-                })()}
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

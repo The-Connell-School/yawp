@@ -160,10 +160,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
     const videoFile = formData.get('video') as File | null;
-    const videoLink = formData.get('videoLink')?.toString();
+    const videoDurationStr = formData.get('videoDuration')?.toString();
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
+    }
+
+    if (!videoFile || videoFile.size === 0) {
+      throw new Response('Video file is required', { status: 400 });
     }
 
     const moduleCount = await prisma.teacherCourseModule.count({
@@ -171,27 +175,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
 
     let finalVideoLink = null;
-    let videoDuration = null;
+    let videoDuration = videoDurationStr ? Math.floor(Number(videoDurationStr)) : null;
 
-    if (videoFile && videoFile.size > 0) {
-      // For simplicity, we'll store the video as a blob and create a link to it
-      // In a real app, you might want to upload to cloud storage
-      const arrayBuffer = await videoFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+    // Store the video as a blob and create a link to it
+    const arrayBuffer = await videoFile.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-      const upload = await prisma.upload.create({
-        data: {
-          name: videoFile.name,
-          contentType: videoFile.type,
-          blob: buffer,
-          userId,
-        },
-      });
+    const upload = await prisma.upload.create({
+      data: {
+        name: videoFile.name,
+        contentType: videoFile.type,
+        blob: buffer,
+        userId,
+      },
+    });
 
-      finalVideoLink = `/api/upload/${upload.id}`;
-    } else if (videoLink) {
-      finalVideoLink = videoLink;
-    }
+    finalVideoLink = `/api/upload/${upload.id}`;
 
     await prisma.teacherCourseModule.create({
       data: {
@@ -261,6 +260,8 @@ export default function TeacherCourseRoute() {
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [hasRemovedImage, setHasRemovedImage] = React.useState(false);
+  const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Drag and drop state for modules ---
@@ -361,6 +362,8 @@ export default function TeacherCourseRoute() {
       setIsModuleSheetOpen(false);
       setPreviewUrl(null);
       setHasRemovedImage(false);
+      setVideoDuration(null);
+      setIsVideoLoading(false);
     }
   }, [fetcher.data, fetcher.state]);
 
@@ -378,6 +381,55 @@ export default function TeacherCourseRoute() {
       fileInputRef.current.value = '';
     }
     setPreviewUrl(null);
+  };
+
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsVideoLoading(true);
+      try {
+        // Client-side video duration detection
+        const duration = await new Promise<number>((resolve, reject) => {
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          
+          video.onloadedmetadata = function() {
+            URL.revokeObjectURL(video.src);
+            resolve(video.duration);
+          };
+          
+          video.onerror = function() {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Error loading video metadata'));
+          };
+          
+          video.src = URL.createObjectURL(file);
+        });
+        
+        setVideoDuration(duration);
+      } catch (error) {
+        console.error('Could not get video duration:', error);
+        setVideoDuration(null);
+      } finally {
+        setIsVideoLoading(false);
+      }
+    } else {
+      setVideoDuration(null);
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds || seconds <= 0) return '0:00';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
   };
 
   return (
@@ -583,18 +635,28 @@ export default function TeacherCourseRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Video Upload</Label>
-                  <Input id="video" name="video" type="file" accept="video/*" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="videoLink">Or Video Link</Label>
-                  <Input
-                    id="videoLink"
-                    name="videoLink"
-                    placeholder="https://example.com/video.mp4"
+                  <Input 
+                    id="video" 
+                    name="video" 
+                    type="file" 
+                    accept="video/*"
+                    onChange={handleVideoFileChange}
+                    required
                   />
+                  {isVideoLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      Analyzing video duration...
+                    </p>
+                  )}
+                  {videoDuration && (
+                    <p className="text-sm text-green-600">
+                      Duration: {formatDuration(videoDuration)}
+                    </p>
+                  )}
+                  <input type="hidden" name="videoDuration" value={videoDuration || ''} />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  You can add resources after creating the module.
+                  Upload a video file to create this module. You can add resources after creating the module.
                 </p>
                 <Button
                   type="submit"

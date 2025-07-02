@@ -24,9 +24,9 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Badge } from '~/components/ui/badge';
 import { Progress } from '~/components/ui/progress';
+import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
-import { YouTubePlayer } from './youtube-player';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -207,8 +207,6 @@ export default function TeacherCourseModuleRoute() {
   const [showAutoplayCountdown, setShowAutoplayCountdown] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [lastSavedTime, setLastSavedTime] = useState(0);
-  const [isYouTubeVideo, setIsYouTubeVideo] = useState(false);
-  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
 
   // Find current module index and next module
   const currentModuleIndex = teacherCourse.teacherCourseModules.findIndex(
@@ -216,34 +214,17 @@ export default function TeacherCourseModuleRoute() {
   );
   const nextModule = teacherCourse.teacherCourseModules[currentModuleIndex + 1];
 
-  // Extract YouTube video ID from URL
-  useEffect(() => {
-    if (
-      currentModule.videoLink &&
-      !currentModule.videoLink.startsWith('/api')
-    ) {
-      const youtubeRegex =
-        /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/;
-      const match = currentModule.videoLink.match(youtubeRegex);
-      if (match) {
-        setYoutubeVideoId(match[1]);
-        setIsYouTubeVideo(true);
-      }
-    }
-  }, [currentModule.videoLink]);
 
-  // Set initial video time when session data loads (for non-YouTube videos)
+  // Set initial video time when session data loads
   useEffect(() => {
-    if (videoRef.current && currentSession?.videoTimestamp && !isYouTubeVideo) {
+    if (videoRef.current && currentSession?.videoTimestamp) {
       videoRef.current.currentTime = currentSession.videoTimestamp;
       setCurrentTime(currentSession.videoTimestamp);
     }
-  }, [currentSession, isYouTubeVideo]);
+  }, [currentSession]);
 
-  // Progress tracking for non-YouTube videos
+  // Progress tracking for videos
   useEffect(() => {
-    if (isYouTubeVideo) return; // YouTube progress is handled by the YouTubePlayer component
-
     const interval = setInterval(() => {
       if (videoRef.current && isPlaying) {
         const currentTime = videoRef.current.currentTime;
@@ -273,7 +254,7 @@ export default function TeacherCourseModuleRoute() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isPlaying, lastSavedTime, currentSession, fetcher, isYouTubeVideo]);
+  }, [isPlaying, lastSavedTime, currentSession, fetcher]);
 
   // Auto-play countdown when video ends
   useEffect(() => {
@@ -302,43 +283,11 @@ export default function TeacherCourseModuleRoute() {
   }, [showAutoplayCountdown, nextModule, navigate, teacherCourse.id]);
 
   const handleLoadedMetadata = () => {
-    if (videoRef.current && !isYouTubeVideo) {
+    if (videoRef.current) {
       setDuration(videoRef.current.duration);
     }
   };
 
-  // YouTube player event handlers
-  const handleYouTubeTimeUpdate = useCallback(
-    (currentTime: number, duration: number) => {
-      setCurrentTime(currentTime);
-      setDuration(duration);
-
-      if (duration > 0) {
-        const newProgress = (currentTime / duration) * 100;
-        setProgress(newProgress);
-
-        // Save progress every 10 seconds to avoid too many requests
-        if (Math.abs(currentTime - lastSavedTime) >= 10) {
-          setLastSavedTime(currentTime);
-
-          const formData = new FormData();
-          formData.append('intent', 'updateProgress');
-          formData.append('videoTimestamp', currentTime.toString());
-          formData.append('videoProgress', newProgress.toString());
-          if (currentSession?.id) {
-            formData.append('sessionId', currentSession.id);
-          }
-
-          fetcher.submit(formData, { method: 'post' });
-        }
-      }
-    },
-    [lastSavedTime, currentSession, fetcher]
-  );
-
-  const handleYouTubeStateChange = useCallback((isPlaying: boolean) => {
-    setIsPlaying(isPlaying);
-  }, []);
 
   const handleVideoEnd = useCallback(() => {
     // Mark as completed and show auto-play if there's a next module
@@ -396,7 +345,7 @@ export default function TeacherCourseModuleRoute() {
             <Card className="bg-muted">
               <CardContent className="p-0">
                 <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                  {currentModule.videoLink?.startsWith('/api') ? (
+                  {currentModule.videoLink ? (
                     <video
                       ref={videoRef}
                       className="w-full h-full"
@@ -414,21 +363,6 @@ export default function TeacherCourseModuleRoute() {
                       <source src={currentModule.videoLink} type="video/mp4" />
                       Your browser does not support the video tag.
                     </video>
-                  ) : isYouTubeVideo && youtubeVideoId ? (
-                    <YouTubePlayer
-                      videoId={youtubeVideoId}
-                      initialTime={currentSession?.videoTimestamp || 0}
-                      onTimeUpdate={handleYouTubeTimeUpdate}
-                      onStateChange={handleYouTubeStateChange}
-                      onEnded={handleVideoEnd}
-                    />
-                  ) : currentModule.videoLink ? (
-                    <div className="flex items-center justify-center h-full">
-                      <div className="text-center text-muted-foreground">
-                        <Play className="mx-auto h-16 w-16 mb-4" />
-                        <p>Invalid video URL</p>
-                      </div>
-                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center text-muted-foreground">
@@ -572,18 +506,12 @@ export default function TeacherCourseModuleRoute() {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="flex flex-col items-center gap-1 min-w-fit">
-                          <div
-                            className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                              isCurrentModule
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-                          <StatusIcon
-                            className={`h-3 w-3 ${moduleStatus.color}`}
+                        <div className="flex-shrink-0">
+                          <CircularProgress
+                            progress={module.teacherCourseModuleSessions[0]?.videoProgress || 0}
+                            index={index + 1}
+                            size="sm"
+                            className={isCurrentModule ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}
                           />
                         </div>
 
