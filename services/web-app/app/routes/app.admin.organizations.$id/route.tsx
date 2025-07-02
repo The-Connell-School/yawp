@@ -3,6 +3,7 @@ import {
   data as dataResponse,
   Link,
   type LoaderFunctionArgs,
+  redirect,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -20,7 +21,8 @@ import {
 } from '~/components/ui/table';
 import { UserImage } from '~/components/user-image';
 import { requireAdmin } from '~/utils/permissions';
-import { ChevronLeft, Settings, UserPlus } from 'lucide-react';
+import { ChevronLeft, Settings, UserPlus, TrashIcon } from 'lucide-react';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { Badge } from '~/components/ui/badge';
 import {
   Sheet,
@@ -39,9 +41,9 @@ import { sendEmail } from '~/utils/email.server';
 import * as E from '@react-email/components';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireAdmin(request);
+  const currentUser = await requireAdmin(request);
 
-  const [organization, invitations] = await Promise.all([
+  const [organization, invitations, totalOrganizations] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
       include: {
@@ -57,13 +59,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         type: 'organization-owner-invite',
       },
     }),
+    prisma.organization.count(),
   ]);
 
   if (!organization) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ organization, invitations });
+  // Check if current user is assigned to this organization
+  const isUserAssignedToOrg = currentUser.organizationId === params.id;
+  // Check if this is the only organization
+  const isOnlyOrganization = totalOrganizations <= 1;
+
+  return dataResponse({ 
+    organization, 
+    invitations, 
+    canDelete: !isUserAssignedToOrg && !isOnlyOrganization 
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -78,6 +90,37 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (!user?.isAdmin) {
     throw new Response('Unauthorized', { status: 401 });
+  }
+
+  if (intent === 'deleteOrganization') {
+    // Get current user and organization count to validate deletion
+    const [currentUser, totalOrganizations] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { organizationId: true, isAdmin: true },
+      }),
+      prisma.organization.count(),
+    ]);
+
+    if (!currentUser) {
+      throw new Response('User not found', { status: 404 });
+    }
+
+    // Prevent deletion if user is assigned to this organization
+    if (currentUser.organizationId === params.id) {
+      throw new Response('Cannot delete organization you are assigned to', { status: 400 });
+    }
+
+    // Prevent deletion if this is the only organization
+    if (totalOrganizations <= 1) {
+      throw new Response('Cannot delete the only organization', { status: 400 });
+    }
+
+    await prisma.organization.delete({
+      where: { id: params.id },
+    });
+
+    return redirect('/app/admin/organizations');
   }
 
   if (intent === 'update') {
@@ -220,7 +263,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations } = useLoaderData<typeof loader>();
+  const { organization, invitations, canDelete } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
@@ -321,6 +364,34 @@ export default function OrganizationRoute() {
               </fetcher.Form>
             </SheetContent>
           </Sheet>
+          <ConfirmationDialog
+            variant="destructive"
+            title="Delete Organization"
+            description={
+              !canDelete 
+                ? "This organization cannot be deleted because either you are assigned to it or it's the only organization in the system."
+                : `Are you sure you want to delete "${organization.name}"? This action cannot be undone and will permanently remove the organization and all its data.`
+            }
+            confirmText={canDelete ? "Delete Organization" : "Cannot Delete"}
+            cancelText="Cancel"
+            onConfirm={() => {
+              if (canDelete) {
+                fetcher.submit({ intent: 'deleteOrganization' }, { method: 'post' });
+              }
+            }}
+            onCancel={() => {
+              // Dialog will close automatically
+            }}
+          >
+            <Button 
+              variant="destructive-outline" 
+              size="icon"
+              disabled={!canDelete}
+              title={!canDelete ? "Cannot delete: you are assigned to this organization or it's the only organization" : "Delete organization"}
+            >
+              <TrashIcon className="h-4 w-4" />
+            </Button>
+          </ConfirmationDialog>
         </div>
       </div>
 
