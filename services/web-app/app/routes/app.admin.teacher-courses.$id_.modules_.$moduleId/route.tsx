@@ -24,7 +24,7 @@ import {
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
-import React from 'react';
+import React, { useState } from 'react';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -93,16 +93,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
     const videoFile = formData.get('video') as File | null;
-    const videoLink = formData.get('videoLink')?.toString();
+    const videoDurationStr = formData.get('videoDuration')?.toString();
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
     }
 
     let finalVideoLink = undefined;
+    let videoDuration = undefined;
 
     if (videoFile && videoFile.size > 0) {
-      // For simplicity, we'll store the video as a blob and create a link to it
+      // Store the video as a blob and create a link to it
       const arrayBuffer = await videoFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
@@ -116,8 +117,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       finalVideoLink = `/api/upload/${upload.id}`;
-    } else if (videoLink) {
-      finalVideoLink = videoLink;
+      videoDuration = videoDurationStr ? Math.floor(Number(videoDurationStr)) : null;
     }
 
     await prisma.teacherCourseModule.update({
@@ -126,6 +126,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         title,
         description: description || null,
         ...(finalVideoLink !== undefined && { videoLink: finalVideoLink }),
+        ...(videoDuration !== undefined && { videoDuration }),
       },
     });
 
@@ -182,11 +183,68 @@ export default function TeacherCourseModuleRoute() {
   const fetcher = useFetcher();
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);
+  const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = React.useState(false);
+
+  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsVideoLoading(true);
+      try {
+        const duration = await new Promise<number>((resolve, reject) => {
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          
+          video.onloadedmetadata = function() {
+            URL.revokeObjectURL(video.src);
+            resolve(video.duration);
+          };
+          
+          video.onerror = function() {
+            URL.revokeObjectURL(video.src);
+            reject(new Error('Error loading video metadata'));
+          };
+          
+          video.src = URL.createObjectURL(file);
+        });
+        
+        setVideoDuration(duration);
+      } catch (error) {
+        console.error('Could not get video duration:', error);
+        setVideoDuration(null);
+      } finally {
+        setIsVideoLoading(false);
+      }
+    } else {
+      setVideoDuration(null);
+    }
+  };
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds || seconds <= 0) return '0:00';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    } else {
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+  };
+
+  // Helper function for displaying duration in module details
+  const formatDurationForDisplay = (seconds: number): string => {
+    return formatDuration(seconds);
+  };
 
   React.useEffect(() => {
     if (fetcher.data?.status === 'success' && fetcher.state === 'idle') {
       setIsModuleSheetOpen(false);
       setIsResourceSheetOpen(false);
+      setVideoDuration(null);
+      setIsVideoLoading(false);
     }
   }, [fetcher.data, fetcher.state]);
 
@@ -245,16 +303,27 @@ export default function TeacherCourseModuleRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Replace Video</Label>
-                  <Input id="video" name="video" type="file" accept="video/*" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="videoLink">Or Update Video Link</Label>
-                  <Input
-                    id="videoLink"
-                    name="videoLink"
-                    defaultValue={teacherCourseModule.videoLink || ''}
-                    placeholder="https://example.com/video.mp4"
+                  <Input 
+                    id="video" 
+                    name="video" 
+                    type="file" 
+                    accept="video/*"
+                    onChange={handleVideoFileChange}
                   />
+                  {isVideoLoading && (
+                    <p className="text-sm text-muted-foreground">
+                      Analyzing video duration...
+                    </p>
+                  )}
+                  {videoDuration && (
+                    <p className="text-sm text-green-600">
+                      New duration: {formatDuration(videoDuration)}
+                    </p>
+                  )}
+                  <input type="hidden" name="videoDuration" value={videoDuration || ''} />
+                  <p className="text-sm text-muted-foreground">
+                    Leave empty to keep current video. Only upload files are supported.
+                  </p>
                 </div>
                 <Button
                   type="submit"
@@ -316,6 +385,16 @@ export default function TeacherCourseModuleRoute() {
                 {teacherCourseModule.description || 'No description'}
               </dd>
             </div>
+            {teacherCourseModule.videoDuration && (
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">
+                  Video Duration
+                </dt>
+                <dd className="text-base">
+                  {formatDuration(teacherCourseModule.videoDuration)}
+                </dd>
+              </div>
+            )}
           </dl>
         </CardContent>
       </Card>
@@ -330,47 +409,26 @@ export default function TeacherCourseModuleRoute() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {teacherCourseModule.videoLink.includes('youtube.com') ||
-              teacherCourseModule.videoLink.includes('youtu.be') ? (
-                <div className="aspect-video w-full">
-                  <iframe
-                    src={teacherCourseModule.videoLink.replace(
-                      'watch?v=',
-                      'embed/'
-                    )}
-                    className="w-full h-full rounded-lg"
-                    allowFullScreen
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  />
-                </div>
-              ) : (
-                <video
-                  controls
-                  className="w-full max-h-96 rounded-lg"
-                  src={teacherCourseModule.videoLink}
-                  onError={(e) => {
-                    console.error('Video failed to load:', e);
-                  }}
-                >
-                  Your browser does not support the video tag.
-                </video>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Video URL:{' '}
-                <code className="bg-muted px-1 py-0.5 rounded text-xs">
-                  {teacherCourseModule.videoLink}
-                </code>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                <a
-                  href={teacherCourseModule.videoLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  Open video in new tab
-                </a>
-              </p>
+              <video
+                controls
+                className="w-full max-h-96 rounded-lg"
+                src={teacherCourseModule.videoLink}
+                onError={(e) => {
+                  console.error('Video failed to load:', e);
+                }}
+              >
+                Your browser does not support the video tag.
+              </video>
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  Video format: {teacherCourseModule.videoLink.split('.').pop()?.toUpperCase() || 'Unknown'}
+                </span>
+                {teacherCourseModule.videoDuration && (
+                  <span>
+                    Duration: {formatDuration(teacherCourseModule.videoDuration)}
+                  </span>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

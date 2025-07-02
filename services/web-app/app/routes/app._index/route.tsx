@@ -32,7 +32,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants');
   const userId = await requireUserId(request);
 
-  const [courses, documents, studentProfiles, views] = await Promise.all([
+  // Check if user has teacher profile
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { teacherProfile: { select: { id: true } } },
+  });
+
+  const [courses, documents, studentProfiles, views, teacherCourses] = await Promise.all([
     prisma.course.findMany({
       select: { image: { select: { id: true } }, id: true, title: true },
     }),
@@ -54,6 +60,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { userId },
       orderBy: { createdAt: 'desc' },
     }),
+    // Fetch teacher courses if user has teacher profile
+    user?.teacherProfile ? 
+      prisma.teacherCourse.findMany({
+        select: { 
+          image: { select: { id: true } }, 
+          id: true, 
+          title: true,
+          description: true,
+          teacherCourseModules: {
+            select: {
+              id: true,
+              title: true,
+              videoDuration: true,
+              teacherCourseModuleSessions: {
+                where: {
+                  teacherProfileId: user.teacherProfile.id
+                },
+                select: {
+                  videoProgress: true,
+                  videoTimestamp: true
+                }
+              }
+            },
+            orderBy: { position: 'asc' }
+          }
+        },
+        orderBy: { position: 'asc' }
+      }) : 
+      [],
   ]);
 
   return dataResponse({
@@ -61,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     documents,
     studentProfiles,
     views,
+    teacherCourses,
   });
 }
 
@@ -186,6 +222,68 @@ export default function AppRoute() {
                 title="No saved views"
                 subtitle="Create a view to quickly access filtered student lists."
               />
+            )}
+          </div>
+          <div className="mt-8 flex flex-col">
+            <p className="my-2 text-foreground/60">Teacher Professional Development</p>
+            {data.teacherCourses.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {data.teacherCourses.map((course) => {
+                  // Calculate overall progress
+                  const totalModules = course.teacherCourseModules.length;
+                  const completedModules = course.teacherCourseModules.filter(
+                    module => module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
+                  ).length;
+                  const progressPercentage = totalModules > 0 ? (completedModules / totalModules) * 100 : 0;
+                  
+                  return (
+                    <Link
+                      to={`/app/teacher-courses/${course.id}`}
+                      key={course.id}
+                      className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
+                    >
+                      <div className="aspect-video w-full overflow-hidden rounded-t-lg">
+                        {course.image ? (
+                          <img
+                            src={`/api/image/teacher-course/${course.image.id}`}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-gradient-to-br from-foreground/5 to-foreground/20" />
+                        )}
+                      </div>
+                      <div className="flex flex-col p-4">
+                        <h4 className="text-foreground/90 font-medium">{course.title}</h4>
+                        {course.description && (
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                            {course.description}
+                          </p>
+                        )}
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {completedModules}/{totalModules} modules completed
+                          </span>
+                          <span className="text-primary font-medium">
+                            {Math.round(progressPercentage)}%
+                          </span>
+                        </div>
+                        <div className="mt-2 w-full bg-muted-foreground/20 rounded-full h-2">
+                          <div 
+                            className="bg-primary h-2 rounded-full transition-all duration-300" 
+                            style={{ width: `${progressPercentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                <p>No teacher courses available yet.</p>
+                <p className="text-sm mt-1">Check back later for professional development opportunities.</p>
+              </div>
             )}
           </div>
           <div className="mt-8 flex flex-col">
