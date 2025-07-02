@@ -1,36 +1,36 @@
-import { type ActionFunctionArgs, data as dataResponse } from 'react-router'
-import { prisma } from '~/app/utils/db.server'
+import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import { prisma } from '~/utils/db.server';
 
 export async function action({ request }: ActionFunctionArgs) {
-	const json = await request.json()
-	const { teacherCourseModuleId, teacherProfileId } = json
+  const json = await request.json();
+  const { teacherCourseModuleId, teacherProfileId } = json;
 
-	if (!teacherCourseModuleId || !teacherProfileId) {
-		throw new Response('Invalid data', { status: 400 })
-	}
+  if (!teacherCourseModuleId || !teacherProfileId) {
+    throw new Response('Invalid data', { status: 400 });
+  }
 
-	// Find existing session or create new one
-	const existingSession = await prisma.teacherCourseModuleSession.findUnique({
-		where: {
-			teacherCourseModuleId_teacherProfileId: {
-				teacherCourseModuleId,
-				teacherProfileId,
-			},
-		},
-	})
+  // Find existing session or create new one
+  const existingSession = await prisma.teacherCourseModuleSession.findUnique({
+    where: {
+      teacherCourseModuleId_teacherProfileId: {
+        teacherCourseModuleId,
+        teacherProfileId,
+      },
+    },
+  });
 
-	if (existingSession) {
-		return dataResponse({ session: existingSession })
-	}
+  if (existingSession) {
+    return dataResponse({ session: existingSession });
+  }
 
-	const session = await prisma.teacherCourseModuleSession.create({
-		data: {
-			teacherCourseModuleId,
-			teacherProfileId,
-			videoProgress: 0,
-			videoTimestamp: 0,
-		},
-	})
+  const session = await prisma.teacherCourseModuleSession.create({
+    data: {
+      teacherCourseModuleId,
+      teacherProfileId,
+      videoProgress: 0,
+      videoTimestamp: 0,
+    },
+  });
 
-	return dataResponse({ session })
+  return dataResponse({ session });
 }

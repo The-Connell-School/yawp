@@ -10,9 +10,9 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { prisma } from '~/app/utils/db.server';
+import { prisma } from '~/utils/db.server';
 import { Plus } from 'lucide-react';
-import { requireAdmin } from '~/app/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
 import {
   Sheet,
   SheetContent,
@@ -33,10 +33,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       include: {
         teacherCourseModules: {
           include: {
-            resources: true,
+            resources: {
+              select: {
+                id: true,
+                name: true,
+                contentType: true,
+              },
+            },
           },
         },
-        resources: true,
+        resources: {
+          select: {
+            id: true,
+          },
+        },
         image: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -134,7 +144,9 @@ export default function TeacherCoursesRoute() {
                   className="w-full"
                   disabled={fetcher.state !== 'idle'}
                 >
-                  {fetcher.state === 'idle' ? 'Create Teacher Course' : 'Creating...'}
+                  {fetcher.state === 'idle'
+                    ? 'Create Teacher Course'
+                    : 'Creating...'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -151,7 +163,9 @@ export default function TeacherCoursesRoute() {
             </div>
           ) : teacherCourses.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <span className="text-lg font-bold">No teacher courses found</span>
+              <span className="text-lg font-bold">
+                No teacher courses found
+              </span>
               <span className="text-sm text-muted-foreground">
                 Create your first teacher course to get started
               </span>

@@ -8,7 +8,7 @@ import {
 import { TrashIcon, ImageIcon, VideoIcon, FileIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
-import { prisma } from '~/app/utils/db.server';
+import { prisma } from '~/utils/db.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import {
@@ -19,7 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { requireAdmin } from '~/app/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
+import { requireUserId } from '~/utils/auth.server';
 import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
 import {
   Sheet,
@@ -59,7 +60,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     include: {
       teacherCourseModules: {
         include: {
-          resources: true,
+          resources: {
+            select: {
+              id: true,
+              name: true,
+              contentType: true,
+              blob: true,
+            },
+          },
         },
         orderBy: { position: 'asc' },
       },
@@ -74,11 +82,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ teacherCourse });
+  // Transform resources to include byteLength instead of blob
+  const transformedCourse = {
+    ...teacherCourse,
+    teacherCourseModules: teacherCourse.teacherCourseModules.map((module) => ({
+      ...module,
+      resources: module.resources.map((resource) => ({
+        id: resource.id,
+        name: resource.name,
+        contentType: resource.contentType,
+        byteLength: resource.blob?.byteLength || 0,
+      })),
+    })),
+  };
+
+  return dataResponse({ teacherCourse: transformedCourse });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireAdmin(request);
+  const userId = await requireUserId(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -102,12 +125,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.teacherCourseImage.deleteMany({ where: { teacherCourseId: params.id } });
+        await tx.teacherCourseImage.deleteMany({
+          where: { teacherCourseId: params.id },
+        });
       } else if (imageFile && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await tx.teacherCourseImage.deleteMany({ where: { teacherCourseId: params.id } });
+        await tx.teacherCourseImage.deleteMany({
+          where: { teacherCourseId: params.id },
+        });
         await tx.teacherCourseImage.create({
           data: {
             contentType: imageFile.type,
@@ -151,16 +178,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       // In a real app, you might want to upload to cloud storage
       const arrayBuffer = await videoFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      
+
       const upload = await prisma.upload.create({
         data: {
           name: videoFile.name,
           contentType: videoFile.type,
           blob: buffer,
-          userId: 'admin', // You might want to get the actual user ID
+          userId,
         },
       });
-      
+
       finalVideoLink = `/api/upload/${upload.id}`;
     } else if (videoLink) {
       finalVideoLink = videoLink;
@@ -237,7 +264,9 @@ export default function TeacherCourseRoute() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Drag and drop state for modules ---
-  const [modules, setModules] = React.useState(teacherCourse.teacherCourseModules);
+  const [modules, setModules] = React.useState(
+    teacherCourse.teacherCourseModules
+  );
   React.useEffect(() => {
     setModules(teacherCourse.teacherCourseModules);
   }, [teacherCourse.teacherCourseModules]);
@@ -534,7 +563,11 @@ export default function TeacherCourseRoute() {
               <SheetHeader>
                 <SheetTitle>Create Module</SheetTitle>
               </SheetHeader>
-              <fetcher.Form method="post" className="mt-4 space-y-4" encType="multipart/form-data">
+              <fetcher.Form
+                method="post"
+                className="mt-4 space-y-4"
+                encType="multipart/form-data"
+              >
                 <input type="hidden" name="intent" value="createModule" />
                 <div className="space-y-2">
                   <Label htmlFor="moduleTitle">Title</Label>
@@ -550,12 +583,7 @@ export default function TeacherCourseRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Video Upload</Label>
-                  <Input
-                    id="video"
-                    name="video"
-                    type="file"
-                    accept="video/*"
-                  />
+                  <Input id="video" name="video" type="file" accept="video/*" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="videoLink">Or Video Link</Label>

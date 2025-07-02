@@ -8,10 +8,11 @@ import {
 import { TrashIcon, VideoIcon, FileIcon, Plus, Upload } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
-import { prisma } from '~/app/utils/db.server';
+import { prisma } from '~/utils/db.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { requireAdmin } from '~/app/utils/permissions';
+import { requireAdmin } from '~/utils/permissions';
+import { getUserId } from '~/utils/auth.server';
 import { ChevronLeft, Settings } from 'lucide-react';
 import {
   Sheet,
@@ -34,6 +35,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: { id: params.moduleId },
       include: {
         resources: {
+          select: {
+            id: true,
+            name: true,
+            contentType: true,
+            blob: true,
+          },
           orderBy: { createdAt: 'desc' },
         },
         teacherCourse: {
@@ -51,11 +58,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ teacherCourseModule, teacherCourse });
+  // Transform resources to include byteLength instead of blob
+  const transformedModule = {
+    ...teacherCourseModule,
+    resources: teacherCourseModule.resources.map((resource) => ({
+      id: resource.id,
+      name: resource.name,
+      contentType: resource.contentType,
+      byteLength: resource.blob?.byteLength || 0,
+    })),
+  };
+
+  return dataResponse({
+    teacherCourseModule: transformedModule,
+    teacherCourse,
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireAdmin(request);
+  const userId = await getUserId(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -83,16 +105,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
       // For simplicity, we'll store the video as a blob and create a link to it
       const arrayBuffer = await videoFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      
+
       const upload = await prisma.upload.create({
         data: {
           name: videoFile.name,
           contentType: videoFile.type,
           blob: buffer,
-          userId: 'admin', // You might want to get the actual user ID
+          userId: userId!,
         },
       });
-      
+
       finalVideoLink = `/api/upload/${upload.id}`;
     } else if (videoLink) {
       finalVideoLink = videoLink;
@@ -223,12 +245,7 @@ export default function TeacherCourseModuleRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Replace Video</Label>
-                  <Input
-                    id="video"
-                    name="video"
-                    type="file"
-                    accept="video/*"
-                  />
+                  <Input id="video" name="video" type="file" accept="video/*" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="videoLink">Or Update Video Link</Label>
@@ -279,7 +296,9 @@ export default function TeacherCourseModuleRoute() {
               <dt className="text-sm font-medium text-muted-foreground">
                 Title
               </dt>
-              <dd className="text-base font-medium">{teacherCourseModule.title}</dd>
+              <dd className="text-base font-medium">
+                {teacherCourseModule.title}
+              </dd>
             </div>
             <div>
               <dt className="text-sm font-medium text-muted-foreground">
@@ -311,15 +330,46 @@ export default function TeacherCourseModuleRoute() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <video 
-                controls 
-                className="w-full max-h-96 rounded-lg"
-                src={teacherCourseModule.videoLink}
-              >
-                Your browser does not support the video tag.
-              </video>
+              {teacherCourseModule.videoLink.includes('youtube.com') ||
+              teacherCourseModule.videoLink.includes('youtu.be') ? (
+                <div className="aspect-video w-full">
+                  <iframe
+                    src={teacherCourseModule.videoLink.replace(
+                      'watch?v=',
+                      'embed/'
+                    )}
+                    className="w-full h-full rounded-lg"
+                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  />
+                </div>
+              ) : (
+                <video
+                  controls
+                  className="w-full max-h-96 rounded-lg"
+                  src={teacherCourseModule.videoLink}
+                  onError={(e) => {
+                    console.error('Video failed to load:', e);
+                  }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              )}
               <p className="text-sm text-muted-foreground">
-                Video URL: <code className="bg-muted px-1 py-0.5 rounded text-xs">{teacherCourseModule.videoLink}</code>
+                Video URL:{' '}
+                <code className="bg-muted px-1 py-0.5 rounded text-xs">
+                  {teacherCourseModule.videoLink}
+                </code>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <a
+                  href={teacherCourseModule.videoLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  Open video in new tab
+                </a>
               </p>
             </div>
           </CardContent>
@@ -332,7 +382,10 @@ export default function TeacherCourseModuleRoute() {
             <FileIcon className="h-5 w-5" />
             Module Resources
           </CardTitle>
-          <Sheet open={isResourceSheetOpen} onOpenChange={setIsResourceSheetOpen}>
+          <Sheet
+            open={isResourceSheetOpen}
+            onOpenChange={setIsResourceSheetOpen}
+          >
             <SheetTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -343,9 +396,9 @@ export default function TeacherCourseModuleRoute() {
               <SheetHeader>
                 <SheetTitle>Upload Resources</SheetTitle>
               </SheetHeader>
-              <fetcher.Form 
-                method="post" 
-                className="mt-4 space-y-4" 
+              <fetcher.Form
+                method="post"
+                className="mt-4 space-y-4"
                 encType="multipart/form-data"
               >
                 <input type="hidden" name="intent" value="uploadResources" />
@@ -368,7 +421,9 @@ export default function TeacherCourseModuleRoute() {
                   className="w-full"
                   disabled={fetcher.state !== 'idle'}
                 >
-                  {fetcher.state !== 'idle' ? 'Uploading...' : 'Upload Resources'}
+                  {fetcher.state !== 'idle'
+                    ? 'Uploading...'
+                    : 'Upload Resources'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -382,7 +437,7 @@ export default function TeacherCourseModuleRoute() {
           ) : (
             <div className="space-y-3">
               {teacherCourseModule.resources.map((resource) => (
-                <div 
+                <div
                   key={resource.id}
                   className="flex items-center justify-between p-3 border rounded-lg bg-background"
                 >
@@ -391,13 +446,17 @@ export default function TeacherCourseModuleRoute() {
                     <div>
                       <p className="font-medium">{resource.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {resource.contentType} • {formatFileSize(Buffer.byteLength(resource.blob))}
+                        {resource.contentType} •{' '}
+                        {formatFileSize(resource.byteLength)}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" asChild>
-                      <a href={`/api/teacher-course-module-resource/${resource.id}`} download>
+                      <a
+                        href={`/api/teacher-course-module-resource/${resource.id}`}
+                        download
+                      >
                         Download
                       </a>
                     </Button>
