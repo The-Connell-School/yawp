@@ -77,7 +77,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               },
             },
           },
-          messages: true,
+          messages: {
+            orderBy: { createdAt: 'asc' },
+          },
         },
       },
       comments: {

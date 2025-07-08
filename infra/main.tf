@@ -412,7 +412,7 @@ resource "aws_apprunner_service" "web" {
         runtime_environment_variables = {
           NODE_ENV = var.env
           PORT = "8080"
-          AI_MODEL = "claude-3-5-sonnet-20240620"
+          AI_MODEL = "claude-3-7-sonnet-20250219"
           RESEND_FROM_EMAIL = var.resend_from_email
         }
 
