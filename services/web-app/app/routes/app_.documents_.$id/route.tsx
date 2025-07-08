@@ -66,7 +66,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         include: {
           courseModule: {
             include: {
-              instructions: true,
+              instructions: {
+                include: {
+                  buttons: {
+                    orderBy: { position: 'asc' },
+                  },
+                },
+              },
               course: {
                 select: {
                   courseModules: {

@@ -59,6 +59,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
+import { useFieldArray } from '~/hooks/useFieldArray';
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -70,13 +71,14 @@ const moduleSchema = z.object({
 const instructionSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   prompt: z.string().min(1, 'Prompt is required'),
-  interactiveType: z.string().min(1, 'Interactive type is required'),
-  answerType: z.string().optional(),
   answerKey: z.string().optional(),
   tutorInstructions: z.string().optional(),
   canAskQuestion: z.union([z.literal('on'), z.literal(undefined)]).optional(),
   nextInstructionBtnLabel: z.string().optional(),
-  answerTypeOptions: z.string().optional(),
+  buttons: z.array(z.object({
+    label: z.string().min(1, 'Button label is required'),
+    action: z.enum(['advance', 'response']),
+  })).min(1, 'At least one button is required'),
 });
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -92,6 +94,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       include: {
         instructions: {
           orderBy: { position: 'asc' },
+          include: {
+            buttons: {
+              orderBy: { position: 'asc' },
+            },
+          },
         },
       },
     }),
@@ -135,19 +142,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'createInstruction') {
-    const title = formData.get('title')?.toString();
-    const prompt = formData.get('prompt')?.toString();
-    const interactiveType = formData.get('interactiveType')?.toString();
-    const answerType = formData.get('answerType')?.toString();
-    const answerKey = formData.get('answerKey')?.toString();
-    const tutorInstructions = formData.get('tutorInstructions')?.toString();
-    const canAskQuestion = formData.get('canAskQuestion') === 'true';
-
-    if (!title || !prompt || !interactiveType) {
-      throw new Response('Title, prompt, and interactive type are required', {
-        status: 400,
-      });
-    }
+    const { error, data } = await parseFormData(formData, instructionSchema);
+    if (error) return validationError(error);
 
     const instructionCount = await prisma.courseModuleInstruction.count({
       where: { courseModuleId: params.moduleId },
@@ -155,15 +151,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.courseModuleInstruction.create({
       data: {
-        title,
-        prompt,
-        interactiveType,
-        answerType: answerType || null,
-        answerKey: answerKey || null,
-        tutorInstructions: tutorInstructions || null,
-        canAskQuestion,
+        title: data.title,
+        prompt: data.prompt,
+        interactiveType: 'dialogue', // Default to dialogue type
+        answerType: 'button', // Always use button type
+        answerKey: data.answerKey || null,
+        tutorInstructions: data.tutorInstructions || null,
+        canAskQuestion: data.canAskQuestion === 'on',
+        nextInstructionBtnLabel: data.nextInstructionBtnLabel || null,
         position: instructionCount,
         courseModuleId: params.moduleId!,
+        buttons: {
+          create: data.buttons.map((button, index) => ({
+            label: button.label,
+            action: button.action,
+            position: index,
+          })),
+        },
       },
     });
 
@@ -172,28 +176,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'updateInstruction') {
     const instructionId = formData.get('instructionId')?.toString();
-    const title = formData.get('title')?.toString();
-    const prompt = formData.get('prompt')?.toString();
-    const interactiveType = formData.get('interactiveType')?.toString();
-    const answerType = formData.get('answerType')?.toString();
-    const answerKey = formData.get('answerKey')?.toString();
-    const tutorInstructions = formData.get('tutorInstructions')?.toString();
-    const canAskQuestion = formData.get('canAskQuestion') === 'true';
-
-    if (!instructionId || !title || !prompt || !interactiveType) {
-      throw new Response('Required fields missing', { status: 400 });
+    if (!instructionId) {
+      throw new Response('Instruction ID is required', { status: 400 });
     }
+
+    const { error, data } = await parseFormData(formData, instructionSchema);
+    if (error) return validationError(error);
 
     await prisma.courseModuleInstruction.update({
       where: { id: instructionId },
       data: {
-        title,
-        prompt,
-        interactiveType,
-        answerType: answerType || null,
-        answerKey: answerKey || null,
-        tutorInstructions: tutorInstructions || null,
-        canAskQuestion,
+        title: data.title,
+        prompt: data.prompt,
+        interactiveType: 'dialogue', // Default to dialogue type
+        answerType: 'button', // Always use button type
+        answerKey: data.answerKey || null,
+        tutorInstructions: data.tutorInstructions || null,
+        canAskQuestion: data.canAskQuestion === 'on',
+        nextInstructionBtnLabel: data.nextInstructionBtnLabel || null,
+        buttons: {
+          deleteMany: {
+            courseModuleInstructionId: instructionId,
+          },
+          create: data.buttons.map((button, index) => ({
+            label: button.label,
+            action: button.action,
+            position: index,
+          })),
+        },
       },
     });
 
@@ -283,14 +293,12 @@ export default function ModuleRoute() {
     defaultValues: {
       title: editingInstruction?.title || '',
       prompt: editingInstruction?.prompt || '',
-      interactiveType: editingInstruction?.interactiveType || '',
-      answerType: editingInstruction?.answerType || 'textarea',
       answerKey: editingInstruction?.answerKey || '',
       tutorInstructions: editingInstruction?.tutorInstructions || '',
       canAskQuestion: editingInstruction?.canAskQuestion || false,
       nextInstructionBtnLabel:
         editingInstruction?.nextInstructionBtnLabel || '',
-      answerTypeOptions: editingInstruction?.answerTypeOptions || '',
+      buttons: editingInstruction?.buttons || [{ label: 'Continue', action: 'advance' }],
     },
     handleSubmit: (_data, formData) => {
       instructionFetcher.submit(formData, {
@@ -306,14 +314,12 @@ export default function ModuleRoute() {
       instructionForm.resetForm({
         title: editingInstruction?.title || '',
         prompt: editingInstruction?.prompt || '',
-        interactiveType: editingInstruction?.interactiveType || '',
-        answerType: editingInstruction?.answerType || 'textarea',
         answerKey: editingInstruction?.answerKey || '',
         tutorInstructions: editingInstruction?.tutorInstructions || '',
         canAskQuestion: editingInstruction?.canAskQuestion || false,
         nextInstructionBtnLabel:
           editingInstruction?.nextInstructionBtnLabel || '',
-        answerTypeOptions: editingInstruction?.answerTypeOptions || '',
+        buttons: editingInstruction?.buttons || [{ label: 'Continue', action: 'advance' }],
       });
     }
     // eslint-disable-next-line
@@ -386,8 +392,37 @@ export default function ModuleRoute() {
           </div>
         </TableCell>
         <TableCell className="font-medium">{instruction.title}</TableCell>
-        <TableCell>{instruction.interactiveType}</TableCell>
-        <TableCell>{instruction.answerType || 'N/A'}</TableCell>
+        <TableCell>
+          {instruction.buttons?.length > 0 ? (
+            <div className="flex flex-wrap gap-1">
+              {instruction.buttons.map((button: any) => (
+                <span
+                  key={button.id}
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    button.action === 'advance' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}
+                >
+                  {button.label} ({button.action})
+                </span>
+              ))}
+            </div>
+          ) : (
+            'No buttons'
+          )}
+        </TableCell>
+        <TableCell>
+          {instruction.canAskQuestion ? (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Chat enabled
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              Chat disabled
+            </span>
+          )}
+        </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
             <Button
@@ -654,61 +689,32 @@ export default function ModuleRoute() {
                       rows={3}
                       required
                     />
-                    <FormSelect
-                      scope={instructionForm.scope('answerType')}
-                      label="Response Type"
-                      options={[
-                        { value: 'buttons', label: 'Buttons' },
-                        { value: 'text', label: 'Text' },
-                      ]}
-                    />
-                    {instructionForm.value('answerType') === 'buttons' && (
-                      <FormInput
-                        scope={instructionForm.scope('answerTypeOptions')}
-                        label="Response Options (comma separated)"
-                        placeholder="e.g. Yes,No,Maybe"
-                      />
-                    )}
+                    <ButtonsFieldArray form={instructionForm} />
                     <div className="flex items-center space-x-2">
                       <FormSwitch
                         scope={instructionForm.scope('canAskQuestion')}
                         label="Allow students to ask questions"
                       />
                     </div>
-                    <FormSelect
-                      scope={instructionForm.scope('interactiveType')}
-                      label="Interactive Type"
-                      options={[
-                        { value: 'answer', label: 'Answer' },
-                        { value: 'dialogue', label: 'Dialogue' },
-                      ]}
+                    <FormTextarea
+                      scope={instructionForm.scope('answerKey')}
+                      label="Answer Key"
+                      placeholder="Expected answer or guidance..."
+                      rows={2}
                     />
-                    {instructionForm.value('interactiveType') === 'answer' && (
-                      <FormTextarea
-                        scope={instructionForm.scope('answerKey')}
-                        label="Answer"
-                        placeholder="Expected answer or guidance..."
-                        rows={2}
-                      />
-                    )}
-                    {instructionForm.value('interactiveType') ===
-                      'dialogue' && (
-                      <>
-                        <FormTextarea
-                          scope={instructionForm.scope('tutorInstructions')}
-                          label="Tutor Instructions"
-                          placeholder="Special instructions for the tutor..."
-                          rows={2}
-                        />
-                        <FormInput
-                          scope={instructionForm.scope(
-                            'nextInstructionBtnLabel'
-                          )}
-                          label="Next Instruction Button Label"
-                          placeholder="e.g. Next, Continue, etc."
-                        />
-                      </>
-                    )}
+                    <FormTextarea
+                      scope={instructionForm.scope('tutorInstructions')}
+                      label="Tutor Instructions"
+                      placeholder="Special instructions for the tutor..."
+                      rows={2}
+                    />
+                    <FormInput
+                      scope={instructionForm.scope(
+                        'nextInstructionBtnLabel'
+                      )}
+                      label="Next Instruction Button Label"
+                      placeholder="e.g. Next, Continue, etc."
+                    />
                     <Button
                       type="submit"
                       className="w-full"
@@ -748,8 +754,8 @@ export default function ModuleRoute() {
                     <TableRow>
                       <TableHead className="w-8"></TableHead>
                       <TableHead>Title</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Answer Type</TableHead>
+                      <TableHead>Buttons</TableHead>
+                      <TableHead>Chat</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -767,6 +773,60 @@ export default function ModuleRoute() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ButtonsFieldArray({ form }: { form: any }) {
+  const buttonsFieldArray = useFieldArray({
+    control: form.control,
+    name: 'buttons',
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Label>Buttons</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => buttonsFieldArray.append({ label: '', action: 'response' })}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Button
+        </Button>
+      </div>
+      {buttonsFieldArray.fields.map((field, index) => (
+        <div key={field.id} className="flex items-end gap-2 p-3 border rounded-lg">
+          <div className="flex-1">
+            <FormInput
+              scope={form.scope(`buttons.${index}.label`)}
+              label="Button Label"
+              required
+            />
+          </div>
+          <div className="flex-1">
+            <FormSelect
+              scope={form.scope(`buttons.${index}.action`)}
+              label="Action"
+              options={[
+                { value: 'response', label: 'Send Response' },
+                { value: 'advance', label: 'Advance to Next' },
+              ]}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="destructive-outline"
+            size="icon-sm"
+            onClick={() => buttonsFieldArray.remove(index)}
+            disabled={buttonsFieldArray.fields.length === 1}
+          >
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }

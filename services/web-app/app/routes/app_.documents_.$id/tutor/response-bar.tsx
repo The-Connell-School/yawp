@@ -11,19 +11,17 @@ import { Tooltip } from '~/components/ui/tooltip.js'
 import { cn, useIsPending } from '~/utils/misc.js'
 
 type Props = {
-	options: string | null
+	buttons: Array<{ label: string; action: 'advance' | 'response' }> | null
 	canAskQuestion?: boolean
-	advanceInstructionLabel?: string | null
 	className?: string
 	advanceInstruction?: () => void
 	respond: (response: string) => void
 }
 
 export const ResponseBar = ({
-	options,
+	buttons,
 	canAskQuestion,
 	advanceInstruction,
-	advanceInstructionLabel,
 	respond,
 	className,
 }: Props) => {
@@ -47,14 +45,40 @@ export const ResponseBar = ({
 		</div>
 	) : (
 		<div className={cn("flex flex-wrap items-center justify-center gap-2 border-t p-2 pb-5 md:pb-4", className)}>
-			{options
-				?.split(',')
-				.filter(Boolean)
-				.map(opt => (
-					<Button key={opt} className="text-lg" onClick={() => respond(opt)}>
-						{opt}
+			{buttons?.map((button, index) => (
+				button.action === 'response' ? (
+					<Button key={index} className="text-lg" onClick={() => respond(button.label)}>
+						{button.label}
 					</Button>
-				))}
+				) : (
+					<Tooltip
+						key={index}
+						text="Next step"
+						delayDuration={200}
+						open={check === true || undefined}
+					>
+						<Button
+							variant={check ? 'success' : 'secondary'}
+							className={cn('flex items-center gap-1 text-lg', {
+								'min-w-[150px]': check,
+							})}
+							onClick={() => {
+								if (check) {
+									setCheck(false)
+									advanceInstruction && advanceInstruction()
+								} else {
+									setCheck(true)
+								}
+							}}
+							onBlur={() => check && setCheck(false)}
+							isLoading={isPending}
+						>
+							{check ? 'You sure?' : button.label}
+							{check ? <CheckIcon /> : <ChevronRightIcon />}
+						</Button>
+					</Tooltip>
+				)
+			))}
 			{canAskQuestion ? (
 				<Button
 					variant="secondary"
@@ -62,36 +86,8 @@ export const ResponseBar = ({
 					onClick={() => setIsAskingQuestion(true)}
 				>
 					<MessageCircleIcon />
-					{options ? '' : 'Chat'}
+					{buttons && buttons.length > 0 ? '' : 'Chat'}
 				</Button>
-			) : null}
-			{advanceInstruction ? (
-				<Tooltip
-					text="Next step"
-					delayDuration={200}
-					open={check === true || undefined}
-				>
-					<Button
-						variant={check ? 'success' : 'secondary'}
-						size={advanceInstructionLabel ? undefined : 'icon'}
-						className={cn('flex items-center gap-1 text-lg', {
-							'min-w-[150px]': check,
-						})}
-						onClick={() => {
-							if (check) {
-								setCheck(false)
-								advanceInstruction()
-							} else {
-								setCheck(true)
-							}
-						}}
-						onBlur={() => check && setCheck(false)}
-						isLoading={isPending}
-					>
-						{check ? 'You sure?' : advanceInstructionLabel}
-						{check ? <CheckIcon /> : <ChevronRightIcon />}
-					</Button>
-				</Tooltip>
 			) : null}
 		</div>
 	)

@@ -22,7 +22,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const cms = await prisma.courseModuleSession.findUnique({
     where: { id: params.id },
-    include: { courseModule: { include: { instructions: true } } },
+    include: { courseModule: { include: { instructions: { include: { buttons: { orderBy: { position: 'asc' } } } } } } },
   });
 
   if (!cms) {

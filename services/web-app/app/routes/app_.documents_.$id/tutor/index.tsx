@@ -500,29 +500,19 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               ? undefined
               : 'border-t-0'
           }
-          options={instruction.answerTypeOptions}
+          buttons={instruction.buttons || []}
           respond={respond}
           canAskQuestion={
             !!instruction.canAskQuestion ||
             instruction.interactiveType === 'dialogue'
           }
-          advanceInstructionLabel={
-            instruction.interactiveType === 'dialogue'
-              ? instruction.nextInstructionBtnLabel
-              : !instruction.answerTypeOptions
-                ? 'Next'
-                : undefined
-          }
           advanceInstruction={
-            instruction.interactiveType === 'dialogue' ||
-            !instruction.answerTypeOptions
-              ? isLastCmInstruction
-                ? () => {
-                    incrementInstruction();
-                    advanceToNextCourseModule();
-                  }
-                : incrementInstruction
-              : undefined
+            isLastCmInstruction
+              ? () => {
+                  incrementInstruction();
+                  advanceToNextCourseModule();
+                }
+              : incrementInstruction
           }
         />
       )}
