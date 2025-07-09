@@ -195,7 +195,11 @@ export const Bar = ({ editor, documentId, operationTracker }: BarProps) => {
           <MessageCirclePlusIcon className="h-5 w-5" />
         </div>
       </Tooltip>
-      <DocumentHistoryViewer documentId={documentId} />
+      <DocumentHistoryViewer 
+        documentId={documentId} 
+        editor={editor} 
+        historyManager={historyManager.current} 
+      />
       {hiddenCommands.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger>

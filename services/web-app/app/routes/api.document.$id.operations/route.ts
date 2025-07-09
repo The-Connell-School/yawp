@@ -6,7 +6,7 @@ import { prisma } from '~/utils/db.server';
 
 const OperationSchema = z.object({
   position: z.number(),
-  type: z.enum(['insert', 'delete', 'format', 'undo', 'redo']),
+  type: z.enum(['insert', 'delete', 'format', 'undo', 'redo', 'reset']),
   content: z.string().optional(),
   range: z.object({ from: z.number(), to: z.number() }).optional(),
   attributes: z.record(z.any()).optional(),

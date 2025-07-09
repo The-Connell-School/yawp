@@ -6,7 +6,7 @@ export interface DocumentOperation {
   userId: string;
   position: number;
   timestamp: Date;
-  type: 'insert' | 'delete' | 'format' | 'undo' | 'redo';
+  type: 'insert' | 'delete' | 'format' | 'undo' | 'redo' | 'reset';
   content?: string;
   range?: { from: number; to: number };
   attributes?: Record<string, any>;
