@@ -28,28 +28,16 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   operationTracker: OperationTracker | null;
+  historyManager: HistoryManager | null;
 };
 
-export const Bar = ({ editor, documentId, operationTracker }: BarProps) => {
+export const Bar = ({ editor, documentId, operationTracker, historyManager }: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const historyManager = useRef<HistoryManager | null>(null);
   const createDocumentCommentFetcher = useFetcher<{ id: string }>({
     key: 'create-document-comment',
   });
-
-  // Initialize history manager
-  useEffect(() => {
-    if (documentId && !historyManager.current) {
-      historyManager.current = new HistoryManager(documentId);
-    }
-    return () => {
-      if (historyManager.current) {
-        historyManager.current.destroy();
-      }
-    };
-  }, [documentId]);
 
   useEffect(() => {
     const updateButtonVisibility = () => {
@@ -198,7 +186,7 @@ export const Bar = ({ editor, documentId, operationTracker }: BarProps) => {
       <DocumentHistoryViewer 
         documentId={documentId} 
         editor={editor} 
-        historyManager={historyManager.current} 
+        historyManager={historyManager} 
       />
       {hiddenCommands.length > 0 && (
         <DropdownMenu>

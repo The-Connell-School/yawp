@@ -22,6 +22,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const url = new URL(request.url);
   const latest = url.searchParams.get('latest');
+  const limit = url.searchParams.get('limit');
 
   // Check if user has access to this document
   const document = await prisma.document.findFirst({
@@ -49,10 +50,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return Response.json({ position: latestOperation?.position || 0 });
   }
 
-  // Get all operations for the document
+  // Get operations for the document - limit to 200 most recent by default
+  const operationLimit = limit ? parseInt(limit) : 200;
   const operations = await prisma.documentOperation.findMany({
     where: { documentId: params.id },
-    orderBy: { position: 'asc' },
+    orderBy: { position: 'desc' },
+    take: operationLimit,
     include: {
       user: {
         select: { id: true, name: true, email: true },
@@ -60,7 +63,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  return Response.json({ operations });
+  // Reverse to get ascending order for UI
+  const sortedOperations = operations.reverse();
+
+  return Response.json({ operations: sortedOperations });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {

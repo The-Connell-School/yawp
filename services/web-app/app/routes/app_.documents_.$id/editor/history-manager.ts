@@ -15,7 +15,8 @@ export class HistoryManager {
   private async loadOperations() {
     this.isLoading = true;
     try {
-      const response = await fetch(`/api/document/${this.documentId}/operations`);
+      // Load only the most recent 200 operations for performance
+      const response = await fetch(`/api/document/${this.documentId}/operations?limit=200`);
       if (response.ok) {
         const data = await response.json();
         this.operationStack = data.operations.map((op: any) => ({
@@ -392,6 +393,11 @@ export class HistoryManager {
   // Get all operations
   getAllOperations(): DocumentOperation[] {
     return [...this.operationStack].sort((a, b) => a.position - b.position);
+  }
+
+  // Refresh operations from server
+  async refreshOperations() {
+    await this.loadOperations();
   }
 
   // Cleanup

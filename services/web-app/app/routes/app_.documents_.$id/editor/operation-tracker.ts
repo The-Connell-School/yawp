@@ -17,11 +17,14 @@ export class OperationTracker {
   private documentId: string;
   private position: number = 0;
   private operationQueue: Partial<DocumentOperation>[] = [];
+  private queuedTransactions: Transaction[] = [];
   private flushTimeout: NodeJS.Timeout | null = null;
   private isInitialized = false;
+  private onOperationsFlushed?: () => void;
 
-  constructor(documentId: string) {
+  constructor(documentId: string, onOperationsFlushed?: () => void) {
     this.documentId = documentId;
+    this.onOperationsFlushed = onOperationsFlushed;
     this.initializePosition();
   }
 
@@ -37,29 +40,46 @@ export class OperationTracker {
       console.error('Failed to initialize position:', error);
     }
     this.isInitialized = true;
+    
+    // Process any queued transactions
+    this.queuedTransactions.forEach(transaction => {
+      this.trackTransaction(transaction);
+    });
+    this.queuedTransactions = [];
   }
 
   trackTransaction(transaction: Transaction) {
-    if (!this.isInitialized || !transaction.docChanged) return;
+    if (!transaction.docChanged) return;
+    
+    // Queue transactions if not yet initialized
+    if (!this.isInitialized) {
+      this.queuedTransactions.push(transaction);
+      return;
+    }
 
     transaction.steps.forEach((step) => {
-      const operation = this.stepToOperation(step);
+      const operation = this.stepToOperation(step, transaction);
       if (operation) {
         this.addOperation(operation);
       }
     });
   }
 
-  private stepToOperation(step: any): Partial<DocumentOperation> | null {
+  private stepToOperation(step: any, transaction: Transaction): Partial<DocumentOperation> | null {
     if (step.jsonID === 'replace') {
       const { from, to } = step;
       
       if (step.slice.content.size === 0) {
-        // Delete operation
+        // Delete operation - capture the deleted content from the original document
+        const deletedContent = transaction.before.textBetween(from, to);
+        
         return {
           type: 'delete',
           range: { from, to },
-          metadata: { deletedLength: to - from }
+          metadata: { 
+            deletedLength: to - from,
+            deletedContent
+          }
         };
       } else {
         // Insert operation
@@ -129,6 +149,11 @@ export class OperationTracker {
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Notify that operations were successfully flushed
+      if (this.onOperationsFlushed) {
+        this.onOperationsFlushed();
       }
     } catch (error) {
       // Re-queue operations on failure

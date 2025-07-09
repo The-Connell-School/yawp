@@ -74,7 +74,8 @@ export function DocumentHistoryViewer({
   const loadOperations = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/document/${documentId}/operations`);
+      // Load only the most recent 200 operations for performance
+      const response = await fetch(`/api/document/${documentId}/operations?limit=200`);
       if (response.ok) {
         const data = await response.json();
         setOperations(data.operations || []);
@@ -106,6 +107,13 @@ export function DocumentHistoryViewer({
       loadSnapshots();
     }
   }, [view, documentId]);
+
+  // Refresh operations when history manager is updated
+  useEffect(() => {
+    if (historyManager && view === 'operations') {
+      loadOperations();
+    }
+  }, [historyManager, view]);
 
   // Time-travel functions
   const handlePreviewOperation = async (position: number) => {

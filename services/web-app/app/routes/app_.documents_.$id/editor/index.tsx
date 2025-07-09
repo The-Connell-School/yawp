@@ -10,6 +10,7 @@ import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
 import { OperationTracker } from './operation-tracker';
+import { HistoryManager } from './history-manager';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;
@@ -56,12 +57,21 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
     immediatelyRender: false,
   });
   const operationTracker = useRef<OperationTracker | null>(null);
+  const historyManager = useRef<HistoryManager | null>(null);
 
   useEffect(() => {
     if (!editor) return;
 
-    // Initialize operation tracker
-    operationTracker.current = new OperationTracker(docId);
+    // Initialize history manager
+    historyManager.current = new HistoryManager(docId);
+
+    // Initialize operation tracker with refresh callback
+    operationTracker.current = new OperationTracker(docId, () => {
+      // Refresh history when operations are flushed
+      if (historyManager.current) {
+        historyManager.current.refreshOperations();
+      }
+    });
 
     const saveToBackend = debounce(async () => {
       setIsSaving(true);
@@ -99,6 +109,9 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
       if (operationTracker.current) {
         operationTracker.current.destroy();
       }
+      if (historyManager.current) {
+        historyManager.current.destroy();
+      }
     };
   }, [editor, docId, setIsSaving]);
 
@@ -109,6 +122,7 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
           editor={editor}
           documentId={docId}
           operationTracker={operationTracker.current}
+          historyManager={historyManager.current}
         />
         <div
           className="no-scrollbar grow overflow-y-scroll p-5 font-times"
