@@ -16,14 +16,14 @@ ALTER TABLE "CourseModuleInstructionButton" ADD CONSTRAINT "CourseModuleInstruct
 
 -- Data migration: Convert existing answerTypeOptions to buttons
 INSERT INTO "CourseModuleInstructionButton" ("id", "createdAt", "updatedAt", "courseModuleInstructionId", "position", "label", "action")
-SELECT 
+SELECT
     gen_random_uuid() as id,
     NOW() as createdAt,
     NOW() as updatedAt,
     i.id as courseModuleInstructionId,
     ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY button_value) - 1 as position,
     TRIM(button_value) as label,
-    CASE 
+    CASE
         WHEN i."interactiveType" = 'answer' THEN 'advance'
         ELSE 'response'
     END as action
@@ -37,19 +37,21 @@ WHERE i."answerTypeOptions" IS NOT NULL AND i."answerTypeOptions" != '';
 
 -- For instructions without answerTypeOptions, create a default button
 INSERT INTO "CourseModuleInstructionButton" ("id", "createdAt", "updatedAt", "courseModuleInstructionId", "position", "label", "action")
-SELECT 
+SELECT
     gen_random_uuid() as id,
     NOW() as createdAt,
     NOW() as updatedAt,
     i.id as courseModuleInstructionId,
     0 as position,
-    CASE 
+    CASE
         WHEN i."interactiveType" = 'answer' THEN 'Continue'
         ELSE 'Response'
     END as label,
-    CASE 
+    CASE
         WHEN i."interactiveType" = 'answer' THEN 'advance'
         ELSE 'response'
     END as action
 FROM "CourseModuleInstruction" i
 WHERE i."answerTypeOptions" IS NULL OR i."answerTypeOptions" = '';
+
+ALTER INDEX "TeacherCourseModuleSession_teacherCourseModuleId_teacherProfile" RENAME TO "TeacherCourseModuleSession_teacherCourseModuleId_teacherPro_key";

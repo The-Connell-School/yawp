@@ -3,7 +3,12 @@ import {
   type CourseModuleInstruction,
   type CourseModuleSessionMessage,
 } from '@app/prisma';
-import { useFetcher, useNavigate, useSearchParams } from 'react-router';
+import {
+  useFetcher,
+  useNavigate,
+  useSearchParams,
+  useLoaderData,
+} from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -41,18 +46,30 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
+import { loader } from '../route';
 
 type Props = {
   docId: string;
   nextCmId?: string;
   hasPreviousCms?: boolean;
-  cms: PrismaCMS & {
+  cms: {
     courseModule: {
-      instructions: CourseModuleInstruction[];
+      course: { courseModules: { id: string; position: number }[] } | null;
+      instructions: {
+        buttons: { id: string; label: string; action: string }[];
+        id: string;
+        title: string;
+        interactiveType: string;
+        prompt: string;
+        canAskQuestion: boolean | null;
+        nextInstructionBtnLabel: string | null;
+      }[];
       title: string;
       isSelfGuided: boolean;
     };
-    messages: CourseModuleSessionMessage[];
+    messages: { id: string; agent: string; content: string; createdAt: Date }[];
+    id: string;
+    instructionsCompleted: number;
   };
 };
 
@@ -185,7 +202,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       top: messagesRef.current.scrollHeight,
       behavior: 'smooth',
     });
-  }, [messages]);
+  }, []);
 
   useEffect(() => {
     if (speechEnabled && tutorResponseFetcher.data?.audio?.length) {
@@ -500,7 +517,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               ? undefined
               : 'border-t-0'
           }
-          buttons={instruction.buttons || []}
+          buttons={instruction.buttons?.map((button) => button.label) || []}
           respond={respond}
           canAskQuestion={
             !!instruction.canAskQuestion ||

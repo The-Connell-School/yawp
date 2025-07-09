@@ -6,7 +6,12 @@ import {
   redirect,
 } from 'react-router';
 import { useLoaderData, useFetcher } from 'react-router';
-import { parseFormData, validationError, useForm } from '@rvf/react-router';
+import {
+  parseFormData,
+  validationError,
+  useForm,
+  useFieldArray,
+} from '@rvf/react-router';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
@@ -27,6 +32,7 @@ import {
   Plus,
   GripVertical,
   TrashIcon,
+  Trash2,
 } from 'lucide-react';
 import {
   Sheet,
@@ -36,15 +42,6 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
-import { Input } from '~/components/ui/input';
-import { Textarea } from '~/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
 import React from 'react';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormTextarea } from '~/components/rvf-forms/form-textarea';
@@ -59,7 +56,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
-import { useFieldArray } from '~/hooks/useFieldArray';
+import { cn } from '~/utils/misc';
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -75,10 +72,14 @@ const instructionSchema = z.object({
   tutorInstructions: z.string().optional(),
   canAskQuestion: z.union([z.literal('on'), z.literal(undefined)]).optional(),
   nextInstructionBtnLabel: z.string().optional(),
-  buttons: z.array(z.object({
-    label: z.string().min(1, 'Button label is required'),
-    action: z.enum(['advance', 'response']),
-  })).min(1, 'At least one button is required'),
+  buttons: z
+    .array(
+      z.object({
+        label: z.string().min(1, 'Button label is required'),
+        action: z.enum(['advance', 'response']),
+      })
+    )
+    .min(1, 'At least one button is required'),
 });
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -298,7 +299,9 @@ export default function ModuleRoute() {
       canAskQuestion: editingInstruction?.canAskQuestion || false,
       nextInstructionBtnLabel:
         editingInstruction?.nextInstructionBtnLabel || '',
-      buttons: editingInstruction?.buttons || [{ label: 'Continue', action: 'advance' }],
+      buttons: editingInstruction?.buttons || [
+        { label: 'Continue', action: 'advance' },
+      ],
     },
     handleSubmit: (_data, formData) => {
       instructionFetcher.submit(formData, {
@@ -319,7 +322,10 @@ export default function ModuleRoute() {
         canAskQuestion: editingInstruction?.canAskQuestion || false,
         nextInstructionBtnLabel:
           editingInstruction?.nextInstructionBtnLabel || '',
-        buttons: editingInstruction?.buttons || [{ label: 'Continue', action: 'advance' }],
+        buttons:
+          editingInstruction?.buttons.length > 0
+            ? editingInstruction?.buttons
+            : [{ label: 'Continue', action: 'advance' }],
       });
     }
     // eslint-disable-next-line
@@ -376,6 +382,7 @@ export default function ModuleRoute() {
       transition,
       opacity: isDragging ? 0.5 : 1,
     };
+
     return (
       <TableRow
         ref={setNodeRef}
@@ -399,8 +406,8 @@ export default function ModuleRoute() {
                 <span
                   key={button.id}
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    button.action === 'advance' 
-                      ? 'bg-blue-100 text-blue-800' 
+                    button.action === 'advance'
+                      ? 'bg-blue-100 text-blue-800'
                       : 'bg-green-100 text-green-800'
                   }`}
                 >
@@ -697,23 +704,10 @@ export default function ModuleRoute() {
                       />
                     </div>
                     <FormTextarea
-                      scope={instructionForm.scope('answerKey')}
-                      label="Answer Key"
-                      placeholder="Expected answer or guidance..."
-                      rows={2}
-                    />
-                    <FormTextarea
                       scope={instructionForm.scope('tutorInstructions')}
                       label="Tutor Instructions"
                       placeholder="Special instructions for the tutor..."
                       rows={2}
-                    />
-                    <FormInput
-                      scope={instructionForm.scope(
-                        'nextInstructionBtnLabel'
-                      )}
-                      label="Next Instruction Button Label"
-                      placeholder="e.g. Next, Continue, etc."
                     />
                     <Button
                       type="submit"
@@ -778,52 +772,61 @@ export default function ModuleRoute() {
 }
 
 function ButtonsFieldArray({ form }: { form: any }) {
-  const buttonsFieldArray = useFieldArray({
-    control: form.control,
-    name: 'buttons',
-  });
+  const buttonsFieldArray = useFieldArray<{ label: string; action: string }[]>(
+    form.scope('buttons')
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2 mb-4">
       <div className="flex items-center justify-between">
         <Label>Buttons</Label>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => buttonsFieldArray.append({ label: '', action: 'response' })}
+          onClick={() =>
+            buttonsFieldArray.push({ label: '', action: 'response' })
+          }
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Button
         </Button>
       </div>
-      {buttonsFieldArray.fields.map((field, index) => (
-        <div key={field.id} className="flex items-end gap-2 p-3 border rounded-lg">
-          <div className="flex-1">
-            <FormInput
-              scope={form.scope(`buttons.${index}.label`)}
-              label="Button Label"
-              required
-            />
-          </div>
-          <div className="flex-1">
-            <FormSelect
-              scope={form.scope(`buttons.${index}.action`)}
-              label="Action"
-              options={[
-                { value: 'response', label: 'Send Response' },
-                { value: 'advance', label: 'Advance to Next' },
-              ]}
-            />
-          </div>
+      {buttonsFieldArray.map((key, item, index) => (
+        <div key={key} className="flex">
+          <input
+            {...item.getInputProps('label')}
+            required
+            placeholder="Label"
+            className={cn(
+              'w-full rounded-l-md border-l border-y h-10 px-3 py-2 text-sm bg-muted border-border',
+              item.error('label') ? 'border-destructive' : ''
+            )}
+          />
+          <select
+            {...item.getInputProps('action')}
+            required
+            className={cn(
+              'w-full border-l border-y h-10 px-3 py-2 text-sm bg-muted border-border',
+              item.error('action') ? 'border-destructive' : '',
+              item.error('label') ? 'border-l-destructive' : ''
+            )}
+          >
+            <option value="response">Should respond</option>
+            <option value="advance">Should advance</option>
+          </select>
           <Button
             type="button"
-            variant="destructive-outline"
-            size="icon-sm"
+            variant="outline"
+            size="icon"
+            className={cn(
+              'rounded-l-none px-3 bg-muted border-border rounded-r-md',
+              item.error('action') ? 'border-l-destructive' : ''
+            )}
             onClick={() => buttonsFieldArray.remove(index)}
-            disabled={buttonsFieldArray.fields.length === 1}
+            disabled={buttonsFieldArray.length() === 1}
           >
-            <TrashIcon className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ))}

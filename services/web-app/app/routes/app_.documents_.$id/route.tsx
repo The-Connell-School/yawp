@@ -126,6 +126,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const nextCmId = currentCms.courseModule.course?.courseModules.find(
     (cm) => cm.position === currentCms.courseModule.position + 1
   )?.id;
+  console.log(currentCms);
 
   return dataResponse({
     doc,
