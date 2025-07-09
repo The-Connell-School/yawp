@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button } from '~/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '~/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '~/components/ui/dialog';
 import { Badge } from '~/components/ui/badge';
 import { Clock, Users, Edit, Trash2, Type, Undo2, Redo2 } from 'lucide-react';
 
@@ -115,16 +121,15 @@ export function DocumentHistoryViewer({ documentId }: Props) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Clock className="h-4 w-4 mr-2" />
-          History
+        <Button variant="outline" size="icon-sm">
+          <Clock className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle>Document History</DialogTitle>
         </DialogHeader>
-        
+
         <div className="flex gap-2 mb-4">
           <Button
             variant={view === 'operations' ? 'default' : 'outline'}
@@ -149,59 +154,67 @@ export function DocumentHistoryViewer({ documentId }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              {view === 'operations' && operations.map((operation) => (
-                <div key={operation.id} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {getOperationIcon(operation.type)}
-                      <Badge variant="outline">{operation.type}</Badge>
-                      <span className="text-sm text-gray-600">
-                        Position {operation.position}
-                      </span>
+              {view === 'operations' &&
+                operations.map((operation) => (
+                  <div
+                    key={operation.id}
+                    className="border rounded-lg p-3 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getOperationIcon(operation.type)}
+                        <Badge variant="outline">{operation.type}</Badge>
+                        <span className="text-sm text-gray-600">
+                          Position {operation.position}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Users className="h-3 w-3" />
+                        {operation.user.name}
+                        <Clock className="h-3 w-3" />
+                        {formatTimestamp(operation.timestamp)}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Users className="h-3 w-3" />
-                      {operation.user.name}
-                      <Clock className="h-3 w-3" />
-                      {formatTimestamp(operation.timestamp)}
+
+                    <div className="text-sm">
+                      {getOperationDescription(operation)}
+                    </div>
+
+                    {operation.range && (
+                      <div className="text-xs text-gray-500">
+                        Range: {operation.range.from} - {operation.range.to}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+              {view === 'snapshots' &&
+                snapshots.map((snapshot) => (
+                  <div
+                    key={snapshot.id}
+                    className="border rounded-lg p-3 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default">Snapshot</Badge>
+                        <span className="text-sm text-gray-600">
+                          {snapshot.text.length} characters
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Clock className="h-3 w-3" />
+                        {formatTimestamp(snapshot.timestamp)}
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded max-h-20 overflow-y-auto">
+                      {snapshot.text.substring(0, 200)}
+                      {snapshot.text.length > 200 && '...'}
                     </div>
                   </div>
-                  
-                  <div className="text-sm">
-                    {getOperationDescription(operation)}
-                  </div>
-                  
-                  {operation.range && (
-                    <div className="text-xs text-gray-500">
-                      Range: {operation.range.from} - {operation.range.to}
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {view === 'snapshots' && snapshots.map((snapshot) => (
-                <div key={snapshot.id} className="border rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="default">Snapshot</Badge>
-                      <span className="text-sm text-gray-600">
-                        {snapshot.text.length} characters
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Clock className="h-3 w-3" />
-                      {formatTimestamp(snapshot.timestamp)}
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded max-h-20 overflow-y-auto">
-                    {snapshot.text.substring(0, 200)}
-                    {snapshot.text.length > 200 && '...'}
-                  </div>
-                </div>
-              ))}
-              
-              {((view === 'operations' && operations.length === 0) || 
+                ))}
+
+              {((view === 'operations' && operations.length === 0) ||
                 (view === 'snapshots' && snapshots.length === 0)) && (
                 <div className="text-center p-8 text-gray-500">
                   No {view} found for this document.
