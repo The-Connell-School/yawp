@@ -234,10 +234,12 @@ export const commands: Command[] = [
 		icon: <Undo2Icon className="h-4 w-4" />,
 		label: 'Undo',
 		command: 'undo',
+		override: (editor) => null, // Will be handled by Bar component
 	},
 	{
 		icon: <Redo2Icon className="h-4 w-4" />,
 		label: 'Redo',
 		command: 'redo',
+		override: (editor) => null, // Will be handled by Bar component
 	},
 ]

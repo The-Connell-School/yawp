@@ -15,6 +15,8 @@ import { Tooltip } from '~/components/ui/tooltip'
 import { camelCase } from '~/utils/camelCase'
 import { cn } from '~/utils/misc'
 import { type Command, commands, COMMAND_STYLE } from './commands'
+import { HistoryManager } from './history-manager'
+import { type OperationTracker } from './operation-tracker'
 
 const DROPDOWN_WIDTH = 32
 const BUTTON_WIDTH = 32
@@ -24,13 +26,27 @@ const PADDING = 8
 export type BarProps = {
 	editor: Editor | null
 	documentId: string
+	operationTracker: OperationTracker | null
 }
 
-export const Bar = ({ editor, documentId }: BarProps) => {
+export const Bar = ({ editor, documentId, operationTracker }: BarProps) => {
 	const [visibleCommands, setVisibleCommands] = useState(commands)
 	const [hiddenCommands, setHiddenCommands] = useState<Command[]>([])
 	const containerRef = useRef<HTMLDivElement>(null)
+	const historyManager = useRef<HistoryManager | null>(null)
 	const createDocumentCommentFetcher = useFetcher<{ id: string }>({ key: 'create-document-comment' })
+
+	// Initialize history manager
+	useEffect(() => {
+		if (documentId && !historyManager.current) {
+			historyManager.current = new HistoryManager(documentId)
+		}
+		return () => {
+			if (historyManager.current) {
+				historyManager.current.destroy()
+			}
+		}
+	}, [documentId])
 
 	useEffect(() => {
 		const updateButtonVisibility = () => {
@@ -67,8 +83,70 @@ export const Bar = ({ editor, documentId }: BarProps) => {
 			ref={containerRef}
 		>
 			{visibleCommands.map(
-				({ icon, label, command, params, activeId, override }) =>
-					override?.(editor) ?? (
+				({ icon, label, command, params, activeId, override }) => {
+					// Handle custom undo/redo buttons
+					if (label === 'Undo' && historyManager.current) {
+						return (
+							<Tooltip text={label} delayDuration={300} key={label}>
+								<div
+									onClick={() => {
+										if (editor && historyManager.current) {
+											historyManager.current.undo(editor)
+											if (operationTracker) {
+												// Track the undo operation
+												operationTracker.addUndoOperation({
+													id: `undo-${Date.now()}`,
+													documentId,
+													userId: '',
+													position: 0,
+													timestamp: new Date(),
+													type: 'undo',
+												})
+											}
+										}
+									}}
+									className={cn(COMMAND_STYLE, {
+										'opacity-50 cursor-not-allowed': !historyManager.current?.canUndo()
+									})}
+								>
+									{icon ?? label}
+								</div>
+							</Tooltip>
+						)
+					}
+					
+					if (label === 'Redo' && historyManager.current) {
+						return (
+							<Tooltip text={label} delayDuration={300} key={label}>
+								<div
+									onClick={() => {
+										if (editor && historyManager.current) {
+											historyManager.current.redo(editor)
+											if (operationTracker) {
+												// Track the redo operation
+												operationTracker.addRedoOperation({
+													id: `redo-${Date.now()}`,
+													documentId,
+													userId: '',
+													position: 0,
+													timestamp: new Date(),
+													type: 'redo',
+												})
+											}
+										}
+									}}
+									className={cn(COMMAND_STYLE, {
+										'opacity-50 cursor-not-allowed': !historyManager.current?.canRedo()
+									})}
+								>
+									{icon ?? label}
+								</div>
+							</Tooltip>
+						)
+					}
+					
+					// Default behavior for other commands
+					return override?.(editor) ?? (
 						<Tooltip text={label} delayDuration={300} key={label}>
 							<div
 								// @ts-ignore
@@ -83,7 +161,8 @@ export const Bar = ({ editor, documentId }: BarProps) => {
 								{icon ?? label}
 							</div>
 						</Tooltip>
-					),
+					)
+				}
 			)}
 			<Tooltip text="Comment" delayDuration={300}>
 				<div

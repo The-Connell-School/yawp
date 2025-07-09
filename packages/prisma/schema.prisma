@@ -130,6 +130,8 @@ model Document {
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   comments             DocumentComment[]
   versions             DocumentVersion[]
+  operations           DocumentOperation[]
+  snapshots            DocumentSnapshot[]
 }
 
 model DocumentComment {
@@ -161,6 +163,40 @@ model DocumentVersion {
   text       String
   html       String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentOperation {
+  id          String   @id @default(cuid())
+  documentId  String
+  userId      String
+  position    Int      // Sequential position in operation stack
+  timestamp   DateTime @default(now()) @db.Timestamptz(6)
+  type        String   // 'insert', 'delete', 'format', 'undo', 'redo'
+  content     String?  // Content for insert operations
+  range       Json?    // { from: number, to: number } for position ranges
+  attributes  Json?    // Formatting attributes for format operations
+  metadata    Json?    // Additional operation metadata
+  
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshots   DocumentSnapshot[]
+  
+  @@index([documentId, position])
+  @@index([documentId, timestamp])
+}
+
+model DocumentSnapshot {
+  id          String   @id @default(cuid())
+  documentId  String
+  operationId String   // Reference to the operation when snapshot was taken
+  html        String
+  text        String
+  timestamp   DateTime @default(now()) @db.Timestamptz(6)
+  
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  operation   DocumentOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId, timestamp])
 }
 
 model FeatureFlag {
@@ -279,6 +315,7 @@ model User {
   documents                Document[]
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
+  documentOperations       DocumentOperation[]
   organizationId           String?
   organization             Organization?             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   password                 Password?
