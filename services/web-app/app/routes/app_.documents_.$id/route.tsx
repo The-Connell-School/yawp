@@ -23,6 +23,7 @@ import { RestoreDataFromLocalStorageModal } from './_components/restore-data-fro
 import { Comments } from './comments';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
+import { DocumentVersions } from './_components/document-versions';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -210,10 +211,10 @@ export default function Route() {
               </div>
             )}
             <div className="h-[20px] border-r" />
-            {/* <DocumentVersions
-						documentId={data.doc.id}
-						versions={data.doc.versions}
-					/> */}
+            <DocumentVersions
+              documentId={data.doc.id}
+              versions={data.doc.versions}
+            />
           </div>
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
