@@ -44,7 +44,7 @@ SELECT
     i.id as courseModuleInstructionId,
     0 as position,
     CASE
-        WHEN i."interactiveType" = 'answer' THEN 'Continue'
+        WHEN i."interactiveType" = 'answer' THEN 'Next step'
         ELSE 'Response'
     END as label,
     CASE

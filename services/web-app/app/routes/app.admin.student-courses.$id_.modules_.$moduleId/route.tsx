@@ -54,7 +54,6 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { FormSelect } from '~/components/rvf-forms/form-select';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
 
@@ -79,7 +78,8 @@ const instructionSchema = z.object({
         action: z.enum(['advance', 'response']),
       })
     )
-    .min(1, 'At least one button is required'),
+    .optional()
+    .default([]),
 });
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -322,10 +322,7 @@ export default function ModuleRoute() {
         canAskQuestion: editingInstruction?.canAskQuestion || false,
         nextInstructionBtnLabel:
           editingInstruction?.nextInstructionBtnLabel || '',
-        buttons:
-          editingInstruction?.buttons.length > 0
-            ? editingInstruction?.buttons
-            : [{ label: 'Continue', action: 'advance' }],
+        buttons: editingInstruction?.buttons,
       });
     }
     // eslint-disable-next-line
@@ -824,7 +821,6 @@ function ButtonsFieldArray({ form }: { form: any }) {
               item.error('action') ? 'border-l-destructive' : ''
             )}
             onClick={() => buttonsFieldArray.remove(index)}
-            disabled={buttonsFieldArray.length() === 1}
           >
             <Trash2 className="h-4 w-4" />
           </Button>

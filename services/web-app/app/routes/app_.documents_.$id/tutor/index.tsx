@@ -202,7 +202,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       top: messagesRef.current.scrollHeight,
       behavior: 'smooth',
     });
-  }, []);
+  }, [messages.length]);
 
   useEffect(() => {
     if (speechEnabled && tutorResponseFetcher.data?.audio?.length) {
@@ -517,7 +517,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               ? undefined
               : 'border-t-0'
           }
-          buttons={instruction.buttons?.map((button) => button.label) || []}
+          buttons={instruction.buttons ?? []}
           respond={respond}
           canAskQuestion={
             !!instruction.canAskQuestion ||
