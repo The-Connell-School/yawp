@@ -17,6 +17,7 @@ import { cn } from '~/utils/misc'
 import { type Command, commands, COMMAND_STYLE } from './commands'
 import { HistoryManager } from './history-manager'
 import { type OperationTracker } from './operation-tracker'
+import { DocumentHistoryViewer } from './document-history-viewer'
 
 const DROPDOWN_WIDTH = 32
 const BUTTON_WIDTH = 32
@@ -188,6 +189,7 @@ export const Bar = ({ editor, documentId, operationTracker }: BarProps) => {
 					<MessageCirclePlusIcon className="h-5 w-5" />
 				</div>
 			</Tooltip>
+			<DocumentHistoryViewer documentId={documentId} />
 			{hiddenCommands.length > 0 && (
 				<DropdownMenu>
 					<DropdownMenuTrigger>

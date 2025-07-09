@@ -88,6 +88,9 @@
     "uuid": "^11.1.0",
     "vaul": "^1.1.2",
     "vite-env-only": "^3.0.3",
+    "yjs": "^13.6.10",
+    "y-prosemirror": "^1.2.5",
+    "@tiptap/extension-collaboration": "^2.12.0",
     "zod": "^3.24.3",
     "zod-form-data": "^2.0.7"
   },
