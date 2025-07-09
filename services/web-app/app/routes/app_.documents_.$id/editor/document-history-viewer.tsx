@@ -8,7 +8,20 @@ import {
   DialogTrigger,
 } from '~/components/ui/dialog';
 import { Badge } from '~/components/ui/badge';
-import { Clock, Users, Edit, Trash2, Type, Undo2, Redo2, Eye, RotateCcw, Play, Pause, History } from 'lucide-react';
+import {
+  Clock,
+  Users,
+  Edit,
+  Trash2,
+  Type,
+  Undo2,
+  Redo2,
+  Eye,
+  RotateCcw,
+  Play,
+  Pause,
+  History,
+} from 'lucide-react';
 import { type Editor } from '@tiptap/react';
 import { HistoryManager } from './history-manager';
 
@@ -42,7 +55,11 @@ interface Props {
   historyManager?: HistoryManager;
 }
 
-export function DocumentHistoryViewer({ documentId, editor, historyManager }: Props) {
+export function DocumentHistoryViewer({
+  documentId,
+  editor,
+  historyManager,
+}: Props) {
   const [operations, setOperations] = useState<DocumentOperation[]>([]);
   const [snapshots, setSnapshots] = useState<DocumentSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,7 +110,7 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
   // Time-travel functions
   const handlePreviewOperation = async (position: number) => {
     if (!historyManager) return;
-    
+
     try {
       const preview = await historyManager.previewAtPosition(position);
       setPreviewContent(preview.content);
@@ -107,9 +124,11 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
 
   const handlePreviewSnapshot = async (snapshot: DocumentSnapshot) => {
     if (!historyManager) return;
-    
+
     try {
-      const content = await historyManager.reconstructDocumentAtSnapshot(snapshot.id);
+      const content = await historyManager.reconstructDocumentAtSnapshot(
+        snapshot.id
+      );
       setPreviewContent(content);
       setPreviewPosition(null);
       setPreviewSnapshot(snapshot.id);
@@ -121,7 +140,7 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
 
   const handleResetToOperation = async (position: number) => {
     if (!historyManager || !editor) return;
-    
+
     try {
       await historyManager.resetToPosition(position, editor);
       setPreviewMode(false);
@@ -134,7 +153,7 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
 
   const handleResetToSnapshot = async (snapshotId: string) => {
     if (!historyManager || !editor) return;
-    
+
     try {
       await historyManager.resetToSnapshot(snapshotId, editor);
       setPreviewMode(false);
@@ -157,25 +176,25 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
       setIsPlaying(false);
       return;
     }
-    
+
     if (operations.length === 0) return;
-    
+
     setIsPlaying(true);
     let currentIndex = 0;
-    
+
     const playNext = () => {
       if (currentIndex >= operations.length || !isPlaying) {
         setIsPlaying(false);
         return;
       }
-      
+
       const operation = operations[currentIndex];
       handlePreviewOperation(operation.position);
       currentIndex++;
-      
+
       setTimeout(playNext, playbackSpeed);
     };
-    
+
     playNext();
   };
 
@@ -233,7 +252,7 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
           <Clock className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-scroll">
         <DialogHeader>
           <DialogTitle>Document History - Time Travel</DialogTitle>
         </DialogHeader>
@@ -256,30 +275,6 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
               >
                 Snapshots ({snapshots.length})
               </Button>
-              
-              {/* Playback Controls */}
-              {view === 'operations' && operations.length > 0 && (
-                <div className="flex gap-2 ml-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePlayback}
-                    disabled={!historyManager}
-                  >
-                    {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    {isPlaying ? 'Pause' : 'Play'}
-                  </Button>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                    className="px-2 py-1 border rounded text-sm"
-                  >
-                    <option value={500}>2x</option>
-                    <option value={1000}>1x</option>
-                    <option value={2000}>0.5x</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -294,7 +289,9 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
                       <div
                         key={operation.id}
                         className={`border rounded-lg p-3 space-y-2 ${
-                          previewPosition === operation.position ? 'bg-blue-50 border-blue-300' : ''
+                          previewPosition === operation.position
+                            ? 'bg-blue-50 border-blue-300'
+                            : ''
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -329,7 +326,9 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handlePreviewOperation(operation.position)}
+                              onClick={() =>
+                                handlePreviewOperation(operation.position)
+                              }
                               disabled={isPlaying}
                             >
                               <Eye className="h-3 w-3 mr-1" />
@@ -338,7 +337,9 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleResetToOperation(operation.position)}
+                              onClick={() =>
+                                handleResetToOperation(operation.position)
+                              }
                               disabled={isPlaying}
                             >
                               <RotateCcw className="h-3 w-3 mr-1" />
@@ -354,7 +355,9 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
                       <div
                         key={snapshot.id}
                         className={`border rounded-lg p-3 space-y-2 ${
-                          previewSnapshot === snapshot.id ? 'bg-blue-50 border-blue-300' : ''
+                          previewSnapshot === snapshot.id
+                            ? 'bg-blue-50 border-blue-300'
+                            : ''
                         }`}
                       >
                         <div className="flex items-center justify-between">
@@ -428,18 +431,18 @@ export function DocumentHistoryViewer({ documentId, editor, historyManager }: Pr
                   ×
                 </Button>
               </div>
-              
+
               <div className="text-sm text-gray-600 mb-2">
                 {previewPosition !== null && `Position ${previewPosition}`}
                 {previewSnapshot && `Snapshot preview`}
               </div>
-              
+
               <div className="flex-1 border rounded-lg p-3 bg-gray-50 overflow-y-auto">
                 <div className="text-sm whitespace-pre-wrap">
                   {previewContent || 'No content to preview'}
                 </div>
               </div>
-              
+
               <div className="mt-3 text-xs text-gray-500">
                 {previewContent.length} characters
               </div>
