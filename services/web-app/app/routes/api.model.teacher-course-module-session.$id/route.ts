@@ -6,9 +6,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   invariantResponse(params.id, 'id is required', { status: 400 });
 
   const json = await request.json();
-  const { videoTimestamp, videoProgress } = json;
+  const { videoTimestamp } = json;
 
-  if (typeof videoTimestamp !== 'number' || typeof videoProgress !== 'number') {
+  if (typeof videoTimestamp !== 'number') {
     throw new Response('Invalid data', { status: 400 });
   }
 
@@ -16,7 +16,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: { id: params.id },
     data: {
       videoTimestamp,
-      videoProgress,
       updatedAt: new Date(),
     },
   });

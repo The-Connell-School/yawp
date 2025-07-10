@@ -27,7 +27,6 @@ export async function action({ request }: ActionFunctionArgs) {
     data: {
       teacherCourseModuleId,
       teacherProfileId,
-      videoProgress: 0,
       videoTimestamp: 0,
     },
   });

@@ -389,7 +389,6 @@ model TeacherCourseModuleSession {
   createdAt             DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt             DateTime            @default(now()) @db.Timestamptz(6)
   deletedAt             DateTime?           @db.Timestamptz(6)
-  videoProgress         Float               @default(0) // Progress as percentage (0-100)
   videoTimestamp        Int                 @default(0) // Last watched timestamp in seconds
   teacherCourseModuleId String
   teacherProfileId      String

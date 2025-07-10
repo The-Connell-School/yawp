@@ -117,7 +117,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       finalVideoLink = `/api/upload/${upload.id}`;
-      videoDuration = videoDurationStr ? Math.floor(Number(videoDurationStr)) : null;
+      videoDuration = videoDurationStr
+        ? Math.floor(Number(videoDurationStr))
+        : null;
     }
 
     await prisma.teacherCourseModule.update({
@@ -129,6 +131,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ...(videoDuration !== undefined && { videoDuration }),
       },
     });
+
+    // Reset all course module sessions when video is changed
+    if (videoFile && videoFile.size > 0) {
+      await prisma.teacherCourseModuleSession.updateMany({
+        where: { teacherCourseModuleId: params.moduleId },
+        data: { videoTimestamp: 0 },
+      });
+    }
 
     return dataResponse({ status: 'success' });
   }
@@ -186,7 +196,9 @@ export default function TeacherCourseModuleRoute() {
   const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
   const [isVideoLoading, setIsVideoLoading] = React.useState(false);
 
-  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsVideoLoading(true);
@@ -194,20 +206,20 @@ export default function TeacherCourseModuleRoute() {
         const duration = await new Promise<number>((resolve, reject) => {
           const video = document.createElement('video');
           video.preload = 'metadata';
-          
-          video.onloadedmetadata = function() {
+
+          video.onloadedmetadata = function () {
             URL.revokeObjectURL(video.src);
             resolve(video.duration);
           };
-          
-          video.onerror = function() {
+
+          video.onerror = function () {
             URL.revokeObjectURL(video.src);
             reject(new Error('Error loading video metadata'));
           };
-          
+
           video.src = URL.createObjectURL(file);
         });
-        
+
         setVideoDuration(duration);
       } catch (error) {
         console.error('Could not get video duration:', error);
@@ -222,7 +234,7 @@ export default function TeacherCourseModuleRoute() {
 
   const formatDuration = (seconds: number): string => {
     if (!seconds || seconds <= 0) return '0:00';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
@@ -303,10 +315,10 @@ export default function TeacherCourseModuleRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Replace Video</Label>
-                  <Input 
-                    id="video" 
-                    name="video" 
-                    type="file" 
+                  <Input
+                    id="video"
+                    name="video"
+                    type="file"
                     accept="video/*"
                     onChange={handleVideoFileChange}
                   />
@@ -320,9 +332,14 @@ export default function TeacherCourseModuleRoute() {
                       New duration: {formatDuration(videoDuration)}
                     </p>
                   )}
-                  <input type="hidden" name="videoDuration" value={videoDuration || ''} />
+                  <input
+                    type="hidden"
+                    name="videoDuration"
+                    value={videoDuration || ''}
+                  />
                   <p className="text-sm text-muted-foreground">
-                    Leave empty to keep current video. Only upload files are supported.
+                    Leave empty to keep current video. Only upload files are
+                    supported.
                   </p>
                 </div>
                 <Button
@@ -421,11 +438,16 @@ export default function TeacherCourseModuleRoute() {
               </video>
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Video format: {teacherCourseModule.videoLink.split('.').pop()?.toUpperCase() || 'Unknown'}
+                  Video format:{' '}
+                  {teacherCourseModule.videoLink
+                    .split('.')
+                    .pop()
+                    ?.toUpperCase() || 'Unknown'}
                 </span>
                 {teacherCourseModule.videoDuration && (
                   <span>
-                    Duration: {formatDuration(teacherCourseModule.videoDuration)}
+                    Duration:{' '}
+                    {formatDuration(teacherCourseModule.videoDuration)}
                   </span>
                 )}
               </div>

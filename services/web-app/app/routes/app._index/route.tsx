@@ -27,6 +27,7 @@ import { useUser } from '~/hooks/useUser.js';
 import { redirectIfDisabled, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { FeatureFlags } from '~/utils/featureFlags/index.js';
+import { cn } from '~/utils/misc';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants');
@@ -38,58 +39,58 @@ export async function loader({ request }: LoaderFunctionArgs) {
     select: { teacherProfile: { select: { id: true } } },
   });
 
-  const [courses, documents, studentProfiles, views, teacherCourses] = await Promise.all([
-    prisma.course.findMany({
-      select: { image: { select: { id: true } }, id: true, title: true },
-    }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: { userId, deletedAt: null },
-      include: {
-        courseModuleSessions: {
-          include: { courseModule: true },
-          orderBy: { courseModule: { position: 'desc' } },
+  const [courses, documents, studentProfiles, views, teacherCourses] =
+    await Promise.all([
+      prisma.course.findMany({
+        select: { image: { select: { id: true } }, id: true, title: true },
+      }),
+      prisma.document.findMany({
+        orderBy: { createdAt: 'desc' },
+        where: { userId, deletedAt: null },
+        include: {
+          courseModuleSessions: {
+            include: { courseModule: true },
+            orderBy: { courseModule: { position: 'desc' } },
+          },
         },
-      },
-    }),
-    prisma.studentProfile.findMany({
-      where: { workshopLeaderId: userId },
-      include: { user: { include: { image: true, documents: true } } },
-    }),
-    prisma.studentView.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    }),
-    // Fetch teacher courses if user has teacher profile
-    user?.teacherProfile ? 
-      prisma.teacherCourse.findMany({
-        select: { 
-          image: { select: { id: true } }, 
-          id: true, 
-          title: true,
-          description: true,
-          teacherCourseModules: {
+      }),
+      prisma.studentProfile.findMany({
+        where: { workshopLeaderId: userId },
+        include: { user: { include: { image: true, documents: true } } },
+      }),
+      prisma.studentView.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      // Fetch teacher courses if user has teacher profile
+      user?.teacherProfile
+        ? prisma.teacherCourse.findMany({
             select: {
+              image: { select: { id: true } },
               id: true,
               title: true,
-              videoDuration: true,
-              teacherCourseModuleSessions: {
-                where: {
-                  teacherProfileId: user.teacherProfile.id
-                },
+              description: true,
+              teacherCourseModules: {
                 select: {
-                  videoProgress: true,
-                  videoTimestamp: true
-                }
-              }
+                  id: true,
+                  title: true,
+                  videoDuration: true,
+                  teacherCourseModuleSessions: {
+                    where: {
+                      teacherProfileId: user.teacherProfile.id,
+                    },
+                    select: {
+                      videoTimestamp: true,
+                    },
+                  },
+                },
+                orderBy: { position: 'asc' },
+              },
             },
-            orderBy: { position: 'asc' }
-          }
-        },
-        orderBy: { position: 'asc' }
-      }) : 
-      [],
-  ]);
+            orderBy: { position: 'asc' },
+          })
+        : [],
+    ]);
 
   return dataResponse({
     courses,
@@ -225,17 +226,26 @@ export default function AppRoute() {
             )}
           </div>
           <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Teacher Professional Development</p>
+            <p className="my-2 text-foreground/60">
+              Teacher Professional Development
+            </p>
             {data.teacherCourses.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {data.teacherCourses.map((course) => {
                   // Calculate overall progress
                   const totalModules = course.teacherCourseModules.length;
                   const completedModules = course.teacherCourseModules.filter(
-                    module => module.teacherCourseModuleSessions.some(session => session.videoProgress >= 95)
+                    (module) =>
+                      module.teacherCourseModuleSessions.some(
+                        (session) =>
+                          session.videoTimestamp === module.videoDuration
+                      )
                   ).length;
-                  const progressPercentage = totalModules > 0 ? (completedModules / totalModules) * 100 : 0;
-                  
+                  const progressPercentage =
+                    totalModules > 0
+                      ? (completedModules / totalModules) * 100
+                      : 0;
+
                   return (
                     <Link
                       to={`/app/teacher-courses/${course.id}`}
@@ -254,7 +264,9 @@ export default function AppRoute() {
                         )}
                       </div>
                       <div className="flex flex-col p-4">
-                        <h4 className="text-foreground/90 font-medium">{course.title}</h4>
+                        <h4 className="text-foreground/90 font-medium">
+                          {course.title}
+                        </h4>
                         {course.description && (
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                             {course.description}
@@ -264,13 +276,21 @@ export default function AppRoute() {
                           <span className="text-muted-foreground">
                             {completedModules}/{totalModules} modules completed
                           </span>
-                          <span className="text-primary font-medium">
+                          <span
+                            className={cn(
+                              'text-primary font-medium',
+                              progressPercentage === 100 && 'text-green-600'
+                            )}
+                          >
                             {Math.round(progressPercentage)}%
                           </span>
                         </div>
                         <div className="mt-2 w-full bg-muted-foreground/20 rounded-full h-2">
-                          <div 
-                            className="bg-primary h-2 rounded-full transition-all duration-300" 
+                          <div
+                            className={cn(
+                              'h-2 rounded-full transition-all duration-300',
+                              progressPercentage === 100 && 'bg-green-600'
+                            )}
                             style={{ width: `${progressPercentage}%` }}
                           />
                         </div>
@@ -282,7 +302,9 @@ export default function AppRoute() {
             ) : (
               <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
                 <p>No teacher courses available yet.</p>
-                <p className="text-sm mt-1">Check back later for professional development opportunities.</p>
+                <p className="text-sm mt-1">
+                  Check back later for professional development opportunities.
+                </p>
               </div>
             )}
           </div>

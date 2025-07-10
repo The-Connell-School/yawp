@@ -162,7 +162,7 @@ export default function TeacherCoursesRoute() {
               </span>
             </div>
           ) : teacherCourses.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
+            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted py-6">
               <span className="text-lg font-bold">
                 No teacher courses found
               </span>
