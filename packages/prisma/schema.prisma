@@ -130,6 +130,7 @@ model Document {
   user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   comments             DocumentComment[]
   versions             DocumentVersion[]
+  operations           DocumentOperation[]
 }
 
 model DocumentComment {
@@ -161,6 +162,23 @@ model DocumentVersion {
   text       String
   html       String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentOperation {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  documentId    String
+  userId        String
+  operationType String   // 'insert', 'delete', 'format', 'undo', 'redo', etc.
+  position      Int      // Position in the document where operation occurred
+  content       String?  // Text content being inserted/deleted
+  metadata      String?  // JSON string containing operation details
+  stackPosition Int      // Position in the undo/redo stack
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId, stackPosition])
+  @@index([documentId, createdAt])
 }
 
 model FeatureFlag {
@@ -279,6 +297,7 @@ model User {
   documents                Document[]
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
+  documentOperations       DocumentOperation[]
   organizationId           String?
   organization             Organization?             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   password                 Password?

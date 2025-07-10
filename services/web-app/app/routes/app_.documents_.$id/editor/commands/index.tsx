@@ -40,7 +40,7 @@ export type Command = {
 	checkDisabled?: boolean
 	disableActiveStyles?: boolean
 	activeId?: string
-	override?: (editor: TiptapEditor) => ReactNode
+	override?: (editor: TiptapEditor, operations?: any, operationService?: any) => ReactNode
 }
 
 const COLOR_OPTIONS = {
@@ -233,11 +233,87 @@ export const commands: Command[] = [
 	{
 		icon: <Undo2Icon className="h-4 w-4" />,
 		label: 'Undo',
-		command: 'undo',
+		override: (editor, operations, operationService) => {
+			if (!operations || !operationService) return null
+			
+			return (
+				<Tooltip text="Undo" delayDuration={300} key="undo">
+					<div
+						onClick={() => {
+							if (operations.canUndo()) {
+								const undoOps = operations.getOperationsForUndo()
+								if (undoOps.length > 0) {
+									const lastOp = undoOps[0]
+									// Apply inverse operation
+									const inverseOp = operationService.createInverseOperation({
+										type: lastOp.operationType,
+										position: lastOp.position,
+										content: lastOp.content,
+										metadata: JSON.parse(lastOp.metadata || '{}'),
+									})
+									
+									// Mark transaction as undo/redo to prevent infinite loop
+									editor.chain().focus().command(({ tr }) => {
+										tr.setMeta('isUndoRedo', true)
+										return true
+									}).run()
+									
+									operationService.applyOperation(inverseOp)
+									operations.navigateToStackPosition(lastOp.stackPosition - 1)
+								}
+							}
+						}}
+						className={cn(COMMAND_STYLE, {
+							'opacity-50 cursor-not-allowed': !operations?.canUndo(),
+						})}
+					>
+						<Undo2Icon className="h-4 w-4" />
+					</div>
+				</Tooltip>
+			)
+		},
 	},
 	{
 		icon: <Redo2Icon className="h-4 w-4" />,
 		label: 'Redo',
-		command: 'redo',
+		override: (editor, operations, operationService) => {
+			if (!operations || !operationService) return null
+			
+			return (
+				<Tooltip text="Redo" delayDuration={300} key="redo">
+					<div
+						onClick={() => {
+							if (operations.canRedo()) {
+								const redoOps = operations.getOperationsForRedo()
+								if (redoOps.length > 0) {
+									const nextOp = redoOps[0]
+									// Apply operation
+									const operation = {
+										type: nextOp.operationType,
+										position: nextOp.position,
+										content: nextOp.content,
+										metadata: JSON.parse(nextOp.metadata || '{}'),
+									}
+									
+									// Mark transaction as undo/redo to prevent infinite loop
+									editor.chain().focus().command(({ tr }) => {
+										tr.setMeta('isUndoRedo', true)
+										return true
+									}).run()
+									
+									operationService.applyOperation(operation)
+									operations.navigateToStackPosition(nextOp.stackPosition)
+								}
+							}
+						}}
+						className={cn(COMMAND_STYLE, {
+							'opacity-50 cursor-not-allowed': !operations?.canRedo(),
+						})}
+					>
+						<Redo2Icon className="h-4 w-4" />
+					</div>
+				</Tooltip>
+			)
+		},
 	},
 ]

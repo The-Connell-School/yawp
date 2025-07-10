@@ -24,9 +24,11 @@ const PADDING = 8
 export type BarProps = {
 	editor: Editor | null
 	documentId: string
+	operations?: any
+	operationService?: any
 }
 
-export const Bar = ({ editor, documentId }: BarProps) => {
+export const Bar = ({ editor, documentId, operations, operationService }: BarProps) => {
 	const [visibleCommands, setVisibleCommands] = useState(commands)
 	const [hiddenCommands, setHiddenCommands] = useState<Command[]>([])
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -68,7 +70,7 @@ export const Bar = ({ editor, documentId }: BarProps) => {
 		>
 			{visibleCommands.map(
 				({ icon, label, command, params, activeId, override }) =>
-					override?.(editor) ?? (
+					override?.(editor, operations, operationService) ?? (
 						<Tooltip text={label} delayDuration={300} key={label}>
 							<div
 								// @ts-ignore
@@ -122,25 +124,27 @@ export const Bar = ({ editor, documentId }: BarProps) => {
 					</DropdownMenuTrigger>
 					<DropdownMenuContent className="flex w-fit flex-col gap-1">
 						{hiddenCommands.map(
-							({ icon, label, command, params, activeId }) => (
-								<DropdownMenuItem
-									key={label}
-									onClick={e => {
-										e.preventDefault()
-										e.stopPropagation()
-										// @ts-ignore
-										editor.chain().focus()[command](params).run()
-									}}
-									className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
-										'bg-muted': editor.isActive(
-											activeId ?? camelCase(label ?? ''),
-											params,
-										),
-									})}
-								>
-									<span>{icon ?? label}</span>
-									<span>{label}</span>
-								</DropdownMenuItem>
+							({ icon, label, command, params, activeId, override }) => (
+								override?.(editor, operations, operationService) ?? (
+									<DropdownMenuItem
+										key={label}
+										onClick={e => {
+											e.preventDefault()
+											e.stopPropagation()
+											// @ts-ignore
+											editor.chain().focus()[command](params).run()
+										}}
+										className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
+											'bg-muted': editor.isActive(
+												activeId ?? camelCase(label ?? ''),
+												params,
+											),
+										})}
+									>
+										<span>{icon ?? label}</span>
+										<span>{label}</span>
+									</DropdownMenuItem>
+								)
 							),
 						)}
 					</DropdownMenuContent>
