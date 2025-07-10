@@ -73,7 +73,7 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
           <DropdownMenuContent align="end">
             <deleteDocumentFetcher.Form
               method="DELETE"
-              action={`/api/model/document/${doc.id}`}
+              action={`/api/model/document/${doc.id}?from=document-link`}
             >
               <DropdownMenuItem asChild>
                 <Button

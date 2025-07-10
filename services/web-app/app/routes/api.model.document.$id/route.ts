@@ -51,6 +51,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     data,
   });
 
+  await prisma.documentVersion.create({
+    data: {
+      documentId: params.id,
+      text: data.text ?? '',
+      html: data.html ?? '',
+    },
+  });
+
   if (!update) {
     return new Response(null, { status: 404 });
   } else {

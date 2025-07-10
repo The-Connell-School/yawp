@@ -1,0 +1,28 @@
+import { invariant } from '@epic-web/invariant';
+import { data, type ActionFunctionArgs } from 'react-router';
+import { requireUserId } from '~/utils/auth.server.js';
+import { prisma } from '~/utils/db.server.js';
+
+export async function loader({ request, params }: ActionFunctionArgs) {
+  invariant(params.id, 'No id provided');
+  await requireUserId(request);
+
+  const url = new URL(request.url);
+  const page = parseInt(url.searchParams.get('page') || '1');
+  const limit = parseInt(url.searchParams.get('limit') || '5');
+  const skip = (page - 1) * limit;
+
+  const versions = await prisma.documentVersion.findMany({
+    where: { documentId: params.id },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    skip,
+    take: limit,
+  });
+
+  return new Response(JSON.stringify(versions), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}

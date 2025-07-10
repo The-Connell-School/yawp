@@ -19,7 +19,6 @@ import { useUser } from '~/hooks/useUser';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { RestoreDataFromLocalStorageModal } from './_components/restore-data-from-local-storage-modal';
 import { Comments } from './comments';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
@@ -181,10 +180,14 @@ export default function Route() {
               onBlur={(e) =>
                 e.target.value !== data.doc.title
                   ? fetcher.submit(
-                      { title: e.target.value },
+                      {
+                        title: e.target.value,
+                        text: data.doc.text,
+                        html: data.doc.html,
+                      },
                       {
                         method: 'POST',
-                        action: `/api/model/document/${data.doc.id}`,
+                        action: `/api/model/document/${data.doc.id}?from=title-input`,
                       }
                     )
                   : undefined
@@ -211,10 +214,7 @@ export default function Route() {
               </div>
             )}
             <div className="h-[20px] border-r" />
-            <DocumentVersions
-              documentId={data.doc.id}
-              versions={data.doc.versions}
-            />
+            <DocumentVersions documentId={data.doc.id} />
           </div>
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
@@ -251,13 +251,6 @@ export default function Route() {
           )}
         </div>
       </main>
-      {/* TODO: Remove this after we have fixed the data loss bug (likely in a week, or once confirmed they've all logged on again and opened the doc) */}
-      {/* This only exsits because we had a bug when we were trying to be fancy and store all text in local storage */}
-      {/* Unfortunately, we lost data due to it not being sent to our database so we are seeing if we can capture the data this way */}
-      <RestoreDataFromLocalStorageModal
-        docId={data.doc.id}
-        docCreatedAt={data.doc.createdAt}
-      />
     </>
   );
 }
