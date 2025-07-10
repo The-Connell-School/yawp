@@ -31,14 +31,27 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, PUT);
   if (error) return validationError(error);
 
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: { isAdmin: true },
+  const [user, document] = await Promise.all([
+    prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { isAdmin: true },
+    }),
+    prisma.document.findUniqueOrThrow({
+      where: { id: params.id },
+    }),
+  ]);
+
+  await prisma.documentVersion.create({
+    data: {
+      documentId: params.id,
+      text: document.text ?? '',
+      html: document.html ?? '',
+    },
   });
 
   const update = await prisma.document.update({
     where: {
-      id: params.id,
+      id: document.id,
       ...(user.isAdmin
         ? {}
         : {
@@ -49,14 +62,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           }),
     },
     data,
-  });
-
-  await prisma.documentVersion.create({
-    data: {
-      documentId: params.id,
-      text: data.text ?? '',
-      html: data.html ?? '',
-    },
   });
 
   if (!update) {
