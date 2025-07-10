@@ -198,7 +198,7 @@ export default function Route() {
                 : `Viewing work by ${data.doc.user.name}`}
             </Badge>
           ) : null}
-          <div className="ml-auto flex w-[135px] items-center gap-4">
+          <div className="ml-auto flex items-center gap-4">
             {isSaving ? (
               <div className="flex items-center gap-1 text-muted-foreground/70">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -210,11 +210,6 @@ export default function Route() {
                 <p className="mr-2 text-sm">Saved</p>
               </div>
             )}
-            <div className="h-[20px] border-r" />
-            <DocumentVersions
-              documentId={data.doc.id}
-              versions={data.doc.versions}
-            />
           </div>
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">

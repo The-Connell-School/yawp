@@ -31,7 +31,12 @@ export type BarProps = {
   historyManager: HistoryManager | null;
 };
 
-export const Bar = ({ editor, documentId, operationTracker, historyManager }: BarProps) => {
+export const Bar = ({
+  editor,
+  documentId,
+  operationTracker,
+  historyManager,
+}: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,13 +81,13 @@ export const Bar = ({ editor, documentId, operationTracker, historyManager }: Ba
       {visibleCommands.map(
         ({ icon, label, command, params, activeId, override }) => {
           // Handle custom undo/redo buttons
-          if (label === 'Undo' && historyManager.current) {
+          if (label === 'Undo' && historyManager) {
             return (
               <Tooltip text={label} delayDuration={300} key={label}>
                 <div
                   onClick={() => {
-                    if (editor && historyManager.current) {
-                      historyManager.current.undo(editor);
+                    if (editor && historyManager) {
+                      historyManager.undo(editor);
                       if (operationTracker) {
                         // Track the undo operation
                         operationTracker.addUndoOperation({
@@ -97,8 +102,7 @@ export const Bar = ({ editor, documentId, operationTracker, historyManager }: Ba
                     }
                   }}
                   className={cn(COMMAND_STYLE, {
-                    'opacity-50 cursor-not-allowed':
-                      !historyManager.current?.canUndo(),
+                    'opacity-50 cursor-not-allowed': !historyManager?.canUndo(),
                   })}
                 >
                   {icon ?? label}
@@ -107,13 +111,13 @@ export const Bar = ({ editor, documentId, operationTracker, historyManager }: Ba
             );
           }
 
-          if (label === 'Redo' && historyManager.current) {
+          if (label === 'Redo' && historyManager) {
             return (
               <Tooltip text={label} delayDuration={300} key={label}>
                 <div
                   onClick={() => {
-                    if (editor && historyManager.current) {
-                      historyManager.current.redo(editor);
+                    if (editor && historyManager) {
+                      historyManager.redo(editor);
                       if (operationTracker) {
                         // Track the redo operation
                         operationTracker.addRedoOperation({
@@ -128,8 +132,7 @@ export const Bar = ({ editor, documentId, operationTracker, historyManager }: Ba
                     }
                   }}
                   className={cn(COMMAND_STYLE, {
-                    'opacity-50 cursor-not-allowed':
-                      !historyManager.current?.canRedo(),
+                    'opacity-50 cursor-not-allowed': !historyManager?.canRedo(),
                   })}
                 >
                   {icon ?? label}
@@ -183,10 +186,10 @@ export const Bar = ({ editor, documentId, operationTracker, historyManager }: Ba
           <MessageCirclePlusIcon className="h-5 w-5" />
         </div>
       </Tooltip>
-      <DocumentHistoryViewer 
-        documentId={documentId} 
-        editor={editor} 
-        historyManager={historyManager} 
+      <DocumentHistoryViewer
+        documentId={documentId}
+        editor={editor}
+        historyManager={historyManager ?? undefined}
       />
       {hiddenCommands.length > 0 && (
         <DropdownMenu>

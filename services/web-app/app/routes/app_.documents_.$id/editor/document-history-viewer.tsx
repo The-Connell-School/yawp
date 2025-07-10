@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button } from '~/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '~/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '~/components/ui/sheet';
 import { Badge } from '~/components/ui/badge';
 import {
   Clock,
@@ -18,8 +18,6 @@ import {
   Redo2,
   Eye,
   RotateCcw,
-  Play,
-  Pause,
   History,
 } from 'lucide-react';
 import { type Editor } from '@tiptap/react';
@@ -39,6 +37,7 @@ interface DocumentOperation {
     name: string;
     email: string;
   };
+  previewContent?: string;
 }
 
 interface DocumentSnapshot {
@@ -47,6 +46,7 @@ interface DocumentSnapshot {
   text: string;
   timestamp: string;
   operationId: string;
+  previewContent?: string;
 }
 
 interface Props {
@@ -63,27 +63,53 @@ export function DocumentHistoryViewer({
   const [operations, setOperations] = useState<DocumentOperation[]>([]);
   const [snapshots, setSnapshots] = useState<DocumentSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [view, setView] = useState<'operations' | 'snapshots'>('operations');
-  const [previewMode, setPreviewMode] = useState(false);
-  const [previewContent, setPreviewContent] = useState('');
-  const [previewPosition, setPreviewPosition] = useState<number | null>(null);
-  const [previewSnapshot, setPreviewSnapshot] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms between operations
+  const [selectedOperation, setSelectedOperation] =
+    useState<DocumentOperation | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] =
+    useState<DocumentSnapshot | null>(null);
+  const [hasMoreOperations, setHasMoreOperations] = useState(true);
+  const [operationsPage, setOperationsPage] = useState(0);
 
-  const loadOperations = async () => {
-    setLoading(true);
+  const loadOperations = async (page = 0, append = false) => {
+    if (page === 0) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
-      // Load only the most recent 200 operations for performance
-      const response = await fetch(`/api/document/${documentId}/operations?limit=200`);
+      const limit = 50;
+      const offset = page * limit;
+      const response = await fetch(
+        `/api/document/${documentId}/operations?limit=${limit}&offset=${offset}`
+      );
       if (response.ok) {
         const data = await response.json();
-        setOperations(data.operations || []);
+        const newOperations = data.operations || [];
+
+        if (append) {
+          setOperations((prev) => [...prev, ...newOperations]);
+        } else {
+          setOperations(newOperations);
+        }
+
+        setHasMoreOperations(newOperations.length === limit);
+        setOperationsPage(page);
       }
     } catch (error) {
       console.error('Failed to load operations:', error);
     }
+
     setLoading(false);
+    setLoadingMore(false);
+  };
+
+  const loadMoreOperations = async () => {
+    if (!loadingMore && hasMoreOperations) {
+      await loadOperations(operationsPage + 1, true);
+    }
   };
 
   const loadSnapshots = async () => {
@@ -102,6 +128,8 @@ export function DocumentHistoryViewer({
 
   useEffect(() => {
     if (view === 'operations') {
+      setOperationsPage(0);
+      setHasMoreOperations(true);
       loadOperations();
     } else {
       loadSnapshots();
@@ -116,15 +144,15 @@ export function DocumentHistoryViewer({
   }, [historyManager, view]);
 
   // Time-travel functions
-  const handlePreviewOperation = async (position: number) => {
+  const handlePreviewOperation = async (operation: DocumentOperation) => {
     if (!historyManager) return;
 
     try {
-      const preview = await historyManager.previewAtPosition(position);
-      setPreviewContent(preview.content);
-      setPreviewPosition(position);
-      setPreviewSnapshot(null);
-      setPreviewMode(true);
+      const preview = await historyManager.previewAtPosition(
+        operation.position
+      );
+      setSelectedOperation({ ...operation, previewContent: preview.content });
+      setSelectedSnapshot(null);
     } catch (error) {
       console.error('Failed to preview operation:', error);
     }
@@ -137,10 +165,8 @@ export function DocumentHistoryViewer({
       const content = await historyManager.reconstructDocumentAtSnapshot(
         snapshot.id
       );
-      setPreviewContent(content);
-      setPreviewPosition(null);
-      setPreviewSnapshot(snapshot.id);
-      setPreviewMode(true);
+      setSelectedSnapshot({ ...snapshot, previewContent: content });
+      setSelectedOperation(null);
     } catch (error) {
       console.error('Failed to preview snapshot:', error);
     }
@@ -151,7 +177,8 @@ export function DocumentHistoryViewer({
 
     try {
       await historyManager.resetToPosition(position, editor);
-      setPreviewMode(false);
+      setSelectedOperation(null);
+      setSelectedSnapshot(null);
       // Reload operations to show the new state
       loadOperations();
     } catch (error) {
@@ -164,7 +191,8 @@ export function DocumentHistoryViewer({
 
     try {
       await historyManager.resetToSnapshot(snapshotId, editor);
-      setPreviewMode(false);
+      setSelectedOperation(null);
+      setSelectedSnapshot(null);
       // Reload operations to show the new state
       loadOperations();
     } catch (error) {
@@ -173,37 +201,8 @@ export function DocumentHistoryViewer({
   };
 
   const handleClosePreview = () => {
-    setPreviewMode(false);
-    setPreviewContent('');
-    setPreviewPosition(null);
-    setPreviewSnapshot(null);
-  };
-
-  const handlePlayback = () => {
-    if (isPlaying) {
-      setIsPlaying(false);
-      return;
-    }
-
-    if (operations.length === 0) return;
-
-    setIsPlaying(true);
-    let currentIndex = 0;
-
-    const playNext = () => {
-      if (currentIndex >= operations.length || !isPlaying) {
-        setIsPlaying(false);
-        return;
-      }
-
-      const operation = operations[currentIndex];
-      handlePreviewOperation(operation.position);
-      currentIndex++;
-
-      setTimeout(playNext, playbackSpeed);
-    };
-
-    playNext();
+    setSelectedOperation(null);
+    setSelectedSnapshot(null);
   };
 
   const getOperationIcon = (type: string) => {
@@ -254,210 +253,201 @@ export function DocumentHistoryViewer({
   };
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="icon-sm">
-          <Clock className="h-4 w-4" />
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon-sm">
+          <Clock className="h-5 w-5" />
         </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-scroll">
-        <DialogHeader>
-          <DialogTitle>Document History - Time Travel</DialogTitle>
-        </DialogHeader>
+      </SheetTrigger>
+      <SheetContent className="w-[800px] sm:max-w-[800px]">
+        <SheetHeader>
+          <SheetTitle>Document History</SheetTitle>
+        </SheetHeader>
 
-        <div className="flex gap-4 h-full">
-          {/* Main History Panel */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant={view === 'operations' ? 'default' : 'outline'}
-                onClick={() => setView('operations')}
-                size="sm"
-              >
-                Operations ({operations.length})
-              </Button>
-              <Button
-                variant={view === 'snapshots' ? 'default' : 'outline'}
-                onClick={() => setView('snapshots')}
-                size="sm"
-              >
-                Snapshots ({snapshots.length})
-              </Button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center p-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {view === 'operations' &&
-                    operations.map((operation) => (
-                      <div
-                        key={operation.id}
-                        className={`border rounded-lg p-3 space-y-2 ${
-                          previewPosition === operation.position
-                            ? 'bg-blue-50 border-blue-300'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {getOperationIcon(operation.type)}
-                            <Badge variant="outline">{operation.type}</Badge>
-                            <span className="text-sm text-gray-600">
-                              Position {operation.position}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <Users className="h-3 w-3" />
-                            {operation.user.name}
-                            <Clock className="h-3 w-3" />
-                            {formatTimestamp(operation.timestamp)}
-                          </div>
-                        </div>
-
-                        <div className="text-sm">
-                          {getOperationDescription(operation)}
-                        </div>
-
-                        {operation.range && (
-                          <div className="text-xs text-gray-500">
-                            Range: {operation.range.from} - {operation.range.to}
-                          </div>
-                        )}
-
-                        {/* Time Travel Actions */}
-                        {historyManager && editor && (
-                          <div className="flex gap-2 mt-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                handlePreviewOperation(operation.position)
-                              }
-                              disabled={isPlaying}
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              Preview
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                handleResetToOperation(operation.position)
-                              }
-                              disabled={isPlaying}
-                            >
-                              <RotateCcw className="h-3 w-3 mr-1" />
-                              Reset Here
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                  {view === 'snapshots' &&
-                    snapshots.map((snapshot) => (
-                      <div
-                        key={snapshot.id}
-                        className={`border rounded-lg p-3 space-y-2 ${
-                          previewSnapshot === snapshot.id
-                            ? 'bg-blue-50 border-blue-300'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="default">Snapshot</Badge>
-                            <span className="text-sm text-gray-600">
-                              {snapshot.text.length} characters
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
-                            <Clock className="h-3 w-3" />
-                            {formatTimestamp(snapshot.timestamp)}
-                          </div>
-                        </div>
-
-                        <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded max-h-20 overflow-y-auto">
-                          {snapshot.text.substring(0, 200)}
-                          {snapshot.text.length > 200 && '...'}
-                        </div>
-
-                        {/* Time Travel Actions */}
-                        {historyManager && editor && (
-                          <div className="flex gap-2 mt-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handlePreviewSnapshot(snapshot)}
-                              disabled={isPlaying}
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              Preview
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleResetToSnapshot(snapshot.id)}
-                              disabled={isPlaying}
-                            >
-                              <RotateCcw className="h-3 w-3 mr-1" />
-                              Reset Here
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                  {((view === 'operations' && operations.length === 0) ||
-                    (view === 'snapshots' && snapshots.length === 0)) && (
-                    <div className="text-center p-8 text-gray-500">
-                      No {view} found for this document.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+        <div className="flex flex-col h-full mt-6">
+          <div className="flex gap-2 mb-4">
+            <Button
+              variant={view === 'operations' ? 'default' : 'outline'}
+              onClick={() => setView('operations')}
+              size="sm"
+            >
+              Operations
+            </Button>
+            <Button
+              variant={view === 'snapshots' ? 'default' : 'outline'}
+              onClick={() => setView('snapshots')}
+              size="sm"
+            >
+              Snapshots
+            </Button>
           </div>
 
-          {/* Preview Panel */}
-          {previewMode && (
-            <div className="w-96 border-l pl-4 flex flex-col">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <History className="h-5 w-5" />
-                  Preview
-                </h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClosePreview}
-                >
-                  ×
-                </Button>
+          <div
+            className="flex-1 overflow-y-auto"
+            onScroll={(e) => {
+              const target = e.target as HTMLDivElement;
+              if (
+                target.scrollHeight - target.scrollTop <=
+                  target.clientHeight + 100 &&
+                !loadingMore &&
+                hasMoreOperations &&
+                view === 'operations'
+              ) {
+                loadMoreOperations();
+              }
+            }}
+          >
+            {loading ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
               </div>
+            ) : (
+              <div className="space-y-2">
+                {view === 'operations' &&
+                  operations.map((operation) => (
+                    <div
+                      key={operation.id}
+                      className={`border rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-50 ${
+                        selectedOperation?.id === operation.id
+                          ? 'bg-blue-50 border-blue-300'
+                          : ''
+                      }`}
+                      onClick={() => handlePreviewOperation(operation)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {getOperationIcon(operation.type)}
+                          <Badge variant="outline">{operation.type}</Badge>
+                          <span className="text-sm text-gray-600">
+                            Position {operation.position}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <Users className="h-3 w-3" />
+                          {operation.user.name}
+                          <Clock className="h-3 w-3" />
+                          {formatTimestamp(operation.timestamp)}
+                        </div>
+                      </div>
 
-              <div className="text-sm text-gray-600 mb-2">
-                {previewPosition !== null && `Position ${previewPosition}`}
-                {previewSnapshot && `Snapshot preview`}
-              </div>
+                      <div className="text-sm">
+                        {getOperationDescription(operation)}
+                      </div>
 
-              <div className="flex-1 border rounded-lg p-3 bg-gray-50 overflow-y-auto">
-                <div className="text-sm whitespace-pre-wrap">
-                  {previewContent || 'No content to preview'}
-                </div>
-              </div>
+                      {operation.range && (
+                        <div className="text-xs text-gray-500">
+                          Range: {operation.range.from} - {operation.range.to}
+                        </div>
+                      )}
 
-              <div className="mt-3 text-xs text-gray-500">
-                {previewContent.length} characters
+                      {/* Preview Content */}
+                      {selectedOperation?.id === operation.id &&
+                        selectedOperation.previewContent && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded border">
+                            <div className="text-xs text-gray-500 mb-2">
+                              Document at this point:
+                            </div>
+                            <div className="text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {selectedOperation.previewContent}
+                            </div>
+                            {historyManager && editor && (
+                              <div className="flex gap-2 mt-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleResetToOperation(operation.position)
+                                  }
+                                >
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  Reset Here
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  ))}
+
+                {view === 'snapshots' &&
+                  snapshots.map((snapshot) => (
+                    <div
+                      key={snapshot.id}
+                      className={`border rounded-lg p-3 space-y-2 cursor-pointer hover:bg-gray-50 ${
+                        selectedSnapshot?.id === snapshot.id
+                          ? 'bg-blue-50 border-blue-300'
+                          : ''
+                      }`}
+                      onClick={() => handlePreviewSnapshot(snapshot)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default">Snapshot</Badge>
+                          <span className="text-sm text-gray-600">
+                            {snapshot.text.length} characters
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <Clock className="h-3 w-3" />
+                          {formatTimestamp(snapshot.timestamp)}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded max-h-20 overflow-y-auto">
+                        {snapshot.text.substring(0, 200)}
+                        {snapshot.text.length > 200 && '...'}
+                      </div>
+
+                      {/* Preview Content */}
+                      {selectedSnapshot?.id === snapshot.id &&
+                        selectedSnapshot.previewContent && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded border">
+                            <div className="text-xs text-gray-500 mb-2">
+                              Document at this point:
+                            </div>
+                            <div className="text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {selectedSnapshot.previewContent}
+                            </div>
+                            {historyManager && editor && (
+                              <div className="flex gap-2 mt-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleResetToSnapshot(snapshot.id)
+                                  }
+                                >
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  Reset Here
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  ))}
+
+                {((view === 'operations' && operations.length === 0) ||
+                  (view === 'snapshots' && snapshots.length === 0)) && (
+                  <div className="text-center p-8 text-gray-500">
+                    No {view} found for this document.
+                  </div>
+                )}
+
+                {/* Loading more operations indicator */}
+                {view === 'operations' && loadingMore && (
+                  <div className="flex items-center justify-center p-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                    <span className="ml-2 text-sm text-gray-500">
+                      Loading more operations...
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

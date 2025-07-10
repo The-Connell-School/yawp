@@ -5,7 +5,7 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 const OperationSchema = z.object({
-  position: z.number(),
+  position: z.number().optional(),
   type: z.enum(['insert', 'delete', 'format', 'undo', 'redo', 'reset']),
   content: z.string().optional(),
   range: z.object({ from: z.number(), to: z.number() }).optional(),
@@ -91,18 +91,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (request.method === 'POST') {
     const body = await request.json();
     const { operations } = CreateOperationsSchema.parse(body);
-    
+
+    // Get the latest position to assign to operations without position
+    const latestOperation = await prisma.documentOperation.findFirst({
+      where: { documentId: params.id },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+
+    let currentPosition = latestOperation?.position || 0;
+
     // Create operations in batch
     const createdOperations = await prisma.documentOperation.createMany({
-      data: operations.map((op) => ({
-        ...op,
-        id: undefined, // Let Prisma generate the ID
-        documentId: params.id,
-        userId,
-        range: op.range ? JSON.stringify(op.range) : null,
-        attributes: op.attributes ? JSON.stringify(op.attributes) : null,
-        metadata: op.metadata ? JSON.stringify(op.metadata) : null,
-      })),
+      data: operations.map((op) => {
+        const position = op.position ?? ++currentPosition;
+        return {
+          ...op,
+          id: undefined, // Let Prisma generate the ID
+          documentId: params.id!,
+          userId,
+          position,
+          range: op.range || undefined,
+          attributes: op.attributes || undefined,
+          metadata: op.metadata || undefined,
+        };
+      }),
     });
 
     // Check if we need to create a snapshot (every 200 operations)
@@ -114,10 +127,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await createSnapshot(params.id);
     }
 
-    return Response.json({ 
-      success: true, 
+    return Response.json({
+      success: true,
       count: createdOperations.count,
-      shouldCreateSnapshot: totalOperations % 200 === 0
+      shouldCreateSnapshot: totalOperations % 200 === 0,
     });
   }
 

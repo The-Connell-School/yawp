@@ -16,14 +16,16 @@ export class HistoryManager {
     this.isLoading = true;
     try {
       // Load only the most recent 200 operations for performance
-      const response = await fetch(`/api/document/${this.documentId}/operations?limit=200`);
+      const response = await fetch(
+        `/api/document/${this.documentId}/operations?limit=200`
+      );
       if (response.ok) {
         const data = await response.json();
         this.operationStack = data.operations.map((op: any) => ({
           ...op,
-          range: op.range ? JSON.parse(op.range) : null,
-          attributes: op.attributes ? JSON.parse(op.attributes) : null,
-          metadata: op.metadata ? JSON.parse(op.metadata) : null,
+          range: op.range || null,
+          attributes: op.attributes || null,
+          metadata: op.metadata || null,
         }));
         this.currentPosition = this.operationStack.length;
       }
@@ -35,119 +37,131 @@ export class HistoryManager {
 
   async undo(editor: Editor) {
     if (this.isLoading || this.currentPosition <= 0) return;
-    
+
     const operation = this.operationStack[this.currentPosition - 1];
     if (!operation) return;
 
     const undoOperation = this.createUndoOperation(operation);
-    
+
     // Apply undo operation to editor
     this.applyOperationToEditor(editor, undoOperation);
-    
+
     // Add undo operation to stack (append-only)
     await this.addOperationToStack(undoOperation);
-    
+
     this.currentPosition--;
   }
 
   async redo(editor: Editor) {
-    if (this.isLoading || this.currentPosition >= this.operationStack.length) return;
-    
+    if (this.isLoading || this.currentPosition >= this.operationStack.length)
+      return;
+
     const operation = this.operationStack[this.currentPosition];
     if (!operation) return;
 
     const redoOperation = this.createRedoOperation(operation);
-    
+
     // Apply redo operation to editor
     this.applyOperationToEditor(editor, redoOperation);
-    
+
     // Add redo operation to stack (append-only)
     await this.addOperationToStack(redoOperation);
-    
+
     this.currentPosition++;
   }
 
-  private createUndoOperation(operation: DocumentOperation): Partial<DocumentOperation> {
+  private createUndoOperation(
+    operation: DocumentOperation
+  ): Partial<DocumentOperation> {
     switch (operation.type) {
       case 'insert':
         return {
           type: 'delete',
           range: operation.range,
-          metadata: { 
+          metadata: {
             undoOf: operation.id,
             originalType: 'insert',
-            originalContent: operation.content
-          }
+            originalContent: operation.content,
+          },
         };
-      
+
       case 'delete':
         return {
           type: 'insert',
           range: operation.range,
           content: operation.metadata?.deletedContent || '',
-          metadata: { 
+          metadata: {
             undoOf: operation.id,
-            originalType: 'delete'
-          }
+            originalType: 'delete',
+          },
         };
-      
+
       case 'format':
         return {
           type: 'format',
           range: operation.range,
           attributes: this.invertFormatAttributes(operation.attributes),
-          metadata: { 
+          metadata: {
             undoOf: operation.id,
-            originalType: 'format'
-          }
+            originalType: 'format',
+          },
         };
-      
+
       default:
         return {
           type: 'undo',
-          metadata: { 
+          metadata: {
             undoOf: operation.id,
-            originalType: operation.type
-          }
+            originalType: operation.type,
+          },
         };
     }
   }
 
-  private createRedoOperation(operation: DocumentOperation): Partial<DocumentOperation> {
+  private createRedoOperation(
+    operation: DocumentOperation
+  ): Partial<DocumentOperation> {
     return {
       type: 'redo',
       range: operation.range,
       content: operation.content,
       attributes: operation.attributes,
-      metadata: { 
+      metadata: {
         redoOf: operation.id,
-        originalOperation: operation
-      }
+        originalOperation: operation,
+      },
     };
   }
 
-  private applyOperationToEditor(editor: Editor, operation: Partial<DocumentOperation>) {
+  private applyOperationToEditor(
+    editor: Editor,
+    operation: Partial<DocumentOperation>
+  ) {
     const { tr } = editor.state;
-    
+
     switch (operation.type) {
       case 'insert':
         if (operation.range && operation.content) {
-          tr.insertText(operation.content, operation.range.from, operation.range.to);
+          tr.insertText(
+            operation.content,
+            operation.range.from,
+            operation.range.to
+          );
         }
         break;
-      
+
       case 'delete':
         if (operation.range) {
           tr.delete(operation.range.from, operation.range.to);
         }
         break;
-      
+
       case 'format':
         if (operation.range && operation.attributes) {
           // Apply formatting changes
           const { from, to } = operation.range;
           const { mark, action, attrs } = operation.attributes;
-          
+
           if (action === 'add') {
             const markType = editor.schema.marks[mark];
             if (markType) {
@@ -161,13 +175,13 @@ export class HistoryManager {
           }
         }
         break;
-      
+
       case 'undo':
       case 'redo':
         // These are handled by the specific undo/redo logic above
         break;
     }
-    
+
     if (tr.docChanged) {
       editor.view.dispatch(tr);
     }
@@ -175,11 +189,14 @@ export class HistoryManager {
 
   private async addOperationToStack(operation: Partial<DocumentOperation>) {
     try {
-      const response = await fetch(`/api/document/${this.documentId}/operations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operations: [operation] })
-      });
+      const response = await fetch(
+        `/api/document/${this.documentId}/operations`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ operations: [operation] }),
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -192,7 +209,7 @@ export class HistoryManager {
           position: this.operationStack.length + 1,
           timestamp: new Date(),
         } as DocumentOperation;
-        
+
         this.operationStack.push(newOperation);
       }
     } catch (error) {
@@ -202,14 +219,14 @@ export class HistoryManager {
 
   private invertFormatAttributes(attributes: any): any {
     if (!attributes) return attributes;
-    
+
     // Invert formatting attributes for undo
     if (attributes.action === 'add') {
       return { ...attributes, action: 'remove' };
     } else if (attributes.action === 'remove') {
       return { ...attributes, action: 'add' };
     }
-    
+
     return attributes;
   }
 
@@ -231,25 +248,32 @@ export class HistoryManager {
   // Time-travel functionality
   async reconstructDocumentAtPosition(targetPosition: number): Promise<string> {
     // Get operations up to the target position
-    const relevantOperations = this.operationStack.filter(op => op.position <= targetPosition);
-    
+    const relevantOperations = this.operationStack.filter(
+      (op) => op.position <= targetPosition
+    );
+
     // Sort by position to ensure correct order
     relevantOperations.sort((a, b) => a.position - b.position);
-    
+
     // Start with empty document state
     let documentContent = '';
-    
+
     // Apply operations in sequence
     for (const operation of relevantOperations) {
-      documentContent = this.applyOperationToContent(documentContent, operation);
+      documentContent = this.applyOperationToContent(
+        documentContent,
+        operation
+      );
     }
-    
+
     return documentContent;
   }
 
   async reconstructDocumentAtSnapshot(snapshotId: string): Promise<string> {
     try {
-      const response = await fetch(`/api/document/${this.documentId}/snapshots/${snapshotId}`);
+      const response = await fetch(
+        `/api/document/${this.documentId}/snapshots/${snapshotId}`
+      );
       if (response.ok) {
         const snapshot = await response.json();
         return snapshot.text || '';
@@ -260,22 +284,29 @@ export class HistoryManager {
     return '';
   }
 
-  private applyOperationToContent(content: string, operation: DocumentOperation): string {
+  private applyOperationToContent(
+    content: string,
+    operation: DocumentOperation
+  ): string {
     switch (operation.type) {
       case 'insert':
         if (operation.range && operation.content) {
           const { from, to } = operation.range;
-          return content.substring(0, from) + operation.content + content.substring(to);
+          return (
+            content.substring(0, from) +
+            operation.content +
+            content.substring(to)
+          );
         }
         break;
-      
+
       case 'delete':
         if (operation.range) {
           const { from, to } = operation.range;
           return content.substring(0, from) + content.substring(to);
         }
         break;
-      
+
       case 'undo':
         // For undo operations, we need to reverse the original operation
         if (operation.metadata?.originalType === 'insert') {
@@ -286,18 +317,25 @@ export class HistoryManager {
           // Undo delete = insert
           const { from } = operation.range || { from: 0 };
           const deletedContent = operation.metadata?.originalContent || '';
-          return content.substring(0, from) + deletedContent + content.substring(from);
+          return (
+            content.substring(0, from) +
+            deletedContent +
+            content.substring(from)
+          );
         }
         break;
-      
+
       case 'redo':
         // For redo operations, we apply the original operation
         if (operation.metadata?.originalOperation) {
-          return this.applyOperationToContent(content, operation.metadata.originalOperation);
+          return this.applyOperationToContent(
+            content,
+            operation.metadata.originalOperation
+          );
         }
         break;
     }
-    
+
     return content;
   }
 
@@ -308,42 +346,49 @@ export class HistoryManager {
     operation?: DocumentOperation;
   }> {
     const content = await this.reconstructDocumentAtPosition(targetPosition);
-    const operation = this.operationStack.find(op => op.position === targetPosition);
-    
+    const operation = this.operationStack.find(
+      (op) => op.position === targetPosition
+    );
+
     return {
       content,
       position: targetPosition,
       timestamp: operation?.timestamp || new Date(),
-      operation
+      operation,
     };
   }
 
   async resetToPosition(targetPosition: number, editor: Editor): Promise<void> {
     try {
       // Get the reconstructed content at the target position
-      const targetContent = await this.reconstructDocumentAtPosition(targetPosition);
-      
+      const targetContent =
+        await this.reconstructDocumentAtPosition(targetPosition);
+
       // Clear the editor and set the new content
       const { tr } = editor.state;
-      tr.replaceWith(0, editor.state.doc.content.size, editor.schema.text(targetContent));
-      
+      tr.replaceWith(
+        0,
+        editor.state.doc.content.size,
+        editor.schema.text(targetContent)
+      );
+
       if (tr.docChanged) {
         editor.view.dispatch(tr);
       }
-      
+
       // Update the current position
       this.currentPosition = targetPosition;
-      
+
       // Record this reset as a new operation
       await this.addOperationToStack({
         type: 'reset',
         content: targetContent,
-        metadata: { 
+        metadata: {
           resetToPosition: targetPosition,
-          resetTimestamp: new Date()
-        }
+          resetTimestamp: new Date(),
+        },
       });
-      
+
       // Reload operations to get the latest state
       await this.loadOperations();
     } catch (error) {
@@ -355,26 +400,31 @@ export class HistoryManager {
   async resetToSnapshot(snapshotId: string, editor: Editor): Promise<void> {
     try {
       // Get the snapshot content
-      const snapshotContent = await this.reconstructDocumentAtSnapshot(snapshotId);
-      
+      const snapshotContent =
+        await this.reconstructDocumentAtSnapshot(snapshotId);
+
       // Clear the editor and set the snapshot content
       const { tr } = editor.state;
-      tr.replaceWith(0, editor.state.doc.content.size, editor.schema.text(snapshotContent));
-      
+      tr.replaceWith(
+        0,
+        editor.state.doc.content.size,
+        editor.schema.text(snapshotContent)
+      );
+
       if (tr.docChanged) {
         editor.view.dispatch(tr);
       }
-      
+
       // Record this reset as a new operation
       await this.addOperationToStack({
         type: 'reset',
         content: snapshotContent,
-        metadata: { 
+        metadata: {
           resetToSnapshot: snapshotId,
-          resetTimestamp: new Date()
-        }
+          resetTimestamp: new Date(),
+        },
       });
-      
+
       // Reload operations to get the latest state
       await this.loadOperations();
     } catch (error) {
@@ -384,10 +434,15 @@ export class HistoryManager {
   }
 
   // Get operations within a range
-  getOperationsInRange(startPosition: number, endPosition: number): DocumentOperation[] {
-    return this.operationStack.filter(op => 
-      op.position >= startPosition && op.position <= endPosition
-    ).sort((a, b) => a.position - b.position);
+  getOperationsInRange(
+    startPosition: number,
+    endPosition: number
+  ): DocumentOperation[] {
+    return this.operationStack
+      .filter(
+        (op) => op.position >= startPosition && op.position <= endPosition
+      )
+      .sort((a, b) => a.position - b.position);
   }
 
   // Get all operations
