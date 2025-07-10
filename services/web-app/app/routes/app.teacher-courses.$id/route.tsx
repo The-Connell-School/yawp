@@ -175,12 +175,16 @@ export default function TeacherCourseRoute() {
                 </div>
                 <div className="mt-6 flex flex-col gap-4 text-sm">
                   <div className="flex items-center gap-2">
-                    <Play className="h-4 w-4" />
-                    <span>{totalModules} modules</span>
+                    <Play className="h-4 w-4 min-w-fit opacity-50" />
+                    <span className="min-w-fit font-medium">
+                      {totalModules} modules
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
-                    <span>{formatDuration(totalCourseDuration)}</span>
+                    <Clock className="h-4 w-4 min-w-fit opacity-50" />
+                    <span className="min-w-fit font-medium">
+                      {formatDuration(totalCourseDuration)}
+                    </span>
                   </div>
                 </div>
               </div>

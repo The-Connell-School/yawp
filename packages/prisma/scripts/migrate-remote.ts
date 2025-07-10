@@ -21,7 +21,7 @@ if (!process.env.DATABASE_URL) {
 const DB_NAME = process.env.PROD_DB_NAME;
 const DB_USER = process.env.PROD_DB_USER;
 const DB_PASSWORD = process.env.PROD_DB_PASSWORD;
-const SSH_HOST = 'ec2-user@54.211.4.71';
+const SSH_HOST = `ec2-user@${process.env.PROD_SSH_HOST}`;
 const DB_HOST = process.env.PROD_DB_HOST;
 
 const SSH_KEY_PATH = join(homedir(), '.ssh', 'yawp-production-bastion');

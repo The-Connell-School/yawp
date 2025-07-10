@@ -426,7 +426,7 @@ export default function TeacherCourseModuleRoute() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <video
+              {/* <video
                 controls
                 className="w-full max-h-96 rounded-lg"
                 src={teacherCourseModule.videoLink}
@@ -435,7 +435,7 @@ export default function TeacherCourseModuleRoute() {
                 }}
               >
                 Your browser does not support the video tag.
-              </video>
+              </video> */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
                   Video format:{' '}
