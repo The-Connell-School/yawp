@@ -148,7 +148,7 @@ export default function AppRoute() {
         <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
           <div className="mt-8 flex flex-col">
             <div className="mb-1 flex items-center gap-1">
-              <p className="text-foreground/60">Folders</p>
+              <p className="text-foreground/60">My Classes</p>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -226,9 +226,7 @@ export default function AppRoute() {
             )}
           </div>
           <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">
-              Teacher Professional Development
-            </p>
+            <p className="my-2 text-foreground/60">Teachers' Lounge</p>
             {data.teacherCourses.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {data.teacherCourses.map((course) => {

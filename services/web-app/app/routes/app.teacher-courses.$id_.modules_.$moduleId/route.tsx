@@ -291,12 +291,18 @@ export default function TeacherCourseModuleRoute() {
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
                       onUpdateProgress={(currentTime) => {
-                        fetcher.submit(
+                        const formData = new FormData();
+                        formData.append('intent', 'updateProgress');
+                        formData.append(
+                          'videoTimestamp',
+                          currentTime.toString()
+                        );
+                        fetch(
+                          `/app/teacher-courses/${teacherCourse.id}/modules/${currentModule.id}`,
                           {
-                            intent: 'updateProgress',
-                            videoTimestamp: currentTime,
-                          },
-                          { method: 'post' }
+                            method: 'POST',
+                            body: formData,
+                          }
                         );
                       }}
                     />
