@@ -78,7 +78,7 @@ jobs:
   deploy-web-app-production:
     name: 🚀 Deploy Web App (Production)
     runs-on: ubuntu-22.04
-    # needs: [typecheck-web-app]
+    needs: [typecheck-web-app]
 
     environment:
       name: production

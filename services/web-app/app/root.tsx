@@ -206,14 +206,15 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
     createSecureLoginMethod();
   }, []);
 
-  const posthogOptions = {
-    api_host: data.ENV.POSTHOG_HOST,
-    defaults: '2025-05-24',
-  };
-
   return (
     <AuthenticityTokenProvider token={data.csrfToken}>
-      <PostHogProvider apiKey={data.ENV.POSTHOG_API_KEY} options={posthogOptions}>
+      <PostHogProvider
+        apiKey={data.ENV.POSTHOG_API_KEY!}
+        options={{
+          api_host: data.ENV.POSTHOG_HOST!,
+          defaults: '2025-05-24',
+        }}
+      >
         <Document nonce={nonce} env={data.ENV}>
           {data.bannerWarning === 'staging' ? (
             <Tooltip
