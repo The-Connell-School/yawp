@@ -43,6 +43,8 @@ export function getEnv() {
   return {
     MODE: process.env.NODE_ENV,
     SENTRY_DSN: process.env.SENTRY_DSN,
+    POSTHOG_API_KEY: process.env.POSTHOG_API_KEY,
+    POSTHOG_HOST: process.env.POSTHOG_HOST,
   };
 }
 
