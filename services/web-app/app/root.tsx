@@ -12,6 +12,7 @@ import {
 } from 'react-router';
 import { AlertTriangle, FlaskConical } from 'lucide-react';
 import { useEffect } from 'react';
+import { PostHogProvider } from 'posthog-js/react';
 import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
@@ -205,36 +206,43 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
     createSecureLoginMethod();
   }, []);
 
+  const posthogOptions = {
+    api_host: data.ENV.POSTHOG_HOST,
+    defaults: '2025-05-24',
+  };
+
   return (
     <AuthenticityTokenProvider token={data.csrfToken}>
-      <Document nonce={nonce} env={data.ENV}>
-        {data.bannerWarning === 'staging' ? (
-          <Tooltip
-            text="This is a staging environment. Do not use real data."
-            delayDuration={0}
-          >
-            <div className="fixed bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
-              <AlertTriangle size={26} />
+      <PostHogProvider apiKey={data.ENV.POSTHOG_API_KEY} options={posthogOptions}>
+        <Document nonce={nonce} env={data.ENV}>
+          {data.bannerWarning === 'staging' ? (
+            <Tooltip
+              text="This is a staging environment. Do not use real data."
+              delayDuration={0}
+            >
+              <div className="fixed bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
+                <AlertTriangle size={26} />
+              </div>
+            </Tooltip>
+          ) : data.bannerWarning === 'localhost' ? (
+            <Tooltip
+              text="This is a local environment. Do not use real data."
+              delayDuration={0}
+            >
+              <div className="fixed bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
+                <FlaskConical size={26} />
+              </div>
+            </Tooltip>
+          ) : null}
+          <GlobalLoading />
+          <div className="flex h-screen min-h-screen flex-col justify-between">
+            <div className="flex-1 bg-background">
+              <Outlet />
             </div>
-          </Tooltip>
-        ) : data.bannerWarning === 'localhost' ? (
-          <Tooltip
-            text="This is a local environment. Do not use real data."
-            delayDuration={0}
-          >
-            <div className="fixed bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
-              <FlaskConical size={26} />
-            </div>
-          </Tooltip>
-        ) : null}
-        <GlobalLoading />
-        <div className="flex h-screen min-h-screen flex-col justify-between">
-          <div className="flex-1 bg-background">
-            <Outlet />
           </div>
-        </div>
-        <Toaster toast={data.toast} />
-      </Document>
+          <Toaster toast={data.toast} />
+        </Document>
+      </PostHogProvider>
     </AuthenticityTokenProvider>
   );
 }

@@ -414,6 +414,8 @@ resource "aws_apprunner_service" "web" {
           PORT = "8080"
           AI_MODEL = "claude-3-7-sonnet-20250219"
           RESEND_FROM_EMAIL = var.resend_from_email
+          POSTHOG_API_KEY = var.posthog_api_key
+          POSTHOG_HOST = var.posthog_host
         }
 
         runtime_environment_secrets = {

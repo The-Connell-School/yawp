@@ -92,3 +92,13 @@ variable "sentry_dsn" {
   type        = string
   description = "Sentry DSN"
 }
+
+variable "posthog_api_key" {
+  type        = string
+  description = "PostHog API key"
+}
+
+variable "posthog_host" {
+  type        = string
+  description = "PostHog host URL"
+}
