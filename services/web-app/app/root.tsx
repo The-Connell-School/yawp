@@ -35,6 +35,8 @@ import { makeTimings, time } from './utils/timing.server.ts';
 import { getToast } from './utils/toast.server.ts';
 import type { Route } from './+types/root.ts';
 import { AuthenticityTokenProvider } from 'remix-utils/csrf/react';
+import posthog from 'posthog-js';
+import omit from 'lodash/omit';
 
 export const links: LinksFunction = () => {
   return [
@@ -86,7 +88,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
               isAdmin: true,
               isOwner: true,
               isSuperOwner: true,
-              organization: { select: { id: true } },
+              organization: { select: { id: true, name: true } },
             },
             where: { id: userId },
           }),
@@ -205,6 +207,47 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
 
     createSecureLoginMethod();
   }, []);
+
+  useEffect(() => {
+    if (data.ENV.POSTHOG_API_KEY) {
+      posthog.init(data.ENV.POSTHOG_API_KEY, {
+        api_host: data.ENV.POSTHOG_HOST,
+        person_profiles: 'identified_only',
+        loaded: (posthog) => {
+          if (process.env.NODE_ENV === 'development') {
+            posthog.debug();
+          }
+        },
+        capture_pageview: true,
+        capture_pageleave: true,
+        session_recording: {
+          maskAllInputs: true,
+          maskInputOptions: {
+            password: true,
+            email: false,
+            tel: false,
+          },
+        },
+        autocapture: {
+          dom_event_allowlist: ['click', 'change', 'submit'],
+          url_allowlist: [window.location.origin],
+        },
+      });
+
+      // Identify user if logged in
+      if (data.user) {
+        posthog.identify(data.user.id, {
+          email: data.user.email,
+          name: data.user.name,
+          organization_id: data.user.organization?.id,
+          organization_name: data.user.organization?.id,
+          is_admin: data.user.isAdmin,
+          is_owner: data.user.isOwner,
+          ...omit(data.user, ['id', 'email', 'name', 'organization']),
+        });
+      }
+    }
+  }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user]);
 
   return (
     <AuthenticityTokenProvider token={data.csrfToken}>
