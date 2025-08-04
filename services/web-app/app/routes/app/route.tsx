@@ -8,15 +8,7 @@ import {
   useMatches,
   type LoaderFunctionArgs,
 } from 'react-router';
-import {
-  Building2,
-  CogIcon,
-  GaugeIcon,
-  LockIcon,
-  Settings2,
-  User,
-  UserIcon,
-} from 'lucide-react';
+import { CogIcon, GaugeIcon, LockIcon, UserIcon, Users } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -98,8 +90,8 @@ const LINKS: {
   },
   {
     to: '/app/students',
-    label: 'My Students',
-    icon: <User size={20} />,
+    label: 'My Classes',
+    icon: <Users size={20} />,
     requires: 'teacherProfile',
   },
   {
@@ -204,7 +196,7 @@ export default function Route() {
               <Button
                 size="icon-sm"
                 variant="ghost"
-                className="hidden sm:block"
+                className="hidden sm:inline-flex"
                 disabled={['submitting', 'loading'].includes(fetcher.state)}
               >
                 {state === 'expanded' ? (

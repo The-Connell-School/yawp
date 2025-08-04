@@ -307,7 +307,7 @@ export default function AppRoute() {
             )}
           </div>
           <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Resources (by course)</p>
+            <p className="my-2 text-foreground/60">Student Courses</p>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {data.courses.map((course) => (
                 <Link

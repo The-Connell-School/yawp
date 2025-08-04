@@ -215,47 +215,6 @@ export default function AppCoursesIdRoute() {
             </Accordion>
           </>
         ) : null}
-        {isTeacher ? (
-          <div>
-            <h3 className="text-foreground/75">Resources</h3>
-            <p className="mb-2 text-sm text-muted-foreground">
-              Explore documents and resources.
-            </p>
-            {data.resources.length ? (
-              <div>
-                {data.resources.map((resource, index) => (
-                  <div
-                    key={resource.id}
-                    className={cn('flex-flex-col py-2', {
-                      'border-t': index !== 0,
-                    })}
-                  >
-                    <a
-                      href={resource.url!}
-                      className="flex items-center gap-1 text-primary hover:underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {resource.title}
-                      <ExternalLinkIcon size={14} />
-                    </a>
-                    <p className="text-sm text-muted-foreground">
-                      {resource.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <NoDataPlaceholder
-                title="No resources"
-                subtitle="Come back later to check for newly added resources."
-              />
-            )}
-          </div>
-        ) : null}
-        {isTeacher ? (
-          <h3 className="mt-6 text-foreground/75">Documents</h3>
-        ) : null}
         {data.documents.length ? (
           <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
             {data.documents.map((doc) => (

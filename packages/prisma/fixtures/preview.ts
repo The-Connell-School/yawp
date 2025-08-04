@@ -140,6 +140,7 @@ export const preview: (prisma: PrismaClient) => Promise<SeedData> = async (
       isAdmin: true,
       isOwner: true,
       organization: { connect: { id: 'the-connell-school' } },
+      teacherProfile: { create: {} },
     },
     // Students
     {

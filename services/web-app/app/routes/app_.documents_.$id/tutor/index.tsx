@@ -178,7 +178,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
   const messages = cms.messages
     .filter((m) => ['user', 'assistant'].includes(m.agent))
-    .concat(optimisticMessage ?? []);
+    .concat(optimisticMessage ?? [])
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   useEffect(() => {
     messagesRef.current?.scrollTo({
