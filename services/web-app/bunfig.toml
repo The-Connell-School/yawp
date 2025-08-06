@@ -1,0 +1,19 @@
+[test]
+# Test configuration for Bun
+preload = ["./test-setup.ts"]
+
+# Test timeout (in milliseconds)
+timeout = 30000
+
+# Test patterns
+# Run files ending with .test.ts, .test.tsx, .spec.ts, .spec.tsx
+pattern = ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"]
+
+# Exclude node_modules and build directories
+exclude = [
+  "node_modules/**",
+  "build/**",
+  "dist/**",
+  ".next/**",
+  ".react-router/**"
+]
