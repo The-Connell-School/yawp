@@ -199,6 +199,7 @@ model Organization {
   numOfTeacherSeats Int            @default(10)
   users             User[]
   verifications     Verification[]
+  featureClasses    FeatureClass[]
 }
 
 model Password {
@@ -405,4 +406,17 @@ model TeacherCourseModuleSession {
   teacherProfile        TeacherProfile      @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
 
   @@unique([teacherCourseModuleId, teacherProfileId])
+}
+
+model FeatureClass {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @db.Timestamptz(6)
+  grade          String
+  period         String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([grade, period, organizationId])
+  @@index([organizationId])
 }
