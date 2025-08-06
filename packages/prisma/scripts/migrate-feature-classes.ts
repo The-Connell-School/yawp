@@ -10,9 +10,9 @@ interface StudentGradePeriod {
   period: string | null;
 }
 
-async function migrateFeatureClasses() {
-  console.log('🏫 Starting FeatureClass migration...');
-  console.time('⏱️ FeatureClass migration completed');
+async function migrateClasses() {
+  console.log('🏫 Starting Class migration...');
+  console.time('⏱️ Class migration completed');
 
   try {
     // Get all unique grade/period combinations per organization from student profiles
@@ -61,7 +61,7 @@ async function migrateFeatureClasses() {
 
     let totalClassesCreated = 0;
 
-    // Create FeatureClass records for each unique combination
+    // Create Class records for each unique combination
     for (const [orgId, classKeys] of organizationClassMap.entries()) {
       console.log(`🏫 Processing organization ${orgId} with ${classKeys.size} unique class combinations`);
 
@@ -70,7 +70,7 @@ async function migrateFeatureClasses() {
         
         try {
           // Use upsert to handle duplicates gracefully
-          await prisma.featureClass.upsert({
+          await prisma.class.upsert({
             where: {
               grade_period_organizationId: {
                 grade,
@@ -83,6 +83,7 @@ async function migrateFeatureClasses() {
               grade,
               period,
               organizationId: orgId,
+              // teacherProfileId will be null initially - can be assigned later via UI
             },
           });
           
@@ -97,7 +98,7 @@ async function migrateFeatureClasses() {
     // Create "unassigned" classes for organizations that have students with missing data
     for (const orgId of studentsNeedingUnassigned) {
       try {
-        await prisma.featureClass.upsert({
+        await prisma.class.upsert({
           where: {
             grade_period_organizationId: {
               grade: 'unassigned',
@@ -110,6 +111,7 @@ async function migrateFeatureClasses() {
             grade: 'unassigned',
             period: 'unassigned',
             organizationId: orgId,
+            // teacherProfileId will be null initially - can be assigned later via UI
           },
         });
         
@@ -120,22 +122,22 @@ async function migrateFeatureClasses() {
       }
     }
 
-    console.log(`🎉 Successfully created/updated ${totalClassesCreated} FeatureClass records`);
+    console.log(`🎉 Successfully created/updated ${totalClassesCreated} Class records`);
     
     // Verify the results
-    const finalCount = await prisma.featureClass.count();
-    console.log(`📊 Total FeatureClass records in database: ${finalCount}`);
+    const finalCount = await prisma.class.count();
+    console.log(`📊 Total Class records in database: ${finalCount}`);
 
   } catch (error) {
     console.error('❌ Migration failed:', error);
     throw error;
   } finally {
-    console.timeEnd('⏱️ FeatureClass migration completed');
+    console.timeEnd('⏱️ Class migration completed');
   }
 }
 
 // Run the migration
-migrateFeatureClasses()
+migrateClasses()
   .catch((e) => {
     console.error('💥 Migration script failed:', e);
     process.exit(1);
