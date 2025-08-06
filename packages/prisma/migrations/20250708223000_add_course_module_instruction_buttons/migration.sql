@@ -1,4 +1,3 @@
--- CreateTable
 CREATE TABLE "CourseModuleInstructionButton" (
     "id" TEXT NOT NULL,
     "createdAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -11,10 +10,8 @@ CREATE TABLE "CourseModuleInstructionButton" (
     CONSTRAINT "CourseModuleInstructionButton_pkey" PRIMARY KEY ("id")
 );
 
--- AddForeignKey
 ALTER TABLE "CourseModuleInstructionButton" ADD CONSTRAINT "CourseModuleInstructionButton_courseModuleInstructionId_fkey" FOREIGN KEY ("courseModuleInstructionId") REFERENCES "CourseModuleInstruction"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Data migration: Convert existing answerTypeOptions to buttons
 INSERT INTO "CourseModuleInstructionButton" ("id", "createdAt", "updatedAt", "courseModuleInstructionId", "position", "label", "action")
 SELECT
     gen_random_uuid() as id,
@@ -35,7 +32,6 @@ CROSS JOIN LATERAL (
 ) buttons
 WHERE i."answerTypeOptions" IS NOT NULL AND i."answerTypeOptions" != '';
 
--- For instructions without answerTypeOptions, create a default button
 INSERT INTO "CourseModuleInstructionButton" ("id", "createdAt", "updatedAt", "courseModuleInstructionId", "position", "label", "action")
 SELECT
     gen_random_uuid() as id,
@@ -54,4 +50,3 @@ SELECT
 FROM "CourseModuleInstruction" i
 WHERE i."answerTypeOptions" IS NULL OR i."answerTypeOptions" = '';
 
-ALTER INDEX "TeacherCourseModuleSession_teacherCourseModuleId_teacherProfile" RENAME TO "TeacherCourseModuleSession_teacherCourseModuleId_teacherPro_key";
