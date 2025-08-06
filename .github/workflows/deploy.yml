@@ -39,6 +39,32 @@ jobs:
       - name: 🔎 Type check
         run: bun web-app:typecheck
 
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
+
+      - name: 📦 Install dependencies
+        run: bun install
+
+      - name: ⚙️ Generate Prisma Client
+        run: bun prisma:generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: 🔎 Unit tests
+        run: bun test
+
   # deploy-web-app-staging:
   #   name: 🚀 Deploy Web App (Staging)
   #   runs-on: ubuntu-22.04
@@ -78,7 +104,7 @@ jobs:
   deploy-web-app-production:
     name: 🚀 Deploy Web App (Production)
     runs-on: ubuntu-22.04
-    needs: [typecheck-web-app]
+    needs: [typecheck-web-app, unit-tests]
 
     environment:
       name: production

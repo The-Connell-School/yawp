@@ -12,7 +12,6 @@
     "web-app:build": "bun run --cwd services/web-app build",
     "web-app:start": "bun run --cwd services/web-app start",
     "web-app:typecheck": "bun run --cwd services/web-app typecheck",
-    "web-app:test": "bun run --cwd services/web-app test",
     "web-app:test:watch": "bun run --cwd services/web-app test:watch",
     "web-app:docker:build": "docker build --platform linux/amd64 -t yawp-web-app:latest -f services/web-app/Dockerfile .",
     "web-app:docker:staging:tag": "docker tag yawp-web-app:latest 422348803522.dkr.ecr.us-east-1.amazonaws.com/yawp-staging-web-app:latest",
