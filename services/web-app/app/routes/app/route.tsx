@@ -262,6 +262,35 @@ export default function Route() {
           ))}
         </div>
         <div className="flex flex-grow flex-col justify-end">
+          {/* Organization Selector - only show if user has multiple organizations */}
+          {user.organizations && user.organizations.length > 1 ? (
+            <div className="mb-2 px-2">
+              <Form action="/api/organization-selector" method="POST" className="w-full">
+                <select
+                  name="organizationId"
+                  value={user.organization?.id || ''}
+                  onChange={(e) => {
+                    // Submit the form when selection changes
+                    e.target.form?.submit();
+                  }}
+                  className={cn(
+                    "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+                    "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+                    {
+                      "text-xs px-2 py-1": !navExpanded,
+                    }
+                  )}
+                >
+                  {user.organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {navExpanded ? org.name : org.name.slice(0, 3)}
+                    </option>
+                  ))}
+                </select>
+              </Form>
+            </div>
+          ) : null}
+
           <Popover>
             <PopoverTrigger>
               <div className="flex items-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
@@ -278,6 +307,11 @@ export default function Route() {
                             ? 'Teacher'
                             : 'Student'}
                     </p>
+                    {user.organization && (
+                      <p className="text-left text-xs text-muted-foreground/80">
+                        {user.organization.name}
+                      </p>
+                    )}
                   </div>
                 ) : null}
               </div>

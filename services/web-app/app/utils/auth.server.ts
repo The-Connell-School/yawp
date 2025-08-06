@@ -119,38 +119,86 @@ export async function signup({
   workshopTeacherId?: string;
 }) {
   const hashedPassword = await getPasswordHash(password);
-  const user = await prisma.user.upsert({
+  
+  // Check if user already exists
+  const existingUser = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
-    create: {
-      email: email.toLowerCase(),
-      name,
-      password: { create: { hash: hashedPassword } },
-      organization: { connect: { id: 'default-org' } },
-      studentProfile: {
-        create: {
-          grade,
-          period,
-          school,
-          schoolTeacher: teacher,
-          workshopLeaderId: workshopTeacherId,
-        },
-      },
-    },
-    update: {
-      name,
-      password: { update: { hash: hashedPassword } },
-      organization: { connect: { id: 'default-org' } },
-      studentProfile: {
-        update: {
-          grade,
-          period,
-          school,
-          schoolTeacher: teacher,
-          workshopLeaderId: workshopTeacherId,
-        },
+    include: {
+      userRoles: {
+        where: { organizationId: 'default-org' },
+        include: { studentProfile: true },
       },
     },
   });
+
+  let user: any;
+  
+  if (existingUser) {
+    // User exists, update password and create/update user role for default org
+    user = await prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        name,
+        password: { update: { hash: hashedPassword } },
+        userRoles: {
+          upsert: {
+            where: {
+              userId_organizationId: {
+                userId: existingUser.id,
+                organizationId: 'default-org',
+              },
+            },
+            create: {
+              organizationId: 'default-org',
+              studentProfile: {
+                create: {
+                  grade,
+                  period,
+                  school,
+                  schoolTeacher: teacher,
+                  workshopLeaderId: workshopTeacherId,
+                },
+              },
+            },
+            update: {
+              studentProfile: {
+                update: {
+                  grade,
+                  period,
+                  school,
+                  schoolTeacher: teacher,
+                  workshopLeaderId: workshopTeacherId,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  } else {
+    // Create new user with user role for default org
+    user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        name,
+        password: { create: { hash: hashedPassword } },
+        userRoles: {
+          create: {
+            organizationId: 'default-org',
+            studentProfile: {
+              create: {
+                grade,
+                period,
+                school,
+                schoolTeacher: teacher,
+                workshopLeaderId: workshopTeacherId,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
 
   const session = await prisma.session.create({
     data: {
@@ -182,7 +230,8 @@ export async function signupAsTeacher({
           email: email.toLowerCase(),
           name,
           password: { create: { hash: hashedPassword } },
-          teacherProfile: { create: {} },
+          // Note: For standalone teachers, we might need a default organization or handle differently
+          // For now, leaving this as is since it might be legacy
         },
       },
     },
@@ -213,9 +262,13 @@ export async function signupAsOrganizationTeacher({
           email: email.toLowerCase(),
           name,
           password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          teacherProfile: { create: {} },
-          studentProfile: { create: {} },
+          userRoles: {
+            create: {
+              organizationId,
+              teacherProfile: { create: {} },
+              studentProfile: { create: {} },
+            },
+          },
         },
       },
     },
@@ -246,8 +299,12 @@ export async function signupAsOrganizationStudent({
           email: email.toLowerCase(),
           name,
           password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          studentProfile: { create: {} },
+          userRoles: {
+            create: {
+              organizationId,
+              studentProfile: { create: {} },
+            },
+          },
         },
       },
     },
@@ -270,7 +327,7 @@ export async function signupAsOrganizationOwner({
 }) {
   const hashedPassword = await getPasswordHash(password);
 
-  const existingUsers = await prisma.user.findMany({
+  const existingUserRoles = await prisma.userRole.findMany({
     where: { organizationId },
     select: { id: true },
   });
@@ -283,10 +340,14 @@ export async function signupAsOrganizationOwner({
           email: email.toLowerCase(),
           name,
           password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          studentProfile: { create: {} },
-          isOwner: true,
-          ...(existingUsers.length === 0 ? { isSuperOwner: true } : {}),
+          userRoles: {
+            create: {
+              organizationId,
+              isOwner: true,
+              isSuperOwner: existingUserRoles.length === 0,
+              studentProfile: { create: {} },
+            },
+          },
         },
       },
     },
@@ -316,11 +377,12 @@ export async function signupWithConnection({
         create: {
           email: email.toLowerCase(),
           name,
-          studentProfile: { create: {} },
           connections: { create: { providerId, providerName } },
           image: imageUrl
             ? { create: await downloadFile(imageUrl) }
             : undefined,
+          // Note: Social auth users might not have organization context initially
+          // This may need special handling in the onboarding flow
         },
       },
     },
@@ -328,6 +390,53 @@ export async function signupWithConnection({
   });
 
   return session;
+}
+
+/**
+ * Add an existing user to a new organization with specified role
+ */
+export async function addUserToOrganization({
+  userId,
+  organizationId,
+  isOwner = false,
+  isAdmin = false,
+  isSuperOwner = false,
+  createStudentProfile = false,
+  createTeacherProfile = false,
+}: {
+  userId: string;
+  organizationId: string;
+  isOwner?: boolean;
+  isAdmin?: boolean;
+  isSuperOwner?: boolean;
+  createStudentProfile?: boolean;
+  createTeacherProfile?: boolean;
+}) {
+  // Check if user role already exists
+  const existingUserRole = await prisma.userRole.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+  });
+
+  if (existingUserRole) {
+    throw new Error('User is already a member of this organization');
+  }
+
+  return prisma.userRole.create({
+    data: {
+      userId,
+      organizationId,
+      isOwner,
+      isAdmin,
+      isSuperOwner,
+      studentProfile: createStudentProfile ? { create: {} } : undefined,
+      teacherProfile: createTeacherProfile ? { create: {} } : undefined,
+    },
+  });
 }
 
 export async function logout(

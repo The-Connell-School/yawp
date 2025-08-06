@@ -2,47 +2,38 @@ import { data, redirect } from 'react-router';
 import { type useUser } from '../hooks/useUser.ts';
 import { requireUserId } from './auth.server.ts';
 import { prisma } from './db.server.ts';
+import { getCurrentUserRole, getCurrentOrganizationId } from './organization.server.ts';
 
 export async function requireAdmin(request: Request) {
   const userId = await requireUserId(request);
-  const user = await prisma.user.findFirst({
-    select: {
-      id: true,
-      isAdmin: true,
-      isOwner: true,
-      isSuperOwner: true,
-      organizationId: true,
-    },
-    where: { id: userId, isAdmin: true },
-  });
+  const currentUserRole = await getCurrentUserRole(request);
 
-  if (!user) {
+  if (!currentUserRole?.isAdmin) {
     throw data(
       {
         error: 'Unauthorized',
         requiredRole: 'isAdmin',
-        message: `Unauthorized: required role: ${name}`,
+        message: 'Unauthorized: required role: isAdmin',
       },
       { status: 403 }
     );
   }
 
-  return user;
+  return {
+    id: userId,
+    isAdmin: currentUserRole.isAdmin,
+    isOwner: currentUserRole.isOwner,
+    isSuperOwner: currentUserRole.isSuperOwner,
+    organizationId: currentUserRole.organizationId,
+    userRole: currentUserRole,
+  };
 }
 
 export async function requireOwner(request: Request) {
   const userId = await requireUserId(request);
-  const user = await prisma.user.findFirst({
-    select: {
-      id: true,
-      isOwner: true,
-      isSuperOwner: true,
-      organization: { select: { name: true, id: true } },
-    },
-    where: { id: userId, isOwner: true, organizationId: { not: null } },
-  });
+  const currentUserRole = await getCurrentUserRole(request);
 
-  if (!user) {
+  if (!currentUserRole?.isOwner) {
     throw data(
       {
         error: 'Unauthorized',
@@ -53,17 +44,31 @@ export async function requireOwner(request: Request) {
     );
   }
 
-  return user;
+  return {
+    id: userId,
+    isOwner: currentUserRole.isOwner,
+    isSuperOwner: currentUserRole.isSuperOwner,
+    organization: currentUserRole.organization,
+    userRole: currentUserRole,
+  };
 }
 
 export async function requireOrganizationAccess(request: Request) {
   const userId = await requireUserId(request);
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      isOwner: true,
-      organizationId: true,
+  const organizationId = await getCurrentOrganizationId(request);
+  
+  if (!organizationId) {
+    throw redirect('/app/access-denied');
+  }
+
+  const userRole = await prisma.userRole.findUnique({
+    where: {
+      userId_organizationId: {
+        userId,
+        organizationId,
+      },
+    },
+    include: {
       organization: {
         select: {
           id: true,
@@ -74,21 +79,25 @@ export async function requireOrganizationAccess(request: Request) {
     },
   });
 
-  if (!user) {
-    throw data({ error: 'User not found' }, { status: 404 });
+  if (!userRole) {
+    throw data({ error: 'User not found in organization' }, { status: 404 });
   }
 
-  // Check if user has no organization
+  // Check if organization access has expired
   if (
-    !user.organizationId ||
-    !user.organization ||
-    (user.organization.accessExpiresAt &&
-      new Date() > user.organization.accessExpiresAt)
+    userRole.organization.accessExpiresAt &&
+    new Date() > userRole.organization.accessExpiresAt
   ) {
     throw redirect('/app/access-denied');
   }
 
-  return user;
+  return {
+    id: userId,
+    isOwner: userRole.isOwner,
+    organizationId: userRole.organizationId,
+    organization: userRole.organization,
+    userRole,
+  };
 }
 
 type Action = 'create' | 'read' | 'update' | 'delete';

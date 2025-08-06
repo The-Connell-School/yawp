@@ -197,7 +197,7 @@ model Organization {
   accessExpiresAt   DateTime?      @db.Timestamptz(6)
   numOfStudentSeats Int            @default(10)
   numOfTeacherSeats Int            @default(10)
-  users             User[]
+  userRoles         UserRole[]
   verifications     Verification[]
 }
 
@@ -231,13 +231,13 @@ model Setting {
 model StudentProfile {
   id               String   @id @default(cuid())
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
-  userId           String   @unique
+  userRoleId       String   @unique
   workshopLeaderId String?
   school           String?
   schoolTeacher    String?
   grade            String?
   period           String?
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userRole         UserRole @relation(fields: [userRoleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   workshopLeader   User?    @relation("Students", fields: [workshopLeaderId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 }
 
@@ -258,9 +258,9 @@ model StudentView {
 model TeacherProfile {
   id                          String                       @id @default(cuid())
   createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
-  userId                      String                       @unique
+  userRoleId                  String                       @unique
   isActive                    Boolean                      @default(true)
-  user                        User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRole                    UserRole                     @relation(fields: [userRoleId], references: [id], onDelete: Cascade)
   teacherCourseModuleSessions TeacherCourseModuleSession[]
 }
 
@@ -276,6 +276,23 @@ model Upload {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model UserRole {
+  id               String           @id @default(cuid())
+  createdAt        DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @db.Timestamptz(6)
+  userId           String
+  organizationId   String
+  isOwner          Boolean          @default(false)
+  isAdmin          Boolean          @default(false)
+  isSuperOwner     Boolean          @default(false)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentProfile   StudentProfile?
+  teacherProfile   TeacherProfile?
+  
+  @@unique([userId, organizationId])
+}
+
 model User {
   id                       String                    @id @default(cuid())
   createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
@@ -287,19 +304,13 @@ model User {
   documents                Document[]
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
-  organizationId           String?
-  organization             Organization?             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   password                 Password?
   sessions                 Session[]
   studentViews             StudentView[]
-  studentProfile           StudentProfile?
   studentProfiles          StudentProfile[]          @relation("Students")
-  teacherProfile           TeacherProfile?
   uploads                  Upload[]
   image                    UserImage?
-  isAdmin                  Boolean                   @default(false)
-  isOwner                  Boolean                   @default(false)
-  isSuperOwner             Boolean                   @default(false)
+  userRoles                UserRole[]
 }
 
 model UserImage {

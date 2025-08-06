@@ -76,22 +76,58 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const user = userId
     ? await time(
-        () =>
-          prisma.user.findUniqueOrThrow({
+        async () => {
+          const baseUser = await prisma.user.findUniqueOrThrow({
             select: {
               id: true,
               name: true,
               email: true,
               image: { select: { id: true } },
-              studentProfiles: { select: { id: true, userId: true } },
-              teacherProfile: { select: { id: true } },
-              isAdmin: true,
-              isOwner: true,
-              isSuperOwner: true,
-              organization: { select: { id: true, name: true } },
+              userRoles: {
+                include: {
+                  organization: { select: { id: true, name: true } },
+                  studentProfile: { select: { id: true } },
+                  teacherProfile: { select: { id: true } },
+                },
+                orderBy: { createdAt: 'asc' },
+              },
             },
             where: { id: userId },
-          }),
+          });
+          
+          // Get current organization ID from cookie or use first organization
+          const cookieHeader = request.headers.get('Cookie');
+          const cookies = new Map(
+            cookieHeader?.split('; ').map(c => {
+              const [name, ...rest] = c.split('=');
+              return [name, rest.join('=')];
+            }) ?? []
+          );
+          
+          const selectedOrgId = cookies.get('selected-organization-id');
+          const currentUserRole = baseUser.userRoles.find(
+            role => role.organizationId === selectedOrgId
+          ) || baseUser.userRoles[0];
+          
+          return {
+            ...baseUser,
+            // Current organization context
+            isAdmin: currentUserRole?.isAdmin || false,
+            isOwner: currentUserRole?.isOwner || false,
+            isSuperOwner: currentUserRole?.isSuperOwner || false,
+            organization: currentUserRole?.organization || null,
+            studentProfile: currentUserRole?.studentProfile || null,
+            teacherProfile: currentUserRole?.teacherProfile || null,
+            // All user roles for organization selector
+            organizations: baseUser.userRoles.map(role => ({
+              id: role.organizationId,
+              name: role.organization.name,
+              isAdmin: role.isAdmin,
+              isOwner: role.isOwner,
+              isSuperOwner: role.isSuperOwner,
+            })),
+          };
+        },
         { timings, type: 'find user', desc: 'find user in root' }
       )
     : null;
