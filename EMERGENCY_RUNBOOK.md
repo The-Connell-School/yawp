@@ -12,8 +12,8 @@ This document contains all essential information needed for emergency handoff, i
 - **Primary Repository**: https://github.com/The-Connell-School/yawp-2.0
 
 ### Critical URLs
-- **Production Application**: https://[app-runner-service-url] (See AWS App Runner console)
-- **Staging Application**: https://[staging-app-runner-service-url] (if configured)
+- **Production Application**: https://yawp.school
+- **Staging Application**: none
 
 ---
 
@@ -36,10 +36,9 @@ Backend: Bun runtime, Prisma ORM
 Database: PostgreSQL (AWS RDS)
 Deployment: AWS App Runner + ECR
 Infrastructure: Terraform
-AI Services: Anthropic Claude, OpenAI GPT
+AI Services: Anthropic Claude (default), or OpenAI GPT -> used for tutor brains
 Email: Resend API
-Analytics: PostHog
-Error Tracking: Sentry
+Analytics & Error tracking: PostHog
 ```
 
 ### Multi-Tenant Architecture
@@ -54,7 +53,7 @@ Error Tracking: Sentry
 ### AWS Resources (Primary Platform)
 
 #### Core Infrastructure
-- **Region**: us-east-1 (configurable via Terraform variables)
+- **Region**: us-east-2 (configurable via Terraform variables)
 - **VPC**: Custom VPC with public/private subnets
 - **Networking**: NAT Gateway for private subnet internet access
 - **Security**: Security groups for App Runner, RDS, and bastion access
@@ -78,7 +77,7 @@ Error Tracking: Sentry
 
 #### Container Registry
 - **Service**: AWS ECR
-- **Repository**: `[app-name]-[env]-web-app`
+- **Repository**: `yawp-production-web-app`
 - **Image Scanning**: Enabled on push
 - **Lifecycle**: Keep latest 5 images, expire older ones
 
@@ -180,11 +179,12 @@ App Runner Instance Role:
 ---
 
 ## 🌐 External Services Integration
+Client should have access to all services below.
 
 ### 1. Resend (Email Service)
 - **Purpose**: Transactional email sending
 - **API Endpoint**: `https://api.resend.com/emails`
-- **Configuration**: 
+- **Configuration**:
   - API Key: Stored in AWS Secrets Manager
   - From Email: Configured via environment variable
 - **Access**: Client should have access to Resend dashboard
@@ -204,17 +204,11 @@ App Runner Instance Role:
 - **Usage**: Fallback AI service, text-to-speech generation
 - **Rate Limits**: Monitor usage in OpenAI dashboard
 
-### 4. PostHog (Analytics)
+### 4. PostHog (Analytics & Error Tracking)
 - **Purpose**: User analytics and product insights
 - **Configuration**: API key and host URL in environment
 - **Data**: User interactions, feature usage, performance metrics
 - **Access**: Client should have access to PostHog dashboard
-
-### 5. Sentry (Error Monitoring)
-- **Purpose**: Application error tracking and performance monitoring
-- **DSN**: Stored in AWS Secrets Manager
-- **Integration**: Automatic error capture and reporting
-- **Access**: Client should have access to Sentry project
 
 ---
 
@@ -305,6 +299,16 @@ bun prisma db push # Push schema changes
 ```
 
 ### Database Migrations
+
+#### Production
+With updated credentials in packages/prisma/.env, you can migrate the remote database (via bastion server proxy).
+
+From the root folder, run this command:
+```bash
+bun prisma:migrate-remote production
+```
+
+#### Local
 ```bash
 # Generate migration
 bun prisma migrate dev --name migration_name
@@ -403,7 +407,7 @@ curl https://[app-runner-url]/api/healthcheck
 
 #### 1. Memory/Performance Issues
 - **Symptoms**: Slow responses, timeout errors
-- **Solutions**: 
+- **Solutions**:
   - Scale App Runner instance (increase CPU/memory)
   - Optimize database queries
   - Review application code for memory leaks
@@ -592,8 +596,8 @@ bastion_public_key = "ssh-rsa ..."
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2025-08-06  
-**Next Review**: 2025-11-06  
+**Document Version**: 1.0
+**Last Updated**: 2025-08-06
+**Next Review**: 2025-11-06
 
 ⚠️ **Keep this document secure and updated. Review quarterly or after major infrastructure changes.**
