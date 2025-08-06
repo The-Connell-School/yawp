@@ -9,7 +9,7 @@ import omit from 'lodash/omit';
 
 interface Props extends SwitchProps {
   scope: any;
-  label: ReactNode;
+  label?: ReactNode;
   labelInfo?: ReactNode;
   hideLabel?: boolean;
   helperText?: ReactNode;

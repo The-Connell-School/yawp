@@ -3,7 +3,12 @@ import {
   type CourseModuleInstruction,
   type CourseModuleSessionMessage,
 } from '@app/prisma';
-import { useFetcher, useNavigate, useSearchParams } from 'react-router';
+import {
+  useFetcher,
+  useNavigate,
+  useSearchParams,
+  useLoaderData,
+} from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -46,13 +51,23 @@ type Props = {
   docId: string;
   nextCmId?: string;
   hasPreviousCms?: boolean;
-  cms: PrismaCMS & {
+  cms: {
     courseModule: {
-      instructions: CourseModuleInstruction[];
+      course: { courseModules: { id: string; position: number }[] } | null;
+      instructions: {
+        buttons: { id: string; label: string; action: string }[];
+        id: string;
+        title: string;
+        prompt: string;
+        showChatButton: boolean | null;
+        showNextButton: boolean | null;
+      }[];
       title: string;
       isSelfGuided: boolean;
     };
-    messages: CourseModuleSessionMessage[];
+    messages: { id: string; agent: string; content: string; createdAt: Date }[];
+    id: string;
+    instructionsCompleted: number;
   };
 };
 
@@ -186,7 +201,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       top: messagesRef.current.scrollHeight,
       behavior: 'smooth',
     });
-  }, [messages]);
+  }, [messages.length]);
 
   useEffect(() => {
     if (speechEnabled && tutorResponseFetcher.data?.audio?.length) {
@@ -236,6 +251,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       return prev;
     });
   };
+
+  console.log('instruction', instruction);
 
   return (
     <div className="flex w-full flex-col border-r pb-2 md:w-3/5">
@@ -501,29 +518,17 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               ? undefined
               : 'border-t-0'
           }
-          options={instruction.answerTypeOptions}
+          buttons={instruction.buttons ?? []}
           respond={respond}
-          canAskQuestion={
-            !!instruction.canAskQuestion ||
-            instruction.interactiveType === 'dialogue'
-          }
-          advanceInstructionLabel={
-            instruction.interactiveType === 'dialogue'
-              ? instruction.nextInstructionBtnLabel
-              : !instruction.answerTypeOptions
-                ? 'Next'
-                : undefined
-          }
+          showChatButton={!!instruction.showChatButton}
+          showNextButton={!!instruction.showNextButton}
           advanceInstruction={
-            instruction.interactiveType === 'dialogue' ||
-            !instruction.answerTypeOptions
-              ? isLastCmInstruction
-                ? () => {
-                    incrementInstruction();
-                    advanceToNextCourseModule();
-                  }
-                : incrementInstruction
-              : undefined
+            isLastCmInstruction
+              ? () => {
+                  incrementInstruction();
+                  advanceToNextCourseModule();
+                }
+              : incrementInstruction
           }
         />
       )}
