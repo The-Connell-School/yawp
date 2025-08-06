@@ -79,7 +79,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const firstCourseModule = await prisma.courseModule.findFirst({
     where: { courseId: params.id },
     orderBy: { position: 'asc' },
-    include: { instructions: true },
+    include: {
+      instructions: {
+        orderBy: { position: 'asc' },
+        include: { buttons: { orderBy: { position: 'asc' } } },
+      },
+    },
   });
 
   if (!firstCourseModule) {

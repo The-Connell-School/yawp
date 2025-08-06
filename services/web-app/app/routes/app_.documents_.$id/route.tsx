@@ -67,6 +67,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           courseModule: {
             include: {
               instructions: {
+                orderBy: { position: 'asc' },
                 include: {
                   buttons: {
                     orderBy: { position: 'asc' },
@@ -126,7 +127,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const nextCmId = currentCms.courseModule.course?.courseModules.find(
     (cm) => cm.position === currentCms.courseModule.position + 1
   )?.id;
-  console.log(currentCms);
 
   return dataResponse({
     doc,

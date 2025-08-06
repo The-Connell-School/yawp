@@ -12,7 +12,8 @@ import { cn, useIsPending } from '~/utils/misc.js';
 
 type Props = {
   buttons: { label: string; action: string }[] | null;
-  canAskQuestion?: boolean;
+  showChatButton?: boolean;
+  showNextButton?: boolean;
   className?: string;
   advanceInstruction?: () => void;
   respond: (response: string) => void;
@@ -20,7 +21,8 @@ type Props = {
 
 export const ResponseBar = ({
   buttons,
-  canAskQuestion,
+  showChatButton,
+  showNextButton,
   advanceInstruction,
   respond,
   className,
@@ -71,7 +73,7 @@ export const ResponseBar = ({
           {button.label}
         </Button>
       ))}
-      {canAskQuestion ? (
+      {showChatButton ? (
         <Button
           variant="secondary"
           className="flex items-center gap-2 text-lg"
@@ -81,29 +83,31 @@ export const ResponseBar = ({
           {buttons && buttons.length > 0 ? '' : 'Chat'}
         </Button>
       ) : null}
-      <Tooltip
-        text="Next step"
-        delayDuration={200}
-        open={check === true || undefined}
-      >
-        <Button
-          variant={check ? 'default' : 'secondary'}
-          className={cn('flex items-center gap-1 text-lg', {})}
-          onClick={() => {
-            if (check) {
-              setCheck(false);
-              advanceInstruction && advanceInstruction();
-            } else {
-              setCheck(true);
-            }
-          }}
-          onBlur={() => check && setCheck(false)}
-          isLoading={isPending}
+      {showNextButton ? (
+        <Tooltip
+          text="Next step"
+          delayDuration={200}
+          open={check === true || undefined}
         >
-          {check ? 'You sure?' : <ChevronRightIcon />}
-          {check ? <CheckIcon /> : null}
-        </Button>
-      </Tooltip>
+          <Button
+            variant={check ? 'default' : 'secondary'}
+            className={cn('flex items-center gap-1 text-lg', {})}
+            onClick={() => {
+              if (check) {
+                setCheck(false);
+                advanceInstruction && advanceInstruction();
+              } else {
+                setCheck(true);
+              }
+            }}
+            onBlur={() => check && setCheck(false)}
+            isLoading={isPending}
+          >
+            {check ? 'You sure?' : <ChevronRightIcon />}
+            {check ? <CheckIcon /> : null}
+          </Button>
+        </Tooltip>
+      ) : null}
     </div>
   );
 };

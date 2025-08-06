@@ -33,6 +33,8 @@ import {
   GripVertical,
   TrashIcon,
   Trash2,
+  MessageCircleIcon,
+  ChevronRightIcon,
 } from 'lucide-react';
 import {
   Sheet,
@@ -69,7 +71,8 @@ const instructionSchema = z.object({
   prompt: z.string().min(1, 'Prompt is required'),
   answerKey: z.string().optional(),
   tutorInstructions: z.string().optional(),
-  canAskQuestion: z.union([z.literal('on'), z.literal(undefined)]).optional(),
+  showChatButton: z.union([z.literal('on'), z.literal(undefined)]).optional(),
+  showNextButton: z.union([z.literal('on'), z.literal(undefined)]).optional(),
   nextInstructionBtnLabel: z.string().optional(),
   buttons: z
     .array(
@@ -154,12 +157,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       data: {
         title: data.title,
         prompt: data.prompt,
-        interactiveType: 'dialogue', // Default to dialogue type
-        answerType: 'button', // Always use button type
-        answerKey: data.answerKey || null,
         tutorInstructions: data.tutorInstructions || null,
-        canAskQuestion: data.canAskQuestion === 'on',
-        nextInstructionBtnLabel: data.nextInstructionBtnLabel || null,
+        showChatButton: data.showChatButton === 'on',
+        showNextButton: data.showNextButton === 'on',
         position: instructionCount,
         courseModuleId: params.moduleId!,
         buttons: {
@@ -189,12 +189,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       data: {
         title: data.title,
         prompt: data.prompt,
-        interactiveType: 'dialogue', // Default to dialogue type
-        answerType: 'button', // Always use button type
-        answerKey: data.answerKey || null,
         tutorInstructions: data.tutorInstructions || null,
-        canAskQuestion: data.canAskQuestion === 'on',
-        nextInstructionBtnLabel: data.nextInstructionBtnLabel || null,
+        showChatButton: data.showChatButton === 'on',
+        showNextButton: data.showNextButton === 'on',
         buttons: {
           deleteMany: {
             courseModuleInstructionId: instructionId,
@@ -294,11 +291,9 @@ export default function ModuleRoute() {
     defaultValues: {
       title: editingInstruction?.title || '',
       prompt: editingInstruction?.prompt || '',
-      answerKey: editingInstruction?.answerKey || '',
       tutorInstructions: editingInstruction?.tutorInstructions || '',
-      canAskQuestion: editingInstruction?.canAskQuestion || false,
-      nextInstructionBtnLabel:
-        editingInstruction?.nextInstructionBtnLabel || '',
+      showChatButton: editingInstruction?.showChatButton || false,
+      showNextButton: editingInstruction?.showNextButton || false,
       buttons: editingInstruction?.buttons || [
         { label: 'Continue', action: 'advance' },
       ],
@@ -317,11 +312,9 @@ export default function ModuleRoute() {
       instructionForm.resetForm({
         title: editingInstruction?.title || '',
         prompt: editingInstruction?.prompt || '',
-        answerKey: editingInstruction?.answerKey || '',
         tutorInstructions: editingInstruction?.tutorInstructions || '',
-        canAskQuestion: editingInstruction?.canAskQuestion || false,
-        nextInstructionBtnLabel:
-          editingInstruction?.nextInstructionBtnLabel || '',
+        showChatButton: editingInstruction?.showChatButton || false,
+        showNextButton: editingInstruction?.showNextButton || false,
         buttons: editingInstruction?.buttons,
       });
     }
@@ -417,13 +410,24 @@ export default function ModuleRoute() {
           )}
         </TableCell>
         <TableCell>
-          {instruction.canAskQuestion ? (
+          {instruction.showChatButton ? (
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Chat enabled
+              Visbile
             </span>
           ) : (
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              Chat disabled
+              Hidden
+            </span>
+          )}
+        </TableCell>
+        <TableCell>
+          {instruction.showNextButton ? (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Visible
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              Hidden
             </span>
           )}
         </TableCell>
@@ -663,7 +667,7 @@ export default function ModuleRoute() {
                   <form
                     {...instructionForm.getFormProps()}
                     method="post"
-                    className="mt-4 space-y-4"
+                    className="mt-4 space-y-8"
                   >
                     <input
                       type="hidden"
@@ -694,11 +698,35 @@ export default function ModuleRoute() {
                       required
                     />
                     <ButtonsFieldArray form={instructionForm} />
-                    <div className="flex items-center space-x-2">
-                      <FormSwitch
-                        scope={instructionForm.scope('canAskQuestion')}
-                        label="Allow students to ask questions"
-                      />
+                    <div className="flex flex-col border border-border rounded-md">
+                      <div className="p-4 flex items-center justify-between border-b">
+                        <div>
+                          <label className="text-sm">Show chat button</label>
+                          <p className="text-xs pr-4 pt-1 text-muted-foreground">
+                            Enabling this shows the{' '}
+                            <MessageCircleIcon className="inline-block h-4 w-4" />{' '}
+                            button in the tutor response bar
+                          </p>
+                        </div>
+                        <FormSwitch
+                          hideLabel
+                          scope={instructionForm.scope('showChatButton')}
+                        />
+                      </div>
+                      <div className="p-4 flex items-center justify-between">
+                        <div>
+                          <label className="text-sm">Show next button</label>
+                          <p className="text-xs pr-4 pt-1 text-muted-foreground">
+                            Enabling this hides the{' '}
+                            <ChevronRightIcon className="inline-block h-4 w-4" />{' '}
+                            button in the tutor response bar
+                          </p>
+                        </div>
+                        <FormSwitch
+                          hideLabel
+                          scope={instructionForm.scope('showNextButton')}
+                        />
+                      </div>
                     </div>
                     <FormTextarea
                       scope={instructionForm.scope('tutorInstructions')}
@@ -746,7 +774,8 @@ export default function ModuleRoute() {
                       <TableHead className="w-8"></TableHead>
                       <TableHead>Title</TableHead>
                       <TableHead>Buttons</TableHead>
-                      <TableHead>Chat</TableHead>
+                      <TableHead>Chat Btn</TableHead>
+                      <TableHead>Next Btn</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -777,17 +806,6 @@ function ButtonsFieldArray({ form }: { form: any }) {
     <div className="space-y-2 mb-4">
       <div className="flex items-center justify-between">
         <Label>Buttons</Label>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            buttonsFieldArray.push({ label: '', action: 'response' })
-          }
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Button
-        </Button>
       </div>
       {buttonsFieldArray.map((key, item, index) => (
         <div key={key} className="flex">
@@ -826,6 +844,18 @@ function ButtonsFieldArray({ form }: { form: any }) {
           </Button>
         </div>
       ))}
+      <Button
+        size="sm"
+        type="button"
+        variant="outline"
+        className="w-full rounded-md"
+        onClick={() =>
+          buttonsFieldArray.push({ label: '', action: 'response' })
+        }
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        Add Button
+      </Button>
     </div>
   );
 }

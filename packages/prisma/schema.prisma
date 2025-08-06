@@ -60,23 +60,19 @@ model CourseModule {
 }
 
 model CourseModuleInstruction {
-  id                      String                           @id @default(cuid())
-  createdAt               DateTime                         @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime                         @default(now()) @db.Timestamptz(6)
-  courseModuleId          String
-  position                Int
-  title                   String
-  interactiveType         String
-  prompt                  String
-  tutorInstructions       String?
-  answerType              String?
-  answerKey               String?
-  answerTypeOptions       String?
-  canAskQuestion          Boolean?                         @default(false)
-  nextInstructionBtnLabel String?
-  courseModule            CourseModule                     @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
-  instructionAudio        InstructionAudio?
-  buttons                 CourseModuleInstructionButton[]
+  id                String                          @id @default(cuid())
+  createdAt         DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                        @default(now()) @db.Timestamptz(6)
+  courseModuleId    String
+  position          Int
+  title             String
+  prompt            String
+  tutorInstructions String?
+  showChatButton    Boolean?                        @default(false)
+  showNextButton    Boolean?                        @default(true)
+  courseModule      CourseModule                    @relation(fields: [courseModuleId], references: [id], onDelete: Cascade)
+  instructionAudio  InstructionAudio?
+  buttons           CourseModuleInstructionButton[]
 }
 
 model CourseModuleInstructionButton {
@@ -86,7 +82,7 @@ model CourseModuleInstructionButton {
   courseModuleInstructionId String
   position                  Int
   label                     String
-  action                    String                  // 'advance' or 'response'
+  action                    String // 'advance' or 'response'
   courseModuleInstruction   CourseModuleInstruction @relation(fields: [courseModuleInstructionId], references: [id], onDelete: Cascade)
 }
 
@@ -336,77 +332,77 @@ model Verification {
 }
 
 model TeacherCourse {
-  id                    String                 @id @default(cuid())
-  createdAt             DateTime               @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime               @default(now()) @db.Timestamptz(6)
-  title                 String
-  description           String?
-  position              Int
-  image                 TeacherCourseImage?
-  teacherCourseModules  TeacherCourseModule[]
-  resources             TeacherCourseResource[]
+  id                   String                  @id @default(cuid())
+  createdAt            DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                @default(now()) @db.Timestamptz(6)
+  title                String
+  description          String?
+  position             Int
+  image                TeacherCourseImage?
+  teacherCourseModules TeacherCourseModule[]
+  resources            TeacherCourseResource[]
 }
 
 model TeacherCourseImage {
-  id               String        @id @default(cuid())
-  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime      @default(now()) @db.Timestamptz(6)
-  altText          String?
-  contentType      String
-  blob             Bytes
-  teacherCourseId  String        @unique
-  teacherCourse    TeacherCourse @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  altText         String?
+  contentType     String
+  blob            Bytes
+  teacherCourseId String        @unique
+  teacherCourse   TeacherCourse @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
 }
 
 model TeacherCourseModule {
-  id                          String                       @id @default(cuid())
-  createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt                   DateTime                     @default(now()) @db.Timestamptz(6)
-  deletedAt                   DateTime?                    @db.Timestamptz(6)
+  id                          String                        @id @default(cuid())
+  createdAt                   DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                   DateTime                      @default(now()) @db.Timestamptz(6)
+  deletedAt                   DateTime?                     @db.Timestamptz(6)
   title                       String
   position                    Int
   description                 String?
   videoLink                   String?
-  videoDuration               Int?                         // Duration in seconds
+  videoDuration               Int? // Duration in seconds
   teacherCourseId             String?
-  teacherCourse               TeacherCourse?               @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
+  teacherCourse               TeacherCourse?                @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
   resources                   TeacherCourseModuleResource[]
   teacherCourseModuleSessions TeacherCourseModuleSession[]
 }
 
 model TeacherCourseModuleResource {
-  id                   String              @id @default(cuid())
-  createdAt            DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime            @default(now()) @db.Timestamptz(6)
-  name                 String
-  contentType          String
-  blob                 Bytes
+  id                    String              @id @default(cuid())
+  createdAt             DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @db.Timestamptz(6)
+  name                  String
+  contentType           String
+  blob                  Bytes
   teacherCourseModuleId String
-  teacherCourseModule  TeacherCourseModule @relation(fields: [teacherCourseModuleId], references: [id], onDelete: Cascade)
+  teacherCourseModule   TeacherCourseModule @relation(fields: [teacherCourseModuleId], references: [id], onDelete: Cascade)
 }
 
 model TeacherCourseResource {
-  id               String        @id @default(cuid())
-  createdAt        DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime      @default(now()) @db.Timestamptz(6)
-  title            String
-  description      String?
-  url              String?
-  teacherCourseId  String
-  teacherCourse    TeacherCourse @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  title           String
+  description     String?
+  url             String?
+  teacherCourseId String
+  teacherCourse   TeacherCourse @relation(fields: [teacherCourseId], references: [id], onDelete: Cascade)
 }
 
 model TeacherCourseModuleSession {
-  id                     String              @id @default(cuid())
-  createdAt              DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt              DateTime            @default(now()) @db.Timestamptz(6)
-  deletedAt              DateTime?           @db.Timestamptz(6)
-  videoProgress          Float               @default(0) // Progress as percentage (0-100)
-  videoTimestamp         Int                 @default(0) // Last watched timestamp in seconds
-  teacherCourseModuleId  String
-  teacherProfileId       String
-  teacherCourseModule    TeacherCourseModule @relation(fields: [teacherCourseModuleId], references: [id], onDelete: Cascade)
-  teacherProfile         TeacherProfile      @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  id                    String              @id @default(cuid())
+  createdAt             DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime            @default(now()) @db.Timestamptz(6)
+  deletedAt             DateTime?           @db.Timestamptz(6)
+  videoProgress         Float               @default(0) // Progress as percentage (0-100)
+  videoTimestamp        Int                 @default(0) // Last watched timestamp in seconds
+  teacherCourseModuleId String
+  teacherProfileId      String
+  teacherCourseModule   TeacherCourseModule @relation(fields: [teacherCourseModuleId], references: [id], onDelete: Cascade)
+  teacherProfile        TeacherProfile      @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
 
   @@unique([teacherCourseModuleId, teacherProfileId])
 }

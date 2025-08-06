@@ -46,7 +46,6 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
-import { loader } from '../route';
 
 type Props = {
   docId: string;
@@ -59,10 +58,9 @@ type Props = {
         buttons: { id: string; label: string; action: string }[];
         id: string;
         title: string;
-        interactiveType: string;
         prompt: string;
-        canAskQuestion: boolean | null;
-        nextInstructionBtnLabel: string | null;
+        showChatButton: boolean | null;
+        showNextButton: boolean | null;
       }[];
       title: string;
       isSelfGuided: boolean;
@@ -252,6 +250,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       return prev;
     });
   };
+
+  console.log('instruction', instruction);
 
   return (
     <div className="flex w-full flex-col border-r pb-2 md:w-3/5">
@@ -519,10 +519,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
           }
           buttons={instruction.buttons ?? []}
           respond={respond}
-          canAskQuestion={
-            !!instruction.canAskQuestion ||
-            instruction.interactiveType === 'dialogue'
-          }
+          showChatButton={!!instruction.showChatButton}
+          showNextButton={!!instruction.showNextButton}
           advanceInstruction={
             isLastCmInstruction
               ? () => {
