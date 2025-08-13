@@ -2,7 +2,7 @@ import {
   type DocumentCommentResponse,
   type DocumentComment,
   type User,
-  type UserImage as PrismaUserImage,
+  Profile,
 } from '@app/prisma';
 import { useFetcher } from 'react-router';
 import { useRef, type MouseEvent } from 'react';
@@ -15,13 +15,9 @@ import { useDoubleCheck } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 
 export type Comment = DocumentComment & {
-  user: Omit<User, 'createdAt' | 'updatedAt'> & {
-    image: Pick<PrismaUserImage, 'id'> | null;
-  };
+  profile: Omit<Profile, 'createdAt' | 'updatedAt'>;
   responses: (DocumentCommentResponse & {
-    user: Omit<User, 'createdAt' | 'updatedAt'> & {
-      image: Pick<PrismaUserImage, 'id'> | null;
-    };
+    profile: Omit<Profile, 'createdAt' | 'updatedAt'> & { user: User };
   })[];
 };
 
@@ -32,9 +28,8 @@ export const Comment = (comment: Comment) => {
   const user = useUser();
   const ref = useRef(null);
 
-  const isTeacherOfCommentUser = user.studentProfiles.find(
-    (sp) => sp.userId === comment.userId
-  );
+  const isTeacherOfCommentUser =
+    user.selectedProfile?.teacherProfile?.profileId === comment.profileId;
 
   const optimisticData = createCommentResponseFetcher.formData;
   const optimisticDocumentCommentResponse = optimisticData
@@ -44,8 +39,8 @@ export const Comment = (comment: Comment) => {
           createdAt: new Date(),
           content: optimisticData.get('content') as string,
           commentId: comment.id,
-          userId: user.id,
-          user: user as any,
+          profileId: user.selectedProfile!.id,
+          profile: user.selectedProfile as any,
         },
       ]
     : [];
@@ -105,7 +100,8 @@ export const Comment = (comment: Comment) => {
             ? comment.content.slice(0, 90) + '...'
             : comment.content}
         </p>
-        {comment.userId === user.id || isTeacherOfCommentUser ? (
+        {comment.profileId === user.selectedProfile?.id ||
+        isTeacherOfCommentUser ? (
           <Button
             {...dc.getButtonProps({
               onClick: (event) => {
@@ -129,9 +125,10 @@ export const Comment = (comment: Comment) => {
           .map((response) => (
             <div key={response.id}>
               <div className="mt-1 flex items-center gap-2">
-                <UserImage user={response.user} size="xxs" />
                 <div>
-                  <p className="text-xs font-semibold">{response.user.name}</p>
+                  <p className="text-xs font-semibold">
+                    {response.profile.user.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     {timeAgo(new Date(response.createdAt))}
                   </p>

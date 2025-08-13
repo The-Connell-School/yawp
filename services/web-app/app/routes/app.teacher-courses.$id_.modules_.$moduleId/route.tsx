@@ -4,7 +4,6 @@ import {
   data as dataResponse,
   useLoaderData,
   useFetcher,
-  useNavigate,
   Form,
   redirect,
 } from 'react-router';
@@ -12,8 +11,6 @@ import { Link } from 'react-router';
 import {
   ChevronLeft,
   Play,
-  SkipForward,
-  CheckCircle,
   Clock,
   FileText,
   Download,
@@ -34,7 +31,6 @@ import { prisma } from '~/utils/db.server';
 import { requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
-import { Suspense } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -42,10 +38,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get teacher profile
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { teacherProfile: { select: { id: true } } },
+    select: { profiles: { include: { teacherProfile: true } } },
   });
 
-  if (!user?.teacherProfile) {
+  if (!user?.profiles.some((p) => p.teacherProfile)) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
@@ -63,7 +59,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             videoDuration: true,
             teacherCourseModuleSessions: {
               where: {
-                teacherProfileId: user.teacherProfile.id,
+                teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+                  ?.teacherProfile?.id,
               },
               select: {
                 id: true,
@@ -87,7 +84,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         teacherCourseModuleSessions: {
           where: {
-            teacherProfileId: user.teacherProfile.id,
+            teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+              ?.teacherProfile?.id,
           },
           select: {
             id: true,
@@ -106,10 +104,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
+  // Derive a signed URL for playback if using S3 key
+  let playbackUrl: string | null = null;
+  if (currentModule?.videoS3Key) {
+    playbackUrl = await (
+      await import('~/services/s3.server')
+    ).getSignedGetUrl(currentModule.videoS3Key);
+  }
+
   return dataResponse({
     teacherCourse,
-    currentModule,
-    teacherProfileId: user.teacherProfile.id,
+    currentModule: currentModule
+      ? {
+          ...currentModule,
+          videoLink: playbackUrl ?? null,
+        }
+      : currentModule,
+    teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+      ?.teacherProfile?.id,
     currentSession: currentModule.teacherCourseModuleSessions[0] || null,
   });
 }
@@ -122,10 +134,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   // Get teacher profile
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { teacherProfile: { select: { id: true } } },
+    select: { profiles: { include: { teacherProfile: true } } },
   });
 
-  if (!user?.teacherProfile) {
+  if (!user?.profiles.some((p) => p.teacherProfile)) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
@@ -138,7 +150,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: {
         teacherCourseModuleId_teacherProfileId: {
           teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.teacherProfile.id,
+          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+            ?.teacherProfile?.id!,
         },
       },
     });
@@ -146,7 +159,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.teacherCourseModuleSession.create({
         data: {
           teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.teacherProfile.id,
+          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+            ?.teacherProfile?.id!,
           videoTimestamp,
         },
       });
@@ -171,7 +185,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: {
         teacherCourseModuleId_teacherProfileId: {
           teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.teacherProfile.id,
+          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+            ?.teacherProfile?.id!,
         },
       },
       update: {
@@ -180,7 +195,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
       create: {
         teacherCourseModuleId: params.moduleId!,
-        teacherProfileId: user.teacherProfile.id,
+        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+          ?.teacherProfile?.id!,
         videoTimestamp: 0,
       },
     });
@@ -199,7 +215,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await prisma.teacherCourseModuleSession.deleteMany({
       where: {
         teacherCourseModuleId: moduleId,
-        teacherProfileId: user.teacherProfile.id,
+        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+          ?.teacherProfile?.id!,
       },
     });
 
@@ -207,7 +224,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await prisma.teacherCourseModuleSession.create({
       data: {
         teacherCourseModuleId: moduleId,
-        teacherProfileId: user.teacherProfile.id,
+        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+          ?.teacherProfile?.id!,
         videoTimestamp: 0,
       },
     });
@@ -276,7 +294,7 @@ export default function TeacherCourseModuleRoute() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 flex-1 overflow-scroll h-full">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 flex-1 overflow-scroll h-full">
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="lg:col-span-3 space-y-6">
             <Card className="bg-muted">

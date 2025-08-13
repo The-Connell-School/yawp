@@ -8,6 +8,8 @@ const schema = z.object({
   INTERNAL_COMMAND_TOKEN: z.string(),
   HONEYPOT_SECRET: z.string(),
   CACHE_DATABASE_PATH: z.string(),
+  AWS_S3_BUCKET_FOR_VIDEOS: z.string(),
+  AWS_S3_REGION_FOR_VIDEOS: z.string(),
 });
 
 declare global {

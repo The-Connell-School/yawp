@@ -5,6 +5,7 @@ import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { getProfileId } from '~/cookies/profile-id.server';
 
 const POST = z.object({
   documentId: z.string(),
@@ -14,12 +15,25 @@ const POST = z.object({
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
+  const profileId = await getProfileId(request);
+  const profile = await prisma.profile.findUnique({
+    where: { id: profileId, userId },
+    select: { id: true },
+  });
+
+  if (!profile) {
+    return dataResponse({ error: 'Profile not found.' }, { status: 404 });
+  }
 
   const where: Prisma.DocumentCommentWhereUniqueInput = {
     id: params.id,
     OR: [
-      { userId },
-      { user: { studentProfile: { workshopLeaderId: userId } } },
+      { profileId },
+      {
+        profile: {
+          studentProfile: { class: { teachers: { some: { profileId } } } },
+        },
+      },
     ],
   };
 

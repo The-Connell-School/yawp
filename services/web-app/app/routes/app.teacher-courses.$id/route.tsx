@@ -4,7 +4,7 @@ import {
   useLoaderData,
 } from 'react-router';
 import { Link } from 'react-router';
-import { ChevronLeft, Play, CheckCircle, Clock, FileText } from 'lucide-react';
+import { ChevronLeft, Play, Clock, FileText } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { CircularProgress } from '~/components/ui/circular-progress';
@@ -19,10 +19,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get teacher profile
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { teacherProfile: { select: { id: true } } },
+    select: { profiles: { include: { teacherProfile: true } } },
   });
 
-  if (!user?.teacherProfile) {
+  if (!user?.profiles.some((p) => p.teacherProfile)) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
@@ -41,7 +41,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
           teacherCourseModuleSessions: {
             where: {
-              teacherProfileId: user.teacherProfile.id,
+              teacherProfileId: user.profiles.find((p) => p.teacherProfile)
+                ?.teacherProfile?.id,
             },
             select: {
               id: true,

@@ -11,7 +11,6 @@ import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { requireAdmin } from '~/utils/permissions';
 import { getUserId } from '~/utils/auth.server';
 import { ChevronLeft, Settings } from 'lucide-react';
 import {
@@ -24,8 +23,11 @@ import {
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
-import React, { useState } from 'react';
+import React from 'react';
+import { useMultipartUpload } from '~/hooks/useMultipartUpload';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
+import { requireAdmin } from '~/utils/auth.server';
+import { getSignedGetUrl } from '~/services/s3.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -99,35 +101,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    let finalVideoLink = undefined;
     let videoDuration = undefined;
 
-    if (videoFile && videoFile.size > 0) {
-      // Store the video as a blob and create a link to it
-      const arrayBuffer = await videoFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      const upload = await prisma.upload.create({
-        data: {
-          name: videoFile.name,
-          contentType: videoFile.type,
-          blob: buffer,
-          userId: userId!,
-        },
-      });
-
-      finalVideoLink = `/api/upload/${upload.id}`;
-      videoDuration = videoDurationStr
-        ? Math.floor(Number(videoDurationStr))
-        : null;
+    // Expect `videoS3Key` if replacing video
+    const videoS3Key = formData.get('videoS3Key')?.toString();
+    if (videoFile && videoFile.size > 0 && !videoS3Key) {
+      return new Response('Missing videoS3Key', { status: 400 });
     }
+    videoDuration = videoDurationStr
+      ? Math.floor(Number(videoDurationStr))
+      : null;
 
     await prisma.teacherCourseModule.update({
       where: { id: params.moduleId },
       data: {
         title,
         description: description || null,
-        ...(finalVideoLink !== undefined && { videoLink: finalVideoLink }),
+        ...(videoS3Key ? { videoS3Key } : {}),
         ...(videoDuration !== undefined && { videoDuration }),
       },
     });
@@ -195,6 +185,11 @@ export default function TeacherCourseModuleRoute() {
   const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);
   const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
   const [isVideoLoading, setIsVideoLoading] = React.useState(false);
+  const {
+    uploadFile,
+    progress: uploadProgress,
+    isUploading,
+  } = useMultipartUpload();
 
   const handleVideoFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -221,6 +216,16 @@ export default function TeacherCourseModuleRoute() {
         });
 
         setVideoDuration(duration);
+        // Perform multipart upload, then set hidden input value
+        const { key } = await uploadFile({
+          file,
+          teacherCourseId: teacherCourse.id,
+          moduleId: teacherCourseModule.id,
+        });
+        const hidden = document.getElementById(
+          'videoS3Key'
+        ) as HTMLInputElement | null;
+        if (hidden) hidden.value = key;
       } catch (error) {
         console.error('Could not get video duration:', error);
         setVideoDuration(null);
@@ -278,14 +283,30 @@ export default function TeacherCourseModuleRoute() {
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
+          <Sheet
+            open={isModuleSheetOpen}
+            onOpenChange={(open) => {
+              if (isUploading || fetcher.state !== 'idle') return;
+              setIsModuleSheetOpen(open);
+            }}
+          >
             <SheetTrigger asChild>
-              <Button variant="outline">
+              <Button
+                variant="outline"
+                disabled={isUploading || fetcher.state !== 'idle'}
+              >
                 <Settings className="mr-2 h-4 w-4" />
                 Edit Module
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent
+              onPointerDownOutside={(e) => {
+                if (isUploading || fetcher.state !== 'idle') e.preventDefault();
+              }}
+              onEscapeKeyDown={(e) => {
+                if (isUploading || fetcher.state !== 'idle') e.preventDefault();
+              }}
+            >
               <SheetHeader>
                 <SheetTitle>Edit Teacher Course Module</SheetTitle>
               </SheetHeader>
@@ -295,6 +316,7 @@ export default function TeacherCourseModuleRoute() {
                 encType="multipart/form-data"
               >
                 <input type="hidden" name="intent" value="updateModule" />
+                <input type="hidden" name="videoS3Key" id="videoS3Key" />
                 <div className="space-y-2">
                   <Label htmlFor="title">Title</Label>
                   <Input
@@ -322,6 +344,11 @@ export default function TeacherCourseModuleRoute() {
                     accept="video/*"
                     onChange={handleVideoFileChange}
                   />
+                  {isUploading ? (
+                    <p className="text-sm text-muted-foreground">
+                      Uploading... {uploadProgress}%
+                    </p>
+                  ) : null}
                   {isVideoLoading && (
                     <p className="text-sm text-muted-foreground">
                       Analyzing video duration...
@@ -338,16 +365,19 @@ export default function TeacherCourseModuleRoute() {
                     value={videoDuration || ''}
                   />
                   <p className="text-sm text-muted-foreground">
-                    Leave empty to keep current video. Only upload files are
-                    supported.
+                    Leave empty to keep current video.
                   </p>
                 </div>
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={fetcher.state !== 'idle'}
+                  disabled={isUploading || fetcher.state !== 'idle'}
                 >
-                  {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+                  {isUploading
+                    ? `Uploading Video… ${uploadProgress}%`
+                    : fetcher.state !== 'idle'
+                      ? 'Saving...'
+                      : 'Save Changes'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -416,7 +446,7 @@ export default function TeacherCourseModuleRoute() {
         </CardContent>
       </Card>
 
-      {teacherCourseModule.videoLink && (
+      {teacherCourseModule.videoS3Key && (
         <Card className="bg-muted">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -438,11 +468,7 @@ export default function TeacherCourseModuleRoute() {
               </video> */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Video format:{' '}
-                  {teacherCourseModule.videoLink
-                    .split('.')
-                    .pop()
-                    ?.toUpperCase() || 'Unknown'}
+                  Video format: {teacherCourseModule.videoS3Key || 'Unknown'}
                 </span>
                 {teacherCourseModule.videoDuration && (
                   <span>

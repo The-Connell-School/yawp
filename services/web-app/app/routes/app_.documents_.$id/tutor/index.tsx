@@ -1,14 +1,4 @@
-import {
-  type CourseModuleSession as PrismaCMS,
-  type CourseModuleInstruction,
-  type CourseModuleSessionMessage,
-} from '@app/prisma';
-import {
-  useFetcher,
-  useNavigate,
-  useSearchParams,
-  useLoaderData,
-} from 'react-router';
+import { useFetcher, useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -52,8 +42,10 @@ type Props = {
   nextCmId?: string;
   hasPreviousCms?: boolean;
   cms: {
-    courseModule: {
-      course: { courseModules: { id: string; position: number }[] } | null;
+    studentCourseModule: {
+      studentCourse: {
+        studentCourseModules: { id: string; position: number }[];
+      } | null;
       instructions: {
         buttons: { id: string; label: string; action: string }[];
         id: string;
@@ -109,12 +101,13 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
   const [speechSpeed, setSpeechSpeed] = useLocalStorage('speechSpeed', 1);
 
   const finishedCms =
-    cms.instructionsCompleted === cms.courseModule.instructions.length;
+    cms.instructionsCompleted === cms.studentCourseModule.instructions.length;
   const isLastCmInstruction =
-    cms.instructionsCompleted === cms.courseModule.instructions.length - 1;
+    cms.instructionsCompleted ===
+    cms.studentCourseModule.instructions.length - 1;
 
   const instruction =
-    cms.courseModule.instructions[cms.instructionsCompleted] ?? {};
+    cms.studentCourseModule.instructions[cms.instructionsCompleted] ?? {};
 
   const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
   const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
@@ -131,7 +124,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
   const user = useUser();
   const userIsAdmin = user.isAdmin;
-  const userIsTeacher = user.teacherProfile !== null;
+  const userIsTeacher = user.selectedProfile?.teacherProfile !== null;
   const { submit, isLoading } = useAsyncFetcherSubmit();
 
   const respond = (response: string) => {
@@ -260,7 +253,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       <div
         className={cn(
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
-          cms.courseModule.isSelfGuided ? '' : 'border-b'
+          cms.studentCourseModule.isSelfGuided ? '' : 'border-b'
         )}
       >
         <div className="flex h-[32px] w-full items-center gap-1">
@@ -279,7 +272,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               </Button>
             </Tooltip>
             <p className="text-sm font-bold text-foreground/80">
-              {cms.courseModule.title}
+              {cms.studentCourseModule.title}
             </p>
             <Tooltip text="Next step" delayDuration={0}>
               <Button
@@ -295,7 +288,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               </Button>
             </Tooltip>
           </div>
-          {cms.courseModule.isSelfGuided ? null : (
+          {cms.studentCourseModule.isSelfGuided ? null : (
             <Tooltip
               text={messagesExpanded ? 'Hide messages' : 'Show messages'}
               delayDuration={0}
@@ -314,7 +307,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               </Button>
             </Tooltip>
           )}
-          {cms.courseModule.isSelfGuided ? null : (
+          {cms.studentCourseModule.isSelfGuided ? null : (
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon-sm" className="min-w-8">
@@ -383,7 +376,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
           )}
         </div>
       </div>
-      {cms.courseModule.isSelfGuided ? (
+      {cms.studentCourseModule.isSelfGuided ? (
         <div className="flex items-center justify-center gap-4 p-4">
           <p className="text-sm text-muted-foreground">
             {isCurrentCms
@@ -446,7 +439,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
         <div
           className={cn(
             'flex flex-col items-center justify-center p-4',
-            messagesExpanded && !cms.courseModule.isSelfGuided
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -481,7 +474,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
         <div
           className={cn(
             'flex flex-col items-center gap-4 border-t p-2 px-4',
-            messagesExpanded && !cms.courseModule.isSelfGuided
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -504,7 +497,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
         <p
           className={cn(
             'p-2 text-center text-sm text-muted-foreground',
-            messagesExpanded && !cms.courseModule.isSelfGuided
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -514,7 +507,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       ) : (
         <ResponseBar
           className={
-            messagesExpanded && !cms.courseModule.isSelfGuided
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }

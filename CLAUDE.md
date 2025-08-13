@@ -59,6 +59,7 @@ import { z } from 'zod';
 const Schema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email'),
+  isAdmin: z.enum(['on']).optional(),
 });
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -71,7 +72,7 @@ export default function MyRoute() {
   const form = useForm({
     schema: Schema,
     method: 'POST',
-    defaultValues: { name: '', email: '' }
+    defaultValues: { name: data.name, email: data.email, isAdmin: data.isAdmin ? 'on' : undefined }
   });
 
   return (

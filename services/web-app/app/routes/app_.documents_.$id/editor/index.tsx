@@ -9,7 +9,6 @@ import { Bar } from './bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
-import { useFetcher, useFetchers, useRevalidator } from 'react-router';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;

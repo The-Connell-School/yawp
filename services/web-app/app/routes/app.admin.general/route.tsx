@@ -10,8 +10,6 @@ import { z } from 'zod';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
-import { requireAdmin } from '~/utils/permissions';
-import { startCase } from '~/utils/startCase';
 import { redirectWithToast } from '~/utils/toast.server';
 import { Setting } from '@app/prisma';
 import { useState } from 'react';
@@ -25,6 +23,8 @@ import {
 } from '~/components/ui/sheet';
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { Input } from '~/components/ui/input';
+import startCase from 'lodash/startCase';
+import { requireAdmin } from '~/utils/auth.server';
 
 const Schema = z.object({
   name: z.string(),

@@ -80,7 +80,7 @@ export const handleError: HandleErrorFunction = async (error, args) => {
   try {
     // Get user context for better error tracking
     const userId = await getUserId(request).catch(() => null);
-    
+
     // Build comprehensive error context
     const errorContext = {
       timestamp: new Date().toISOString(),
@@ -110,10 +110,9 @@ export const handleError: HandleErrorFunction = async (error, args) => {
 
     // Log to PostHog in production
     if (posthog) {
-      console.log('📊 Logging error to PostHog...');
       posthog.captureException(error, userId ?? 'anonymous');
     } else {
-      await logToFile(errorContext);
+      throw error;
     }
   } catch (loggingError) {
     // Fallback logging if our error logger fails

@@ -52,3 +52,8 @@ output "web_service_url" {
   description = "Public URL of the App Runner service"
   value       = aws_apprunner_service.web.service_url
 }
+
+output "videos_bucket_name" {
+  description = "S3 bucket for videos/files"
+  value       = aws_s3_bucket.videos.bucket
+}

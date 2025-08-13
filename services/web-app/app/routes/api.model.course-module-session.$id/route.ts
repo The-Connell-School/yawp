@@ -20,9 +20,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const cms = await prisma.courseModuleSession.findUnique({
+  const cms = await prisma.studentCourseModuleSession.findUnique({
     where: { id: params.id },
-    include: { courseModule: { include: { instructions: { include: { buttons: { orderBy: { position: 'asc' } } } } } } },
+    include: {
+      studentCourseModule: {
+        include: {
+          instructions: {
+            include: { buttons: { orderBy: { position: 'asc' } } },
+          },
+        },
+      },
+    },
   });
 
   if (!cms) {
@@ -33,13 +41,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const hasCompletedAllInstructions =
-    cms.instructionsCompleted + 1 === cms.courseModule.instructions.length;
+    cms.instructionsCompleted + 1 ===
+    cms.studentCourseModule.instructions.length;
 
   const isIncrementing =
     typeof data.instructionsCompleted === 'object' &&
     'increment' in data.instructionsCompleted;
 
-  const updated = await prisma.courseModuleSession.update({
+  const updated = await prisma.studentCourseModuleSession.update({
     where: { id: params.id },
     data: {
       ...data,
@@ -48,11 +57,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
             messages: {
               create: {
                 content:
-                  cms.courseModule.instructions[cms.instructionsCompleted]
-                    .prompt,
+                  cms.studentCourseModule.instructions[
+                    cms.instructionsCompleted
+                  ].prompt,
                 agent: 'assistant',
                 instructionId:
-                  cms.courseModule.instructions[cms.instructionsCompleted].id,
+                  cms.studentCourseModule.instructions[
+                    cms.instructionsCompleted
+                  ].id,
               },
             },
           }

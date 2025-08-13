@@ -19,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { requireAdmin } from '~/utils/permissions';
 import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
 import {
   Sheet,
@@ -51,23 +50,21 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
+import { requireAdmin } from '~/utils/auth.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const course = await prisma.course.findUnique({
+  const course = await prisma.studentCourse.findUnique({
     where: { id: params.id },
     include: {
-      courseModules: {
+      studentCourseModules: {
         include: {
           instructions: {
             orderBy: { position: 'asc' },
           },
         },
         orderBy: { position: 'asc' },
-      },
-      resources: {
-        orderBy: { createdAt: 'desc' },
       },
       image: { select: { id: true } },
     },
@@ -86,7 +83,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteCourse') {
-    await prisma.course.delete({
+    await prisma.studentCourse.delete({
       where: { id: params.id },
     });
 
@@ -105,22 +102,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.courseImage.deleteMany({ where: { courseId: params.id } });
+        await tx.studentCourseImage.deleteMany({
+          where: { studentCourseId: params.id },
+        });
       } else if (imageFile && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await tx.courseImage.deleteMany({ where: { courseId: params.id } });
-        await tx.courseImage.create({
+        await tx.studentCourseImage.deleteMany({
+          where: { studentCourseId: params.id },
+        });
+        await tx.studentCourseImage.create({
           data: {
             contentType: imageFile.type,
             blob: buffer,
-            courseId: params.id!,
+            studentCourseId: params.id!,
           },
         });
       }
 
-      await tx.course.update({
+      await tx.studentCourse.update({
         where: { id: params.id },
         data: {
           title,
@@ -142,18 +143,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.courseModule.count({
-      where: { courseId: params.id },
+    const moduleCount = await prisma.studentCourseModule.count({
+      where: { studentCourseId: params.id },
     });
 
-    await prisma.courseModule.create({
+    await prisma.studentCourseModule.create({
       data: {
         title,
         description: description || null,
         isSelfGuided,
         tutorInstructions: tutorInstructions || null,
         position: moduleCount,
-        courseId: params.id!,
+        studentCourseId: params.id!,
       },
     });
 
@@ -165,7 +166,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await Promise.all(
       moduleIds.map((moduleId: string, index: number) =>
-        prisma.courseModule.update({
+        prisma.studentCourseModule.update({
           where: { id: moduleId },
           data: { position: index },
         })
@@ -188,10 +189,10 @@ export default function CourseRoute() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Drag and drop state for modules ---
-  const [modules, setModules] = React.useState(course.courseModules);
+  const [modules, setModules] = React.useState(course.studentCourseModules);
   React.useEffect(() => {
-    setModules(course.courseModules);
-  }, [course.courseModules]);
+    setModules(course.studentCourseModules);
+  }, [course.studentCourseModules]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -225,7 +226,7 @@ export default function CourseRoute() {
   };
 
   // Sortable row component
-  function SortableTableRow({ module, idx }: { module: any; idx: number }) {
+  function SortableTableRow({ module }: { module: any }) {
     const {
       attributes,
       listeners,
@@ -545,12 +546,8 @@ export default function CourseRoute() {
                   strategy={verticalListSortingStrategy}
                 >
                   <TableBody>
-                    {modules.map((module, idx) => (
-                      <SortableTableRow
-                        key={module.id}
-                        module={module}
-                        idx={idx}
-                      />
+                    {modules.map((module) => (
+                      <SortableTableRow key={module.id} module={module} />
                     ))}
                   </TableBody>
                 </SortableContext>

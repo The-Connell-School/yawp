@@ -4,7 +4,6 @@ import {
   type LoaderFunctionArgs,
   useLoaderData,
   type ActionFunctionArgs,
-  redirect,
   useNavigate,
 } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -28,9 +27,7 @@ import {
   OrganizationTableCookie,
   setOrganizationTableCookie,
 } from '~/utils/cookies.server';
-import { requireAdmin } from '~/utils/permissions';
 import { Pagination } from '~/components/table/pagination';
-import { Checkbox } from '~/components/ui/checkbox';
 import { CookieColumns, useTable } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
 import {
@@ -40,9 +37,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
-import { Label } from '~/components/ui/label';
-import { Input } from '~/components/ui/input';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { requireAdmin } from '~/utils/auth.server';
+import { z } from 'zod';
+import { parseFormData, useForm, validationError } from '@rvf/react-router';
+import { FormInput } from '~/components/forms/form-input-2';
 
 type Stats = {
   total_organizations: number;
@@ -50,6 +49,17 @@ type Stats = {
   total_students: number;
   total_teachers: number;
 };
+
+const CreateOrganizationSchema = z.object({
+  name: z.string(),
+  numOfStudentSeats: z.string().refine((value) => !isNaN(Number(value)), {
+    message: 'Number of student seats must be a number',
+  }),
+  numOfTeacherSeats: z.string().refine((value) => !isNaN(Number(value)), {
+    message: 'Number of teacher seats must be a number',
+  }),
+  accessExpiresAt: z.string().optional(),
+});
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -92,7 +102,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       skip,
       take,
       include: {
-        users: {
+        profiles: {
           include: {
             studentProfile: true,
             teacherProfile: true,
@@ -106,14 +116,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.organization.count(),
     prisma.$queryRaw<Stats[]>`
       SELECT
-        COUNT(DISTINCT o.id)::int as total_organizations,
-        COUNT(DISTINCT CASE WHEN o."createdAt" > NOW() - INTERVAL '30 days' THEN o.id END)::int as active_organizations,
-        COUNT(DISTINCT CASE WHEN sp.id IS NOT NULL THEN u.id END)::int as total_students,
-        COUNT(DISTINCT CASE WHEN tp.id IS NOT NULL THEN u.id END)::int as total_teachers
-      FROM "Organization" o
-      LEFT JOIN "User" u ON u."organizationId" = o.id
-      LEFT JOIN "StudentProfile" sp ON sp."userId" = u.id
-      LEFT JOIN "TeacherProfile" tp ON tp."userId" = u.id
+        (SELECT COUNT(*) FROM "Organization")::int as total_organizations,
+        (SELECT COUNT(*) FROM "Organization" WHERE "createdAt" > NOW() - INTERVAL '30 days')::int as active_organizations,
+        (SELECT COUNT(*) FROM "StudentProfile")::int as total_students,
+        (SELECT COUNT(*) FROM "TeacherProfile")::int as total_teachers
     `,
   ]);
 
@@ -135,35 +141,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireAdmin(request);
   const formData = await request.formData();
-  const intent = formData.get('intent');
 
-  if (intent === 'create') {
-    const name = formData.get('name')?.toString();
-    const numOfStudentSeats = parseInt(
-      formData.get('numOfStudentSeats')?.toString() || '10'
+  if (formData.get('intent') === 'create') {
+    const { error, data } = await parseFormData(
+      formData,
+      CreateOrganizationSchema
     );
-    const numOfTeacherSeats = parseInt(
-      formData.get('numOfTeacherSeats')?.toString() || '10'
-    );
-    const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    if (error) return validationError(error);
 
-    if (!name) {
-      throw new Response('Name is required', { status: 400 });
-    }
-
-    const organization = await prisma.organization.create({
+    await prisma.organization.create({
       data: {
-        name,
-        numOfStudentSeats,
-        numOfTeacherSeats,
-        accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+        name: data.name,
+        numOfStudentSeats: Number(data.numOfStudentSeats),
+        numOfTeacherSeats: Number(data.numOfTeacherSeats),
+        accessExpiresAt: data.accessExpiresAt
+          ? new Date(data.accessExpiresAt)
+          : null,
       },
     });
 
-    return redirect(`/app/admin/organizations/${organization.id}`);
+    return dataResponse({ success: true });
   }
 
-  if (intent === 'updateFilters') {
+  if (formData.get('intent') === 'updateFilters') {
     let filters = await getOrganizationTableCookie(request);
     const key = formData.get('key') as
       | keyof OrganizationTableCookie
@@ -191,7 +191,8 @@ export async function action({ request }: ActionFunctionArgs) {
       { headers: { 'Set-Cookie': cookie } }
     );
   }
-  return {};
+
+  return new Response('Method not allowed', { status: 405 });
 }
 
 export default function OrganizationsRoute() {
@@ -200,15 +201,18 @@ export default function OrganizationsRoute() {
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const { selected, handleSelectAll, handleSort, handleSelect } = useTable({
-    rows: organizations,
-  });
+  const { handleSort } = useTable({ rows: organizations });
 
-  useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data) {
-      setIsSheetOpen(false);
-    }
-  }, [fetcher.state, fetcher.data]);
+  const form = useForm({
+    schema: CreateOrganizationSchema,
+    method: 'POST',
+    defaultValues: {
+      name: '',
+      numOfStudentSeats: '10',
+      numOfTeacherSeats: '10',
+    },
+    onSubmitSuccess: () => setIsSheetOpen(false),
+  });
 
   return (
     <div className="p-3 sm:p-5">
@@ -283,44 +287,24 @@ export default function OrganizationsRoute() {
               <SheetHeader>
                 <SheetTitle>Create Organization</SheetTitle>
               </SheetHeader>
-              <fetcher.Form method="post" className="mt-4 space-y-4">
+              <fetcher.Form className="mt-4 space-y-4" {...form.getFormProps()}>
                 <input type="hidden" name="intent" value="create" />
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="numOfStudentSeats">
-                    Number of Student Seats
-                  </Label>
-                  <Input
-                    id="numOfStudentSeats"
-                    name="numOfStudentSeats"
-                    type="number"
-                    defaultValue="10"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="numOfTeacherSeats">
-                    Number of Teacher Seats
-                  </Label>
-                  <Input
-                    id="numOfTeacherSeats"
-                    name="numOfTeacherSeats"
-                    type="number"
-                    defaultValue="10"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="accessExpiresAt">Access Expires At</Label>
-                  <Input
-                    id="accessExpiresAt"
-                    name="accessExpiresAt"
-                    type="datetime-local"
-                  />
-                </div>
+                <FormInput scope={form.scope('name')} label="Name" />
+                <FormInput
+                  scope={form.scope('numOfStudentSeats')}
+                  label="Number of Student Seats"
+                  type="number"
+                />
+                <FormInput
+                  scope={form.scope('numOfTeacherSeats')}
+                  label="Number of Teacher Seats"
+                  type="number"
+                />
+                <FormInput
+                  scope={form.scope('accessExpiresAt')}
+                  label="Access Expires At"
+                  type="date"
+                />
                 <Button
                   type="submit"
                   className="w-full"
@@ -354,12 +338,6 @@ export default function OrganizationsRoute() {
             <Table className="rounded-lg">
               <TableHeader className="rounded-t-lg">
                 <TableRow className="bg-muted/50 rounded-t-lg">
-                  <TableHead className="w-[50px] pl-4 rounded-tl-lg">
-                    <Checkbox
-                      checked={selected.length === organizations.length}
-                      onCheckedChange={handleSelectAll}
-                    />
-                  </TableHead>
                   {Object.entries(COLUMNS).map(([key, { label, value }]) => (
                     <TableHead
                       key={key}
@@ -415,29 +393,25 @@ export default function OrganizationsRoute() {
                       navigate(`/app/admin/organizations/${organization.id}`)
                     }
                   >
-                    <TableCell className="max-h-[37px] pl-4">
-                      <Checkbox
-                        checked={selected.includes(organization.id)}
-                        onCheckedChange={() => handleSelect(organization.id)}
-                      />
-                    </TableCell>
                     <TableCell>{organization.name}</TableCell>
                     <TableCell>
                       {organization.createdAt.toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{organization.users.length}</TableCell>
+                    <TableCell>{organization.profiles.length}</TableCell>
                     <TableCell>
                       {
-                        organization.users.filter(
-                          (user) => user.studentProfile && !user.isOwner
+                        organization.profiles.filter(
+                          (profile) =>
+                            profile.studentProfile && !profile.isOwner
                         ).length
                       }{' '}
                       / {organization.numOfStudentSeats}
                     </TableCell>
                     <TableCell>
                       {
-                        organization.users.filter((user) => user.teacherProfile)
-                          .length
+                        organization.profiles.filter(
+                          (profile) => profile.teacherProfile
+                        ).length
                       }{' '}
                       / {organization.numOfTeacherSeats}
                     </TableCell>

@@ -12,7 +12,6 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
 import { Plus } from 'lucide-react';
-import { requireAdmin } from '~/utils/permissions';
 import {
   Sheet,
   SheetContent,
@@ -24,46 +23,27 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
+import { requireAdmin } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [courses, stats] = await Promise.all([
-    prisma.course.findMany({
+  const [courses] = await Promise.all([
+    prisma.studentCourse.findMany({
       include: {
-        courseModules: {
+        studentCourseModules: {
           include: {
             instructions: true,
           },
         },
-        resources: true,
         image: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.$queryRaw<
-      {
-        total_courses: number;
-        total_modules: number;
-        total_instructions: number;
-        total_resources: number;
-      }[]
-    >`
-      SELECT
-        COUNT(DISTINCT c.id)::int as total_courses,
-        COUNT(DISTINCT cm.id)::int as total_modules,
-        COUNT(DISTINCT cmi.id)::int as total_instructions,
-        COUNT(DISTINCT cr.id)::int as total_resources
-      FROM "Course" c
-      LEFT JOIN "CourseModule" cm ON cm."courseId" = c.id
-      LEFT JOIN "CourseModuleInstruction" cmi ON cmi."courseModuleId" = cm.id
-      LEFT JOIN "CourseResource" cr ON cr."courseId" = c.id
-    `,
   ]);
 
   return dataResponse({
     courses,
-    stats: stats[0],
   });
 }
 
@@ -80,8 +60,8 @@ export async function action({ request }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const count = await prisma.course.count();
-    const course = await prisma.course.create({
+    const count = await prisma.studentCourse.count();
+    const course = await prisma.studentCourse.create({
       data: {
         title,
         description: description || null,
@@ -96,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function CoursesRoute() {
-  const { courses, stats } = useLoaderData<typeof loader>();
+  const { courses } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -190,8 +170,7 @@ export default function CoursesRoute() {
                       {course.description || 'No description'}
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{course.courseModules.length} modules</span>
-                      <span>{course.resources.length} resources</span>
+                      <span>{course.studentCourseModules.length} modules</span>
                     </div>
                   </CardContent>
                 </Card>

@@ -131,7 +131,6 @@
 
 * {
   --font-sans: 'Roboto', sans-serif;
-  @apply overscroll-none;
 }
 
 h1,

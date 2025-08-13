@@ -7,7 +7,10 @@ export async function action({ request }: { request: Request }) {
   const user = await prisma.user.findUnique({
     where: {
       id: userId,
-      OR: [{ teacherProfile: { isNot: null } }, { isAdmin: true }],
+      OR: [
+        { profiles: { some: { teacherProfile: { isNot: null } } } },
+        { isAdmin: true },
+      ],
     },
   });
 
@@ -25,7 +28,7 @@ export async function action({ request }: { request: Request }) {
     );
   }
 
-  const cms = await prisma.courseModuleSession.findUnique({
+  const cms = await prisma.studentCourseModuleSession.findUnique({
     where: { id: cmsId },
     include: { document: true },
   });
@@ -38,13 +41,13 @@ export async function action({ request }: { request: Request }) {
   }
 
   await Promise.all([
-    prisma.courseModuleSession.deleteMany({
+    prisma.studentCourseModuleSession.deleteMany({
       where: {
         documentId: cms.documentId,
         createdAt: { gt: cms.createdAt },
       },
     }),
-    prisma.courseModuleSession.update({
+    prisma.studentCourseModuleSession.update({
       where: { id: cmsId },
       data: {
         instructionsCompleted: { decrement: 1 },

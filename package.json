@@ -7,6 +7,7 @@
     "services/*"
   ],
   "scripts": {
+    "export-env": "export $(grep -v '^#' .env | xargs) ",
     "dev": "bun web-app:dev",
     "web-app:dev": "bun run --cwd services/web-app dev",
     "web-app:build": "bun run --cwd services/web-app build",
@@ -24,11 +25,11 @@
     "prisma:migrate:dev": "bun run --cwd packages/prisma bun prisma migrate dev",
     "prisma:migrate:reset": "bun run --cwd packages/prisma bun prisma migrate reset",
     "prisma:migrate-remote": "bun run --cwd packages/prisma migrate-remote",
-    "infra:staging:init": "bun run --cwd infra terraform init -backend-config=envs/backends/staging.backend",
-    "infra:staging:plan": "bun run --cwd infra terraform plan -var-file=envs/variables/staging.tfvars",
-    "infra:staging:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/staging.tfvars",
-    "infra:production:init": "bun run --cwd infra terraform init -backend-config=envs/backends/production.backend",
-    "infra:production:plan": "bun run --cwd infra terraform plan -var-file=envs/variables/production.tfvars",
-    "infra:production:apply": "bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars"
+    "infra:staging:init": "bun export-env && bun run --cwd infra terraform init -backend-config=envs/backends/staging.backend",
+    "infra:staging:plan": "bun export-env && bun run --cwd infra terraform plan -var-file=envs/variables/staging.tfvars",
+    "infra:staging:apply": "bun export-env && bun run --cwd infra terraform apply -var-file=envs/variables/staging.tfvars",
+    "infra:production:init": "bun export-env && bun run --cwd infra terraform init -backend-config=envs/backends/production.backend",
+    "infra:production:plan": "bun export-env && bun run --cwd infra terraform plan -var-file=envs/variables/production.tfvars",
+    "infra:production:apply": "bun export-env && bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars"
   }
 }

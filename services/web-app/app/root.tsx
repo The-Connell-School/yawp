@@ -26,17 +26,15 @@ import {
 import appCssUrl from './app.css?url';
 import { getUserId, logout } from './utils/auth.server.ts';
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx';
-import { csrf } from './utils/csrf.server.ts';
 import { prisma } from './utils/db.server.ts';
 import { getEnv } from './utils/env.server.ts';
-import { honeypot } from './utils/honeypot.server.ts';
 import { combineHeaders, getDomainUrl } from './utils/misc.tsx';
 import { makeTimings, time } from './utils/timing.server.ts';
 import { getToast } from './utils/toast.server.ts';
 import type { Route } from './+types/root.ts';
-import { AuthenticityTokenProvider } from 'remix-utils/csrf/react';
 import posthog from 'posthog-js';
 import omit from 'lodash/omit';
+import { getProfileId } from './cookies/profile-id.server.ts';
 
 export const links: LinksFunction = () => {
   return [
@@ -82,13 +80,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
               id: true,
               name: true,
               email: true,
-              image: { select: { id: true } },
-              studentProfiles: { select: { id: true, userId: true } },
-              teacherProfile: { select: { id: true } },
               isAdmin: true,
-              isOwner: true,
-              isSuperOwner: true,
-              organization: { select: { id: true, name: true } },
+              profiles: {
+                orderBy: { createdAt: 'asc' },
+                select: {
+                  id: true,
+                  isOwner: true,
+                  teacherProfile: { select: { id: true, profileId: true } },
+                  studentProfile: { select: { id: true, profileId: true } },
+                  organization: { select: { name: true } },
+                },
+              },
             },
             where: { id: userId },
           }),
@@ -101,15 +103,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const { toast, headers: toastHeaders } = await getToast(request);
-  const honeyProps = honeypot.getInputProps();
-  const [csrfToken, csrfCookieHeader] = await csrf.commitToken();
   const cookieHeader = request.headers.get('Cookie');
-
   const navCookie = (await navStateCookie.parse(cookieHeader)) || {};
+  const profileId = await getProfileId(request);
+  const profile =
+    user?.profiles.find((p) => p.id === profileId) ?? user?.profiles[0];
 
   return data(
     {
-      user,
+      user: { ...user, selectedProfile: profile },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -125,14 +127,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           ? 'localhost'
           : null,
       toast,
-      honeyProps,
-      csrfToken,
     },
     {
       headers: combineHeaders(
         { 'Server-Timing': timings.toString() },
-        toastHeaders,
-        csrfCookieHeader ? { 'set-cookie': csrfCookieHeader } : null
+        toastHeaders
       ),
     }
   );
@@ -239,55 +238,52 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         posthog.identify(data.user.id, {
           email: data.user.email,
           name: data.user.name,
-          organization_id: data.user.organization?.id,
-          organization_name: data.user.organization?.id,
+          profile_id: data.user.selectedProfile?.id,
           is_admin: data.user.isAdmin,
-          is_owner: data.user.isOwner,
-          ...omit(data.user, ['id', 'email', 'name', 'organization']),
+          is_owner: data.user.selectedProfile?.isOwner,
+          ...omit(data.user, ['id', 'email', 'name']),
         });
       }
     }
   }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user]);
 
   return (
-    <AuthenticityTokenProvider token={data.csrfToken}>
-      <PostHogProvider
-        apiKey={data.ENV.POSTHOG_API_KEY!}
-        options={{
-          api_host: data.ENV.POSTHOG_HOST!,
-          defaults: '2025-05-24',
-        }}
-      >
-        <Document nonce={nonce} env={data.ENV}>
-          {data.bannerWarning === 'staging' ? (
-            <Tooltip
-              text="This is a staging environment. Do not use real data."
-              delayDuration={0}
-            >
-              <div className="fixed bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
-                <AlertTriangle size={26} />
-              </div>
-            </Tooltip>
-          ) : data.bannerWarning === 'localhost' ? (
-            <Tooltip
-              text="This is a local environment. Do not use real data."
-              delayDuration={0}
-            >
-              <div className="fixed bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
-                <FlaskConical size={26} />
-              </div>
-            </Tooltip>
-          ) : null}
-          <GlobalLoading />
-          <div className="flex h-screen min-h-screen flex-col justify-between">
-            <div className="flex-1 bg-background">
-              <Outlet />
+    <PostHogProvider
+      apiKey={data.ENV.POSTHOG_API_KEY!}
+      options={{
+        api_host: data.ENV.POSTHOG_HOST!,
+        defaults: '2025-05-24',
+      }}
+    >
+      <Document nonce={nonce} env={data.ENV}>
+        {data.bannerWarning === 'staging' ? (
+          <Tooltip
+            text="This is a staging environment. Do not use real data."
+            delayDuration={0}
+          >
+            <div className="fixed bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
+              <AlertTriangle size={26} />
             </div>
+          </Tooltip>
+        ) : data.bannerWarning === 'localhost' ? (
+          <Tooltip
+            text="This is a local environment. Do not use real data."
+            delayDuration={0}
+          >
+            <div className="fixed bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
+              <FlaskConical size={26} />
+            </div>
+          </Tooltip>
+        ) : null}
+        <GlobalLoading />
+        <div className="flex h-screen min-h-screen flex-col justify-between">
+          <div className="flex-1 bg-background">
+            <Outlet />
           </div>
-          <Toaster toast={data.toast} />
-        </Document>
-      </PostHogProvider>
-    </AuthenticityTokenProvider>
+        </div>
+        <Toaster toast={data.toast} />
+      </Document>
+    </PostHogProvider>
   );
 }
 

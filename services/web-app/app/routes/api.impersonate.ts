@@ -1,7 +1,12 @@
-import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
+import {
+  data as dataResponse,
+  redirect,
+  type ActionFunctionArgs,
+} from 'react-router';
 import { getSessionExpirationDate, sessionKey } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { authSessionStorage } from '~/utils/session.server.js';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server.js';
+import { setProfileId } from '~/cookies/profile-id.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -35,16 +40,24 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
+    const profile = await prisma.profile.findFirst({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+
     const authSession = await authSessionStorage.getSession(
       request.headers.get('cookie')
     );
     authSession.set(sessionKey, session.id);
 
-    return new Response(null, {
+    return redirect('/app', {
       headers: {
-        'set-cookie': await authSessionStorage.commitSession(authSession, {
-          expires: session.expirationDate,
-        }),
+        'set-cookie': [
+          await authSessionStorage.commitSession(authSession, {
+            expires: session.expirationDate,
+          }),
+          await setProfileId(profile?.id ?? ''),
+        ].join(';'),
       },
     });
   } catch (error) {

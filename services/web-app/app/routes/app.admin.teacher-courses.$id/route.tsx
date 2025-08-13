@@ -9,6 +9,7 @@ import { TrashIcon, ImageIcon, VideoIcon, FileIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
+import { buildModuleVideoKey, getSignedGetUrl } from '~/services/s3.server';
 import { useFetcher } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import {
@@ -19,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { requireAdmin } from '~/utils/permissions';
 import { requireUserId } from '~/utils/auth.server';
 import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
 import {
@@ -33,6 +33,7 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import React from 'react';
+import { useMultipartUpload } from '~/hooks/useMultipartUpload';
 import {
   DndContext,
   closestCenter,
@@ -51,6 +52,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
+import { requireAdmin } from '~/utils/auth.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -175,28 +177,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
 
     let finalVideoLink = null;
-    let videoDuration = videoDurationStr ? Math.floor(Number(videoDurationStr)) : null;
+    let videoDuration = videoDurationStr
+      ? Math.floor(Number(videoDurationStr))
+      : null;
 
-    // Store the video as a blob and create a link to it
-    const arrayBuffer = await videoFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const upload = await prisma.upload.create({
-      data: {
-        name: videoFile.name,
-        contentType: videoFile.type,
-        blob: buffer,
-        userId,
-      },
-    });
-
-    finalVideoLink = `/api/upload/${upload.id}`;
+    // Client performs multipart upload to S3 separately.
+    // Here we expect the client to send `videoS3Key` as hidden input after upload completes.
+    const videoS3Key = formData.get('videoS3Key')?.toString();
+    if (!videoS3Key) {
+      throw new Response('Missing videoS3Key', { status: 400 });
+    }
 
     await prisma.teacherCourseModule.create({
       data: {
         title,
         description: description || null,
-        videoLink: finalVideoLink,
+        videoS3Key,
         videoDuration,
         position: moduleCount,
         teacherCourseId: params.id!,
@@ -260,8 +256,16 @@ export default function TeacherCourseRoute() {
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
   const [hasRemovedImage, setHasRemovedImage] = React.useState(false);
+  const [isImageUploading, setIsImageUploading] = React.useState(false);
+  const [imageUploadProgress, setImageUploadProgress] =
+    React.useState<number>(0);
   const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
   const [isVideoLoading, setIsVideoLoading] = React.useState(false);
+  const {
+    uploadFile,
+    progress: uploadProgress,
+    isUploading,
+  } = useMultipartUpload();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Drag and drop state for modules ---
@@ -304,7 +308,7 @@ export default function TeacherCourseRoute() {
   };
 
   // Sortable row component
-  function SortableTableRow({ module, idx }: { module: any; idx: number }) {
+  function SortableTableRow({ module }: { module: any; idx: number }) {
     const {
       attributes,
       listeners,
@@ -337,7 +341,7 @@ export default function TeacherCourseRoute() {
         </TableCell>
         <TableCell className="font-medium">{module.title}</TableCell>
         <TableCell>
-          {module.videoLink ? (
+          {module.videoS3Key ? (
             <div className="flex items-center gap-1">
               <VideoIcon className="h-4 w-4" />
               <span>Video</span>
@@ -372,6 +376,21 @@ export default function TeacherCourseRoute() {
     if (file) {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
+      // Simulate/provide local read progress; actual network upload occurs on submit
+      setIsImageUploading(true);
+      setImageUploadProgress(0);
+      const reader = new FileReader();
+      reader.onprogress = (evt) => {
+        if (evt.lengthComputable) {
+          const pct = Math.round((evt.loaded / evt.total) * 100);
+          setImageUploadProgress(pct);
+        }
+      };
+      reader.onloadend = () => {
+        setImageUploadProgress(100);
+        setIsImageUploading(false);
+      };
+      reader.readAsArrayBuffer(file);
     }
   };
 
@@ -383,7 +402,9 @@ export default function TeacherCourseRoute() {
     setPreviewUrl(null);
   };
 
-  const handleVideoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (file) {
       setIsVideoLoading(true);
@@ -392,21 +413,31 @@ export default function TeacherCourseRoute() {
         const duration = await new Promise<number>((resolve, reject) => {
           const video = document.createElement('video');
           video.preload = 'metadata';
-          
-          video.onloadedmetadata = function() {
+
+          video.onloadedmetadata = function () {
             URL.revokeObjectURL(video.src);
             resolve(video.duration);
           };
-          
-          video.onerror = function() {
+
+          video.onerror = function () {
             URL.revokeObjectURL(video.src);
             reject(new Error('Error loading video metadata'));
           };
-          
+
           video.src = URL.createObjectURL(file);
         });
-        
+
         setVideoDuration(duration);
+        // Perform multipart upload, then set hidden input value
+        const { key } = await uploadFile({
+          file,
+          teacherCourseId: teacherCourse.id,
+          moduleId: 'new',
+        });
+        const hidden = document.getElementById(
+          'videoS3Key'
+        ) as HTMLInputElement | null;
+        if (hidden) hidden.value = key;
       } catch (error) {
         console.error('Could not get video duration:', error);
         setVideoDuration(null);
@@ -420,7 +451,7 @@ export default function TeacherCourseRoute() {
 
   const formatDuration = (seconds: number): string => {
     if (!seconds || seconds <= 0) return '0:00';
-    
+
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = Math.floor(seconds % 60);
@@ -442,9 +473,18 @@ export default function TeacherCourseRoute() {
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          <Sheet open={isCourseSheetOpen} onOpenChange={setIsCourseSheetOpen}>
+          <Sheet
+            open={isCourseSheetOpen}
+            onOpenChange={(open) => {
+              if (isImageUploading || fetcher.state !== 'idle') return;
+              setIsCourseSheetOpen(open);
+            }}
+          >
             <SheetTrigger asChild>
-              <Button variant="outline">
+              <Button
+                variant="outline"
+                disabled={isImageUploading || fetcher.state !== 'idle'}
+              >
                 <Settings className="mr-2 h-4 w-4" />
                 Edit Course
               </Button>
@@ -542,9 +582,13 @@ export default function TeacherCourseRoute() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={fetcher.state !== 'idle'}
+                  disabled={isImageUploading || fetcher.state !== 'idle'}
                 >
-                  {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+                  {isImageUploading
+                    ? `Uploading Image… ${imageUploadProgress}%`
+                    : fetcher.state !== 'idle'
+                      ? 'Saving...'
+                      : 'Save Changes'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -621,6 +665,7 @@ export default function TeacherCourseRoute() {
                 encType="multipart/form-data"
               >
                 <input type="hidden" name="intent" value="createModule" />
+                <input type="hidden" name="videoS3Key" id="videoS3Key" />
                 <div className="space-y-2">
                   <Label htmlFor="moduleTitle">Title</Label>
                   <Input id="moduleTitle" name="title" required />
@@ -635,14 +680,19 @@ export default function TeacherCourseRoute() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="video">Video Upload</Label>
-                  <Input 
-                    id="video" 
-                    name="video" 
-                    type="file" 
+                  <Input
+                    id="video"
+                    name="video"
+                    type="file"
                     accept="video/*"
                     onChange={handleVideoFileChange}
                     required
                   />
+                  {isUploading ? (
+                    <p className="text-sm text-muted-foreground">
+                      Uploading... {uploadProgress}%
+                    </p>
+                  ) : null}
                   {isVideoLoading && (
                     <p className="text-sm text-muted-foreground">
                       Analyzing video duration...
@@ -653,10 +703,15 @@ export default function TeacherCourseRoute() {
                       Duration: {formatDuration(videoDuration)}
                     </p>
                   )}
-                  <input type="hidden" name="videoDuration" value={videoDuration || ''} />
+                  <input
+                    type="hidden"
+                    name="videoDuration"
+                    value={videoDuration || ''}
+                  />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Upload a video file to create this module. You can add resources after creating the module.
+                  Upload a video file to create this module. You can add
+                  resources after creating the module.
                 </p>
                 <Button
                   type="submit"

@@ -6,9 +6,17 @@ import {
   data,
   useLocation,
   useMatches,
-  type LoaderFunctionArgs,
+  type ActionFunctionArgs,
+  redirect,
 } from 'react-router';
-import { CogIcon, GaugeIcon, LockIcon, UserIcon, Users } from 'lucide-react';
+import {
+  CogIcon,
+  GaugeIcon,
+  LockIcon,
+  Settings2,
+  UserIcon,
+  Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -27,7 +35,6 @@ import {
   PopoverTrigger,
 } from '~/components/ui/popover.js';
 import { Tooltip } from '~/components/ui/tooltip';
-import { UserImage } from '~/components/user-image';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
@@ -35,11 +42,9 @@ import {
   BreadcrumbHandleMatch,
   type BreadcrumbHandle,
 } from '~/utils/breadcrumb';
-import { prisma } from '~/utils/db.server';
-import { FeatureFlags } from '~/utils/featureFlags/index.js';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
-import { requireOrganizationAccess } from '~/utils/permissions';
+import { Check } from 'lucide-react';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -48,39 +53,16 @@ export const NavExpandedContext = createContext({
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  const url = new URL(request.url);
-
-  // Skip organization access check for the access-denied page to avoid redirect loops
-  if (!url.pathname.includes('/access-denied')) {
-    // Check organization access - redirect to access-denied page if no access
-    await requireOrganizationAccess(request);
-  }
-
-  const ffs = await prisma.featureFlag.findMany({
-    where: { name: { in: [FeatureFlags.Courses, FeatureFlags.Assistants] } },
-  });
-  return data({
-    enableCourses: ffs.some(
-      (ff) => ff.name === FeatureFlags.Courses && ff.isEnabled
-    ),
-    enableAssistants: ffs.some(
-      (ff) => ff.name === FeatureFlags.Assistants && ff.isEnabled
-    ),
-  });
-}
-
-type RequiresOptions = 'isAdmin' | 'teacherProfile' | 'isOwner';
+type RequiresFn = (
+  user: ReturnType<typeof useUser>
+) => boolean | null | undefined;
 
 const LINKS: {
   to: string;
   label: string;
   end?: boolean;
   icon: React.ReactNode;
-  requires?:
-    | { OR: RequiresOptions[] }
-    | { AND: RequiresOptions[] }
-    | RequiresOptions;
+  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 }[] = [
   {
     to: '/app',
@@ -89,22 +71,22 @@ const LINKS: {
     icon: <GaugeIcon size={20} />,
   },
   {
-    to: '/app/students',
+    to: '/app/my-classes',
     label: 'My Classes',
     icon: <Users size={20} />,
-    requires: 'teacherProfile',
+    requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {
     to: '/app/organization',
     label: 'Organization',
     icon: <CogIcon size={20} />,
-    requires: 'isOwner',
+    requires: (user) => user.selectedProfile?.isOwner,
   },
   {
     to: '/app/admin',
     label: 'Admin',
     icon: <LockIcon size={20} />,
-    requires: 'isAdmin',
+    requires: (user) => user.isAdmin,
   },
 ];
 
@@ -222,9 +204,9 @@ export default function Route() {
               !link.requires ||
               (typeof link.requires === 'object'
                 ? 'OR' in link.requires
-                  ? link.requires.OR.some((r) => user[r])
-                  : link.requires.AND.every((r) => user[r])
-                : user[link.requires])
+                  ? link.requires.OR.some((r) => r(user))
+                  : link.requires.AND.every((r) => r(user))
+                : link.requires(user))
           ).map((link) => (
             <NavLink
               key={link.to}
@@ -264,42 +246,58 @@ export default function Route() {
         <div className="flex flex-grow flex-col justify-end">
           <Popover>
             <PopoverTrigger>
-              <div className="flex items-center gap-2 border-t px-2 py-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
-                <UserImage user={user} size="sm" />
-                {navExpanded ? (
-                  <div>
-                    <p className="font-bold text-sm">{user.name}</p>
-                    <p className="text-left text-sm text-muted-foreground">
-                      {user.isAdmin
-                        ? 'Admin'
-                        : user.isOwner
-                          ? 'Owner'
-                          : user.teacherProfile
-                            ? 'Teacher'
-                            : 'Student'}
-                    </p>
-                  </div>
-                ) : null}
+              <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
+                <Settings2 size={18} />
+                {navExpanded ? <p className="">Settings</p> : null}
               </div>
             </PopoverTrigger>
-            <PopoverContent className="m-1 w-[170px] p-1">
-              <Button
-                asChild
-                size="sm"
-                variant="ghost"
-                className="rounded-xl w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
-              >
-                <Link to="/app/profile">
-                  <UserIcon size={15} />
-                  Profile
-                </Link>
-              </Button>
-              <Form action="/auth/logout" method="POST">
+            <PopoverContent className="m-1 p-0">
+              <div className="flex flex-col p-3 border-b">
+                <p className="text-sm font-bold">{user.name}</p>
+                <div className="flex gap-2 items-center justify-between">
+                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                </div>
+              </div>
+              {/* Organization / Profile selector */}
+              {user.profiles?.length ? (
+                <div className="max-h-64 overflow-auto p-1 border-b space-y-1">
+                  {user.profiles.map((p) => {
+                    const isSelected = user.selectedProfile
+                      ? user.selectedProfile?.id === p.id
+                      : user.profiles?.[0]?.id === p.id;
+                    return (
+                      <Form method="POST" action="/api/profile-id" key={p.id}>
+                        <input
+                          type="hidden"
+                          name="intent"
+                          value="switch-profile"
+                        />
+                        <input type="hidden" name="profileId" value={p.id} />
+                        <Button
+                          type="submit"
+                          size="sm"
+                          variant={isSelected ? 'secondary' : 'ghost'}
+                          className="w-full justify-between rounded-lg px-3 py-2 disabled:opacity-100 disabled:bg-foreground/10 disabled:font-bold"
+                          disabled={isSelected}
+                        >
+                          <span className="flex min-w-0 flex-col text-left">
+                            <span className="truncate">
+                              {p.organization?.name ?? 'Organization'}
+                            </span>
+                          </span>
+                          {isSelected ? <Check size={16} /> : null}
+                        </Button>
+                      </Form>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <Form action="/auth/logout" method="POST" className="p-1">
                 <Button
                   type="submit"
                   size="sm"
                   variant="ghost"
-                  className="rounded-lg w-full justify-start gap-2 text-muted-foreground transition hover:text-current"
+                  className="text-destructive rounded-lg w-full justify-start gap-2 transition hover:text-destructive hover:bg-destructive/10"
                 >
                   <ExitIcon />
                   Logout

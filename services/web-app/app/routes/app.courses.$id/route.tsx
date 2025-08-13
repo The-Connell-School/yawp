@@ -4,7 +4,7 @@ import {
   type ActionFunctionArgs,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
-import { ExternalLinkIcon, PlusIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import {
   parseFormData,
   ValidatedForm,
@@ -25,36 +25,39 @@ import {
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser.js';
 import { getBase64Audio } from '~/services/openai.js';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { cn, useIsPending } from '~/utils/misc.js';
 import { redirectWithToast } from '~/utils/toast.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const [course, documents, resources] = await Promise.all([
-    prisma.course.findUnique({
+  const profile = await requireProfile(request, userId);
+
+  const [course, documents] = await Promise.all([
+    prisma.studentCourse.findUnique({
       where: { id: params.id },
-      include: { image: true, courseModules: { orderBy: { position: 'asc' } } },
+      include: {
+        image: true,
+        studentCourseModules: { orderBy: { position: 'asc' } },
+      },
     }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
       where: {
-        userId,
+        profileId: profile.id,
         deletedAt: null,
-        courseModuleSessions: {
-          some: { courseModule: { courseId: params.id } },
+        studentCourseModuleSessions: {
+          some: { studentCourseModule: { studentCourseId: params.id } },
         },
       },
       include: {
-        courseModuleSessions: {
+        studentCourseModuleSessions: {
           take: 1,
-          orderBy: { courseModule: { position: 'desc' } },
-          include: { courseModule: true },
+          orderBy: { studentCourseModule: { position: 'desc' } },
+          include: { studentCourseModule: true },
         },
       },
     }),
-    prisma.courseResource.findMany({ where: { courseId: params.id } }),
   ]);
 
   if (!course) {
@@ -64,7 +67,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  return dataResponse({ course, documents, resources });
+  return dataResponse({ course, documents });
 }
 
 const validator = z.object({
@@ -73,11 +76,12 @@ const validator = z.object({
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const firstCourseModule = await prisma.courseModule.findFirst({
-    where: { courseId: params.id },
+  const firstCourseModule = await prisma.studentCourseModule.findFirst({
+    where: { studentCourseId: params.id },
     orderBy: { position: 'asc' },
     include: {
       instructions: {
@@ -99,25 +103,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
     data.audioEnabled &&
     firstInstruction?.prompt &&
     !(await prisma.instructionAudio.findUnique({
-      where: { courseModuleInstructionId: firstInstruction.id },
+      where: { studentCourseModuleInstructionId: firstInstruction.id },
     }));
 
   const audio = shouldFetchAudio
     ? await getBase64Audio(firstInstruction.prompt, '1.5')
     : null;
 
+  const studentProfile = await prisma.studentProfile.findUniqueOrThrow({
+    where: { profileId: profile.id },
+  });
+
   const [doc] = await Promise.all([
     prisma.document.create({
       data: {
-        userId,
+        profileId: profile.id,
         text: '',
         html: '',
         title: '',
-        courseModuleSessions: {
+        studentCourseModuleSessions: {
           create: {
-            userId,
+            studentProfileId: studentProfile.id,
             instructionsCompleted: 0,
-            courseModuleId: firstCourseModule.id,
+            studentCourseModuleId: firstCourseModule.id,
             ...(firstInstruction && {
               messages: {
                 create: [
@@ -137,7 +145,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ? [
           prisma.instructionAudio.create({
             data: {
-              courseModuleInstructionId: firstInstruction.id,
+              studentCourseModuleInstructionId: firstInstruction.id,
               blob: Buffer.from(audio, 'base64'),
             },
           }),
@@ -154,8 +162,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AppCoursesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
-  const isTeacher = !!user.teacherProfile;
-  const hasModules = data.course.courseModules.length > 0;
+  const isTeacher = !!user.selectedProfile?.teacherProfile;
+  const hasModules = data.course.studentCourseModules.length > 0;
   const [speechEnabled] = useLocalStorage('speechEnabled', false);
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
@@ -207,7 +215,7 @@ export default function AppCoursesIdRoute() {
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
             <Accordion type="multiple" className="pb-6">
-              {data.course.courseModules.map((cm) => (
+              {data.course.studentCourseModules.map((cm) => (
                 <AccordionItem key={cm.id} value={cm.id}>
                   <AccordionTrigger className="py-2 text-base">
                     {cm.title}

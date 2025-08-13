@@ -1,132 +1,140 @@
-import {
-  type LoaderFunctionArgs,
-  type ActionFunctionArgs,
-  data as dataResponse,
-} from 'react-router';
-import { Link, useLoaderData, useFetcher } from 'react-router';
-import { BookmarkIcon, EllipsisVertical, PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import { Link, useLoaderData } from 'react-router';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
-import { Button } from '~/components/ui/button.js';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '~/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu.js';
 import { useUser } from '~/hooks/useUser.js';
-import { redirectIfDisabled, requireUserId } from '~/utils/auth.server.js';
+import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { FeatureFlags } from '~/utils/featureFlags/index.js';
 import { cn } from '~/utils/misc';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await redirectIfDisabled(FeatureFlags.Courses, '/app/assistants');
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
 
-  // Check if user has teacher profile
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { teacherProfile: { select: { id: true } } },
-  });
-
-  const [courses, documents, studentProfiles, views, teacherCourses] =
-    await Promise.all([
-      prisma.course.findMany({
-        select: { image: { select: { id: true } }, id: true, title: true },
-      }),
-      prisma.document.findMany({
-        orderBy: { createdAt: 'desc' },
-        where: { userId, deletedAt: null },
-        include: {
-          courseModuleSessions: {
-            include: { courseModule: true },
-            orderBy: { courseModule: { position: 'desc' } },
-          },
+  const [
+    courses,
+    documents,
+    studentProfiles,
+    teacherCourses,
+    teacherClasses,
+    teacherSchoolCount,
+  ] = await Promise.all([
+    prisma.studentCourse.findMany({
+      select: { image: { select: { id: true } }, id: true, title: true },
+    }),
+    prisma.document.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: { profileId: profile.id },
+      include: {
+        studentCourseModuleSessions: {
+          include: { studentCourseModule: true },
+          orderBy: { studentCourseModule: { position: 'desc' } },
         },
-      }),
-      prisma.studentProfile.findMany({
-        where: { workshopLeaderId: userId },
-        include: { user: { include: { image: true, documents: true } } },
-      }),
-      prisma.studentView.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-      }),
-      // Fetch teacher courses if user has teacher profile
-      user?.teacherProfile
-        ? prisma.teacherCourse.findMany({
-            select: {
-              image: { select: { id: true } },
-              id: true,
-              title: true,
-              description: true,
-              teacherCourseModules: {
-                select: {
-                  id: true,
-                  title: true,
-                  videoDuration: true,
-                  teacherCourseModuleSessions: {
-                    where: {
-                      teacherProfileId: user.teacherProfile.id,
-                    },
-                    select: {
-                      videoTimestamp: true,
-                    },
+      },
+    }),
+    prisma.studentProfile.findMany({
+      where: { class: { teachers: { some: { profileId: profile.id } } } },
+      include: { profile: { include: { documents: true } } },
+    }),
+    // Fetch teacher courses if user has teacher profile
+    profile?.teacherProfile
+      ? prisma.teacherCourse.findMany({
+          select: {
+            image: { select: { id: true } },
+            id: true,
+            title: true,
+            description: true,
+            teacherCourseModules: {
+              select: {
+                id: true,
+                title: true,
+                videoDuration: true,
+                teacherCourseModuleSessions: {
+                  where: {
+                    teacherProfileId: profile.teacherProfile.id,
+                  },
+                  select: {
+                    videoTimestamp: true,
                   },
                 },
-                orderBy: { position: 'asc' },
               },
+              orderBy: { position: 'asc' },
             },
-            orderBy: { position: 'asc' },
+          },
+          orderBy: { position: 'asc' },
+        })
+      : [],
+    // Teacher classes and recent ordering
+    profile?.teacherProfile
+      ? prisma.class.findMany({
+          where: { teachers: { some: { id: profile.teacherProfile.id } } },
+          select: {
+            id: true,
+            grade: true,
+            period: true,
+            school: { select: { name: true } },
+            _count: { select: { students: true, teachers: true } },
+          },
+        })
+      : [],
+    profile?.teacherProfile
+      ? prisma.teacherProfile
+          .findUnique({
+            where: { id: profile.teacherProfile.id },
+            select: { schools: { select: { id: true } } },
           })
-        : [],
-    ]);
+          .then((tp) => tp?.schools.length ?? 0)
+      : 0,
+  ]);
+
+  // Compute recent activity per class for teachers, based on latest student document
+  let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
+  if (profile.teacherProfile && teacherClasses.length > 0) {
+    const recentDocs = await prisma.document.findMany({
+      where: {
+        deletedAt: null,
+        profile: {
+          studentProfile: {
+            class: { teachers: { some: { id: profile.teacherProfile.id } } },
+          },
+        },
+      },
+      select: {
+        updatedAt: true,
+        profile: { select: { studentProfile: { select: { classId: true } } } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const latestByClass = new Map<string, Date>();
+    for (const d of recentDocs) {
+      const cid = d.profile.studentProfile?.classId;
+      if (!cid) continue;
+      if (!latestByClass.has(cid)) latestByClass.set(cid, d.updatedAt);
+    }
+    teacherClassesOrdered = [...teacherClasses].sort((a, b) => {
+      const ad = latestByClass.get(a.id);
+      const bd = latestByClass.get(b.id);
+      if (ad && bd) return bd.getTime() - ad.getTime();
+      if (ad) return -1;
+      if (bd) return 1;
+      return 0;
+    });
+  }
 
   return dataResponse({
     courses,
     documents,
     studentProfiles,
-    views,
     teacherCourses,
+    teacherClasses: teacherClassesOrdered,
+    teacherSchoolCount,
   });
-}
-
-export async function action({ request }: ActionFunctionArgs) {
-  try {
-    const formData = await request.formData();
-    const intent = formData.get('intent');
-
-    if (intent === 'deleteView') {
-      const viewId = formData.get('viewId');
-      await prisma.studentView.delete({
-        where: { id: viewId as string },
-      });
-
-      return dataResponse({ success: true } as const);
-    }
-
-    return dataResponse({ success: false } as const);
-  } catch (error) {
-    throw error;
-  }
 }
 
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
-  const isTeacher = user.teacherProfile !== null;
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const fetcher = useFetcher<typeof action>();
+  const isTeacher = user.selectedProfile?.teacherProfile !== null;
 
   if (isTeacher) {
     return (
@@ -149,80 +157,36 @@ export default function AppRoute() {
           <div className="mt-8 flex flex-col">
             <div className="mb-1 flex items-center gap-1">
               <p className="text-foreground/60">My Classes</p>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                <PlusIcon className="h-5 w-5" />
-              </Button>
             </div>
-            {data.views.length ? (
-              <div className="flex flex-wrap gap-2">
-                {data.views.map((view) => (
+            {Array.isArray(data.teacherClasses) &&
+            data.teacherClasses.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {data.teacherClasses.map((klass) => (
                   <Link
-                    key={view.id}
-                    to={`/app/students?filters=${encodeURIComponent(
-                      JSON.stringify({
-                        school: view.school?.split(',').filter(Boolean) ?? [],
-                        grade: view.grade?.split(',').filter(Boolean) ?? [],
-                        period: view.period?.split(',').filter(Boolean) ?? [],
-                        workshopLeader:
-                          view.workshopLeader?.split(',').filter(Boolean) ?? [],
-                        schoolTeacher:
-                          view.schoolTeacher?.split(',').filter(Boolean) ?? [],
-                        view: 'cards',
-                      })
-                    )}`}
-                    className="align-center flex justify-between gap-2 rounded-lg border bg-muted/50 p-2 shadow-sm transition-shadow hover:shadow-md"
+                    key={klass.id}
+                    to={`/app/my-classes/${klass.id}`}
+                    className="flex flex-col rounded-lg border bg-muted p-4 hover:shadow transition"
                   >
-                    <BookmarkIcon className="my-auto h-5 w-5 fill-white text-gray-400" />
-                    <div className="my-auto min-w-fit font-medium">
-                      {view.name}
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="text-foreground/90 font-medium">
+                        Grade {klass.grade} • Period {klass.period}
+                      </h4>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                        >
-                          <EllipsisVertical
-                            size={16}
-                            className="text-muted-foreground"
-                          />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <fetcher.Form method="post">
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="deleteView"
-                          />
-                          <input type="hidden" name="viewId" value={view.id} />
-                          <DropdownMenuItem asChild>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-start"
-                              onClick={(e: React.MouseEvent) =>
-                                e.stopPropagation()
-                              }
-                            >
-                              Delete
-                            </Button>
-                          </DropdownMenuItem>
-                        </fetcher.Form>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(data.teacherSchoolCount ?? 0) === 1 ? null : (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {klass.school?.name ?? 'School'}
+                      </p>
+                    )}
+                    <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
+                      <span>{klass._count.students} students</span>
+                    </div>
                   </Link>
                 ))}
               </div>
             ) : (
-              <NoDataPlaceholder
-                title="No saved views"
-                subtitle="Create a view to quickly access filtered student lists."
-              />
+              <div className="mt-2 border rounded-lg p-2 text-muted-foreground">
+                No classes yet.
+              </div>
             )}
           </div>
           <div className="mt-8 flex flex-col">
@@ -347,22 +311,6 @@ export default function AppRoute() {
             )}
           </div>
         </div>
-        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create a Student View</DialogTitle>
-              <DialogDescription>
-                Go to the Students page, add your desired filters, and hit the
-                'Save' button to create a new Student View from those filters.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button asChild>
-                <Link to="/app/students">Go to Students</Link>
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </section>
     );
   }

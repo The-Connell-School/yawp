@@ -24,10 +24,10 @@ export const Comments = ({ comments }: Props) => {
 
   const optimisticComment: CommentType | [] = fetcher?.formData
     ? {
-        user: { ...user, organizationId: null },
+        profile: user.selectedProfile as any,
+        profileId: user.selectedProfile!.id,
         id: 'optimistic-document-comment',
         createdAt: new Date(),
-        userId: user.id,
         content: fetcher.formData.get('content') as string,
         highlightId: fetcher.formData.get('highlightId') as string,
         responses: [],

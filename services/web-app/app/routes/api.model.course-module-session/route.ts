@@ -15,8 +15,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const [document, courseModule] = await Promise.all([
-    prisma.document.findUnique({ where: { id: data.documentId } }),
-    prisma.courseModule.findUnique({
+    prisma.document.findUnique({
+      where: { id: data.documentId },
+      select: {
+        profile: { select: { studentProfile: { select: { id: true } } } },
+      },
+    }),
+    prisma.studentCourseModule.findUnique({
       where: { id: data.courseModuleId },
       include: { instructions: true },
     }),
@@ -28,12 +33,20 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
 
+  if (!document.profile.studentProfile?.id) {
+    return dataResponse(
+      { error: 'No student profile found.' },
+      { status: 404 }
+    );
+  }
+
   const firstInstruction = courseModule.instructions[0];
-  const created = await prisma.courseModuleSession.create({
+  const created = await prisma.studentCourseModuleSession.create({
     data: {
       ...data,
       instructionsCompleted: 0,
-      userId: document.userId,
+      studentCourseModuleId: courseModule.id,
+      studentProfileId: document.profile.studentProfile.id,
       ...(firstInstruction && {
         messages: {
           create: [

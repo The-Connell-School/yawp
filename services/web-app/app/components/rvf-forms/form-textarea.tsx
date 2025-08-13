@@ -1,7 +1,6 @@
 import { forwardRef, useId } from 'react';
 import { useField, FormScope } from '@rvf/react';
 import { cn } from '~/utils/misc';
-import { startCase } from '~/utils/startCase';
 import { InfoCircledIcon } from '../icons';
 import { Textarea, type TextareaProps } from '../ui/textarea';
 import { Tooltip } from '../ui/tooltip';

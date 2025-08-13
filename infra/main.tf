@@ -416,6 +416,8 @@ resource "aws_apprunner_service" "web" {
           RESEND_FROM_EMAIL = var.resend_from_email
           POSTHOG_API_KEY = var.posthog_api_key
           POSTHOG_HOST = var.posthog_host
+          AWS_S3_BUCKET_FOR_VIDEOS = aws_s3_bucket.videos.bucket
+          AWS_S3_REGION_FOR_VIDEOS = "us-east-1"
         }
 
         runtime_environment_secrets = {
@@ -461,4 +463,82 @@ resource "aws_apprunner_service" "web" {
     Environment = var.env
     Project     = var.app_name
   }
+}
+
+# -----------------------
+# S3 bucket for videos/files
+# -----------------------
+resource "aws_s3_bucket" "videos" {
+  bucket = "${var.app_name}-${var.env}-videos"
+}
+
+resource "aws_s3_bucket_ownership_controls" "videos" {
+  bucket = aws_s3_bucket.videos.id
+  rule { object_ownership = "BucketOwnerPreferred" }
+}
+
+resource "aws_s3_bucket_public_access_block" "videos" {
+  bucket                  = aws_s3_bucket.videos.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "videos" {
+  bucket = aws_s3_bucket.videos.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "videos" {
+  bucket = aws_s3_bucket.videos.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "videos" {
+  bucket = aws_s3_bucket.videos.id
+  cors_rule {
+    allowed_methods = ["GET", "PUT", "POST", "HEAD"]
+    allowed_origins = [
+      "http://localhost:5173",
+      "https://${aws_apprunner_service.web.service_url}"
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]
+    max_age_seconds = 3600
+  }
+}
+
+data "aws_iam_policy_document" "videos_access" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:CreateMultipartUpload",
+      "s3:UploadPart",
+      "s3:CompleteMultipartUpload",
+      "s3:AbortMultipartUpload",
+      "s3:ListBucketMultipartUploads",
+      "s3:ListBucket"
+    ]
+    resources = [
+      aws_s3_bucket.videos.arn,
+      "${aws_s3_bucket.videos.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "videos_policy" {
+  name   = "${var.app_name}-${var.env}-videos-access"
+  policy = data.aws_iam_policy_document.videos_access.json
+}
+
+resource "aws_iam_role_policy_attachment" "apprunner_instance_videos" {
+  role       = aws_iam_role.apprunner_instance.name
+  policy_arn = aws_iam_policy.videos_policy.arn
 }

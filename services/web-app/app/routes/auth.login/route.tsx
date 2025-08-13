@@ -5,20 +5,25 @@ import {
   type ActionFunctionArgs,
   useFetcher,
   Form,
+  redirect,
 } from 'react-router';
 import { Link, useSearchParams } from 'react-router';
 import { ArrowRightIcon } from 'lucide-react';
-import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
-import { HoneypotInputs } from 'remix-utils/honeypot/react';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
-import { login, requireAnonymous } from '~/utils/auth.server';
-import { DEFAULT_ROUTE } from '~/utils/misc';
+import {
+  getSessionExpirationDate,
+  requireAnonymous,
+  sessionKey,
+  verifyUserPassword,
+} from '~/utils/auth.server';
 import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
-import { handleNewSession } from './utils.server';
+import { prisma } from '~/utils/db.server';
+import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
+import { posthog } from '~/services/posthog.server';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -36,15 +41,37 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
-  const session = await login(data);
+  try {
+    const { email, password } = data;
+    const user = await verifyUserPassword({ email }, password);
 
-  if (session) {
-    return handleNewSession({
-      request,
-      session,
-      redirectTo: data.redirectTo ?? DEFAULT_ROUTE,
+    if (!user)
+      return validationError(
+        { fieldErrors: { email: 'Invalid email or password' } },
+        data
+      );
+
+    const session = await prisma.session.create({
+      select: { id: true, expirationDate: true, userId: true },
+      data: {
+        expirationDate: getSessionExpirationDate(),
+        userId: user.id,
+      },
     });
-  } else {
+
+    const cookies = request.headers.get('cookie');
+    const authSession = await authSessionStorage.getSession(cookies);
+    authSession.set(sessionKey, session.id);
+
+    return redirect('/app', {
+      headers: {
+        'set-cookie': await authSessionStorage.commitSession(authSession, {
+          expires: session.expirationDate,
+        }),
+      },
+    });
+  } catch (error) {
+    posthog?.captureException(error, 'anonymous');
     return validationError(
       { fieldErrors: { email: 'Invalid email or password' } },
       data
@@ -77,8 +104,6 @@ export default function LoginPage() {
       </div>
       <div className="mx-auto mt-10 w-full max-w-md px-8">
         <Form {...form.getFormProps()} className="flex flex-col gap-3">
-          <AuthenticityTokenInput />
-          <HoneypotInputs />
           <input type="hidden" name="redirectTo" />
           <FormInput
             scope={form.scope('email')}
@@ -95,7 +120,7 @@ export default function LoginPage() {
           />
           <div className="flex items-center justify-end">
             <Link
-              to="/auth/forgot-password"
+              to="/auth/inv/forgot-password"
               className={button({ variant: 'link' })}
             >
               Forgot password?
@@ -118,8 +143,8 @@ export default function LoginPage() {
             })}
             to={
               redirectTo
-                ? `/auth/signup?${encodeURIComponent(redirectTo)}`
-                : '/auth/signup'
+                ? `/auth/inv/signup?${encodeURIComponent(redirectTo)}`
+                : '/auth/inv/signup'
             }
           >
             Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />

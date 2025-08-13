@@ -25,7 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { requireAdmin } from '~/utils/permissions';
 import {
   ChevronLeft,
   Settings,
@@ -58,6 +57,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
+import { requireAdmin } from '~/utils/auth.server';
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -89,11 +89,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
   const [course, module] = await Promise.all([
-    prisma.course.findUnique({
+    prisma.studentCourse.findUnique({
       where: { id: params.id },
       select: { id: true, title: true },
     }),
-    prisma.courseModule.findUnique({
+    prisma.studentCourseModule.findUnique({
       where: { id: params.moduleId },
       include: {
         instructions: {
@@ -124,7 +124,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, moduleSchema);
     if (error) return validationError(error);
 
-    await prisma.courseModule.update({
+    await prisma.studentCourseModule.update({
       where: { id: params.moduleId },
       data: {
         title: data.title,
@@ -138,7 +138,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'deleteModule') {
-    await prisma.courseModule.delete({
+    await prisma.studentCourseModule.delete({
       where: { id: params.moduleId },
     });
 
@@ -149,11 +149,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
-    const instructionCount = await prisma.courseModuleInstruction.count({
-      where: { courseModuleId: params.moduleId },
+    const instructionCount = await prisma.studentCourseModuleInstruction.count({
+      where: { studentCourseModuleId: params.moduleId },
     });
 
-    await prisma.courseModuleInstruction.create({
+    await prisma.studentCourseModuleInstruction.create({
       data: {
         title: data.title,
         prompt: data.prompt,
@@ -161,7 +161,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         showChatButton: data.showChatButton === 'on',
         showNextButton: data.showNextButton === 'on',
         position: instructionCount,
-        courseModuleId: params.moduleId!,
+        studentCourseModuleId: params.moduleId!,
         buttons: {
           create: data.buttons.map((button, index) => ({
             label: button.label,
@@ -184,7 +184,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
-    await prisma.courseModuleInstruction.update({
+    await prisma.studentCourseModuleInstruction.update({
       where: { id: instructionId },
       data: {
         title: data.title,
@@ -194,7 +194,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         showNextButton: data.showNextButton === 'on',
         buttons: {
           deleteMany: {
-            courseModuleInstructionId: instructionId,
+            studentCourseModuleInstructionId: instructionId,
           },
           create: data.buttons.map((button, index) => ({
             label: button.label,
@@ -215,7 +215,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Instruction ID is required', { status: 400 });
     }
 
-    await prisma.courseModuleInstruction.delete({
+    await prisma.studentCourseModuleInstruction.delete({
       where: { id: instructionId },
     });
 
@@ -229,7 +229,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await Promise.all(
       instructionIds.map((instructionId: string, index: number) =>
-        prisma.courseModuleInstruction.update({
+        prisma.studentCourseModuleInstruction.update({
           where: { id: instructionId },
           data: { position: index },
         })

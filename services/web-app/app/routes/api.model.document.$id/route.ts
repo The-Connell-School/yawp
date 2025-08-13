@@ -1,8 +1,8 @@
 import { invariant } from '@epic-web/invariant';
-import { type ActionFunctionArgs } from 'react-router';
+import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server.js';
+import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const PUT = z.object({
@@ -14,10 +14,11 @@ const PUT = z.object({
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
 
   if (request.method === 'DELETE') {
     const updated = await prisma.document.update({
-      where: { id: params.id, userId },
+      where: { id: params.id, profileId: profile.id },
       data: { deletedAt: new Date() },
     });
 
@@ -56,8 +57,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ? {}
         : {
             OR: [
-              { userId },
-              { user: { studentProfile: { workshopLeaderId: userId } } },
+              { profileId: profile.id },
+              {
+                profile: {
+                  studentProfile: {
+                    class: { teachers: { some: { profileId: profile.id } } },
+                  },
+                },
+              },
             ],
           }),
     },

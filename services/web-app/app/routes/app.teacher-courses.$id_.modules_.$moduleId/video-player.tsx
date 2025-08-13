@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Form, Link, useNavigation } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { ChevronRight, RotateCcw } from 'lucide-react';
+import z from 'zod';
+import { useForm } from '@rvf/react-router';
 
 export default function VideoPlayer({
   videoLink,
@@ -28,6 +30,24 @@ export default function VideoPlayer({
   const isLoading = navigation.state !== 'idle';
   const isComplete = initialCurrentTime === videoDuration;
 
+  const form = useForm({
+    schema: z.object({
+      moduleId: z.string(),
+    }),
+    method: 'POST',
+    defaultValues: {
+      moduleId: moduleId,
+    },
+    onSubmitSuccess: () => {
+      setVideoEnded(false);
+      setVideoStarted(false);
+      setCurrentTime(initialCurrentTime);
+
+      if (videoRef.current) {
+        videoRef.current.play();
+      }
+    },
+  });
   // Reset state and reload video when module changes
   useEffect(() => {
     setVideoEnded(false);
@@ -80,13 +100,14 @@ export default function VideoPlayer({
         }}
         onPlay={() => setVideoStarted(true)}
       >
-        <source src={videoLink} type="video/mp4" />
+        <source src={videoLink} />
         Your browser does not support the video tag.
       </video>
       {videoEnded || isComplete ? (
         <Form
           method="post"
           className="absolute inset-0 bg-black/75 flex items-center justify-center gap-4"
+          {...form.getFormProps()}
         >
           <input type="hidden" name="moduleId" value={moduleId} />
           <Button

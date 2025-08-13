@@ -26,12 +26,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
-    const cms = await prisma.courseModuleSession.findUnique({
+    const cms = await prisma.studentCourseModuleSession.findUnique({
       where: {
         id: data.cmsId,
       },
       include: {
-        courseModule: {
+        studentCourseModule: {
           include: {
             instructions: { orderBy: { position: 'asc' } },
           },
@@ -49,7 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const instruction =
-      cms.courseModule.instructions[cms.instructionsCompleted];
+      cms.studentCourseModule.instructions[cms.instructionsCompleted];
     if (!instruction) {
       return dataResponse(
         { error: 'No current instruction found.' },
@@ -58,7 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const system = `
-		${cms.courseModule.tutorInstructions}
+		${cms.studentCourseModule.tutorInstructions}
 		${instruction.tutorInstructions}`;
 
     const currentMessages = cms.messages.map((m) => ({
@@ -96,7 +96,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return errorResponse(error as any);
     }
 
-    await prisma.courseModuleSession.update({
+    await prisma.studentCourseModuleSession.update({
       where: { id: cms.id },
       data: {
         messages: {

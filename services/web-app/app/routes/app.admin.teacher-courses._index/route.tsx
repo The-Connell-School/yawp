@@ -12,7 +12,6 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
 import { Plus } from 'lucide-react';
-import { requireAdmin } from '~/utils/permissions';
 import {
   Sheet,
   SheetContent,
@@ -24,6 +23,7 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
+import { requireAdmin } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);

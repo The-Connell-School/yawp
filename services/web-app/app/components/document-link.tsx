@@ -14,7 +14,7 @@ import { Tooltip } from './ui/tooltip';
 type Props = {
   exitTo: string;
   doc: Document & {
-    courseModuleSessions: { courseModule: { title: string } }[];
+    studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
   };
 };
 
@@ -28,7 +28,7 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
       <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
-        {doc.courseModuleSessions[0]?.courseModule.title}
+        {doc.studentCourseModuleSessions[0]?.studentCourseModule.title}
       </span>
       {doc.html ? (
         <div

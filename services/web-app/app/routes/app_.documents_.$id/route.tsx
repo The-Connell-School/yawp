@@ -42,11 +42,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ? {}
         : {
             OR: [
-              { userId },
+              { profile: { userId } },
               {
-                user: {
+                profile: {
                   studentProfile: {
-                    workshopLeaderId: userId,
+                    class: {
+                      teachers: {
+                        some: {
+                          profileId: userId,
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -60,11 +66,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       html: true,
       text: true,
       versions: { orderBy: { createdAt: 'desc' } },
-      user: { include: { studentProfile: true } },
-      courseModuleSessions: {
-        orderBy: { courseModule: { position: 'desc' } },
+      profile: { include: { user: { select: { name: true } } } },
+      studentCourseModuleSessions: {
+        orderBy: { studentCourseModule: { position: 'desc' } },
         include: {
-          courseModule: {
+          studentCourseModule: {
             include: {
               instructions: {
                 orderBy: { position: 'asc' },
@@ -74,9 +80,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              course: {
+              studentCourse: {
                 select: {
-                  courseModules: {
+                  studentCourseModules: {
                     select: { id: true, position: true },
                     orderBy: { position: 'asc' },
                   },
@@ -91,10 +97,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       comments: {
         include: {
-          user: { include: { image: { select: { id: true } } } },
+          profile: { include: { user: { select: { name: true } } } },
           responses: {
             include: {
-              user: { include: { image: { select: { id: true } } } },
+              profile: { include: { user: { select: { name: true } } } },
             },
           },
         },
@@ -120,22 +126,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
-  let currentCms = doc.courseModuleSessions[cmsIdx];
+  let currentCms = doc.studentCourseModuleSessions[cmsIdx];
 
   if (!currentCms) {
-    currentCms = doc.courseModuleSessions[0];
+    currentCms = doc.studentCourseModuleSessions[0];
   }
 
-  const nextCmId = currentCms.courseModule.course?.courseModules.find(
-    (cm) => cm.position === currentCms.courseModule.position + 1
-  )?.id;
+  if (!currentCms) {
+    return redirectWithToast('/app', {
+      description: 'No course module session found.',
+      type: 'error',
+    });
+  }
+
+  const nextCmId =
+    currentCms.studentCourseModule.studentCourse?.studentCourseModules.find(
+      (cm) => cm.position === currentCms.studentCourseModule.position + 1
+    )?.id;
 
   return dataResponse({
     doc,
     currentCms,
     nextCmId,
     shouldSaveVersion,
-    hasPreviousCms: doc.courseModuleSessions[cmsIdx + 1] !== undefined,
+    hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
   });
 }
 
@@ -150,7 +164,7 @@ export default function Route() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') ?? 'tutor';
   const exitTo = searchParams.get('exitTo');
-  const isViewingAsTeacher = data.doc && user.id !== data.doc?.user.id;
+  const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -204,8 +218,8 @@ export default function Route() {
           {isViewingAsTeacher ? (
             <Badge variant="info-outlined" className="md:text-md text-xs">
               {isMobile
-                ? data.doc.user.name
-                : `Viewing work by ${data.doc.user.name}`}
+                ? data.doc.profile.user.name
+                : `Viewing work by ${data.doc.profile.user.name}`}
             </Badge>
           ) : null}
           <div className="ml-auto flex w-[135px] items-center gap-4">
@@ -254,7 +268,7 @@ export default function Route() {
             />
           )}
           {isMobile && tab !== 'comments' ? null : (
-            <Comments comments={data.doc.comments} />
+            <Comments comments={data.doc.comments as any} />
           )}
         </div>
       </main>

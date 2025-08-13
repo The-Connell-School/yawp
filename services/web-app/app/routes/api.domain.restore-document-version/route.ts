@@ -13,7 +13,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const version = await prisma.documentVersion.findUnique({
-    where: { id: data.versionId, document: { userId } },
+    where: { id: data.versionId, document: { profile: { userId } } },
     include: { document: true },
   });
 

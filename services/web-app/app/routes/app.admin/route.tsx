@@ -4,12 +4,12 @@ import {
   useLocation,
   type LoaderFunctionArgs,
 } from 'react-router';
-import { NavLink, Outlet } from 'react-router';
+import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
-import { requireAdmin } from '~/utils/permissions';
 import { Button } from '~/components/ui/button';
 import { Settings2, Book, User, GraduationCap } from 'lucide-react';
+import { requireAdmin } from '~/utils/auth.server';
 
 const tabs = [
   {

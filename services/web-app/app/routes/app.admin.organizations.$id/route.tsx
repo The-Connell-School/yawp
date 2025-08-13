@@ -10,7 +10,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import {
   Table,
   TableBody,
@@ -19,8 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { UserImage } from '~/components/user-image';
-import { requireAdmin } from '~/utils/permissions';
 import { ChevronLeft, Settings, UserPlus, TrashIcon } from 'lucide-react';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { Badge } from '~/components/ui/badge';
@@ -35,29 +33,29 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import React from 'react';
-import { AuthenticityTokenInput } from 'remix-utils/csrf/react';
-import { prepareVerification } from '~/routes/auth.verify/utils';
 import { sendEmail } from '~/utils/email.server';
 import * as E from '@react-email/components';
+import { requireAdmin } from '~/utils/auth.server';
+import { generateTOTP } from '~/utils/totp.server';
+import { getDomainUrl } from '~/utils/misc';
+import { Prisma } from '@app/prisma';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
+  const profile = await requireProfile(request, currentUser.id);
 
   const [organization, invitations, totalOrganizations] = await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
       include: {
-        users: {
+        profiles: {
           where: { isOwner: true },
-          include: { image: { select: { id: true } } },
+          include: { user: { select: { name: true, email: true } } },
         },
       },
     }),
-    prisma.verification.findMany({
-      where: {
-        organizationId: params.id,
-        type: 'organization-owner-invite',
-      },
+    prisma.invitation.findMany({
+      where: { organizationId: params.id, type: 'onboard-owner' },
     }),
     prisma.organization.count(),
   ]);
@@ -67,14 +65,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Check if current user is assigned to this organization
-  const isUserAssignedToOrg = currentUser.organizationId === params.id;
+  const isUserAssignedToOrg = profile?.organization?.id === params.id;
   // Check if this is the only organization
   const isOnlyOrganization = totalOrganizations <= 1;
 
-  return dataResponse({ 
-    organization, 
-    invitations, 
-    canDelete: !isUserAssignedToOrg && !isOnlyOrganization 
+  return dataResponse({
+    organization,
+    invitations,
+    canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
   });
 }
 
@@ -82,6 +80,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const profile = await requireProfile(request, userId);
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -97,7 +96,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const [currentUser, totalOrganizations] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { organizationId: true, isAdmin: true },
+        select: { isAdmin: true },
       }),
       prisma.organization.count(),
     ]);
@@ -107,13 +106,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     // Prevent deletion if user is assigned to this organization
-    if (currentUser.organizationId === params.id) {
-      throw new Response('Cannot delete organization you are assigned to', { status: 400 });
+    if (profile?.organization.id === params.id) {
+      throw new Response('Cannot delete organization you are assigned to it', {
+        status: 400,
+      });
     }
 
     // Prevent deletion if this is the only organization
     if (totalOrganizations <= 1) {
-      throw new Response('Cannot delete the only organization', { status: 400 });
+      throw new Response('Cannot delete the only organization', {
+        status: 400,
+      });
     }
 
     await prisma.organization.delete({
@@ -177,27 +180,42 @@ export async function action({ request, params }: ActionFunctionArgs) {
     for (const email of emailList) {
       try {
         // Check for existing verification and delete if found
-        const existingVerification = await prisma.verification.findFirst({
+        const existingInvitation = await prisma.invitation.findFirst({
           where: {
             target: email,
-            type: 'organization-owner-invite',
+            type: 'onboard-owner',
             organizationId: params.id,
           },
         });
 
-        if (existingVerification) {
-          await prisma.verification.delete({
-            where: { id: existingVerification.id },
+        if (existingInvitation) {
+          await prisma.invitation.delete({
+            where: { id: existingInvitation.id },
           });
         }
 
-        const { verifyUrl } = await prepareVerification({
-          period: 3 * 24 * 60 * 60, // 3 days
-          request,
-          type: 'organization-owner-invite',
-          target: email,
-          organizationId: params.id,
+        const { otp, ...verificationConfig } = await generateTOTP({
+          algorithm: 'SHA-256',
+          charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789', // Leaving off 0 and O on purpose to avoid confusing users.
+          period: 3 * 24 * 60 * 60,
         });
+
+        const type = 'onboard-owner';
+        const target = email;
+        const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
+        verifyUrl.searchParams.set('type', type);
+        verifyUrl.searchParams.set('target', target);
+        verifyUrl.searchParams.set('code', otp);
+
+        const verificationData: Prisma.InvitationCreateInput = {
+          type,
+          target,
+          ...verificationConfig,
+          expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
+          organization: { connect: { id: params.id } },
+        };
+
+        await prisma.invitation.create({ data: verificationData });
 
         await sendEmail({
           to: email,
@@ -263,13 +281,14 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations, canDelete } = useLoaderData<typeof loader>();
+  const { organization, invitations, canDelete } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
   const [isInviteSheetOpen, setIsInviteSheetOpen] = React.useState(false);
 
-  const owners = organization.users.filter((user) => user.isOwner);
+  const owners = organization.profiles.filter((profile) => profile.isOwner);
 
   React.useEffect(() => {
     if (fetcher.data?.status === 'success') {
@@ -368,26 +387,33 @@ export default function OrganizationRoute() {
             variant="destructive"
             title="Delete Organization"
             description={
-              !canDelete 
+              !canDelete
                 ? "This organization cannot be deleted because either you are assigned to it or it's the only organization in the system."
                 : `Are you sure you want to delete "${organization.name}"? This action cannot be undone and will permanently remove the organization and all its data.`
             }
-            confirmText={canDelete ? "Delete Organization" : "Cannot Delete"}
+            confirmText={canDelete ? 'Delete Organization' : 'Cannot Delete'}
             cancelText="Cancel"
             onConfirm={() => {
               if (canDelete) {
-                fetcher.submit({ intent: 'deleteOrganization' }, { method: 'post' });
+                fetcher.submit(
+                  { intent: 'deleteOrganization' },
+                  { method: 'post' }
+                );
               }
             }}
             onCancel={() => {
               // Dialog will close automatically
             }}
           >
-            <Button 
-              variant="destructive-outline" 
+            <Button
+              variant="destructive-outline"
               size="icon"
               disabled={!canDelete}
-              title={!canDelete ? "Cannot delete: you are assigned to this organization or it's the only organization" : "Delete organization"}
+              title={
+                !canDelete
+                  ? "Cannot delete: you are assigned to this organization or it's the only organization"
+                  : 'Delete organization'
+              }
             >
               <TrashIcon className="h-4 w-4" />
             </Button>
@@ -402,7 +428,6 @@ export default function OrganizationRoute() {
             <SheetTitle>Invite Owners</SheetTitle>
           </SheetHeader>
           <inviteFetcher.Form method="post" className="mt-4 space-y-4">
-            <AuthenticityTokenInput />
             <input type="hidden" name="intent" value="invite-owners" />
             <div className="space-y-2">
               <Label htmlFor="emails">
@@ -512,18 +537,17 @@ export default function OrganizationRoute() {
             </TableHeader>
             <TableBody>
               {owners.length > 0 ? (
-                owners.map((user) => (
-                  <TableRow key={user.id}>
+                owners.map((profile) => (
+                  <TableRow key={profile.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <UserImage user={user} size="xs" />
-                        <span>{user.name}</span>
+                        <span>{profile.user.name}</span>
                         <Badge variant="secondary">Owner</Badge>
                       </div>
                     </TableCell>
-                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{profile.user.email}</TableCell>
                     <TableCell>
-                      {new Date(user.createdAt).toLocaleDateString()}
+                      {new Date(profile.createdAt).toLocaleDateString()}
                     </TableCell>
                   </TableRow>
                 ))

@@ -1,11 +1,11 @@
-import { type Connection, type Password, type User } from '@app/prisma';
-import { redirect } from 'react-router';
+import { Prisma, type Password, type User } from '@app/prisma';
+import { redirect, data } from 'react-router';
 import bcrypt from 'bcryptjs';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { prisma } from './db.server.ts';
-import { type FeatureFlags } from './featureFlags/index.ts';
-import { DEFAULT_ROUTE, combineHeaders, downloadFile } from './misc.tsx';
-import { authSessionStorage } from './session.server.ts';
+import { combineHeaders } from './misc.tsx';
+import { authSessionStorage } from '../cookie-session-storages/authentication.server.ts';
+import { getProfileId, setProfileId } from '~/cookies/profile-id.server';
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 30;
 export const getSessionExpirationDate = () =>
@@ -51,6 +51,90 @@ export async function requireUserId(
     throw redirect(loginRedirect);
   }
   return userId;
+}
+
+export async function requireProfile(request: Request, userId: string) {
+  const profileId = await getProfileId(request);
+
+  if (profileId) {
+    const profile = await prisma.profile.findUnique({
+      where: { id: profileId, userId },
+      select: {
+        id: true,
+        teacherProfile: true,
+        organization: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!profile) {
+      throw redirect('/no-profile', {
+        headers: { 'set-cookie': await setProfileId('') },
+      });
+    }
+
+    return profile;
+  } else {
+    const profile = await prisma.profile.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        teacherProfile: true,
+        organization: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!profile) {
+      throw redirect('/no-profile');
+    }
+
+    return profile;
+  }
+}
+
+export async function requireAdmin(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findFirst({
+    select: { id: true },
+    where: { id: userId, isAdmin: true },
+  });
+
+  if (!user) {
+    throw data(
+      {
+        error: 'Unauthorized',
+        requiredRole: 'isAdmin',
+        message: `Unauthorized: required role: ${name}`,
+      },
+      { status: 403 }
+    );
+  }
+
+  return user;
+}
+
+export async function requireOwner(request: Request) {
+  const userId = await requireUserId(request);
+  const user = await prisma.user.findFirst({
+    select: {
+      id: true,
+      profiles: { select: { id: true, isOwner: true } },
+    },
+    where: { id: userId, profiles: { some: { isOwner: true } } },
+  });
+
+  if (!user) {
+    throw data(
+      {
+        error: 'Unauthorized',
+        requiredRole: 'owner',
+        message: 'Unauthorized: required role: owner',
+      },
+      { status: 403 }
+    );
+  }
+
+  return user;
 }
 
 export async function requireAnonymous(request: Request) {
@@ -105,48 +189,43 @@ export async function signup({
   name,
   grade,
   period,
-  school,
-  teacher,
-  workshopTeacherId,
+  schoolId,
+  teacherId,
 }: {
   email: User['email'];
   name: User['name'];
   password: string;
-  school: string;
-  teacher: string;
+  schoolId: string;
+  teacherId: string;
   grade: string;
   period: string;
-  workshopTeacherId?: string;
 }) {
   const hashedPassword = await getPasswordHash(password);
-  const user = await prisma.user.upsert({
-    where: { email: email.toLowerCase() },
-    create: {
+  const user = await prisma.user.create({
+    data: {
       email: email.toLowerCase(),
       name,
       password: { create: { hash: hashedPassword } },
-      organization: { connect: { id: 'default-org' } },
-      studentProfile: {
+      profiles: {
         create: {
-          grade,
-          period,
-          school,
-          schoolTeacher: teacher,
-          workshopLeaderId: workshopTeacherId,
-        },
-      },
-    },
-    update: {
-      name,
-      password: { update: { hash: hashedPassword } },
-      organization: { connect: { id: 'default-org' } },
-      studentProfile: {
-        update: {
-          grade,
-          period,
-          school,
-          schoolTeacher: teacher,
-          workshopLeaderId: workshopTeacherId,
+          isOwner: false,
+          organization: { connect: { id: 'default-org' } },
+          studentProfile: {
+            create: {
+              class: {
+                connectOrCreate: {
+                  where: { schoolId_period_grade: { schoolId, period, grade } },
+                  create: {
+                    id: 'default-class',
+                    grade,
+                    period,
+                    school: { connect: { id: schoolId } },
+                    teachers: { connect: { id: teacherId } },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -156,173 +235,6 @@ export async function signup({
     data: {
       expirationDate: getSessionExpirationDate(),
       user: { connect: { id: user.id } },
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return session;
-}
-
-export async function signupAsTeacher({
-  email,
-  password,
-  name,
-}: {
-  email: User['email'];
-  name: User['name'];
-  password: string;
-}) {
-  const hashedPassword = await getPasswordHash(password);
-
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          password: { create: { hash: hashedPassword } },
-          teacherProfile: { create: {} },
-        },
-      },
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return session;
-}
-
-export async function signupAsOrganizationTeacher({
-  email,
-  name,
-  password,
-  organizationId,
-}: {
-  email: User['email'];
-  name: User['name'];
-  password: string;
-  organizationId: string;
-}) {
-  const hashedPassword = await getPasswordHash(password);
-
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          teacherProfile: { create: {} },
-          studentProfile: { create: {} },
-        },
-      },
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return session;
-}
-
-export async function signupAsOrganizationStudent({
-  email,
-  name,
-  password,
-  organizationId,
-}: {
-  email: User['email'];
-  name: User['name'];
-  password: string;
-  organizationId: string;
-}) {
-  const hashedPassword = await getPasswordHash(password);
-
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          studentProfile: { create: {} },
-        },
-      },
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return session;
-}
-
-export async function signupAsOrganizationOwner({
-  email,
-  name,
-  password,
-  organizationId,
-}: {
-  email: User['email'];
-  name: User['name'];
-  password: string;
-  organizationId: string;
-}) {
-  const hashedPassword = await getPasswordHash(password);
-
-  const existingUsers = await prisma.user.findMany({
-    where: { organizationId },
-    select: { id: true },
-  });
-
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          password: { create: { hash: hashedPassword } },
-          organization: { connect: { id: organizationId } },
-          studentProfile: { create: {} },
-          isOwner: true,
-          ...(existingUsers.length === 0 ? { isSuperOwner: true } : {}),
-        },
-      },
-    },
-    select: { id: true, expirationDate: true },
-  });
-
-  return session;
-}
-
-export async function signupWithConnection({
-  email,
-  name,
-  providerId,
-  providerName,
-  imageUrl,
-}: {
-  email: User['email'];
-  name: User['name'];
-  providerId: Connection['providerId'];
-  providerName: Connection['providerName'];
-  imageUrl?: string;
-}) {
-  const session = await prisma.session.create({
-    data: {
-      expirationDate: getSessionExpirationDate(),
-      user: {
-        create: {
-          email: email.toLowerCase(),
-          name,
-          studentProfile: { create: {} },
-          connections: { create: { providerId, providerName } },
-          image: imageUrl
-            ? { create: await downloadFile(imageUrl) }
-            : undefined,
-        },
-      },
     },
     select: { id: true, expirationDate: true },
   });
@@ -384,12 +296,4 @@ export async function verifyUserPassword(
   }
 
   return { id: userWithPassword.id };
-}
-
-export async function redirectIfDisabled(
-  name: FeatureFlags,
-  redirectUrl?: string
-) {
-  const ff = await prisma.featureFlag.findUnique({ where: { name } });
-  if (!ff?.isEnabled) return redirect(redirectUrl ?? DEFAULT_ROUTE);
 }
