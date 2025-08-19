@@ -542,3 +542,65 @@ resource "aws_iam_role_policy_attachment" "apprunner_instance_videos" {
   role       = aws_iam_role.apprunner_instance.name
   policy_arn = aws_iam_policy.videos_policy.arn
 }
+
+
+# -----------------------
+# EventBridge rule to call retention API daily
+# -----------------------
+resource "aws_cloudwatch_event_connection" "retention" {
+  name                = "${var.app_name}-${var.env}-retention-connection"
+  authorization_type  = "API_KEY"
+  auth_parameters {
+    api_key {
+      key   = "x-internal-token"
+      value = var.internal_command_token
+    }
+  }
+}
+
+resource "aws_cloudwatch_event_api_destination" "retention" {
+  name                       = "${var.app_name}-${var.env}-retention-destination"
+  description                = "Calls the app retention cleanup endpoint"
+  invocation_endpoint        = "${aws_apprunner_service.web.service_url}/api/domain/retention"
+  http_method                = "POST"
+  invocation_rate_limit_per_second = 1
+  connection_arn            = aws_cloudwatch_event_connection.retention.arn
+}
+
+resource "aws_iam_role" "events_invoke_api_destination" {
+  name = "${var.app_name}-${var.env}-events-invoke-api-destination"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "events.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "events_invoke_api_destination_policy" {
+  name = "${var.app_name}-${var.env}-events-invoke-api-destination-policy"
+  role = aws_iam_role.events_invoke_api_destination.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = ["events:InvokeApiDestination"],
+      Resource = aws_cloudwatch_event_api_destination.retention.arn
+    }]
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "retention_daily" {
+  name                = "${var.app_name}-${var.env}-retention-daily"
+  # Runs at 08:00 UTC daily (~2:00 AM CST / 3:00 AM CDT)
+  schedule_expression = "cron(0 8 * * ? *)"
+  description         = "Daily retention cleanup trigger"
+}
+
+resource "aws_cloudwatch_event_target" "retention_daily_target" {
+  rule      = aws_cloudwatch_event_rule.retention_daily.name
+  arn       = aws_cloudwatch_event_api_destination.retention.arn
+  role_arn  = aws_iam_role.events_invoke_api_destination.arn
+}

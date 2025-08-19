@@ -1,4 +1,4 @@
-import { type DocumentVersion } from '@app/prisma';
+import { type DocumentVersion, type DocumentSnapshot } from '@app/prisma';
 import { HistoryIcon, RefreshCwIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import {
@@ -17,17 +17,21 @@ type Props = { documentId: string };
 
 const VERSIONS_PER_PAGE = 5;
 
+type VersionLike = (DocumentVersion | DocumentSnapshot) & { createdAt: string };
+
 export const DocumentVersions = ({ documentId }: Props) => {
   const [open, setOpen] = useState(false);
-  const [version, setVersion] = useState<DocumentVersion | null>(null);
-  const [allVersions, setAllVersions] = useState<DocumentVersion[]>([]);
+  const [mode, setMode] = useState<'versions' | 'snapshots'>('snapshots');
+  const [version, setVersion] = useState<VersionLike | null>(null);
+  const [allVersions, setAllVersions] = useState<VersionLike[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const fetcher = useFetcher<DocumentVersion[]>({ key: 'document-versions' });
+  const fetcher = useFetcher<VersionLike[]>({ key: 'document-versions' });
+  const restoreFetcher = useFetcher({ key: 'restore-version' });
 
   const loadVersions = (pageNum: number) => {
     fetcher.load(
-      `/api/model/document/${documentId}/versions?page=${pageNum}&limit=${VERSIONS_PER_PAGE}`
+      `/api/model/document/${documentId}/versions?page=${pageNum}&limit=${VERSIONS_PER_PAGE}&mode=${mode}`
     );
   };
 
@@ -38,7 +42,7 @@ export const DocumentVersions = ({ documentId }: Props) => {
       setHasMore(true);
       loadVersions(1);
     }
-  }, [open]);
+  }, [open, mode]);
 
   useEffect(() => {
     if (
@@ -46,7 +50,7 @@ export const DocumentVersions = ({ documentId }: Props) => {
       Array.isArray(fetcher.data) &&
       fetcher.state === 'idle'
     ) {
-      const versions = fetcher.data as DocumentVersion[];
+      const versions = fetcher.data as VersionLike[];
       if (page === 1) {
         setAllVersions(versions);
         setVersion(versions[0] ?? null);
@@ -69,6 +73,13 @@ export const DocumentVersions = ({ documentId }: Props) => {
     setHasMore(true);
     loadVersions(1);
   };
+
+  useEffect(() => {
+    if (restoreFetcher.state === 'idle' && restoreFetcher.data) {
+      setOpen(false);
+      window.location.reload();
+    }
+  }, [restoreFetcher.state, restoreFetcher.data]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -98,6 +109,34 @@ export const DocumentVersions = ({ documentId }: Props) => {
         </SheetHeader>
         <div className="flex grow flex-col overflow-hidden sm:flex-row">
           <div className="no-scrollbar mb-2 flex max-h-[300px] min-h-[200px] flex-col gap-1 overflow-scroll p-1 sm:mb-0 sm:max-h-full sm:w-1/2">
+            <div className="flex items-center gap-2 p-1">
+              <Button
+                variant={mode === 'snapshots' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setMode('snapshots');
+                  setAllVersions([]);
+                  setPage(1);
+                  setHasMore(true);
+                  loadVersions(1);
+                }}
+              >
+                Snapshots
+              </Button>
+              <Button
+                variant={mode === 'versions' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  setMode('versions');
+                  setAllVersions([]);
+                  setPage(1);
+                  setHasMore(true);
+                  loadVersions(1);
+                }}
+              >
+                Autosaves
+              </Button>
+            </div>
             {allVersions.map((v) => (
               <div key={v.id} className="flex">
                 <button
@@ -143,7 +182,24 @@ export const DocumentVersions = ({ documentId }: Props) => {
           </div>
         </div>
         <SheetFooter>
-          <Button onClick={() => setOpen(false)}>Close</Button>
+          <div className="flex items-center gap-2">
+            <restoreFetcher.Form
+              method="post"
+              action="/api/domain/restore-document-version"
+            >
+              <input type="hidden" name="versionId" value={version?.id ?? ''} />
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={!version || restoreFetcher.state === 'submitting'}
+              >
+                {restoreFetcher.state === 'submitting'
+                  ? 'Restoring…'
+                  : 'Restore and Reload'}
+              </Button>
+            </restoreFetcher.Form>
+            <Button onClick={() => setOpen(false)}>Close</Button>
+          </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>

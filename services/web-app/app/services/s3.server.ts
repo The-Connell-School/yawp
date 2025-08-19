@@ -9,7 +9,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-const bucket = process.env.AWS_S3_BUCKET_FOR_VIDEOS!;
+const videoBucket = process.env.AWS_S3_BUCKET_FOR_VIDEOS!;
 const region = process.env.AWS_S3_REGION_FOR_VIDEOS!;
 
 export const s3 = new S3Client({ region });
@@ -30,7 +30,7 @@ export async function putSmallObject(
 ) {
   await s3.send(
     new PutObjectCommand({
-      Bucket: bucket,
+      Bucket: videoBucket,
       Key: key,
       Body: body,
       ContentType: contentType,
@@ -39,14 +39,14 @@ export async function putSmallObject(
 }
 
 export async function getSignedGetUrl(key: string, expiresInSeconds = 3600) {
-  const command = new GetObjectCommand({ Bucket: bucket, Key: key });
+  const command = new GetObjectCommand({ Bucket: videoBucket, Key: key });
   return getSignedUrl(s3, command, { expiresIn: expiresInSeconds });
 }
 
 export async function startMultipartUpload(key: string, contentType: string) {
   const res = await s3.send(
     new CreateMultipartUploadCommand({
-      Bucket: bucket,
+      Bucket: videoBucket,
       Key: key,
       ContentType: contentType,
     })
@@ -60,7 +60,7 @@ export async function signPartUpload(
   partNumber: number
 ) {
   const command = new UploadPartCommand({
-    Bucket: bucket,
+    Bucket: videoBucket,
     Key: key,
     UploadId: uploadId,
     PartNumber: partNumber,
@@ -76,7 +76,7 @@ export async function completeMultipartUpload(
 ) {
   await s3.send(
     new CompleteMultipartUploadCommand({
-      Bucket: bucket,
+      Bucket: videoBucket,
       Key: key,
       UploadId: uploadId,
       MultipartUpload: {
@@ -89,9 +89,11 @@ export async function completeMultipartUpload(
 export async function abortMultipartUpload(key: string, uploadId: string) {
   await s3.send(
     new AbortMultipartUploadCommand({
-      Bucket: bucket,
+      Bucket: videoBucket,
       Key: key,
       UploadId: uploadId,
     })
   );
 }
+
+// Document snapshot S3 archival removed; DB snapshots are sufficient

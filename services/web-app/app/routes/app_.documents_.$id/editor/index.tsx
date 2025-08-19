@@ -49,12 +49,16 @@ type Props = {
 };
 
 export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
-  const editor = useEditor({ extensions, content: docHtml });
+  const editor = useEditor({
+    extensions,
+    content: docHtml,
+    immediatelyRender: false,
+  });
 
   useEffect(() => {
     if (!editor) return;
 
-    const saveToBackend = debounce(async () => {
+    const save = async () => {
       setIsSaving(true);
       const html = editor.getHTML();
       const text = editor.getText();
@@ -64,13 +68,19 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
       await fetch(`/api/model/document/${docId}?from=editor`, {
         method: 'PUT',
         body: formData,
+        keepalive: true,
       });
       setIsSaving(false);
-    }, 200);
+    };
 
-    editor.on('update', saveToBackend);
+    const saveDebounced = debounce(save, 1500);
+
+    editor.on('update', saveDebounced);
+    editor.on('blur', save);
+
     return () => {
-      editor.off('update', saveToBackend);
+      editor.off('update', saveDebounced);
+      editor.off('blur', save);
     };
   }, [editor, docId, setIsSaving]);
 

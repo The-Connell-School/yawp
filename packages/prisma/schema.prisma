@@ -128,6 +128,7 @@ model Document {
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
+  snapshots                   DocumentSnapshot[]
 }
 
 model DocumentComment {
@@ -159,6 +160,17 @@ model DocumentVersion {
   html       String
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentSnapshot {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  text       String
+  html       String
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt(sort: Desc)])
 }
 
 model InstructionAudio {

@@ -12,31 +12,45 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  const version = await prisma.documentVersion.findUnique({
+  // Try version first, then snapshot by id
+  const version = await prisma.documentVersion.findFirst({
     where: { id: data.versionId, document: { profile: { userId } } },
     include: { document: true },
   });
+  const snapshot = version
+    ? null
+    : await prisma.documentSnapshot.findFirst({
+        where: { id: data.versionId, document: { profile: { userId } } },
+        include: { document: true },
+      });
 
-  if (!version) {
+  if (!version && !snapshot) {
     return redirectWithToast('/app', {
       description: 'Document version not found.',
       type: 'error',
     });
   }
 
-  if (version.document.html && version.document.text) {
+  if (
+    (version || snapshot) &&
+    (version?.document.html || snapshot?.document.html) &&
+    (version?.document.text || snapshot?.document.text)
+  ) {
     await prisma.documentVersion.create({
       data: {
-        documentId: version.documentId,
-        html: version.document.html,
-        text: version.document.text,
+        documentId: (version ?? snapshot)!.documentId,
+        html: (version ?? snapshot)!.document.html!,
+        text: (version ?? snapshot)!.document.text!,
       },
     });
   }
 
   const doc = await prisma.document.update({
-    where: { id: version.documentId },
-    data: { html: version.html, text: version.text },
+    where: { id: (version ?? snapshot)!.documentId },
+    data: {
+      html: (version ?? snapshot)!.html,
+      text: (version ?? snapshot)!.text,
+    },
   });
   return dataResponse({ doc });
 }

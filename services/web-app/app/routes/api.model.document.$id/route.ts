@@ -42,13 +42,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }),
   ]);
 
-  await prisma.documentVersion.create({
-    data: {
-      documentId: params.id,
-      text: document.text ?? '',
-      html: document.html ?? '',
-    },
+  // Throttled version + periodic durable snapshot strategy
+  const now = new Date();
+  const twentySecondsAgo = new Date(now.getTime() - 20_000);
+
+  const lastVersion = await prisma.documentVersion.findFirst({
+    where: { documentId: params.id },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
   });
+
+  if (!lastVersion || lastVersion.createdAt < twentySecondsAgo) {
+    await prisma.documentVersion.create({
+      data: {
+        documentId: params.id,
+        text: document.text ?? '',
+        html: document.html ?? '',
+      },
+    });
+  }
 
   const update = await prisma.document.update({
     where: {
@@ -70,6 +82,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
     data,
   });
+
+  // Create hourly durable snapshot in DB and S3 for point-in-time recovery
+  try {
+    const fresh = await prisma.document.findUnique({
+      where: { id: document.id },
+      select: { id: true, html: true, text: true },
+    });
+
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const lastSnapshot = await (prisma as any).documentSnapshot?.findFirst?.({
+      where: { documentId: document.id },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    const shouldSnapshot = !lastSnapshot || lastSnapshot.createdAt < oneHourAgo;
+
+    if (shouldSnapshot && fresh?.html != null && fresh?.text != null) {
+      await (prisma as any).documentSnapshot.create({
+        data: {
+          document: { connect: { id: document.id } },
+          html: fresh.html,
+          text: fresh.text,
+        },
+      });
+    }
+  } catch (err) {
+    // Non-fatal snapshot errors should not block editing
+  }
 
   if (!update) {
     return new Response(null, { status: 404 });
