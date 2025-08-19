@@ -123,11 +123,14 @@ model Document {
   title                       String                       @default("Untitled")
   text                        String?
   html                        String?
+  currentVersion              Int                          @default(0)
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId                   String
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
+  operations                  DocumentOperation[]
+  snapshots                   DocumentSnapshot[]
 }
 
 model DocumentComment {
@@ -159,6 +162,35 @@ model DocumentVersion {
   html       String
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentOperation {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  type       String   // 'insert', 'delete', 'retain'
+  position   Int
+  content    String?  // For insert operations
+  length     Int?     // For delete operations
+  batchId    String   // Groups related operations
+  version    Int      // Document version this operation belongs to
+
+  @@index([documentId, version])
+  @@index([documentId, batchId])
+}
+
+model DocumentSnapshot {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  text       String
+  html       String
+  version    Int      // Document version at time of snapshot
+
+  @@unique([documentId, version])
+  @@index([documentId, version])
 }
 
 model InstructionAudio {
