@@ -49,7 +49,11 @@ type Props = {
 };
 
 export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
-  const editor = useEditor({ extensions, content: docHtml });
+  const editor = useEditor({
+    extensions,
+    content: docHtml,
+    immediatelyRender: false,
+  });
 
   useEffect(() => {
     if (!editor) return;
@@ -66,11 +70,21 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
         body: formData,
       });
       setIsSaving(false);
-    }, 200);
+    }, 800);
 
     editor.on('update', saveToBackend);
+    // Ensure pending batches get flushed when user leaves the page
+    const beforeUnload = () => {
+      // Use keepalive request to attempt a server-side flush
+      fetch(`/api/model/document/${docId}/flush`, {
+        method: 'POST',
+        keepalive: true,
+      });
+    };
+    window.addEventListener('beforeunload', beforeUnload);
     return () => {
       editor.off('update', saveToBackend);
+      window.removeEventListener('beforeunload', beforeUnload);
     };
   }, [editor, docId, setIsSaving]);
 

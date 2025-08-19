@@ -5,6 +5,7 @@ export type Operation = {
   position: number;
   content?: string;
   length?: number;
+  sequence?: number;
 };
 
 export type OperationBatch = {
@@ -18,12 +19,15 @@ export type OperationBatch = {
  * Groups operations that happen within a time window and are semantically related
  */
 export class DocumentOperationManager {
-  private pendingBatches = new Map<string, {
-    operations: Operation[];
-    batchId: string;
-    lastActivity: Date;
-    timer: NodeJS.Timeout;
-  }>();
+  private pendingBatches = new Map<
+    string,
+    {
+      operations: Operation[];
+      batchId: string;
+      lastActivity: Date;
+      timer: NodeJS.Timeout;
+    }
+  >();
 
   // Configuration
   private readonly BATCH_TIMEOUT = 5000; // 5 seconds - much longer than current 200ms
@@ -40,8 +44,11 @@ export class DocumentOperationManager {
     if (!batch) {
       // Create new batch
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-      const timer = setTimeout(() => this.flushBatch(documentId), this.BATCH_TIMEOUT);
-      
+      const timer = setTimeout(
+        () => this.flushBatch(documentId),
+        this.BATCH_TIMEOUT
+      );
+
       this.pendingBatches.set(documentId, {
         operations: [operation],
         batchId,
@@ -88,6 +95,7 @@ export class DocumentOperationManager {
             length: op.length,
             batchId: batch.batchId,
             version: nextVersion,
+            sequence: index,
           })),
         });
 
@@ -115,7 +123,9 @@ export class DocumentOperationManager {
         }
       });
 
-      console.log(`Flushed batch ${batch.batchId} for document ${documentId}: ${batch.operations.length} operations`);
+      console.log(
+        `Flushed batch ${batch.batchId} for document ${documentId}: ${batch.operations.length} operations`
+      );
     } catch (error) {
       console.error('Error flushing document operations:', error);
     } finally {
@@ -126,10 +136,17 @@ export class DocumentOperationManager {
   }
 
   /**
+   * Public: force flush for a specific document immediately (e.g., end of request)
+   */
+  async flushNow(documentId: string): Promise<void> {
+    await this.flushBatch(documentId);
+  }
+
+  /**
    * Force flush all pending batches (useful for shutdown)
    */
   async flushAll(): Promise<void> {
-    const promises = Array.from(this.pendingBatches.keys()).map(docId => 
+    const promises = Array.from(this.pendingBatches.keys()).map((docId) =>
       this.flushBatch(docId)
     );
     await Promise.all(promises);
@@ -138,7 +155,10 @@ export class DocumentOperationManager {
   /**
    * Get document at a specific version by replaying operations
    */
-  async getDocumentAtVersion(documentId: string, version: number): Promise<{ text: string; html: string } | null> {
+  async getDocumentAtVersion(
+    documentId: string,
+    version: number
+  ): Promise<{ text: string; html: string } | null> {
     // Find the latest snapshot before the target version
     const snapshot = await prisma.documentSnapshot.findFirst({
       where: {
@@ -167,29 +187,44 @@ export class DocumentOperationManager {
           lte: version,
         },
       },
-      orderBy: { version: 'asc' },
+      orderBy: [{ version: 'asc' }, { createdAt: 'asc' }],
     });
 
     // Apply operations to reconstruct the document
     let currentText = baseText;
     // Note: For simplicity, we're only tracking text. HTML reconstruction would be more complex
-    
+
+    // Group by version to avoid index-shift issues by applying deletes right-to-left, inserts left-to-right per version
+    const versionToOps = new Map<number, typeof operations>();
     for (const op of operations) {
-      switch (op.type) {
-        case 'insert':
-          if (op.content && op.position <= currentText.length) {
-            currentText = currentText.slice(0, op.position) + op.content + currentText.slice(op.position);
-          }
-          break;
-        case 'delete':
-          if (op.length && op.position <= currentText.length) {
-            const endPos = Math.min(op.position + op.length, currentText.length);
-            currentText = currentText.slice(0, op.position) + currentText.slice(endPos);
-          }
-          break;
-        case 'retain':
-          // No-op for text, but could be used for formatting in HTML
-          break;
+      const arr = versionToOps.get(op.version) ?? [];
+      arr.push(op);
+      versionToOps.set(op.version, arr);
+    }
+
+    for (const v of Array.from(versionToOps.keys()).sort((a, b) => a - b)) {
+      const ops = versionToOps.get(v)!;
+      const deletes = ops
+        .filter((o) => o.type === 'delete')
+        .sort((a, b) => (b.position ?? 0) - (a.position ?? 0));
+      const inserts = ops
+        .filter((o) => o.type === 'insert')
+        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+
+      for (const op of deletes) {
+        if (op.length && op.position <= currentText.length) {
+          const endPos = Math.min(op.position + op.length, currentText.length);
+          currentText =
+            currentText.slice(0, op.position) + currentText.slice(endPos);
+        }
+      }
+      for (const op of inserts) {
+        if (op.content && op.position <= currentText.length) {
+          currentText =
+            currentText.slice(0, op.position) +
+            op.content +
+            currentText.slice(op.position);
+        }
       }
     }
 
@@ -247,88 +282,51 @@ export const documentOperationManager = new DocumentOperationManager();
  * Generate operations by comparing two text strings
  * This is a simplified diff algorithm
  */
-export function generateOperations(oldText: string, newText: string): Operation[] {
-  const operations: Operation[] = [];
-  
-  // Simple character-by-character diff
-  let oldIndex = 0;
-  let newIndex = 0;
-  
-  while (oldIndex < oldText.length || newIndex < newText.length) {
-    if (oldIndex >= oldText.length) {
-      // Insert remaining new characters
-      operations.push({
-        type: 'insert',
-        position: oldIndex,
-        content: newText.slice(newIndex),
-      });
-      break;
-    } else if (newIndex >= newText.length) {
-      // Delete remaining old characters
-      operations.push({
-        type: 'delete',
-        position: oldIndex,
-        length: oldText.length - oldIndex,
-      });
-      break;
-    } else if (oldText[oldIndex] === newText[newIndex]) {
-      // Characters match, continue
-      oldIndex++;
-      newIndex++;
-    } else {
-      // Find the next matching character to determine if it's an insert or delete
-      let insertLength = 0;
-      let deleteLength = 0;
-      
-      // Look ahead to see if this is an insertion
-      for (let i = newIndex; i < newText.length && i < newIndex + 10; i++) {
-        if (oldText[oldIndex] === newText[i]) {
-          insertLength = i - newIndex;
-          break;
-        }
-      }
-      
-      // Look ahead to see if this is a deletion
-      for (let i = oldIndex; i < oldText.length && i < oldIndex + 10; i++) {
-        if (oldText[i] === newText[newIndex]) {
-          deleteLength = i - oldIndex;
-          break;
-        }
-      }
-      
-      if (insertLength > 0 && (deleteLength === 0 || insertLength <= deleteLength)) {
-        // This looks like an insertion
-        operations.push({
-          type: 'insert',
-          position: oldIndex,
-          content: newText.slice(newIndex, newIndex + insertLength),
-        });
-        newIndex += insertLength;
-      } else if (deleteLength > 0) {
-        // This looks like a deletion
-        operations.push({
-          type: 'delete',
-          position: oldIndex,
-          length: deleteLength,
-        });
-        oldIndex += deleteLength;
-      } else {
-        // Fallback: treat as a replacement (delete + insert)
-        operations.push({
-          type: 'delete',
-          position: oldIndex,
-          length: 1,
-        });
-        operations.push({
-          type: 'insert',
-          position: oldIndex,
-          content: newText[newIndex],
-        });
-        oldIndex++;
-        newIndex++;
-      }
-    }
+export function generateOperations(
+  oldText: string,
+  newText: string
+): Operation[] {
+  if (oldText === newText) return [];
+
+  // Common-prefix/suffix diff: produce at most one delete and one insert
+  let start = 0;
+  const oldLen = oldText.length;
+  const newLen = newText.length;
+
+  while (
+    start < oldLen &&
+    start < newLen &&
+    oldText[start] === newText[start]
+  ) {
+    start++;
   }
-  
+
+  let endOld = oldLen - 1;
+  let endNew = newLen - 1;
+  while (
+    endOld >= start &&
+    endNew >= start &&
+    oldText[endOld] === newText[endNew]
+  ) {
+    endOld--;
+    endNew--;
+  }
+
+  const operations: Operation[] = [];
+
+  const deleteLength = endOld - start + 1;
+  if (deleteLength > 0) {
+    operations.push({ type: 'delete', position: start, length: deleteLength });
+  }
+
+  const insertContent = newText.slice(start, endNew + 1);
+  if (insertContent.length > 0) {
+    operations.push({
+      type: 'insert',
+      position: start,
+      content: insertContent,
+    });
+  }
+
   return operations;
 }

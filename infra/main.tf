@@ -466,6 +466,88 @@ resource "aws_apprunner_service" "web" {
 }
 
 # -----------------------
+# Scheduled cleanup via EventBridge calling internal admin endpoint
+# -----------------------
+resource "aws_iam_role" "events_invoke_apprunner" {
+  name = "${var.app_name}-${var.env}-events-invoke-apprunner"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "events_invoke_apprunner_policy" {
+  name = "${var.app_name}-${var.env}-events-invoke-apprunner-policy"
+  role = aws_iam_role.events_invoke_apprunner.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = ["events:InvokeApiDestination"],
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow",
+        Action   = ["secretsmanager:GetSecretValue"],
+        Resource = aws_secretsmanager_secret.internal_token.arn
+      }
+    ]
+  })
+}
+
+resource "aws_events_connection" "cleanup_connection" {
+  name               = "${var.app_name}-${var.env}-cleanup-connection"
+  authorization_type = "API_KEY"
+  auth_parameters {
+    api_key {
+      key   = "x-internal-token"
+      value = var.internal_command_token
+    }
+  }
+}
+
+resource "aws_events_api_destination" "cleanup_destination" {
+  name                             = "${var.app_name}-${var.env}-cleanup-destination"
+  invocation_endpoint              = "${aws_apprunner_service.web.service_url}/api/admin/document-cleanup"
+  http_method                      = "POST"
+  invocation_rate_limit_per_second = 1
+  connection_arn                   = aws_events_connection.cleanup_connection.arn
+}
+
+resource "aws_cloudwatch_event_rule" "nightly_cleanup" {
+  name                = "${var.app_name}-${var.env}-nightly-cleanup"
+  schedule_expression = "cron(0 7 * * ? *)" # 7:00 UTC daily
+}
+
+resource "aws_cloudwatch_event_target" "nightly_cleanup_target" {
+  rule      = aws_cloudwatch_event_rule.nightly_cleanup.name
+  target_id = "document_cleanup"
+  arn       = aws_events_api_destination.cleanup_destination.arn
+  role_arn  = aws_iam_role.events_invoke_apprunner.arn
+  input     = jsonencode({ action = "cleanup", retentionDays = 30 })
+}
+
+resource "aws_cloudwatch_event_rule" "weekly_snapshots" {
+  name                = "${var.app_name}-${var.env}-weekly-snapshots"
+  schedule_expression = "cron(0 8 ? * MON *)" # 08:00 UTC every Monday
+}
+
+resource "aws_cloudwatch_event_target" "weekly_snapshots_target" {
+  rule      = aws_cloudwatch_event_rule.weekly_snapshots.name
+  target_id = "create_snapshots"
+  arn       = aws_events_api_destination.cleanup_destination.arn
+  role_arn  = aws_iam_role.events_invoke_apprunner.arn
+  input     = jsonencode({ action = "create-snapshots" })
+}
+
+# -----------------------
 # S3 bucket for videos/files
 # -----------------------
 resource "aws_s3_bucket" "videos" {

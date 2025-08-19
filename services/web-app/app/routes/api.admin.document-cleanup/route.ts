@@ -1,4 +1,8 @@
-import { type ActionFunctionArgs, type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  data as dataResponse,
+} from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server.js';
@@ -12,7 +16,7 @@ const CleanupSchema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  
+
   // Verify admin access
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
@@ -25,7 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Return storage statistics
   const stats = await documentCleanupService.getStorageStats();
-  
+
   return dataResponse({
     stats,
     message: 'Document storage statistics',
@@ -33,16 +37,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-  
-  // Verify admin access
-  const user = await prisma.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: { isAdmin: true },
-  });
-
-  if (!user.isAdmin) {
-    return new Response('Unauthorized', { status: 403 });
+  // Allow internal automation with token, or admins via session
+  const internalToken = request.headers.get('x-internal-token');
+  const isInternal =
+    !!internalToken && internalToken === process.env.INTERNAL_COMMAND_TOKEN;
+  let isAdmin = false;
+  if (!isInternal) {
+    const userId = await requireUserId(request);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { isAdmin: true },
+    });
+    isAdmin = user.isAdmin;
+    if (!isAdmin) return new Response('Unauthorized', { status: 403 });
   }
 
   const { error, data } = await parseFormData(request, CleanupSchema);
@@ -51,9 +58,10 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     switch (data.action) {
       case 'cleanup':
-        const cleanupResults = await documentCleanupService.cleanupOldDocumentHistory(
-          data.retentionDays || 30
-        );
+        const cleanupResults =
+          await documentCleanupService.cleanupOldDocumentHistory(
+            data.retentionDays || 30
+          );
         return dataResponse({
           success: true,
           action: 'cleanup',
@@ -62,7 +70,8 @@ export async function action({ request }: ActionFunctionArgs) {
         });
 
       case 'create-snapshots':
-        const snapshotsCreated = await documentCleanupService.createMissingSnapshots();
+        const snapshotsCreated =
+          await documentCleanupService.createMissingSnapshots();
         return dataResponse({
           success: true,
           action: 'create-snapshots',
@@ -84,6 +93,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   } catch (error) {
     console.error('Document cleanup error:', error);
-    return new Response('Internal server error during cleanup', { status: 500 });
+    return new Response('Internal server error during cleanup', {
+      status: 500,
+    });
   }
 }

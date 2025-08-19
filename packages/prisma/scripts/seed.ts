@@ -156,11 +156,7 @@ async function seed() {
             isOwner:
               u.email === 'brian@theconnellschool.com' ||
               u.email === 'bryant@brock.software',
-            studentProfile:
-              u.email === 'jdoe@brock.software' ||
-              u.email === 'jsmith@brock.software'
-                ? { create: {} }
-                : undefined,
+            studentProfile: { create: {} },
             teacherProfile:
               u.email === 'brian@theconnellschool.com' ||
               u.email === 'bryant@brock.software' ||

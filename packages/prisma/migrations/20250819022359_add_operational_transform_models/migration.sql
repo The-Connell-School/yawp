@@ -9,6 +9,7 @@ CREATE TABLE "DocumentOperation" (
     "length" INTEGER,
     "batchId" TEXT NOT NULL,
     "version" INTEGER NOT NULL,
+    "sequence" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "DocumentOperation_pkey" PRIMARY KEY ("id")
 );
@@ -30,6 +31,7 @@ ALTER TABLE "Document" ADD COLUMN "currentVersion" INTEGER NOT NULL DEFAULT 0;
 
 -- CreateIndex
 CREATE INDEX "DocumentOperation_documentId_version_idx" ON "DocumentOperation"("documentId", "version");
+CREATE INDEX "DocumentOperation_documentId_version_sequence_idx" ON "DocumentOperation"("documentId", "version", "sequence");
 
 -- CreateIndex
 CREATE INDEX "DocumentOperation_documentId_batchId_idx" ON "DocumentOperation"("documentId", "batchId");

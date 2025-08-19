@@ -245,8 +245,6 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
     });
   };
 
-  console.log('instruction', instruction);
-
   return (
     <div className="flex w-full flex-col border-r pb-2 md:w-3/5">
       <audio ref={audioRef} hidden />
