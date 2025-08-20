@@ -1,100 +1,35 @@
-import { test as base, expect, Page, BrowserContext } from '@playwright/test';
+import { test as base } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { E2EContext } from './seed-e2e';
 
-// Extend the basic test to include custom fixtures
 type TestFixtures = {
-  authenticatedPage: Page;
-  mockAuth: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  e2eContext: E2EContext;
 };
 
 export const test = base.extend<TestFixtures>({
-  // Create a fixture for authenticated pages
-  authenticatedPage: async ({ page }, use) => {
-    // Mock authentication by intercepting requests or setting up test state
-    await page.addInitScript(() => {
-      // Mock any client-side auth state
-      window.localStorage.setItem('test-mode', 'true');
-    });
-    
-    // Intercept auth-related API calls and return mock responses
-    await page.route('**/api/auth/**', (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ authenticated: true, userId: 'test-user-id' }),
-      });
-    });
-
-    // Mock user profile endpoints
-    await page.route('**/api/profile/**', (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          id: 'test-user-id',
-          name: 'Test User',
-          email: 'test@example.com',
-          isAdmin: false,
-        }),
-      });
-    });
-
-    await use(page);
+  e2eContext: async ({}, use) => {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const e2eDir = path.resolve(__dirname, '.');
+    const ctxPath = path.join(e2eDir, '.e2e-context.json');
+    const ctx = JSON.parse(fs.readFileSync(ctxPath, 'utf8')) as E2EContext;
+    await use(ctx);
   },
-
-  // Mock auth function
-  mockAuth: async ({ page }, use) => {
-    const mockAuthFunction = async () => {
-      // Mock document API endpoints for testing
-      await page.route('**/api/model/document/**', async (route) => {
-        const method = route.request().method();
-        
-        if (method === 'PUT') {
-          // Mock document save
-          route.fulfill({
-            status: 204,
-            body: '',
-          });
-        } else if (method === 'GET') {
-          // Mock document fetch
-          route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify({
-              id: 'test-document-id',
-              title: 'Test Document',
-              html: '<p>Initial content</p>',
-              text: 'Initial content',
-              versions: [
-                {
-                  id: 'version-1',
-                  html: '<p>Previous version</p>',
-                  text: 'Previous version',
-                  createdAt: new Date().toISOString(),
-                }
-              ],
-            }),
-          });
-        }
-      });
-
-      // Mock document versions API
-      await page.route('**/api/model/document/*/versions', (route) => {
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([
-            {
-              id: 'version-1',
-              html: '<p>Version 1</p>',
-              text: 'Version 1',
-              createdAt: new Date().toISOString(),
-            },
-          ]),
-        });
-      });
+  signIn: async ({ page }, use) => {
+    const signInFn = async (email: string, password: string) => {
+      await page.goto('/auth/login');
+      const emailInput = page.locator('input[type="email"]');
+      const passwordInput = page.locator('input[type="password"]');
+      const submitButton = page.getByRole('button', { name: /log in/i });
+      await emailInput.fill(email);
+      await passwordInput.fill(password);
+      await submitButton.click();
+      await page.waitForURL('**/app**', { timeout: 15000 });
     };
-
-    await use(mockAuthFunction);
+    await use(signInFn);
   },
 });
 
