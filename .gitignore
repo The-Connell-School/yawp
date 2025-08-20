@@ -190,3 +190,6 @@ infra/.terraform
 infra/envs/variables/
 **/*.db
 **/*.production
+
+playwright-report/
+test-results/
