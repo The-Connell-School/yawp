@@ -20,6 +20,7 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { Comments } from './comments';
+import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
@@ -251,26 +252,28 @@ export default function Route() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
-          {isMobile && tab !== 'tutor' ? null : (
-            <Tutor
-              docId={data.doc.id}
-              cms={data.currentCms}
-              nextCmId={data.nextCmId}
-              hasPreviousCms={data.hasPreviousCms}
-            />
-          )}
-          {isMobile && tab !== 'editor' ? null : (
-            <Editor
-              docId={data.doc.id}
-              docHtml={data.doc.html}
-              setIsSaving={setIsSaving}
-            />
-          )}
-          {isMobile && tab !== 'comments' ? null : (
-            <Comments comments={data.doc.comments as any} />
-          )}
-        </div>
+        <CommentsSelectionProvider>
+          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+            {isMobile && tab !== 'tutor' ? null : (
+              <Tutor
+                docId={data.doc.id}
+                cms={data.currentCms}
+                nextCmId={data.nextCmId}
+                hasPreviousCms={data.hasPreviousCms}
+              />
+            )}
+            {isMobile && tab !== 'editor' ? null : (
+              <Editor
+                docId={data.doc.id}
+                docHtml={data.doc.html}
+                setIsSaving={setIsSaving}
+              />
+            )}
+            {isMobile && tab !== 'comments' ? null : (
+              <Comments comments={data.doc.comments as any} />
+            )}
+          </div>
+        </CommentsSelectionProvider>
       </main>
     </>
   );

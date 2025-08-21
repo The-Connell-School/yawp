@@ -20,6 +20,7 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Plus } from 'lucide-react';
 import { useFetcher } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useForm } from '@rvf/react-router';
 import z from 'zod';
 
@@ -124,6 +125,7 @@ export function SchoolsCard({ schools }: SchoolsCardProps) {
   const fetcher = useFetcher();
   const [open, setOpen] = React.useState(false);
   const [editingSchool, setEditingSchool] = React.useState<School | null>(null);
+  const navigate = useNavigate();
 
   return (
     <Card className="bg-muted flex-1">
@@ -186,34 +188,12 @@ export function SchoolsCard({ schools }: SchoolsCardProps) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => {
-                          setEditingSchool(s);
-                          setOpen(true);
-                        }}
+                        onClick={() =>
+                          navigate(`/app/organizations/schools/${s.id}`)
+                        }
                       >
-                        Edit
+                        View
                       </Button>
-                      <fetcher.Form method="post" className="inline">
-                        <input
-                          type="hidden"
-                          name="intent"
-                          value="delete-school"
-                        />
-                        <input type="hidden" name="schoolId" value={s.id} />
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={fetcher.state !== 'idle'}
-                          onClick={(e) => {
-                            if (!confirm('Delete this school?')) {
-                              e.preventDefault();
-                              return;
-                            }
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      </fetcher.Form>
                     </TableCell>
                   </TableRow>
                 ))}

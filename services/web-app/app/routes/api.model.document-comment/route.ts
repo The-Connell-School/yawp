@@ -1,9 +1,8 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server.js';
+import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { getProfileId } from '~/cookies/profile-id.server';
 
 const validator = z.object({
   id: z.string(),
@@ -13,11 +12,7 @@ const validator = z.object({
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profileId = await getProfileId(request);
-  const profile = await prisma.profile.findUnique({
-    where: { id: profileId, userId },
-    select: { id: true },
-  });
+  const profile = await requireProfile(request, userId);
 
   if (!profile) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });

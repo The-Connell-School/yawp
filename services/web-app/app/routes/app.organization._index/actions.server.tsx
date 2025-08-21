@@ -403,8 +403,105 @@ export async function unassignTeacherFromClassAction(request: Request) {
   return dataResponse({ success: true });
 }
 
-export async function organizationIndexAction({ request }: ActionFunctionArgs) {
+async function assignTeacherToAllClassesInSchoolAction(request: Request) {
+  const user = await requireOwner(request);
+  const profile = await requireProfile(request, user.id);
   const formData = await request.formData();
+  const teacherProfileId = formData.get('teacherProfileId')?.toString();
+  const schoolId = formData.get('schoolId')?.toString();
+  if (!teacherProfileId || !schoolId)
+    return dataResponse({ error: 'Missing IDs' }, { status: 400 });
+
+  const [tp, school, schoolClasses] = await Promise.all([
+    prisma.teacherProfile.findFirst({
+      where: {
+        id: teacherProfileId,
+        profile: { organizationId: profile.organization.id },
+      },
+      select: {
+        id: true,
+        classes: { select: { id: true } },
+        schools: { select: { id: true } },
+      },
+    }),
+    prisma.school.findFirst({
+      where: { id: schoolId, organizationId: profile.organization.id },
+      select: { id: true },
+    }),
+    prisma.class.findMany({
+      where: { schoolId, school: { organizationId: profile.organization.id } },
+      select: { id: true },
+    }),
+  ]);
+  if (!tp || !school)
+    return dataResponse({ error: 'Not found' }, { status: 404 });
+
+  const currentClassIds = new Set(tp.classes.map((c) => c.id));
+  const toConnect = schoolClasses
+    .map((c) => c.id)
+    .filter((id) => !currentClassIds.has(id))
+    .map((id) => ({ id }));
+
+  await prisma.teacherProfile.update({
+    where: { id: teacherProfileId },
+    data: {
+      // Ensure teacher is connected to the school
+      schools: tp.schools.some((s) => s.id === schoolId)
+        ? undefined
+        : { connect: { id: schoolId } },
+      classes: toConnect.length > 0 ? { connect: toConnect } : undefined,
+    },
+  });
+  return dataResponse({ success: true, assignedCount: toConnect.length });
+}
+
+async function unassignTeacherFromAllClassesInSchoolAction(request: Request) {
+  const user = await requireOwner(request);
+  const profile = await requireProfile(request, user.id);
+  const formData = await request.formData();
+  const teacherProfileId = formData.get('teacherProfileId')?.toString();
+  const schoolId = formData.get('schoolId')?.toString();
+  if (!teacherProfileId || !schoolId)
+    return dataResponse({ error: 'Missing IDs' }, { status: 400 });
+
+  const [tp, school, schoolClasses] = await Promise.all([
+    prisma.teacherProfile.findFirst({
+      where: {
+        id: teacherProfileId,
+        profile: { organizationId: profile.organization.id },
+      },
+      select: { id: true, classes: { select: { id: true } } },
+    }),
+    prisma.school.findFirst({
+      where: { id: schoolId, organizationId: profile.organization.id },
+      select: { id: true },
+    }),
+    prisma.class.findMany({
+      where: { schoolId, school: { organizationId: profile.organization.id } },
+      select: { id: true },
+    }),
+  ]);
+  if (!tp || !school)
+    return dataResponse({ error: 'Not found' }, { status: 404 });
+
+  const schoolClassIds = new Set(schoolClasses.map((c) => c.id));
+  const toDisconnect = tp.classes
+    .map((c) => c.id)
+    .filter((id) => schoolClassIds.has(id))
+    .map((id) => ({ id }));
+
+  await prisma.teacherProfile.update({
+    where: { id: teacherProfileId },
+    data: {
+      classes:
+        toDisconnect.length > 0 ? { disconnect: toDisconnect } : undefined,
+    },
+  });
+  return dataResponse({ success: true, unassignedCount: toDisconnect.length });
+}
+
+export async function organizationIndexAction({ request }: ActionFunctionArgs) {
+  const formData = await request.clone().formData();
   const intent = formData.get('intent');
 
   if (intent === 'updateFilters') return updateFiltersAction(request);
@@ -424,6 +521,10 @@ export async function organizationIndexAction({ request }: ActionFunctionArgs) {
     return assignTeacherToClassAction(request);
   if (intent === 'unassign-teacher-from-class')
     return unassignTeacherFromClassAction(request);
+  if (intent === 'assign-teacher-to-all-classes-in-school')
+    return assignTeacherToAllClassesInSchoolAction(request);
+  if (intent === 'unassign-teacher-from-all-classes-in-school')
+    return unassignTeacherFromAllClassesInSchoolAction(request);
 
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
 }

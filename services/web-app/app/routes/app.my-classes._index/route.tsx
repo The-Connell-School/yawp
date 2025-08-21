@@ -1,5 +1,7 @@
+import { User } from 'lucide-react';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, useSearchParams } from 'react-router';
+import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
@@ -18,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         id: true,
         grade: true,
         period: true,
-        school: { select: { name: true } },
+        school: { select: { id: true, name: true } },
         _count: { select: { students: true, teachers: true } },
       },
       orderBy: [
@@ -34,12 +36,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ]);
 
   const teacherSchoolCount = teacher?.schools.length ?? 0;
-  return dataResponse({ classes, teacherSchoolCount });
+  const schools = Array.from(
+    new Map(
+      classes
+        .map((c) => c.school)
+        .filter(Boolean)
+        .map((s) => [s!.id, { id: s!.id, name: s!.name }])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name));
+  return dataResponse({ classes, teacherSchoolCount, schools });
 }
 
 export default function MyClassesRoute() {
   const data = useLoaderData<typeof loader>();
-  const hideSchool = (data.teacherSchoolCount ?? 0) === 1;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSchoolId = searchParams.get('school') ?? 'all';
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -54,30 +65,56 @@ export default function MyClassesRoute() {
         </div>
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+        {data.schools.length > 1 ? (
+          <div className="mb-4">
+            <Tabs
+              value={selectedSchoolId}
+              onValueChange={(value) => {
+                const next = new URLSearchParams(searchParams);
+                if (value === 'all') {
+                  next.delete('school');
+                } else {
+                  next.set('school', value);
+                }
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              <TabsList>
+                <TabsTrigger value="all">All schools</TabsTrigger>
+                {data.schools.map((s) => (
+                  <TabsTrigger key={s.id} value={s.id}>
+                    {s.name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        ) : null}
         {data.classes.length ? (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {data.classes.map((klass) => (
-              <Link
-                key={klass.id}
-                to={`/app/my-classes/${klass.id}`}
-                className="flex flex-col rounded-lg border bg-muted p-4 hover:shadow transition"
-              >
-                <div className="flex items-baseline justify-between">
-                  <h4 className="text-foreground/90 font-medium">
-                    Grade {klass.grade} • Period {klass.period}
-                  </h4>
-                </div>
-                {hideSchool ? null : (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {klass.school?.name ?? 'School'}
-                  </p>
-                )}
-                <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{klass._count.students} students</span>
-                  <span>{klass._count.teachers} teachers</span>
-                </div>
-              </Link>
-            ))}
+            {data.classes
+              .filter((klass) =>
+                selectedSchoolId === 'all'
+                  ? true
+                  : klass.school?.id === selectedSchoolId
+              )
+              .map((klass) => (
+                <Link
+                  key={klass.id}
+                  to={`/app/my-classes/${klass.id}`}
+                  className="flex flex-col rounded-lg border bg-muted p-4 hover:shadow transition"
+                >
+                  <div className="flex items-baseline justify-between">
+                    <h4 className="text-foreground/90 font-medium">
+                      Grade {klass.grade} • Period {klass.period}
+                    </h4>
+                    <p className="text-sm text-muted-foreground mt-1 flex items-center">
+                      <User className="w-3 h-3 inline-block mr-1" />
+                      {klass._count.students}
+                    </p>
+                  </div>
+                </Link>
+              ))}
           </div>
         ) : (
           <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">

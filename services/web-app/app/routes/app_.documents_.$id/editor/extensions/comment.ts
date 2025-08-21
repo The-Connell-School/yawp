@@ -1,16 +1,16 @@
-import { Extension, Mark } from '@tiptap/core'
-import { Plugin, PluginKey } from 'prosemirror-state'
+import { Extension, Mark } from '@tiptap/core';
+import { Plugin, PluginKey } from 'prosemirror-state';
 
 export interface CommentOptions {
-  HTMLAttributes: Record<string, any>
+  HTMLAttributes: Record<string, any>;
 }
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     comment: {
-      setComment: (id: string) => ReturnType
-      unsetComment: () => ReturnType
-    }
+      setComment: (id: string) => ReturnType;
+      unsetComment: () => ReturnType;
+    };
   }
 }
 
@@ -20,52 +20,52 @@ export const Comment = Mark.create<CommentOptions>({
   addOptions() {
     return {
       HTMLAttributes: {},
-    }
+    };
   },
 
   addAttributes() {
     return {
       id: {
         default: null,
-        parseHTML: element => element.getAttribute('data-comment-id'),
-        renderHTML: attributes => {
-          if (!attributes.id) return {}
-          return { 'data-comment-id': attributes.id }
+        parseHTML: (element) => element.getAttribute('data-comment-id'),
+        renderHTML: (attributes) => {
+          if (!attributes.id) return {};
+          return { 'data-comment-id': attributes.id };
         },
       },
-    }
+    };
   },
 
   parseHTML() {
     return [
       {
         tag: 'span[data-comment-id]',
-        getAttrs: dom => ({
+        getAttrs: (dom) => ({
           id: (dom as HTMLElement).getAttribute('data-comment-id'),
         }),
       },
-    ]
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['span', { ...HTMLAttributes, class: 'comment-mark' }, 0]
+    return ['span', { ...HTMLAttributes, class: 'comment-mark' }, 0];
   },
 
   addCommands() {
     return {
       setComment:
-        id =>
+        (id) =>
         ({ commands }) => {
-          return commands.setMark(this.name, { id })
+          return commands.setMark(this.name, { id });
         },
       unsetComment:
         () =>
         ({ commands }) => {
-          return commands.unsetMark(this.name)
+          return commands.unsetMark(this.name);
         },
-    }
+    };
   },
-})
+});
 
 export const CommentExtension = Extension.create({
   name: 'commentExtension',
@@ -75,24 +75,63 @@ export const CommentExtension = Extension.create({
       new Plugin({
         key: new PluginKey('commentExtension'),
         props: {
-          handleClick(view, pos, event) {
-            const { schema, doc } = view.state
-            const range = doc.resolve(pos).marks().find(mark => mark.type === schema.marks.comment)
+          handleDOMEvents: {
+            mouseover: (_view, event) => {
+              const target = event.target as HTMLElement | null;
+              const mark = target?.closest(
+                '[data-comment-id]'
+              ) as HTMLElement | null;
+              if (!mark) return false;
+              const id = mark.getAttribute('data-comment-id');
+              if (!id) return false;
+              window.dispatchEvent(
+                new CustomEvent('document-comment-hover', { detail: { id } })
+              );
+              return false;
+            },
+            mouseout: (_view, event) => {
+              const target = event.target as HTMLElement | null;
+              const mark = target?.closest(
+                '[data-comment-id]'
+              ) as HTMLElement | null;
+              if (!mark) return false;
+              const id = mark.getAttribute('data-comment-id');
+              if (!id) return false;
+              window.dispatchEvent(
+                new CustomEvent('document-comment-unhover', { detail: { id } })
+              );
+              return false;
+            },
+          },
+          handleClick(view, pos) {
+            const { schema, doc } = view.state;
+            const range = doc
+              .resolve(pos)
+              .marks()
+              .find((mark) => mark.type === schema.marks.comment);
             if (range) {
-              const id = range.attrs.id
-              const comment = document.getElementById(`comment-${id}`)
-              if (comment) {
-                comment.scrollIntoView({ behavior: 'smooth' })
-                comment.classList.add('bg-primary/20', 'shadow-lg')
-              }
-              if (event.target instanceof HTMLElement) {
-                event.target.classList.add('focused');
-              }
+              const id = range.attrs.id as string;
+              window.dispatchEvent(
+                new CustomEvent('document-comment-active', { detail: { id } })
+              );
             }
-            return false
+            return false;
+          },
+          handleTextInput(view) {
+            // Prevent newly typed text from inheriting the comment mark when cursor is inside
+            const { state } = view;
+            const { schema, selection } = state;
+            const hasComment = selection.$from
+              .marks()
+              .some((m) => m.type === schema.marks.comment);
+            if (hasComment) {
+              const tr = state.tr.removeStoredMark(schema.marks.comment);
+              view.dispatch(tr);
+            }
+            return false;
           },
         },
       }),
-    ]
+    ];
   },
-})
+});

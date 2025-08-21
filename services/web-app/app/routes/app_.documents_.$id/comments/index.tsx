@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { Comment, type Comment as CommentType } from './comment';
+import { useCommentsSelection } from './selection-context';
 
 type Props = { comments: CommentType[] };
 
@@ -14,6 +15,7 @@ export const Comments = ({ comments }: Props) => {
   const fetcher = useFetchers().find(
     (f) => f.key === 'create-document-comment'
   );
+  const { activeCommentId, setActiveCommentId } = useCommentsSelection();
   const [commentsExpanded, setCommentsExpanded] = useLocalStorage(
     `commentsExpanded-${comments[0]?.documentId}`,
     true
@@ -81,18 +83,23 @@ const useBlurComments = (comments: CommentType[]) => {
     const handleClickOutside = (event: MouseEvent) => {
       comments.forEach((comment) => {
         const commentElement = document.getElementById(`comment-${comment.id}`);
-        const commentMark = document.querySelector(
+        const commentMarks = document.querySelectorAll(
           `[data-comment-id="${comment.id}"]`
         );
         const clickedElement = commentElement?.contains(event.target as Node);
-        const clickedMark = commentMark?.contains(event.target as Node);
+        const clickedMark = Array.from(commentMarks).some((el) =>
+          el.contains(event.target as Node)
+        );
 
         if (clickedElement || clickedMark) {
           return;
         }
 
         commentElement?.classList.remove('bg-primary/20', 'shadow-lg');
-        commentMark?.classList.remove('focused');
+        commentElement?.removeAttribute('data-comment-active');
+        commentMarks.forEach((el) =>
+          (el as HTMLElement).classList.remove('focused')
+        );
       });
     };
 

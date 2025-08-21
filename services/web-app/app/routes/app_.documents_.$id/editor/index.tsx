@@ -5,6 +5,7 @@ import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
+import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
@@ -49,6 +50,12 @@ type Props = {
 };
 
 export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
+  const {
+    activeCommentId,
+    hoveredCommentId,
+    setActiveCommentId,
+    setHoveredCommentId,
+  } = useCommentsSelection();
   const editor = useEditor({
     extensions,
     content: docHtml,
@@ -83,6 +90,49 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
       editor.off('blur', save);
     };
   }, [editor, docId, setIsSaving]);
+
+  useEffect(() => {
+    if (!editor) return;
+    // Toggle classes on marks to reflect hovered/active state from context
+    const allMarks = document.querySelectorAll<HTMLElement>('.comment-mark');
+    allMarks.forEach((el) => el.classList.remove('focused'));
+    if (hoveredCommentId) {
+      document
+        .querySelectorAll<HTMLElement>(
+          `[data-comment-id="${hoveredCommentId}"]`
+        )
+        .forEach((el) => el.classList.add('focused'));
+    }
+    if (activeCommentId) {
+      document
+        .querySelectorAll<HTMLElement>(`[data-comment-id="${activeCommentId}"]`)
+        .forEach((el) => el.classList.add('focused'));
+    }
+  }, [editor, activeCommentId, hoveredCommentId]);
+
+  useEffect(() => {
+    // Bridge TipTap plugin custom events to context
+    const onHover = (e: Event) => {
+      const id = (e as CustomEvent).detail?.id as string | undefined;
+      if (id) setHoveredCommentId(id);
+    };
+    const onUnhover = (e: Event) => {
+      const id = (e as CustomEvent).detail?.id as string | undefined;
+      if (id && hoveredCommentId === id) setHoveredCommentId(null);
+    };
+    const onActive = (e: Event) => {
+      const id = (e as CustomEvent).detail?.id as string | undefined;
+      if (id) setActiveCommentId(id);
+    };
+    window.addEventListener('document-comment-hover', onHover as any);
+    window.addEventListener('document-comment-unhover', onUnhover as any);
+    window.addEventListener('document-comment-active', onActive as any);
+    return () => {
+      window.removeEventListener('document-comment-hover', onHover as any);
+      window.removeEventListener('document-comment-unhover', onUnhover as any);
+      window.removeEventListener('document-comment-active', onActive as any);
+    };
+  }, [hoveredCommentId, setHoveredCommentId, setActiveCommentId]);
 
   return (
     <ErrorBoundary>

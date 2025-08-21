@@ -1,5 +1,6 @@
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import { useLoaderData } from 'react-router';
+import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import {
@@ -9,6 +10,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
+import { Button } from '~/components/ui/button';
+import { CaretLeftIcon } from '~/components/icons';
 import { useState } from 'react';
 import { DocumentLink } from '~/components/document-link';
 
@@ -104,8 +107,13 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-foreground/80">Students ({students.length})</h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <Button asChild variant="outline">
+            <Link to="/app/my-classes" className="w-fit my-4">
+              <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
+            </Link>
+          </Button>
+          <h3 className="text-foreground/80">{students.length} students</h3>
         </div>
         {students.length === 0 ? (
           <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">

@@ -3,9 +3,8 @@ import { type Prisma } from '@app/prisma';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server.js';
+import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { getProfileId } from '~/cookies/profile-id.server';
 
 const POST = z.object({
   documentId: z.string(),
@@ -15,11 +14,7 @@ const POST = z.object({
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
-  const profileId = await getProfileId(request);
-  const profile = await prisma.profile.findUnique({
-    where: { id: profileId, userId },
-    select: { id: true },
-  });
+  const profile = await requireProfile(request, userId);
 
   if (!profile) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
@@ -28,10 +23,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const where: Prisma.DocumentCommentWhereUniqueInput = {
     id: params.id,
     OR: [
-      { profileId },
+      { profileId: profile.id },
       {
         profile: {
-          studentProfile: { class: { teachers: { some: { profileId } } } },
+          studentProfile: {
+            class: { teachers: { some: { profileId: profile.id } } },
+          },
         },
       },
     ],
