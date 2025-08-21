@@ -89,6 +89,7 @@ export type OrganizationMembersTableCookie = {
   direction: 'asc' | 'desc';
   skip: number;
   take: number;
+  seat?: string[];
 };
 
 export function getOrganizationTableCookieValue(
@@ -106,6 +107,9 @@ export function getOrganizationMembersTableCookieValue(
   key: keyof OrganizationMembersTableCookie,
   value: string
 ) {
+  if (key === 'seat') {
+    return value.split(',').filter(Boolean);
+  }
   if (key === 'skip' || key === 'take') {
     return Number(value);
   }
@@ -167,6 +171,7 @@ export async function getOrganizationMembersTableCookie(
       direction: 'asc',
       skip: 0,
       take: 10,
+      seat: [],
     }
   );
 }

@@ -51,6 +51,8 @@ export default function OrganizationRoute() {
     invitations,
     schools,
     teacherProfiles,
+    seat,
+    totals,
   } = useLoaderData<typeof loader>();
   const teacherInvitations = invitations.filter(
     (inv) => inv.type === 'organization-teacher-invite'
@@ -85,16 +87,21 @@ export default function OrganizationRoute() {
         </div>
       </div>
 
-      <OverviewCards
-        users={users}
-        organization={organization}
-        onOpenTeacherInvites={() => setIsTeacherInvitationsOpen(true)}
-        onOpenStudentInvites={() => setIsStudentInvitationsOpen(true)}
-        onOpenOwnerInvites={() => setIsOwnerInvitationsOpen(true)}
-        teacherInvitationsCount={teacherInvitations.length}
-        studentInvitationsCount={studentInvitations.length}
-        ownerInvitationsCount={ownerInvitations.length}
-      />
+      {
+        <OverviewCards
+          {...({
+            users,
+            organization,
+            onOpenTeacherInvites: () => setIsTeacherInvitationsOpen(true),
+            onOpenStudentInvites: () => setIsStudentInvitationsOpen(true),
+            onOpenOwnerInvites: () => setIsOwnerInvitationsOpen(true),
+            teacherInvitationsCount: teacherInvitations.length,
+            studentInvitationsCount: studentInvitations.length,
+            ownerInvitationsCount: ownerInvitations.length,
+            totals,
+          } as any)}
+        />
+      }
 
       <div className="flex gap-2 flex-wrap">
         <InviteSheet
@@ -141,6 +148,7 @@ export default function OrganizationRoute() {
         onSelect={handleSelect}
         onSort={handleSort}
         onClearSelection={() => setSelected([])}
+        seat={seat}
         onEditMember={(userId) => {
           const u = users.find((x) => x.id === userId) ?? null;
           setSelectedMember(u);

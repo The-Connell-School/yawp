@@ -16,6 +16,7 @@ import { CookieColumns } from '~/hooks/useTable';
 import { cn } from '~/utils/misc';
 import { useFetcher, useRevalidator } from 'react-router';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
+import { MultiSelect } from '~/components/multi-select';
 
 type User = {
   id: string;
@@ -44,6 +45,7 @@ type MembersTableProps = {
   onSort: (field: string, direction: 'asc' | 'desc') => void;
   onEditMember: (userId: string) => void;
   onClearSelection: () => void;
+  seat: string[];
 };
 
 export function MembersTable({
@@ -57,14 +59,53 @@ export function MembersTable({
   onSort,
   onEditMember,
   onClearSelection,
+  seat,
 }: MembersTableProps) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   const isLoading = fetcher.state !== 'idle' || revalidator.state === 'loading';
+  const [localSeat, setLocalSeat] = React.useState<string[]>(seat ?? []);
+  React.useEffect(() => {
+    if (revalidator.state === 'idle') {
+      setLocalSeat(seat ?? []);
+    }
+  }, [revalidator.state, seat]);
   return (
     <div className="bg-muted flex-1 rounded-lg">
       <div className="flex justify-between items-center px-6 pt-6">
-        <h2 className="text-base font-semibold">Members ({totalCount})</h2>
+        <div className="flex flex-col">
+          <h2 className="text-base font-semibold">Members ({totalCount})</h2>
+          <div className="my-2">
+            <MultiSelect
+              label="Seat"
+              options={[
+                { value: 'owner', label: 'Owners' },
+                { value: 'teacher', label: 'Teachers' },
+                { value: 'student', label: 'Students' },
+                { value: 'unassigned', label: 'Unassigned' },
+              ]}
+              values={localSeat}
+              onChange={(values) => {
+                setLocalSeat(values);
+                const payload = {
+                  sort: table.sort,
+                  direction: table.direction,
+                  skip: 0,
+                  take: table.take,
+                  seat: values,
+                } as const;
+                fetcher.submit(
+                  {
+                    intent: 'updateFilters',
+                    key: 'reset',
+                    value: JSON.stringify(payload),
+                  },
+                  { method: 'POST' }
+                );
+              }}
+            />
+          </div>
+        </div>
         {selected.length > 0 && (
           <fetcher.Form method="post" className="inline">
             <input type="hidden" name="intent" value="remove-members" />

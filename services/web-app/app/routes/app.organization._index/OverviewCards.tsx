@@ -20,6 +20,8 @@ export type Organization = {
   accessExpiresAt: string | Date | null;
 };
 
+type Totals = { teachers: number; students: number; owners: number };
+
 type OverviewCardsProps = {
   users: User[];
   organization: Organization;
@@ -29,6 +31,7 @@ type OverviewCardsProps = {
   teacherInvitationsCount: number;
   studentInvitationsCount: number;
   ownerInvitationsCount: number;
+  totals?: Totals;
 };
 
 export function OverviewCards({
@@ -40,16 +43,21 @@ export function OverviewCards({
   teacherInvitationsCount,
   studentInvitationsCount,
   ownerInvitationsCount,
+  totals,
 }: OverviewCardsProps) {
-  const owners = users.filter((user) => user.profiles.some((p) => p.isOwner));
-  const teachers = users.filter((user) =>
-    user.profiles.some((p) => p.teacherProfile)
-  );
-  const students = users.filter(
-    (user) =>
-      user.profiles.some((p) => p.studentProfile) &&
-      !user.profiles.some((p) => p.teacherProfile)
-  );
+  const owners = totals
+    ? Array.from({ length: totals.owners })
+    : users.filter((u) => u.profiles.some((p) => p.isOwner));
+  const teachers = totals
+    ? Array.from({ length: totals.teachers })
+    : users.filter((u) => u.profiles.some((p) => p.teacherProfile));
+  const students = totals
+    ? Array.from({ length: totals.students })
+    : users.filter(
+        (u) =>
+          u.profiles.some((p) => p.studentProfile) &&
+          !u.profiles.some((p) => p.teacherProfile)
+      );
 
   return (
     <div className="grid gap-4 md:grid-cols-4">
