@@ -44,13 +44,20 @@ export const Schema = z
   .and(PasswordAndConfirmPasswordSchema);
 
 async function requireInvitation(request: Request) {
-  const invitation = await invitationCookieStorage.getSession(
+  const invitationCookie = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
-  const email = invitation.get('email');
-  const schoolId = invitation.get('schoolId');
+  const email = invitationCookie.get('email');
+  const schoolId = invitationCookie.get('schoolId');
 
-  if (!email || !schoolId) {
+  const invitation = await prisma.invitation.findUnique({
+    where: {
+      target_type: { target: email, type: 'onboard-student' },
+      schoolId,
+    },
+  });
+
+  if (!invitation) {
     throw redirectWithToast(
       '/auth/login',
       {
@@ -60,7 +67,7 @@ async function requireInvitation(request: Request) {
       {
         headers: {
           'set-cookie':
-            await invitationCookieStorage.destroySession(invitation),
+            await invitationCookieStorage.destroySession(invitationCookie),
         },
       }
     );
