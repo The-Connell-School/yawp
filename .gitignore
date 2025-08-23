@@ -193,3 +193,4 @@ infra/envs/variables/
 
 playwright-report/
 test-results/
+services/web-app/e2e/prisma/
