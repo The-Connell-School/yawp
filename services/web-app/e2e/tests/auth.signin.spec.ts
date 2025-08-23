@@ -1,4 +1,4 @@
-import { test, expect } from './test-setup';
+import { test, expect } from '../test-setup';
 
 const TEST_USER = {
   email: 'jdoe@brock.software',

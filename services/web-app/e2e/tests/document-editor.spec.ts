@@ -1,7 +1,7 @@
-import { test, expect } from './test-setup';
-import { TestHelpers } from './test-helpers';
+import { test, expect } from '../test-setup';
+import { TestHelpers } from '../test-helpers';
 
-test.describe('Document Editor E2E Tests', () => {
+test.describe.serial('Document Editor E2E Tests', () => {
   test('should display basic document page structure', async ({
     page,
     signIn,
@@ -36,17 +36,12 @@ test.describe('Document Editor E2E Tests', () => {
 
     let saveRequestCount = 0;
 
-    // Mock the document save API to track save operations
+    // Intercept document save API to track save operations but allow real saves
     await page.route('**/api/model/document/**', async (route) => {
       if (route.request().method() === 'PUT') {
         saveRequestCount++;
-        route.fulfill({
-          status: 204,
-          body: '',
-        });
-      } else {
-        route.continue();
       }
+      await route.continue();
     });
 
     // Navigate to document page
@@ -77,11 +72,17 @@ test.describe('Document Editor E2E Tests', () => {
 
     // Look for save status indicator if it exists
     const savedIndicator = page.locator('text=Saved, text=Saving').first();
-    // This might be visible depending on timing, so we'll make it optional
     if (await savedIndicator.isVisible({ timeout: 2000 })) {
-      // If save indicator is present, it should show "Saved" eventually
       await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 });
     }
+
+    // Verify persisted content by exiting and returning (with reload fallback)
+    const helpers = new TestHelpers(page);
+    await helpers.verifySavedData({
+      expectedTexts: testText,
+      documentId: e2eContext.documentId,
+      courseId: e2eContext.studentCourseId,
+    });
   });
 
   test('should handle pasting content in document editor', async ({
@@ -110,6 +111,14 @@ test.describe('Document Editor E2E Tests', () => {
 
     // Verify pasted content appears
     await expect(editor).toContainText(pasteContent);
+
+    // Verify persisted content
+    const helpers = new TestHelpers(page);
+    await helpers.verifySavedData({
+      expectedTexts: pasteContent,
+      documentId: e2eContext.documentId,
+      courseId: e2eContext.studentCourseId,
+    });
   });
 
   test('should demonstrate document version concept', async ({
@@ -170,15 +179,13 @@ test.describe('Document Editor E2E Tests', () => {
 
     const saveRequests: string[] = [];
 
-    // Track all save requests to verify debouncing works
+    // Track all save requests to verify debouncing works (allow real saves)
     await page.route('**/api/model/document/**', async (route) => {
       if (route.request().method() === 'PUT') {
         const body = route.request().postData() ?? '';
         saveRequests.push(body);
-        route.fulfill({ status: 204 });
-      } else {
-        route.continue();
       }
+      await route.continue();
     });
 
     await page.goto(`/app/documents/${e2eContext.documentId}`);
@@ -207,5 +214,13 @@ test.describe('Document Editor E2E Tests', () => {
     // Due to debouncing, we should have fewer save requests than typing actions
     expect(saveRequests.length).toBeGreaterThan(0);
     expect(saveRequests.length).toBeLessThan(words.length); // Debouncing should reduce requests
+
+    // Verify persisted content
+    const helpers = new TestHelpers(page);
+    await helpers.verifySavedData({
+      expectedTexts: words,
+      documentId: e2eContext.documentId,
+      courseId: e2eContext.studentCourseId,
+    });
   });
 });

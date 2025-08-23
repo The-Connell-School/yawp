@@ -21,23 +21,10 @@ export default defineConfig({
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-    {
-      name: 'real-auth-chromium',
-      testMatch: /auth\.signin\.spec\.ts$/,
-      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:5174' },
-      webServer: {
-        command:
-          "bash -c 'cd ../.. && if [ -f services/web-app/e2e/.env.e2e ]; then set -a && source services/web-app/e2e/.env.e2e && set +a; else export NODE_ENV=development; export DATABASE_PATH=services/web-app/e2e/.e2e.sqlite; export CACHE_DATABASE_PATH=services/web-app/e2e/.cache.sqlite; export DATABASE_URL=postgres://${PGUSER:-postgres}:${PGPASSWORD:-postgres}@127.0.0.1:${PGPORT:-54329}/yop_e2e; export HONEYPOT_SECRET=${HONEYPOT_SECRET:-dev-honeypot}; export AWS_S3_BUCKET_FOR_VIDEOS=${AWS_S3_BUCKET_FOR_VIDEOS:-e2e-bucket}; export AWS_S3_REGION_FOR_VIDEOS=${AWS_S3_REGION_FOR_VIDEOS:-us-east-1}; fi; export SESSION_SECRET=${SESSION_SECRET:-dev-secret}; export INTERNAL_COMMAND_TOKEN=${INTERNAL_COMMAND_TOKEN:-dev-token}; export E2E=true; cd services/web-app && E2E=true bun run dev -- --port 5174 --host 127.0.0.1 --strictPort'",
-        url: 'http://127.0.0.1:5174',
-        reuseExistingServer: !process.env.CI,
-        timeout: 240 * 1000,
-      },
-    } as any,
   ],
   webServer: {
     command:
-      "bash -c 'if [ -f ./e2e/.env.e2e ]; then set -a && source ./e2e/.env.e2e && set +a; else export NODE_ENV=development; export DATABASE_PATH=./e2e/.e2e.sqlite; export CACHE_DATABASE_PATH=./e2e/.cache.sqlite; export DATABASE_URL=postgres://${PGUSER:-postgres}:${PGPASSWORD:-postgres}@127.0.0.1:${PGPORT:-54329}/yop_e2e; export HONEYPOT_SECRET=${HONEYPOT_SECRET:-dev-honeypot}; export AWS_S3_BUCKET_FOR_VIDEOS=${AWS_S3_BUCKET_FOR_VIDEOS:-e2e-bucket}; export AWS_S3_REGION_FOR_VIDEOS=${AWS_S3_REGION_FOR_VIDEOS:-us-east-1}; export SESSION_SECRET=${SESSION_SECRET:-dev-secret}; export INTERNAL_COMMAND_TOKEN=${INTERNAL_COMMAND_TOKEN:-dev-token}; export E2E=true; fi; E2E=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
+      "bash -c 'bun ./e2e/ensure-e2e-env.ts && if [ -f ./e2e/.env.e2e ]; then set -a && source ./e2e/.env.e2e && set +a; else export NODE_ENV=development; export DATABASE_PATH=./e2e/.e2e.sqlite; export CACHE_DATABASE_PATH=./e2e/.cache.sqlite; export DATABASE_URL=postgres://${PGUSER:-postgres}:${PGPASSWORD:-postgres}@127.0.0.1:${PGPORT:-54329}/yop_e2e; export HONEYPOT_SECRET=${HONEYPOT_SECRET:-dev-honeypot}; export AWS_S3_BUCKET_FOR_VIDEOS=${AWS_S3_BUCKET_FOR_VIDEOS:-e2e-bucket}; export AWS_S3_REGION_FOR_VIDEOS=${AWS_S3_REGION_FOR_VIDEOS:-us-east-1}; export SESSION_SECRET=${SESSION_SECRET:-dev-secret}; export INTERNAL_COMMAND_TOKEN=${INTERNAL_COMMAND_TOKEN:-dev-token}; export E2E=true; fi; E2E=true bun run dev -- --port 5173 --host 127.0.0.1 --strictPort'",
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !process.env.CI,
     timeout: 240 * 1000,

@@ -10,6 +10,7 @@
     "export-env": "export $(grep -v '^#' .env | xargs) ",
     "dev": "bun web-app:dev",
     "web-app:dev": "bun run --cwd services/web-app dev",
+    "web-app:test:e2e": "bun run --cwd services/web-app test:e2e",
     "web-app:build": "bun run --cwd services/web-app build",
     "web-app:start": "bun run --cwd services/web-app start",
     "web-app:typecheck": "bun run --cwd services/web-app typecheck",

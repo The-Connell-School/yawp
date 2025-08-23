@@ -12,6 +12,7 @@ export type E2EContext = {
   userId: string;
   userEmail: string;
   profileId: string;
+  studentCourseId: string;
   documentId: string;
 };
 
@@ -48,16 +49,62 @@ export async function seedE2E(): Promise<E2EContext> {
   const profile = await prisma.profile.findFirstOrThrow({
     where: { userId: user.id },
   });
-  const doc = await prisma.document.create({
-    data: { profileId: profile.id, title: 'E2E Doc' },
+  // Create a StudentProfile to satisfy FK on StudentCourseModuleSession
+  const studentProfile = await prisma.studentProfile.create({
+    data: { profileId: profile.id },
   });
-  console.log('✅ E2E seed complete. Document ID:', doc.id);
+  const studentCourse = await prisma.studentCourse.create({
+    data: {
+      title: 'E2E Course',
+      position: 1,
+      studentCourseModules: {
+        create: [1, 2, 3].map((moduleIndex) => ({
+          title: `E2E Module ${moduleIndex}`,
+          position: moduleIndex,
+          instructions: {
+            create: [1, 2, 3].map((instructionIndex) => ({
+              title: `Instruction ${moduleIndex}.${instructionIndex}`,
+              prompt: `Prompt for instruction ${moduleIndex}.${instructionIndex}`,
+              position: instructionIndex,
+            })),
+          },
+        })),
+      },
+    },
+    select: {
+      id: true,
+      studentCourseModules: { select: { id: true, position: true } },
+    },
+  });
+  // Seed a starter document for the profile
+  const document = await prisma.document.create({
+    data: {
+      title: 'E2E Doc',
+      text: 'Seeded E2E document',
+      html: '<p>Seeded E2E document</p>',
+      profileId: profile.id,
+    },
+    select: { id: true },
+  });
+  // Link the document to the first module via a session
+  await prisma.studentCourseModuleSession.create({
+    data: {
+      studentCourseModuleId: studentCourse.studentCourseModules.sort(
+        (a, b) => a.position - b.position
+      )[0].id,
+      studentProfileId: studentProfile.id,
+      documentId: document.id,
+      title: 'E2E Doc Session',
+      instructionsCompleted: 0,
+    },
+  });
   return {
     organizationId: org.id,
     userId: user.id,
     userEmail: user.email,
     profileId: profile.id,
-    documentId: doc.id,
+    studentCourseId: studentCourse.id,
+    documentId: document.id,
   };
 }
 
