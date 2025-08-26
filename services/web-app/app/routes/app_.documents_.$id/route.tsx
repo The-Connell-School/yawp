@@ -16,7 +16,7 @@ import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { Comments } from './comments';
@@ -28,6 +28,7 @@ import { DocumentVersions } from './_components/document-versions';
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
@@ -43,14 +44,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ? {}
         : {
             OR: [
-              { profile: { userId } },
+              { profile: { id: profile.id } },
               {
                 profile: {
                   studentProfile: {
                     class: {
                       teachers: {
                         some: {
-                          profileId: userId,
+                          profileId: profile.id,
                         },
                       },
                     },
