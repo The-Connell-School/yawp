@@ -277,32 +277,6 @@ export function EditMemberSheet({
                   </div>
                 )}
 
-              {member.profiles.some((p) => p.teacherProfile) && (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="isOwner"
-                      name="isOwner"
-                      defaultChecked={member.profiles.some((p) => p.isOwner)}
-                      disabled={
-                        member.profiles.some((p) => p.isOwner) ||
-                        (!!member.profiles.some((p) => p.studentProfile) &&
-                          !member.profiles.some((p) => p.teacherProfile))
-                      }
-                    />
-                    <Label htmlFor="isOwner">Is an Owner</Label>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {member.profiles.some((p) => p.isOwner)
-                      ? 'Super owners cannot have their owner status changed'
-                      : member.profiles.some((p) => p.studentProfile) &&
-                          !member.profiles.some((p) => p.teacherProfile)
-                        ? 'Students must have a teacher profile to become owners'
-                        : 'Owners can manage organization members and settings'}
-                  </p>
-                </div>
-              )}
-
               {teacherProfile ? (
                 <div className="space-y-3">
                   <div className="text-sm font-medium">Teacher Assignments</div>

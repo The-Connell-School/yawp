@@ -505,7 +505,8 @@ resource "aws_s3_bucket_cors_configuration" "videos" {
     allowed_methods = ["GET", "PUT", "POST", "HEAD"]
     allowed_origins = [
       "http://localhost:5173",
-      "https://${aws_apprunner_service.web.service_url}"
+      "https://${aws_apprunner_service.web.service_url}",
+      "https://yawp.school",
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag", "x-amz-request-id", "x-amz-id-2"]

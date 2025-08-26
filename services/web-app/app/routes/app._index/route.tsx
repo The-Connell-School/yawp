@@ -24,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
-      where: { profileId: profile.id },
+      where: { profileId: profile.id, deletedAt: null },
       include: {
         studentCourseModuleSessions: {
           include: { studentCourseModule: true },

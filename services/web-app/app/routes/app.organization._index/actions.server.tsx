@@ -181,7 +181,6 @@ export async function editMemberAction(request: Request) {
 
   const shouldCreateTeacher = formData.get('createTeacherProfile') === 'on';
   const shouldCreateStudent = formData.get('createStudentProfile') === 'on';
-  const isOwner = formData.get('isOwner') === 'on';
 
   if (shouldCreateTeacher && !memberProfile.teacherProfile) {
     await prisma.teacherProfile.create({
@@ -193,11 +192,6 @@ export async function editMemberAction(request: Request) {
       data: { profileId: memberProfile.id },
     });
   }
-
-  await prisma.profile.update({
-    where: { id: memberProfile.id },
-    data: { isOwner },
-  });
   return dataResponse({ success: true });
 }
 

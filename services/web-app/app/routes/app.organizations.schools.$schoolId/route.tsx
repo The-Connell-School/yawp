@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { ChevronLeft, Settings } from 'lucide-react';
+import { ChevronLeft, Settings, Users, User } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -171,22 +171,10 @@ export default function SchoolRoute() {
   const { school } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isSchoolSheetOpen, setIsSchoolSheetOpen] = React.useState(false);
-  const [editingClassId, setEditingClassId] = React.useState<string | null>(
-    null
-  );
-
-  const editingClass =
-    school.classes.find((c) => c.id === editingClassId) ?? null;
-  const teachers = [...school.teachers].sort((a, b) => {
-    const an = a.profile.user.name ?? a.profile.user.email ?? '';
-    const bn = b.profile.user.name ?? b.profile.user.email ?? '';
-    return an.localeCompare(bn);
-  });
 
   React.useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
       setIsSchoolSheetOpen(false);
-      setEditingClassId(null);
     }
   }, [fetcher.state, fetcher.data]);
 
@@ -290,127 +278,39 @@ export default function SchoolRoute() {
               <TableRow>
                 <TableHead>Grade</TableHead>
                 <TableHead>Period</TableHead>
-                <TableHead>Teacher</TableHead>
+                <TableHead>Teachers</TableHead>
                 <TableHead>Students</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {school.classes.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={4}
                     className="text-center text-muted-foreground"
                   >
                     No classes found for this school.
                   </TableCell>
                 </TableRow>
               ) : (
-                school.classes.map((klass) => {
-                  const teacherName =
-                    klass.teachers[0]?.profile.user.name ??
-                    klass.teachers[0]?.profile.user.email ??
-                    '—';
-                  const studentsLine =
-                    klass.students
-                      .map(
-                        (s) =>
-                          s.profile.user.name ??
-                          s.profile.user.email ??
-                          'Student'
-                      )
-                      .join(', ') || '—';
-                  return (
-                    <TableRow key={klass.id}>
-                      <TableCell>{klass.grade}</TableCell>
-                      <TableCell>{klass.period}</TableCell>
-                      <TableCell>{teacherName}</TableCell>
-                      <TableCell className="max-w-[400px] truncate">
-                        {studentsLine}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Sheet
-                          open={editingClassId === klass.id}
-                          onOpenChange={(o) =>
-                            setEditingClassId(o ? klass.id : null)
-                          }
-                        >
-                          <SheetTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                          </SheetTrigger>
-                          <SheetContent>
-                            <SheetHeader>
-                              <SheetTitle>Edit Class</SheetTitle>
-                            </SheetHeader>
-                            <fetcher.Form
-                              method="post"
-                              className="mt-4 space-y-4"
-                            >
-                              <input
-                                type="hidden"
-                                name="intent"
-                                value="updateClass"
-                              />
-                              <input
-                                type="hidden"
-                                name="classId"
-                                value={klass.id}
-                              />
-                              <div className="space-y-2">
-                                <Label htmlFor="grade">Grade</Label>
-                                <Input
-                                  id="grade"
-                                  name="grade"
-                                  defaultValue={klass.grade}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="period">Period</Label>
-                                <Input
-                                  id="period"
-                                  name="period"
-                                  defaultValue={klass.period}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="teacherProfileId">
-                                  Teacher
-                                </Label>
-                                <select
-                                  id="teacherProfileId"
-                                  name="teacherProfileId"
-                                  defaultValue={klass.teachers[0]?.id ?? ''}
-                                  className="w-full h-9 rounded-md border bg-background px-3 text-sm"
-                                >
-                                  <option value="">— None —</option>
-                                  {teachers.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.profile.user.name ??
-                                        t.profile.user.email}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <Button
-                                type="submit"
-                                className="w-full"
-                                disabled={fetcher.state !== 'idle'}
-                              >
-                                {fetcher.state !== 'idle'
-                                  ? 'Saving...'
-                                  : 'Save Changes'}
-                              </Button>
-                            </fetcher.Form>
-                          </SheetContent>
-                        </Sheet>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                school.classes.map((klass) => (
+                  <TableRow key={klass.id}>
+                    <TableCell>{klass.grade}</TableCell>
+                    <TableCell>{klass.period}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        {klass.teachers.length}
+                      </span>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        {klass.students.length}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>
