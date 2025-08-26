@@ -14,6 +14,12 @@ export type E2EContext = {
   profileId: string;
   studentCourseId: string;
   documentId: string;
+  // Added for signup flow
+  schoolId: string;
+  schoolCode: string;
+  teacherProfileId: string;
+  teacherName: string;
+  teacherEmail: string;
 };
 
 export async function seedE2E(): Promise<E2EContext> {
@@ -26,6 +32,35 @@ export async function seedE2E(): Promise<E2EContext> {
   // Minimal org
   const org = await prisma.organization.create({
     data: { id: 'the-connell-school', name: 'The Connell School' },
+  });
+
+  // Seed a school for student signup flow
+  const schoolCode = 'E2E-TEST';
+  const school = await prisma.school.create({
+    data: { name: 'E2E High', code: schoolCode, organizationId: org.id },
+  });
+
+  // Seed a teacher assigned to that school
+  const seededTeacherEmail = 'teacher.e2e@yawp.test';
+  const seededTeacherName = 'Mrs Test Teacher';
+  const seededTeacher = await prisma.user.create({
+    data: {
+      email: seededTeacherEmail,
+      name: seededTeacherName,
+      profiles: {
+        create: {
+          organizationId: org.id,
+          teacherProfile: { create: {} },
+        },
+      },
+    },
+    include: { profiles: { include: { teacherProfile: true } } },
+  });
+  const seededTeacherProfileId = seededTeacher.profiles[0].teacherProfile
+    ?.id as string;
+  await prisma.teacherProfile.update({
+    where: { id: seededTeacherProfileId },
+    data: { schools: { connect: { id: school.id } } },
   });
 
   // Test users
@@ -105,6 +140,11 @@ export async function seedE2E(): Promise<E2EContext> {
     profileId: profile.id,
     studentCourseId: studentCourse.id,
     documentId: document.id,
+    schoolId: school.id,
+    schoolCode,
+    teacherProfileId: seededTeacherProfileId,
+    teacherName: seededTeacherName,
+    teacherEmail: seededTeacherEmail,
   };
 }
 
