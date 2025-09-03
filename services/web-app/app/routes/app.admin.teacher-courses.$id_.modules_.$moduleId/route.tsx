@@ -27,7 +27,6 @@ import React from 'react';
 import { useMultipartUpload } from '~/hooks/useMultipartUpload';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
-import { getSignedGetUrl } from '~/services/s3.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -94,7 +93,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'updateModule') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
-    const videoFile = formData.get('video') as File | null;
     const videoDurationStr = formData.get('videoDuration')?.toString();
 
     if (!title) {
@@ -105,7 +103,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     // Expect `videoS3Key` if replacing video
     const videoS3Key = formData.get('videoS3Key')?.toString();
-    if (videoFile && videoFile.size > 0 && !videoS3Key) {
+    if (!videoS3Key) {
       return new Response('Missing videoS3Key', { status: 400 });
     }
     videoDuration = videoDurationStr
@@ -121,14 +119,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         ...(videoDuration !== undefined && { videoDuration }),
       },
     });
-
-    // Reset all course module sessions when video is changed
-    if (videoFile && videoFile.size > 0) {
-      await prisma.teacherCourseModuleSession.updateMany({
-        where: { teacherCourseModuleId: params.moduleId },
-        data: { videoTimestamp: 0 },
-      });
-    }
 
     return dataResponse({ status: 'success' });
   }
@@ -310,11 +300,7 @@ export default function TeacherCourseModuleRoute() {
               <SheetHeader>
                 <SheetTitle>Edit Teacher Course Module</SheetTitle>
               </SheetHeader>
-              <fetcher.Form
-                method="post"
-                className="mt-4 space-y-4"
-                encType="multipart/form-data"
-              >
+              <fetcher.Form method="post" className="mt-4 space-y-4">
                 <input type="hidden" name="intent" value="updateModule" />
                 <input type="hidden" name="videoS3Key" id="videoS3Key" />
                 <div className="space-y-2">
@@ -456,16 +442,6 @@ export default function TeacherCourseModuleRoute() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {/* <video
-                controls
-                className="w-full max-h-96 rounded-lg"
-                src={teacherCourseModule.videoLink}
-                onError={(e) => {
-                  console.error('Video failed to load:', e);
-                }}
-              >
-                Your browser does not support the video tag.
-              </video> */}
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
                   Video format: {teacherCourseModule.videoS3Key || 'Unknown'}

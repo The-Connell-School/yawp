@@ -162,7 +162,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
 
   const advanceToNextCourseModule = () => {
     advanceCourseModuleFetcher.submit(
-      { courseModuleId: nextCmId ?? '', documentId: docId },
+      { studentCourseModuleId: nextCmId ?? '', documentId: docId },
       {
         method: 'POST',
         action: '/api/model/course-module-session',

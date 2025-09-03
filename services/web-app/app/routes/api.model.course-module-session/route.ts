@@ -5,7 +5,7 @@ import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const POST = z.object({
-  courseModuleId: z.string(),
+  studentCourseModuleId: z.string(),
   documentId: z.string(),
 });
 
@@ -22,7 +22,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     }),
     prisma.studentCourseModule.findUnique({
-      where: { id: data.courseModuleId },
+      where: { id: data.studentCourseModuleId },
       include: { instructions: true },
     }),
   ]);
