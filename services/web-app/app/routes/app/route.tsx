@@ -57,6 +57,15 @@ type RequiresFn = (
   user: ReturnType<typeof useUser>
 ) => boolean | null | undefined;
 
+type Profile = NonNullable<ReturnType<typeof useUser>['profiles']>[0];
+
+const getRoleLabel = (profile: Profile): string => {
+  if (profile.isOwner) return 'Owner';
+  if (profile.teacherProfile) return 'Teacher';  
+  if (profile.studentProfile) return 'Student';
+  return 'Member';
+};
+
 const LINKS: {
   to: string;
   label: string;
@@ -283,6 +292,9 @@ export default function Route() {
                           <span className="flex min-w-0 flex-col text-left">
                             <span className="truncate">
                               {p.organization?.name ?? 'Organization'}
+                            </span>
+                            <span className="text-xs text-muted-foreground truncate">
+                              ({getRoleLabel(p)})
                             </span>
                           </span>
                           {isSelected ? <Check size={16} /> : null}
