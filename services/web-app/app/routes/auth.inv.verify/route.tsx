@@ -29,10 +29,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { target, type } = data;
 
   const invitation = await prisma.invitation.findUnique({
-    where: {
-      target_type: { target, type },
-      OR: [{ expiresAt: { gt: new Date() } }, { expiresAt: null }],
-    },
+    where: { target_type: { target, type } },
     select: {
       algorithm: true,
       secret: true,
@@ -42,26 +39,24 @@ export async function action({ request }: ActionFunctionArgs) {
       schoolId: true,
       id: true,
       metadata: true,
+      expiresAt: true,
     },
   });
 
   if (!invitation) {
     return validationError({
-      fieldErrors: { code: 'Invalid code.' },
+      fieldErrors: { code: 'No invitation found.' },
+    });
+  } else if (invitation.expiresAt && invitation.expiresAt < new Date()) {
+    return validationError({
+      fieldErrors: { code: 'Invitation has expired.' },
     });
   }
 
   const isValid = !!verifyTOTP({ otp: data.code, ...invitation });
   if (!isValid) {
-    return validationError({
-      fieldErrors: { code: 'Invalid code.' },
-    });
+    return validationError({ fieldErrors: { code: 'Invalid code.' } });
   }
-
-  await prisma.invitation.delete({ where: { id: invitation.id } });
-
-  const cookie = request.headers.get('cookie');
-  const invitationCookie = await invitationCookieStorage.getSession(cookie);
 
   const existingUser = await prisma.user.findUnique({
     where: { email: target },
@@ -74,8 +69,13 @@ export async function action({ request }: ActionFunctionArgs) {
           fieldErrors: { code: 'User already exists.' },
         });
       } else {
-        invitationCookie.set('schoolId', invitation.schoolId);
-        invitationCookie.set('email', target);
+        if (invitation.metadata) {
+          try {
+            const meta = JSON.parse(invitation.metadata);
+            if (meta.classCode)
+              invitationCookie.set('classCode', meta.classCode);
+          } catch {}
+        }
         return redirect('/auth/inv/onboard-student', {
           headers: {
             'set-cookie':

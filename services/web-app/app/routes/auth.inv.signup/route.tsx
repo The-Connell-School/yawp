@@ -24,7 +24,7 @@ import { getDomainUrl } from '~/utils/misc';
 
 const Schema = z.object({
   email: EmailSchema,
-  schoolCode: z.string().min(1, 'School code is required'),
+  code: z.string(),
 });
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -32,16 +32,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(formData, Schema);
   if (error) return validationError(error);
 
-  const schools = await prisma.school.findMany({
-    select: { id: true, code: true, organizationId: true },
-  });
-  const school = schools.find((s) => s.code === data.schoolCode);
+  let schoolId: string | null = null;
+  let klassId: string | null = null;
 
-  if (!school) {
-    return validationError(
-      { fieldErrors: { schoolCode: 'Invalid school code.' } },
-      data
-    );
+  const klass = await prisma.class.findFirst({
+    where: { code: data.code },
+    select: { id: true },
+  });
+
+  if (!klass) {
+    const school = await prisma.school.findUnique({
+      where: { code: data.code },
+      select: { id: true },
+    });
+
+    if (!school) {
+      return validationError({ fieldErrors: { code: 'Invalid code.' } }, data);
+    } else {
+      schoolId = school.id;
+    }
+  } else {
+    klassId = klass.id;
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -51,7 +62,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (existingUser) {
     return validationError(
-      { fieldErrors: { email: 'An account with this email already exists.' } },
+      {
+        fieldErrors: {
+          email:
+            'An account with this email already exists. Use a different email to join with this code. Hint: add a + to your email to create a new account, e.g. your+1@email.com.',
+        },
+      },
       data
     );
   }
@@ -74,8 +90,7 @@ export async function action({ request }: ActionFunctionArgs) {
     target,
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
-    organization: { connect: { id: school.organizationId } },
-    school: { connect: { id: school.id } },
+    metadata: JSON.stringify({ inputtedCode: data.code, schoolId, klassId }),
   };
 
   await prisma.invitation.create({ data: verificationData });
@@ -134,10 +149,7 @@ export default function SignupRoute() {
           method="POST"
           className="flex flex-col gap-4"
           schema={Schema}
-          defaultValues={{
-            email: '',
-            schoolCode: '',
-          }}
+          defaultValues={{ email: '', code: '' }}
         >
           <FormInput
             scope="email"
@@ -148,11 +160,10 @@ export default function SignupRoute() {
           />
           <div className="flex w-full items-center rounded-lg border p-3 bg-white">
             <FormInput
-              scope="schoolCode"
+              scope="code"
               type="text"
-              label="School Code"
-              labelInfo="This is the code for the school you're signing up for."
-              name="schoolCode"
+              label="Code"
+              name="code"
               className="w-full"
             />
           </div>

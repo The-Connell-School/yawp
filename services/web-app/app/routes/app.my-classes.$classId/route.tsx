@@ -12,7 +12,7 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { CaretLeftIcon } from '~/components/icons';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { DocumentLink } from '~/components/document-link';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -23,63 +23,68 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
   const classId = params.classId!;
 
-  const klass = await prisma.class.findFirst({
-    where: {
-      id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
-    },
-    select: {
-      id: true,
-      grade: true,
-      period: true,
-      school: { select: { name: true } },
-      students: {
-        select: {
-          id: true,
-          profile: {
-            select: { id: true, user: { select: { name: true, email: true } } },
+  const [klass, profiles] = await Promise.all([
+    prisma.class.findFirst({
+      where: {
+        id: classId,
+        teachers: { some: { id: profile.teacherProfile.id } },
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        grade: true,
+        period: true,
+        school: { select: { name: true } },
+        students: {
+          select: {
+            id: true,
+            profile: {
+              select: {
+                id: true,
+                user: { select: { name: true, email: true } },
+              },
+            },
           },
+          orderBy: { createdAt: 'asc' },
         },
-        orderBy: { createdAt: 'asc' },
       },
-    },
-  });
-  if (!klass) throw new Response('Class not found', { status: 404 });
-
-  const profiles = await prisma.profile.findMany({
-    where: {
-      studentProfile: {
-        classId,
+    }),
+    prisma.profile.findMany({
+      where: {
+        studentProfile: {
+          classId,
+        },
       },
-    },
-    select: {
-      id: true,
-      user: { select: { name: true, email: true } },
-      documents: {
-        select: {
-          id: true,
-          title: true,
-          createdAt: true,
-          updatedAt: true,
-          html: true,
-          text: true,
-          studentCourseModuleSessions: {
-            select: {
-              studentCourseModule: { select: { title: true } },
-              document: { select: { title: true } },
+      select: {
+        id: true,
+        user: { select: { name: true, email: true } },
+        documents: {
+          select: {
+            id: true,
+            title: true,
+            createdAt: true,
+            updatedAt: true,
+            html: true,
+            text: true,
+            studentCourseModuleSessions: {
+              select: {
+                studentCourseModule: { select: { title: true } },
+                document: { select: { title: true } },
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
+  if (!klass) throw new Response('Class not found', { status: 404 });
 
   return dataResponse({ klass, profiles });
 }
 
 export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
-  console.log(data);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
@@ -89,13 +94,24 @@ export default function ClassDetailRoute() {
     ? (data.profiles.find((p) => p.id === selectedProfileId)?.documents ?? [])
     : [];
 
+  const inviteUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const url = new URL(window.location.origin + '/auth/inv/signup');
+    if (data.klass.code) url.searchParams.set('classCode', data.klass.code);
+    return url.toString();
+  }, [data.klass.code]);
+
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
             <h2>
-              Grade {data.klass.grade} • Period {data.klass.period}
+              {data.klass.name || (
+                <>
+                  Grade {data.klass.grade} • Period {data.klass.period}
+                </>
+              )}
             </h2>
             {data.klass.school?.name ? (
               <p className="mt-1 text-muted-foreground">
@@ -113,7 +129,35 @@ export default function ClassDetailRoute() {
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
-          <h3 className="text-foreground/80">{students.length} students</h3>
+          <div className="flex items-center gap-3">
+            {data.klass.code ? (
+              <>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Class code:</span>{' '}
+                  <span className="font-mono font-semibold">
+                    {data.klass.code}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    navigator.clipboard.writeText(data.klass.code!)
+                  }
+                >
+                  Copy code
+                </Button>
+                {inviteUrl ? (
+                  <Button
+                    variant="default"
+                    onClick={() => navigator.clipboard.writeText(inviteUrl)}
+                  >
+                    Copy invite link
+                  </Button>
+                ) : null}
+              </>
+            ) : null}
+            <h3 className="text-foreground/80">{students.length} students</h3>
+          </div>
         </div>
         {students.length === 0 ? (
           <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">

@@ -9,15 +9,18 @@ datasource db {
 }
 
 model Class {
-  id        String           @id @default(cuid())
-  createdAt DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime         @default(now()) @db.Timestamptz(6)
-  period    String
-  grade     String
-  students  StudentProfile[]
-  teachers  TeacherProfile[]
-  schoolId  String
-  school    School           @relation(fields: [schoolId], references: [id])
+  id          String           @id @default(cuid())
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime         @default(now()) @db.Timestamptz(6)
+  name        String?
+  code        String?          @unique
+  period      String?
+  grade       String?
+  gradeLevels String[]
+  students    StudentProfile[]
+  teachers    TeacherProfile[]
+  schoolId    String
+  school      School           @relation(fields: [schoolId], references: [id])
 
   @@unique([schoolId, period, grade])
 }

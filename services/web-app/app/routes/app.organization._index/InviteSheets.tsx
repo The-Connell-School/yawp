@@ -28,6 +28,14 @@ export function InviteSheet({
   variant = 'default',
 }: InviteSheetProps) {
   const fetcher = useFetcher();
+
+  React.useEffect(() => {
+    // Close the sheet after a successful submission
+    if (fetcher.state === 'idle' && (fetcher.data as any)?.success) {
+      onOpenChange(false);
+    }
+  }, [fetcher.state, fetcher.data, onOpenChange]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>

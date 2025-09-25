@@ -28,8 +28,16 @@ import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setProfileId } from '~/cookies/profile-id.server';
 
+// Accept either a single id string or an array of strings and coerce to array
+const SchoolIdsSchema = z
+  .union([z.string(), z.array(z.string())])
+  .transform((value) => (Array.isArray(value) ? value : [value]))
+  .refine((arr) => arr.length > 0, {
+    message: 'Please select at least one school',
+  });
+
 export const Schema = z
-  .object({ name: NameSchema, schoolIds: z.array(z.string()).min(1) })
+  .object({ name: NameSchema, schoolIds: SchoolIdsSchema })
   .and(PasswordAndConfirmPasswordSchema);
 
 async function requireInvitation(request: Request) {

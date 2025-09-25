@@ -28,7 +28,7 @@ import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setProfileId } from '~/cookies/profile-id.server.ts';
 
-export const Schema = z
+const FullSchema = z
   .object({
     name: NameSchema,
     teacherId: z.string().refine((value) => value !== '<select>', {
@@ -43,12 +43,17 @@ export const Schema = z
   })
   .and(PasswordAndConfirmPasswordSchema);
 
+const MinimalSchema = z
+  .object({ name: NameSchema })
+  .and(PasswordAndConfirmPasswordSchema);
+
 async function requireInvitation(request: Request) {
   const invitation = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
   const email = invitation.get('email');
   const schoolId = invitation.get('schoolId');
+  const classCode = invitation.get('classCode') as string | undefined;
 
   if (!email || !schoolId) {
     throw redirectWithToast(
@@ -66,12 +71,20 @@ async function requireInvitation(request: Request) {
     );
   }
 
-  return { email, schoolId };
+  return { email, schoolId, classCode };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const { email, schoolId } = await requireInvitation(request);
+  const { email, schoolId, classCode } = await requireInvitation(request);
+
+  let klass: { id: string; code: string | null } | null = null;
+  if (classCode) {
+    klass = await prisma.class.findFirst({
+      where: { code: classCode.toUpperCase(), schoolId },
+      select: { id: true, code: true },
+    });
+  }
 
   const teachers = await prisma.teacherProfile.findMany({
     where: { schools: { some: { id: schoolId } } },
@@ -81,15 +94,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  return { email, schoolId, teachers };
+  return {
+    email,
+    schoolId,
+    teachers,
+    classCode: klass?.code ?? null,
+    classId: klass?.id ?? null,
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { email, schoolId } = await requireInvitation(request);
-  const { data, error } = await parseFormData(request, Schema);
+  const { email, schoolId, classCode } = await requireInvitation(request);
+
+  const useMinimal = !!classCode;
+  const { data, error } = await parseFormData(
+    request,
+    useMinimal ? MinimalSchema : FullSchema
+  );
   if (error) return validationError(error);
 
-  const hashedPassword = await getPasswordHash(data.password);
+  const hashedPassword = await getPasswordHash((data as any).password);
 
   let organizationId;
   try {
@@ -105,35 +129,67 @@ export async function action({ request }: ActionFunctionArgs) {
     return validationError({ fieldErrors: { schoolId: 'School not found' } });
   }
 
+  let classConnect:
+    | { connect: { id: string } }
+    | {
+        connectOrCreate: {
+          where: {
+            schoolId_period_grade: {
+              schoolId: string;
+              period: string;
+              grade: string;
+            };
+          };
+          create: {
+            grade: string;
+            period: string;
+            school: { connect: { id: string } };
+            teachers: { connect: { id: string } };
+          };
+        };
+      };
+
+  if (classCode) {
+    const klass = await prisma.class.findFirst({
+      where: { code: classCode.toUpperCase(), schoolId },
+      select: { id: true },
+    });
+    if (!klass)
+      return validationError({ fieldErrors: { classCode: 'Class not found' } });
+    classConnect = { connect: { id: klass.id } };
+  } else {
+    classConnect = {
+      connectOrCreate: {
+        where: {
+          schoolId_period_grade: {
+            schoolId,
+            period: (data as any).period,
+            grade: (data as any).grade,
+          },
+        },
+        create: {
+          grade: (data as any).grade,
+          period: (data as any).period,
+          school: { connect: { id: schoolId } },
+          teachers: { connect: { id: (data as any).teacherId } },
+        },
+      },
+    } as const;
+  }
+
   const profile = await prisma.profile.create({
     data: {
       user: {
         create: {
           email,
-          name: data.name,
+          name: (data as any).name,
           password: { create: { hash: hashedPassword } },
         },
       },
       organization: { connect: { id: organizationId } },
       studentProfile: {
         create: {
-          class: {
-            connectOrCreate: {
-              where: {
-                schoolId_period_grade: {
-                  schoolId,
-                  period: data.period,
-                  grade: data.grade,
-                },
-              },
-              create: {
-                grade: data.grade,
-                period: data.period,
-                school: { connect: { id: schoolId } },
-                teachers: { connect: { id: data.teacherId } },
-              },
-            },
-          },
+          class: classConnect as any,
         },
       },
     },
@@ -180,23 +236,36 @@ export default function Route() {
   const isLoading = navigation.state !== 'idle';
 
   const form = useForm({
-    schema: Schema,
+    schema: data.classCode ? MinimalSchema : FullSchema,
     method: 'POST',
-    defaultValues: {
-      name: '',
-      teacherId: '<select>',
-      grade: '<select>',
-      period: '<select>',
-      password: '',
-      confirmPassword: '',
-    },
+    defaultValues: data.classCode
+      ? {
+          name: '',
+          password: '',
+          confirmPassword: '',
+        }
+      : {
+          name: '',
+          teacherId: '<select>',
+          grade: '<select>',
+          period: '<select>',
+          password: '',
+          confirmPassword: '',
+        },
   });
 
   return (
     <div className="mx-auto w-full max-w-lg px-2 py-20">
       <div className="flex flex-col gap-3 text-center">
         <h1>Welcome, {data.email}!</h1>
-        <p>Please enter your details.</p>
+        {data.classCode ? (
+          <p>
+            You're joining class code {data.classCode}. Finish creating your
+            account.
+          </p>
+        ) : (
+          <p>Please enter your details.</p>
+        )}
       </div>
       <Form
         method="POST"
@@ -209,46 +278,50 @@ export default function Route() {
           label="Name"
           autoComplete="name"
         />
-        <FormSelect
-          scope={form.scope('teacherId')}
-          label="Teacher"
-          autoComplete="teacher"
-          options={[
-            { value: '<select>', label: 'Select a teacher' },
-            ...data.teachers.map((teacher) => ({
-              value: teacher.id,
-              label: teacher.profile.user.name,
-            })),
-          ]}
-        />
-        <div className="flex gap-3">
-          <FormSelect
-            scope={form.scope('grade')}
-            label="Grade"
-            autoComplete="grade"
-            className="w-full"
-            options={[
-              { value: '<select>', label: 'Select a grade' },
-              ...Object.values(Grade).map((grade) => ({
-                value: grade,
-                label: grade,
-              })),
-            ]}
-          />
-          <FormSelect
-            scope={form.scope('period')}
-            label="Period"
-            autoComplete="period"
-            className="w-full"
-            options={[
-              { value: '<select>', label: 'Select a period' },
-              ...Object.values(Period).map((period) => ({
-                value: period,
-                label: period,
-              })),
-            ]}
-          />
-        </div>
+        {data.classCode ? null : (
+          <>
+            <FormSelect
+              scope={form.scope('teacherId')}
+              label="Teacher"
+              autoComplete="teacher"
+              options={[
+                { value: '<select>', label: 'Select a teacher' },
+                ...data.teachers.map((teacher) => ({
+                  value: teacher.id,
+                  label: teacher.profile.user.name,
+                })),
+              ]}
+            />
+            <div className="flex gap-3">
+              <FormSelect
+                scope={form.scope('grade')}
+                label="Grade"
+                autoComplete="grade"
+                className="w-full"
+                options={[
+                  { value: '<select>', label: 'Select a grade' },
+                  ...Object.values(Grade).map((grade) => ({
+                    value: grade,
+                    label: grade,
+                  })),
+                ]}
+              />
+              <FormSelect
+                scope={form.scope('period')}
+                label="Period"
+                autoComplete="period"
+                className="w-full"
+                options={[
+                  { value: '<select>', label: 'Select a period' },
+                  ...Object.values(Period).map((period) => ({
+                    value: period,
+                    label: period,
+                  })),
+                ]}
+              />
+            </div>
+          </>
+        )}
         <FormInput
           scope={form.scope('password')}
           label="Password"

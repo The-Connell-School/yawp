@@ -57,6 +57,14 @@ type RequiresFn = (
   user: ReturnType<typeof useUser>
 ) => boolean | null | undefined;
 
+type Profile = NonNullable<ReturnType<typeof useUser>['profiles']>[0];
+
+const getRoleLabel = (profile: Profile): string => {
+  if (profile.isOwner) return 'Owner';
+  if (profile.teacherProfile) return 'Teacher';
+  return 'Student';
+};
+
 const LINKS: {
   to: string;
   label: string;
@@ -74,6 +82,12 @@ const LINKS: {
     to: '/app/my-classes',
     label: 'My Classes',
     icon: <Users size={20} />,
+    requires: (user) => !!user.selectedProfile?.teacherProfile,
+  },
+  {
+    to: '/app/teacher-courses',
+    label: 'Teacher Lounge',
+    icon: <UserIcon size={20} />,
     requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {
@@ -152,7 +166,7 @@ export default function Route() {
       {/* Left navigation panel */}
       <nav
         className={cn(
-          'z-20 flex h-full w-[190px] min-w-[190px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full w-[230px] min-w-[230px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             'w-[56px] min-w-0 items-center': !navExpanded,
@@ -280,9 +294,12 @@ export default function Route() {
                           className="w-full justify-between rounded-lg px-3 py-2 disabled:opacity-100 disabled:bg-foreground/10 disabled:font-bold"
                           disabled={isSelected}
                         >
-                          <span className="flex min-w-0 flex-col text-left">
+                          <span className="flex min-w-0 flex items-center text-left">
                             <span className="truncate">
                               {p.organization?.name ?? 'Organization'}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-normal ml-2 truncate">
+                              {getRoleLabel(p)}
                             </span>
                           </span>
                           {isSelected ? <Check size={16} /> : null}
@@ -312,7 +329,7 @@ export default function Route() {
           'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
-            '-translate-x-[190px]': isNavExpanded,
+            '-translate-x-[230px]': isNavExpanded,
             'opacity-50': !isInAssistants && isMobileNavOpen,
           }
         )}
