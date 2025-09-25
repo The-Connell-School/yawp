@@ -5,8 +5,10 @@ import { z } from 'zod';
 import { zfd } from 'zod-form-data';
 import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import omit from 'lodash/omit';
 
 const validator = z.object({
+  incrementButtonText: z.string().optional(),
   instructionsCompleted: z.union([
     z.object({ increment: zfd.numeric() }),
     z.object({ decrement: zfd.numeric() }),
@@ -40,9 +42,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
+  const nextInstruction = cms.instructionsCompleted + 1;
   const hasCompletedAllInstructions =
-    cms.instructionsCompleted + 1 ===
-    cms.studentCourseModule.instructions.length;
+    nextInstruction === cms.studentCourseModule.instructions.length;
 
   const isIncrementing =
     typeof data.instructionsCompleted === 'object' &&
@@ -51,20 +53,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const updated = await prisma.studentCourseModuleSession.update({
     where: { id: params.id },
     data: {
-      ...data,
+      ...omit(data, ['incrementButtonText']),
       ...(!hasCompletedAllInstructions && isIncrementing
         ? {
             messages: {
-              create: {
-                content:
-                  cms.studentCourseModule.instructions[
-                    cms.instructionsCompleted
-                  ].prompt,
-                agent: 'assistant',
-                instructionId:
-                  cms.studentCourseModule.instructions[
-                    cms.instructionsCompleted
-                  ].id,
+              createMany: {
+                data: [
+                  {
+                    content: data.incrementButtonText ?? 'Ready!',
+                    agent: 'user',
+                    instructionId:
+                      cms.studentCourseModule.instructions[
+                        cms.instructionsCompleted
+                      ].id,
+                  },
+                  {
+                    content:
+                      cms.studentCourseModule.instructions[nextInstruction]
+                        .prompt,
+                    agent: 'assistant',
+                    instructionId:
+                      cms.studentCourseModule.instructions[nextInstruction].id,
+                  },
+                ],
               },
             },
           }

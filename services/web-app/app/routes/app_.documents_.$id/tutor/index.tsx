@@ -140,9 +140,12 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
     );
   };
 
-  const incrementInstruction = () => {
+  const incrementInstruction = (label?: string) => {
     incrementInstructionFetcher.submit(
-      { 'instructionsCompleted.increment': 1 },
+      {
+        'instructionsCompleted.increment': 1,
+        ...(label ? { incrementButtonText: label } : {}),
+      },
       {
         method: 'POST',
         action: `/api/model/course-module-session/${cms.id}`,
@@ -515,8 +518,8 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
           showNextButton={!!instruction.showNextButton}
           advanceInstruction={
             isLastCmInstruction
-              ? () => {
-                  incrementInstruction();
+              ? (label?: string) => {
+                  incrementInstruction(label);
                   advanceToNextCourseModule();
                 }
               : incrementInstruction

@@ -8,14 +8,15 @@ import { useState } from 'react';
 import { RichTextarea } from '~/components/rich-textarea';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip.js';
-import { cn, useIsPending } from '~/utils/misc.js';
+import { cn } from '~/utils/misc.js';
+import { useNavigation } from 'react-router';
 
 type Props = {
   buttons: { label: string; action: string }[] | null;
   showChatButton?: boolean;
   showNextButton?: boolean;
   className?: string;
-  advanceInstruction?: () => void;
+  advanceInstruction?: (label?: string) => void;
   respond: (response: string) => void;
 };
 
@@ -27,9 +28,10 @@ export const ResponseBar = ({
   respond,
   className,
 }: Props) => {
+  const navigation = useNavigation();
   const [isAskingQuestion, setIsAskingQuestion] = useState(false);
   const [check, setCheck] = useState(false);
-  const isPending = useIsPending();
+  const isPending = navigation.state !== 'idle';
 
   return isAskingQuestion ? (
     <div
@@ -61,7 +63,7 @@ export const ResponseBar = ({
           className={cn('flex items-center gap-1 text-lg')}
           onClick={() => {
             if (button.action === 'advance') {
-              return advanceInstruction?.();
+              return advanceInstruction?.(button.label);
             } else if (button.action === 'response') {
               return respond(button.label);
             } else {
