@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -11,6 +10,7 @@ import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { UserPlus } from 'lucide-react';
 import { useFetcher } from 'react-router';
+import { useEffect } from 'react';
 
 type InviteSheetProps = {
   open: boolean;
@@ -28,6 +28,13 @@ export function InviteSheet({
   variant = 'default',
 }: InviteSheetProps) {
   const fetcher = useFetcher();
+
+  useEffect(() => {
+    if (fetcher.data?.success) {
+      onOpenChange(false);
+    }
+  }, [fetcher.state, fetcher.data]);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetTrigger asChild>
