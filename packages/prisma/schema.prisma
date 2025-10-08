@@ -208,6 +208,8 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
+
+  @@unique([userId, organizationId])
 }
 
 model Password {

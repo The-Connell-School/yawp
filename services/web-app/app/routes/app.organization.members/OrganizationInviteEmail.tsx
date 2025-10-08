@@ -1,4 +1,3 @@
-import * as React from 'react';
 import * as E from '@react-email/components';
 
 export function OrganizationInviteEmail({
