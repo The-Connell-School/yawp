@@ -9,29 +9,24 @@ import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { Button } from '~/components/ui/button';
-import { Users, School, BookOpen, Mail } from 'lucide-react';
+import { BookOpen, Building2, Users } from 'lucide-react';
 import { requireAdmin, requireProfile } from '~/utils/auth.server';
 
 const tabs = [
-  {
-    label: 'Members',
-    to: '/app/organization/members',
-    icon: <Users size={16} className="opacity-75 mr-1" />,
-  },
-  {
-    label: 'Schools',
-    to: '/app/organization/schools',
-    icon: <School size={16} className="opacity-75 mr-1" />,
-  },
   {
     label: 'Classes',
     to: '/app/organization/classes',
     icon: <BookOpen size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Invitations',
-    to: '/app/organization/invitations',
-    icon: <Mail size={16} className="opacity-75 mr-1" />,
+    label: 'Schools',
+    to: '/app/organization/schools',
+    icon: <Building2 size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Teachers',
+    to: '/app/organization/teachers',
+    icon: <Users size={16} className="opacity-75 mr-1" />,
   },
 ];
 
@@ -69,7 +64,7 @@ export default function Route() {
           ))}
         </div>
       </div>
-      <div className="flex-grow overflow-auto pb-24">
+      <div className="flex-grow overflow-auto">
         <Outlet />
       </div>
     </main>

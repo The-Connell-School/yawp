@@ -12,7 +12,9 @@ import {
 import {
   CogIcon,
   GaugeIcon,
+  GraduationCap,
   LockIcon,
+  MonitorPlay,
   Settings2,
   UserIcon,
   Users,
@@ -74,6 +76,12 @@ const LINKS: {
     to: '/app/my-classes',
     label: 'My Classes',
     icon: <Users size={20} />,
+    requires: (user) => !!user.selectedProfile?.teacherProfile,
+  },
+  {
+    to: '/app/teacher-courses',
+    label: "Teacher's Lounge",
+    icon: <MonitorPlay size={20} />,
     requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {
@@ -152,7 +160,7 @@ export default function Route() {
       {/* Left navigation panel */}
       <nav
         className={cn(
-          'z-20 flex h-full w-[190px] min-w-[190px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
+          'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
             'w-[56px] min-w-0 items-center': !navExpanded,
@@ -312,7 +320,7 @@ export default function Route() {
           'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
           {
             'translate-x-0': isMobileNavOpen,
-            '-translate-x-[190px]': isNavExpanded,
+            '-translate-x-[212px]': isNavExpanded,
             'opacity-50': !isInAssistants && isMobileNavOpen,
           }
         )}

@@ -9,17 +9,20 @@ datasource db {
 }
 
 model Class {
-  id        String           @id @default(cuid())
-  createdAt DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime         @default(now()) @db.Timestamptz(6)
-  period    String
-  grade     String
-  students  StudentProfile[]
-  teachers  TeacherProfile[]
-  schoolId  String
-  school    School           @relation(fields: [schoolId], references: [id])
+  id         String           @id @default(cuid())
+  createdAt  DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime         @default(now()) @db.Timestamptz(6)
+  code       String           @unique
+  schoolYear String           @default("2024-2025")
+  period     String
+  grade      String
+  isArchived Boolean          @default(false)
+  students   StudentProfile[]
+  teachers   TeacherProfile[]
+  schoolId   String
+  school     School           @relation(fields: [schoolId], references: [id])
 
-  @@unique([schoolId, period, grade])
+  @@unique([schoolId, schoolYear, period, grade])
 }
 
 model StudentCourse {
@@ -208,8 +211,6 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
-
-  @@unique([userId, organizationId])
 }
 
 model Password {

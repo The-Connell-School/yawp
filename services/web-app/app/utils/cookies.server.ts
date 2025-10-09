@@ -184,3 +184,58 @@ export async function setOrganizationMembersTableCookie(
   const mergedFilters = { ...currentFilters, ...filters };
   return await organizationMembersTableCookie.serialize(mergedFilters);
 }
+
+// Organization Classes Filters
+export type OrganizationClassesTableKey = 'organization-classes-table';
+export type OrganizationClassesTableCookie = {
+  sort: 'code' | 'schoolYear' | 'grade' | 'period' | 'createdAt';
+  direction: 'asc' | 'desc';
+  skip: number;
+  take: number;
+};
+
+export function getOrganizationClassesTableCookieValue(
+  key: keyof OrganizationClassesTableCookie,
+  value: string
+) {
+  if (key === 'skip' || key === 'take') {
+    return Number(value);
+  }
+
+  return value;
+}
+
+export const organizationClassesTableCookie = createCookie(
+  'organization-classes-table',
+  {
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  } as CookieOptions
+);
+
+export async function getOrganizationClassesTableCookie(
+  request: Request
+): Promise<OrganizationClassesTableCookie> {
+  const cookie = await organizationClassesTableCookie.parse(
+    request.headers.get('Cookie')
+  );
+  return (
+    cookie ?? {
+      sort: 'code',
+      direction: 'asc',
+      skip: 0,
+      take: 10,
+    }
+  );
+}
+
+export async function setOrganizationClassesTableCookie(
+  request: Request,
+  filters: Partial<OrganizationClassesTableCookie>
+): Promise<string> {
+  const currentFilters = await getOrganizationClassesTableCookie(request);
+  const mergedFilters = { ...currentFilters, ...filters };
+  return await organizationClassesTableCookie.serialize(mergedFilters);
+}
