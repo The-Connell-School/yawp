@@ -1,4 +1,8 @@
-import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  data as dataResponse,
+  redirect,
+} from 'react-router';
 import { Link, useLoaderData } from 'react-router';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
@@ -16,6 +20,16 @@ import {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+
+  const isStudentOnlyWithNoClasses =
+    profile.studentProfile &&
+    !profile.teacherProfile &&
+    !profile.isOwner &&
+    profile.studentProfile.classes.length === 0;
+
+  if (isStudentOnlyWithNoClasses) {
+    return redirect('/enter-code');
+  }
 
   const [
     courses,

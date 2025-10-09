@@ -26,22 +26,15 @@ import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setProfileId } from '~/cookies/profile-id.server.ts';
 import { cn } from '~/utils/misc';
+import { useEffect } from 'react';
 
 export const Schema = z
   .object({
     name: NameSchema,
-    schoolYear: z.string().refine((value) => value !== '<select>', {
-      message: 'Please select a school year',
-    }),
-    teacherId: z.string().refine((value) => value !== '<select>', {
-      message: 'Please select a teacher',
-    }),
-    grade: z.string().refine((value) => value !== '<select>', {
-      message: 'Please select a grade',
-    }),
-    period: z.string().refine((value) => value !== '<select>', {
-      message: 'Please select a period',
-    }),
+    schoolYear: z.string().min(1),
+    teacherId: z.string().min(1),
+    grade: z.string().min(1),
+    period: z.string().min(1),
   })
   .and(PasswordAndConfirmPasswordSchema);
 
@@ -185,18 +178,8 @@ export default function Route() {
     (id) => data.classes.flatMap((k) => k.teachers).find((t) => t.id === id)!
   );
 
-  const gradeOptions = Array.from(
-    new Set(data.classes.flatMap((klass) => klass.grade))
-  );
-
-  const periodOptions = Array.from(
-    new Set(data.classes.flatMap((klass) => klass.period))
-  );
-
   const showSchoolYearSelect = schoolYearOptions.length > 1;
   const showTeacherSelect = teacherOptions.length > 1;
-  const showGradeSelect = gradeOptions.length > 1;
-  const showPeriodSelect = periodOptions.length > 1;
 
   const form = useForm({
     schema: Schema,
@@ -205,12 +188,55 @@ export default function Route() {
       name: '',
       schoolYear: showSchoolYearSelect ? '<select>' : schoolYearOptions[0],
       teacherId: showTeacherSelect ? '<select>' : teacherOptions[0].id,
-      grade: showGradeSelect ? '<select>' : gradeOptions[0],
-      period: showPeriodSelect ? '<select>' : periodOptions[0],
+      grade: '<select>',
+      period: '<select>',
       password: '',
       confirmPassword: '',
     },
   });
+
+  // Watch form values for dynamic filtering
+  const selectedSchoolYear = form.value('schoolYear');
+  const selectedTeacherId = form.value('teacherId');
+
+  // Filter classes based on selected teacher and school year
+  const filteredClasses = data.classes.filter((klass) => {
+    const matchesSchoolYear =
+      selectedSchoolYear === '<select>' ||
+      klass.schoolYear === selectedSchoolYear;
+    const matchesTeacher =
+      selectedTeacherId === '<select>' ||
+      klass.teachers.some((t) => t.id === selectedTeacherId);
+    return matchesSchoolYear && matchesTeacher;
+  });
+
+  const gradeOptions = Array.from(
+    new Set(filteredClasses.map((klass) => klass.grade))
+  );
+
+  const periodOptions = Array.from(
+    new Set(filteredClasses.map((klass) => klass.period))
+  );
+
+  const showGradeSelect = gradeOptions.length > 1;
+  const showPeriodSelect = periodOptions.length > 1;
+  const canSelectGradeOrPeriod = selectedTeacherId !== '<select>';
+
+  // Auto-fill grade and period when teacher is selected and there's only one option
+  useEffect(() => {
+    if (canSelectGradeOrPeriod) {
+      if (gradeOptions.length === 1) {
+        form.setValue('grade', gradeOptions[0]);
+      }
+      if (periodOptions.length === 1) {
+        form.setValue('period', periodOptions[0]);
+      }
+    } else {
+      // Reset grade and period when teacher is not selected
+      form.setValue('grade', '<select>');
+      form.setValue('period', '<select>');
+    }
+  }, [canSelectGradeOrPeriod, gradeOptions, periodOptions]);
 
   return (
     <div className="mx-auto w-full max-w-lg px-2 py-20">
@@ -265,7 +291,11 @@ export default function Route() {
         <div
           className={
             'flex gap-3 ' +
-            cn(showGradeSelect || showPeriodSelect ? '' : 'hidden')
+            cn(
+              canSelectGradeOrPeriod && (showGradeSelect || showPeriodSelect)
+                ? ''
+                : 'hidden'
+            )
           }
         >
           <FormSelect
@@ -273,8 +303,14 @@ export default function Route() {
             label="Grade"
             autoComplete="grade"
             className={cn('w-full', showGradeSelect ? '' : 'hidden')}
+            disabled={!canSelectGradeOrPeriod}
             options={[
-              { value: '<select>', label: 'Select a grade' },
+              {
+                value: '<select>',
+                label: canSelectGradeOrPeriod
+                  ? 'Select a grade'
+                  : 'Select teacher first',
+              },
               ...gradeOptions.map((grade) => ({
                 value: grade,
                 label: grade,
@@ -286,8 +322,14 @@ export default function Route() {
             label="Period"
             autoComplete="period"
             className={cn('w-full', showPeriodSelect ? '' : 'hidden')}
+            disabled={!canSelectGradeOrPeriod}
             options={[
-              { value: '<select>', label: 'Select a period' },
+              {
+                value: '<select>',
+                label: canSelectGradeOrPeriod
+                  ? 'Select a period'
+                  : 'Select teacher first',
+              },
               ...periodOptions.map((period) => ({
                 value: period,
                 label: period,
