@@ -21,6 +21,7 @@ model Class {
   teachers   TeacherProfile[]
   schoolId   String
   school     School           @relation(fields: [schoolId], references: [id])
+  documents  Document[]
 
   @@unique([schoolId, schoolYear, period, grade])
 }
@@ -123,11 +124,14 @@ model Document {
   createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
   updatedAt                   DateTime                     @default(now()) @db.Timestamptz(6)
   deletedAt                   DateTime?                    @db.Timestamptz(6)
+  archivedAt                  DateTime?                    @db.Timestamptz(6)
   title                       String                       @default("Untitled")
   text                        String?
   html                        String?
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId                   String
+  classId                     String?
+  class                       Class?                       @relation(fields: [classId], references: [id], onDelete: Cascade)
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
@@ -262,8 +266,7 @@ model StudentProfile {
   period                      String?
   profileId                   String                       @unique
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classId                     String?
-  class                       Class?                       @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  classes                     Class[]
   studentCourseModuleSessions StudentCourseModuleSession[]
 }
 

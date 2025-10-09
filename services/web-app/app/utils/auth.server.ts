@@ -210,22 +210,23 @@ export async function signup({
         create: {
           isOwner: false,
           organization: { connect: { id: 'default-org' } },
-          studentProfile: {
-            create: {
-              class: {
-                connectOrCreate: {
-                  where: { schoolId_period_grade: { schoolId, period, grade } },
-                  create: {
-                    id: 'default-class',
-                    grade,
-                    period,
-                    school: { connect: { id: schoolId } },
-                    teachers: { connect: { id: teacherId } },
-                  },
-                },
-              },
-            },
-          },
+          // TODO: Add classes
+          // studentProfile: {
+          //   create: {
+          //     class: {
+          //       connectOrCreate: {
+          //         where: { schoolId_period_grade: { schoolId, period, grade } },
+          //         create: {
+          //           id: 'default-class',
+          //           grade,
+          //           period,
+          //           school: { connect: { id: schoolId } },
+          //           teachers: { connect: { id: teacherId } },
+          //         },
+          //       },
+          //     },
+          //   },
+          // },
         },
       },
     },

@@ -49,13 +49,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const profiles = await prisma.profile.findMany({
     where: {
       studentProfile: {
-        classId,
+        classes: { some: { id: classId } },
       },
     },
     select: {
       id: true,
       user: { select: { name: true, email: true } },
       documents: {
+        where: { classId },
         select: {
           id: true,
           title: true,

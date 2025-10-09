@@ -55,19 +55,53 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const schools = await prisma.school.findMany({
-    where,
-    include: {
-      _count: {
-        select: {
-          classes: true,
+  const [schools, teachers] = await Promise.all([
+    prisma.school.findMany({
+      where,
+      include: {
+        teachers: {
+          include: {
+            profile: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            classes: true,
+            teachers: true,
+          },
         },
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+      orderBy: { name: 'asc' },
+    }),
+    prisma.teacherProfile.findMany({
+      where: {
+        profile: {
+          organizationId: profile.organization.id,
+        },
+        isActive: true,
+      },
+      include: {
+        profile: {
+          include: {
+            user: true,
+          },
+        },
+      },
+      orderBy: {
+        profile: {
+          user: {
+            name: 'asc',
+          },
+        },
+      },
+    }),
+  ]);
 
-  return dataResponse({ schools, q });
+  return dataResponse({ schools, teachers, q });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -79,6 +113,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create-school') {
     const name = formData.get('name') as string;
     const code = formData.get('code') as string;
+    const teacherIds = formData.getAll('teacherIds') as string[];
 
     if (!name || !code) {
       return dataResponse(
@@ -93,6 +128,9 @@ export async function action({ request }: ActionFunctionArgs) {
           name: name.trim(),
           code: code.trim().toUpperCase(),
           organizationId: profile.organization.id,
+          teachers: {
+            connect: teacherIds.map((id) => ({ id })),
+          },
         },
       });
 
@@ -112,6 +150,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const schoolId = formData.get('schoolId') as string;
     const name = formData.get('name') as string;
     const code = formData.get('code') as string;
+    const teacherIds = formData.getAll('teacherIds') as string[];
 
     if (!schoolId || !name || !code) {
       return dataResponse(
@@ -134,6 +173,9 @@ export async function action({ request }: ActionFunctionArgs) {
         data: {
           name: name.trim(),
           code: code.trim().toUpperCase(),
+          teachers: {
+            set: teacherIds.map((id) => ({ id })),
+          },
         },
       });
 
@@ -198,7 +240,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OrganizationSchoolsRoute() {
-  const { schools, q } = useLoaderData<typeof loader>();
+  const { schools, teachers, q } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -297,6 +339,7 @@ export default function OrganizationSchoolsRoute() {
                       <TableHead>Code</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Classes</TableHead>
+                      <TableHead>Teachers</TableHead>
                       <TableHead className="pr-4">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -323,6 +366,7 @@ export default function OrganizationSchoolsRoute() {
                           {school.name}
                         </TableCell>
                         <TableCell>{school._count.classes}</TableCell>
+                        <TableCell>{school._count.teachers}</TableCell>
                         <TableCell className="pr-4">
                           <Button
                             size="sm"
@@ -352,6 +396,7 @@ export default function OrganizationSchoolsRoute() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         editingSchool={editingSchool}
+        teachers={teachers}
       />
     </div>
   );
@@ -389,15 +434,18 @@ function SchoolSheet({
   open,
   onOpenChange,
   editingSchool,
+  teachers,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingSchool: any | null;
+  teachers: any[];
 }) {
   const fetcherKey = editingSchool ? `edit-${editingSchool.id}` : 'create';
   const fetcher = useFetcher({ key: fetcherKey });
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
 
   useEffect(() => {
     setName(editingSchool?.name || '');
@@ -406,6 +454,7 @@ function SchoolSheet({
     } else {
       setCode(Math.random().toString(36).substring(2, 10).toUpperCase());
     }
+    setSelectedTeachers(editingSchool?.teachers?.map((t: any) => t.id) || []);
   }, [editingSchool, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -417,6 +466,9 @@ function SchoolSheet({
     }
     formData.append('name', name);
     formData.append('code', code);
+    selectedTeachers.forEach((teacherId) => {
+      formData.append('teacherIds', teacherId);
+    });
     fetcher.submit(formData, { method: 'POST' });
   };
 
@@ -471,6 +523,55 @@ function SchoolSheet({
             />
             <p className="text-xs text-muted-foreground">
               Unique identifier for the school
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Teachers (Optional)</Label>
+            <div className="rounded-md border border-input bg-background">
+              <div className="max-h-[200px] overflow-y-auto p-3 space-y-2">
+                {teachers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No teachers available
+                  </p>
+                ) : (
+                  teachers.map((teacher) => (
+                    <div
+                      key={teacher.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`teacher-${teacher.id}`}
+                        checked={selectedTeachers.includes(teacher.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTeachers([
+                              ...selectedTeachers,
+                              teacher.id,
+                            ]);
+                          } else {
+                            setSelectedTeachers(
+                              selectedTeachers.filter((id) => id !== teacher.id)
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`teacher-${teacher.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {teacher.profile.user.name ||
+                          teacher.profile.user.email}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedTeachers.length > 0
+                ? `${selectedTeachers.length} teacher${selectedTeachers.length !== 1 ? 's' : ''} selected`
+                : 'Select teachers to assign to this school'}
             </p>
           </div>
 

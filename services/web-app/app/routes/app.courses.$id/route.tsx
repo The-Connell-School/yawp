@@ -33,7 +33,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const [course, documents] = await Promise.all([
+  const [course, documents, archivedDocuments] = await Promise.all([
     prisma.studentCourse.findUnique({
       where: { id: params.id },
       include: {
@@ -46,6 +46,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: {
         profileId: profile.id,
         deletedAt: null,
+        archivedAt: null,
+        studentCourseModuleSessions: {
+          some: { studentCourseModule: { studentCourseId: params.id } },
+        },
+      },
+      include: {
+        studentCourseModuleSessions: {
+          take: 1,
+          orderBy: { studentCourseModule: { position: 'desc' } },
+          include: { studentCourseModule: true },
+        },
+      },
+    }),
+    prisma.document.findMany({
+      orderBy: { archivedAt: 'desc' },
+      where: {
+        profileId: profile.id,
+        deletedAt: null,
+        archivedAt: { not: null },
         studentCourseModuleSessions: {
           some: { studentCourseModule: { studentCourseId: params.id } },
         },
@@ -67,7 +86,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  return dataResponse({ course, documents });
+  return dataResponse({ course, documents, archivedDocuments });
 }
 
 const validator = z.object({
@@ -112,6 +131,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const studentProfile = await prisma.studentProfile.findUniqueOrThrow({
     where: { profileId: profile.id },
+    include: { classes: true },
   });
 
   const [doc] = await Promise.all([
@@ -121,6 +141,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         text: '',
         html: '',
         title: '',
+        classId: studentProfile.classes[0].id,
         studentCourseModuleSessions: {
           create: {
             studentProfileId: studentProfile.id,
@@ -229,15 +250,39 @@ export default function AppCoursesIdRoute() {
           </>
         ) : null}
         {data.documents.length ? (
-          <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
-            {data.documents.map((doc) => (
-              <DocumentLink
-                key={doc.id}
-                doc={doc}
-                exitTo={`/app/courses/${data.course.id}`}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
+              {data.documents.map((doc) => (
+                <DocumentLink
+                  key={doc.id}
+                  doc={doc}
+                  exitTo={`/app/courses/${data.course.id}`}
+                />
+              ))}
+            </div>
+            {data.archivedDocuments.length > 0 && (
+              <div className="pb-10">
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="archived" className="border-none">
+                    <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
+                      View archived documents ({data.archivedDocuments.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-2 md:grid-cols-3">
+                        {data.archivedDocuments.map((doc) => (
+                          <DocumentLink
+                            key={doc.id}
+                            doc={doc}
+                            exitTo={`/app/courses/${data.course.id}`}
+                          />
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
+          </>
         ) : !hasModules ? (
           <NoDataPlaceholder
             title="No modules"

@@ -15,7 +15,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [classes, teacher] = await Promise.all([
     prisma.class.findMany({
-      where: { teachers: { some: { id: profile.teacherProfile.id } } },
+      where: {
+        teachers: { some: { id: profile.teacherProfile.id } },
+        isArchived: false,
+      },
       select: {
         id: true,
         grade: true,

@@ -6,6 +6,12 @@ import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { cn } from '~/utils/misc';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -14,6 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const [
     courses,
     documents,
+    archivedDocuments,
     studentProfiles,
     teacherCourses,
     teacherClasses,
@@ -24,7 +31,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
-      where: { profileId: profile.id, deletedAt: null },
+      where: { profileId: profile.id, deletedAt: null, archivedAt: null },
+      include: {
+        studentCourseModuleSessions: {
+          include: { studentCourseModule: true },
+          orderBy: { studentCourseModule: { position: 'desc' } },
+        },
+      },
+    }),
+    prisma.document.findMany({
+      orderBy: { archivedAt: 'desc' },
+      where: {
+        profileId: profile.id,
+        deletedAt: null,
+        archivedAt: { not: null },
+      },
       include: {
         studentCourseModuleSessions: {
           include: { studentCourseModule: true },
@@ -33,7 +54,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     }),
     prisma.studentProfile.findMany({
-      where: { class: { teachers: { some: { profileId: profile.id } } } },
+      where: {
+        classes: { some: { teachers: { some: { profileId: profile.id } } } },
+      },
       include: { profile: { include: { documents: true } } },
     }),
     // Fetch teacher courses if user has teacher profile
@@ -67,7 +90,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Teacher classes and recent ordering
     profile?.teacherProfile
       ? prisma.class.findMany({
-          where: { teachers: { some: { id: profile.teacherProfile.id } } },
+          where: {
+            teachers: { some: { id: profile.teacherProfile.id } },
+            isArchived: false,
+          },
           select: {
             id: true,
             grade: true,
@@ -95,19 +121,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
         deletedAt: null,
         profile: {
           studentProfile: {
-            class: { teachers: { some: { id: profile.teacherProfile.id } } },
+            classes: {
+              some: { teachers: { some: { id: profile.teacherProfile.id } } },
+            },
           },
         },
       },
       select: {
         updatedAt: true,
-        profile: { select: { studentProfile: { select: { classId: true } } } },
+        profile: {
+          select: {
+            studentProfile: { select: { classes: { select: { id: true } } } },
+          },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     });
     const latestByClass = new Map<string, Date>();
     for (const d of recentDocs) {
-      const cid = d.profile.studentProfile?.classId;
+      const cid = d.profile.studentProfile?.classes[0]?.id;
       if (!cid) continue;
       if (!latestByClass.has(cid)) latestByClass.set(cid, d.updatedAt);
     }
@@ -124,6 +156,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     courses,
     documents,
+    archivedDocuments,
     studentProfiles,
     teacherCourses,
     teacherClasses: teacherClassesOrdered,
@@ -309,6 +342,24 @@ export default function AppRoute() {
                 subtitle="Select a course above to get started."
               />
             )}
+            {data.archivedDocuments.length > 0 && (
+              <div className="mt-6">
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="archived" className="border-none">
+                    <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
+                      View archived documents ({data.archivedDocuments.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
+                        {data.archivedDocuments.map((doc) => (
+                          <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -370,6 +421,24 @@ export default function AppRoute() {
               title="No documents"
               subtitle="Select a course above to get started."
             />
+          )}
+          {data.archivedDocuments.length > 0 && (
+            <div className="mt-6">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="archived" className="border-none">
+                  <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
+                    View archived documents ({data.archivedDocuments.length})
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
+                      {data.archivedDocuments.map((doc) => (
+                        <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
           )}
         </div>
       </div>

@@ -42,8 +42,6 @@ export async function action({ request }: ActionFunctionArgs) {
       secret: true,
       period: true,
       charSet: true,
-      organizationId: true,
-      schoolId: true,
       id: true,
       metadata: true,
     },
@@ -79,8 +77,10 @@ export async function action({ request }: ActionFunctionArgs) {
       invitation.metadata ?? '{}'
     ) as z.infer<typeof StudentOnboardingMetadataSchema>;
 
-    if (!schoolId || !klassId) {
-      return validationError({ fieldErrors: { code: 'Invalid code.' } });
+    if (!schoolId && !klassId) {
+      return validationError({
+        fieldErrors: { code: 'Invalid metadata. Please sign up again.' },
+      });
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -279,8 +279,8 @@ export default function Route() {
             We've sent you a code to verify your email address.
           </p>
         </div>
-        <div className="mt-12 flex flex-col justify-center gap-1">
-          <div className="flex w-full gap-2 px-8">
+        <div className="mt-6 flex flex-col justify-center gap-1">
+          <div className="flex w-full gap-2">
             <Form {...form.getFormProps()} className="flex-1">
               <FormInput scope={form.scope('code')} type="text" label="Code" />
               <input type="hidden" name="type" value={type} />
