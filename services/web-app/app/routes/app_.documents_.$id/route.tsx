@@ -48,10 +48,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               {
                 profile: {
                   studentProfile: {
-                    class: {
-                      teachers: {
-                        some: {
-                          profileId: profile.id,
+                    classes: {
+                      some: {
+                        teachers: {
+                          some: {
+                            profileId: profile.id,
+                          },
                         },
                       },
                     },

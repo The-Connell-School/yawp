@@ -55,7 +55,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
     }),
     prisma.invitation.findMany({
-      where: { organizationId: params.id, type: 'onboard-owner' },
+      where: {
+        metadata: JSON.stringify({ organizationId: params.id }),
+        type: 'onboard-owner',
+      },
     }),
     prisma.organization.count(),
   ]);
@@ -184,7 +187,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           where: {
             target: email,
             type: 'onboard-owner',
-            organizationId: params.id,
+            metadata: JSON.stringify({ organizationId: params.id }),
           },
         });
 
@@ -212,7 +215,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           target,
           ...verificationConfig,
           expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
-          organization: { connect: { id: params.id } },
+          metadata: JSON.stringify({ organizationId: params.id }),
         };
 
         await prisma.invitation.create({ data: verificationData });

@@ -27,7 +27,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
       {
         profile: {
           studentProfile: {
-            class: { teachers: { some: { profileId: profile.id } } },
+            classes: {
+              some: { teachers: { some: { profileId: profile.id } } },
+            },
           },
         },
       },

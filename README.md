@@ -48,3 +48,20 @@ ssh -N -L 3306:<db_host>:5432 ec2-user@<bastion_server_host> -i ~/.ssh/<app_name
 ```bash
 DATABASE_URL="postgresql://<user>:<password>@localhost:3306/<db_name>"
 ```
+
+### Creating a database backup from production
+First login to the ssh server:
+```
+ssh ec2-user@3.87.160.232 -i ~/.ssh/yawp-production-bastion
+
+```
+On the ssh server, install the `pg_dump` command via postgresql tools and dump the database to a file:
+```
+sudo yum install postgresql15
+pg_dump --host=yawp-production-postgres.cafmse4qcmw7.us-east-1.rds.amazonaws.com --port=5432 --username=yawp_admin --dbname=yawpdb --file=backup.dump
+exit
+```
+Now that you are back on your local machine, copy the file over:
+```
+scp -i ~/.ssh/yawp-production-bastion ec2-user@3.87.160.232:/home/ec2-user/backup.dump .
+```

@@ -39,14 +39,13 @@ export function SearchInput({
     <Form>
       <div className="relative">
         <MagnifyingGlassIcon
-          className={cn(
-            'pointer-events-none absolute left-2.5 top-2.5 h-5 w-5',
-            { 'opacity-60': isLoading }
-          )}
+          className={cn('pointer-events-none absolute left-2.5 top-2 h-4 w-4', {
+            'opacity-60': isLoading,
+          })}
         />
         <Input
           placeholder="Search"
-          className="pl-9"
+          className="pl-8 h-[32px] rounded-[100px]"
           defaultValue={initialQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           disabled={disabled}

@@ -21,7 +21,7 @@ import {
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server.ts';
 import { redirectWithToast } from '~/utils/toast.server.ts';
 import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
-import { parseFormData, useForm } from '@rvf/react';
+import { parseFormData, useForm } from '@rvf/react-router';
 import { validationError } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { setProfileId } from '~/cookies/profile-id.server';
@@ -32,7 +32,7 @@ export const Schema = z
   })
   .and(PasswordAndConfirmPasswordSchema);
 
-async function requireInvitation(request: Request) {
+async function requireInvitationDetails(request: Request) {
   const invitation = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
@@ -60,12 +60,12 @@ async function requireInvitation(request: Request) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const { email, organizationId } = await requireInvitation(request);
+  const { email, organizationId } = await requireInvitationDetails(request);
   return { email, organizationId };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { email, organizationId } = await requireInvitation(request);
+  const { email, organizationId } = await requireInvitationDetails(request);
   const { data, error } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
@@ -127,10 +127,14 @@ export default function Route() {
 
   const form = useForm({
     schema: Schema,
+    method: 'POST',
     defaultValues: {
       name: '',
       password: '',
       confirmPassword: '',
+    },
+    onSubmitFailure(error) {
+      console.log(error);
     },
   });
 
