@@ -10,7 +10,11 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { Button } from '~/components/ui/button';
 import { BookOpen, Building2, Users } from 'lucide-react';
-import { requireAdmin, requireProfile } from '~/utils/auth.server';
+import {
+  requireAdmin,
+  requireOwner,
+  requireProfile,
+} from '~/utils/auth.server';
 
 const tabs = [
   {
@@ -33,7 +37,7 @@ const tabs = [
 export const handle: BreadcrumbHandle = { breadcrumb: 'Organization' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const user = await requireAdmin(request);
+  const user = await requireOwner(request);
   const profile = await requireProfile(request, user.id);
   return dataResponse({ organization: profile.organization });
 }
