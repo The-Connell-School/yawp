@@ -16,9 +16,12 @@ FROM base AS production
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl
 COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/bun.lockb ./bun.lockb
 COPY --from=build /app/services/web-app/build ./services/web-app/build
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
+COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
 COPY --from=build /app/packages/prisma ./packages/prisma
+RUN bun install --production --ignore-scripts
+RUN chmod +x services/web-app/start.sh
 EXPOSE 8080
-CMD ["bun", "run", "web-app:start"]
+CMD ["bash", "services/web-app/start.sh"]
