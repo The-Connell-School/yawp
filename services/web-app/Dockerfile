@@ -19,24 +19,15 @@ FROM base AS production
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl
 
-# Copy dependency files and install (cached if unchanged)
+# Copy everything needed from build stage (includes all dependencies and generated files)
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/bun.lockb ./bun.lockb
-RUN bun install --production --ignore-scripts
-
-# Copy prisma schema/package (without node_modules first)
-COPY --from=build /app/packages/prisma/schema.prisma ./packages/prisma/schema.prisma
-COPY --from=build /app/packages/prisma/package.json ./packages/prisma/package.json
-COPY --from=build /app/packages/prisma/index.ts ./packages/prisma/index.ts
-
-# Copy generated Prisma client from root node_modules (bun workspaces hoist dependencies)
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-
-# Copy build artifacts and scripts (changes most frequently)
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages/prisma ./packages/prisma
 COPY --from=build /app/services/web-app/build ./services/web-app/build
 COPY --from=build /app/services/web-app/package.json ./services/web-app/package.json
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
+
 RUN chmod +x services/web-app/start.sh
 
 EXPOSE 8080
