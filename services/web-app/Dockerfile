@@ -8,18 +8,15 @@ WORKDIR /app
 COPY package.json bun.lockb ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
-RUN bun install --ignore-scripts
+RUN bun install --frozen-lockfile
 RUN bun prisma:generate
-RUN echo "=== Checking Prisma generation locations ===" && \
-    find . -name ".prisma" -type d && \
-    find . -path "*/node_modules/@prisma/client" -type d
 RUN bun web-app:build
 
 FROM base AS production
 WORKDIR /app
 RUN apt-get update -y && apt-get install -y openssl
 
-# Copy everything needed from build stage (includes all dependencies and generated files)
+# Copy everything from build (has all deps properly installed and Prisma generated)
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/bun.lockb ./bun.lockb
 COPY --from=build /app/node_modules ./node_modules
