@@ -23,8 +23,21 @@ import { prisma } from '~/utils/db.server';
 import { Plus, Trash2 } from 'lucide-react';
 import { SearchInput } from '~/components/search-input';
 import { useTable } from '~/hooks/useTable';
-import { cn } from '~/utils/misc';
+import { cn, getDomainUrl } from '~/utils/misc';
 import { Tooltip } from '~/components/ui/tooltip';
+import { sendEmail } from '~/utils/email.server';
+import * as E from '@react-email/components';
+import { generateTOTP } from '~/utils/totp.server';
+import { Prisma } from '@app/prisma';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
+import { Label } from '~/components/ui/label';
+import { Textarea } from '~/components/ui/textarea';
+import { useState } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
@@ -115,14 +128,144 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect('/app/organization/teachers');
   }
 
+  if (intent === 'invite-teachers') {
+    const emails = formData.get('emails')?.toString().trim();
+    if (!emails) {
+      return dataResponse({ error: 'Emails are required' }, { status: 400 });
+    }
+
+    const emailList = emails
+      .split(/[,\n]/)
+      .map((email: string) => email.trim())
+      .filter((email: string) => email && email.includes('@'));
+
+    if (emailList.length === 0) {
+      return dataResponse(
+        { error: 'No valid emails provided' },
+        { status: 400 }
+      );
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id: profile.organization.id },
+      select: { name: true },
+    });
+
+    let successCount = 0;
+    for (const email of emailList) {
+      try {
+        // Check for existing invitation and delete if found
+        const existingInvitation = await prisma.invitation.findFirst({
+          where: {
+            target: email,
+            type: 'onboard-teacher',
+            metadata: JSON.stringify({
+              organizationId: profile.organization.id,
+            }),
+          },
+        });
+
+        if (existingInvitation) {
+          await prisma.invitation.delete({
+            where: { id: existingInvitation.id },
+          });
+        }
+
+        const { otp, ...verificationConfig } = await generateTOTP({
+          algorithm: 'SHA-256',
+          charSet: 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789',
+          period: 3 * 24 * 60 * 60,
+        });
+
+        const type = 'onboard-teacher';
+        const target = email;
+        const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
+        verifyUrl.searchParams.set('type', type);
+        verifyUrl.searchParams.set('target', target);
+        verifyUrl.searchParams.set('code', otp);
+
+        const verificationData: Prisma.InvitationCreateInput = {
+          type,
+          target,
+          ...verificationConfig,
+          expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
+          metadata: JSON.stringify({
+            organizationId: profile.organization.id,
+          }),
+        };
+
+        await prisma.invitation.create({ data: verificationData });
+
+        await sendEmail({
+          to: email,
+          subject: "You're invited to join your organization on Yawp!",
+          react: (
+            <OrganizationInviteEmail
+              verifyUrl={verifyUrl.toString()}
+              organizationName={organization?.name ?? 'your organization'}
+              userType="teacher"
+            />
+          ),
+        });
+
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to send invitation to ${email}:`, error);
+      }
+    }
+
+    return dataResponse({
+      success: true,
+      message: `Invitations sent to ${successCount} teacher(s)`,
+      invited: successCount,
+    });
+  }
+
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
+}
+
+function OrganizationInviteEmail({
+  verifyUrl,
+  userType,
+  organizationName,
+}: {
+  verifyUrl: string;
+  userType: 'teacher' | 'student' | 'owner';
+  organizationName: string;
+}) {
+  return (
+    <E.Html lang="en" dir="ltr">
+      <E.Container>
+        <h1>
+          <E.Text>Welcome to Yawp!</E.Text>
+        </h1>
+        <p>
+          <E.Text>
+            You've been invited to join {organizationName} as{' '}
+            {userType === 'owner' ? 'an owner' : `a ${userType}`} on Yawp!
+          </E.Text>
+        </p>
+        <p>
+          <E.Text>Click the link to get started:</E.Text>
+        </p>
+        <E.Link href={verifyUrl}>{verifyUrl}</E.Link>
+        <p>
+          <E.Text>
+            This invitation will expire in 3 days for security reasons.
+          </E.Text>
+        </p>
+      </E.Container>
+    </E.Html>
+  );
 }
 
 export default function OrganizationTeachersRoute() {
   const { teachers, q } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
+  const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [isInviteSheetOpen, setIsInviteSheetOpen] = useState(false);
   const { selected, setSelected, isLoading, handleSelectAll, handleSelect } =
     useTable({ rows: teachers });
 
@@ -170,7 +313,7 @@ export default function OrganizationTeachersRoute() {
                 </Tooltip>
               </fetcher.Form>
             )}
-            <Button size="sm" variant="outline" disabled>
+            <Button size="sm" onClick={() => setIsInviteSheetOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Invite Teacher
             </Button>
@@ -236,6 +379,49 @@ export default function OrganizationTeachersRoute() {
           </div>
         </div>
       </div>
+
+      {/* Invite Teacher Sheet */}
+      <Sheet open={isInviteSheetOpen} onOpenChange={setIsInviteSheetOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Invite Teachers</SheetTitle>
+          </SheetHeader>
+          <inviteFetcher.Form method="post" className="mt-4 space-y-4">
+            <input type="hidden" name="intent" value="invite-teachers" />
+            <div className="space-y-2">
+              <Label htmlFor="emails">
+                Email addresses (comma or line separated)
+              </Label>
+              <Textarea
+                id="emails"
+                name="emails"
+                placeholder="teacher1@example.com, teacher2@example.com"
+                rows={4}
+                required
+              />
+            </div>
+            {inviteFetcher.data?.error && (
+              <div className="text-sm text-red-600">
+                {inviteFetcher.data.error}
+              </div>
+            )}
+            {inviteFetcher.data?.success && (
+              <div className="text-sm text-green-600">
+                {inviteFetcher.data.message}
+              </div>
+            )}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={inviteFetcher.state !== 'idle'}
+            >
+              {inviteFetcher.state !== 'idle'
+                ? 'Sending...'
+                : 'Send Invitations'}
+            </Button>
+          </inviteFetcher.Form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

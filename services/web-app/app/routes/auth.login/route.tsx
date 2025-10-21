@@ -89,6 +89,11 @@ export default function LoginPage() {
     schema: Schema,
     method: 'POST',
     defaultValues: { redirectTo, email: '', password: '' },
+    validationBehaviorConfig: {
+      initial: 'onSubmit',
+      whenTouched: 'onSubmit',
+      whenSubmitted: 'onSubmit',
+    },
   });
 
   return (
@@ -110,7 +115,6 @@ export default function LoginPage() {
             type="email"
             label="Email"
             autoComplete="email"
-            autoFocus
           />
           <FormInput
             scope={form.scope('password')}
