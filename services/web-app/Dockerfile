@@ -29,9 +29,9 @@ COPY --from=build /app/packages/prisma/schema.prisma ./packages/prisma/schema.pr
 COPY --from=build /app/packages/prisma/package.json ./packages/prisma/package.json
 COPY --from=build /app/packages/prisma/index.ts ./packages/prisma/index.ts
 
-# Copy generated Prisma client from packages/prisma workspace
-COPY --from=build /app/packages/prisma/node_modules/.prisma ./packages/prisma/node_modules/.prisma
-COPY --from=build /app/packages/prisma/node_modules/@prisma ./packages/prisma/node_modules/@prisma
+# Copy generated Prisma client from root node_modules (bun workspaces hoist dependencies)
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy build artifacts and scripts (changes most frequently)
 COPY --from=build /app/services/web-app/build ./services/web-app/build
