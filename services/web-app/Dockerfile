@@ -10,6 +10,9 @@ COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 RUN bun install --ignore-scripts
 RUN bun prisma:generate
+RUN echo "=== Checking Prisma generation locations ===" && \
+    find . -name ".prisma" -type d && \
+    find . -path "*/node_modules/@prisma/client" -type d
 RUN bun web-app:build
 
 FROM base AS production
@@ -21,12 +24,14 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/bun.lockb ./bun.lockb
 RUN bun install --production --ignore-scripts
 
-# Copy generated Prisma client (overwrites partial install)
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
+# Copy prisma schema/package (without node_modules first)
+COPY --from=build /app/packages/prisma/schema.prisma ./packages/prisma/schema.prisma
+COPY --from=build /app/packages/prisma/package.json ./packages/prisma/package.json
+COPY --from=build /app/packages/prisma/index.ts ./packages/prisma/index.ts
 
-# Copy prisma schema/package
-COPY --from=build /app/packages/prisma ./packages/prisma
+# Copy generated Prisma client from packages/prisma workspace
+COPY --from=build /app/packages/prisma/node_modules/.prisma ./packages/prisma/node_modules/.prisma
+COPY --from=build /app/packages/prisma/node_modules/@prisma ./packages/prisma/node_modules/@prisma
 
 # Copy build artifacts and scripts (changes most frequently)
 COPY --from=build /app/services/web-app/build ./services/web-app/build
