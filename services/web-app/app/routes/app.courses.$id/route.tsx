@@ -141,7 +141,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         text: '',
         html: '',
         title: '',
-        classId: studentProfile.classes[0].id,
+        ...(studentProfile.classes[0] && {
+          classId: studentProfile.classes[0].id,
+        }),
         studentCourseModuleSessions: {
           create: {
             studentProfileId: studentProfile.id,

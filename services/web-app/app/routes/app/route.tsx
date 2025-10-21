@@ -8,6 +8,8 @@ import {
   useMatches,
   type ActionFunctionArgs,
   redirect,
+  useFetcher,
+  useRevalidator,
 } from 'react-router';
 import {
   CogIcon,
@@ -18,6 +20,7 @@ import {
   Settings2,
   UserIcon,
   Users,
+  Pencil,
 } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -47,6 +50,18 @@ import {
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
 import { Check } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
+import { useForm } from '@rvf/react-router';
+import { FormInput } from '~/components/rvf-forms/form-input';
+import { z } from 'zod';
+import { NameSchema } from '~/utils/schemas/user';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -98,10 +113,15 @@ const LINKS: {
   },
 ];
 
+const EditNameSchema = z.object({
+  name: NameSchema,
+});
+
 export default function Route() {
   const location = useLocation();
   const user = useUser();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
 
   const matches = useMatches();
   const isInAssistants = !!matches.find((m) => m.id.includes('app.assistants'));
@@ -260,11 +280,19 @@ export default function Route() {
               </div>
             </PopoverTrigger>
             <PopoverContent className="m-1 p-0">
-              <div className="flex flex-col p-3 border-b">
-                <p className="text-sm font-bold">{user.name}</p>
-                <div className="flex gap-2 items-center justify-between">
+              <div className="flex justify-between p-3 border-b">
+                <div className="flex flex-col">
+                  <p className="text-sm font-bold">{user.name}</p>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                 </div>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="opacity-40 hover:opacity-100"
+                  onClick={() => setIsEditNameOpen(true)}
+                >
+                  <Pencil size={14} />
+                </Button>
               </div>
               {/* Organization / Profile selector */}
               {user.profiles?.length ? (
@@ -373,7 +401,89 @@ export default function Route() {
           <Outlet />
         </NavExpandedContext.Provider>
       </div>
+      <EditNameDialog
+        open={isEditNameOpen}
+        onOpenChange={setIsEditNameOpen}
+        currentName={user.name || ''}
+      />
     </main>
+  );
+}
+
+function EditNameDialog({
+  open,
+  onOpenChange,
+  currentName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentName: string;
+}) {
+  const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const [wasSubmitting, setWasSubmitting] = useState(false);
+  const isLoading = fetcher.state !== 'idle';
+
+  const form = useForm({
+    fetcher,
+    schema: EditNameSchema,
+    method: 'POST',
+    action: '/api/user/name',
+    defaultValues: {
+      name: currentName,
+    },
+  });
+
+  useEffect(() => {
+    if (open) {
+      form.resetForm({ name: currentName });
+      setWasSubmitting(false);
+    }
+  }, [open, currentName]);
+
+  useEffect(() => {
+    if (fetcher.state === 'submitting' || fetcher.state === 'loading') {
+      setWasSubmitting(true);
+    }
+  }, [fetcher.state]);
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && wasSubmitting) {
+      revalidator.revalidate();
+      onOpenChange(false);
+      setWasSubmitting(false);
+    }
+  }, [fetcher.state, wasSubmitting, onOpenChange, revalidator]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit Name</DialogTitle>
+          <DialogDescription>Update your display name</DialogDescription>
+        </DialogHeader>
+        <fetcher.Form {...form.getFormProps()}>
+          <FormInput
+            scope={form.scope('name')}
+            type="text"
+            label="Name"
+            autoComplete="name"
+          />
+          <DialogFooter className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              Save
+            </Button>
+          </DialogFooter>
+        </fetcher.Form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

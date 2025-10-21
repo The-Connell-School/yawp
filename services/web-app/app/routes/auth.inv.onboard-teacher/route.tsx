@@ -22,14 +22,13 @@ import {
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server.ts';
 import { redirectWithToast } from '~/utils/toast.server.ts';
 import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
-import { parseFormData, useForm } from '@rvf/react';
-import { validationError } from '@rvf/react-router';
+import { validationError, parseFormData, useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setProfileId } from '~/cookies/profile-id.server';
 
 export const Schema = z
-  .object({ name: NameSchema, schoolIds: z.array(z.string()).min(1) })
+  .object({ name: NameSchema, schoolId: z.string() })
   .and(PasswordAndConfirmPasswordSchema);
 
 async function requireInvitation(request: Request) {
@@ -88,9 +87,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       organization: { connect: { id: organizationId } },
       teacherProfile: {
-        create: {
-          schools: { connect: data.schoolIds.map((id) => ({ id })) },
-        },
+        create: { schools: { connect: [{ id: data.schoolId }] } },
       },
     },
   });
@@ -137,9 +134,10 @@ export default function Route() {
 
   const form = useForm({
     schema: Schema,
+    method: 'POST',
     defaultValues: {
       name: '',
-      schoolIds: [],
+      schoolId: '',
       password: '',
       confirmPassword: '',
     },
@@ -163,7 +161,7 @@ export default function Route() {
           autoComplete="name"
         />
         <FormSelect
-          scope={form.scope('schoolIds')}
+          scope={form.scope('schoolId')}
           label="School"
           autoComplete="school"
           options={data.schools.map((school) => ({
