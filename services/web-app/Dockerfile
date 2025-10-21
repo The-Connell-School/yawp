@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package.json bun.lockb ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
-RUN bun install --frozen-lockfile
+RUN bun install
 RUN bun prisma:generate
 RUN bun web-app:build
 
