@@ -182,6 +182,8 @@ function Document({
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
 
+  // TODOD: remove this later
+
   useEffect(() => {
     function createSecureLoginMethod() {
       // @ts-expect-error window is not typed
