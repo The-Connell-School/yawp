@@ -22,6 +22,7 @@ COPY --from=build /app/services/web-app/package.json ./services/web-app/package.
 COPY --from=build /app/services/web-app/start.sh ./services/web-app/start.sh
 COPY --from=build /app/packages/prisma ./packages/prisma
 RUN bun install --production --ignore-scripts
+RUN bun prisma:generate
 RUN chmod +x services/web-app/start.sh
 EXPOSE 8080
 CMD ["bash", "services/web-app/start.sh"]
