@@ -14,8 +14,6 @@ import {
   Check,
   ListOrderedIcon,
   QuoteIcon,
-  Undo2Icon,
-  Redo2Icon,
   Palette,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
