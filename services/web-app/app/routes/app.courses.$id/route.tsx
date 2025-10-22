@@ -129,10 +129,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     ? await getBase64Audio(firstInstruction.prompt, '1.5')
     : null;
 
-  const studentProfile = await prisma.studentProfile.findUniqueOrThrow({
+  let studentProfile = await prisma.studentProfile.findUnique({
     where: { profileId: profile.id },
     include: { classes: true },
   });
+
+  if (!studentProfile) {
+    studentProfile = await prisma.studentProfile.create({
+      data: { profileId: profile.id },
+      include: { classes: true },
+    });
+  }
 
   const [doc] = await Promise.all([
     prisma.document.create({
