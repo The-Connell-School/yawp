@@ -36,6 +36,7 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
+import posthog from 'posthog-js';
 
 type Props = {
   docId: string;
@@ -200,12 +201,21 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
   }, [messages.length]);
 
   useEffect(() => {
-    if (speechEnabled && tutorResponseFetcher.data?.audio?.length) {
-      playBase64StringAudio(tutorResponseFetcher.data!.audio!);
-      audioControls.setIsPlaying(true);
+    if (speechEnabled && audioFetcher.data?.audio) {
+      try {
+        playBase64StringAudio(audioFetcher.data.audio);
+        audioControls.setIsPlaying(true);
+      } catch (error) {
+        posthog.capture('audio_error', {
+          error: error instanceof Error ? error.message : String(error),
+          audio: audioFetcher.data.audio,
+          cmsId: cms.id,
+        });
+        console.error(error);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutorResponseFetcher.data, speechEnabled]);
+  }, [audioFetcher.data, speechEnabled]);
 
   useEffect(() => {
     if (shouldPlayAudio) {
@@ -220,14 +230,6 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shouldPlayAudio, navigate]);
-
-  useEffect(() => {
-    if (audioFetcher.data?.audio) {
-      playBase64StringAudio(audioFetcher.data.audio);
-      audioControls.setIsPlaying(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioFetcher.data]);
 
   const handleReset = () => {
     setShowResetConfirmation(true);
