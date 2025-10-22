@@ -78,6 +78,20 @@ export async function action({ request }: ActionFunctionArgs) {
     metadata: JSON.stringify({ schoolId: school?.id, klassId: klass?.id }),
   };
 
+  // Check for existing invitation and delete if found
+  const existingInvitation = await prisma.invitation.findFirst({
+    where: {
+      target,
+      type,
+    },
+  });
+
+  if (existingInvitation) {
+    await prisma.invitation.delete({
+      where: { id: existingInvitation.id },
+    });
+  }
+
   await prisma.invitation.create({ data: verificationData });
 
   const response = await sendEmail({
