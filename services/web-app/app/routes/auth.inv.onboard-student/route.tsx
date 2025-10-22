@@ -184,6 +184,7 @@ export default function Route() {
   const form = useForm({
     schema: Schema,
     method: 'POST',
+    submitSource: 'state',
     defaultValues: {
       name: '',
       schoolYear: showSchoolYearSelect ? '<select>' : schoolYearOptions[0],
@@ -198,6 +199,8 @@ export default function Route() {
   // Watch form values for dynamic filtering
   const selectedSchoolYear = form.value('schoolYear');
   const selectedTeacherId = form.value('teacherId');
+  const selectedGrade = form.value('grade');
+  const selectedPeriod = form.value('period');
 
   // Filter classes based on selected teacher and school year
   const filteredClasses = data.classes.filter((klass) => {
@@ -222,21 +225,42 @@ export default function Route() {
   const showPeriodSelect = periodOptions.length > 1;
   const canSelectGradeOrPeriod = selectedTeacherId !== '<select>';
 
-  // Auto-fill grade and period when teacher is selected and there's only one option
+  // Auto-fill grade and period when there's only one option
   useEffect(() => {
     if (canSelectGradeOrPeriod) {
-      if (gradeOptions.length === 1) {
+      // Set grade if only one option and not already set
+      if (gradeOptions.length === 1 && selectedGrade === '<select>') {
         form.setValue('grade', gradeOptions[0]);
       }
-      if (periodOptions.length === 1) {
+      // Set period if only one option and not already set
+      if (periodOptions.length === 1 && selectedPeriod === '<select>') {
         form.setValue('period', periodOptions[0]);
+      }
+      // Reset if current selection is no longer valid
+      if (gradeOptions.length > 0 && !gradeOptions.includes(selectedGrade)) {
+        form.setValue(
+          'grade',
+          gradeOptions.length === 1 ? gradeOptions[0] : '<select>'
+        );
+      }
+      if (periodOptions.length > 0 && !periodOptions.includes(selectedPeriod)) {
+        form.setValue(
+          'period',
+          periodOptions.length === 1 ? periodOptions[0] : '<select>'
+        );
       }
     } else {
       // Reset grade and period when teacher is not selected
-      form.setValue('grade', '<select>');
-      form.setValue('period', '<select>');
+      if (selectedGrade !== '<select>') form.setValue('grade', '<select>');
+      if (selectedPeriod !== '<select>') form.setValue('period', '<select>');
     }
-  }, [canSelectGradeOrPeriod, gradeOptions, periodOptions]);
+  }, [
+    canSelectGradeOrPeriod,
+    gradeOptions.join(','),
+    periodOptions.join(','),
+    selectedGrade,
+    selectedPeriod,
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-lg px-2 py-20">
