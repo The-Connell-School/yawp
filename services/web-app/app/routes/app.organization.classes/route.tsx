@@ -127,65 +127,75 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const [classes, totalCount, schools, teachers] = await Promise.all([
-    prisma.class.findMany({
-      where,
-      include: {
-        school: true,
-        teachers: {
-          include: {
-            profile: {
-              include: {
-                user: true,
+  const [classes, totalCount, schools, teachers, studentCourses] =
+    await Promise.all([
+      prisma.class.findMany({
+        where,
+        include: {
+          school: true,
+          teachers: {
+            include: {
+              profile: {
+                include: {
+                  user: true,
+                },
               },
             },
           },
-        },
-        _count: {
-          select: {
-            students: true,
-            teachers: true,
+          allowedStudentCourses: {
+            include: {
+              studentCourse: true,
+            },
+          },
+          _count: {
+            select: {
+              students: true,
+              teachers: true,
+            },
           },
         },
-      },
-      orderBy: { [sort]: direction },
-      skip,
-      take,
-    }),
-    prisma.class.count({ where }),
-    prisma.school.findMany({
-      where: { organizationId: profile.organization.id },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.teacherProfile.findMany({
-      where: {
-        profile: {
-          organizationId: profile.organization.id,
+        orderBy: { [sort]: direction },
+        skip,
+        take,
+      }),
+      prisma.class.count({ where }),
+      prisma.school.findMany({
+        where: { organizationId: profile.organization.id },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.teacherProfile.findMany({
+        where: {
+          profile: {
+            organizationId: profile.organization.id,
+          },
+          isActive: true,
         },
-        isActive: true,
-      },
-      include: {
-        profile: {
-          include: {
-            user: true,
+        include: {
+          profile: {
+            include: {
+              user: true,
+            },
           },
         },
-      },
-      orderBy: {
-        profile: {
-          user: {
-            name: 'asc',
+        orderBy: {
+          profile: {
+            user: {
+              name: 'asc',
+            },
           },
         },
-      },
-    }),
-  ]);
+      }),
+      prisma.studentCourse.findMany({
+        orderBy: { position: 'asc' },
+      }),
+    ]);
 
   return {
     classes,
     totalCount,
     schools,
     teachers,
+    studentCourses,
     table: { sort, direction, skip, take },
     q,
   };
@@ -245,6 +255,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = formData.get('period') as string;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
+    const studentCourseIds = formData.getAll('studentCourseIds') as string[];
 
     if (!schoolId || !schoolYear || !grade || !period) {
       return dataResponse(
@@ -294,6 +305,11 @@ export async function action({ request }: ActionFunctionArgs) {
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
           },
+          allowedStudentCourses: {
+            create: studentCourseIds.map((studentCourseId) => ({
+              studentCourseId,
+            })),
+          },
         },
       });
 
@@ -329,6 +345,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = formData.get('period') as string;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
+    const studentCourseIds = formData.getAll('studentCourseIds') as string[];
 
     if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
       return dataResponse(
@@ -375,6 +392,12 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
+      // First, delete existing student course associations
+      await prisma.classStudentCourse.deleteMany({
+        where: { classId },
+      });
+
+      // Then update the class with new data
       await prisma.class.update({
         where: { id: classId },
         data: {
@@ -387,6 +410,11 @@ export async function action({ request }: ActionFunctionArgs) {
           code,
           teachers: {
             set: teacherIds.map((id) => ({ id })),
+          },
+          allowedStudentCourses: {
+            create: studentCourseIds.map((studentCourseId) => ({
+              studentCourseId,
+            })),
           },
         },
       });
@@ -506,7 +534,7 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, table, q } =
+  const { classes, totalCount, schools, teachers, studentCourses, table, q } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -796,6 +824,7 @@ export default function OrganizationClassesRoute() {
         duplicatingClass={duplicatingClass}
         schools={schools}
         teachers={teachers}
+        studentCourses={studentCourses}
       />
     </div>
   );
@@ -808,6 +837,7 @@ function ClassSheet({
   duplicatingClass,
   schools,
   teachers,
+  studentCourses,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -815,6 +845,7 @@ function ClassSheet({
   duplicatingClass: any | null;
   schools: any[];
   teachers: any[];
+  studentCourses: any[];
 }) {
   // Use a key that changes to reset fetcher when switching between create/edit/duplicate
   const fetcherKey = editingClass
@@ -829,6 +860,9 @@ function ClassSheet({
   const [period, setPeriod] = useState('');
   const [code, setCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [selectedStudentCourses, setSelectedStudentCourses] = useState<
+    string[]
+  >([]);
 
   // Reset form when editingClass or duplicatingClass changes or sheet opens/closes
   useEffect(() => {
@@ -843,6 +877,11 @@ function ClassSheet({
         (duplicatingClass ? generateClassCode() : generateClassCode())
     );
     setSelectedTeachers(sourceClass?.teachers?.map((t: any) => t.id) || []);
+    setSelectedStudentCourses(
+      sourceClass?.allowedStudentCourses?.map(
+        (asc: any) => asc.studentCourse.id
+      ) || []
+    );
   }, [editingClass, duplicatingClass, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -859,6 +898,9 @@ function ClassSheet({
     formData.append('code', code);
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
+    });
+    selectedStudentCourses.forEach((studentCourseId) => {
+      formData.append('studentCourseIds', studentCourseId);
     });
     fetcher.submit(formData, { method: 'POST' });
   };
@@ -1032,6 +1074,56 @@ function ClassSheet({
               {selectedTeachers.length > 0
                 ? `${selectedTeachers.length} teacher${selectedTeachers.length !== 1 ? 's' : ''} selected`
                 : 'Select teachers to assign to this class'}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Student Courses (Optional)</Label>
+            <div className="rounded-md border border-input bg-background">
+              <div className="max-h-[200px] overflow-y-auto p-3 space-y-2">
+                {studentCourses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No student courses available
+                  </p>
+                ) : (
+                  studentCourses.map((course) => (
+                    <div
+                      key={course.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`course-${course.id}`}
+                        checked={selectedStudentCourses.includes(course.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStudentCourses([
+                              ...selectedStudentCourses,
+                              course.id,
+                            ]);
+                          } else {
+                            setSelectedStudentCourses(
+                              selectedStudentCourses.filter(
+                                (id) => id !== course.id
+                              )
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`course-${course.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {course.title}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedStudentCourses.length > 0
+                ? `${selectedStudentCourses.length} course${selectedStudentCourses.length !== 1 ? 's' : ''} selected`
+                : 'Select courses to show for this class (if none selected, all courses will be shown)'}
             </p>
           </div>
 

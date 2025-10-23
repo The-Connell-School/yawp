@@ -9,19 +9,20 @@ datasource db {
 }
 
 model Class {
-  id         String           @id @default(cuid())
-  createdAt  DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime         @default(now()) @db.Timestamptz(6)
-  code       String           @unique
-  schoolYear String           @default("2024-2025")
-  period     String
-  grade      String
-  isArchived Boolean          @default(false)
-  students   StudentProfile[]
-  teachers   TeacherProfile[]
-  schoolId   String
-  school     School           @relation(fields: [schoolId], references: [id])
-  documents  Document[]
+  id                    String               @id @default(cuid())
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime             @default(now()) @db.Timestamptz(6)
+  code                  String               @unique
+  schoolYear            String               @default("2024-2025")
+  period                String
+  grade                 String
+  isArchived            Boolean              @default(false)
+  students              StudentProfile[]
+  teachers              TeacherProfile[]
+  schoolId              String
+  school                School               @relation(fields: [schoolId], references: [id])
+  documents             Document[]
+  allowedStudentCourses ClassStudentCourse[]
 
   @@unique([schoolId, schoolYear, period, grade])
 }
@@ -35,6 +36,7 @@ model StudentCourse {
   position             Int
   image                StudentCourseImage?
   studentCourseModules StudentCourseModule[]
+  allowedInClasses     ClassStudentCourse[]
 }
 
 model StudentCourseImage {
@@ -388,4 +390,15 @@ model TeacherCourseModuleSession {
   teacherProfile        TeacherProfile      @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
 
   @@unique([teacherCourseModuleId, teacherProfileId])
+}
+
+model ClassStudentCourse {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  classId         String
+  class           Class         @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentCourseId String
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentCourseId])
 }

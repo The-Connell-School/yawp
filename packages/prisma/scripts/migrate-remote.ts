@@ -23,11 +23,10 @@ const DB_USER = process.env.PROD_DB_USER;
 const DB_PASSWORD = process.env.PROD_DB_PASSWORD;
 const SSH_HOST = `ec2-user@${process.env.PROD_SSH_HOST}`;
 const DB_HOST = process.env.PROD_DB_HOST;
+const SSH_KEY_PATH = process.env.PROD_SSH_KEY_PATH;
 
-const SSH_KEY_PATH = join(homedir(), '.ssh', 'yawp-production-bastion');
-
-if (!existsSync(SSH_KEY_PATH)) {
-  console.error(`SSH key not found at ${SSH_KEY_PATH}`);
+if (!SSH_KEY_PATH) {
+  console.error('Error: PROD_SSH_KEY_PATH is not set');
   process.exit(1);
 }
 

@@ -31,6 +31,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/enter-code');
   }
 
+  // Determine which student courses to show
+  let allowedCourseIds: string[] | null = null;
+  if (profile.studentProfile) {
+    const studentClasses = await prisma.class.findMany({
+      where: {
+        students: { some: { id: profile.studentProfile.id } },
+      },
+      include: {
+        allowedStudentCourses: {
+          select: {
+            studentCourseId: true,
+          },
+        },
+      },
+    });
+
+    // Collect all allowed course IDs from all classes
+    const courseIdSet = new Set<string>();
+    studentClasses.forEach((cls) => {
+      cls.allowedStudentCourses.forEach((asc) => {
+        courseIdSet.add(asc.studentCourseId);
+      });
+    });
+
+    // If we found specific courses, use them; otherwise show all (fallback)
+    if (courseIdSet.size > 0) {
+      allowedCourseIds = Array.from(courseIdSet);
+    }
+  }
+
   const [
     courses,
     documents,
@@ -41,7 +71,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherSchoolCount,
   ] = await Promise.all([
     prisma.studentCourse.findMany({
+      where: allowedCourseIds ? { id: { in: allowedCourseIds } } : undefined,
       select: { image: { select: { id: true } }, id: true, title: true },
+      orderBy: { position: 'asc' },
     }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
