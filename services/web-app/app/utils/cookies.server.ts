@@ -239,3 +239,58 @@ export async function setOrganizationClassesTableCookie(
   const mergedFilters = { ...currentFilters, ...filters };
   return await organizationClassesTableCookie.serialize(mergedFilters);
 }
+
+// Organization Students Filters
+export type OrganizationStudentsTableKey = 'organization-students-table';
+export type OrganizationStudentsTableCookie = {
+  sort: 'name' | 'email' | 'createdAt';
+  direction: 'asc' | 'desc';
+  skip: number;
+  take: number;
+};
+
+export function getOrganizationStudentsTableCookieValue(
+  key: keyof OrganizationStudentsTableCookie,
+  value: string
+) {
+  if (key === 'skip' || key === 'take') {
+    return Number(value);
+  }
+
+  return value;
+}
+
+export const organizationStudentsTableCookie = createCookie(
+  'organization-students-table',
+  {
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  } as CookieOptions
+);
+
+export async function getOrganizationStudentsTableCookie(
+  request: Request
+): Promise<OrganizationStudentsTableCookie> {
+  const cookie = await organizationStudentsTableCookie.parse(
+    request.headers.get('Cookie')
+  );
+  return (
+    cookie ?? {
+      sort: 'name',
+      direction: 'asc',
+      skip: 0,
+      take: 10,
+    }
+  );
+}
+
+export async function setOrganizationStudentsTableCookie(
+  request: Request,
+  filters: Partial<OrganizationStudentsTableCookie>
+): Promise<string> {
+  const currentFilters = await getOrganizationStudentsTableCookie(request);
+  const mergedFilters = { ...currentFilters, ...filters };
+  return await organizationStudentsTableCookie.serialize(mergedFilters);
+}
