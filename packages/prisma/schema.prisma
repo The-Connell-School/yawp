@@ -16,6 +16,7 @@ model Class {
   schoolYear            String               @default("2024-2025")
   period                String
   grade                 String
+  title                 String?
   isArchived            Boolean              @default(false)
   students              StudentProfile[]
   teachers              TeacherProfile[]
@@ -138,6 +139,7 @@ model Document {
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
+  pasteAlerts                 PasteAlert[]
 }
 
 model DocumentComment {
@@ -214,6 +216,7 @@ model Profile {
   documents                Document[]
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
+  pasteAlerts              PasteAlert[]
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
@@ -401,4 +404,17 @@ model ClassStudentCourse {
   studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
 
   @@unique([classId, studentCourseId])
+}
+
+model PasteAlert {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  textLength Int
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  profileId  String
+  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, createdAt(sort: Desc)])
+  @@index([profileId, createdAt(sort: Desc)])
 }

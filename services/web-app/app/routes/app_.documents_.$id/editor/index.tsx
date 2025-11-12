@@ -93,6 +93,70 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
 
   useEffect(() => {
     if (!editor) return;
+
+    // Track if content was copied from tutor messages
+    const handleCopy = (event: ClipboardEvent) => {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      const range = selection.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+
+      // Check if the selection contains or is within a tutor message element
+      const tutorMessageElement = (
+        container.nodeType === Node.TEXT_NODE
+          ? container.parentElement
+          : (container as Element)
+      )?.closest('[data-tutor-message="true"]');
+
+      if (tutorMessageElement) {
+        // Store flag that content was copied from tutor message
+        sessionStorage.setItem(`tutor-copy-${docId}`, 'true');
+        // Clear flag after 5 seconds to prevent stale flags
+        setTimeout(() => {
+          sessionStorage.removeItem(`tutor-copy-${docId}`);
+        }, 5000);
+      }
+    };
+
+    const handlePaste = (event: ClipboardEvent) => {
+      const pastedText = event.clipboardData?.getData('text/plain') || '';
+      const textLength = pastedText.length;
+
+      // Only detect large pastes if they came from tutor messages
+      const copiedFromTutor =
+        sessionStorage.getItem(`tutor-copy-${docId}`) === 'true';
+
+      if (textLength >= 200 && copiedFromTutor) {
+        // Clear the flag after using it
+        sessionStorage.removeItem(`tutor-copy-${docId}`);
+
+        // Send paste alert to API asynchronously
+        fetch('/api/paste-alert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentId: docId,
+            textLength,
+          }),
+        }).catch((err) => {
+          console.error('Failed to log paste alert:', err);
+        });
+      }
+    };
+
+    // Listen for copy events on the entire document to catch copies from tutor messages
+    document.addEventListener('copy', handleCopy);
+    editor.view.dom.addEventListener('paste', handlePaste);
+
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      editor.view.dom.removeEventListener('paste', handlePaste);
+    };
+  }, [editor, docId]);
+
+  useEffect(() => {
+    if (!editor) return;
     // Toggle classes on marks to reflect hovered/active state from context
     const allMarks = document.querySelectorAll<HTMLElement>('.comment-mark');
     allMarks.forEach((el) => el.classList.remove('focused'));

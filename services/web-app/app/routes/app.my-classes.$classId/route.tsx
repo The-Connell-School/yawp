@@ -11,6 +11,16 @@ import {
   SheetTrigger,
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
+import { Badge } from '~/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '~/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { CaretLeftIcon } from '~/components/icons';
 import { useState } from 'react';
 import { DocumentLink } from '~/components/document-link';
@@ -32,6 +42,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       grade: true,
       period: true,
+      title: true,
       school: { select: { name: true } },
       students: {
         select: {
@@ -70,12 +81,50 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               document: { select: { title: true } },
             },
           },
+          _count: {
+            select: {
+              pasteAlerts: true,
+            },
+          },
         },
       },
     },
   });
 
-  return dataResponse({ klass, profiles });
+  // Get recent paste alerts for this class
+  const pasteAlerts = await prisma.pasteAlert.findMany({
+    where: {
+      document: { classId },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      textLength: true,
+      document: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+      profile: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 50, // Limit to most recent 50 alerts
+  });
+
+  return dataResponse({ klass, profiles, pasteAlerts });
 }
 
 export default function ClassDetailRoute() {
@@ -98,6 +147,9 @@ export default function ClassDetailRoute() {
             <h2>
               Grade {data.klass.grade} • Period {data.klass.period}
             </h2>
+            {data.klass.title && (
+              <p className="mt-1 font-medium">{data.klass.title}</p>
+            )}
             {data.klass.school?.name ? (
               <p className="mt-1 text-muted-foreground">
                 {data.klass.school.name}
@@ -108,80 +160,140 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="mb-4">
           <Button asChild variant="outline">
-            <Link to="/app/my-classes" className="w-fit my-4">
+            <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
-          <h3 className="text-foreground/80">{students.length} students</h3>
         </div>
-        {students.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-            <p>No students in this class yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {students.map((s) => (
-              <Sheet key={s.id}>
-                <SheetTrigger asChild>
-                  <button
-                    className="flex w-full items-center justify-between rounded-lg border bg-muted p-3 text-left hover:shadow"
-                    onClick={() => setSelectedProfileId(s.profile.id)}
-                  >
-                    <div className="flex min-w-0 flex-col">
-                      <span className="font-medium truncate">
-                        {s.profile.user.name ?? 'Unnamed Student'}
-                      </span>
-                      <span className="text-sm text-muted-foreground truncate">
-                        {s.profile.user.email}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">View</span>
-                  </button>
-                </SheetTrigger>
-                <SheetContent className="w-full sm:max-w-lg">
-                  <SheetHeader>
-                    <SheetTitle>Student Details</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-1">
-                        Student
-                      </div>
-                      <div className="font-medium">
-                        {s.profile.user.name ?? 'Unnamed Student'}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {s.profile.user.email}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground mb-1">
-                        Documents
-                      </div>
-                      {selectedDocs.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">
-                          No documents yet.
+
+        <Tabs defaultValue="students" className="w-full">
+          <TabsList>
+            <TabsTrigger value="students">
+              Students ({students.length})
+            </TabsTrigger>
+            <TabsTrigger value="paste-activity">
+              Copy/Paste Activity ({data.pasteAlerts.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="students" className="mt-4">
+            {students.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                <p>No students in this class yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {students.map((s) => (
+                  <Sheet key={s.id}>
+                    <SheetTrigger asChild>
+                      <button
+                        className="flex w-full items-center justify-between rounded-lg border bg-muted p-3 text-left hover:shadow"
+                        onClick={() => setSelectedProfileId(s.profile.id)}
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span className="font-medium truncate">
+                            {s.profile.user.name ?? 'Unnamed Student'}
+                          </span>
+                          <span className="text-sm text-muted-foreground truncate">
+                            {s.profile.user.email}
+                          </span>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-1 gap-2">
-                          {selectedDocs.map((doc) => (
-                            <DocumentLink
-                              key={doc.id}
-                              doc={doc as any}
-                              exitTo={`/app/my-classes/${data.klass.id}`}
-                            />
-                          ))}
+                        <span className="text-xs text-muted-foreground">
+                          View
+                        </span>
+                      </button>
+                    </SheetTrigger>
+                    <SheetContent className="w-full sm:max-w-lg">
+                      <SheetHeader>
+                        <SheetTitle>Student Details</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-4 space-y-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">
+                            Student
+                          </div>
+                          <div className="font-medium">
+                            {s.profile.user.name ?? 'Unnamed Student'}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {s.profile.user.email}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </SheetContent>
-              </Sheet>
-            ))}
-          </div>
-        )}
+                        <div>
+                          <div className="text-sm text-muted-foreground mb-1">
+                            Documents
+                          </div>
+                          {selectedDocs.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">
+                              No documents yet.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-2">
+                              {selectedDocs.map((doc) => (
+                                <DocumentLink
+                                  key={doc.id}
+                                  doc={doc as any}
+                                  exitTo={`/app/my-classes/${data.klass.id}`}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="paste-activity" className="mt-4">
+            {data.pasteAlerts.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                <p>No copy/paste activity detected yet.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Document</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead className="text-right">Characters</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.pasteAlerts.map((alert) => (
+                    <TableRow key={alert.id}>
+                      <TableCell className="font-medium">
+                        {alert.profile.user.name || alert.profile.user.email}
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          to={`/app/documents/${alert.document.id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {alert.document.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(alert.createdAt).toLocaleDateString()}{' '}
+                        {new Date(alert.createdAt).toLocaleTimeString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="secondary">
+                          {alert.textLength.toLocaleString()}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </section>
   );

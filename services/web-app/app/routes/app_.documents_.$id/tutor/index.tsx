@@ -425,7 +425,12 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
                   {timeAgo(new Date(message.createdAt))}
                 </p>
               </div>
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <p
+                className="whitespace-pre-wrap"
+                data-tutor-message={message.agent === 'assistant' ? 'true' : undefined}
+              >
+                {message.content}
+              </p>
             </div>
           ))}
           {tutorResponseFetcher.state !== 'idle' && optimistic ? (

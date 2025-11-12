@@ -23,6 +23,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         id: true,
         grade: true,
         period: true,
+        title: true,
         school: { select: { id: true, name: true } },
         _count: { select: { students: true, teachers: true } },
       },
@@ -116,6 +117,11 @@ export default function MyClassesRoute() {
                       {klass._count.students}
                     </p>
                   </div>
+                  {klass.title && (
+                    <p className="text-sm font-medium mt-1">
+                      {klass.title}
+                    </p>
+                  )}
                 </Link>
               ))}
           </div>

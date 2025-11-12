@@ -64,6 +64,14 @@ import {
 import { generateClassCode } from '~/utils/class';
 
 const COLUMNS: CookieColumns = {
+  school: {
+    label: 'School',
+    formatter: (cls) => cls.school.name,
+  },
+  title: {
+    label: 'Class Title',
+    value: 'title',
+  },
   code: {
     label: 'Code',
     value: 'code',
@@ -79,10 +87,6 @@ const COLUMNS: CookieColumns = {
   period: {
     label: 'Period',
     value: 'period',
-  },
-  school: {
-    label: 'School',
-    formatter: (cls) => cls.school.name,
   },
   studentCount: {
     label: 'Students',
@@ -117,6 +121,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             { schoolYear: { contains: q, mode: 'insensitive' as const } },
             { grade: { contains: q, mode: 'insensitive' as const } },
             { period: { contains: q, mode: 'insensitive' as const } },
+            { title: { contains: q, mode: 'insensitive' as const } },
             {
               school: {
                 name: { contains: q, mode: 'insensitive' as const },
@@ -253,6 +258,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const schoolYear = formData.get('schoolYear') as string;
     const grade = formData.get('grade') as string;
     const period = formData.get('period') as string;
+    const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
     const studentCourseIds = formData.getAll('studentCourseIds') as string[];
@@ -301,6 +307,7 @@ export async function action({ request }: ActionFunctionArgs) {
           schoolYear,
           grade,
           period,
+          title,
           code,
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
@@ -343,6 +350,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const schoolYear = formData.get('schoolYear') as string;
     const grade = formData.get('grade') as string;
     const period = formData.get('period') as string;
+    const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
     const teacherIds = formData.getAll('teacherIds') as string[];
     const studentCourseIds = formData.getAll('studentCourseIds') as string[];
@@ -407,6 +415,7 @@ export async function action({ request }: ActionFunctionArgs) {
           schoolYear,
           grade,
           period,
+          title,
           code,
           teachers: {
             set: teacherIds.map((id) => ({ id })),
@@ -751,6 +760,18 @@ export default function OrganizationClassesRoute() {
                             onCheckedChange={() => handleSelect(cls.id)}
                           />
                         </TableCell>
+                        <TableCell>{cls.school.name}</TableCell>
+                        <TableCell>
+                          {cls.title ? (
+                            <span className="text-muted-foreground">
+                              {cls.title}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50 italic">
+                              —
+                            </span>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center">
                             <TooltipIdCopy id={cls.id}>
@@ -764,7 +785,6 @@ export default function OrganizationClassesRoute() {
                         <TableCell>{cls.schoolYear}</TableCell>
                         <TableCell>{cls.grade}</TableCell>
                         <TableCell>{cls.period}</TableCell>
-                        <TableCell>{cls.school.name}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">
                             {cls._count.students}
@@ -858,6 +878,7 @@ function ClassSheet({
   const [schoolYear, setSchoolYear] = useState('');
   const [grade, setGrade] = useState('');
   const [period, setPeriod] = useState('');
+  const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [selectedStudentCourses, setSelectedStudentCourses] = useState<
@@ -871,6 +892,7 @@ function ClassSheet({
     setSchoolYear(sourceClass?.schoolYear || '');
     setGrade(sourceClass?.grade || '');
     setPeriod(sourceClass?.period || '');
+    setTitle(sourceClass?.title || '');
     // Generate new code for duplicates, use existing for edits
     setCode(
       editingClass?.code ||
@@ -895,6 +917,7 @@ function ClassSheet({
     formData.append('schoolYear', schoolYear);
     formData.append('grade', grade);
     formData.append('period', period);
+    formData.append('title', title);
     formData.append('code', code);
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
@@ -1026,6 +1049,19 @@ function ClassSheet({
                 <SelectItem value="8">8</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="title">Class Title (Optional)</Label>
+            <Input
+              id="title"
+              placeholder="e.g., AP English 11, British Lit"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional descriptive title for the class
+            </p>
           </div>
 
           <div className="space-y-2">

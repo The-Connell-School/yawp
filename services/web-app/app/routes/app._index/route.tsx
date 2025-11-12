@@ -144,6 +144,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             id: true,
             grade: true,
             period: true,
+            title: true,
             school: { select: { name: true } },
             _count: { select: { students: true, teachers: true } },
           },
@@ -251,6 +252,9 @@ export default function AppRoute() {
                         Grade {klass.grade} • Period {klass.period}
                       </h4>
                     </div>
+                    {klass.title && (
+                      <p className="text-sm font-medium mt-1">{klass.title}</p>
+                    )}
                     {(data.teacherSchoolCount ?? 0) === 1 ? null : (
                       <p className="text-sm text-muted-foreground mt-1">
                         {klass.school?.name ?? 'School'}
