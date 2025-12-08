@@ -427,7 +427,9 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
               </div>
               <p
                 className="whitespace-pre-wrap"
-                data-tutor-message={message.agent === 'assistant' ? 'true' : undefined}
+                data-tutor-message={
+                  message.agent === 'assistant' ? 'true' : undefined
+                }
               >
                 {message.content}
               </p>
@@ -453,22 +455,16 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
           )}
         >
           <div className="mb-4 text-center text-sm text-muted-foreground">
-            {userIsAdmin || userIsTeacher ? (
-              <>
-                This step has been completed. Click next to continue <br />
-                or
-                <Button
-                  variant="link"
-                  onClick={handleReset}
-                  className="h-4 pl-1 pr-0"
-                >
-                  reset back to this point
-                </Button>
-                .
-              </>
-            ) : (
-              'This step has been completed. Click next to continue.'
-            )}
+            This step has been completed. Click next to continue <br />
+            or
+            <Button
+              variant="link"
+              onClick={handleReset}
+              className="h-4 pl-1 pr-0"
+            >
+              reset back to this point
+            </Button>
+            .
           </div>
           <Button
             onClick={() =>
