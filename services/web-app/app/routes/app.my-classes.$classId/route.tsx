@@ -100,6 +100,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       createdAt: true,
       textLength: true,
+      content: true,
       document: {
         select: {
           id: true,
@@ -131,6 +132,9 @@ export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
   console.log(data);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
+    null
+  );
+  const [selectedPasteContent, setSelectedPasteContent] = useState<string | null>(
     null
   );
   const students = data.klass.students;
@@ -262,39 +266,73 @@ export default function ClassDetailRoute() {
                     <TableHead>Document</TableHead>
                     <TableHead>Date & Time</TableHead>
                     <TableHead className="text-right">Characters</TableHead>
+                    <TableHead>Content</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.pasteAlerts.map((alert) => (
-                    <TableRow key={alert.id}>
-                      <TableCell className="font-medium">
-                        {alert.profile.user.name || alert.profile.user.email}
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          to={`/app/documents/${alert.document.id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {alert.document.title}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(alert.createdAt).toLocaleDateString()}{' '}
-                        {new Date(alert.createdAt).toLocaleTimeString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant="secondary">
-                          {alert.textLength.toLocaleString()}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {data.pasteAlerts.map((alert) => {
+                    const truncatedContent = alert.content
+                      ? alert.content.length > 100
+                        ? alert.content.substring(0, 100) + '...'
+                        : alert.content
+                      : null;
+                    return (
+                      <TableRow key={alert.id}>
+                        <TableCell className="font-medium">
+                          {alert.profile.user.name || alert.profile.user.email}
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            to={`/app/documents/${alert.document.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {alert.document.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(alert.createdAt).toLocaleDateString()}{' '}
+                          {new Date(alert.createdAt).toLocaleTimeString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary">
+                            {alert.textLength.toLocaleString()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {truncatedContent ? (
+                            <button
+                              onClick={() => setSelectedPasteContent(alert.content || null)}
+                              className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
+                              title="Click to view full content"
+                            >
+                              {truncatedContent}
+                            </button>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
           </TabsContent>
         </Tabs>
       </div>
+
+      <Sheet open={selectedPasteContent !== null} onOpenChange={(open) => !open && setSelectedPasteContent(null)}>
+        <SheetContent className="w-full sm:max-w-2xl">
+          <SheetHeader>
+            <SheetTitle>Pasted Content</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 h-[calc(100vh-8rem)] overflow-y-auto">
+            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted p-4 rounded-lg">
+              {selectedPasteContent || ''}
+            </pre>
+          </div>
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }

@@ -410,6 +410,7 @@ model PasteAlert {
   id         String   @id @default(cuid())
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   textLength Int
+  content    String?
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   profileId  String

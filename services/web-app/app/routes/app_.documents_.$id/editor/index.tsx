@@ -138,6 +138,7 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
           body: JSON.stringify({
             documentId: docId,
             textLength,
+            content: pastedText,
           }),
         }).catch((err) => {
           console.error('Failed to log paste alert:', err);

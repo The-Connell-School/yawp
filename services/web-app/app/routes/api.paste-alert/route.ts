@@ -11,7 +11,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const profile = await requireProfile(request, userId);
 
   const body = await request.json();
-  const { documentId, textLength } = body;
+  const { documentId, textLength, content } = body;
 
   if (!documentId || typeof textLength !== 'number') {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
@@ -35,6 +35,7 @@ export async function action({ request }: ActionFunctionArgs) {
       documentId,
       profileId: profile.id,
       textLength,
+      content: content || null,
     },
   });
 
