@@ -140,6 +140,7 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
+  essayGrades                 EssayGrade[]
 }
 
 model DocumentComment {
@@ -217,6 +218,7 @@ model Profile {
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
   pasteAlerts              PasteAlert[]
+  gradesGiven              EssayGrade[]              @relation("GradesGiven")
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
@@ -418,4 +420,50 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+model EssayGrade {
+  id              String               @id @default(cuid())
+  createdAt       DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime             @default(now()) @db.Timestamptz(6)
+  documentId      String
+  document        Document             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  graderProfileId String
+  graderProfile   Profile              @relation("GradesGiven", fields: [graderProfileId], references: [id], onDelete: Cascade)
+  graderType      String // "teacher" or "student" (for self-assessment)
+  essayHtml       String // Snapshot of essay HTML at grading time
+  essayText       String // Snapshot of essay text at grading time
+  overallFeedback String? // General comments
+  categoryScores  EssayCategoryScore[]
+  highlights      EssayHighlight[]
+
+  @@index([documentId, createdAt(sort: Desc)])
+  @@index([graderProfileId])
+}
+
+model EssayCategoryScore {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  essayGradeId String
+  essayGrade   EssayGrade @relation(fields: [essayGradeId], references: [id], onDelete: Cascade)
+  category     String // "thesis", "organization", "evidence", "voice", "grammar"
+  score        Int // 1-4 scale
+  feedback     String // AI-generated category-specific feedback
+
+  @@index([essayGradeId])
+}
+
+model EssayHighlight {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  essayGradeId String
+  essayGrade   EssayGrade @relation(fields: [essayGradeId], references: [id], onDelete: Cascade)
+  highlightId  String // UUID matching the mark ID in TipTap
+  category     String // "thesis", "organization", "evidence", "voice", "grammar"
+  content      String // The highlighted text content
+  feedback     String // Specific feedback for this highlight
+  position     Int // Order in the document (for sorting)
+
+  @@index([essayGradeId, category])
+  @@index([highlightId])
 }
