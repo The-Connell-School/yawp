@@ -9,6 +9,7 @@ import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
+import { EssayHighlight, EssayHighlightExtension } from './extensions/essay-highlight';
 import { LineHeight } from './extensions/line-height';
 
 const debounce = (func: Function, delay: number) => {
@@ -41,6 +42,8 @@ const extensions = [
   }),
   Comment,
   CommentExtension,
+  EssayHighlight,
+  EssayHighlightExtension,
 ];
 
 type Props = {
