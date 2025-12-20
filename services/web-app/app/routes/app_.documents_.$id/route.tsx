@@ -6,12 +6,13 @@ import {
   useLoaderData,
   useNavigate,
   useSearchParams,
+  useRevalidator,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, GraduationCap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
-import { button } from '~/components/ui/button';
+import { Button, button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import useBreakpoint from '~/hooks/useBreakpoint';
@@ -24,6 +25,7 @@ import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
+import { GradingDialog } from './grading/grading-dialog';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -162,8 +164,10 @@ export default function Route() {
   const user = useUser();
   const fetcher = useFetcher();
   const navigate = useNavigate();
+  const revalidator = useRevalidator();
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
+  const [gradingDialogOpen, setGradingDialogOpen] = useState(false);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') ?? 'tutor';
@@ -226,7 +230,17 @@ export default function Route() {
                 : `Viewing work by ${data.doc.profile.user.name}`}
             </Badge>
           ) : null}
-          <div className="ml-auto flex w-[135px] items-center gap-4">
+          {isViewingAsTeacher && !isMobile && (
+            <Button
+              size="sm"
+              onClick={() => setGradingDialogOpen(true)}
+              className="ml-auto"
+            >
+              <GraduationCap className="mr-2 h-4 w-4" />
+              Grade Essay
+            </Button>
+          )}
+          <div className={`${isViewingAsTeacher ? '' : 'ml-auto'} flex w-[135px] items-center gap-4`}
             {isSaving ? (
               <div className="flex items-center gap-1 text-muted-foreground/70">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -278,6 +292,19 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
+
+      {/* Grading Dialog */}
+      <GradingDialog
+        open={gradingDialogOpen}
+        onOpenChange={setGradingDialogOpen}
+        documentId={data.doc.id}
+        essayText={data.doc.text || ''}
+        essayHtml={data.doc.html || ''}
+        onGradeCreated={() => {
+          // Revalidate to fetch updated document with grades
+          revalidator.revalidate();
+        }}
+      />
     </>
   );
 }
