@@ -7,11 +7,12 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
-import { button } from '~/components/ui/button';
+import { Button, button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import useBreakpoint from '~/hooks/useBreakpoint';
@@ -69,6 +70,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
+      submittedAt: true,
+      submittedSnapshotId: true,
       versions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
       studentCourseModuleSessions: {
@@ -161,6 +164,7 @@ export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
+  const submitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
@@ -169,6 +173,8 @@ export default function Route() {
   const tab = searchParams.get('tab') ?? 'tutor';
   const exitTo = searchParams.get('exitTo');
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
+  const isSubmitting = submitFetcher.state !== 'idle';
+  const isSubmitted = data.doc.submittedAt !== null;
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -184,6 +190,16 @@ export default function Route() {
       navigate(`${pathname}?${searchParams}`, { replace: true });
     }
   }, [data.shouldSaveVersion, navigate]);
+
+  useEffect(() => {
+    if (submitFetcher.state === 'idle' && submitFetcher.data) {
+      if (submitFetcher.data.success) {
+        toast.success(submitFetcher.data.message || 'Essay submitted successfully!');
+        // Reload the page to reflect the new submission status
+        navigate(window.location.pathname + window.location.search, { replace: true });
+      }
+    }
+  }, [submitFetcher.state, submitFetcher.data, navigate]);
 
   return (
     <>
@@ -219,12 +235,54 @@ export default function Route() {
               }
             />
           </div>
+          {!isViewingAsTeacher && (
+            <div className="flex items-center gap-2">
+              {isSubmitted && (
+                <Badge variant="success" className="text-xs">
+                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
+                </Badge>
+              )}
+              <Button
+                size="sm"
+                variant={isSubmitted ? 'outline' : 'default'}
+                disabled={isSubmitting || !data.doc.html || !data.doc.text}
+                onClick={() => {
+                  submitFetcher.submit(
+                    { documentId: data.doc.id },
+                    {
+                      method: 'POST',
+                      action: '/api/domain/submit-document',
+                    }
+                  );
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
           {isViewingAsTeacher ? (
-            <Badge variant="info-outlined" className="md:text-md text-xs">
-              {isMobile
-                ? data.doc.profile.user.name
-                : `Viewing work by ${data.doc.profile.user.name}`}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="info-outlined" className="md:text-md text-xs">
+                {isMobile
+                  ? data.doc.profile.user.name
+                  : `Viewing work by ${data.doc.profile.user.name}`}
+              </Badge>
+              {isSubmitted && (
+                <Badge variant="success" className="md:text-md text-xs">
+                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
+                </Badge>
+              )}
+            </div>
           ) : null}
           <div className="ml-auto flex w-[135px] items-center gap-4">
             {isSaving ? (

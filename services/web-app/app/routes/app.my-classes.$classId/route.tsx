@@ -125,7 +125,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     take: 50, // Limit to most recent 50 alerts
   });
 
-  return dataResponse({ klass, profiles, pasteAlerts });
+  // Get submitted documents for this class
+  const submittedDocuments = await prisma.document.findMany({
+    where: {
+      classId,
+      submittedAt: { not: null },
+    },
+    select: {
+      id: true,
+      title: true,
+      submittedAt: true,
+      submittedSnapshotId: true,
+      profile: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      studentCourseModuleSessions: {
+        select: {
+          studentCourseModule: { select: { title: true } },
+        },
+        take: 1,
+      },
+    },
+    orderBy: {
+      submittedAt: 'desc',
+    },
+  });
+
+  return dataResponse({ klass, profiles, pasteAlerts, submittedDocuments });
 }
 
 export default function ClassDetailRoute() {
@@ -176,6 +210,9 @@ export default function ClassDetailRoute() {
           <TabsList>
             <TabsTrigger value="students">
               Students ({students.length})
+            </TabsTrigger>
+            <TabsTrigger value="submitted-papers">
+              Submitted Papers ({data.submittedDocuments.length})
             </TabsTrigger>
             <TabsTrigger value="paste-activity">
               Copy/Paste Activity ({data.pasteAlerts.length})
@@ -250,6 +287,56 @@ export default function ClassDetailRoute() {
                   </Sheet>
                 ))}
               </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="submitted-papers" className="mt-4">
+            {data.submittedDocuments.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                <p>No submitted essays yet.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Essay Title</TableHead>
+                    <TableHead>Course Module</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.submittedDocuments.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium">
+                        {doc.profile.user.name || doc.profile.user.email}
+                      </TableCell>
+                      <TableCell>{doc.title}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                          .title || '—'}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
+                        {new Date(doc.submittedAt!).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Button asChild size="sm" variant="outline">
+                          <Link
+                            to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                          >
+                            View Essay
+                          </Link>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </TabsContent>
 

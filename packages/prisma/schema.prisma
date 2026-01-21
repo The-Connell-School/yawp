@@ -131,6 +131,9 @@ model Document {
   title                       String                       @default("Untitled")
   text                        String?
   html                        String?
+  submittedAt                 DateTime?                    @db.Timestamptz(6)
+  submittedSnapshotId         String?
+  submittedSnapshot           DocumentSnapshot?            @relation("DocumentSubmission", fields: [submittedSnapshotId], references: [id], onDelete: SetNull)
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId                   String
   classId                     String?
@@ -174,12 +177,13 @@ model DocumentVersion {
 }
 
 model DocumentSnapshot {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  text       String
-  html       String
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  id                    String     @id @default(cuid())
+  createdAt             DateTime   @default(now()) @db.Timestamptz(6)
+  text                  String
+  html                  String
+  documentId            String
+  document              Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  submittedDocuments    Document[] @relation("DocumentSubmission")
 
   @@index([documentId, createdAt(sort: Desc)])
 }
