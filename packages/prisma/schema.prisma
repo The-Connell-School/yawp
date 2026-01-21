@@ -140,6 +140,7 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
+  grade                       Grade?
 }
 
 model DocumentComment {
@@ -284,6 +285,7 @@ model TeacherProfile {
   teacherCourseModuleSessions TeacherCourseModuleSession[]
   classes                     Class[]
   schools                     School[]
+  grades                      Grade[]
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
@@ -418,4 +420,22 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+model Grade {
+  id                 String          @id @default(cuid())
+  createdAt          DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime        @default(now()) @db.Timestamptz(6)
+  score              Float?
+  maxScore           Float           @default(100)
+  feedback           String?
+  status             String          @default("draft") // 'draft' | 'released'
+  releasedAt         DateTime?       @db.Timestamptz(6)
+  documentId         String          @unique
+  document           Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  teacherProfileId   String
+  teacherProfile     TeacherProfile  @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  @@index([teacherProfileId])
+  @@index([status])
 }
