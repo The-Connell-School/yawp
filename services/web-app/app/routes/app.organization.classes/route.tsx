@@ -132,7 +132,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const [classes, totalCount, schools, teachers, studentCourses] =
+  const [classes, totalCount, schools, teachers, studentCourses, rubrics] =
     await Promise.all([
       prisma.class.findMany({
         where,
@@ -193,6 +193,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       prisma.studentCourse.findMany({
         orderBy: { position: 'asc' },
       }),
+      prisma.rubric.findMany({
+        where: { organizationId: profile.organization.id },
+        orderBy: { name: 'asc' },
+      }),
     ]);
 
   return {
@@ -201,6 +205,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     schools,
     teachers,
     studentCourses,
+    rubrics,
     table: { sort, direction, skip, take },
     q,
   };
@@ -260,6 +265,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = formData.get('period') as string;
     const title = (formData.get('title') as string)?.trim() || null;
     let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const rubricId = (formData.get('rubricId') as string) || null;
     const teacherIds = formData.getAll('teacherIds') as string[];
     const studentCourseIds = formData.getAll('studentCourseIds') as string[];
 
@@ -300,6 +306,17 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
+    // Verify rubric belongs to organization if provided
+    if (rubricId) {
+      const rubric = await prisma.rubric.findFirst({
+        where: { id: rubricId, organizationId: profile.organization.id },
+      });
+
+      if (!rubric) {
+        return dataResponse({ error: 'Invalid rubric' }, { status: 400 });
+      }
+    }
+
     try {
       await prisma.class.create({
         data: {
@@ -309,6 +326,7 @@ export async function action({ request }: ActionFunctionArgs) {
           period,
           title,
           code,
+          rubricId,
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
           },
@@ -352,6 +370,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const period = formData.get('period') as string;
     const title = (formData.get('title') as string)?.trim() || null;
     const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+    const rubricId = (formData.get('rubricId') as string) || null;
     const teacherIds = formData.getAll('teacherIds') as string[];
     const studentCourseIds = formData.getAll('studentCourseIds') as string[];
 
@@ -387,6 +406,17 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Invalid school' }, { status: 400 });
     }
 
+    // Verify rubric belongs to organization if provided
+    if (rubricId) {
+      const rubric = await prisma.rubric.findFirst({
+        where: { id: rubricId, organizationId: profile.organization.id },
+      });
+
+      if (!rubric) {
+        return dataResponse({ error: 'Invalid rubric' }, { status: 400 });
+      }
+    }
+
     // Verify class belongs to organization
     const existingClass = await prisma.class.findFirst({
       where: {
@@ -417,6 +447,7 @@ export async function action({ request }: ActionFunctionArgs) {
           period,
           title,
           code,
+          rubricId,
           teachers: {
             set: teacherIds.map((id) => ({ id })),
           },
@@ -543,7 +574,7 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, studentCourses, table, q } =
+  const { classes, totalCount, schools, teachers, studentCourses, rubrics, table, q } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -845,6 +876,7 @@ export default function OrganizationClassesRoute() {
         schools={schools}
         teachers={teachers}
         studentCourses={studentCourses}
+        rubrics={rubrics}
       />
     </div>
   );
@@ -858,6 +890,7 @@ function ClassSheet({
   schools,
   teachers,
   studentCourses,
+  rubrics,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -866,6 +899,7 @@ function ClassSheet({
   schools: any[];
   teachers: any[];
   studentCourses: any[];
+  rubrics: any[];
 }) {
   // Use a key that changes to reset fetcher when switching between create/edit/duplicate
   const fetcherKey = editingClass
@@ -880,6 +914,7 @@ function ClassSheet({
   const [period, setPeriod] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
+  const [rubricId, setRubricId] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
   const [selectedStudentCourses, setSelectedStudentCourses] = useState<
     string[]
@@ -893,6 +928,7 @@ function ClassSheet({
     setGrade(sourceClass?.grade || '');
     setPeriod(sourceClass?.period || '');
     setTitle(sourceClass?.title || '');
+    setRubricId(sourceClass?.rubricId || '');
     // Generate new code for duplicates, use existing for edits
     setCode(
       editingClass?.code ||
@@ -919,6 +955,9 @@ function ClassSheet({
     formData.append('period', period);
     formData.append('title', title);
     formData.append('code', code);
+    if (rubricId) {
+      formData.append('rubricId', rubricId);
+    }
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });
@@ -1061,6 +1100,26 @@ function ClassSheet({
             />
             <p className="text-xs text-muted-foreground">
               Optional descriptive title for the class
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="rubricId">Grading Rubric (Optional)</Label>
+            <Select value={rubricId} onValueChange={setRubricId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a rubric" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {rubrics.map((rubric) => (
+                  <SelectItem key={rubric.id} value={rubric.id}>
+                    {rubric.name} ({rubric.gradeLevel} - {rubric.feedbackTone})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Select a rubric to customize grading for this class
             </p>
           </div>
 

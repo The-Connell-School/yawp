@@ -9,7 +9,7 @@ import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { Button } from '~/components/ui/button';
-import { BookOpen, Building2, Users, GraduationCap } from 'lucide-react';
+import { BookOpen, Building2, Users, GraduationCap, FileText } from 'lucide-react';
 import {
   requireAdmin,
   requireOwner,
@@ -36,6 +36,11 @@ const tabs = [
     label: 'Students',
     to: '/app/organization/students',
     icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Rubrics',
+    to: '/app/organization/rubrics',
+    icon: <FileText size={16} className="opacity-75 mr-1" />,
   },
 ];
 

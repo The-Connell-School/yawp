@@ -24,6 +24,8 @@ model Class {
   school                School               @relation(fields: [schoolId], references: [id])
   documents             Document[]
   allowedStudentCourses ClassStudentCourse[]
+  rubricId              String?
+  rubric                Rubric?              @relation(fields: [rubricId], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, schoolYear, period, grade])
 }
@@ -204,6 +206,7 @@ model Organization {
   profiles          Profile[]
   invitations       Invitation[]
   schools           School[]
+  rubrics           Rubric[]
 }
 
 model Profile {
@@ -220,6 +223,44 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
+}
+
+enum RubricType {
+  default_yop
+  school_upload
+  custom_pdf
+}
+
+enum GradeLevel {
+  regular
+  honors
+  ap
+}
+
+enum FeedbackTone {
+  gentle
+  moderate
+  brutal
+}
+
+model Rubric {
+  id             String        @id @default(cuid())
+  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @db.Timestamptz(6)
+  name           String
+  description    String?
+  rubricType     RubricType
+  gradeLevel     GradeLevel
+  feedbackTone   FeedbackTone
+  // PDF storage (required for school_upload and custom_pdf types)
+  pdfBlob        Bytes?
+  pdfFileName    String?
+  pdfContentType String?
+  // Organization ownership
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  // Classes using this rubric
+  classes        Class[]
 }
 
 model Password {
