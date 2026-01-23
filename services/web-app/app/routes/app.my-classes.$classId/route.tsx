@@ -22,8 +22,18 @@ import {
 } from '~/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { CaretLeftIcon } from '~/components/icons';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DocumentLink } from '~/components/document-link';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
+import { Checkbox } from '~/components/ui/checkbox';
+import { GradingSheet } from './grading-sheet';
+import { ReleaseGradesSheet } from './release-grades-sheet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -125,7 +135,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     take: 50, // Limit to most recent 50 alerts
   });
 
-  // Get submitted documents for this class
+  // Get submitted documents for this class with grades
   const submittedDocuments = await prisma.document.findMany({
     where: {
       classId,
@@ -153,6 +163,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         take: 1,
       },
+      grade: {
+        select: {
+          id: true,
+          score: true,
+          feedback: true,
+          isReleased: true,
+          releasedAt: true,
+          createdAt: true,
+        },
+      },
     },
     orderBy: {
       submittedAt: 'desc',
@@ -171,7 +191,73 @@ export default function ClassDetailRoute() {
   const [selectedPasteContent, setSelectedPasteContent] = useState<string | null>(
     null
   );
+  const [gradeFilter, setGradeFilter] = useState<'all' | 'graded' | 'non-graded'>('non-graded');
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
+  const [gradingDocuments, setGradingDocuments] = useState<typeof data.submittedDocuments>([]);
+  const [isGradingSheetOpen, setIsGradingSheetOpen] = useState(false);
+  const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] = useState(false);
   const students = data.klass.students;
+
+  // Filter submitted documents based on grading status
+  const filteredDocuments = useMemo(() => {
+    return data.submittedDocuments.filter((doc) => {
+      if (gradeFilter === 'all') return true;
+      if (gradeFilter === 'graded') return doc.grade !== null;
+      if (gradeFilter === 'non-graded') return doc.grade === null;
+      return true;
+    });
+  }, [data.submittedDocuments, gradeFilter]);
+
+  // Get unreleased grades for release functionality
+  const unreleasedGrades = useMemo(() => {
+    return data.submittedDocuments
+      .filter((doc) => doc.grade && !doc.grade.isReleased)
+      .map((doc) => ({
+        id: doc.grade!.id,
+        score: doc.grade!.score,
+        feedback: doc.grade!.feedback,
+        document: {
+          id: doc.id,
+          title: doc.title,
+          profile: doc.profile,
+        },
+      }));
+  }, [data.submittedDocuments]);
+
+  // Toggle document selection
+  const toggleDocumentSelection = (docId: string) => {
+    const newSelection = new Set(selectedDocuments);
+    if (newSelection.has(docId)) {
+      newSelection.delete(docId);
+    } else {
+      newSelection.add(docId);
+    }
+    setSelectedDocuments(newSelection);
+  };
+
+  // Toggle all documents
+  const toggleAllDocuments = () => {
+    if (selectedDocuments.size === filteredDocuments.length) {
+      setSelectedDocuments(new Set());
+    } else {
+      setSelectedDocuments(new Set(filteredDocuments.map(d => d.id)));
+    }
+  };
+
+  // Open grading sheet for selected documents
+  const openGradingSheet = (documentIds: string[]) => {
+    const docs = data.submittedDocuments.filter(d => documentIds.includes(d.id));
+    setGradingDocuments(docs);
+    setIsGradingSheetOpen(true);
+  };
+
+  // Handle successful grading
+  const handleGradingSuccess = () => {
+    setSelectedDocuments(new Set());
+    setGradingDocuments([]);
+    // Reload the page to get updated data
+    window.location.reload();
+  };
 
   const selectedDocs = selectedProfileId
     ? (data.profiles.find((p) => p.id === selectedProfileId)?.documents ?? [])
@@ -296,47 +382,153 @@ export default function ClassDetailRoute() {
                 <p>No submitted essays yet.</p>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Essay Title</TableHead>
-                    <TableHead>Course Module</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.submittedDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium">
-                        {doc.profile.user.name || doc.profile.user.email}
-                      </TableCell>
-                      <TableCell>{doc.title}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                          .title || '—'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
-                        {new Date(doc.submittedAt!).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                          >
-                            View Essay
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="grade-filter" className="text-sm font-medium">
+                      Filter:
+                    </label>
+                    <Select
+                      value={gradeFilter}
+                      onValueChange={(value) => {
+                        setGradeFilter(value as typeof gradeFilter);
+                        setSelectedDocuments(new Set());
+                      }}
+                    >
+                      <SelectTrigger id="grade-filter" className="w-[180px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Papers</SelectItem>
+                        <SelectItem value="graded">Graded</SelectItem>
+                        <SelectItem value="non-graded">Not Graded</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    {unreleasedGrades.length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsReleaseGradesSheetOpen(true)}
+                      >
+                        Release {unreleasedGrades.length} {unreleasedGrades.length === 1 ? 'Grade' : 'Grades'}
+                      </Button>
+                    )}
+                    {selectedDocuments.size > 0 && (
+                      <Button
+                        variant="default"
+                        onClick={() => openGradingSheet(Array.from(selectedDocuments))}
+                      >
+                        Grade {selectedDocuments.size === 1 ? 'Essay' : `${selectedDocuments.size} Essays`}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {filteredDocuments.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                    <p>
+                      {gradeFilter === 'graded'
+                        ? 'No graded essays yet.'
+                        : gradeFilter === 'non-graded'
+                          ? 'No ungraded essays.'
+                          : 'No submitted essays yet.'}
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={selectedDocuments.size === filteredDocuments.length && filteredDocuments.length > 0}
+                            onCheckedChange={toggleAllDocuments}
+                            aria-label="Select all"
+                          />
+                        </TableHead>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Essay Title</TableHead>
+                        <TableHead>Course Module</TableHead>
+                        <TableHead>Submitted</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDocuments.map((doc) => (
+                        <TableRow key={doc.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedDocuments.has(doc.id)}
+                              onCheckedChange={() => toggleDocumentSelection(doc.id)}
+                              aria-label={`Select ${doc.title}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {doc.profile.user.name || doc.profile.user.email}
+                          </TableCell>
+                          <TableCell>{doc.title}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                              .title || '—'}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
+                            {new Date(doc.submittedAt!).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            {doc.grade ? (
+                              <div className="flex items-center gap-2">
+                                <Badge variant={doc.grade.isReleased ? "default" : "secondary"}>
+                                  {doc.grade.isReleased ? 'Released' : 'Graded'}
+                                </Badge>
+                                {doc.grade.score && (
+                                  <span className="text-sm text-muted-foreground">
+                                    {doc.grade.score}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <Badge variant="outline">Not Graded</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button asChild size="sm" variant="outline">
+                                <Link
+                                  to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                                >
+                                  View
+                                </Link>
+                              </Button>
+                              {doc.grade ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => openGradingSheet([doc.id])}
+                                >
+                                  Edit Grade
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => openGradingSheet([doc.id])}
+                                >
+                                  Grade
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             )}
           </TabsContent>
 
@@ -420,6 +612,23 @@ export default function ClassDetailRoute() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <GradingSheet
+        documents={gradingDocuments}
+        isOpen={isGradingSheetOpen}
+        onClose={() => {
+          setIsGradingSheetOpen(false);
+          setGradingDocuments([]);
+        }}
+        onSuccess={handleGradingSuccess}
+      />
+
+      <ReleaseGradesSheet
+        grades={unreleasedGrades}
+        isOpen={isReleaseGradesSheetOpen}
+        onClose={() => setIsReleaseGradesSheetOpen(false)}
+        onSuccess={handleGradingSuccess}
+      />
     </section>
   );
 }
