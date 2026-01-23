@@ -17,17 +17,21 @@ import { Badge } from '~/components/ui/badge';
 type Document = {
   id: string;
   title: string;
+  submittedSnapshotId: string | null;
   profile: {
     user: {
       name: string | null;
       email: string;
     };
   };
-  grade?: {
+  submittedSnapshot?: {
     id: string;
-    score: string | null;
-    feedback: string | null;
-    isReleased: boolean;
+    grades: {
+      id: string;
+      score: string | null;
+      feedback: string | null;
+      isReleased: boolean;
+    }[];
   } | null;
 };
 
@@ -45,8 +49,8 @@ export function GradingSheet({ documents, isOpen, onClose, onSuccess }: GradingS
   const [releaseImmediately, setReleaseImmediately] = useState(false);
 
   const isMultiple = documents.length > 1;
-  const isEditing = !isMultiple && documents[0]?.grade;
-  const existingGrade = !isMultiple ? documents[0]?.grade : null;
+  const existingGrade = !isMultiple ? documents[0]?.submittedSnapshot?.grades?.[0] : null;
+  const isEditing = !isMultiple && existingGrade;
 
   // Initialize form with existing grade data when editing
   useState(() => {

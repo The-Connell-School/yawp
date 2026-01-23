@@ -143,7 +143,6 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
-  grade                       Grade?
 }
 
 model DocumentComment {
@@ -185,24 +184,25 @@ model DocumentSnapshot {
   documentId            String
   document              Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   submittedDocuments    Document[] @relation("DocumentSubmission")
+  grades                Grade[]
 
   @@index([documentId, createdAt(sort: Desc)])
 }
 
 model Grade {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
-  score        String?   // Flexible: can be letter grade, number, or text
-  feedback     String?   // Teacher's written feedback
-  isReleased   Boolean   @default(false) // Whether the grade is visible to student
-  releasedAt   DateTime? @db.Timestamptz(6) // When the grade was released
-  documentId   String    @unique
-  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  gradedById   String
-  gradedBy     Profile   @relation(fields: [gradedById], references: [id], onDelete: Cascade)
+  id         String            @id @default(cuid())
+  createdAt  DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime          @default(now()) @db.Timestamptz(6)
+  score      String?           // Flexible: can be letter grade, number, or text
+  feedback   String?           // Teacher's written feedback
+  isReleased Boolean           @default(false) // Whether the grade is visible to student
+  releasedAt DateTime?         @db.Timestamptz(6) // When the grade was released
+  snapshotId String            @unique // Grade is tied to specific submission snapshot
+  snapshot   DocumentSnapshot  @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  gradedById String
+  gradedBy   Profile           @relation(fields: [gradedById], references: [id], onDelete: Cascade)
 
-  @@index([documentId])
+  @@index([snapshotId])
   @@index([gradedById])
   @@index([isReleased])
 }

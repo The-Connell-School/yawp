@@ -50,12 +50,14 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: { in: data.documentIds },
       submittedAt: { not: null },
+      submittedSnapshotId: { not: null },
       classId: { in: teacherClassIds },
       deletedAt: null,
     },
     select: {
       id: true,
       title: true,
+      submittedSnapshotId: true,
       profile: {
         select: {
           id: true,
@@ -85,12 +87,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const isReleased = data.releaseImmediately === 'on';
   const now = new Date();
 
-  // Create or update grades for all documents
-  const gradePromises = documents.map(doc =>
-    prisma.grade.upsert({
-      where: { documentId: doc.id },
+  // Create or update grades for all submitted snapshots
+  const gradePromises = documents.map(doc => {
+    if (!doc.submittedSnapshotId) {
+      throw new Error(`Document ${doc.id} has no submitted snapshot`);
+    }
+    return prisma.grade.upsert({
+      where: { snapshotId: doc.submittedSnapshotId },
       create: {
-        documentId: doc.id,
+        snapshotId: doc.submittedSnapshotId,
         gradedById: profile.id,
         score: data.score,
         feedback: data.feedback,
@@ -104,8 +109,8 @@ export async function action({ request }: ActionFunctionArgs) {
         releasedAt: isReleased ? now : null,
         updatedAt: now,
       },
-    })
-  );
+    });
+  });
 
   await Promise.all(gradePromises);
 

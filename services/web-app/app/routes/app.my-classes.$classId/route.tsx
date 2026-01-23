@@ -163,14 +163,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         take: 1,
       },
-      grade: {
+      submittedSnapshot: {
         select: {
           id: true,
-          score: true,
-          feedback: true,
-          isReleased: true,
-          releasedAt: true,
-          createdAt: true,
+          grades: {
+            select: {
+              id: true,
+              score: true,
+              feedback: true,
+              isReleased: true,
+              releasedAt: true,
+              createdAt: true,
+            },
+            take: 1,
+          },
         },
       },
     },
@@ -201,9 +207,10 @@ export default function ClassDetailRoute() {
   // Filter submitted documents based on grading status
   const filteredDocuments = useMemo(() => {
     return data.submittedDocuments.filter((doc) => {
+      const grade = doc.submittedSnapshot?.grades?.[0];
       if (gradeFilter === 'all') return true;
-      if (gradeFilter === 'graded') return doc.grade !== null;
-      if (gradeFilter === 'non-graded') return doc.grade === null;
+      if (gradeFilter === 'graded') return grade !== undefined;
+      if (gradeFilter === 'non-graded') return grade === undefined;
       return true;
     });
   }, [data.submittedDocuments, gradeFilter]);
@@ -211,17 +218,23 @@ export default function ClassDetailRoute() {
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
     return data.submittedDocuments
-      .filter((doc) => doc.grade && !doc.grade.isReleased)
-      .map((doc) => ({
-        id: doc.grade!.id,
-        score: doc.grade!.score,
-        feedback: doc.grade!.feedback,
-        document: {
-          id: doc.id,
-          title: doc.title,
-          profile: doc.profile,
-        },
-      }));
+      .filter((doc) => {
+        const grade = doc.submittedSnapshot?.grades?.[0];
+        return grade && !grade.isReleased;
+      })
+      .map((doc) => {
+        const grade = doc.submittedSnapshot!.grades[0];
+        return {
+          id: grade.id,
+          score: grade.score,
+          feedback: grade.feedback,
+          document: {
+            id: doc.id,
+            title: doc.title,
+            profile: doc.profile,
+          },
+        };
+      });
   }, [data.submittedDocuments]);
 
   // Toggle document selection
@@ -455,76 +468,79 @@ export default function ClassDetailRoute() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredDocuments.map((doc) => (
-                        <TableRow key={doc.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selectedDocuments.has(doc.id)}
-                              onCheckedChange={() => toggleDocumentSelection(doc.id)}
-                              aria-label={`Select ${doc.title}`}
-                            />
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {doc.profile.user.name || doc.profile.user.email}
-                          </TableCell>
-                          <TableCell>{doc.title}</TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                              .title || '—'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
-                            {new Date(doc.submittedAt!).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </TableCell>
-                          <TableCell>
-                            {doc.grade ? (
-                              <div className="flex items-center gap-2">
-                                <Badge variant={doc.grade.isReleased ? "default" : "secondary"}>
-                                  {doc.grade.isReleased ? 'Released' : 'Graded'}
-                                </Badge>
-                                {doc.grade.score && (
-                                  <span className="text-sm text-muted-foreground">
-                                    {doc.grade.score}
-                                  </span>
+                      {filteredDocuments.map((doc) => {
+                        const grade = doc.submittedSnapshot?.grades?.[0];
+                        return (
+                          <TableRow key={doc.id}>
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedDocuments.has(doc.id)}
+                                onCheckedChange={() => toggleDocumentSelection(doc.id)}
+                                aria-label={`Select ${doc.title}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {doc.profile.user.name || doc.profile.user.email}
+                            </TableCell>
+                            <TableCell>{doc.title}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                                .title || '—'}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
+                              {new Date(doc.submittedAt!).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </TableCell>
+                            <TableCell>
+                              {grade ? (
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={grade.isReleased ? "default" : "secondary"}>
+                                    {grade.isReleased ? 'Released' : 'Graded'}
+                                  </Badge>
+                                  {grade.score && (
+                                    <span className="text-sm text-muted-foreground">
+                                      {grade.score}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <Badge variant="outline">Not Graded</Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button asChild size="sm" variant="outline">
+                                  <Link
+                                    to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                                  >
+                                    View
+                                  </Link>
+                                </Button>
+                                {grade ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => openGradingSheet([doc.id])}
+                                  >
+                                    Edit Grade
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => openGradingSheet([doc.id])}
+                                  >
+                                    Grade
+                                  </Button>
                                 )}
                               </div>
-                            ) : (
-                              <Badge variant="outline">Not Graded</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button asChild size="sm" variant="outline">
-                                <Link
-                                  to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                                >
-                                  View
-                                </Link>
-                              </Button>
-                              {doc.grade ? (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => openGradingSheet([doc.id])}
-                                >
-                                  Edit Grade
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => openGradingSheet([doc.id])}
-                                >
-                                  Grade
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}
