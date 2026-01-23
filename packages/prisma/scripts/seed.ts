@@ -10,11 +10,20 @@ type SeedData = {
   organizations: Prisma.OrganizationCreateInput[];
 };
 
+const ORG_ID = 'the-connell-school';
+const ORG_NAME = 'The Connell School';
+const SCHOOL_COUNT = 3;
+const CLASSES_PER_SCHOOL = 6;
+const TOTAL_TEACHERS = 8;
+const TOTAL_STUDENTS = 50;
+const DOCUMENTS_PER_STUDENT = 2;
+
 const organizations: SeedData['organizations'] = [
   {
-    name: 'The Connell School',
-    // explicit id used so we can connect when creating users
-    id: 'the-connell-school',
+    name: ORG_NAME,
+    id: ORG_ID,
+    numOfStudentSeats: TOTAL_STUDENTS + 10,
+    numOfTeacherSeats: TOTAL_TEACHERS + 5,
   },
 ];
 
@@ -98,35 +107,161 @@ const studentCourses: SeedData['studentCourses'] = [
   },
 ];
 
+const FIRST_NAMES = [
+  'Alex',
+  'Bailey',
+  'Casey',
+  'Drew',
+  'Emery',
+  'Finley',
+  'Gray',
+  'Harper',
+  'Jamie',
+  'Kai',
+  'Logan',
+  'Morgan',
+  'Nico',
+  'Oakley',
+  'Peyton',
+  'Quinn',
+  'Riley',
+  'Sage',
+  'Taylor',
+  'Zion',
+];
+
+const LAST_NAMES = [
+  'Anders',
+  'Beck',
+  'Carver',
+  'Delaney',
+  'Ellis',
+  'Foster',
+  'Garcia',
+  'Hughes',
+  'Iverson',
+  'Jensen',
+  'Keller',
+  'Larsen',
+  'Morris',
+  'Nguyen',
+  'Olsen',
+  'Patel',
+  'Reyes',
+  'Shaw',
+  'Turner',
+  'Valdez',
+];
+
+const ESSAY_TOPICS = [
+  'The ethics of AI in education',
+  'Why local history matters',
+  'Social media and attention',
+  'The future of renewable energy',
+  'Stories that change communities',
+  'The cost of fast fashion',
+  'The power of civic engagement',
+  'Why we should read more poetry',
+];
+
+const GRADES = ['9', '10', '11', '12'];
+const PERIODS = ['1', '2', '3', '4', '5', '6'];
+
+const TEST_USERS = [
+  {
+    email: 'admin@fake.test',
+    name: 'Admin User',
+    password: 'admin123',
+    isAdmin: true,
+    isOwner: true,
+    teacherProfile: true,
+  },
+  {
+    email: 'teacher@fake.test',
+    name: 'Teacher User',
+    password: 'teacher123',
+    teacherProfile: true,
+  },
+  {
+    email: 'student@fake.test',
+    name: 'Student User',
+    password: 'student123',
+    studentProfile: true,
+  },
+];
+
+function makeName(index: number) {
+  const first = FIRST_NAMES[index % FIRST_NAMES.length];
+  const last = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
+  return `${first} ${last}`;
+}
+
+function makeEmail(role: 'teacher' | 'student', index: number) {
+  return `${role}${index + 1}@fake.test`;
+}
+
+function makeClassCode(schoolIndex: number, classIndex: number, grade: string, period: string) {
+  return `S${schoolIndex + 1}C${classIndex + 1}G${grade}P${period}`;
+}
+
+function buildUser(options: {
+  email: string;
+  name: string;
+  password: string;
+  isAdmin?: boolean;
+  isOwner?: boolean;
+  studentProfile?: boolean;
+  teacherProfile?: boolean;
+}): Prisma.UserCreateInput {
+  return {
+    email: options.email,
+    name: options.name,
+    isAdmin: options.isAdmin,
+    password: { create: createPassword(options.password) },
+    profiles: {
+      create: [
+        {
+          organization: { connect: { id: ORG_ID } },
+          isOwner: options.isOwner ?? false,
+          studentProfile: options.studentProfile ? { create: {} } : undefined,
+          teacherProfile: options.teacherProfile ? { create: {} } : undefined,
+        },
+      ],
+    },
+  };
+}
+
+const bulkTeacherCount = Math.max(0, TOTAL_TEACHERS - 1);
+const bulkStudentCount = Math.max(0, TOTAL_STUDENTS - 1);
+
 const users: SeedData['users'] = [
-  // Admins
-  {
-    email: 'brian@theconnellschool.com',
-    name: 'Brian Connell',
-    password: { create: createPassword('brianconnell') },
-  },
-  {
-    email: 'bryant@brock.software',
-    name: 'Bryant Brock',
-    password: { create: createPassword('bryantbrock') },
-  },
-  // Students
-  {
-    email: 'jdoe@brock.software',
-    name: 'John Doe',
-    password: { create: createPassword('johndoe') },
-  },
-  {
-    email: 'jsmith@brock.software',
-    name: 'Jane Smith',
-    password: { create: createPassword('janesmith') },
-  },
-  // Teachers
-  {
-    email: 'arobins@brock.software',
-    name: 'Alex Robins',
-    password: { create: createPassword('alexrobins') },
-  },
+  ...TEST_USERS.map((user) =>
+    buildUser({
+      email: user.email,
+      name: user.name,
+      password: user.password,
+      isAdmin: user.isAdmin,
+      isOwner: user.isOwner,
+      studentProfile: user.studentProfile,
+      teacherProfile: user.teacherProfile,
+    })
+  ),
+  ...Array.from({ length: bulkTeacherCount }, (_, index) =>
+    buildUser({
+      email: makeEmail('teacher', index),
+      name: `Teacher ${makeName(index)}`,
+      password: `teacher${index + 1}`,
+      teacherProfile: true,
+    })
+  ),
+  ...Array.from({ length: bulkStudentCount }, (_, index) =>
+    buildUser({
+      email: makeEmail('student', index),
+      name: `Student ${makeName(index + 7)}`,
+      password: `student${index + 1}`,
+      studentProfile: true,
+    })
+  ),
 ];
 
 async function seed() {
@@ -139,34 +274,9 @@ async function seed() {
   } catch (e) {
     console.error(e);
   }
-  // Seed order matters: create organizations first, then users and courses
   const data: SeedData = {
     organizations,
-    users: users.map((u) => ({
-      ...u,
-      isAdmin:
-        u.email === 'brian@theconnellschool.com' ||
-        u.email === 'bryant@brock.software'
-          ? true
-          : undefined,
-      profiles: {
-        create: [
-          {
-            organization: { connect: { id: 'the-connell-school' } },
-            isOwner:
-              u.email === 'brian@theconnellschool.com' ||
-              u.email === 'bryant@brock.software',
-            studentProfile: { create: {} },
-            teacherProfile:
-              u.email === 'brian@theconnellschool.com' ||
-              u.email === 'bryant@brock.software' ||
-              u.email === 'arobins@brock.software'
-                ? { create: {} }
-                : undefined,
-          },
-        ],
-      },
-    })),
+    users,
     studentCourses,
   };
   console.timeEnd('🧹 Cleaned up the database...');
@@ -193,6 +303,161 @@ async function seed() {
     );
     console.timeEnd(`Created ${key}`);
   }
+
+  const module = await prisma.studentCourseModule.findFirst({
+    where: { deletedAt: null },
+    orderBy: { position: 'asc' },
+    include: {
+      instructions: { orderBy: { position: 'asc' } },
+    },
+  });
+
+  if (!module) {
+    throw new Error('No student course module found.');
+  }
+
+  const firstInstruction = module.instructions[0] ?? null;
+
+  const teacherProfiles = await prisma.teacherProfile.findMany({
+    include: { profile: { include: { user: true } } },
+  });
+  const studentProfiles = await prisma.studentProfile.findMany({
+    include: { profile: { include: { user: true } } },
+  });
+
+  const classCount = SCHOOL_COUNT * CLASSES_PER_SCHOOL;
+  const classStudentBuckets: Array<(typeof studentProfiles)[number][]> = Array.from(
+    { length: classCount },
+    () => []
+  );
+
+  studentProfiles.forEach((student, index) => {
+    classStudentBuckets[index % classCount].push(student);
+  });
+
+  const studentClassMap = new Map<string, string>();
+
+  const schools = await Promise.all(
+    Array.from({ length: SCHOOL_COUNT }, (_, schoolIndex) =>
+      prisma.school.create({
+        data: {
+          name: `School ${schoolIndex + 1}`,
+          code: `SCH-${schoolIndex + 1}`,
+          organization: { connect: { id: ORG_ID } },
+          teachers: {
+            connect: teacherProfiles
+              .filter((_, index) => index % SCHOOL_COUNT === schoolIndex)
+              .map((teacher) => ({ id: teacher.id })),
+          },
+        },
+      })
+    )
+  );
+
+  const classes: Array<{ id: string }> = [];
+  for (const [schoolIndex, school] of schools.entries()) {
+    for (let classIndex = 0; classIndex < CLASSES_PER_SCHOOL; classIndex += 1) {
+      const classGlobalIndex = schoolIndex * CLASSES_PER_SCHOOL + classIndex;
+      const grade = GRADES[classGlobalIndex % GRADES.length];
+      const period = PERIODS[classGlobalIndex % PERIODS.length];
+      const code = makeClassCode(schoolIndex, classIndex, grade, period);
+      const classStudents = classStudentBuckets[classGlobalIndex] ?? [];
+      const primaryTeacher =
+        teacherProfiles[classGlobalIndex % teacherProfiles.length];
+      const secondaryTeacher =
+        teacherProfiles[(classGlobalIndex + 1) % teacherProfiles.length];
+      const teacherIds = new Set(
+        [primaryTeacher, secondaryTeacher]
+          .filter(Boolean)
+          .map((teacher) => teacher.id)
+      );
+      const teachersToConnect = Array.from(teacherIds).map((id) => ({ id }));
+
+      const klass = await prisma.class.create({
+        data: {
+          code,
+          schoolYear: '2024-2025',
+          period,
+          grade,
+          title: `Grade ${grade} - Period ${period}`,
+          school: { connect: { id: school.id } },
+          teachers: { connect: teachersToConnect },
+          students: {
+            connect: classStudents.map((student) => ({ id: student.id })),
+          },
+        },
+      });
+
+      for (const student of classStudents) {
+        studentClassMap.set(student.id, klass.id);
+        await prisma.studentProfile.update({
+          where: { id: student.id },
+          data: {
+            school: school.name,
+            grade,
+            period,
+            schoolTeacher:
+              primaryTeacher?.profile.user.name ??
+              primaryTeacher?.profile.user.email ??
+              'Teacher',
+          },
+        });
+      }
+
+      classes.push(klass);
+    }
+  }
+
+  await Promise.all(
+    studentProfiles.map((student, studentIndex) => {
+      const classId = studentClassMap.get(student.id) ?? classes[0]?.id ?? null;
+      const topic = ESSAY_TOPICS[studentIndex % ESSAY_TOPICS.length];
+      const baseTitle = `Essay on ${topic}`;
+      return Promise.all(
+        Array.from({ length: DOCUMENTS_PER_STUDENT }, (_, docIndex) => {
+          const text = `Topic: ${topic}\n\nThis is draft ${
+            docIndex + 1
+          } by ${student.profile.user.name ?? student.profile.user.email}.`;
+          const html = `<p><strong>Topic:</strong> ${topic}</p><p>This is draft ${
+            docIndex + 1
+          } by ${student.profile.user.name ?? student.profile.user.email}.</p>`;
+          return prisma.document.create({
+            data: {
+              title: `${baseTitle} (${docIndex + 1})`,
+              text,
+              html,
+              class: classId ? { connect: { id: classId } } : undefined,
+              profile: { connect: { id: student.profileId } },
+              snapshots: {
+                create: [{ text, html }],
+              },
+              studentCourseModuleSessions: {
+                create: [
+                  {
+                    title: `${topic} Session ${docIndex + 1}`,
+                    instructionsCompleted: docIndex,
+                    studentCourseModule: { connect: { id: module.id } },
+                    studentProfile: { connect: { id: student.id } },
+                    ...(firstInstruction && {
+                      messages: {
+                        create: [
+                          {
+                            content: firstInstruction.prompt,
+                            agent: 'assistant',
+                            instructionId: firstInstruction.id,
+                          },
+                        ],
+                      },
+                    }),
+                  },
+                ],
+              },
+            },
+          });
+        })
+      );
+    })
+  );
 
   console.timeEnd(`🌱 Database has been seeded`);
 }
