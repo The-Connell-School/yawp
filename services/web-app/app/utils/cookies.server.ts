@@ -14,6 +14,8 @@ export type StudentFilters = {
   take: number;
 };
 
+export type SubmittedPapersFilter = 'all' | 'graded' | 'non-graded';
+
 export function getStudentFiltersValue(
   key: keyof StudentFilters,
   value: string
@@ -71,6 +73,32 @@ export async function setStudentFilters(
   const currentFilters = await getStudentFilters(request);
   const mergedFilters = { ...currentFilters, ...filters };
   return await studentFiltersCookie.serialize(mergedFilters);
+}
+
+export const submittedPapersFilterCookie = createCookie(
+  'submitted-papers-filter',
+  {
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  } as CookieOptions
+);
+
+export async function getSubmittedPapersFilter(
+  request: Request
+): Promise<SubmittedPapersFilter> {
+  const cookie = await submittedPapersFilterCookie.parse(
+    request.headers.get('Cookie')
+  );
+  return cookie ?? 'non-graded';
+}
+
+export async function setSubmittedPapersFilter(
+  request: Request,
+  filter: SubmittedPapersFilter
+): Promise<string> {
+  return await submittedPapersFilterCookie.serialize(filter);
 }
 
 // Organization Filters

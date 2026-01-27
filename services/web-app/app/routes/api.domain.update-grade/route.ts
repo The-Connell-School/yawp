@@ -8,7 +8,20 @@ const POST = z.object({
   gradeId: z.string(),
   score: z.string().optional(),
   feedback: z.string().optional(),
+  rubricScores: z.string().optional(),
+  overallScore: z.string().optional(),
+  overallComment: z.string().optional(),
+  aiMeta: z.string().optional(),
 });
+
+function parseJson(value?: string) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -39,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      isReleased: true,
+      releasedAt: true,
     },
   });
 
@@ -51,11 +64,23 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Update the grade
+  const rubricScores = parseJson(data.rubricScores);
+  const aiMeta = parseJson(data.aiMeta);
+  const overallScore =
+    data.overallScore && Number.isFinite(Number(data.overallScore))
+      ? Number(data.overallScore)
+      : null;
+  const overallComment = data.overallComment ?? null;
+
   const updatedGrade = await prisma.grade.update({
     where: { id: grade.id },
     data: {
       score: data.score,
       feedback: data.feedback,
+      rubricScores,
+      overallScore,
+      overallComment,
+      aiMeta,
       updatedAt: new Date(),
     },
   });

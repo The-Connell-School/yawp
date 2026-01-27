@@ -9,8 +9,21 @@ const POST = z.object({
   documentIds: z.array(z.string()).min(1, 'At least one document is required'),
   score: z.string().optional(),
   feedback: z.string().optional(),
+  rubricScores: z.string().optional(),
+  overallScore: z.string().optional(),
+  overallComment: z.string().optional(),
+  aiMeta: z.string().optional(),
   releaseImmediately: z.enum(['on']).optional(), // Checkbox value
 });
+
+function parseJson(value?: string) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -86,6 +99,13 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const now = new Date();
   const releasedAt = data.releaseImmediately === 'on' ? now : null;
+  const rubricScores = parseJson(data.rubricScores);
+  const aiMeta = parseJson(data.aiMeta);
+  const overallScore =
+    data.overallScore && Number.isFinite(Number(data.overallScore))
+      ? Number(data.overallScore)
+      : null;
+  const overallComment = data.overallComment ?? null;
 
   // Create or update grades for all submitted snapshots
   const gradePromises = documents.map(doc => {
@@ -99,11 +119,19 @@ export async function action({ request }: ActionFunctionArgs) {
         gradedById: profile.id,
         score: data.score,
         feedback: data.feedback,
+        rubricScores,
+        overallScore,
+        overallComment,
+        aiMeta,
         releasedAt,
       },
       update: {
         score: data.score,
         feedback: data.feedback,
+        rubricScores,
+        overallScore,
+        overallComment,
+        aiMeta,
         releasedAt,
         updatedAt: now,
       },

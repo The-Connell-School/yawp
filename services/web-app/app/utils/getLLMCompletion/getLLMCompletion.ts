@@ -14,10 +14,7 @@ interface Params {
   system?: string;
   temperature?: number;
   maxTokens?: number;
-  model:
-    | 'gpt-4-turbo-preview'
-    | 'claude-3-opus-20240229'
-    | 'claude-3-5-sonnet-20240620';
+  model: string;
 }
 
 export async function getLLMCompletion(params: Params) {

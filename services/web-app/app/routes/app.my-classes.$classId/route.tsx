@@ -1,8 +1,9 @@
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { useLoaderData } from 'react-router';
+import { useFetcher, useLoaderData } from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
   Sheet,
   SheetContent,
@@ -171,6 +172,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               id: true,
               score: true,
               feedback: true,
+              rubricScores: true,
+              overallScore: true,
+              overallComment: true,
+              aiMeta: true,
               releasedAt: true,
               createdAt: true,
             },
@@ -184,7 +189,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  return dataResponse({ klass, profiles, pasteAlerts, submittedDocuments });
+  const submittedPapersFilter = await getSubmittedPapersFilter(request);
+
+  return dataResponse({
+    klass,
+    profiles,
+    pasteAlerts,
+    submittedDocuments,
+    submittedPapersFilter,
+  });
 }
 
 export default function ClassDetailRoute() {
@@ -196,7 +209,10 @@ export default function ClassDetailRoute() {
   const [selectedPasteContent, setSelectedPasteContent] = useState<string | null>(
     null
   );
-  const [gradeFilter, setGradeFilter] = useState<'all' | 'graded' | 'non-graded'>('non-graded');
+  const filterFetcher = useFetcher();
+  const [gradeFilter, setGradeFilter] = useState<
+    'all' | 'graded' | 'non-graded'
+  >(data.submittedPapersFilter);
   const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
   const [gradingDocuments, setGradingDocuments] = useState<typeof data.submittedDocuments>([]);
   const [isGradingSheetOpen, setIsGradingSheetOpen] = useState(false);
@@ -403,7 +419,15 @@ export default function ClassDetailRoute() {
                     <Select
                       value={gradeFilter}
                       onValueChange={(value) => {
-                        setGradeFilter(value as typeof gradeFilter);
+                        const nextValue = value as typeof gradeFilter;
+                        setGradeFilter(nextValue);
+                        filterFetcher.submit(
+                          { filter: nextValue },
+                          {
+                            method: 'post',
+                            action: '/api/preferences/submitted-papers-filter',
+                          }
+                        );
                         setSelectedDocuments(new Set());
                       }}
                     >
