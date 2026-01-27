@@ -30,7 +30,7 @@ type Document = {
       id: string;
       score: string | null;
       feedback: string | null;
-      isReleased: boolean;
+      releasedAt: string | null;
     }[];
   } | null;
 };
@@ -57,7 +57,7 @@ export function GradingSheet({ documents, isOpen, onClose, onSuccess }: GradingS
     if (isEditing && existingGrade) {
       setScore(existingGrade.score || '');
       setFeedback(existingGrade.feedback || '');
-      setReleaseImmediately(existingGrade.isReleased);
+      setReleaseImmediately(!!existingGrade.releasedAt);
     }
   });
 
@@ -158,8 +158,8 @@ export function GradingSheet({ documents, isOpen, onClose, onSuccess }: GradingS
               </div>
               {existingGrade && (
                 <div className="pt-2 border-t">
-                  <Badge variant={existingGrade.isReleased ? 'default' : 'secondary'}>
-                    {existingGrade.isReleased ? 'Released' : 'Not Released'}
+                  <Badge variant={existingGrade.releasedAt ? 'default' : 'secondary'}>
+                    {existingGrade.releasedAt ? 'Released' : 'Not Released'}
                   </Badge>
                 </div>
               )}

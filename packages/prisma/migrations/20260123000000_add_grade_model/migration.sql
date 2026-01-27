@@ -5,7 +5,6 @@ CREATE TABLE "Grade" (
     "updatedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "score" TEXT,
     "feedback" TEXT,
-    "isReleased" BOOLEAN NOT NULL DEFAULT false,
     "releasedAt" TIMESTAMPTZ(6),
     "snapshotId" TEXT NOT NULL,
     "gradedById" TEXT NOT NULL,
@@ -23,7 +22,7 @@ CREATE INDEX "Grade_snapshotId_idx" ON "Grade"("snapshotId");
 CREATE INDEX "Grade_gradedById_idx" ON "Grade"("gradedById");
 
 -- CreateIndex
-CREATE INDEX "Grade_isReleased_idx" ON "Grade"("isReleased");
+CREATE INDEX "Grade_releasedAt_idx" ON "Grade"("releasedAt");
 
 -- AddForeignKey
 ALTER TABLE "Grade" ADD CONSTRAINT "Grade_snapshotId_fkey" FOREIGN KEY ("snapshotId") REFERENCES "DocumentSnapshot"("id") ON DELETE CASCADE ON UPDATE CASCADE;

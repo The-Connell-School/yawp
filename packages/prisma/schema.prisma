@@ -195,8 +195,7 @@ model Grade {
   updatedAt  DateTime          @default(now()) @db.Timestamptz(6)
   score      String?           // Flexible: can be letter grade, number, or text
   feedback   String?           // Teacher's written feedback
-  isReleased Boolean           @default(false) // Whether the grade is visible to student
-  releasedAt DateTime?         @db.Timestamptz(6) // When the grade was released
+  releasedAt DateTime?         @db.Timestamptz(6) // When released to student (null = not released)
   snapshotId String            @unique // Grade is tied to specific submission snapshot
   snapshot   DocumentSnapshot  @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   gradedById String
@@ -204,7 +203,7 @@ model Grade {
 
   @@index([snapshotId])
   @@index([gradedById])
-  @@index([isReleased])
+  @@index([releasedAt])
 }
 
 model InstructionAudio {

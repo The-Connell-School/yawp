@@ -84,8 +84,8 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isReleased = data.releaseImmediately === 'on';
   const now = new Date();
+  const releasedAt = data.releaseImmediately === 'on' ? now : null;
 
   // Create or update grades for all submitted snapshots
   const gradePromises = documents.map(doc => {
@@ -99,14 +99,12 @@ export async function action({ request }: ActionFunctionArgs) {
         gradedById: profile.id,
         score: data.score,
         feedback: data.feedback,
-        isReleased,
-        releasedAt: isReleased ? now : null,
+        releasedAt,
       },
       update: {
         score: data.score,
         feedback: data.feedback,
-        isReleased,
-        releasedAt: isReleased ? now : null,
+        releasedAt,
         updatedAt: now,
       },
     });
@@ -116,10 +114,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const message =
     documents.length === 1
-      ? isReleased
+      ? releasedAt
         ? 'Essay graded and released to student.'
         : 'Essay graded. You can release it to the student when ready.'
-      : isReleased
+      : releasedAt
         ? `${documents.length} essays graded and released to students.`
         : `${documents.length} essays graded. You can release them to students when ready.`;
 

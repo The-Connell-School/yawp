@@ -171,7 +171,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               id: true,
               score: true,
               feedback: true,
-              isReleased: true,
               releasedAt: true,
               createdAt: true,
             },
@@ -220,7 +219,7 @@ export default function ClassDetailRoute() {
     return data.submittedDocuments
       .filter((doc) => {
         const grade = doc.submittedSnapshot?.grades?.[0];
-        return grade && !grade.isReleased;
+        return grade && !grade.releasedAt;
       })
       .map((doc) => {
         const grade = doc.submittedSnapshot!.grades[0];
@@ -497,8 +496,8 @@ export default function ClassDetailRoute() {
                             <TableCell>
                               {grade ? (
                                 <div className="flex items-center gap-2">
-                                  <Badge variant={grade.isReleased ? "default" : "secondary"}>
-                                    {grade.isReleased ? 'Released' : 'Graded'}
+                                  <Badge variant={grade.releasedAt ? "default" : "secondary"}>
+                                    {grade.releasedAt ? 'Released' : 'Graded'}
                                   </Badge>
                                   {grade.score && (
                                     <span className="text-sm text-muted-foreground">

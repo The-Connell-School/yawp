@@ -34,7 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: { in: data.gradeIds },
       gradedById: profile.id,
-      isReleased: false,
+      releasedAt: null,
     },
     select: { id: true },
   });
@@ -54,7 +54,6 @@ export async function action({ request }: ActionFunctionArgs) {
       id: { in: grades.map(g => g.id) },
     },
     data: {
-      isReleased: true,
       releasedAt: now,
       updatedAt: now,
     },
