@@ -723,3 +723,119 @@ Write two versions of a sentence using "since":
 ---
 
 *Once you understand how clauses work together, commas stop being random and start being logical. Dependent first? Comma. Independent first? Usually not. Contrast? Comma for emphasis.*
+
+---
+
+## Example Lesson 6
+
+**Topic:** Passive Voice
+
+---
+
+# Passive Voice
+
+## Why This Matters
+"Mistakes were made." You've heard politicians say this. Notice how it avoids saying *who* made the mistakes? That's passive voice — and while it's great for dodging blame, it's usually bad for your writing. Passive voice hides the actor, weakens your verbs, and makes sentences feel sluggish. Learning to spot it (and fix it) will make your writing sharper and more direct.
+
+## The Rule
+In **active voice**, the subject does the action:
+- *The dog bit the mailman.*
+
+In **passive voice**, the subject receives the action:
+- *The mailman was bitten by the dog.*
+
+Let's be clear: passive voice isn't grammatically wrong. It's not a rule violation. Your teacher shouldn't mark it as an error the way they would a comma splice. (Some teachers will anyway — they really hate it. Did the passive voice kill their parents or something? We don't know, and we've learned not to ask.) The point is, passive voice isn't the worst offense in writing, but it does often create weaker, wordier sentences — and in academic writing, where concise sentences are the goal, you should avoid that.
+
+If you've completed the lesson on wordiness, you know how the verb "to be" often props up wordy constructions. Passive voice is one of the biggest culprits. Every passive sentence requires a form of "to be" (was bitten, were seen, is being reviewed), and that often leads to longer, clunkier sentences.
+
+Compare:
+- Passive: *The experiment was conducted by the researchers.* (7 words)
+- Active: *The researchers conducted the experiment.* (5 words)
+
+It's not a dramatic difference in one sentence. But across a five-page essay? Those extra words add up. Your writing starts to feel sluggish, and your reader has to work harder to get to the point.
+
+**How to spot it:** Look for a form of "to be" (is, are, was, were, been, being) followed by a past participle (usually a verb ending in -ed or -en). Then ask: is the subject *doing* the action or *receiving* it?
+
+**When passive voice is okay:**
+- The actor is unknown: "My bike was stolen."
+- The actor is less important than the action: "The vaccine was developed in record time."
+- You're deliberately shifting emphasis away from the actor.
+- You're writing in a scientific context where passive is the convention.
+
+Passive voice is a tool, not a sin. But like any tool, you should use it intentionally — not accidentally. If you find yourself writing passive sentences without realizing it, that's when it becomes a problem.
+
+## See It In Action
+
+**Example 1: Basic fix**
+- ❌ Passive: The ball was thrown by Marcus.
+- ✅ Active: Marcus threw the ball.
+- *Why:* The active version is shorter and puts the actor (Marcus) front and center.
+
+**Example 2: Hidden actor**
+- ❌ Passive: The homework was not completed.
+- ✅ Active: I didn't complete the homework.
+- *Why:* The passive version hides who's responsible. The active version owns it.
+
+**Example 3: Sluggish sentence**
+- ❌ Passive: The song was written and performed by Beyoncé.
+- ✅ Active: Beyoncé wrote and performed the song.
+- *Why:* Beyoncé is the star here — let her lead the sentence.
+
+**Example 4: When passive works**
+- ✅ Passive (acceptable): The Mona Lisa was painted in the early 1500s.
+- *Why:* We care more about the painting than the painter in this context. (Though "Leonardo da Vinci painted the Mona Lisa in the early 1500s" works too.)
+
+**Example 5: Wordy passive**
+- ❌ Passive: The decision to cancel the game was made by the coach.
+- ✅ Active: The coach canceled the game.
+- *Why:* "The decision to cancel the game was made by" is nine words doing the job of two.
+
+## Quick Tip
+**The "by zombies" test:** If you can add "by zombies" after the verb and the sentence still makes grammatical sense, it's passive voice.
+- "The report was written [by zombies]." → Passive.
+- "Zombies wrote the report." → Active.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Rewrite in active voice:
+"The test was failed by half the class."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Rewrite in active voice:
+"The movie was directed by Greta Gerwig."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+This sentence hides the actor. Rewrite to reveal who's responsible:
+"The error was made during the experiment."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Is passive voice acceptable here? Why or why not?
+"The ancient temple was built over 2,000 years ago."
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Find a passive sentence in your own recent writing (or a textbook). Rewrite it in active voice.
+
+`[Your response here]`
+
+---
+
+*Passive voice isn't a crime — but active voice is almost always stronger. Put the actor in the driver's seat, and your writing will move.*
