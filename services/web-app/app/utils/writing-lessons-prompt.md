@@ -25,7 +25,7 @@ Core topics this skill can generate lessons for:
 2. **Transition Sentences** - Connecting ideas between paragraphs
 3. **Comma: Oxford/Serial** - When and why to use the serial comma
 4. **Comma: Splices** - Recognizing and fixing comma splices
-5. **Comma: Introductory Phrases** - Comma after introductory elements
+5. **Comma: Introductory Phrases** - Comma after introductory elements (see Topic-Specific Notes)
 6. **Comma: Clauses** - Separating independent and dependent clauses
 7. **Passive Voice** - Identifying and revising passive constructions
 8. **Parallel Construction** - Maintaining grammatical consistency in lists/series
@@ -143,6 +143,29 @@ Present the lesson in clean markdown:
 
 [Additional exercises]
 ```
+
+## Topic-Specific Notes
+
+### Comma: Introductory Phrases
+This topic requires nuance. Not all introductory elements require a comma:
+
+- **Introductory words** (However, Unfortunately, Therefore) → comma always needed
+- **Introductory clauses** (When I got home, While she was eating) → comma always needed
+- **Short prepositional phrases** (After practice, In the morning) → comma is *optional* unless omitting it causes confusion
+
+The rule: if the absence of a comma creates confusion in the meaning or rhythm of the sentence, use a comma. If the sentence reads smoothly without it, the comma is the writer's choice.
+
+**Example where both are acceptable:**
+- After practice I went straight to bed. ✓
+- After practice, I went straight to bed. ✓
+
+**Example where comma is needed (longer phrase):**
+- ❌ After practice with the varsity squad and the coaching staff I went straight to bed.
+- ✅ After practice with the varsity squad and the coaching staff, I went straight to bed.
+
+Include this nuance in the lesson and give students practice identifying when the comma is required vs. optional.
+
+---
 
 ## Quality Checks
 
