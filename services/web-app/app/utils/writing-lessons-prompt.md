@@ -26,7 +26,7 @@ Core topics this skill can generate lessons for:
 3. **Comma: Oxford/Serial** - When and why to use the serial comma
 4. **Comma: Splices** - Recognizing and fixing comma splices
 5. **Comma: Introductory Phrases** - Comma after introductory elements (see Topic-Specific Notes)
-6. **Comma: Clauses** - Separating independent and dependent clauses
+6. **Comma: Sentences with Independent and Dependent Clauses** - When to use commas with dependent clauses
 7. **Passive Voice** - Identifying and revising passive constructions
 8. **Parallel Construction** - Maintaining grammatical consistency in lists/series
 9. **Subject-Verb Agreement** - Matching subjects and verbs correctly
@@ -617,3 +617,109 @@ Write your own sentence with a list of three or more items where skipping the Ox
 ---
 
 *The Oxford comma takes half a second to type and can save your reader from confusion — or your sentence from becoming a meme. Always use it.*
+
+---
+
+## Example Lesson 5
+
+**Topic:** Commas: Sentences with Independent and Dependent Clauses
+
+---
+
+# Commas: Sentences with Independent and Dependent Clauses
+
+## Why This Matters
+You've got two chunks of a sentence. One can stand on its own. One can't. How you connect them — and where you put the comma — matters. Get it wrong, and your sentence can fall apart or feel clunky. Get it right, and your sentence flows.
+
+## The Rule
+First, some quick definitions:
+
+- **Independent clause** = a complete thought that can stand alone as a sentence. ("She aced the test.")
+- **Dependent clause** = has a subject and verb but can't stand alone. It depends on the rest of the sentence to make sense. ("Because she studied all night")
+
+Dependent clauses often start with words like: *because, although, when, if, since, while, after, before, unless, even though*
+
+Here's the rule:
+
+**Dependent clause FIRST → use a comma.**
+- *Because she studied all night, she aced the test.*
+
+**Independent clause FIRST → usually no comma.**
+- *She aced the test because she studied all night.*
+
+Why the difference? When the dependent clause comes first, the comma signals where the "setup" ends and the main point begins. When the independent clause comes first, the sentence flows naturally without that pause.
+
+**Exception:** Use a comma before the dependent clause if it shows contrast (especially with "although," "though," "even though," or "whereas").
+- *She aced the test, even though she barely slept.*
+
+## See It In Action
+
+**Example 1: Dependent clause first**
+- ❌ Before: When the bell rang everyone rushed out.
+- ✅ After: When the bell rang, everyone rushed out.
+- *Why:* "When the bell rang" is the setup. The comma signals the main action is coming.
+
+**Example 2: Independent clause first**
+- ❌ Before: I'll text you, when I get there.
+- ✅ After: I'll text you when I get there.
+- *Why:* No comma needed. The sentence flows naturally from main idea to supporting detail.
+
+**Example 3: Contrast (exception)**
+- ❌ Before: He passed the class even though he never did the reading.
+- ✅ After: He passed the class, even though he never did the reading.
+- *Why:* "Even though" signals contrast, so we add the comma for emphasis and clarity.
+
+**Example 4: Multiple dependent clauses**
+- ❌ Before: If you finish early and before the library closes you can return the books.
+- ✅ After: If you finish early and before the library closes, you can return the books.
+- *Why:* The whole opening chunk ("If you finish early and before the library closes") is the dependent setup. One comma after all of it.
+
+## Quick Tip
+**The "because" test:** Read your sentence out loud. If it starts with a word like "because," "when," "if," or "although," you probably need a comma before the main clause kicks in. If it starts with the main action, you probably don't.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Add a comma if needed:
+"Although he trained for months he didn't make the team."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Is a comma needed here? Why or why not?
+"She canceled the trip because her flight was delayed."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Add a comma if needed:
+"Before you submit your essay check for spelling errors."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+This sentence needs a comma due to contrast. Add it:
+"He got the job even though he bombed the interview."
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Write two versions of a sentence using "since":
+1. Dependent clause first (comma needed)
+2. Independent clause first (no comma needed)
+
+`[Your response here]`
+
+---
+
+*Once you understand how clauses work together, commas stop being random and start being logical. Dependent first? Comma. Independent first? Usually not. Contrast? Comma for emphasis.*
