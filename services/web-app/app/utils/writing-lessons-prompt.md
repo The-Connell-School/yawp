@@ -960,3 +960,136 @@ Write your own sentence with a three-item list using parallel construction.
 ---
 
 *Parallel construction isn't about being rigid — it's about being rhythmic. When your structure matches, your writing has a beat. When it doesn't, the beat drops out.*
+
+---
+
+## Example Lesson 8
+
+**Topic:** Subject-Verb Agreement
+
+---
+
+# Subject-Verb Agreement
+
+## Why This Matters
+"The team are winning." "Everyone have their own opinion." Something feels off, right? That's a subject-verb agreement error — when your subject and verb don't match in number. It's one of those mistakes that sounds wrong even if you can't explain why. Lack of subject-verb agreement will not only distract your reader, but will also make you look like you don't have a firm grasp of basic rules of writing. Get it right, though, and your sentences will be clear and smart.
+
+## The Rule
+The basic rule is simple: **singular subjects take singular verbs, and plural subjects take plural verbs.**
+
+- *The dog barks.* (singular subject, singular verb)
+- *The dogs bark.* (plural subject, plural verb)
+
+Easy enough. But English loves to make things complicated. Here's where it gets tricky:
+
+**Tricky Situation 1: Words between subject and verb**
+The subject might be separated from the verb by a phrase — and that phrase might try to trick you.
+
+- ❌ *The box of chocolates are on the table.*
+- ✅ *The box of chocolates is on the table.*
+
+"Chocolates" is closer to the verb, but "box" is the subject. The box *is*.
+
+**Tricky Situation 2: Compound subjects**
+Two subjects joined by "and" usually take a plural verb.
+
+- *Mia and Jordan are coming to the party.*
+
+But if "or" or "nor" joins them, the verb agrees with the subject closest to it.
+
+- *Neither the teacher nor the students were ready.* (students = plural, so "were")
+- *Neither the students nor the teacher was ready.* (teacher = singular, so "was")
+
+**Tricky Situation 3: Indefinite pronouns**
+Words like *everyone*, *someone*, *nobody*, *each*, and *either* are singular — even when they feel plural.
+
+- ❌ *Everyone have their own style.*
+- ✅ *Everyone has their own style.*
+
+**Tricky Situation 4: Collective nouns**
+Words like *team*, *group*, *family*, and *audience* are usually singular in American English (they act as one unit).
+
+- *The team is practicing.* (American English)
+- *The team are arguing among themselves.* (British English — acceptable when emphasizing individuals)
+
+**Tricky Situation 5: "There is" vs. "There are"**
+The subject comes *after* the verb in these sentences. Look ahead to see if it's singular or plural.
+
+- *There is a problem.* (singular)
+- *There are problems.* (plural)
+
+## See It In Action
+
+**Example 1: Phrase between subject and verb**
+- ❌ Before: The group of students were late.
+- ✅ After: The group of students was late.
+- *Why:* "Group" is the subject, and it's singular.
+
+**Example 2: Compound subject with "or"**
+- ❌ Before: Either the coach or the players was wrong.
+- ✅ After: Either the coach or the players were wrong.
+- *Why:* "Players" is closest to the verb, so the verb matches it.
+
+**Example 3: Indefinite pronoun**
+- ❌ Before: Each of the answers were correct.
+- ✅ After: Each of the answers was correct.
+- *Why:* "Each" is singular, even though "answers" is plural.
+
+**Example 4: "There is/are"**
+- ❌ Before: There's many reasons to try.
+- ✅ After: There are many reasons to try.
+- *Why:* "Reasons" is plural, so use "are."
+
+**Example 5: Collective noun**
+- ❌ Before: The jury have reached a verdict.
+- ✅ After: The jury has reached a verdict.
+- *Why:* In American English, the jury acts as one unit — singular.
+
+## Quick Tip
+**Find the true subject.** Cross out any phrases between the subject and verb, especially ones starting with "of." What's left? That's what your verb should agree with.
+- *The pile (of papers) is falling.* → "Pile" is the subject.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Choose the correct verb:
+"The list of supplies (is/are) on the counter."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Choose the correct verb:
+"Neither the players nor the coach (was/were) happy with the call."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Fix the error:
+"Everyone in the class have finished the test."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Fix the error:
+"There's too many options to choose from."
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Write a sentence using "each of the students" as your subject. Make sure the verb agrees.
+
+`[Your response here]`
+
+---
+
+*Subject-verb agreement is all about matching. Find the real subject, ignore the distractions, and make sure your verb lines up. When they match, your sentence clicks into place.*
