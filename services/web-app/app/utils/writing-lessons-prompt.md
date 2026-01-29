@@ -839,3 +839,124 @@ Find a passive sentence in your own recent writing (or a textbook). Rewrite it i
 ---
 
 *Passive voice isn't a crime — but active voice is almost always stronger. Put the actor in the driver's seat, and your writing will move.*
+
+---
+
+## Example Lesson 7
+
+**Topic:** Parallel Construction
+
+---
+
+# Parallel Construction
+
+## Why This Matters
+You're listing three things someone loves: "She loves hiking, swimming, and to ride bikes." Feel that little stumble at the end? That's a parallelism problem. When items in a list don't match grammatically, your sentence trips over itself. Parallel construction keeps your lists clean, your comparisons balanced, and your writing smooth.
+
+## The Rule
+When you list items, compare things, or pair ideas, they should follow the same grammatical structure. If the first item is a verb, they should all be verbs. If the first item is a noun, they should all be nouns. If the first item is a phrase starting with "to," they should all start with "to."
+
+**Not parallel:**
+- She likes *running*, *to swim*, and *bikes*. (verb, infinitive, noun — a mess)
+
+**Parallel:**
+- She likes *running*, *swimming*, and *biking*. (all -ing verbs)
+- She likes *to run*, *to swim*, and *to bike*. (all infinitives)
+
+This applies to more than just simple lists. Watch for parallelism in:
+- Bullet points and numbered lists
+- Comparisons ("more X than Y")
+- Paired constructions ("both/and," "either/or," "not only/but also")
+
+Think of it like balancing a see-saw. Whatever weight you put on one side, you need the same kind of weight on the other. "Not only a great singer" on one side? Then "but also a great dancer" on the other — not "but also she dances well." Same structure, same weight, balanced see-saw.
+
+Here's the real payoff: understanding parallel structure puts you in control of your sentences. Once you set up the first item in a list with a noun, you know the others will be nouns. Once you write "Running a marathon is harder than..." you know you need an -ing word on the other side — "running a 5K" or "working out at the gym." You're not guessing. You're building.
+
+That's one of our goals here: not just to follow rules, but to understand how language works so you can use it intentionally. When you know how to build powerful sentences, you can express yourself effectively — and that puts you in the driver's seat.
+
+When your structure is parallel, your reader glides through. When it's not, they stumble.
+
+## See It In Action
+
+**Example 1: Simple list**
+- ❌ Before: The job requires creativity, being organized, and you need to communicate well.
+- ✅ After: The job requires creativity, organization, and strong communication.
+- *Why:* All three items are now nouns. Clean and balanced.
+
+**Example 2: Verbs in a series**
+- ❌ Before: On weekends, I like to sleep in, eating brunch, and going to the movies.
+- ✅ After: On weekends, I like to sleep in, eat brunch, and go to the movies.
+- *Why:* After "like to," all verbs should be in base form (sleep, eat, go).
+
+**Example 3: Comparisons**
+- ❌ Before: Running a marathon is harder than to run a 5K.
+- ✅ After: Running a marathon is harder than running a 5K.
+- *Why:* Both sides of the comparison should match. "-ing" to "-ing."
+
+**Example 4: Paired constructions (not only/but also)**
+- ❌ Before: She is not only a great singer but also she dances well.
+- ✅ After: She is not only a great singer but also a great dancer.
+- *Why:* What follows "not only" should match what follows "but also" — both are now noun phrases.
+
+**Example 5: Bullet points**
+- ❌ Before:
+  - Organize your notes
+  - Reviewing the material
+  - To practice sample questions
+
+- ✅ After:
+  - Organize your notes
+  - Review the material
+  - Practice sample questions
+
+- *Why:* Each bullet starts with a command verb. Consistent structure.
+
+## Quick Tip
+**The finger test:** Point to each item in your list and say its grammatical form out loud. "Noun, noun, verb." If they don't match, fix it.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Fix the parallelism:
+"The coach told us to stretch, that we should hydrate, and running drills."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Fix the parallelism:
+"I'd rather be studying for the test than to play video games right now."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Fix the parallelism:
+"The new policy is both unfair and it costs too much."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Fix these bullet points so they're parallel:
+- Setting clear goals
+- To track your progress
+- Staying motivated
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Write your own sentence with a three-item list using parallel construction.
+
+`[Your response here]`
+
+---
+
+*Parallel construction isn't about being rigid — it's about being rhythmic. When your structure matches, your writing has a beat. When it doesn't, the beat drops out.*
