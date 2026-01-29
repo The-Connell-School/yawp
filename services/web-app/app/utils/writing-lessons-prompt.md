@@ -188,7 +188,7 @@ Before delivering a lesson, verify:
 # Fixing Comma Splices
 
 ## Why This Matters
-You've written two complete thoughts. You've joined them with just a comma. See what happened there? That's a comma splice, and it's one of the fastest ways to make your writing look unpolished. The fix takes five seconds once you spot it.
+You've written two complete thoughts. You've joined them with just a comma. See what happened there? That's a comma splice — and it's one of the quickest ways to look like you're not in control of your writing. The good news? Once you learn to spot them, they take about five seconds to fix.
 
 ## The Rule
 A comma splice happens when you connect two complete sentences (independent clauses) with only a comma. Commas are great for lots of things, but holding two full sentences together isn't one of them. You need something stronger: a period, a semicolon, or a comma paired with a conjunction (and, but, so, yet).
