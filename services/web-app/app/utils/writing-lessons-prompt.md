@@ -522,3 +522,98 @@ Find two consecutive paragraphs in your own writing. Look at the last sentence o
 ---
 
 *Strong transitions don't just move your reader along — they show your reader how your ideas fit together. Reach back before you step forward, and your argument will feel like one continuous thought.*
+
+---
+
+## Example Lesson 4
+
+**Topic:** The Oxford Comma
+
+---
+
+# The Oxford Comma
+
+## Why This Matters
+You're listing three things. You write: "I love my parents, Batman and Wonder Woman." Wait — are your parents Batman and Wonder Woman? Probably not. But without the Oxford comma, that's what your sentence says. One tiny comma can be the difference between clarity and chaos.
+
+## The Rule
+The Oxford comma (also called the serial comma) is the comma that comes before "and" or "or" in a list of three or more items.
+
+- Without: I bought apples, oranges and bananas.
+- With: I bought apples, oranges, and bananas.
+
+There's probably no punctuation mark more polarizing than the Oxford comma. Style guides disagree. English teachers disagree. The internet has very strong feelings, and so do we. We've literally gotten into bar fights with other writing programs to defend the Oxford comma. Friendships have ended. Holiday dinners have been ruined.
+
+Here's where we stand: **always use it.** It never hurts clarity, and skipping it sometimes does. Why take the risk? We will die on this hill.
+
+The Oxford comma is especially important when the last two items in your list could be misread as describing the first item — or when items in your list are long or complex.
+
+## See It In Action
+
+**Example 1: Avoiding confusion**
+- ❌ Before: I admire my teachers, Beyoncé and Kendrick Lamar.
+- ✅ After: I admire my teachers, Beyoncé, and Kendrick Lamar.
+- *Why:* Without the comma, it sounds like your teachers are Beyoncé and Kendrick Lamar. (Cool if true, but probably not.)
+
+**Example 2: Another classic mix-up**
+- ❌ Before: This book is dedicated to my parents, Oprah and God.
+- ✅ After: This book is dedicated to my parents, Oprah, and God.
+- *Why:* Unless Oprah and God are actually your parents, you need that comma.
+
+**Example 3: Complex list items**
+- ❌ Before: For breakfast I had eggs with hot sauce, toast with butter and jam and orange juice.
+- ✅ After: For breakfast I had eggs with hot sauce, toast with butter and jam, and orange juice.
+- *Why:* When list items themselves contain "and," the Oxford comma helps your reader see where one item ends and the next begins.
+
+**Example 4: When it seems optional (but use it anyway)**
+- ⚠️ Without: She bought notebooks, pens and highlighters.
+- ✅ With: She bought notebooks, pens, and highlighters.
+- *Why:* Sure, this one's clear without it. But if you always use the Oxford comma, you never have to stop and think "is this one of those confusing situations?" Just use it.
+
+## Quick Tip
+**Be consistent.** The worst thing you can do is use the Oxford comma sometimes and skip it other times in the same piece of writing. Pick a lane — we recommend the "always use it" lane — and stay there.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Add the Oxford comma to this sentence:
+"My favorite genres are horror, comedy and sci-fi."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+This sentence is confusing without the Oxford comma. Add it and explain what changes:
+"The documentary featured interviews with his ex-wives, Kris Jenner and Martha Stewart."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Add the Oxford comma to clarify this complex list:
+"The sandwich comes with lettuce, tomato, bacon and avocado and a side of fries."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Some people argue the Oxford comma isn't always necessary. Rewrite this sentence in a way that's clear WITHOUT the Oxford comma (hint: you may need to reorder the list):
+"I'd like to thank my mentor, my mother and my father."
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Write your own sentence with a list of three or more items where skipping the Oxford comma would create confusion or a funny misreading.
+
+`[Your response here]`
+
+---
+
+*The Oxford comma takes half a second to type and can save your reader from confusion — or your sentence from becoming a meme. Always use it.*
