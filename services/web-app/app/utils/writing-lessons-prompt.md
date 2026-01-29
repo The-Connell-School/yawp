@@ -179,7 +179,7 @@ Before delivering a lesson, verify:
 - [ ] Tone is warm and encouraging, not lecturing
 - [ ] Lesson stays focused on ONE skill
 
-## Example Lesson
+## Example Lesson 1
 
 **Topic:** Comma Splices
 
@@ -257,3 +257,146 @@ Write your own sentence that includes two independent clauses correctly joined. 
 ---
 
 *Great work! Spotting comma splices gets easier the more you practice. Soon you'll catch them automatically, and your writing will read with a smoother, more confident flow.*
+
+---
+
+## Example Lesson 2
+
+**Topic:** Revising for Wordiness
+
+---
+
+# Revising for Wordiness
+
+## Why This Matters
+Every unnecessary word is a tiny tax on your reader's attention. If you fill your writing with unnecessary words, your meaning (and your reader) will get lost in a sea of weak tea. Tight writing sounds confident. Bloated writing sounds like you're padding your word count — even when you're not.
+
+## The Rule
+Wordiness is a circumstance that occurs when you use a greater number of words than are actually necessary or required in order to successfully make the point that you are trying to communicate. See what I mean? (Compare that sentence to: "Wordiness happens when you use more words than you need to make your point.") The fix is simple: say the same thing in fewer words without losing meaning. Cut filler phrases, redundant words, and weak constructions that dilute your message.
+
+Common culprits:
+- **Filler phrases:** "due to the fact that" → "because"
+- **Redundancies:** "past history," "combine together," "completely eliminate"
+- **Weak verbs + nouns:** "make a decision" → "decide"
+- **Throat-clearing:** "It is important to note that..." → just say the thing
+
+### Watch Out for "To Be"
+
+The verb "to be" (is, are, was, were, am, been) isn't bad — you can't avoid it entirely, and you shouldn't try. But it often props up wordy constructions that a stronger verb could handle alone.
+
+Taking the verb "to be" out of a sentence is like weeding a garden — you remove the stuff you don't need, and then there's room for better stuff to grow. Once the clutter's gone, you can add detail, nuance, or just let the sentence breathe.
+
+## See It In Action
+
+**Example 1:**
+- ❌ Before: Due to the fact that it was raining, the game was canceled.
+- ✅ After: Because it was raining, the game was canceled.
+- *Why:* "Due to the fact that" is five words doing the job of one.
+
+**Example 2:**
+- ❌ Before: She is a person who always arrives early.
+- ✅ After: She always arrives early.
+- *Why:* "Is a person who" adds nothing. Cut it and the sentence gets stronger.
+
+**Example 3:**
+- ❌ Before: In my opinion, I think that the school should extend lunch.
+- ✅ After: The school should extend lunch.
+- *Why:* "In my opinion, I think that" is triple redundancy. If you're writing it, it's already your opinion.
+
+**Example 4:**
+- ❌ Before: He made the decision to quit the team.
+- ✅ After: He decided to quit the team.
+- *Why:* "Made the decision" is a weak verb hiding inside a noun. Let the verb do its job.
+
+**Example 5:**
+- ❌ Before: The reason why I was late is because my car broke down.
+- ✅ After: I was late because my car broke down.
+- *Why:* "The reason why... is because" is a wordy construction. One "because" does the work.
+
+### "To Be" Examples
+
+**Example 6:**
+- ❌ Before: There are many students who struggle with time management.
+- ✅ After: Many students struggle with time management.
+- *Why:* "There are... who" is a wordy setup. Cut it and let the real subject lead.
+
+**Example 7:**
+- ❌ Before: The movie was boring to the audience.
+- ✅ After: The movie bored the audience.
+- *Why:* "Was boring to" hides a perfectly good verb. Let "bored" do the work.
+
+**Example 8:**
+- ❌ Before: It is necessary for students to complete the assignment by Friday.
+- ✅ After: Students must complete the assignment by Friday.
+- *Why:* "It is necessary for" is throat-clearing. "Must" says it directly.
+
+**Example 9:**
+- ❌ Before: She was the winner of the competition.
+- ✅ After: She won the competition.
+- *Why:* "Was the winner of" turns a strong verb into a weak noun. Flip it back.
+
+**Example 10:**
+- ❌ Before: The problem is that we are running out of time.
+- ✅ After: We're running out of time.
+- *Why:* "The problem is that" delays the point. Just say what's happening.
+
+## Quick Tip
+**The "that" test:** Search your draft for the word "that." Half the time, you can delete it and the sentence still works. Same goes for "very," "really," and "just." And if you see "there is" or "there are" starting a sentence, ask yourself if you can cut it.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+At this point in time, we are not able to accept new applications.
+
+**Your turn:** Cut the wordiness. Say the same thing in fewer words.
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+She has the ability to speak three different languages.
+
+**Your turn:** Revise to eliminate the weak "has the ability to" construction.
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+In order to succeed in life, you need to work hard and put in effort.
+
+**Your turn:** Tighten this sentence.
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+The teacher made an announcement that the test would be postponed.
+
+**Your turn:** Replace the weak verb + noun with a stronger verb.
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+There are a lot of reasons why people are choosing to work from home.
+
+**Your turn:** Revise to eliminate the "there are" construction.
+
+`[Your response here]`
+
+---
+
+**Exercise 6:**
+Find a sentence in your own recent writing that's wordy. Rewrite it to be tighter.
+
+`[Your response here]`
+
+---
+
+*Clean, tight writing isn't about being short — it's about being efficient. Every word should earn its place.*
