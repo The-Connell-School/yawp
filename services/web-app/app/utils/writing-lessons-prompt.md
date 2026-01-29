@@ -1093,3 +1093,131 @@ Write a sentence using "each of the students" as your subject. Make sure the ver
 ---
 
 *Subject-verb agreement is all about matching. Find the real subject, ignore the distractions, and make sure your verb lines up. When they match, your sentence clicks into place.*
+
+---
+
+## Example Lesson 9
+
+**Topic:** Pronoun Agreement
+
+---
+
+# Pronoun Agreement
+
+## Why This Matters
+"Everyone should bring their laptop." "A student must do their best." Wait — is that right? This one trips people up because the rules have evolved. Pronoun agreement used to be simple: match singular with singular, plural with plural. But here's the cool thing about language — it changes. And now we have ways to write that are both grammatically sound *and* more inclusive and natural-sounding. Let's sort it out.
+
+## The Rule
+A pronoun must agree with the noun it refers to in number. If the noun is singular, the pronoun should be singular. If the noun is plural, the pronoun should be plural. (Note: the technical term for "the noun it refers to" is the *antecedent*.)
+
+- *The students forgot their books.* (plural antecedent, plural pronoun ✓)
+- *The student forgot her book.* (singular antecedent, singular pronoun ✓)
+
+Simple enough. But here's where it gets complicated:
+
+**The "Everyone" Problem**
+Words like *everyone*, *someone*, *anyone*, *each*, and *nobody* are grammatically singular. Traditional grammar says:
+
+- *Everyone should bring his or her laptop.*
+
+But let's be honest — that sounds clunky. And it leaves out people who don't identify as "he" or "she."
+
+**The Modern Solution: Singular "They"**
+Singular "they" has been used in English for centuries (Shakespeare used it), and it's now widely accepted — including by major style guides like APA, MLA, and the Chicago Manual of Style.
+
+- ✅ *Everyone should bring their laptop.*
+- ✅ *Someone left their umbrella.*
+- ✅ *Each student should do their best.*
+
+This is grammatically accepted, inclusive, and sounds natural. We recommend it.
+
+**When "They" Doesn't Work**
+If your teacher or style guide still requires traditional agreement, you have options:
+- Use "his or her": *Everyone should bring his or her laptop.*
+- Rewrite to plural: *All students should bring their laptops.*
+
+But honestly? Most modern writing embraces singular "they." It's clearer and more inclusive.
+
+**The Real Problem: Unclear Antecedents**
+The bigger issue isn't singular vs. plural — it's making sure your reader knows what the pronoun refers to.
+
+- ❌ *Maria told Jessica that she got the job.* (Who got the job? Maria or Jessica?)
+- ✅ *Maria told Jessica, "You got the job."*
+- ✅ *Maria told Jessica that Jessica got the job.*
+
+If your pronoun could refer to more than one noun, rewrite for clarity.
+
+## See It In Action
+
+**Example 1: Indefinite pronoun (modern usage)**
+- ⚠️ Clunky: Everyone must submit his or her application by Friday.
+- ✅ Better: Everyone must submit their application by Friday.
+- *Why:* Singular "they" is accepted and sounds more natural.
+
+**Example 2: Rewriting to plural**
+- ⚠️ Before: A doctor should always listen to his or her patients.
+- ✅ After: Doctors should always listen to their patients.
+- *Why:* Making the subject plural avoids the awkward "his or her" entirely.
+
+**Example 3: Unclear antecedent**
+- ❌ Before: When the bottle hit the glass, it broke.
+- ✅ After: When the bottle hit the glass, the glass broke.
+- *Why:* "It" could refer to either the bottle or the glass. Be specific.
+
+**Example 4: Collective noun**
+- ❌ Before: The band took their instruments and went to his bus.
+- ✅ After: The band took their instruments and went to their bus.
+- *Why:* Stay consistent. If you're treating "band" as plural ("their instruments"), keep it plural.
+
+**Example 5: Shifting number**
+- ❌ Before: When a person exercises regularly, they improve your health.
+- ✅ After: When a person exercises regularly, they improve their health.
+- *Why:* Don't shift from "a person" to "you." Keep the pronoun consistent with the antecedent.
+
+## Quick Tip
+**When in doubt, go plural.** If you're wrestling with "he or she" or worried about agreement, try making your subject plural from the start. *A writer should revise their work* becomes *Writers should revise their work.* Problem solved.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Fix the pronoun agreement:
+"Each of the players must bring his own equipment."
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Fix the unclear antecedent:
+"The teacher told the student that she needed to stay after class."
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Fix the shifting pronoun:
+"When someone studies hard, you will see results."
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Rewrite this sentence to avoid "his or her":
+"A customer should check his or her receipt before leaving."
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Write a sentence using "everyone" as the subject, with correct pronoun agreement.
+
+`[Your response here]`
+
+---
+
+*Pronoun agreement isn't just about following rules — it's about being clear and inclusive. Make sure your reader always knows who you're talking about, and use language that includes everyone.*
