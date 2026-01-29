@@ -400,3 +400,125 @@ Find a sentence in your own recent writing that's wordy. Rewrite it to be tighte
 ---
 
 *Clean, tight writing isn't about being short — it's about being efficient. Every word should earn its place.*
+
+---
+
+## Example Lesson 3
+
+**Topic:** Transition Sentences
+
+---
+
+# Transition Sentences
+
+## Why This Matters
+You've made a great point in one paragraph. You've got another great point coming in the next. But if you just slam them together, your reader gets whiplash. Transition sentences are the bridges that carry your reader from one idea to the next — without them, your essay feels like a list of disconnected thoughts instead of a smooth, flowing argument.
+
+## The Rule
+A transition sentence connects the idea you just finished to the idea you're about to introduce. Some writers place transitions at the end of a paragraph, teeing up what's coming next:
+
+*"Social media has changed how teens communicate. But communication isn't the only thing that's changed — and the next shift may be even more troubling."*
+
+This can work, but it often creates a sense of dramatic suspense — like you're teasing the next idea rather than just moving into it. It can feel like a trailer for a paragraph that hasn't arrived yet.
+
+We prefer placing transition sentences at the beginning of the new paragraph. This way, the transition reaches up into the paragraph that just ended, grabs a thread from that idea, and pulls it down to connect to what you're about to say.
+
+Here's that same example done our way:
+
+*Paragraph 1 ends:* "...Social media has changed how teens communicate."
+
+*Paragraph 2 begins:* "This shift in communication has also reshaped how they see themselves."
+
+No dramatic teaser. The first paragraph ends cleanly, and the next one picks up the thread and moves forward.
+
+Think of it this way: your transition sentence has one foot in the past and one foot in the future. It acknowledges where you've been before stepping into where you're going.
+
+Weak transitions rely on single words: "Also," "Next," "Additionally." These tell your reader *that* you're moving on, but not *how* the ideas connect. Strong transitions show the relationship between ideas — contrast, cause/effect, building on, qualifying, etc.
+
+## See It In Action
+
+**Example 1: Building on an idea**
+
+*End of Paragraph 1:* "...Social media has fundamentally changed how teens communicate with each other."
+
+- ❌ Weak transition: "Additionally, it affects their self-esteem."
+- ✅ Strong transition: "This shift in communication has also reshaped how they see themselves."
+- *Why:* "This shift in communication" reaches up and grabs the thread from the previous paragraph before introducing the new idea about self-esteem.
+
+**Example 2: Showing contrast**
+
+*End of Paragraph 1:* "...Proponents argue that homework reinforces what students learn in class."
+
+- ❌ Weak transition: "However, others disagree."
+- ✅ Strong transition: "But for students already stretched thin by sports, jobs, and family responsibilities, more work at home may do more harm than good."
+- *Why:* Instead of just saying "others disagree," we show *who* would see it differently and *why* — the transition brings the previous point along while pivoting to a new perspective.
+
+**Example 3: Cause and effect**
+
+*End of Paragraph 1:* "...Last year, the school cut funding for all arts programs."
+
+- ❌ Weak transition: "As a result, students lost opportunities."
+- ✅ Strong transition: "Without access to music and visual arts classes, students who once found their voice through creativity were left with nowhere to turn."
+- *Why:* The transition reaches back to "arts programs" and shows the specific human consequence — not just a vague "lost opportunities."
+
+**Example 4: Qualifying or complicating**
+
+*End of Paragraph 1:* "...Studies consistently show that regular exercise improves mental health."
+
+- ❌ Weak transition: "But there are exceptions."
+- ✅ Strong transition: "That said, telling someone in the grip of depression to 'just go for a run' ignores how hard it can be to take that first step."
+- *Why:* The transition doesn't just announce an exception — it reaches back to "exercise improves mental health" and complicates it with a real-world situation.
+
+## Quick Tip
+**The "reach up" test:** Before writing your transition, look at the last sentence of your previous paragraph. What word, phrase, or idea can you grab onto? Start your new paragraph by referencing that thread — then pivot to your new point.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Here's the last sentence of a paragraph: "School start times haven't changed in decades, even as research on teen sleep has evolved."
+
+Your next paragraph will discuss how sleep deprivation affects academic performance. Write a transition sentence that reaches up into this idea and connects it to what's coming.
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Revise this weak transition:
+"Video games can improve problem-solving skills. Also, they can be social."
+
+**Your turn:** Rewrite the second sentence to reach back and connect to the first idea.
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Here's the last sentence of a paragraph: "Reading builds vocabulary, strengthens critical thinking, and opens windows into other lives."
+
+Your next paragraph will acknowledge that not everyone has equal access to books. Write a transition that reaches up into the benefits before pivoting to this complication.
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Revise this weak transition:
+"Climate change is causing sea levels to rise. Another effect is extreme weather."
+
+**Your turn:** Rewrite to reach back and show how these effects connect.
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+Find two consecutive paragraphs in your own writing. Look at the last sentence of the first paragraph, then rewrite the first sentence of the second paragraph to better reach up and connect.
+
+`[Your response here]`
+
+---
+
+*Strong transitions don't just move your reader along — they show your reader how your ideas fit together. Reach back before you step forward, and your argument will feel like one continuous thought.*
