@@ -16,6 +16,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
+  // Handle archive/unarchive
+  if (request.method === 'POST') {
+    const formData = await request.formData();
+    const actionType = formData.get('action');
+
+    if (actionType === 'archive' || actionType === 'unarchive') {
+      const updated = await prisma.document.update({
+        where: { id: params.id, profileId: profile.id },
+        data: {
+          archivedAt: actionType === 'archive' ? new Date() : null,
+        },
+      });
+
+      if (!updated) {
+        return new Response(null, { status: 404 });
+      }
+      return new Response(null, { status: 204 });
+    }
+  }
+
   if (request.method === 'DELETE') {
     const updated = await prisma.document.update({
       where: { id: params.id, profileId: profile.id },

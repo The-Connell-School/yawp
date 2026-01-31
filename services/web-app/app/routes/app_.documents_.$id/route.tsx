@@ -1,20 +1,27 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
 import {
-  Link,
   useFetcher,
   useLoaderData,
   useNavigate,
   useSearchParams,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, AlertCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
-import { Button, button } from '~/components/ui/button';
+import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
@@ -25,6 +32,7 @@ import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
+import { GradeDetailsSheet } from './grade-details-sheet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -72,6 +80,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       text: true,
       submittedAt: true,
       submittedSnapshotId: true,
+      submittedSnapshot: {
+        select: {
+          id: true,
+          grades: {
+            select: {
+              id: true,
+              score: true,
+              feedback: true,
+              overallScore: true,
+              overallComment: true,
+              rubricScores: true,
+              releasedAt: true,
+              createdAt: true,
+            },
+            take: 1,
+          },
+        },
+      },
       versions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
       studentCourseModuleSessions: {
@@ -168,13 +194,19 @@ export default function Route() {
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
+  const [isGradeDetailsOpen, setIsGradeDetailsOpen] = useState(false);
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [hasEditorContent, setHasEditorContent] = useState(
+    !!(data.doc.html && data.doc.text)
+  );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') ?? 'tutor';
-  const exitTo = searchParams.get('exitTo');
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
+  const grade = data.doc.submittedSnapshot?.grades?.[0];
+  const isGradeReleased = grade?.releasedAt !== null && grade?.releasedAt !== undefined;
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -195,24 +227,49 @@ export default function Route() {
     if (submitFetcher.state === 'idle' && submitFetcher.data) {
       if (submitFetcher.data.success) {
         toast.success(submitFetcher.data.message || 'Essay submitted successfully!');
+        setIsFinalizeDialogOpen(false);
         // Reload the page to reflect the new submission status
         navigate(window.location.pathname + window.location.search, { replace: true });
       }
     }
   }, [submitFetcher.state, submitFetcher.data, navigate]);
 
+  useEffect(() => {
+    const handleEditorReady = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const getContent = customEvent.detail?.getContent;
+      if (!getContent) return;
+
+      // Check content immediately
+      const content = getContent();
+      setHasEditorContent(!!(content?.html && content?.text));
+
+      // Set up interval to check content
+      const interval = setInterval(() => {
+        const currentContent = getContent();
+        setHasEditorContent(!!(currentContent?.html && currentContent?.text));
+      }, 500);
+
+      return () => clearInterval(interval);
+    };
+
+    window.addEventListener('editor-ready', handleEditorReady);
+    return () => window.removeEventListener('editor-ready', handleEditorReady);
+  }, []);
+
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">
-            <Link
-              className={button({ variant: 'secondary', size: 'sm' })}
-              to={exitTo ?? '/app'}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(-1)}
             >
               <ArrowLeft className="h-4" />
               Exit
-            </Link>
+            </Button>
             <Input
               size="sm"
               className="rounded-lg border border-transparent font-bold transition hover:border-border"
@@ -235,39 +292,17 @@ export default function Route() {
               }
             />
           </div>
-          {!isViewingAsTeacher && (
+          {!isViewingAsTeacher && isSubmitted && (
             <div className="flex items-center gap-2">
-              {isSubmitted && (
+              {isGradeReleased ? (
                 <Badge variant="success" className="text-xs">
-                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
+                  Graded {new Date(grade.releasedAt!).toLocaleDateString()}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">
+                  Being graded {new Date(data.doc.submittedAt!).toLocaleDateString()}
                 </Badge>
               )}
-              <Button
-                size="sm"
-                variant={isSubmitted ? 'outline' : 'default'}
-                disabled={isSubmitting || !data.doc.html || !data.doc.text}
-                onClick={() => {
-                  submitFetcher.submit(
-                    { documentId: data.doc.id },
-                    {
-                      method: 'POST',
-                      action: '/api/domain/submit-document',
-                    }
-                  );
-                }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
-                  </>
-                )}
-              </Button>
             </div>
           )}
           {isViewingAsTeacher ? (
@@ -284,22 +319,73 @@ export default function Route() {
               )}
             </div>
           ) : null}
-          <div className="ml-auto flex w-[135px] items-center gap-4">
-            {isSaving ? (
-              <div className="flex items-center gap-1 text-muted-foreground/70">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <p className="text-sm">Saving</p>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1 text-muted-foreground/70">
-                <Check className="h-4 w-4" />
-                <p className="mr-2 text-sm">Saved</p>
-              </div>
+          <div className="ml-auto flex items-center gap-4">
+            {!isViewingAsTeacher && !isSubmitted && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isSubmitting || !hasEditorContent}
+                  onClick={() => setIsFinalizeDialogOpen(true)}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Finalizing...
+                    </>
+                  ) : (
+                    'Finalize'
+                  )}
+                </Button>
+                <div className="h-[20px] border-r" />
+              </>
             )}
-            <div className="h-[20px] border-r" />
-            <DocumentVersions documentId={data.doc.id} />
+            <div className="flex w-[135px] items-center gap-4">
+              {isSaving ? (
+                <div className="flex items-center gap-1 text-muted-foreground/70">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <p className="text-sm">Saving</p>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-muted-foreground/70">
+                  <Check className="h-4 w-4" />
+                  <p className="mr-2 text-sm">Saved</p>
+                </div>
+              )}
+              <div className="h-[20px] border-r" />
+              <DocumentVersions documentId={data.doc.id} />
+            </div>
           </div>
         </nav>
+        {grade && ((!isViewingAsTeacher && isGradeReleased) || isViewingAsTeacher) && (
+          <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 dark:bg-green-950/20 px-3 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Badge variant={isGradeReleased ? 'success' : 'secondary'}>
+                  {isGradeReleased ? 'Grade Released' : 'Graded (Not Released)'}
+                </Badge>
+                <span className="text-sm font-medium">
+                  {grade.score || (grade.overallScore ? `${grade.overallScore}/5` : 'Graded')}
+                </span>
+              </div>
+              {(grade.feedback || grade.overallComment) && (
+                <div className="flex-1 sm:mx-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {grade.overallComment || grade.feedback}
+                  </p>
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsGradeDetailsOpen(true)}
+                className="bg-white dark:bg-background"
+              >
+                View Details
+              </Button>
+            </div>
+          </div>
+        )}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">
@@ -336,6 +422,76 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
+      {grade && (isGradeReleased || isViewingAsTeacher) && (
+        <GradeDetailsSheet
+          isOpen={isGradeDetailsOpen}
+          onClose={() => setIsGradeDetailsOpen(false)}
+          grade={grade}
+        />
+      )}
+      <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600" />
+              Finalize Document
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2">
+              <p>
+                Before you finalize this document, please note the following:
+              </p>
+              <ul className="list-disc space-y-2 pl-5 text-sm">
+                <li>
+                  Once finalized, any changes you make to this document will{' '}
+                  <strong>not be reflected</strong> in the version sent for grading.
+                </li>
+                <li>
+                  This action <strong>cannot be undone</strong>. You will not be able to
+                  resubmit the document.
+                </li>
+                <li>
+                  Your teacher will receive the current version of your document for
+                  grading.
+                </li>
+              </ul>
+              <p className="pt-2 font-medium">
+                Are you sure you want to finalize this document?
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                submitFetcher.submit(
+                  { documentId: data.doc.id },
+                  {
+                    method: 'POST',
+                    action: '/api/domain/submit-document',
+                  }
+                );
+              }}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Finalizing...
+                </>
+              ) : (
+                'Finalize Document'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

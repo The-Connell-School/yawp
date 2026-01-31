@@ -1,4 +1,5 @@
 import { useFetcher } from 'react-router';
+import { useEffect, useRef } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -40,12 +41,18 @@ type ReleaseGradesSheetProps = {
   onSuccess?: () => void;
 };
 
-export function ReleaseGradesSheet({ grades, isOpen, onClose, onSuccess }: ReleaseGradesSheetProps) {
+export function ReleaseGradesSheet({
+  grades,
+  isOpen,
+  onClose,
+  onSuccess,
+}: ReleaseGradesSheetProps) {
   const fetcher = useFetcher();
+  const hasProcessedSuccess = useRef(false);
 
   const handleRelease = () => {
     const formData = new FormData();
-    grades.forEach(grade => {
+    grades.forEach((grade) => {
       formData.append('gradeIds', grade.id);
     });
 
@@ -56,10 +63,24 @@ export function ReleaseGradesSheet({ grades, isOpen, onClose, onSuccess }: Relea
   };
 
   // Close and reload when submission is successful
-  if (fetcher.data?.success && fetcher.state === 'idle') {
-    onClose();
-    onSuccess?.();
-  }
+  useEffect(() => {
+    if (
+      fetcher.data?.success &&
+      fetcher.state === 'idle' &&
+      !hasProcessedSuccess.current
+    ) {
+      hasProcessedSuccess.current = true;
+      onClose();
+      onSuccess?.();
+    }
+  }, [fetcher.data, fetcher.state, onClose, onSuccess]);
+
+  // Reset when sheet closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasProcessedSuccess.current = false;
+    }
+  }, [isOpen]);
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -67,7 +88,8 @@ export function ReleaseGradesSheet({ grades, isOpen, onClose, onSuccess }: Relea
         <SheetHeader>
           <SheetTitle>Release Grades to Students</SheetTitle>
           <SheetDescription>
-            Review the grades below before releasing them to students. Once released, students will be able to see their grades and feedback.
+            Review the grades below before releasing them to students. Once
+            released, students will be able to see their grades and feedback.
           </SheetDescription>
         </SheetHeader>
 
@@ -86,7 +108,8 @@ export function ReleaseGradesSheet({ grades, isOpen, onClose, onSuccess }: Relea
                 {grades.map((grade) => (
                   <TableRow key={grade.id}>
                     <TableCell className="font-medium">
-                      {grade.document.profile.user.name || grade.document.profile.user.email}
+                      {grade.document.profile.user.name ||
+                        grade.document.profile.user.email}
                     </TableCell>
                     <TableCell>{grade.document.title}</TableCell>
                     <TableCell>
@@ -126,10 +149,7 @@ export function ReleaseGradesSheet({ grades, isOpen, onClose, onSuccess }: Relea
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleRelease}
-              disabled={fetcher.state !== 'idle'}
-            >
+            <Button onClick={handleRelease} disabled={fetcher.state !== 'idle'}>
               {fetcher.state !== 'idle'
                 ? 'Releasing...'
                 : `Release ${grades.length} ${grades.length === 1 ? 'Grade' : 'Grades'}`}

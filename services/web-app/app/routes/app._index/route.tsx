@@ -100,6 +100,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                score: true,
+                overallScore: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     prisma.document.findMany({
@@ -113,6 +125,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
         studentCourseModuleSessions: {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
+        },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                score: true,
+                overallScore: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
         },
       },
     }),
@@ -420,7 +444,7 @@ export default function AppRoute() {
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                         {data.archivedDocuments.map((doc) => (
-                          <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                          <DocumentLink key={doc.id} doc={doc} exitTo="/app" isArchived />
                         ))}
                       </div>
                     </AccordionContent>
@@ -500,7 +524,7 @@ export default function AppRoute() {
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                       {data.archivedDocuments.map((doc) => (
-                        <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                        <DocumentLink key={doc.id} doc={doc} exitTo="/app" isArchived />
                       ))}
                     </div>
                   </AccordionContent>

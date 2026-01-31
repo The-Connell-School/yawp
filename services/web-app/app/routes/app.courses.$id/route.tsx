@@ -57,6 +57,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
         },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                score: true,
+                overallScore: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     prisma.document.findMany({
@@ -74,6 +86,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           take: 1,
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
+        },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                score: true,
+                overallScore: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
         },
       },
     }),
@@ -283,6 +307,7 @@ export default function AppCoursesIdRoute() {
                             key={doc.id}
                             doc={doc}
                             exitTo={`/app/courses/${data.course.id}`}
+                            isArchived
                           />
                         ))}
                       </div>

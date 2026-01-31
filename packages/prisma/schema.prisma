@@ -448,3 +448,23 @@ model PasteAlert {
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
 }
+
+model LlmLog {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+  model          String
+  provider       String   // 'anthropic' or 'openai'
+  inputTokens    Int?
+  outputTokens   Int?
+  totalTokens    Int?
+  durationMs     Int?
+  systemPrompt   String?
+  messages       Json     // Input messages
+  response       String?  // Output text
+  error          String?  // Error message if failed
+  metadata       Json?    // Any additional context (e.g., caller info)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([model])
+  @@index([provider])
+}

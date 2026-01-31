@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import {
   Sheet,
@@ -115,6 +115,7 @@ export function GradingSheet({
   const [rubricScores, setRubricScores] =
     useState<Record<string, RubricScore>>(buildEmptyRubric());
   const [overallComment, setOverallComment] = useState('');
+  const hasProcessedSuccess = useRef(false);
 
   const isMultiple = documents.length > 1;
   const existingGrade = !isMultiple
@@ -146,7 +147,7 @@ export function GradingSheet({
     }
   }, [isEditing, existingGrade]);
 
-  const overallScore = useMemo(() => {
+  const computedOverallScore = useMemo(() => {
     const scores = rubric.map((item) => rubricScores[item.key]?.score || 0);
     const validScores = scores.filter((scoreValue) => scoreValue > 0);
     if (validScores.length === 0) return null;
@@ -155,20 +156,26 @@ export function GradingSheet({
     return Math.round(average);
   }, [rubricScores]);
 
+  // Sync score field when rubric-computed score changes
+  useEffect(() => {
+    if (computedOverallScore !== null) {
+      setScore(`${computedOverallScore}/5`);
+    }
+  }, [computedOverallScore]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const computedScore = overallScore !== null ? `${overallScore}/5` : score;
     const formData = new FormData();
 
     if (isEditing) {
       // Update existing grade
       formData.append('gradeId', existingGrade!.id);
-      formData.append('score', computedScore);
+      formData.append('score', score);
       formData.append('feedback', feedback || overallComment);
       formData.append('rubricScores', JSON.stringify(rubricScores));
-      if (overallScore !== null) {
-        formData.append('overallScore', overallScore.toString());
+      if (computedOverallScore !== null) {
+        formData.append('overallScore', computedOverallScore.toString());
       }
       formData.append('overallComment', overallComment);
 
@@ -181,11 +188,11 @@ export function GradingSheet({
       documents.forEach((doc) => {
         formData.append('documentIds', doc.id);
       });
-      formData.append('score', computedScore);
+      formData.append('score', score);
       formData.append('feedback', feedback || overallComment);
       formData.append('rubricScores', JSON.stringify(rubricScores));
-      if (overallScore !== null) {
-        formData.append('overallScore', overallScore.toString());
+      if (computedOverallScore !== null) {
+        formData.append('overallScore', computedOverallScore.toString());
       }
       formData.append('overallComment', overallComment);
       if (releaseImmediately) {
@@ -201,7 +208,12 @@ export function GradingSheet({
 
   // Reset form and close when submission is successful
   useEffect(() => {
-    if (fetcher.data?.success && fetcher.state === 'idle') {
+    if (
+      fetcher.data?.success &&
+      fetcher.state === 'idle' &&
+      !hasProcessedSuccess.current
+    ) {
+      hasProcessedSuccess.current = true;
       setScore('');
       setFeedback('');
       setReleaseImmediately(false);
@@ -211,6 +223,18 @@ export function GradingSheet({
       onSuccess?.();
     }
   }, [fetcher.data, fetcher.state, onClose, onSuccess]);
+
+  // Reset form when sheet closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasProcessedSuccess.current = false;
+      setScore('');
+      setFeedback('');
+      setReleaseImmediately(false);
+      setRubricScores(buildEmptyRubric());
+      setOverallComment('');
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (aiFetcher.data?.success && aiFetcher.state === 'idle') {
@@ -396,7 +420,7 @@ export function GradingSheet({
                 <div className="text-sm font-medium">
                   Overall Score:{' '}
                   <span className="text-muted-foreground">
-                    {overallScore !== null ? `${overallScore}/5` : '—'}
+                    {computedOverallScore !== null ? `${computedOverallScore}/5` : '—'}
                   </span>
                 </div>
               </div>
@@ -409,7 +433,7 @@ export function GradingSheet({
                   return (
                     <div
                       key={item.key}
-                      className="rounded-lg border p-3 space-y-2"
+                      className="rounded-lg border bg-muted p-3 space-y-2"
                     >
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>

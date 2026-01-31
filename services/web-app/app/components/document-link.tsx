@@ -15,11 +15,22 @@ type Props = {
   exitTo: string;
   doc: Document & {
     studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
+    submittedSnapshot?: {
+      grades: {
+        score: string | null;
+        overallScore: number | null;
+        releasedAt: Date | string | null;
+      }[];
+    } | null;
   };
+  isArchived?: boolean;
 };
 
-export const DocumentLink = ({ doc, exitTo }: Props) => {
-  const deleteDocumentFetcher = useFetcher();
+export const DocumentLink = ({ doc, exitTo, isArchived = false }: Props) => {
+  const archiveFetcher = useFetcher();
+  const grade = doc.submittedSnapshot?.grades?.[0];
+  const isGradeReleased = grade?.releasedAt !== null && grade?.releasedAt !== undefined;
+  const gradeDisplay = grade?.score || (grade?.overallScore ? `${grade.overallScore}/5` : null);
 
   return (
     <Link
@@ -30,6 +41,11 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
       <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
         {doc.studentCourseModuleSessions[0]?.studentCourseModule.title}
       </span>
+      {isGradeReleased && gradeDisplay && (
+        <span className="absolute left-0 top-0 z-20 rounded-br-lg rounded-tl-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
+          Grade: {gradeDisplay}
+        </span>
+      )}
       {doc.html ? (
         <div
           dangerouslySetInnerHTML={{ __html: doc.html }}
@@ -71,20 +87,25 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <deleteDocumentFetcher.Form
-              method="DELETE"
-              action={`/api/model/document/${doc.id}?from=document-link`}
+            <archiveFetcher.Form
+              method="POST"
+              action={`/api/model/document/${doc.id}`}
             >
+              <input
+                type="hidden"
+                name="action"
+                value={isArchived ? 'unarchive' : 'archive'}
+              />
               <DropdownMenuItem asChild>
                 <Button
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Delete
+                  {isArchived ? 'Unarchive' : 'Archive'}
                 </Button>
               </DropdownMenuItem>
-            </deleteDocumentFetcher.Form>
+            </archiveFetcher.Form>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

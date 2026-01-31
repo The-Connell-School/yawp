@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { PostHogProvider } from 'posthog-js/react';
 import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
+import { SessionExpiryModal } from './components/session-expiry-modal.tsx';
 import { Toaster } from './components/toaster.tsx';
 import { Tooltip } from './components/ui/tooltip.tsx';
 import { useNonce } from './contexts/nonce.ts';
@@ -275,6 +276,7 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         </div>
       </div>
       <Toaster toast={data.toast} />
+      <SessionExpiryModal />
     </Document>
   );
 

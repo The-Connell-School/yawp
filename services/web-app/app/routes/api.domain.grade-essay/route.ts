@@ -6,7 +6,7 @@ import { prisma } from '~/utils/db.server';
 
 // Schema for single or bulk grading
 const POST = z.object({
-  documentIds: z.array(z.string()).min(1, 'At least one document is required'),
+  documentIds: z.union([z.string(), z.array(z.string())]),
   score: z.string().optional(),
   feedback: z.string().optional(),
   rubricScores: z.string().optional(),
@@ -29,6 +29,17 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+
+  // Normalize documentIds to always be an array
+  const documentIds = Array.isArray(data.documentIds)
+    ? data.documentIds
+    : [data.documentIds];
+
+  if (documentIds.length === 0) {
+    return validationError({
+      fieldErrors: { documentIds: 'At least one document is required' },
+    });
+  }
 
   // Get teacher's profile
   const profile = await prisma.profile.findFirst({
@@ -56,12 +67,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Get the teacher's class IDs for verification
-  const teacherClassIds = profile.teacherProfile.classes.map(c => c.id);
+  const teacherClassIds = profile.teacherProfile.classes.map((c) => c.id);
 
   // Verify all documents exist, are submitted, and belong to students in teacher's classes
   const documents = await prisma.document.findMany({
     where: {
-      id: { in: data.documentIds },
+      id: { in: documentIds },
       submittedAt: { not: null },
       submittedSnapshotId: { not: null },
       classId: { in: teacherClassIds },
@@ -87,7 +98,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (documents.length !== data.documentIds.length) {
+  if (documents.length !== documentIds.length) {
     return dataResponse(
       {
         success: false,
@@ -108,7 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const overallComment = data.overallComment ?? null;
 
   // Create or update grades for all submitted snapshots
-  const gradePromises = documents.map(doc => {
+  const gradePromises = documents.map((doc) => {
     if (!doc.submittedSnapshotId) {
       throw new Error(`Document ${doc.id} has no submitted snapshot`);
     }

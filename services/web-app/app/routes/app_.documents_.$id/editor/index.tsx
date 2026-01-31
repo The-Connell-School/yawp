@@ -62,6 +62,21 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
     immediatelyRender: false,
   });
 
+  // Register editor content getter with context
+  useEffect(() => {
+    if (!editor) return;
+
+    const event = new CustomEvent('editor-ready', {
+      detail: {
+        getContent: () => ({
+          html: editor.getHTML(),
+          text: editor.getText(),
+        }),
+      },
+    });
+    window.dispatchEvent(event);
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
 

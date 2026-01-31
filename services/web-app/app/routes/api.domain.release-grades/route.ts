@@ -5,7 +5,14 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 const POST = z.object({
-  gradeIds: z.array(z.string()).min(1, 'At least one grade is required'),
+  gradeIds: z.preprocess(
+    value => {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') return [value];
+      return value;
+    },
+    z.array(z.string()).min(1, 'At least one grade is required')
+  ),
 });
 
 export async function action({ request }: ActionFunctionArgs) {

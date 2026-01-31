@@ -1,5 +1,10 @@
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { useFetcher, useLoaderData } from 'react-router';
+import {
+  useFetcher,
+  useLoaderData,
+  useSearchParams,
+  useNavigate,
+} from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
@@ -21,20 +26,22 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { CaretLeftIcon } from '~/components/icons';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DocumentLink } from '~/components/document-link';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '~/components/ui/select';
 import { Checkbox } from '~/components/ui/checkbox';
 import { GradingSheet } from './grading-sheet';
 import { ReleaseGradesSheet } from './release-grades-sheet';
+import {
+  FileText,
+  ClipboardCheck,
+  Send,
+  User,
+  AlertCircle,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
+import { Pagination } from '~/components/table/pagination';
+import { timeAgo } from '~/utils/timeAgo';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -189,6 +196,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
+  // Get in-progress documents (not submitted, recent activity)
+  const inProgressDocuments = await prisma.document.findMany({
+    where: {
+      classId,
+      submittedAt: null,
+      updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+    },
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      profile: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
+      studentCourseModuleSessions: {
+        select: {
+          studentCourseModule: { select: { title: true } },
+        },
+        take: 1,
+      },
+    },
+    orderBy: {
+      updatedAt: 'desc',
+    },
+    take: 20, // Limit to most recent 20
+  });
+
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
 
   return dataResponse({
@@ -196,61 +238,101 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     profiles,
     pasteAlerts,
     submittedDocuments,
+    inProgressDocuments,
     submittedPapersFilter,
   });
 }
 
+type TabValue =
+  | 'in-progress'
+  | 'to-grade'
+  | 'graded'
+  | 'released'
+  | 'paste-activity'
+  | 'students';
+
 export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
-  console.log(data);
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
-  const [selectedPasteContent, setSelectedPasteContent] = useState<string | null>(
-    null
+  const [selectedPasteContent, setSelectedPasteContent] = useState<
+    string | null
+  >(null);
+  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(
+    new Set()
   );
-  const filterFetcher = useFetcher();
-  const [gradeFilter, setGradeFilter] = useState<
-    'all' | 'graded' | 'non-graded'
-  >(data.submittedPapersFilter);
-  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(new Set());
-  const [gradingDocuments, setGradingDocuments] = useState<typeof data.submittedDocuments>([]);
+  const [gradingDocuments, setGradingDocuments] = useState<
+    typeof data.submittedDocuments
+  >([]);
   const [isGradingSheetOpen, setIsGradingSheetOpen] = useState(false);
-  const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] = useState(false);
+  const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
+    useState(false);
+
+  // Tab and pagination state
+  const activeTab = (searchParams.get('tab') as TabValue) || 'in-progress';
+  const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+
   const students = data.klass.students;
 
-  // Filter submitted documents based on grading status
-  const filteredDocuments = useMemo(() => {
+  // Reset pagination when tab changes
+  useEffect(() => {
+    setPagination({ skip: 0, take: 20 });
+  }, [activeTab]);
+
+  // Get ungraded documents
+  const ungradedDocuments = useMemo(() => {
     return data.submittedDocuments.filter((doc) => {
       const grade = doc.submittedSnapshot?.grades?.[0];
-      if (gradeFilter === 'all') return true;
-      if (gradeFilter === 'graded') return grade !== undefined;
-      if (gradeFilter === 'non-graded') return grade === undefined;
-      return true;
+      return !grade;
     });
-  }, [data.submittedDocuments, gradeFilter]);
+  }, [data.submittedDocuments]);
+
+  // Get graded but unreleased documents
+  const gradedUnreleasedDocuments = useMemo(() => {
+    return data.submittedDocuments.filter((doc) => {
+      const grade = doc.submittedSnapshot?.grades?.[0];
+      return grade && !grade.releasedAt;
+    });
+  }, [data.submittedDocuments]);
+
+  // Get released documents
+  const releasedDocuments = useMemo(() => {
+    return data.submittedDocuments.filter((doc) => {
+      const grade = doc.submittedSnapshot?.grades?.[0];
+      return grade && grade.releasedAt;
+    });
+  }, [data.submittedDocuments]);
 
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
-    return data.submittedDocuments
-      .filter((doc) => {
-        const grade = doc.submittedSnapshot?.grades?.[0];
-        return grade && !grade.releasedAt;
-      })
-      .map((doc) => {
-        const grade = doc.submittedSnapshot!.grades[0];
-        return {
-          id: grade.id,
-          score: grade.score,
-          feedback: grade.feedback,
-          document: {
-            id: doc.id,
-            title: doc.title,
-            profile: doc.profile,
-          },
-        };
-      });
-  }, [data.submittedDocuments]);
+    return gradedUnreleasedDocuments.map((doc) => {
+      const grade = doc.submittedSnapshot!.grades[0];
+      return {
+        id: grade.id,
+        score: grade.score,
+        feedback: grade.feedback,
+        document: {
+          id: doc.id,
+          title: doc.title,
+          profile: doc.profile,
+        },
+      };
+    });
+  }, [gradedUnreleasedDocuments]);
+
+  // Handle URL param for to-release action
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'to-release') {
+      if (unreleasedGrades.length > 0) {
+        setIsReleaseGradesSheetOpen(true);
+        navigate(`?tab=graded`, { replace: true });
+      }
+    }
+  }, [searchParams, navigate, unreleasedGrades]);
 
   // Toggle document selection
   const toggleDocumentSelection = (docId: string) => {
@@ -263,18 +345,25 @@ export default function ClassDetailRoute() {
     setSelectedDocuments(newSelection);
   };
 
-  // Toggle all documents
-  const toggleAllDocuments = () => {
-    if (selectedDocuments.size === filteredDocuments.length) {
-      setSelectedDocuments(new Set());
+  // Toggle all documents for a specific list
+  const toggleAllDocuments = (docList: typeof data.submittedDocuments) => {
+    const docIds = docList.map((d) => d.id);
+    if (docIds.every((id) => selectedDocuments.has(id))) {
+      const newSelection = new Set(selectedDocuments);
+      docIds.forEach((id) => newSelection.delete(id));
+      setSelectedDocuments(newSelection);
     } else {
-      setSelectedDocuments(new Set(filteredDocuments.map(d => d.id)));
+      const newSelection = new Set(selectedDocuments);
+      docIds.forEach((id) => newSelection.add(id));
+      setSelectedDocuments(newSelection);
     }
   };
 
   // Open grading sheet for selected documents
   const openGradingSheet = (documentIds: string[]) => {
-    const docs = data.submittedDocuments.filter(d => documentIds.includes(d.id));
+    const docs = data.submittedDocuments.filter((d) =>
+      documentIds.includes(d.id)
+    );
     setGradingDocuments(docs);
     setIsGradingSheetOpen(true);
   };
@@ -291,8 +380,447 @@ export default function ClassDetailRoute() {
     ? (data.profiles.find((p) => p.id === selectedProfileId)?.documents ?? [])
     : [];
 
+  // Get current tab data and paginate it
+  const currentTabData = useMemo(() => {
+    switch (activeTab) {
+      case 'in-progress':
+        return data.inProgressDocuments;
+      case 'to-grade':
+        return ungradedDocuments;
+      case 'graded':
+        return gradedUnreleasedDocuments;
+      case 'released':
+        return releasedDocuments;
+      case 'paste-activity':
+        return data.pasteAlerts;
+      case 'students':
+        return students;
+      default:
+        return [];
+    }
+  }, [
+    activeTab,
+    data.inProgressDocuments,
+    ungradedDocuments,
+    gradedUnreleasedDocuments,
+    releasedDocuments,
+    data.pasteAlerts,
+    students,
+  ]);
+
+  const paginatedData = useMemo(() => {
+    return currentTabData.slice(
+      pagination.skip,
+      pagination.skip + pagination.take
+    );
+  }, [currentTabData, pagination.skip, pagination.take]);
+
+  const handleTabChange = (value: string) => {
+    navigate(`?tab=${value}`);
+  };
+
+  const handlePaginationChange = (skip: number, take: number) => {
+    setPagination({ skip, take });
+  };
+
+  // Render table based on active tab
+  const renderTable = () => {
+    if (paginatedData.length === 0) {
+      return (
+        <div className="text-center text-muted-foreground py-8">
+          <p>
+            {activeTab === 'in-progress' && 'No in-progress documents.'}
+            {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
+            {activeTab === 'graded' && 'No grades ready to release.'}
+            {activeTab === 'released' && 'No released documents yet.'}
+            {activeTab === 'paste-activity' &&
+              'No copy/paste activity detected yet.'}
+            {activeTab === 'students' && 'No students in this class yet.'}
+          </p>
+        </div>
+      );
+    }
+
+    if (activeTab === 'in-progress') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Document</TableHead>
+                <TableHead>Course Module</TableHead>
+                <TableHead>Last Updated</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map(
+                (doc: (typeof data.inProgressDocuments)[0]) => (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">
+                      {doc.profile.user.name || doc.profile.user.email}
+                    </TableCell>
+                    <TableCell>{doc.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                        .title || '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {timeAgo(new Date(doc.updatedAt))}
+                    </TableCell>
+                    <TableCell>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'to-grade') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={
+                      ungradedDocuments.length > 0 &&
+                      ungradedDocuments.every((d) =>
+                        selectedDocuments.has(d.id)
+                      )
+                    }
+                    onCheckedChange={() =>
+                      toggleAllDocuments(ungradedDocuments)
+                    }
+                    aria-label="Select all"
+                  />
+                </TableHead>
+                <TableHead>Student</TableHead>
+                <TableHead>Essay</TableHead>
+                <TableHead>Course Module</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map((doc: (typeof ungradedDocuments)[0]) => (
+                <TableRow key={doc.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedDocuments.has(doc.id)}
+                      onCheckedChange={() => toggleDocumentSelection(doc.id)}
+                      aria-label={`Select ${doc.title}`}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {doc.profile.user.name || doc.profile.user.email}
+                  </TableCell>
+                  <TableCell>{doc.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                      .title || '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {timeAgo(new Date(doc.submittedAt!))}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => openGradingSheet([doc.id])}
+                      >
+                        Grade
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'graded') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Essay</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Graded</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map(
+                (doc: (typeof gradedUnreleasedDocuments)[0]) => {
+                  const grade = doc.submittedSnapshot!.grades[0];
+                  return (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium">
+                        {doc.profile.user.name || doc.profile.user.email}
+                      </TableCell>
+                      <TableCell>{doc.title}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{grade.score || '—'}</Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {timeAgo(new Date(grade.createdAt))}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                            >
+                              View
+                            </Link>
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => openGradingSheet([doc.id])}
+                          >
+                            Edit Grade
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'released') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Essay</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Released</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map((doc: (typeof releasedDocuments)[0]) => {
+                const grade = doc.submittedSnapshot!.grades[0];
+                return (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">
+                      {doc.profile.user.name || doc.profile.user.email}
+                    </TableCell>
+                    <TableCell>{doc.title}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{grade.score || '—'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {timeAgo(new Date(grade.releasedAt!))}
+                    </TableCell>
+                    <TableCell>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'paste-activity') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student</TableHead>
+                <TableHead>Document</TableHead>
+                <TableHead>Date & Time</TableHead>
+                <TableHead className="text-right">Characters</TableHead>
+                <TableHead>Content</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map((alert: (typeof data.pasteAlerts)[0]) => {
+                const truncatedContent = alert.content
+                  ? alert.content.length > 100
+                    ? alert.content.substring(0, 100) + '...'
+                    : alert.content
+                  : null;
+                return (
+                  <TableRow key={alert.id}>
+                    <TableCell className="font-medium">
+                      {alert.profile.user.name || alert.profile.user.email}
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        to={`/app/documents/${alert.document.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {alert.document.title}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {timeAgo(new Date(alert.createdAt))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="secondary">
+                        {alert.textLength.toLocaleString()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {truncatedContent ? (
+                        <button
+                          onClick={() =>
+                            setSelectedPasteContent(alert.content || null)
+                          }
+                          className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
+                          title="Click to view full content"
+                        >
+                          {truncatedContent}
+                        </button>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'students') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Student Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Documents</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map((s: (typeof students)[0]) => {
+                const studentDocs =
+                  data.profiles.find((p) => p.id === s.profile.id)?.documents ??
+                  [];
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">
+                      {s.profile.user.name ?? 'Unnamed Student'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {s.profile.user.email}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{studentDocs.length}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Sheet>
+                        <SheetTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedProfileId(s.profile.id)}
+                          >
+                            View Details
+                          </Button>
+                        </SheetTrigger>
+                        <SheetContent className="w-full sm:max-w-lg">
+                          <SheetHeader>
+                            <SheetTitle>Student Details</SheetTitle>
+                          </SheetHeader>
+                          <div className="mt-4 space-y-4">
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">
+                                Student
+                              </div>
+                              <div className="font-medium">
+                                {s.profile.user.name ?? 'Unnamed Student'}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {s.profile.user.email}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-sm text-muted-foreground mb-1">
+                                Documents
+                              </div>
+                              {studentDocs.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">
+                                  No documents yet.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 gap-2">
+                                  {studentDocs.map((doc) => (
+                                    <DocumentLink
+                                      key={doc.id}
+                                      doc={doc as any}
+                                      exitTo={`/app/my-classes/${data.klass.id}`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </SheetContent>
+                      </Sheet>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+      {/* Header */}
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
           <div className="flex flex-col">
@@ -312,334 +840,184 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-4">
-          <Button asChild variant="outline">
+        <div className="mb-6">
+          <Button asChild variant="outline" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
         </div>
 
-        <Tabs defaultValue="students" className="w-full">
-          <TabsList>
-            <TabsTrigger value="students">
-              Students ({students.length})
-            </TabsTrigger>
-            <TabsTrigger value="submitted-papers">
-              Submitted Papers ({data.submittedDocuments.length})
-            </TabsTrigger>
-            <TabsTrigger value="paste-activity">
-              Copy/Paste Activity ({data.pasteAlerts.length})
-            </TabsTrigger>
-          </TabsList>
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          <button
+            onClick={() => handleTabChange('students')}
+            className="flex flex-col items-center p-4 rounded-lg bg-muted/50 border hover:bg-muted transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1 text-muted-foreground mb-1">
+              <User className="w-4 h-4" />
+              <span className="text-xs font-medium">Students</span>
+            </div>
+            <span className="text-3xl font-bold">{students.length}</span>
+          </button>
+          <button
+            onClick={() => handleTabChange('in-progress')}
+            className="flex flex-col items-center p-4 rounded-lg bg-muted/50 border hover:bg-muted transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1 text-muted-foreground mb-1">
+              <FileText className="w-4 h-4" />
+              <span className="text-xs font-medium">In Progress</span>
+            </div>
+            <span className="text-3xl font-bold">
+              {data.inProgressDocuments.length}
+            </span>
+          </button>
+          <button
+            onClick={() => handleTabChange('to-grade')}
+            className="flex flex-col items-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 mb-1">
+              <ClipboardCheck className="w-4 h-4" />
+              <span className="text-xs font-medium">To Grade</span>
+            </div>
+            <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+              {ungradedDocuments.length}
+            </span>
+          </button>
+          <button
+            onClick={() => handleTabChange('graded')}
+            className="flex flex-col items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 mb-1">
+              <Send className="w-4 h-4" />
+              <span className="text-xs font-medium">To Release</span>
+            </div>
+            <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+              {gradedUnreleasedDocuments.length}
+            </span>
+          </button>
+        </div>
 
-          <TabsContent value="students" className="mt-4">
-            {students.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                <p>No students in this class yet.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {students.map((s) => (
-                  <Sheet key={s.id}>
-                    <SheetTrigger asChild>
-                      <button
-                        className="flex w-full items-center justify-between rounded-lg border bg-muted p-3 text-left hover:shadow"
-                        onClick={() => setSelectedProfileId(s.profile.id)}
-                      >
-                        <div className="flex min-w-0 flex-col">
-                          <span className="font-medium truncate">
-                            {s.profile.user.name ?? 'Unnamed Student'}
-                          </span>
-                          <span className="text-sm text-muted-foreground truncate">
-                            {s.profile.user.email}
-                          </span>
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          View
-                        </span>
-                      </button>
-                    </SheetTrigger>
-                    <SheetContent className="w-full sm:max-w-lg">
-                      <SheetHeader>
-                        <SheetTitle>Student Details</SheetTitle>
-                      </SheetHeader>
-                      <div className="mt-4 space-y-4">
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">
-                            Student
-                          </div>
-                          <div className="font-medium">
-                            {s.profile.user.name ?? 'Unnamed Student'}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {s.profile.user.email}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-muted-foreground mb-1">
-                            Documents
-                          </div>
-                          {selectedDocs.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">
-                              No documents yet.
-                            </div>
-                          ) : (
-                            <div className="grid grid-cols-1 gap-2">
-                              {selectedDocs.map((doc) => (
-                                <DocumentLink
-                                  key={doc.id}
-                                  doc={doc as any}
-                                  exitTo={`/app/my-classes/${data.klass.id}`}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </SheetContent>
-                  </Sheet>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="submitted-papers" className="mt-4">
-            {data.submittedDocuments.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                <p>No submitted essays yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="grade-filter" className="text-sm font-medium">
-                      Filter:
-                    </label>
-                    <Select
-                      value={gradeFilter}
-                      onValueChange={(value) => {
-                        const nextValue = value as typeof gradeFilter;
-                        setGradeFilter(nextValue);
-                        filterFetcher.submit(
-                          { filter: nextValue },
-                          {
-                            method: 'post',
-                            action: '/api/preferences/submitted-papers-filter',
-                          }
-                        );
-                        setSelectedDocuments(new Set());
-                      }}
-                    >
-                      <SelectTrigger id="grade-filter" className="w-[180px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Papers</SelectItem>
-                        <SelectItem value="graded">Graded</SelectItem>
-                        <SelectItem value="non-graded">Not Graded</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex gap-2">
-                    {unreleasedGrades.length > 0 && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setIsReleaseGradesSheetOpen(true)}
-                      >
-                        Release {unreleasedGrades.length} {unreleasedGrades.length === 1 ? 'Grade' : 'Grades'}
-                      </Button>
-                    )}
-                    {selectedDocuments.size > 0 && (
-                      <Button
-                        variant="default"
-                        onClick={() => openGradingSheet(Array.from(selectedDocuments))}
-                      >
-                        Grade {selectedDocuments.size === 1 ? 'Essay' : `${selectedDocuments.size} Essays`}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {filteredDocuments.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                    <p>
-                      {gradeFilter === 'graded'
-                        ? 'No graded essays yet.'
-                        : gradeFilter === 'non-graded'
-                          ? 'No ungraded essays.'
-                          : 'No submitted essays yet.'}
-                    </p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12">
-                          <Checkbox
-                            checked={selectedDocuments.size === filteredDocuments.length && filteredDocuments.length > 0}
-                            onCheckedChange={toggleAllDocuments}
-                            aria-label="Select all"
-                          />
-                        </TableHead>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Essay Title</TableHead>
-                        <TableHead>Course Module</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredDocuments.map((doc) => {
-                        const grade = doc.submittedSnapshot?.grades?.[0];
-                        return (
-                          <TableRow key={doc.id}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedDocuments.has(doc.id)}
-                                onCheckedChange={() => toggleDocumentSelection(doc.id)}
-                                aria-label={`Select ${doc.title}`}
-                              />
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {doc.profile.user.name || doc.profile.user.email}
-                            </TableCell>
-                            <TableCell>{doc.title}</TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                                .title || '—'}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
-                              {new Date(doc.submittedAt!).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              {grade ? (
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={grade.releasedAt ? "default" : "secondary"}>
-                                    {grade.releasedAt ? 'Released' : 'Graded'}
-                                  </Badge>
-                                  {grade.score && (
-                                    <span className="text-sm text-muted-foreground">
-                                      {grade.score}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <Badge variant="outline">Not Graded</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button asChild size="sm" variant="outline">
-                                  <Link
-                                    to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                                  >
-                                    View
-                                  </Link>
-                                </Button>
-                                {grade ? (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => openGradingSheet([doc.id])}
-                                  >
-                                    Edit Grade
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => openGradingSheet([doc.id])}
-                                  >
-                                    Grade
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+        {/* Tabs and Table */}
+        <Tabs
+          value={activeTab}
+          onValueChange={handleTabChange}
+          className="w-full"
+        >
+          <div>
+            <div className="flex items-center justify-between">
+              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 h-auto">
+                <TabsTrigger
+                  value="in-progress"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">In Progress</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {data.inProgressDocuments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="to-grade"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">To Grade</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {ungradedDocuments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="graded"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Graded</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {gradedUnreleasedDocuments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="released"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">Released</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {releasedDocuments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="paste-activity"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="hidden sm:inline">Paste Activity</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {data.pasteAlerts.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="students"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden sm:inline">Students</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {students.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+              {activeTab === 'to-grade' && selectedDocuments.size > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    openGradingSheet(Array.from(selectedDocuments))
+                  }
+                  className="ml-4"
+                >
+                  Grade{' '}
+                  {selectedDocuments.size === 1
+                    ? 'Essay'
+                    : `${selectedDocuments.size} Essays`}
+                </Button>
+              )}
+              {activeTab === 'graded' &&
+                gradedUnreleasedDocuments.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="default"
+                    onClick={() => setIsReleaseGradesSheetOpen(true)}
+                    className="ml-4"
+                  >
+                    Release {gradedUnreleasedDocuments.length}{' '}
+                    {gradedUnreleasedDocuments.length === 1
+                      ? 'Grade'
+                      : 'Grades'}
+                  </Button>
                 )}
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="paste-activity" className="mt-4">
-            {data.pasteAlerts.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                <p>No copy/paste activity detected yet.</p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Document</TableHead>
-                    <TableHead>Date & Time</TableHead>
-                    <TableHead className="text-right">Characters</TableHead>
-                    <TableHead>Content</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.pasteAlerts.map((alert) => {
-                    const truncatedContent = alert.content
-                      ? alert.content.length > 100
-                        ? alert.content.substring(0, 100) + '...'
-                        : alert.content
-                      : null;
-                    return (
-                      <TableRow key={alert.id}>
-                        <TableCell className="font-medium">
-                          {alert.profile.user.name || alert.profile.user.email}
-                        </TableCell>
-                        <TableCell>
-                          <Link
-                            to={`/app/documents/${alert.document.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {alert.document.title}
-                          </Link>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {new Date(alert.createdAt).toLocaleDateString()}{' '}
-                          {new Date(alert.createdAt).toLocaleTimeString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant="secondary">
-                            {alert.textLength.toLocaleString()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {truncatedContent ? (
-                            <button
-                              onClick={() => setSelectedPasteContent(alert.content || null)}
-                              className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
-                              title="Click to view full content"
-                            >
-                              {truncatedContent}
-                            </button>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </TabsContent>
+            </div>
+            <TabsContent value={activeTab} className="mt-4">
+              <div>{renderTable()}</div>
+              {currentTabData.length > 0 && (
+                <div className="mt-4">
+                  <Pagination
+                    totalCount={currentTabData.length}
+                    skip={pagination.skip}
+                    take={pagination.take}
+                    onChange={handlePaginationChange}
+                  />
+                </div>
+              )}
+            </TabsContent>
+          </div>
         </Tabs>
       </div>
 
-      <Sheet open={selectedPasteContent !== null} onOpenChange={(open) => !open && setSelectedPasteContent(null)}>
+      <Sheet
+        open={selectedPasteContent !== null}
+        onOpenChange={(open) => !open && setSelectedPasteContent(null)}
+      >
         <SheetContent className="w-full sm:max-w-2xl">
           <SheetHeader>
             <SheetTitle>Pasted Content</SheetTitle>
