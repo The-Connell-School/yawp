@@ -61,6 +61,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
+  let teacherCourseWhere:
+    | { assignedTeachers: { some: { id: string } } }
+    | undefined = undefined;
+  if (profile.teacherProfile) {
+    const assignmentCounts = await prisma.teacherProfile.findUnique({
+      where: { id: profile.teacherProfile.id },
+      select: { _count: { select: { assignedTeacherCourses: true } } },
+    });
+    const hasAssignedCourses =
+      (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    if (hasAssignedCourses) {
+      teacherCourseWhere = {
+        assignedTeachers: { some: { id: profile.teacherProfile.id } },
+      };
+    }
+  }
+
   const [
     courses,
     documents,
@@ -108,6 +125,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Fetch teacher courses if user has teacher profile
     profile?.teacherProfile
       ? prisma.teacherCourse.findMany({
+          where: teacherCourseWhere,
           select: {
             image: { select: { id: true } },
             id: true,

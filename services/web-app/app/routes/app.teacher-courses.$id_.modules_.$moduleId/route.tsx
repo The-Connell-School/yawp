@@ -28,26 +28,33 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { prisma } from '~/utils/db.server';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
 
-  // Get teacher profile
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { profiles: { include: { teacherProfile: true } } },
-  });
-
-  if (!user?.profiles.some((p) => p.teacherProfile)) {
+  if (!profile.teacherProfile) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
+  const assignmentCounts = await prisma.teacherProfile.findUnique({
+    where: { id: profile.teacherProfile.id },
+    select: { _count: { select: { assignedTeacherCourses: true } } },
+  });
+  const hasAssignedCourses =
+    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+
   const [teacherCourse, currentModule] = await Promise.all([
-    prisma.teacherCourse.findUnique({
-      where: { id: params.id },
+    prisma.teacherCourse.findFirst({
+      where: {
+        id: params.id,
+        ...(hasAssignedCourses
+          ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+          : {}),
+      },
       select: {
         id: true,
         title: true,
@@ -59,8 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             videoDuration: true,
             teacherCourseModuleSessions: {
               where: {
-                teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-                  ?.teacherProfile?.id,
+                teacherProfileId: profile.teacherProfile.id,
               },
               select: {
                 id: true,
@@ -72,8 +78,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    prisma.teacherCourseModule.findUnique({
-      where: { id: params.moduleId },
+    prisma.teacherCourseModule.findFirst({
+      where: { id: params.moduleId, teacherCourseId: params.id },
       include: {
         resources: {
           select: {
@@ -84,8 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         teacherCourseModuleSessions: {
           where: {
-            teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-              ?.teacherProfile?.id,
+            teacherProfileId: profile.teacherProfile.id,
           },
           select: {
             id: true,
@@ -120,38 +125,55 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           videoLink: playbackUrl ?? null,
         }
       : currentModule,
-    teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-      ?.teacherProfile?.id,
+    teacherProfileId: profile.teacherProfile.id,
     currentSession: currentModule.teacherCourseModuleSessions[0] || null,
   });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
-  // Get teacher profile
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { profiles: { include: { teacherProfile: true } } },
-  });
-
-  if (!user?.profiles.some((p) => p.teacherProfile)) {
+  if (!profile.teacherProfile) {
     throw new Response('Teacher profile required', { status: 403 });
+  }
+
+  const assignmentCounts = await prisma.teacherProfile.findUnique({
+    where: { id: profile.teacherProfile.id },
+    select: { _count: { select: { assignedTeacherCourses: true } } },
+  });
+  const hasAssignedCourses =
+    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+
+  const courseAccess = await prisma.teacherCourse.findFirst({
+    where: {
+      id: params.id,
+      ...(hasAssignedCourses
+        ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+        : {}),
+    },
+    select: { id: true },
+  });
+  if (!courseAccess) {
+    throw new Response('Teacher course not found', { status: 404 });
   }
 
   if (intent === 'updateProgress') {
     const videoTimestamp = Number(formData.get('videoTimestamp'));
-    const module = await prisma.teacherCourseModule.findUniqueOrThrow({
-      where: { id: params.moduleId! },
+    const module = await prisma.teacherCourseModule.findFirst({
+      where: { id: params.moduleId!, teacherCourseId: params.id },
+      select: { id: true, videoDuration: true },
     });
+    if (!module) {
+      throw new Response('Module not found', { status: 404 });
+    }
     const session = await prisma.teacherCourseModuleSession.findUnique({
       where: {
         teacherCourseModuleId_teacherProfileId: {
           teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-            ?.teacherProfile?.id!,
+          teacherProfileId: profile.teacherProfile.id,
         },
       },
     });
@@ -159,8 +181,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.teacherCourseModuleSession.create({
         data: {
           teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-            ?.teacherProfile?.id!,
+          teacherProfileId: profile.teacherProfile.id,
           videoTimestamp,
         },
       });
@@ -181,52 +202,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'restartModule') {
-    await prisma.teacherCourseModuleSession.upsert({
-      where: {
-        teacherCourseModuleId_teacherProfileId: {
-          teacherCourseModuleId: params.moduleId!,
-          teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-            ?.teacherProfile?.id!,
-        },
-      },
-      update: {
-        videoTimestamp: 0,
-        updatedAt: new Date(),
-      },
-      create: {
-        teacherCourseModuleId: params.moduleId!,
-        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-          ?.teacherProfile?.id!,
-        videoTimestamp: 0,
-      },
-    });
-
-    return dataResponse({ success: true });
-  }
-
-  if (intent === 'restartModule') {
-    const moduleId = formData.get('moduleId')?.toString();
+    const moduleId =
+      formData.get('moduleId')?.toString() ?? params.moduleId?.toString();
 
     if (!moduleId) {
       throw new Response('Module ID required', { status: 400 });
     }
 
-    // Delete existing session for this module and teacher
-    await prisma.teacherCourseModuleSession.deleteMany({
-      where: {
-        teacherCourseModuleId: moduleId,
-        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-          ?.teacherProfile?.id!,
-      },
+    const module = await prisma.teacherCourseModule.findFirst({
+      where: { id: moduleId, teacherCourseId: params.id },
+      select: { id: true },
     });
+    if (!module) {
+      throw new Response('Module not found', { status: 404 });
+    }
 
-    // Create new session with default values
-    await prisma.teacherCourseModuleSession.create({
-      data: {
+    await prisma.teacherCourseModuleSession.upsert({
+      where: {
+        teacherCourseModuleId_teacherProfileId: {
+          teacherCourseModuleId: moduleId,
+          teacherProfileId: profile.teacherProfile.id,
+        },
+      },
+      update: { videoTimestamp: 0, updatedAt: new Date() },
+      create: {
         teacherCourseModuleId: moduleId,
-        teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-          ?.teacherProfile?.id!,
+        teacherProfileId: profile.teacherProfile.id,
         videoTimestamp: 0,
+        updatedAt: new Date(),
       },
     });
 
