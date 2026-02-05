@@ -90,6 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               studentCourse: {
                 select: {
                   studentCourseModules: {
+                    where: { deletedAt: null },
                     select: { id: true, position: true },
                     orderBy: { position: 'asc' },
                   },
@@ -194,9 +195,13 @@ export default function Route() {
   useEffect(() => {
     if (submitFetcher.state === 'idle' && submitFetcher.data) {
       if (submitFetcher.data.success) {
-        toast.success(submitFetcher.data.message || 'Essay submitted successfully!');
+        toast.success(
+          submitFetcher.data.message || 'Essay submitted successfully!'
+        );
         // Reload the page to reflect the new submission status
-        navigate(window.location.pathname + window.location.search, { replace: true });
+        navigate(window.location.pathname + window.location.search, {
+          replace: true,
+        });
       }
     }
   }, [submitFetcher.state, submitFetcher.data, navigate]);
@@ -239,7 +244,8 @@ export default function Route() {
             <div className="flex items-center gap-2">
               {isSubmitted && (
                 <Badge variant="success" className="text-xs">
-                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
+                  Submitted{' '}
+                  {new Date(data.doc.submittedAt!).toLocaleDateString()}
                 </Badge>
               )}
               <Button
@@ -279,7 +285,8 @@ export default function Route() {
               </Badge>
               {isSubmitted && (
                 <Badge variant="success" className="md:text-md text-xs">
-                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
+                  Submitted{' '}
+                  {new Date(data.doc.submittedAt!).toLocaleDateString()}
                 </Badge>
               )}
             </div>

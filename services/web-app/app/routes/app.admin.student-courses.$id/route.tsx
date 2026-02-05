@@ -59,6 +59,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: params.id },
     include: {
       studentCourseModules: {
+        where: { deletedAt: null },
         include: {
           instructions: {
             orderBy: { position: 'asc' },
@@ -144,7 +145,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     const moduleCount = await prisma.studentCourseModule.count({
-      where: { studentCourseId: params.id },
+      where: { studentCourseId: params.id, deletedAt: null },
     });
 
     await prisma.studentCourseModule.create({

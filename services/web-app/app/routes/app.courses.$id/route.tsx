@@ -38,7 +38,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: { id: params.id },
       include: {
         image: true,
-        studentCourseModules: { orderBy: { position: 'asc' } },
+        studentCourseModules: {
+          where: { deletedAt: null },
+          orderBy: { position: 'asc' },
+        },
       },
     }),
     prisma.document.findMany({
@@ -100,7 +103,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const firstCourseModule = await prisma.studentCourseModule.findFirst({
-    where: { studentCourseId: params.id },
+    where: { studentCourseId: params.id, deletedAt: null },
     orderBy: { position: 'asc' },
     include: {
       instructions: {

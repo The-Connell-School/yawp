@@ -93,8 +93,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: { id: params.id },
       select: { id: true, title: true },
     }),
-    prisma.studentCourseModule.findUnique({
-      where: { id: params.moduleId },
+    prisma.studentCourseModule.findFirst({
+      where: { id: params.moduleId, deletedAt: null },
       include: {
         instructions: {
           orderBy: { position: 'asc' },
@@ -138,8 +138,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'deleteModule') {
-    await prisma.studentCourseModule.delete({
+    await prisma.studentCourseModule.update({
       where: { id: params.moduleId },
+      data: { deletedAt: new Date() },
     });
 
     return redirect(`/app/admin/student-courses/${params.id}`);
