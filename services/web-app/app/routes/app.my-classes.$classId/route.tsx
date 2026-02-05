@@ -9,6 +9,7 @@ import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
+import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import {
   Sheet,
   SheetContent,
@@ -42,6 +43,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
+import { formatGrade } from '~/domain/grading/gradeMath';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -49,6 +51,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!profile.teacherProfile) {
     throw new Response('Teacher profile required', { status: 403 });
   }
+  const gradingAssistantEnabled = isGradingAssistantEnabledForOrg(
+    profile.organization.id
+  );
   const classId = params.classId!;
 
   const klass = await prisma.class.findFirst({
@@ -182,6 +187,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               rubricScores: true,
               overallScore: true,
               overallComment: true,
+              numericPercentage: true,
+              letterGrade: true,
               aiMeta: true,
               releasedAt: true,
               createdAt: true,
@@ -240,6 +247,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submittedDocuments,
     inProgressDocuments,
     submittedPapersFilter,
+    gradingAssistantEnabled,
   });
 }
 
@@ -255,6 +263,7 @@ export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const gradingAssistantEnabled = data.gradingAssistantEnabled;
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
@@ -310,9 +319,12 @@ export default function ClassDetailRoute() {
   const unreleasedGrades = useMemo(() => {
     return gradedUnreleasedDocuments.map((doc) => {
       const grade = doc.submittedSnapshot!.grades[0];
+      const gradeDisplay =
+        formatGrade(grade.numericPercentage ?? null, grade.letterGrade ?? null) ||
+        grade.score;
       return {
         id: grade.id,
-        score: grade.score,
+        score: gradeDisplay,
         feedback: grade.feedback,
         document: {
           id: doc.id,
@@ -406,14 +418,14 @@ export default function ClassDetailRoute() {
     releasedDocuments,
     data.pasteAlerts,
     students,
-  ]);
+  ]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
       pagination.skip,
       pagination.skip + pagination.take
     );
-  }, [currentTabData, pagination.skip, pagination.take]);
+  }, [currentTabData, pagination.skip, pagination.take]) as any[];
 
   const handleTabChange = (value: string) => {
     navigate(`?tab=${value}`);
@@ -455,8 +467,7 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map(
-                (doc: (typeof data.inProgressDocuments)[0]) => (
+              {paginatedData.map((doc) => (
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">
                       {doc.profile.user.name || doc.profile.user.email}
@@ -479,8 +490,7 @@ export default function ClassDetailRoute() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                )
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -515,7 +525,7 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((doc: (typeof ungradedDocuments)[0]) => (
+              {paginatedData.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell>
                     <Checkbox
@@ -547,6 +557,7 @@ export default function ClassDetailRoute() {
                       <Button
                         size="sm"
                         onClick={() => openGradingSheet([doc.id])}
+                        disabled={!gradingAssistantEnabled}
                       >
                         Grade
                       </Button>
@@ -574,9 +585,15 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map(
-                (doc: (typeof gradedUnreleasedDocuments)[0]) => {
+              {paginatedData.map((doc) => {
                   const grade = doc.submittedSnapshot!.grades[0];
+                  const gradeDisplay =
+                    formatGrade(
+                      grade.numericPercentage ?? null,
+                      grade.letterGrade ?? null
+                    ) ||
+                    grade.score ||
+                    '—';
                   return (
                     <TableRow key={doc.id}>
                       <TableCell className="font-medium">
@@ -584,7 +601,7 @@ export default function ClassDetailRoute() {
                       </TableCell>
                       <TableCell>{doc.title}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{grade.score || '—'}</Badge>
+                        <Badge variant="secondary">{gradeDisplay}</Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {timeAgo(new Date(grade.createdAt))}
@@ -601,6 +618,7 @@ export default function ClassDetailRoute() {
                           <Button
                             size="sm"
                             onClick={() => openGradingSheet([doc.id])}
+                            disabled={!gradingAssistantEnabled}
                           >
                             Edit Grade
                           </Button>
@@ -608,8 +626,7 @@ export default function ClassDetailRoute() {
                       </TableCell>
                     </TableRow>
                   );
-                }
-              )}
+              })}
             </TableBody>
           </Table>
         </div>
@@ -630,8 +647,15 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((doc: (typeof releasedDocuments)[0]) => {
+              {paginatedData.map((doc) => {
                 const grade = doc.submittedSnapshot!.grades[0];
+                const gradeDisplay =
+                  formatGrade(
+                    grade.numericPercentage ?? null,
+                    grade.letterGrade ?? null
+                  ) ||
+                  grade.score ||
+                  '—';
                 return (
                   <TableRow key={doc.id}>
                     <TableCell className="font-medium">
@@ -639,7 +663,7 @@ export default function ClassDetailRoute() {
                     </TableCell>
                     <TableCell>{doc.title}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{grade.score || '—'}</Badge>
+                      <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {timeAgo(new Date(grade.releasedAt!))}
@@ -676,7 +700,7 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((alert: (typeof data.pasteAlerts)[0]) => {
+              {paginatedData.map((alert) => {
                 const truncatedContent = alert.content
                   ? alert.content.length > 100
                     ? alert.content.substring(0, 100) + '...'
@@ -740,7 +764,7 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((s: (typeof students)[0]) => {
+              {paginatedData.map((s) => {
                 const studentDocs =
                   data.profiles.find((p) => p.id === s.profile.id)?.documents ??
                   [];
@@ -968,7 +992,9 @@ export default function ClassDetailRoute() {
                   </span>
                 </TabsTrigger>
               </TabsList>
-              {activeTab === 'to-grade' && selectedDocuments.size > 0 && (
+              {gradingAssistantEnabled &&
+                activeTab === 'to-grade' &&
+                selectedDocuments.size > 0 && (
                 <Button
                   size="sm"
                   onClick={() =>
@@ -982,7 +1008,8 @@ export default function ClassDetailRoute() {
                     : `${selectedDocuments.size} Essays`}
                 </Button>
               )}
-              {activeTab === 'graded' &&
+              {gradingAssistantEnabled &&
+                activeTab === 'graded' &&
                 gradedUnreleasedDocuments.length > 0 && (
                   <Button
                     size="sm"
@@ -1030,22 +1057,26 @@ export default function ClassDetailRoute() {
         </SheetContent>
       </Sheet>
 
-      <GradingSheet
-        documents={gradingDocuments}
-        isOpen={isGradingSheetOpen}
-        onClose={() => {
-          setIsGradingSheetOpen(false);
-          setGradingDocuments([]);
-        }}
-        onSuccess={handleGradingSuccess}
-      />
+      {gradingAssistantEnabled ? (
+        <GradingSheet
+          documents={gradingDocuments}
+          isOpen={isGradingSheetOpen}
+          onClose={() => {
+            setIsGradingSheetOpen(false);
+            setGradingDocuments([]);
+          }}
+          onSuccess={handleGradingSuccess}
+        />
+      ) : null}
 
-      <ReleaseGradesSheet
-        grades={unreleasedGrades}
-        isOpen={isReleaseGradesSheetOpen}
-        onClose={() => setIsReleaseGradesSheetOpen(false)}
-        onSuccess={handleGradingSuccess}
-      />
+      {gradingAssistantEnabled ? (
+        <ReleaseGradesSheet
+          grades={unreleasedGrades}
+          isOpen={isReleaseGradesSheetOpen}
+          onClose={() => setIsReleaseGradesSheetOpen(false)}
+          onSuccess={handleGradingSuccess}
+        />
+      ) : null}
     </section>
   );
 }

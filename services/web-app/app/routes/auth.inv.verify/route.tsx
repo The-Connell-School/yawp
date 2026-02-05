@@ -73,11 +73,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const invitationCookie = await invitationCookieStorage.getSession(cookie);
 
   if (type === 'onboard-student') {
-    const { schoolId, klassId } = JSON.parse(
+    const { klassId, klassIds, schoolId } = JSON.parse(
       invitation.metadata ?? '{}'
     ) as z.infer<typeof StudentOnboardingMetadataSchema>;
 
-    if (!schoolId && !klassId) {
+    if (!klassId && (!klassIds || klassIds.length === 0) && !schoolId) {
       return validationError({
         fieldErrors: { code: 'Invalid metadata. Please sign up again.' },
       });
@@ -92,8 +92,9 @@ export async function action({ request }: ActionFunctionArgs) {
         fieldErrors: { code: 'User already exists.' },
       });
     } else {
-      invitationCookie.set('schoolId', schoolId);
       invitationCookie.set('klassId', klassId);
+      invitationCookie.set('klassIds', klassIds);
+      invitationCookie.set('schoolId', schoolId);
       invitationCookie.set('email', target);
       return redirect('/auth/inv/onboard-student', {
         headers: {

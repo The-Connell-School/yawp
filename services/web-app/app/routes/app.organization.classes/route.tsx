@@ -323,22 +323,15 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error.code === 'P2002') {
-        // Check which constraint was violated
         const target = error.meta?.target;
-        if (target?.includes('code')) {
+        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+        if (targetText.includes('code')) {
           return dataResponse(
-            { error: 'A class with this code already exists' },
+            { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        // Default to the combination constraint
-        return dataResponse(
-          {
-            error:
-              'A class with this school, year, grade, and period combination already exists. Each class must be unique.',
-          },
-          { status: 400 }
-        );
+        return dataResponse({ error: 'Class could not be created.' }, { status: 400 });
       }
       throw error;
     }
@@ -431,22 +424,15 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ success: true });
     } catch (error: any) {
       if (error.code === 'P2002') {
-        // Check which constraint was violated
         const target = error.meta?.target;
-        if (target?.includes('code')) {
+        const targetText = Array.isArray(target) ? target.join(',') : String(target ?? '');
+        if (targetText.includes('code')) {
           return dataResponse(
-            { error: 'A class with this code already exists' },
+            { error: 'Class code already in use. Choose a different code.' },
             { status: 400 }
           );
         }
-        // Default to the combination constraint
-        return dataResponse(
-          {
-            error:
-              'A class with this school, year, grade, and period combination already exists. Each class must be unique.',
-          },
-          { status: 400 }
-        );
+        return dataResponse({ error: 'Class could not be updated.' }, { status: 400 });
       }
       throw error;
     }

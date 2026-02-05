@@ -12,7 +12,7 @@ model Class {
   id                    String               @id @default(cuid())
   createdAt             DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt             DateTime             @default(now()) @db.Timestamptz(6)
-  code                  String               @unique
+  code                  String
   schoolYear            String               @default("2024-2025")
   period                String
   grade                 String
@@ -25,7 +25,8 @@ model Class {
   documents             Document[]
   allowedStudentCourses ClassStudentCourse[]
 
-  @@unique([schoolId, schoolYear, period, grade])
+  @@unique([schoolId, code])
+  @@index([schoolId, schoolYear, period, grade])
 }
 
 model StudentCourse {
@@ -148,6 +149,7 @@ model Document {
 model DocumentComment {
   id          String                    @id @default(cuid())
   createdAt   DateTime                  @default(now()) @db.Timestamptz(6)
+  archivedAt  DateTime?                 @db.Timestamptz(6)
   content     String
   highlightId String?
   documentId  String
@@ -198,16 +200,51 @@ model Grade {
   rubricScores Json?
   overallScore Int?
   overallComment String?
+  numericPercentage Int?
+  letterGrade String?
+  grammarIssues Json?
+  promptConfig Json?
   aiMeta     Json?
   releasedAt DateTime?         @db.Timestamptz(6) // When released to student (null = not released)
   snapshotId String            @unique // Grade is tied to specific submission snapshot
   snapshot   DocumentSnapshot  @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   gradedById String
   gradedBy   Profile           @relation(fields: [gradedById], references: [id], onDelete: Cascade)
+  comments   GradeComment[]
 
   @@index([snapshotId])
   @@index([gradedById])
   @@index([releasedAt])
+}
+
+model GradeComment {
+  id         String              @id @default(cuid())
+  createdAt  DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime            @default(now()) @db.Timestamptz(6)
+  content    String
+  excerpt    String
+  occurrence Int                 @default(1)
+  gradeId    String
+  grade      Grade               @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  profileId  String
+  profile    Profile             @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  responses  GradeCommentResponse[]
+
+  @@index([gradeId, createdAt(sort: Desc)])
+  @@index([profileId])
+}
+
+model GradeCommentResponse {
+  id            String       @id @default(cuid())
+  createdAt     DateTime     @default(now()) @db.Timestamptz(6)
+  content       String
+  commentId     String
+  gradeComment  GradeComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  profileId     String
+  profile       Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@index([profileId])
 }
 
 model InstructionAudio {
@@ -244,6 +281,8 @@ model Profile {
   documentCommentResponses DocumentCommentResponse[]
   pasteAlerts              PasteAlert[]
   gradesGiven              Grade[]
+  gradeComments            GradeComment[]
+  gradeCommentResponses    GradeCommentResponse[]
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)

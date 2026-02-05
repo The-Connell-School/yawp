@@ -24,18 +24,19 @@ export const Comments = ({ comments }: Props) => {
   useBlurComments(comments);
   useFocusOptimisticComment(fetcher);
 
-  const optimisticComment: CommentType | [] = fetcher?.formData
-    ? {
-        profile: user.selectedProfile as any,
-        profileId: user.selectedProfile!.id,
-        id: 'optimistic-document-comment',
-        createdAt: new Date(),
-        content: fetcher.formData.get('content') as string,
-        highlightId: fetcher.formData.get('highlightId') as string,
-        responses: [],
-        documentId: '',
-      }
-    : [];
+	  const optimisticComment: CommentType | [] = fetcher?.formData
+	    ? {
+	        profile: user.selectedProfile as any,
+	        profileId: user.selectedProfile!.id,
+	        id: 'optimistic-document-comment',
+	        createdAt: new Date(),
+	        content: fetcher.formData.get('content') as string,
+	        highlightId: fetcher.formData.get('highlightId') as string,
+	        archivedAt: null,
+	        responses: [],
+	        documentId: '',
+	      }
+	    : [];
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll md:w-3/5">

@@ -63,6 +63,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               select: {
                 score: true,
                 overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
                 releasedAt: true,
               },
               take: 1,
@@ -93,6 +95,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               select: {
                 score: true,
                 overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
                 releasedAt: true,
               },
               take: 1,

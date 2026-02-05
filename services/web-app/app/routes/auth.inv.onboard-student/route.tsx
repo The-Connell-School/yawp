@@ -25,16 +25,11 @@ import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
 import { setProfileId } from '~/cookies/profile-id.server.ts';
-import { cn } from '~/utils/misc';
-import { useEffect } from 'react';
 
 export const Schema = z
   .object({
     name: NameSchema,
-    schoolYear: z.string().min(1),
-    teacherId: z.string().min(1),
-    grade: z.string().min(1),
-    period: z.string().min(1),
+    classId: z.string().min(1, 'Class is required'),
   })
   .and(PasswordAndConfirmPasswordSchema);
 
@@ -42,11 +37,16 @@ async function requireInvitation(request: Request) {
   const invitation = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
-  const email = invitation.get('email');
-  const schoolId = invitation.get('schoolId');
-  const klassId = invitation.get('klassId');
+  const email = invitation.get('email') as string | undefined;
+  const klassId = invitation.get('klassId') as string | undefined;
+  const klassIds = invitation.get('klassIds') as string[] | undefined;
+  const schoolId = invitation.get('schoolId') as string | undefined;
 
-  if (!email || !(schoolId || klassId)) {
+  const classIds = Array.from(
+    new Set([klassId, ...(Array.isArray(klassIds) ? klassIds : [])].filter(Boolean))
+  ) as string[];
+
+  if (!email || (classIds.length === 0 && !schoolId)) {
     throw redirectWithToast(
       '/auth/login',
       {
@@ -62,57 +62,72 @@ async function requireInvitation(request: Request) {
     );
   }
 
-  return { email, schoolId, klassId };
+  return { email, classIds, schoolId };
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  const { email, schoolId, klassId } = await requireInvitation(request);
+  const { email, classIds, schoolId } = await requireInvitation(request);
 
   const classes = await prisma.class.findMany({
     where: {
-      OR: [{ schoolId }, { id: klassId }],
+      OR: [
+        ...(classIds.length ? [{ id: { in: classIds } }] : []),
+        ...(schoolId ? [{ schoolId }] : []),
+      ],
       isArchived: false,
     },
     select: {
       id: true,
-      schoolId: true,
+      code: true,
       schoolYear: true,
-      period: true,
       grade: true,
+      period: true,
+      school: { select: { name: true, organizationId: true } },
       teachers: {
-        select: {
-          id: true,
-          profile: { select: { user: { select: { name: true } } } },
-        },
+        select: { profile: { select: { user: { select: { name: true } } } } },
       },
     },
+    orderBy: [
+      { schoolYear: 'desc' },
+      { grade: 'asc' },
+      { period: 'asc' },
+    ],
   });
+
+  if (classes.length === 0) {
+    throw redirectWithToast('/auth/login', {
+      title: 'Invalid invitation',
+      description: 'Class not found.',
+    });
+  }
 
   return { email, classes };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { email, schoolId, klassId } = await requireInvitation(request);
+  const { email, classIds, schoolId } = await requireInvitation(request);
   const { data, error } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
-  const hashedPassword = await getPasswordHash(data.password);
   const klass = await prisma.class.findFirst({
     where: {
-      OR: [{ schoolId }, { id: klassId }],
+      id: data.classId,
       isArchived: false,
-      schoolYear: data.schoolYear,
-      grade: data.grade,
-      period: data.period,
-      teachers: { some: { id: data.teacherId } },
+      ...(classIds.length ? { id: { in: classIds } } : {}),
+      ...(schoolId ? { schoolId } : {}),
     },
-    include: { school: true },
+    select: {
+      id: true,
+      school: { select: { organizationId: true } },
+    },
   });
 
   if (!klass) {
-    return validationError({ fieldErrors: { name: 'Class not found' } });
+    return validationError({ fieldErrors: { classId: 'Class not found' } });
   }
+
+  const hashedPassword = await getPasswordHash(data.password);
 
   const profile = await prisma.profile.create({
     data: {
@@ -168,18 +183,7 @@ export default function Route() {
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
 
-  const schoolYearOptions = Array.from(
-    new Set(data.classes.flatMap((klass) => klass.schoolYear))
-  );
-
-  const teacherOptions = Array.from(
-    new Set(data.classes.flatMap((klass) => klass.teachers).map((t) => t.id))
-  ).map(
-    (id) => data.classes.flatMap((k) => k.teachers).find((t) => t.id === id)!
-  );
-
-  const showSchoolYearSelect = schoolYearOptions.length > 1;
-  const showTeacherSelect = teacherOptions.length > 1;
+  const showClassSelect = data.classes.length > 1;
 
   const form = useForm({
     schema: Schema,
@@ -187,196 +191,60 @@ export default function Route() {
     submitSource: 'state',
     defaultValues: {
       name: '',
-      schoolYear: showSchoolYearSelect ? '<select>' : schoolYearOptions[0],
-      teacherId: showTeacherSelect ? '<select>' : teacherOptions[0].id,
-      grade: '<select>',
-      period: '<select>',
+      classId: showClassSelect ? '' : data.classes[0]!.id,
       password: '',
       confirmPassword: '',
     },
   });
 
-  // Watch form values for dynamic filtering
-  const selectedSchoolYear = form.value('schoolYear');
-  const selectedTeacherId = form.value('teacherId');
-  const selectedGrade = form.value('grade');
-  const selectedPeriod = form.value('period');
-
-  // Filter classes based on selected teacher and school year
-  const filteredClasses = data.classes.filter((klass) => {
-    const matchesSchoolYear =
-      selectedSchoolYear === '<select>' ||
-      klass.schoolYear === selectedSchoolYear;
-    const matchesTeacher =
-      selectedTeacherId === '<select>' ||
-      klass.teachers.some((t) => t.id === selectedTeacherId);
-    return matchesSchoolYear && matchesTeacher;
-  });
-
-  const gradeOptions = Array.from(
-    new Set(filteredClasses.map((klass) => klass.grade))
-  );
-
-  const periodOptions = Array.from(
-    new Set(filteredClasses.map((klass) => klass.period))
-  );
-
-  const showGradeSelect = gradeOptions.length > 1;
-  const showPeriodSelect = periodOptions.length > 1;
-  const canSelectGradeOrPeriod = selectedTeacherId !== '<select>';
-
-  // Auto-fill grade and period when there's only one option
-  useEffect(() => {
-    if (canSelectGradeOrPeriod) {
-      // Set grade if only one option and not already set
-      if (gradeOptions.length === 1 && selectedGrade === '<select>') {
-        form.setValue('grade', gradeOptions[0]);
-      }
-      // Set period if only one option and not already set
-      if (periodOptions.length === 1 && selectedPeriod === '<select>') {
-        form.setValue('period', periodOptions[0]);
-      }
-      // Reset if current selection is no longer valid
-      if (gradeOptions.length > 0 && !gradeOptions.includes(selectedGrade)) {
-        form.setValue(
-          'grade',
-          gradeOptions.length === 1 ? gradeOptions[0] : '<select>'
-        );
-      }
-      if (periodOptions.length > 0 && !periodOptions.includes(selectedPeriod)) {
-        form.setValue(
-          'period',
-          periodOptions.length === 1 ? periodOptions[0] : '<select>'
-        );
-      }
-    } else {
-      // Reset grade and period when teacher is not selected
-      if (selectedGrade !== '<select>') form.setValue('grade', '<select>');
-      if (selectedPeriod !== '<select>') form.setValue('period', '<select>');
-    }
-  }, [
-    canSelectGradeOrPeriod,
-    gradeOptions.join(','),
-    periodOptions.join(','),
-    selectedGrade,
-    selectedPeriod,
-  ]);
-
   return (
-    <div className="mx-auto w-full max-w-lg px-2 py-20">
-      <div className="flex flex-col gap-3 text-center">
-        <h1>Welcome, {data.email}!</h1>
-        <p>Please enter your details.</p>
+    <div className="mx-auto w-full max-w-md">
+      <div className="mt-8 flex flex-col gap-3 text-center">
+        <h1>Let's get started!</h1>
+        <p className="text-sm text-muted-foreground">
+          Create your account and join your class.
+        </p>
       </div>
-      <Form
-        method="POST"
-        className="mx-auto mt-20 flex min-w-full max-w-lg flex-col gap-3 px-8 sm:min-w-[368px]"
-        {...form.getFormProps()}
-      >
-        <FormInput
-          scope={form.scope('name')}
-          type="text"
-          label="Name"
-          autoComplete="name"
-        />
-        <div
-          className={
-            'flex gap-3 ' +
-            cn(showSchoolYearSelect || showTeacherSelect ? '' : 'hidden')
-          }
-        >
-          <FormSelect
-            scope={form.scope('schoolYear')}
-            label="School Year"
-            autoComplete="school-year"
-            options={[
-              { value: '<select>', label: 'Select a school year' },
-              ...schoolYearOptions.map((schoolYear) => ({
-                value: schoolYear,
-                label: schoolYear,
-              })),
-            ]}
-            className={cn('w-full', showSchoolYearSelect ? '' : 'hidden')}
+
+      <div className="mx-auto mt-10 w-full max-w-md px-8">
+        <Form method="POST" className="flex flex-col gap-4" {...form.getFormProps()}>
+          <FormInput scope={form.scope('name')} type="text" label="Name" autoFocus />
+          {showClassSelect ? (
+            <FormSelect
+              scope={form.scope('classId')}
+              label="Class"
+              options={[
+                { value: '', label: 'Select a class' },
+                ...data.classes.map((klass) => ({
+                  value: klass.id,
+                  label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
+                    klass.teachers
+                      .map((t) => t.profile.user.name)
+                      .filter(Boolean)
+                      .join(', ') || 'Teacher'
+                  }`,
+                })),
+              ]}
+            />
+          ) : (
+            <input type="hidden" name="classId" value={data.classes[0]!.id} />
+          )}
+
+          <FormInput
+            scope={form.scope('password')}
+            type="password"
+            label="Password"
           />
-          <FormSelect
-            scope={form.scope('teacherId')}
-            label="Teacher"
-            autoComplete="teacher"
-            options={[
-              { value: '<select>', label: 'Select a teacher' },
-              ...teacherOptions.map((teacher) => ({
-                value: teacher.id,
-                label: teacher.profile.user.name,
-              })),
-            ]}
-            className={cn('w-full', showTeacherSelect ? '' : 'hidden')}
+          <FormInput
+            scope={form.scope('confirmPassword')}
+            type="password"
+            label="Confirm Password"
           />
-        </div>
-        <div
-          className={
-            'flex gap-3 ' +
-            cn(
-              canSelectGradeOrPeriod && (showGradeSelect || showPeriodSelect)
-                ? ''
-                : 'hidden'
-            )
-          }
-        >
-          <FormSelect
-            scope={form.scope('grade')}
-            label="Grade"
-            autoComplete="grade"
-            className={cn('w-full', showGradeSelect ? '' : 'hidden')}
-            disabled={!canSelectGradeOrPeriod}
-            options={[
-              {
-                value: '<select>',
-                label: canSelectGradeOrPeriod
-                  ? 'Select a grade'
-                  : 'Select teacher first',
-              },
-              ...gradeOptions.map((grade) => ({
-                value: grade,
-                label: grade,
-              })),
-            ]}
-          />
-          <FormSelect
-            scope={form.scope('period')}
-            label="Period"
-            autoComplete="period"
-            className={cn('w-full', showPeriodSelect ? '' : 'hidden')}
-            disabled={!canSelectGradeOrPeriod}
-            options={[
-              {
-                value: '<select>',
-                label: canSelectGradeOrPeriod
-                  ? 'Select a period'
-                  : 'Select teacher first',
-              },
-              ...periodOptions.map((period) => ({
-                value: period,
-                label: period,
-              })),
-            ]}
-          />
-        </div>
-        <FormInput
-          scope={form.scope('password')}
-          label="Password"
-          autoComplete="new-password"
-          type="password"
-        />
-        <FormInput
-          scope={form.scope('confirmPassword')}
-          label="Confirm Password"
-          autoComplete="new-password"
-          type="password"
-        />
-        <Button className="mt-4 w-full" type="submit" disabled={isLoading}>
-          Create an account
-        </Button>
-      </Form>
+          <Button className="w-full" type="submit" disabled={isLoading}>
+            {isLoading ? 'Creating...' : 'Create account'}
+          </Button>
+        </Form>
+      </div>
     </div>
   );
 }

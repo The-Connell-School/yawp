@@ -10,15 +10,20 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Tooltip } from './ui/tooltip';
+import { DocumentStatusBadge } from '~/components/document-status-badge';
+import { formatGrade } from '~/domain/grading/gradeMath';
 
 type Props = {
   exitTo: string;
   doc: Document & {
     studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
+    submittedAt?: Date | string | null;
     submittedSnapshot?: {
       grades: {
         score: string | null;
         overallScore: number | null;
+        numericPercentage?: number | null;
+        letterGrade?: string | null;
         releasedAt: Date | string | null;
       }[];
     } | null;
@@ -29,8 +34,12 @@ type Props = {
 export const DocumentLink = ({ doc, exitTo, isArchived = false }: Props) => {
   const archiveFetcher = useFetcher();
   const grade = doc.submittedSnapshot?.grades?.[0];
-  const isGradeReleased = grade?.releasedAt !== null && grade?.releasedAt !== undefined;
-  const gradeDisplay = grade?.score || (grade?.overallScore ? `${grade.overallScore}/5` : null);
+  const isGradeReleased =
+    grade?.releasedAt !== null && grade?.releasedAt !== undefined;
+  const gradeDisplay =
+    formatGrade(grade?.numericPercentage ?? null, grade?.letterGrade ?? null) ||
+    grade?.score ||
+    (grade?.overallScore ? `${grade.overallScore}/5` : null);
 
   return (
     <Link
@@ -41,9 +50,12 @@ export const DocumentLink = ({ doc, exitTo, isArchived = false }: Props) => {
       <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
         {doc.studentCourseModuleSessions[0]?.studentCourseModule.title}
       </span>
+      <span className="absolute left-0 top-0 z-20 rounded-br-lg rounded-tl-lg border bg-white/90 px-2 py-0.5 dark:bg-background/90">
+        <DocumentStatusBadge submittedAt={doc.submittedAt} grade={grade} />
+      </span>
       {isGradeReleased && gradeDisplay && (
-        <span className="absolute left-0 top-0 z-20 rounded-br-lg rounded-tl-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
-          Grade: {gradeDisplay}
+        <span className="absolute left-0 top-7 z-20 rounded-br-lg rounded-tl-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
+          {gradeDisplay}
         </span>
       )}
       {doc.html ? (

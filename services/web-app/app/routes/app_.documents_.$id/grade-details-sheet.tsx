@@ -6,6 +6,8 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Badge } from '~/components/ui/badge';
+import { rubricCategories } from '~/domain/grading/rubric';
+import { formatGrade } from '~/domain/grading/gradeMath';
 
 type RubricScore = {
   score: number;
@@ -21,39 +23,13 @@ type GradeDetailsSheetProps = {
     feedback: string | null;
     overallScore: number | null;
     overallComment: string | null;
+    numericPercentage?: number | null;
+    letterGrade?: string | null;
     rubricScores?: unknown | null;
     releasedAt: Date | string | null;
     createdAt: Date | string;
   };
 };
-
-const rubricCategories = [
-  {
-    key: 'thesis_and_content',
-    label: 'Thesis and Content',
-    description: 'Clear argument, main idea, and relevance of content.',
-  },
-  {
-    key: 'organization_and_structure',
-    label: 'Organization and Structure',
-    description: 'Introduction, body, conclusion flow, and transitions.',
-  },
-  {
-    key: 'evidence_and_support',
-    label: 'Evidence and Support',
-    description: 'Use of examples, quotes, reasoning, and analysis.',
-  },
-  {
-    key: 'voice_and_style',
-    label: 'Voice and Style',
-    description: 'Appropriate tone, word choice, and sentence variety.',
-  },
-  {
-    key: 'grammar_and_mechanics',
-    label: 'Grammar and Mechanics',
-    description: 'Sentence structure, punctuation, and spelling.',
-  },
-] as const;
 
 const scoreLabels: Record<number, string> = {
   1: 'Needs Improvement',
@@ -72,7 +48,9 @@ export function GradeDetailsSheet({
     (grade.rubricScores as Record<string, RubricScore> | null) || {};
   const hasRubricScores = rubricScores && Object.keys(rubricScores).length > 0;
   const gradeDisplay =
-    grade.score || (grade.overallScore ? `${grade.overallScore}/5` : 'Graded');
+    formatGrade(grade.numericPercentage ?? null, grade.letterGrade ?? null) ||
+    grade.score ||
+    (grade.overallScore ? `${grade.overallScore}/5` : 'Graded');
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -145,14 +123,27 @@ export function GradeDetailsSheet({
 
           {/* Released Date */}
           <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-            Grade released on{' '}
-            {new Date(grade.releasedAt!).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {grade.releasedAt
+              ? `Grade released on ${new Date(grade.releasedAt).toLocaleDateString(
+                  'en-US',
+                  {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }
+                )}`
+              : `Grade saved on ${new Date(grade.createdAt).toLocaleDateString(
+                  'en-US',
+                  {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }
+                )}`}
           </div>
         </div>
       </SheetContent>

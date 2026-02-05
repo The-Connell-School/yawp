@@ -54,27 +54,36 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  // Create a snapshot of the current document state
-  const snapshot = await prisma.documentSnapshot.create({
-    data: {
-      documentId: document.id,
-      html: document.html,
-      text: document.text,
-    },
-  });
+  const html = document.html;
+  const text = document.text;
+  const now = new Date();
 
-  // Update the document with submission information
-  const submittedDocument = await prisma.document.update({
-    where: { id: document.id },
-    data: {
-      submittedAt: new Date(),
-      submittedSnapshotId: snapshot.id,
-    },
+  const finalDocument = await prisma.$transaction(async (tx) => {
+    const snapshot = await tx.documentSnapshot.create({
+      data: {
+        documentId: document.id,
+        html,
+        text,
+      },
+    });
+
+    await tx.documentComment.updateMany({
+      where: { documentId: document.id, archivedAt: null },
+      data: { archivedAt: now },
+    });
+
+    return tx.document.update({
+      where: { id: document.id },
+      data: {
+        submittedAt: now,
+        submittedSnapshotId: snapshot.id,
+      },
+    });
   });
 
   return dataResponse({
     success: true,
-    document: submittedDocument,
+    document: finalDocument,
     message: document.submittedAt
       ? 'Essay resubmitted successfully!'
       : 'Essay submitted successfully!',

@@ -5,6 +5,7 @@ import {
   useLoaderData,
   useNavigate,
   useSearchParams,
+  Link,
 } from 'react-router';
 import { ArrowLeft, Check, Loader2, AlertCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -27,12 +28,16 @@ import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor } from './editor';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
 import { GradeDetailsSheet } from './grade-details-sheet';
+import { DocumentStatusBadge } from '~/components/document-status-badge';
+import { formatGrade } from '~/domain/grading/gradeMath';
+import { TeacherGradingPanel } from './_components/teacher-grading-panel';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -83,6 +88,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submittedSnapshot: {
         select: {
           id: true,
+          html: true,
+          text: true,
           grades: {
             select: {
               id: true,
@@ -90,6 +97,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               feedback: true,
               overallScore: true,
               overallComment: true,
+              numericPercentage: true,
+              letterGrade: true,
+              grammarIssues: true,
               rubricScores: true,
               releasedAt: true,
               createdAt: true,
@@ -183,6 +193,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
+    gradingAssistantEnabled: isGradingAssistantEnabledForOrg(
+      profile.organization.id
+    ),
   });
 }
 
@@ -196,21 +209,46 @@ export default function Route() {
   const [isSaving, setIsSaving] = useState(false);
   const [isGradeDetailsOpen, setIsGradeDetailsOpen] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
   );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get('tab') ?? 'tutor';
+  const leftPanel = searchParams.get('left') ?? 'tutor';
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
   const grade = data.doc.submittedSnapshot?.grades?.[0];
   const isGradeReleased = grade?.releasedAt !== null && grade?.releasedAt !== undefined;
+  const gradingAssistantEnabled = data.gradingAssistantEnabled;
+  const canUseGradingPanel =
+    gradingAssistantEnabled && isViewingAsTeacher && isSubmitted;
+  const gradeDisplay =
+    (grade
+      ? formatGrade(grade.numericPercentage ?? null, grade.letterGrade ?? null) ||
+        grade.score ||
+        (grade.overallScore ? `${grade.overallScore}/5` : null)
+      : null) ?? null;
+  const allComments = (data.doc.comments as any[]) ?? [];
+  const activeComments = allComments.filter((c) => !c.archivedAt);
+  const archivedComments = allComments.filter((c) => !!c.archivedAt);
+  const visibleComments = isSubmitted
+    ? showOldComments
+      ? [...activeComments, ...archivedComments]
+      : activeComments
+    : activeComments;
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', value);
+    setSearchParams(params);
+  };
+
+  const changeLeftPanel = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('left', value);
     setSearchParams(params);
   };
 
@@ -292,17 +330,16 @@ export default function Route() {
               }
             />
           </div>
-          {!isViewingAsTeacher && isSubmitted && (
+          {!isViewingAsTeacher && (
             <div className="flex items-center gap-2">
-              {isGradeReleased ? (
-                <Badge variant="success" className="text-xs">
-                  Graded {new Date(grade.releasedAt!).toLocaleDateString()}
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="text-xs">
-                  Being graded {new Date(data.doc.submittedAt!).toLocaleDateString()}
-                </Badge>
-              )}
+              <DocumentStatusBadge submittedAt={data.doc.submittedAt} grade={grade ?? null} />
+              {isSubmitted ? (
+                <span className="text-xs text-muted-foreground">
+                  {isGradeReleased && grade?.releasedAt
+                    ? new Date(grade.releasedAt).toLocaleDateString()
+                    : new Date(data.doc.submittedAt!).toLocaleDateString()}
+                </span>
+              ) : null}
             </div>
           )}
           {isViewingAsTeacher ? (
@@ -312,15 +349,31 @@ export default function Route() {
                   ? data.doc.profile.user.name
                   : `Viewing work by ${data.doc.profile.user.name}`}
               </Badge>
+              <DocumentStatusBadge submittedAt={data.doc.submittedAt} grade={grade ?? null} />
               {isSubmitted && (
-                <Badge variant="success" className="md:text-md text-xs">
-                  Submitted {new Date(data.doc.submittedAt!).toLocaleDateString()}
-                </Badge>
+                <div className="hidden md:flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+                  <Button
+                    size="sm"
+                    variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
+                    onClick={() => changeLeftPanel('tutor')}
+                  >
+                    Tutor/History
+                  </Button>
+                  {gradingAssistantEnabled ? (
+                    <Button
+                      size="sm"
+                      variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
+                      onClick={() => changeLeftPanel('grading')}
+                    >
+                      Grading
+                    </Button>
+                  ) : null}
+                </div>
               )}
             </div>
           ) : null}
           <div className="ml-auto flex items-center gap-4">
-            {!isViewingAsTeacher && !isSubmitted && (
+            {!isViewingAsTeacher && (
               <>
                 <Button
                   size="sm"
@@ -331,11 +384,23 @@ export default function Route() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Finalizing...
+                      Submitting...
                     </>
                   ) : (
-                    'Finalize'
+                    isSubmitted ? 'Submit again' : 'Submit'
                   )}
+                </Button>
+                <div className="h-[20px] border-r" />
+              </>
+            )}
+            {isSubmitted && archivedComments.length > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowOldComments((v) => !v)}
+                >
+                  {showOldComments ? 'Hide old comments' : 'Show old comments'}
                 </Button>
                 <div className="h-[20px] border-r" />
               </>
@@ -365,7 +430,7 @@ export default function Route() {
                   {isGradeReleased ? 'Grade Released' : 'Graded (Not Released)'}
                 </Badge>
                 <span className="text-sm font-medium">
-                  {grade.score || (grade.overallScore ? `${grade.overallScore}/5` : 'Graded')}
+                  {gradeDisplay || 'Graded'}
                 </span>
               </div>
               {(grade.feedback || grade.overallComment) && (
@@ -375,14 +440,26 @@ export default function Route() {
                   </p>
                 </div>
               )}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsGradeDetailsOpen(true)}
-                className="bg-white dark:bg-background"
-              >
-                View Details
-              </Button>
+              <div className="flex gap-2">
+                {gradingAssistantEnabled ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    asChild
+                    className="bg-white dark:bg-background"
+                  >
+                    <Link to={`/app/graded/${grade.id}`}>Open Graded View</Link>
+                  </Button>
+                ) : null}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsGradeDetailsOpen(true)}
+                  className="bg-white dark:bg-background"
+                >
+                  View Details
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -402,22 +479,42 @@ export default function Route() {
         <CommentsSelectionProvider>
           <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
             {isMobile && tab !== 'tutor' ? null : (
-              <Tutor
-                docId={data.doc.id}
-                cms={data.currentCms}
-                nextCmId={data.nextCmId}
-                hasPreviousCms={data.hasPreviousCms}
-              />
+              canUseGradingPanel && leftPanel === 'grading' ? (
+                <TeacherGradingPanel
+                  documentId={data.doc.id}
+                  existingGrade={grade ?? null}
+                />
+              ) : (
+                <Tutor
+                  docId={data.doc.id}
+                  cms={data.currentCms}
+                  nextCmId={data.nextCmId}
+                  hasPreviousCms={data.hasPreviousCms}
+                />
+              )
             )}
             {isMobile && tab !== 'editor' ? null : (
-              <Editor
-                docId={data.doc.id}
-                docHtml={data.doc.html}
-                setIsSaving={setIsSaving}
-              />
+              isViewingAsTeacher && isSubmitted && data.doc.submittedSnapshot?.html ? (
+                <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
+                  <div className="no-scrollbar grow overflow-y-scroll p-5 font-times">
+                    <div
+                      dangerouslySetInnerHTML={{
+                        __html: data.doc.submittedSnapshot.html,
+                      }}
+                      className="tiptap"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <Editor
+                  docId={data.doc.id}
+                  docHtml={data.doc.html}
+                  setIsSaving={setIsSaving}
+                />
+              )
             )}
             {isMobile && tab !== 'comments' ? null : (
-              <Comments comments={data.doc.comments as any} />
+              <Comments comments={visibleComments as any} />
             )}
           </div>
         </CommentsSelectionProvider>
@@ -434,20 +531,19 @@ export default function Route() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-yellow-600" />
-              Finalize Document
+              {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
             </DialogTitle>
             <DialogDescription className="space-y-3 pt-2">
               <p>
-                Before you finalize this document, please note the following:
+                Before you submit, please note the following:
               </p>
               <ul className="list-disc space-y-2 pl-5 text-sm">
                 <li>
-                  Once finalized, any changes you make to this document will{' '}
-                  <strong>not be reflected</strong> in the version sent for grading.
+                  Submitting creates a snapshot of your essay for your teacher to grade.
                 </li>
                 <li>
-                  This action <strong>cannot be undone</strong>. You will not be able to
-                  resubmit the document.
+                  You can keep editing after you submit, but changes won’t be reflected
+                  in what your teacher sees unless you submit again.
                 </li>
                 <li>
                   Your teacher will receive the current version of your document for
@@ -455,7 +551,7 @@ export default function Route() {
                 </li>
               </ul>
               <p className="pt-2 font-medium">
-                Are you sure you want to finalize this document?
+                Are you sure you want to submit this essay?
               </p>
             </DialogDescription>
           </DialogHeader>

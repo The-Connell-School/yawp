@@ -20,6 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  computeWeightedPercentage,
+  formatGrade,
+  letterFromPercent,
+} from '~/domain/grading/gradeMath';
+import { rubricCategories as rubric } from '~/domain/grading/rubric';
 
 type Document = {
   id: string;
@@ -40,6 +46,8 @@ type Document = {
       rubricScores?: unknown | null;
       overallScore?: number | null;
       overallComment?: string | null;
+      numericPercentage?: number | null;
+      letterGrade?: string | null;
       aiMeta?: unknown | null;
       releasedAt: Date | string | null;
     }[];
@@ -52,34 +60,6 @@ type GradingSheetProps = {
   onClose: () => void;
   onSuccess?: () => void;
 };
-
-const rubric = [
-  {
-    key: 'thesis_and_content',
-    label: 'Thesis and Content',
-    description: 'Clear argument, main idea, and relevance of content.',
-  },
-  {
-    key: 'organization_and_structure',
-    label: 'Organization and Structure',
-    description: 'Introduction, body, conclusion flow, and transitions.',
-  },
-  {
-    key: 'evidence_and_support',
-    label: 'Evidence and Support',
-    description: 'Use of examples, quotes, reasoning, and analysis.',
-  },
-  {
-    key: 'voice_and_style',
-    label: 'Voice and Style',
-    description: 'Appropriate tone, word choice, and sentence variety.',
-  },
-  {
-    key: 'grammar_and_mechanics',
-    label: 'Grammar and Mechanics',
-    description: 'Sentence structure, punctuation, and spelling.',
-  },
-] as const;
 
 const scoreOptions = [
   { value: '1', label: '1 - Needs Improvement' },
@@ -109,8 +89,9 @@ export function GradingSheet({
 }: GradingSheetProps) {
   const fetcher = useFetcher();
   const aiFetcher = useFetcher();
-  const [score, setScore] = useState('');
-  const [feedback, setFeedback] = useState('');
+  const [numericPercentage, setNumericPercentage] = useState('');
+  const [hasManualPercentOverride, setHasManualPercentOverride] =
+    useState(false);
   const [releaseImmediately, setReleaseImmediately] = useState(false);
   const [rubricScores, setRubricScores] =
     useState<Record<string, RubricScore>>(buildEmptyRubric());
@@ -126,12 +107,17 @@ export function GradingSheet({
   // Initialize form with existing grade data when editing
   useEffect(() => {
     if (isEditing && existingGrade) {
-      setScore(existingGrade.score || '');
-      setFeedback(existingGrade.feedback || '');
       setReleaseImmediately(!!existingGrade.releasedAt);
       setOverallComment(
         existingGrade.overallComment || existingGrade.feedback || ''
       );
+      if (typeof existingGrade.numericPercentage === 'number') {
+        setNumericPercentage(existingGrade.numericPercentage.toString());
+        setHasManualPercentOverride(true);
+      } else {
+        setNumericPercentage('');
+        setHasManualPercentOverride(false);
+      }
       if (
         existingGrade.rubricScores &&
         typeof existingGrade.rubricScores === 'object'
@@ -144,40 +130,65 @@ export function GradingSheet({
     } else {
       setRubricScores(buildEmptyRubric());
       setOverallComment('');
+      setNumericPercentage('');
+      setHasManualPercentOverride(false);
     }
   }, [isEditing, existingGrade]);
 
-  const computedOverallScore = useMemo(() => {
-    const scores = rubric.map((item) => rubricScores[item.key]?.score || 0);
-    const validScores = scores.filter((scoreValue) => scoreValue > 0);
-    if (validScores.length === 0) return null;
-    const average =
-      validScores.reduce((sum, val) => sum + val, 0) / validScores.length;
-    return Math.round(average);
+  const computedNumericPercentage = useMemo(() => {
+    return computeWeightedPercentage(rubricScores as unknown as Record<
+      string,
+      unknown
+    >);
   }, [rubricScores]);
 
-  // Sync score field when rubric-computed score changes
+  const resolvedNumericPercentage = useMemo(() => {
+    const raw = Number(numericPercentage);
+    if (!Number.isFinite(raw)) return null;
+    const clamped = Math.max(0, Math.min(100, Math.round(raw)));
+    return clamped;
+  }, [numericPercentage]);
+
+  const resolvedLetterGrade = useMemo(() => {
+    if (resolvedNumericPercentage === null) return null;
+    return letterFromPercent(resolvedNumericPercentage);
+  }, [resolvedNumericPercentage]);
+
+  const gradeDisplay = useMemo(() => {
+    return formatGrade(resolvedNumericPercentage, resolvedLetterGrade) ?? '—';
+  }, [resolvedLetterGrade, resolvedNumericPercentage]);
+
   useEffect(() => {
-    if (computedOverallScore !== null) {
-      setScore(`${computedOverallScore}/5`);
+    if (!hasManualPercentOverride && computedNumericPercentage !== null) {
+      setNumericPercentage(computedNumericPercentage.toString());
     }
-  }, [computedOverallScore]);
+  }, [computedNumericPercentage, hasManualPercentOverride]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     const formData = new FormData();
 
+    const normalizedPercent =
+      resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
+    const normalizedLetter =
+      normalizedPercent === null ? null : letterFromPercent(normalizedPercent);
+    const normalizedScore =
+      normalizedPercent === null ? null : formatGrade(normalizedPercent);
+
     if (isEditing) {
       // Update existing grade
       formData.append('gradeId', existingGrade!.id);
-      formData.append('score', score);
-      formData.append('feedback', feedback || overallComment);
+      if (normalizedScore) formData.append('score', normalizedScore);
+      formData.append('feedback', overallComment);
       formData.append('rubricScores', JSON.stringify(rubricScores));
-      if (computedOverallScore !== null) {
-        formData.append('overallScore', computedOverallScore.toString());
-      }
       formData.append('overallComment', overallComment);
+      if (normalizedPercent !== null) {
+        formData.append('numericPercentage', normalizedPercent.toString());
+      }
+      if (normalizedLetter) {
+        formData.append('letterGrade', normalizedLetter);
+      }
 
       fetcher.submit(formData, {
         method: 'POST',
@@ -188,13 +199,16 @@ export function GradingSheet({
       documents.forEach((doc) => {
         formData.append('documentIds', doc.id);
       });
-      formData.append('score', score);
-      formData.append('feedback', feedback || overallComment);
+      if (normalizedScore) formData.append('score', normalizedScore);
+      formData.append('feedback', overallComment);
       formData.append('rubricScores', JSON.stringify(rubricScores));
-      if (computedOverallScore !== null) {
-        formData.append('overallScore', computedOverallScore.toString());
-      }
       formData.append('overallComment', overallComment);
+      if (normalizedPercent !== null) {
+        formData.append('numericPercentage', normalizedPercent.toString());
+      }
+      if (normalizedLetter) {
+        formData.append('letterGrade', normalizedLetter);
+      }
       if (releaseImmediately) {
         formData.append('releaseImmediately', 'on');
       }
@@ -214,11 +228,11 @@ export function GradingSheet({
       !hasProcessedSuccess.current
     ) {
       hasProcessedSuccess.current = true;
-      setScore('');
-      setFeedback('');
       setReleaseImmediately(false);
       setRubricScores(buildEmptyRubric());
       setOverallComment('');
+      setNumericPercentage('');
+      setHasManualPercentOverride(false);
       onClose();
       onSuccess?.();
     }
@@ -228,11 +242,11 @@ export function GradingSheet({
   useEffect(() => {
     if (!isOpen) {
       hasProcessedSuccess.current = false;
-      setScore('');
-      setFeedback('');
       setReleaseImmediately(false);
       setRubricScores(buildEmptyRubric());
       setOverallComment('');
+      setNumericPercentage('');
+      setHasManualPercentOverride(false);
     }
   }, [isOpen]);
 
@@ -246,10 +260,10 @@ export function GradingSheet({
       }
       if (typeof aiFetcher.data.overallComment === 'string') {
         setOverallComment(aiFetcher.data.overallComment);
-        setFeedback(aiFetcher.data.overallComment);
       }
-      if (typeof aiFetcher.data.overallScore === 'number') {
-        setScore(`${aiFetcher.data.overallScore}/5`);
+      if (typeof aiFetcher.data.numericPercentage === 'number') {
+        setNumericPercentage(aiFetcher.data.numericPercentage.toString());
+        setHasManualPercentOverride(false);
       }
     }
   }, [aiFetcher.data, aiFetcher.state]);
@@ -375,38 +389,51 @@ export function GradingSheet({
 
           {/* Grading form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="score">
-                Score/Grade{' '}
-                <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="score"
-                value={score}
-                onChange={(e) => setScore(e.target.value)}
-                placeholder="e.g., A+, 95/100, Excellent"
-                disabled={fetcher.state !== 'idle'}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="feedback">
-                Feedback{' '}
-                <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id="feedback"
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Enter your feedback for the student..."
-                rows={8}
-                disabled={fetcher.state !== 'idle'}
-              />
-              <p className="text-xs text-muted-foreground">
-                {isMultiple
-                  ? 'This feedback will be applied to all selected essays.'
-                  : 'Provide constructive feedback to help the student improve.'}
-              </p>
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium">Overall Grade</div>
+                  <div className="text-xs text-muted-foreground">
+                    Percentage is computed from the weighted rubric. You can
+                    override it.
+                  </div>
+                </div>
+                <Badge variant="secondary" className="whitespace-nowrap">
+                  {gradeDisplay}
+                </Badge>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="numeric-percentage">Percentage</Label>
+                  <Input
+                    id="numeric-percentage"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={numericPercentage}
+                    onChange={(e) => {
+                      setNumericPercentage(e.target.value);
+                      setHasManualPercentOverride(true);
+                    }}
+                    placeholder="e.g., 94"
+                    disabled={fetcher.state !== 'idle'}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (computedNumericPercentage === null) return;
+                    setNumericPercentage(computedNumericPercentage.toString());
+                    setHasManualPercentOverride(false);
+                  }}
+                  disabled={
+                    fetcher.state !== 'idle' || computedNumericPercentage === null
+                  }
+                >
+                  Recalculate from rubric
+                </Button>
+              </div>
             </div>
 
             <div className="pt-4 space-y-4">
@@ -416,12 +443,6 @@ export function GradingSheet({
                   <div className="text-xs text-muted-foreground">
                     Scores are 1–5 and roll up to the overall grade.
                   </div>
-                </div>
-                <div className="text-sm font-medium">
-                  Overall Score:{' '}
-                  <span className="text-muted-foreground">
-                    {computedOverallScore !== null ? `${computedOverallScore}/5` : '—'}
-                  </span>
                 </div>
               </div>
               <div className="space-y-4">
@@ -493,8 +514,7 @@ export function GradingSheet({
 
             <div className="space-y-2">
               <Label htmlFor="overall-comment">
-                Overall Feedback{' '}
-                <span className="text-muted-foreground">(optional)</span>
+                Overall Feedback
               </Label>
               <Textarea
                 id="overall-comment"

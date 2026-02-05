@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
 
 // Schema for single or bulk grading
 const POST = z.object({
@@ -12,6 +13,8 @@ const POST = z.object({
   rubricScores: z.string().optional(),
   overallScore: z.string().optional(),
   overallComment: z.string().optional(),
+  numericPercentage: z.string().optional(),
+  letterGrade: z.string().optional(),
   aiMeta: z.string().optional(),
   releaseImmediately: z.enum(['on']).optional(), // Checkbox value
 });
@@ -117,6 +120,13 @@ export async function action({ request }: ActionFunctionArgs) {
       ? Number(data.overallScore)
       : null;
   const overallComment = data.overallComment ?? null;
+  const numericPercentage =
+    data.numericPercentage && Number.isFinite(Number(data.numericPercentage))
+      ? Math.max(0, Math.min(100, Math.round(Number(data.numericPercentage))))
+      : null;
+  const letterGrade =
+    numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
+  const score = data.score ?? (numericPercentage !== null ? formatGrade(numericPercentage, letterGrade) ?? undefined : undefined);
 
   // Create or update grades for all submitted snapshots
   const gradePromises = documents.map((doc) => {
@@ -128,20 +138,24 @@ export async function action({ request }: ActionFunctionArgs) {
       create: {
         snapshotId: doc.submittedSnapshotId,
         gradedById: profile.id,
-        score: data.score,
+        score,
         feedback: data.feedback,
         rubricScores,
         overallScore,
         overallComment,
+        numericPercentage,
+        letterGrade,
         aiMeta,
         releasedAt,
       },
       update: {
-        score: data.score,
+        score,
         feedback: data.feedback,
         rubricScores,
         overallScore,
         overallComment,
+        numericPercentage,
+        letterGrade,
         aiMeta,
         releasedAt,
         updatedAt: now,

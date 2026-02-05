@@ -32,16 +32,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(formData, Schema);
   if (error) return validationError(error);
 
-  const [school, klass] = await Promise.all([
-    prisma.school.findFirst({
-      where: { code: data.code },
-    }),
-    prisma.class.findFirst({
-      where: { code: data.code },
-    }),
-  ]);
+  const classes = await prisma.class.findMany({
+    where: { code: { equals: data.code, mode: 'insensitive' }, isArchived: false },
+    select: { id: true },
+    take: 20,
+  });
 
-  if (!school && !klass) {
+  if (classes.length === 0) {
     return validationError({ fieldErrors: { code: 'Invalid code.' } }, data);
   }
 
@@ -75,7 +72,11 @@ export async function action({ request }: ActionFunctionArgs) {
     target,
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
-    metadata: JSON.stringify({ schoolId: school?.id, klassId: klass?.id }),
+    metadata: JSON.stringify(
+      classes.length === 1
+        ? { klassId: classes[0]!.id }
+        : { klassIds: classes.map((c) => c.id) }
+    ),
   };
 
   // Check for existing invitation and delete if found
