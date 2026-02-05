@@ -9,7 +9,7 @@ export const openai = client;
 
 export const getBase64Audio = async (input: string, speed?: string) => {
   if (!openai) {
-    throw new Error('OpenAI not initialized');
+    return;
   }
 
   const mp3 = await openai.audio.speech.create({

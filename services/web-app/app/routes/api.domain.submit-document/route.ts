@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
 
 const POST = z.object({ documentId: z.string() });
 
@@ -11,6 +12,17 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+
+  // Check if document submission is enabled
+  const isSubmissionEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/courses', {
+      description: 'Document submission is currently disabled.',
+      type: 'error',
+    });
+  }
 
   // Verify the document exists and belongs to the user
   const document = await prisma.document.findFirst({
@@ -63,6 +75,8 @@ export async function action({ request }: ActionFunctionArgs) {
   return dataResponse({
     success: true,
     document: submittedDocument,
-    message: document.submittedAt ? 'Essay resubmitted successfully!' : 'Essay submitted successfully!',
+    message: document.submittedAt
+      ? 'Essay resubmitted successfully!'
+      : 'Essay submitted successfully!',
   });
 }

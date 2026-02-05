@@ -23,6 +23,8 @@ import {
 } from '~/components/ui/sheet';
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { Input } from '~/components/ui/input';
+import { Switch } from '~/components/ui/switch';
+import { Label } from '~/components/ui/label';
 import startCase from 'lodash/startCase';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -70,6 +72,8 @@ export default function GeneralSettings() {
             <StringSetting setting={setting} />
           ) : setting.valueType === 'arrayOfStrings' ? (
             <ArrayOfStringsSetting setting={setting} />
+          ) : setting.valueType === 'boolean' ? (
+            <BooleanSetting setting={setting} />
           ) : null
         )}
       </div>
@@ -241,5 +245,43 @@ function ArrayOfStringsSetting({ setting }: { setting: Setting }) {
         </Sheet>
       </div>
     </form>
+  );
+}
+
+function BooleanSetting({ setting }: { setting: Setting }) {
+  const fetcher = useFetcher();
+  const isEnabled = setting.value === 'true';
+
+  const handleToggle = (checked: boolean) => {
+    const formData = new FormData();
+    formData.append('name', setting.name);
+    formData.append('value', checked.toString());
+    fetcher.submit(formData, { method: 'POST' });
+  };
+
+  return (
+    <div
+      key={setting.id}
+      className="mb-4 rounded-xl border shadow-sm bg-muted p-4"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={setting.id} className="font-medium cursor-pointer">
+            {startCase(setting.name)}
+          </Label>
+          {setting.description && (
+            <p className="text-sm text-muted-foreground">
+              {setting.description}
+            </p>
+          )}
+        </div>
+        <Switch
+          id={setting.id}
+          checked={isEnabled}
+          onCheckedChange={handleToggle}
+          disabled={fetcher.state !== 'idle'}
+        />
+      </div>
+    </div>
   );
 }
