@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 type SeedData = {
   users: Prisma.UserCreateInput[];
   studentCourses: Prisma.StudentCourseCreateInput[];
+  teacherCourses: Prisma.TeacherCourseCreateInput[];
   organizations: Prisma.OrganizationCreateInput[];
 };
 
@@ -62,7 +63,7 @@ const studentCourses: SeedData['studentCourses'] = [
                 position: 3,
                 prompt: 'Ready, set, write!',
                 tutorInstructions:
-                  'After user writes for a while, Connell will give them positive feedback and ask them a few probing questions based on their writing. Connell can say: "See if you can write a little bit more on this, and then we\'ll move onto the next step." After user writes a little bit more, Connell will move on to the next step -- helping them find the diamonds in the rough. Connell responds: "Great work! The next step in pre-writing is to read over what we\'ve written. A lot of it may not be that interesting—that\'s ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you\'ve written for a while and you don\'t have anything that\'s really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]" Connell can identify a couple possible "diamonds." Connell should let the user decide which diamond they want to write on.\nAfter the user writes on a diamond of their choice, Connell responds with: "Take a look at all of the ideas you\'ve written and the different aspects of your topic we\'ve identified. Is there a specific angle, argument, or aspect of your topic that you want to focus on in your essay? Take a look, and when you\'re ready, type it here." Once the user has typed a specific topic, Connell responds: "This is a great topic." Connell can talk about why this will make a good essay. Connell should check with the user to make sure this is the topic they want to focus on. Connell responds: "Is this the specific topic you want to build a thesis around?" If user says "Yes," then Connell Pre-Writing Assistant should stop the process by saying: "Excellent! You\'ve just completed the pre-writing phase. Take a minute to recognize how you started with a very general idea and through the process of Critical Thinking--simply asking and answering questions--you\'ve found a more specific focus. This step of pre-writing alone has already improved your chances of writing a great essay! Now that you have your specific focus, you can move onto developing a thesis statement. Ask your teacher to direct you to Connell Thesis Assistant. By the way, what\'s your name?" When user types their name, Connell responds: "Great work today [user name]!" Connell should not help them write a thesis statement. If user responds "No"  to Connell\'s question "Is this the specific topic you want to build a thesis around?" Connell should say: "Ok, let\'s go back and look at another angle -- find a different \"diamond\" from your pre-write."',
+                  'After user writes for a while, Connell will give them positive feedback and ask them a few probing questions based on their writing. Connell can say: "See if you can write a little bit more on this, and then we\'ll move onto the next step." After user writes a little bit more, Connell will move on to the next step -- helping them find the diamonds in the rough. Connell responds: "Great work! The next step in pre-writing is to read over what we\'ve written. A lot of it may not be that interesting—that\'s ok—many times you have to say a lot of nothing in order to get to the good stuff (this is worth it, because the alternative is just writing the essay and forcing your reader or teacher to read a whole lot of nothing). When you find the good stuff, highlight it or circle it or make note of it. These are the diamonds in the rough -- the great ideas hiding in your pre-write. Now I want you to grab one of those diamonds and pre-write on just that one idea or point. Start asking specific questions about that diamond—flush that out. [Note: if you\'ve written for a while and you don\'t have anything that\'s really grabbing you, then go back to the beginning and offer a different answer to what you find interesting or confusing or worthy of discussion. Choose a different road to go down.]" Connell can identify a couple possible "diamonds." Connell should let the user decide which diamond they want to write on.\nAfter the user writes on a diamond of their choice, Connell responds with: "Take a look at all of the ideas you\'ve written and the different aspects of your topic we\'ve identified. Is there a specific angle, argument, or aspect of your topic that you want to focus on in your essay? Take a look, and when you\'re ready, type it here." Once the user has typed a specific topic, Connell responds: "This is a great topic." Connell can talk about why this will make a good essay. Connell should check with the user to make sure this is the topic they want to focus on. Connell responds: "Is this the specific topic you want to build a thesis around?" If user says "Yes," then Connell Pre-Writing Assistant should stop the process by saying: "Excellent! You\'ve just completed the pre-writing phase. Take a minute to recognize how you started with a very general idea and through the process of Critical Thinking--simply asking and answering questions--you\'ve found a more specific focus. This step of pre-writing alone has already improved your chances of writing a great essay! Now that you have your specific focus, you can move onto developing a thesis statement. Ask your teacher to direct you to Connell Thesis Assistant. By the way, what\'s your name?" When user types their name, Connell responds: "Great work today [user name]!" Connell should not help them write a thesis statement. If user responds "No"  to Connell\'s question "Is this the specific topic you want to build a thesis around?" Connell should say: "Ok, let\'s go back and look at another angle -- find a different "diamond" from your pre-write."',
                 showChatButton: true,
                 title: 'Write!',
               },
@@ -101,6 +102,53 @@ const studentCourses: SeedData['studentCourses'] = [
               },
             ],
           },
+        },
+      ],
+    },
+  },
+];
+
+const teacherCourses: SeedData['teacherCourses'] = [
+  {
+    title: 'Teaching the Critical Essay',
+    position: 1,
+    description:
+      'Teacher-focused guidance for coaching thesis development, evidence selection, and feedback cycles.',
+    teacherCourseModules: {
+      create: [
+        {
+          title: 'Planning & Scaffolding',
+          position: 1,
+          description:
+            'Build a unit arc, set clear checkpoints, and design supports for diverse writers.',
+        },
+        {
+          title: 'Feedback & Revision',
+          position: 2,
+          description:
+            'Use feedback routines that help students revise with purpose and confidence.',
+        },
+      ],
+    },
+  },
+  {
+    title: 'Assessment & Conferencing',
+    position: 2,
+    description:
+      'Practical strategies for conferencing, grading, and helping students own their growth.',
+    teacherCourseModules: {
+      create: [
+        {
+          title: 'Conferencing Routines',
+          position: 1,
+          description:
+            'Run quick, high-impact conferences that uncover student thinking.',
+        },
+        {
+          title: 'Assessment Practices',
+          position: 2,
+          description:
+            'Align rubrics, grading, and reflection to reinforce strong writing habits.',
         },
       ],
     },
@@ -192,7 +240,8 @@ const TEST_USERS = [
 
 function makeName(index: number) {
   const first = FIRST_NAMES[index % FIRST_NAMES.length];
-  const last = LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
+  const last =
+    LAST_NAMES[Math.floor(index / FIRST_NAMES.length) % LAST_NAMES.length];
   return `${first} ${last}`;
 }
 
@@ -200,7 +249,12 @@ function makeEmail(role: 'teacher' | 'student', index: number) {
   return `${role}${index + 1}@fake.test`;
 }
 
-function makeClassCode(schoolIndex: number, classIndex: number, grade: string, period: string) {
+function makeClassCode(
+  schoolIndex: number,
+  classIndex: number,
+  grade: string,
+  period: string
+) {
   return `S${schoolIndex + 1}C${classIndex + 1}G${grade}P${period}`;
 }
 
@@ -278,6 +332,7 @@ async function seed() {
     organizations,
     users,
     studentCourses,
+    teacherCourses,
   };
   console.timeEnd('🧹 Cleaned up the database...');
 
@@ -295,6 +350,10 @@ async function seed() {
           case 'studentCourses':
             return prisma.studentCourse.create({
               data: item as Prisma.StudentCourseCreateInput,
+            });
+          case 'teacherCourses':
+            return prisma.teacherCourse.create({
+              data: item as Prisma.TeacherCourseCreateInput,
             });
           default:
             throw new Error(`Unknown model: ${key}`);
@@ -324,12 +383,41 @@ async function seed() {
   const studentProfiles = await prisma.studentProfile.findMany({
     include: { profile: { include: { user: true } } },
   });
+  const seededTeacherCourses = await prisma.teacherCourse.findMany({
+    orderBy: { position: 'asc' },
+  });
+
+  await Promise.all(
+    seededTeacherCourses.map((course, courseIndex) => {
+      if (teacherProfiles.length === 0) {
+        return Promise.resolve(null);
+      }
+      const primaryTeacher =
+        teacherProfiles[courseIndex % teacherProfiles.length];
+      const secondaryTeacher =
+        teacherProfiles[(courseIndex + 1) % teacherProfiles.length];
+      const teacherIds = new Set(
+        [primaryTeacher, secondaryTeacher]
+          .filter(Boolean)
+          .map((teacher) => teacher.id)
+      );
+      if (teacherIds.size === 0) {
+        return Promise.resolve(null);
+      }
+      return prisma.teacherCourse.update({
+        where: { id: course.id },
+        data: {
+          assignedTeachers: {
+            connect: Array.from(teacherIds).map((id) => ({ id })),
+          },
+        },
+      });
+    })
+  );
 
   const classCount = SCHOOL_COUNT * CLASSES_PER_SCHOOL;
-  const classStudentBuckets: Array<(typeof studentProfiles)[number][]> = Array.from(
-    { length: classCount },
-    () => []
-  );
+  const classStudentBuckets: Array<(typeof studentProfiles)[number][]> =
+    Array.from({ length: classCount }, () => []);
 
   studentProfiles.forEach((student, index) => {
     classStudentBuckets[index % classCount].push(student);
@@ -415,9 +503,9 @@ async function seed() {
       const baseTitle = `Essay on ${topic}`;
       return Promise.all(
         Array.from({ length: DOCUMENTS_PER_STUDENT }, (_, docIndex) => {
-          const text = `Topic: ${topic}\n\nThis is draft ${
-            docIndex + 1
-          } by ${student.profile.user.name ?? student.profile.user.email}.`;
+          const text = `Topic: ${topic}\n\nThis is draft ${docIndex + 1} by ${
+            student.profile.user.name ?? student.profile.user.email
+          }.`;
           const html = `<p><strong>Topic:</strong> ${topic}</p><p>This is draft ${
             docIndex + 1
           } by ${student.profile.user.name ?? student.profile.user.email}.</p>`;
