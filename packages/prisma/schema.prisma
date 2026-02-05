@@ -286,6 +286,7 @@ model TeacherProfile {
   profileId                   String                       @unique
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   teacherCourseModuleSessions TeacherCourseModuleSession[]
+  assignedTeacherCourses      TeacherCourse[]              @relation("TeacherCourseAssignments")
   classes                     Class[]
   schools                     School[]
 }
@@ -334,6 +335,7 @@ model TeacherCourse {
   image                TeacherCourseImage?
   teacherCourseModules TeacherCourseModule[]
   resources            TeacherCourseResource[]
+  assignedTeachers     TeacherProfile[]        @relation("TeacherCourseAssignments")
 }
 
 model TeacherCourseImage {

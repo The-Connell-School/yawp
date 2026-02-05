@@ -20,7 +20,7 @@ import {
 import { Checkbox } from '~/components/ui/checkbox';
 import { requireProfile, requireOwner } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { SearchInput } from '~/components/search-input';
 import { useTable } from '~/hooks/useTable';
 import { cn, getDomainUrl } from '~/utils/misc';
@@ -32,12 +32,13 @@ import { Prisma } from '@app/prisma';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
@@ -73,9 +74,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
           user: true,
         },
       },
+      assignedTeacherCourses: {
+        select: { id: true },
+      },
       _count: {
         select: {
           classes: true,
+          assignedTeacherCourses: true,
         },
       },
     },
@@ -88,7 +93,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  return dataResponse({ teachers, q });
+  const teacherCourses = await prisma.teacherCourse.findMany({
+    select: { id: true, title: true },
+    orderBy: { position: 'asc' },
+  });
+
+  return dataResponse({ teachers, teacherCourses, q });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -96,6 +106,58 @@ export async function action({ request }: ActionFunctionArgs) {
   const profile = await requireProfile(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
+
+  if (intent === 'edit-teacher') {
+    const teacherId = formData.get('teacherId')?.toString();
+    if (!teacherId) {
+      return dataResponse({ error: 'Teacher ID is required' }, { status: 400 });
+    }
+
+    const teacherCourseIds = formData
+      .getAll('teacherCourseIds')
+      .map((v) => v.toString())
+      .filter(Boolean);
+
+    const teacher = await prisma.teacherProfile.findFirst({
+      where: {
+        id: teacherId,
+        profile: { organizationId: profile.organization.id },
+      },
+      select: { id: true },
+    });
+
+    if (!teacher) {
+      return dataResponse(
+        { error: 'Teacher not found in your organization' },
+        { status: 404 }
+      );
+    }
+
+    if (teacherCourseIds.length > 0) {
+      const courses = await prisma.teacherCourse.findMany({
+        where: { id: { in: teacherCourseIds } },
+        select: { id: true },
+      });
+
+      if (courses.length !== teacherCourseIds.length) {
+        return dataResponse(
+          { error: 'One or more teacher courses are invalid' },
+          { status: 400 }
+        );
+      }
+    }
+
+    await prisma.teacherProfile.update({
+      where: { id: teacherId },
+      data: {
+        assignedTeacherCourses: {
+          set: teacherCourseIds.map((id) => ({ id })),
+        },
+      },
+    });
+
+    return dataResponse({ success: true });
+  }
 
   if (intent === 'delete-teachers') {
     const teacherIds = formData.getAll('teacherIds') as string[];
@@ -260,14 +322,23 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationTeachersRoute() {
-  const { teachers, q } = useLoaderData<typeof loader>();
+  const { teachers, teacherCourses, q } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isInviteSheetOpen, setIsInviteSheetOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<
+    (typeof teachers)[0] | null
+  >(null);
   const { selected, setSelected, isLoading, handleSelectAll, handleSelect } =
     useTable({ rows: teachers });
+
+  const handleEdit = (teacher: (typeof teachers)[0]) => {
+    setEditingTeacher(teacher);
+    setSheetOpen(true);
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-16 md:p-5 h-screen overflow-auto">
@@ -347,6 +418,8 @@ export default function OrganizationTeachersRoute() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Classes</TableHead>
+                      <TableHead>Teacher Courses</TableHead>
+                      <TableHead className="pr-4">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -362,8 +435,19 @@ export default function OrganizationTeachersRoute() {
                           {teacher.profile.user.name || 'Not set'}
                         </TableCell>
                         <TableCell>{teacher.profile.user.email}</TableCell>
-                        <TableCell className="pr-4">
+                        <TableCell>
                           {teacher._count.classes}
+                        </TableCell>
+                        <TableCell>{teacher._count.assignedTeacherCourses}</TableCell>
+                        <TableCell className="pr-4">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(teacher)}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -379,6 +463,13 @@ export default function OrganizationTeachersRoute() {
           </div>
         </div>
       </div>
+
+      <TeacherSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        editingTeacher={editingTeacher}
+        teacherCourses={teacherCourses}
+      />
 
       {/* Invite Teacher Sheet */}
       <Sheet open={isInviteSheetOpen} onOpenChange={setIsInviteSheetOpen}>
@@ -423,5 +514,149 @@ export default function OrganizationTeachersRoute() {
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function TeacherSheet({
+  open,
+  onOpenChange,
+  editingTeacher,
+  teacherCourses,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editingTeacher: any | null;
+  teacherCourses: { id: string; title: string }[];
+}) {
+  const fetcherKey = editingTeacher ? `edit-${editingTeacher.id}` : 'none';
+  const fetcher = useFetcher({ key: fetcherKey });
+  const [selectedTeacherCourses, setSelectedTeacherCourses] = useState<
+    string[]
+  >([]);
+
+  useEffect(() => {
+    if (!editingTeacher) return;
+    setSelectedTeacherCourses(
+      editingTeacher.assignedTeacherCourses?.map((c: any) => c.id) || []
+    );
+  }, [editingTeacher, open]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeacher) return;
+
+    const formData = new FormData();
+    formData.append('intent', 'edit-teacher');
+    formData.append('teacherId', editingTeacher.id);
+    selectedTeacherCourses.forEach((teacherCourseId) => {
+      formData.append('teacherCourseIds', teacherCourseId);
+    });
+    fetcher.submit(formData, { method: 'POST' });
+  };
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data && !fetcher.data.error) {
+      onOpenChange(false);
+    }
+  }, [fetcher.state, fetcher.data, onOpenChange]);
+
+  if (!editingTeacher) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Edit Teacher</SheetTitle>
+          <SheetDescription>
+            Manage teacher course assignments for this teacher
+          </SheetDescription>
+        </SheetHeader>
+
+        {fetcher.data?.error && (
+          <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive text-destructive text-sm">
+            {fetcher.data.error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+          <div className="space-y-2">
+            <Label>Teacher Name</Label>
+            <div className="text-sm font-medium text-muted-foreground">
+              {editingTeacher.profile.user.name || 'Not set'}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <div className="text-sm font-medium text-muted-foreground">
+              {editingTeacher.profile.user.email}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Teacher Courses</Label>
+            <div className="rounded-md border border-input bg-background">
+              <div className="max-h-[300px] overflow-y-auto p-3 space-y-2">
+                {teacherCourses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No teacher courses available
+                  </p>
+                ) : (
+                  teacherCourses.map((course) => (
+                    <div
+                      key={course.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`teacher-course-${course.id}`}
+                        checked={selectedTeacherCourses.includes(course.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTeacherCourses([
+                              ...selectedTeacherCourses,
+                              course.id,
+                            ]);
+                          } else {
+                            setSelectedTeacherCourses(
+                              selectedTeacherCourses.filter(
+                                (id) => id !== course.id
+                              )
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`teacher-course-${course.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {course.title}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {selectedTeacherCourses.length > 0
+                ? `${selectedTeacherCourses.length} course${selectedTeacherCourses.length !== 1 ? 's' : ''} selected`
+                : 'No courses selected (teacher will see all courses)'}
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" disabled={fetcher.state !== 'idle'}>
+              {fetcher.state !== 'idle' ? 'Saving...' : 'Update Teacher'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

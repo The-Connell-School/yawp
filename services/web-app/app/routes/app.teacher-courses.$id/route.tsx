@@ -9,25 +9,32 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
 import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
 
-  // Get teacher profile
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { profiles: { include: { teacherProfile: true } } },
-  });
-
-  if (!user?.profiles.some((p) => p.teacherProfile)) {
+  if (!profile.teacherProfile) {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const teacherCourse = await prisma.teacherCourse.findUnique({
-    where: { id: params.id },
+  const assignmentCounts = await prisma.teacherProfile.findUnique({
+    where: { id: profile.teacherProfile.id },
+    select: { _count: { select: { assignedTeacherCourses: true } } },
+  });
+  const hasAssignedCourses =
+    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+
+  const teacherCourse = await prisma.teacherCourse.findFirst({
+    where: {
+      id: params.id,
+      ...(hasAssignedCourses
+        ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+        : {}),
+    },
     include: {
       image: { select: { id: true } },
       teacherCourseModules: {
@@ -41,8 +48,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
           teacherCourseModuleSessions: {
             where: {
-              teacherProfileId: user.profiles.find((p) => p.teacherProfile)
-                ?.teacherProfile?.id,
+              teacherProfileId: profile.teacherProfile.id,
             },
             select: {
               id: true,
