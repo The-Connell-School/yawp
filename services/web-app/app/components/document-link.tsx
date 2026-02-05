@@ -2,6 +2,7 @@ import { type Document } from '@app/prisma';
 import { Link, useFetcher } from 'react-router';
 import { EllipsisVertical } from 'lucide-react';
 import { timeAgo } from '../utils/timeAgo';
+import { getDocumentStatus } from '../utils/gradeCalculation';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
@@ -10,16 +11,19 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Tooltip } from './ui/tooltip';
+import { DocumentStatusBadge } from './document-status-badge';
 
 type Props = {
   exitTo: string;
   doc: Document & {
     studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
+    grade?: { isReleased: boolean } | null;
   };
 };
 
 export const DocumentLink = ({ doc, exitTo }: Props) => {
   const deleteDocumentFetcher = useFetcher();
+  const status = getDocumentStatus(doc);
 
   return (
     <Link
@@ -30,6 +34,9 @@ export const DocumentLink = ({ doc, exitTo }: Props) => {
       <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
         {doc.studentCourseModuleSessions[0]?.studentCourseModule.title}
       </span>
+      <div className="absolute left-2 top-2 z-20">
+        <DocumentStatusBadge status={status} />
+      </div>
       {doc.html ? (
         <div
           dangerouslySetInnerHTML={{ __html: doc.html }}

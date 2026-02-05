@@ -8,6 +8,7 @@ type SeedData = {
   users: Prisma.UserCreateInput[];
   studentCourses: Prisma.StudentCourseCreateInput[];
   organizations: Prisma.OrganizationCreateInput[];
+  rubricDimensions: Prisma.RubricDimensionCreateInput[];
 };
 
 const ORG_ID = 'the-connell-school';
@@ -24,6 +25,44 @@ const organizations: SeedData['organizations'] = [
     id: ORG_ID,
     numOfStudentSeats: TOTAL_STUDENTS + 10,
     numOfTeacherSeats: TOTAL_TEACHERS + 5,
+  },
+];
+
+const rubricDimensions: SeedData['rubricDimensions'] = [
+  {
+    name: 'Thesis',
+    description: 'Clear, specific, arguable thesis statement that guides the essay',
+    weight: 0.30,
+    position: 1,
+    isActive: true,
+  },
+  {
+    name: 'Organization',
+    description: 'Logical structure and flow of ideas throughout the essay',
+    weight: 0.25,
+    position: 2,
+    isActive: true,
+  },
+  {
+    name: 'Evidence',
+    description: 'Quality and relevance of supporting evidence and examples',
+    weight: 0.20,
+    position: 3,
+    isActive: true,
+  },
+  {
+    name: 'Analysis',
+    description: 'Depth of critical thinking and interpretation of evidence',
+    weight: 0.15,
+    position: 4,
+    isActive: true,
+  },
+  {
+    name: 'Mechanics',
+    description: 'Grammar, spelling, punctuation, and overall writing quality',
+    weight: 0.10,
+    position: 5,
+    isActive: true,
   },
 ];
 
@@ -278,6 +317,7 @@ async function seed() {
     organizations,
     users,
     studentCourses,
+    rubricDimensions,
   };
   console.timeEnd('🧹 Cleaned up the database...');
 
@@ -295,6 +335,10 @@ async function seed() {
           case 'studentCourses':
             return prisma.studentCourse.create({
               data: item as Prisma.StudentCourseCreateInput,
+            });
+          case 'rubricDimensions':
+            return prisma.rubricDimension.create({
+              data: item as Prisma.RubricDimensionCreateInput,
             });
           default:
             throw new Error(`Unknown model: ${key}`);

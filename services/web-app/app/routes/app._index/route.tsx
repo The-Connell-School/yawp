@@ -83,6 +83,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
+        grade: {
+          select: {
+            isReleased: true,
+          },
+        },
       },
     }),
     prisma.document.findMany({
@@ -96,6 +101,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
         studentCourseModuleSessions: {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
+        },
+        grade: {
+          select: {
+            isReleased: true,
+          },
         },
       },
     }),

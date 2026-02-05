@@ -143,6 +143,7 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
+  grade                       DocumentGrade?
 }
 
 model DocumentComment {
@@ -422,4 +423,46 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+model DocumentGrade {
+  id                String         @id @default(cuid())
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @default(now()) @db.Timestamptz(6)
+  documentId        String         @unique
+  document          Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  percentageGrade   Float          // Overall percentage grade (0-100)
+  letterGrade       String?        // Optional letter grade (A, B+, etc.)
+  overallComment    String         // AI-generated or teacher-written overall feedback
+  isReleased        Boolean        @default(false) // Whether grade is visible to student
+  gradedBy          String?        // Profile ID of grading teacher
+  gradedAt          DateTime?      @db.Timestamptz(6)
+  rubricScores      RubricScore[]
+}
+
+model RubricDimension {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6)
+  name        String        // e.g., "Thesis", "Organization", "Evidence"
+  description String?       // Description of what this dimension measures
+  weight      Float         // Weight as decimal (0.30 for 30%)
+  position    Int           // Display order
+  isActive    Boolean       @default(true)
+  scores      RubricScore[]
+
+  @@unique([name])
+}
+
+model RubricScore {
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @db.Timestamptz(6)
+  gradeId            String
+  grade              DocumentGrade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  dimensionId        String
+  dimension          RubricDimension  @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+  score              Int              // 1-5 score
+  feedback           String?          // AI-generated or teacher-written feedback for this dimension
+
+  @@unique([gradeId, dimensionId])
 }

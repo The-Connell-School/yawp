@@ -12,6 +12,8 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { DocumentStatusBadge } from '~/components/document-status-badge';
+import { getDocumentStatus } from '~/utils/gradeCalculation';
 import {
   Table,
   TableBody,
@@ -152,6 +154,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           studentCourseModule: { select: { title: true } },
         },
         take: 1,
+      },
+      grade: {
+        select: {
+          id: true,
+          percentageGrade: true,
+          letterGrade: true,
+          isReleased: true,
+        },
       },
     },
     orderBy: {
@@ -303,38 +313,62 @@ export default function ClassDetailRoute() {
                     <TableHead>Essay Title</TableHead>
                     <TableHead>Course Module</TableHead>
                     <TableHead>Submitted</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Grade</TableHead>
                     <TableHead>Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.submittedDocuments.map((doc) => (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium">
-                        {doc.profile.user.name || doc.profile.user.email}
-                      </TableCell>
-                      <TableCell>{doc.title}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                          .title || '—'}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
-                        {new Date(doc.submittedAt!).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </TableCell>
-                      <TableCell>
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                          >
-                            View Essay
-                          </Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {data.submittedDocuments.map((doc) => {
+                    const status = getDocumentStatus(doc);
+                    return (
+                      <TableRow key={doc.id}>
+                        <TableCell className="font-medium">
+                          {doc.profile.user.name || doc.profile.user.email}
+                        </TableCell>
+                        <TableCell>{doc.title}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                            .title || '—'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {new Date(doc.submittedAt!).toLocaleDateString()}{' '}
+                          {new Date(doc.submittedAt!).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <DocumentStatusBadge status={status} />
+                        </TableCell>
+                        <TableCell>
+                          {doc.grade ? (
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">
+                                {Math.round(doc.grade.percentageGrade)}%
+                              </span>
+                              {doc.grade.letterGrade && (
+                                <Badge variant="outline">
+                                  {doc.grade.letterGrade}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to={`/app/grade/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                            >
+                              {doc.grade ? 'Edit Grade' : 'Grade'}
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
