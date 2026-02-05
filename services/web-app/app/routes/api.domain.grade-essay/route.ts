@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
+import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { redirectWithToast } from '~/utils/toast.server';
 
 // Schema for single or bulk grading
 const POST = z.object({
@@ -30,6 +32,18 @@ function parseJson(value?: string) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+
+  // Check if document submission is enabled
+  const isSubmissionEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grading is currently disabled.',
+      type: 'error',
+    });
+  }
+
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
@@ -126,7 +140,11 @@ export async function action({ request }: ActionFunctionArgs) {
       : null;
   const letterGrade =
     numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
-  const score = data.score ?? (numericPercentage !== null ? formatGrade(numericPercentage, letterGrade) ?? undefined : undefined);
+  const score =
+    data.score ??
+    (numericPercentage !== null
+      ? (formatGrade(numericPercentage, letterGrade) ?? undefined)
+      : undefined);
 
   // Create or update grades for all submitted snapshots
   const gradePromises = documents.map((doc) => {

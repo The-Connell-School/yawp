@@ -3,10 +3,12 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({
   gradeIds: z.preprocess(
-    value => {
+    (value) => {
       if (Array.isArray(value)) return value;
       if (typeof value === 'string') return [value];
       return value;
@@ -17,6 +19,18 @@ const POST = z.object({
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+
+  // Check if document submission is enabled
+  const isSubmissionEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grading is currently disabled.',
+      type: 'error',
+    });
+  }
+
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
@@ -58,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Release all grades
   await prisma.grade.updateMany({
     where: {
-      id: { in: grades.map(g => g.id) },
+      id: { in: grades.map((g) => g.id) },
     },
     data: {
       releasedAt: now,

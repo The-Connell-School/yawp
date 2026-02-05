@@ -10,6 +10,7 @@ import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
+import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
 import {
   Sheet,
   SheetContent,
@@ -148,60 +149,67 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     take: 50, // Limit to most recent 50 alerts
   });
 
-  // Get submitted documents for this class with grades
-  const submittedDocuments = await prisma.document.findMany({
-    where: {
-      classId,
-      submittedAt: { not: null },
-    },
-    select: {
-      id: true,
-      title: true,
-      submittedAt: true,
-      submittedSnapshotId: true,
-      profile: {
+  // Check feature flag for document submission
+  const isDocumentSubmissionEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  );
+
+  // Get submitted documents for this class with grades (only if feature is enabled)
+  const submittedDocuments = isDocumentSubmissionEnabled
+    ? await prisma.document.findMany({
+        where: {
+          classId,
+          submittedAt: { not: null },
+        },
         select: {
           id: true,
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-      studentCourseModuleSessions: {
-        select: {
-          studentCourseModule: { select: { title: true } },
-        },
-        take: 1,
-      },
-      submittedSnapshot: {
-        select: {
-          id: true,
-          grades: {
+          title: true,
+          submittedAt: true,
+          submittedSnapshotId: true,
+          profile: {
             select: {
               id: true,
-              score: true,
-              feedback: true,
-              rubricScores: true,
-              overallScore: true,
-              overallComment: true,
-              numericPercentage: true,
-              letterGrade: true,
-              aiMeta: true,
-              releasedAt: true,
-              createdAt: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          studentCourseModuleSessions: {
+            select: {
+              studentCourseModule: { select: { title: true } },
             },
             take: 1,
           },
+          submittedSnapshot: {
+            select: {
+              id: true,
+              grades: {
+                select: {
+                  id: true,
+                  score: true,
+                  feedback: true,
+                  rubricScores: true,
+                  overallScore: true,
+                  overallComment: true,
+                  numericPercentage: true,
+                  letterGrade: true,
+                  aiMeta: true,
+                  releasedAt: true,
+                  createdAt: true,
+                },
+                take: 1,
+              },
+            },
+          },
         },
-      },
-    },
-    orderBy: {
-      submittedAt: 'desc',
-    },
-  });
+        orderBy: {
+          submittedAt: 'desc',
+        },
+      })
+    : [];
 
   // Get in-progress documents (not submitted, recent activity)
   const inProgressDocuments = await prisma.document.findMany({
@@ -248,6 +256,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     inProgressDocuments,
     submittedPapersFilter,
     gradingAssistantEnabled,
+    isDocumentSubmissionEnabled,
   });
 }
 
@@ -320,8 +329,10 @@ export default function ClassDetailRoute() {
     return gradedUnreleasedDocuments.map((doc) => {
       const grade = doc.submittedSnapshot!.grades[0];
       const gradeDisplay =
-        formatGrade(grade.numericPercentage ?? null, grade.letterGrade ?? null) ||
-        grade.score;
+        formatGrade(
+          grade.numericPercentage ?? null,
+          grade.letterGrade ?? null
+        ) || grade.score;
       return {
         id: grade.id,
         score: gradeDisplay,
@@ -468,28 +479,28 @@ export default function ClassDetailRoute() {
             </TableHeader>
             <TableBody>
               {paginatedData.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium">
-                      {doc.profile.user.name || doc.profile.user.email}
-                    </TableCell>
-                    <TableCell>{doc.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                        .title || '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(doc.updatedAt))}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                <TableRow key={doc.id}>
+                  <TableCell className="font-medium">
+                    {doc.profile.user.name || doc.profile.user.email}
+                  </TableCell>
+                  <TableCell>{doc.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {doc.studentCourseModuleSessions[0]?.studentCourseModule
+                      .title || '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {timeAgo(new Date(doc.updatedAt))}
+                  </TableCell>
+                  <TableCell>
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                      >
+                        View
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
             </TableBody>
           </Table>
@@ -586,46 +597,46 @@ export default function ClassDetailRoute() {
             </TableHeader>
             <TableBody>
               {paginatedData.map((doc) => {
-                  const grade = doc.submittedSnapshot!.grades[0];
-                  const gradeDisplay =
-                    formatGrade(
-                      grade.numericPercentage ?? null,
-                      grade.letterGrade ?? null
-                    ) ||
-                    grade.score ||
-                    '—';
-                  return (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium">
-                        {doc.profile.user.name || doc.profile.user.email}
-                      </TableCell>
-                      <TableCell>{doc.title}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{gradeDisplay}</Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {timeAgo(new Date(grade.createdAt))}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button asChild size="sm" variant="outline">
-                            <Link
-                              to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
-                            >
-                              View
-                            </Link>
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => openGradingSheet([doc.id])}
-                            disabled={!gradingAssistantEnabled}
+                const grade = doc.submittedSnapshot!.grades[0];
+                const gradeDisplay =
+                  formatGrade(
+                    grade.numericPercentage ?? null,
+                    grade.letterGrade ?? null
+                  ) ||
+                  grade.score ||
+                  '—';
+                return (
+                  <TableRow key={doc.id}>
+                    <TableCell className="font-medium">
+                      {doc.profile.user.name || doc.profile.user.email}
+                    </TableCell>
+                    <TableCell>{doc.title}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{gradeDisplay}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {timeAgo(new Date(grade.createdAt))}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button asChild size="sm" variant="outline">
+                          <Link
+                            to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
                           >
-                            Edit Grade
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
+                            View
+                          </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => openGradingSheet([doc.id])}
+                          disabled={!gradingAssistantEnabled}
+                        >
+                          Edit Grade
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
               })}
             </TableBody>
           </Table>
@@ -896,30 +907,34 @@ export default function ClassDetailRoute() {
               {data.inProgressDocuments.length}
             </span>
           </button>
-          <button
-            onClick={() => handleTabChange('to-grade')}
-            className="flex flex-col items-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 mb-1">
-              <ClipboardCheck className="w-4 h-4" />
-              <span className="text-xs font-medium">To Grade</span>
-            </div>
-            <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-              {ungradedDocuments.length}
-            </span>
-          </button>
-          <button
-            onClick={() => handleTabChange('graded')}
-            className="flex flex-col items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 mb-1">
-              <Send className="w-4 h-4" />
-              <span className="text-xs font-medium">To Release</span>
-            </div>
-            <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-              {gradedUnreleasedDocuments.length}
-            </span>
-          </button>
+          {data.isDocumentSubmissionEnabled && (
+            <button
+              onClick={() => handleTabChange('to-grade')}
+              className="flex flex-col items-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 mb-1">
+                <ClipboardCheck className="w-4 h-4" />
+                <span className="text-xs font-medium">To Grade</span>
+              </div>
+              <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
+                {ungradedDocuments.length}
+              </span>
+            </button>
+          )}
+          {data.isDocumentSubmissionEnabled && (
+            <button
+              onClick={() => handleTabChange('graded')}
+              className="flex flex-col items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 mb-1">
+                <Send className="w-4 h-4" />
+                <span className="text-xs font-medium">To Release</span>
+              </div>
+              <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                {gradedUnreleasedDocuments.length}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Tabs and Table */}
@@ -941,36 +956,42 @@ export default function ClassDetailRoute() {
                     {data.inProgressDocuments.length}
                   </span>
                 </TabsTrigger>
-                <TabsTrigger
-                  value="to-grade"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <ClipboardCheck className="w-4 h-4" />
-                  <span className="hidden sm:inline">To Grade</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {ungradedDocuments.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="graded"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Graded</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {gradedUnreleasedDocuments.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="released"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <ClipboardCheck className="w-4 h-4" />
-                  <span className="hidden sm:inline">Released</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {releasedDocuments.length}
-                  </span>
-                </TabsTrigger>
+                {data.isDocumentSubmissionEnabled && (
+                  <TabsTrigger
+                    value="to-grade"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    <span className="hidden sm:inline">To Grade</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {ungradedDocuments.length}
+                    </span>
+                  </TabsTrigger>
+                )}
+                {data.isDocumentSubmissionEnabled && (
+                  <TabsTrigger
+                    value="graded"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span className="hidden sm:inline">Graded</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {gradedUnreleasedDocuments.length}
+                    </span>
+                  </TabsTrigger>
+                )}
+                {data.isDocumentSubmissionEnabled && (
+                  <TabsTrigger
+                    value="released"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    <span className="hidden sm:inline">Released</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {releasedDocuments.length}
+                    </span>
+                  </TabsTrigger>
+                )}
                 <TabsTrigger
                   value="paste-activity"
                   className="flex items-center gap-2 h-auto py-2"
@@ -992,23 +1013,25 @@ export default function ClassDetailRoute() {
                   </span>
                 </TabsTrigger>
               </TabsList>
-              {gradingAssistantEnabled &&
+              {data.isDocumentSubmissionEnabled &&
+                gradingAssistantEnabled &&
                 activeTab === 'to-grade' &&
                 selectedDocuments.size > 0 && (
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    openGradingSheet(Array.from(selectedDocuments))
-                  }
-                  className="ml-4"
-                >
-                  Grade{' '}
-                  {selectedDocuments.size === 1
-                    ? 'Essay'
-                    : `${selectedDocuments.size} Essays`}
-                </Button>
-              )}
-              {gradingAssistantEnabled &&
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      openGradingSheet(Array.from(selectedDocuments))
+                    }
+                    className="ml-4"
+                  >
+                    Grade{' '}
+                    {selectedDocuments.size === 1
+                      ? 'Essay'
+                      : `${selectedDocuments.size} Essays`}
+                  </Button>
+                )}
+              {data.isDocumentSubmissionEnabled &&
+                gradingAssistantEnabled &&
                 activeTab === 'graded' &&
                 gradedUnreleasedDocuments.length > 0 && (
                   <Button
@@ -1057,7 +1080,7 @@ export default function ClassDetailRoute() {
         </SheetContent>
       </Sheet>
 
-      {gradingAssistantEnabled ? (
+      {data.isDocumentSubmissionEnabled && gradingAssistantEnabled ? (
         <GradingSheet
           documents={gradingDocuments}
           isOpen={isGradingSheetOpen}
@@ -1069,7 +1092,7 @@ export default function ClassDetailRoute() {
         />
       ) : null}
 
-      {gradingAssistantEnabled ? (
+      {data.isDocumentSubmissionEnabled && gradingAssistantEnabled ? (
         <ReleaseGradesSheet
           grades={unreleasedGrades}
           isOpen={isReleaseGradesSheetOpen}
