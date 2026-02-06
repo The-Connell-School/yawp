@@ -164,13 +164,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
-  console.log(data);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
-  const [selectedPasteContent, setSelectedPasteContent] = useState<string | null>(
-    null
-  );
+  const [selectedPasteContent, setSelectedPasteContent] = useState<
+    string | null
+  >(null);
   const students = data.klass.students;
 
   const selectedDocs = selectedProfileId
@@ -388,14 +387,18 @@ export default function ClassDetailRoute() {
                         <TableCell>
                           {truncatedContent ? (
                             <button
-                              onClick={() => setSelectedPasteContent(alert.content || null)}
+                              onClick={() =>
+                                setSelectedPasteContent(alert.content || null)
+                              }
                               className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
                               title="Click to view full content"
                             >
                               {truncatedContent}
                             </button>
                           ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
+                            <span className="text-sm text-muted-foreground">
+                              —
+                            </span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -408,7 +411,10 @@ export default function ClassDetailRoute() {
         </Tabs>
       </div>
 
-      <Sheet open={selectedPasteContent !== null} onOpenChange={(open) => !open && setSelectedPasteContent(null)}>
+      <Sheet
+        open={selectedPasteContent !== null}
+        onOpenChange={(open) => !open && setSelectedPasteContent(null)}
+      >
         <SheetContent className="w-full sm:max-w-2xl">
           <SheetHeader>
             <SheetTitle>Pasted Content</SheetTitle>
