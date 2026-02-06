@@ -19,6 +19,7 @@ import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
@@ -37,6 +38,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: { id: userId },
     select: { isAdmin: true },
   });
+  const documentSubmissionEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  );
 
   const doc = await prisma.document.findFirst({
     where: {
@@ -158,6 +162,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
+    documentSubmissionEnabled,
   });
 }
 
@@ -248,32 +253,34 @@ export default function Route() {
                   {new Date(data.doc.submittedAt!).toLocaleDateString()}
                 </Badge>
               )}
-              <Button
-                size="sm"
-                variant={isSubmitted ? 'outline' : 'default'}
-                disabled={isSubmitting || !data.doc.html || !data.doc.text}
-                onClick={() => {
-                  submitFetcher.submit(
-                    { documentId: data.doc.id },
-                    {
-                      method: 'POST',
-                      action: '/api/domain/submit-document',
-                    }
-                  );
-                }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
-                  </>
-                )}
-              </Button>
+              {data.documentSubmissionEnabled ? (
+                <Button
+                  size="sm"
+                  variant={isSubmitted ? 'outline' : 'default'}
+                  disabled={isSubmitting || !data.doc.html || !data.doc.text}
+                  onClick={() => {
+                    submitFetcher.submit(
+                      { documentId: data.doc.id },
+                      {
+                        method: 'POST',
+                        action: '/api/domain/submit-document',
+                      }
+                    );
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
+                    </>
+                  )}
+                </Button>
+              ) : null}
             </div>
           )}
           {isViewingAsTeacher ? (
