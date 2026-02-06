@@ -183,6 +183,7 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 packages/prisma/client
+packages/prisma/generated
 services/web-app/.react-router
 services/web-app/build
 sandbox.ts

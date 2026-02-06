@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { PrismaClient, type Prisma } from '@prisma/client';
+import { PrismaClient, type Prisma } from '../generated/prisma';
 import { cleanupDb, createPassword } from './utils';
 
 const prisma = new PrismaClient();
