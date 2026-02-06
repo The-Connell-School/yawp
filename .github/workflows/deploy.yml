@@ -32,7 +32,7 @@ jobs:
         run: bun install
 
       - name: ⚙️ Generate Prisma Client
-        run: bun prisma:generate
+        run: bun prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
@@ -59,7 +59,7 @@ jobs:
         run: bun install
 
       - name: ⚙️ Generate Prisma Client
-        run: bun prisma:generate
+        run: bun prisma generate
 
       - name: Install Playwright browsers
         working-directory: services/web-app
