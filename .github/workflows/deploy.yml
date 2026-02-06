@@ -71,38 +71,38 @@ jobs:
           CI: true
         run: bun run test:e2e
 
-  # deploy-web-app-production:
-  #   name: 🚀 Deploy Web App (Production)
-  #   runs-on: ubuntu-22.04
-  #   # needs: [typecheck-web-app]
+  deploy-web-app-production:
+    name: 🚀 Deploy Web App (Production)
+    runs-on: ubuntu-22.04
+    # needs: [typecheck-web-app]
 
-  #   environment:
-  #     name: production
-  #     url: https://yawp.school
+    environment:
+      name: production
+      url: https://yawp.school
 
-  #   steps:
-  #     - name: ⬇️ Checkout repo
-  #       uses: actions/checkout@v3
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
 
-  #     - name: 📥 Download deps
-  #       uses: oven-sh/setup-bun@v1
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
 
-  #     - name: 🔑 Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: us-east-1
+      - name: 🔑 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-  #     - name: 🔐 Login to Amazon ECR
-  #       id: login-ecr
-  #       uses: aws-actions/amazon-ecr-login@v2
+      - name: 🔐 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-  #     - name: 📦 Build Docker image
-  #       run: bun web-app:docker:build
+      - name: 📦 Build Docker image
+        run: bun web-app:docker:build
 
-  #     - name: 🏷️ Tag Docker image
-  #       run: bun web-app:docker:production:tag
+      - name: 🏷️ Tag Docker image
+        run: bun web-app:docker:production:tag
 
-  #     - name: 🚀 Push Docker image
-  #       run: bun web-app:docker:production:push
+      - name: 🚀 Push Docker image
+        run: bun web-app:docker:production:push
