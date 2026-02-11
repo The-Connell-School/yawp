@@ -23,7 +23,7 @@ export const RichTextarea = ({
   } = useRichTextarea({ onCmdEnter, height });
 
   return (
-    <div className="relative mx-auto flex w-full max-w-[700px] items-center">
+    <div className="relative flex w-full items-center">
       <Textarea
         className={cn(
           'no-scrollbar my-auto w-full resize-none rounded-lg border bg-background p-3 pr-14 focus:border-primary focus:outline-1 focus:outline-primary',
