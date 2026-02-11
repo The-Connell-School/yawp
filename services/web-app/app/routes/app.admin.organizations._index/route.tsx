@@ -328,11 +328,35 @@ export default function OrganizationsRoute() {
               </span>
             </div>
           ) : organizations.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <span className="text-lg font-bold">No results</span>
-              <span className="text-sm text-muted-foreground">
-                Try adjusting your filters
-              </span>
+            <div className="flex h-full flex-col items-center justify-center gap-4 border border-dashed bg-muted p-8">
+              <div className="flex flex-col items-center gap-2">
+                <span className="text-lg font-bold">No results</span>
+                <span className="text-sm text-muted-foreground">
+                  Try adjusting your filters
+                </span>
+              </div>
+              {table.skip > 0 && (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                  </p>
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      fetcher.submit(
+                        {
+                          intent: 'updateFilters',
+                          key: 'skip-take',
+                          value: `0-${table.take}`,
+                        },
+                        { method: 'POST' }
+                      );
+                    }}
+                  >
+                    Go to Page 1
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <Table className="rounded-lg">

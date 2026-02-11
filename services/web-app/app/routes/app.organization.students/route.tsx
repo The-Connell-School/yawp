@@ -594,13 +594,38 @@ export default function OrganizationStudentsRoute() {
         <div>
           <div className="relative flex-1 overflow-y-auto min-h-[200px]">
             {students.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-                <span className="text-lg font-bold">No students found</span>
-                <span className="text-sm text-muted-foreground">
-                  {q
-                    ? 'Try adjusting your search'
-                    : 'Students will appear here once they sign up and join classes'}
-                </span>
+              <div className="flex h-full flex-col items-center justify-center gap-4 border border-dashed bg-muted p-8">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-lg font-bold">No students found</span>
+                  <span className="text-sm text-muted-foreground">
+                    {q
+                      ? 'Try adjusting your search'
+                      : 'Students will appear here once they sign up and join classes'}
+                  </span>
+                </div>
+                {table.skip > 0 && (
+                  <div className="flex flex-col items-center gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                    </p>
+                    <Button
+                      variant="default"
+                      onClick={() => {
+                        setIsLoading(true);
+                        fetcher.submit(
+                          {
+                            intent: 'updateFilters',
+                            key: 'skip-take',
+                            value: `0-${table.take}`,
+                          },
+                          { method: 'POST' }
+                        );
+                      }}
+                    >
+                      Go to Page 1
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div

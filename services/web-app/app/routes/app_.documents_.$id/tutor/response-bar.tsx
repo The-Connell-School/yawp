@@ -35,17 +35,17 @@ export const ResponseBar = ({
 
   return isAskingQuestion ? (
     <div
-      className={cn('flex w-full items-center justify-center px-3', className)}
+      className={cn('flex w-full items-center justify-center gap-2 px-3', className)}
     >
       <Button
         size="lg"
         variant="secondary"
-        className="px-2"
+        className="shrink-0 px-2"
         onClick={() => setIsAskingQuestion(false)}
       >
         <ChevronLeft />
       </Button>
-      <div className="flex w-full items-center justify-center px-3">
+      <div className="flex w-full max-w-[700px] items-center justify-center">
         <RichTextarea onCmdEnter={respond} />
       </div>
     </div>
