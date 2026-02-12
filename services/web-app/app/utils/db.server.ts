@@ -10,9 +10,12 @@ export const prisma = remember('prisma', () => {
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
+  const isLocal =
+    connectionString.includes('localhost') ||
+    connectionString.includes('127.0.0.1');
   const adapter = new PrismaPg({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: isLocal ? false : { rejectUnauthorized: false },
   });
 
   const client = new PrismaClient({
