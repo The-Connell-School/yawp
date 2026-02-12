@@ -611,7 +611,6 @@ export default function OrganizationStudentsRoute() {
                     <Button
                       variant="default"
                       onClick={() => {
-                        setIsLoading(true);
                         fetcher.submit(
                           {
                             intent: 'updateFilters',
