@@ -701,7 +701,6 @@ export default function OrganizationClassesRoute() {
                     <Button
                       variant="default"
                       onClick={() => {
-                        setIsLoading(true);
                         fetcher.submit(
                           {
                             intent: 'updateFilters',
