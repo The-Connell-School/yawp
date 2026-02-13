@@ -32,6 +32,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.studentCourse.findMany({
       include: {
         studentCourseModules: {
+          where: { deletedAt: null },
           include: {
             instructions: true,
           },

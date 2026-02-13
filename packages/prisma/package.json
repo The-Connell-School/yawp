@@ -1,37 +1,35 @@
 {
   "name": "@app/prisma",
   "version": "0.1.0",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./index.ts",
+  "types": "./generated/prisma/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "types": "./generated/prisma/index.d.ts",
+      "import": "index.ts",
+      "require": "./generated/prisma/index.js"
     }
-  },
-  "prisma": {
-    "schema": "schema.prisma",
-    "seed": "bun run scripts/seed.ts"
   },
   "scripts": {
     "generate": "prisma generate",
     "build": "tsc",
     "migrate-remote": "bun run scripts/migrate-remote.ts"
   },
-  "dependencies": {
-    "@prisma/client": "6.8.2",
-    "bcryptjs": "^3.0.3",
-    "node-ssh": "^13.2.1",
-    "pg": "^8.16.0"
-  },
   "devDependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.804.0",
-    "@faker-js/faker": "^9.8.0",
+    "@prisma/client": "^7.2.0",
+    "@types/bun": "latest",
+    "dotenv": "^17.2.3",
+    "prisma": "^7.2.0",
+    "typescript": "^5.4.2",
+    "node-ssh": "^13.2.1"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.2.0",
+    "@prisma/client-runtime-utils": "^7.2.0",
     "bcryptjs": "^3.0.3",
-    "bun-types": "^1.2.12",
-    "prisma": "^6.7.0",
-    "typescript": "^5.4.2"
+    "pg": "^8.13.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
   }
 }

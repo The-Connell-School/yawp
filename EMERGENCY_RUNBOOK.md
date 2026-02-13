@@ -235,7 +235,7 @@ FROM oven/bun:1 AS base
 bun install --ignore-scripts
 
 # Generate Prisma client
-bun prisma:generate
+bun prisma generate
 
 # Build application
 bun web-app:build
