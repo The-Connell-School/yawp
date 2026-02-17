@@ -10,6 +10,7 @@ import { Bar } from './bar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
+import { WritingPromptDisplay } from './writing-prompt-display';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;
@@ -43,13 +44,20 @@ const extensions = [
   CommentExtension,
 ];
 
+type WritingPromptData = {
+  id: string;
+  responseType: string | null;
+  sections: { label: string; description: string | null }[];
+} | null;
+
 type Props = {
   docId: string;
   docHtml: string | null;
   setIsSaving: (isSaving: boolean) => void;
+  writingPrompt?: WritingPromptData;
 };
 
-export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
+export const Editor = ({ docId, docHtml, setIsSaving, writingPrompt }: Props) => {
   const {
     activeCommentId,
     hoveredCommentId,
@@ -207,6 +215,7 @@ export const Editor = ({ docId, docHtml, setIsSaving }: Props) => {
           className="no-scrollbar grow overflow-y-scroll p-5 font-times"
           key={`${docId}-editor`}
         >
+          {writingPrompt && <WritingPromptDisplay writingPrompt={writingPrompt} />}
           <EditorContent
             editor={editor}
             className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"

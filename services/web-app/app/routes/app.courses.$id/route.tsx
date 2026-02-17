@@ -39,6 +39,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       include: {
         image: true,
         studentCourseModules: { orderBy: { position: 'asc' } },
+        writingPromptSections: { orderBy: { position: 'asc' } },
       },
     }),
     prisma.document.findMany({
@@ -141,12 +142,36 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  // Build pre-populated HTML for structured writing prompts
+  const courseForPrompt = await prisma.studentCourse.findUnique({
+    where: { id: params.id },
+    select: {
+      hasWritingPrompt: true,
+      writingPromptResponseType: true,
+      writingPromptSections: { orderBy: { position: 'asc' } },
+    },
+  });
+
+  let initialHtml = '';
+  if (
+    courseForPrompt?.hasWritingPrompt &&
+    courseForPrompt.writingPromptResponseType === 'structured' &&
+    courseForPrompt.writingPromptSections.length > 0
+  ) {
+    initialHtml = courseForPrompt.writingPromptSections
+      .map(
+        (s) =>
+          `<h3>${s.label}</h3>${s.description ? `<p>${s.description}</p>` : ''}<p></p>`
+      )
+      .join('');
+  }
+
   const [doc] = await Promise.all([
     prisma.document.create({
       data: {
         profileId: profile.id,
         text: '',
-        html: '',
+        html: initialHtml,
         title: '',
         ...(studentProfile.classes[0] && {
           classId: studentProfile.classes[0].id,

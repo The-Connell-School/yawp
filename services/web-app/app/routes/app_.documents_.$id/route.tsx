@@ -93,6 +93,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                     select: { id: true, position: true },
                     orderBy: { position: 'asc' },
                   },
+                  hasWritingPrompt: true,
+                  writingPromptResponseType: true,
+                  writingPrompt: { select: { id: true } },
+                  writingPromptSections: {
+                    orderBy: { position: 'asc' },
+                    select: { label: true, description: true },
+                  },
                 },
               },
             },
@@ -151,12 +158,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       (cm) => cm.position === currentCms.studentCourseModule.position + 1
     )?.id;
 
+  const studentCourse = currentCms.studentCourseModule.studentCourse;
+  const writingPrompt =
+    studentCourse?.hasWritingPrompt && studentCourse.writingPrompt
+      ? {
+          id: studentCourse.writingPrompt.id,
+          responseType: studentCourse.writingPromptResponseType,
+          sections: studentCourse.writingPromptSections ?? [],
+        }
+      : null;
+
   return dataResponse({
     doc,
     currentCms,
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
+    writingPrompt,
   });
 }
 
@@ -328,6 +346,7 @@ export default function Route() {
                 docId={data.doc.id}
                 docHtml={data.doc.html}
                 setIsSaving={setIsSaving}
+                writingPrompt={data.writingPrompt}
               />
             )}
             {isMobile && tab !== 'comments' ? null : (

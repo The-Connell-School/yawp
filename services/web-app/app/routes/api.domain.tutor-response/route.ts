@@ -34,6 +34,18 @@ export async function action({ request }: ActionFunctionArgs) {
         studentCourseModule: {
           include: {
             instructions: { orderBy: { position: 'asc' } },
+            studentCourse: {
+              select: {
+                hasWritingPrompt: true,
+                writingPromptResponseType: true,
+                writingPrompt: { select: { extractedText: true } },
+                rubric: { select: { extractedText: true } },
+                writingPromptSections: {
+                  orderBy: { position: 'asc' },
+                  select: { label: true, description: true },
+                },
+              },
+            },
           },
         },
         messages: true,
@@ -57,9 +69,38 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const studentCourse = cms.studentCourseModule.studentCourse;
+    let writingPromptContext = '';
+
+    if (studentCourse?.hasWritingPrompt) {
+      if (studentCourse.writingPrompt?.extractedText) {
+        const sectionInfo =
+          studentCourse.writingPromptResponseType === 'structured' &&
+          studentCourse.writingPromptSections.length > 0
+            ? `\nResponse format: structured (${studentCourse.writingPromptSections.map((s) => s.label).join(', ')}).`
+            : '\nResponse format: free writing.';
+
+        writingPromptContext = `
+Writing Prompt Content:
+${studentCourse.writingPrompt.extractedText}
+
+The student is responding to the writing prompt above.${sectionInfo}
+Help them improve their response to the specific questions in the prompt.`;
+      }
+
+      if (studentCourse.rubric?.extractedText) {
+        writingPromptContext += `
+
+Scoring Rubric:
+${studentCourse.rubric.extractedText}
+
+Use this rubric to evaluate the student's response. Reference specific rubric criteria when giving feedback. Help them understand what score their current response would earn and what they need to improve to score higher.`;
+      }
+    }
+
     const system = `
 		${cms.studentCourseModule.tutorInstructions}
-		${instruction.tutorInstructions}`;
+		${instruction.tutorInstructions}${writingPromptContext}`;
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
