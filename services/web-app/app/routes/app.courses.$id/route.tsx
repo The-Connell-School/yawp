@@ -297,6 +297,7 @@ export default function AppCoursesIdRoute() {
                   key={doc.id}
                   doc={doc}
                   exitTo={`/app/courses/${data.course.id}`}
+                  isStudentView
                 />
               ))}
             </div>
@@ -315,6 +316,7 @@ export default function AppCoursesIdRoute() {
                             doc={doc}
                             exitTo={`/app/courses/${data.course.id}`}
                             isArchived
+                            isStudentView
                           />
                         ))}
                       </div>

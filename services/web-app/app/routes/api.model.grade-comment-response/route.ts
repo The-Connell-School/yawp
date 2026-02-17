@@ -27,7 +27,9 @@ export async function action({ request }: ActionFunctionArgs) {
               document: {
                 select: {
                   profileId: true,
-                  class: { select: { teachers: { select: { profileId: true } } } },
+                  class: {
+                    select: { teachers: { select: { profileId: true } } },
+                  },
                 },
               },
             },
@@ -44,21 +46,18 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isStudentOwner = comment.grade.snapshot.document.profileId === profile.id;
+  const isStudentOwner =
+    comment.grade.snapshot.document.profileId === profile.id;
   const teachers = comment.grade.snapshot.document.class?.teachers ?? [];
   const isTeacherOfClass = teachers.some((t) => t.profileId === profile.id);
 
   if (isStudentOwner) {
-    if (!comment.grade.releasedAt) {
-      return dataResponse(
-        {
-          success: false,
-          message: 'You can reply once the grade has been released.',
-        },
-        { status: 403 }
-      );
-    }
-  } else if (!isTeacherOfClass) {
+    return dataResponse(
+      { success: false, message: 'Students cannot reply to grade comments.' },
+      { status: 403 }
+    );
+  }
+  if (!isTeacherOfClass) {
     return dataResponse(
       { success: false, message: 'Not authorized.' },
       { status: 403 }

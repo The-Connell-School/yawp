@@ -7,8 +7,8 @@ import {
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2, AlertCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArrowLeft, Check, Loader2, AlertCircle, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
@@ -32,13 +32,41 @@ import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { Editor } from './editor';
+import { Editor } from './editor/index';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
-import { GradeDetailsSheet } from './grade-details-sheet';
-import { DocumentStatusBadge } from '~/components/document-status-badge';
+import {
+  DocumentStatusBadge,
+  getDocumentStatusLabel,
+} from '~/components/document-status-badge';
+import { cn } from '~/utils/misc';
 import { formatGrade } from '~/domain/grading/gradeMath';
 import { TeacherGradingPanel } from './_components/teacher-grading-panel';
+import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
+
+type GrammarIssue = {
+  id: string;
+  excerpt: string;
+  occurrence?: number;
+  kind: 'error' | 'style';
+  ruleNumber?: number;
+  rule?: string;
+  message: string;
+};
+
+function parseGrammarIssues(raw: unknown): GrammarIssue[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const issues = (raw as { issues?: unknown[] }).issues;
+  if (!Array.isArray(issues)) return [];
+  return issues.filter(
+    (issue): issue is GrammarIssue =>
+      typeof issue === 'object' &&
+      issue !== null &&
+      typeof (issue as GrammarIssue).id === 'string' &&
+      typeof (issue as GrammarIssue).excerpt === 'string' &&
+      typeof (issue as GrammarIssue).message === 'string'
+  );
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
@@ -192,6 +220,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     FEATURE_FLAGS.DOCUMENT_SUBMISSION
   );
 
+  const gradeId = doc.submittedSnapshot?.grades?.[0]?.id;
+  const gradeComments =
+    gradeId != null
+      ? await prisma.gradeComment.findMany({
+          where: { gradeId },
+          include: {
+            profile: {
+              include: { user: { select: { name: true, email: true } } },
+            },
+            responses: {
+              include: {
+                profile: {
+                  include: { user: { select: { name: true, email: true } } },
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+
   return dataResponse({
     doc,
     currentCms,
@@ -202,6 +252,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile.organization.id
     ),
     isDocumentSubmissionEnabled,
+    gradeComments,
   });
 }
 
@@ -213,7 +264,6 @@ export default function Route() {
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
-  const [isGradeDetailsOpen, setIsGradeDetailsOpen] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
@@ -221,12 +271,19 @@ export default function Route() {
   );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
+  const [exitTarget, setExitTarget] = useState(
+    searchParams.get('exitTo') || '/app'
+  );
   const tab = searchParams.get('tab') ?? 'tutor';
   const leftPanel = searchParams.get('left') ?? 'tutor';
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
   const grade = data.doc.submittedSnapshot?.grades?.[0];
+  const documentStatusLabel = getDocumentStatusLabel({
+    submittedAt: data.doc.submittedAt,
+    grade: grade ?? null,
+  });
   const isGradeReleased =
     grade?.releasedAt !== null && grade?.releasedAt !== undefined;
   const gradingAssistantEnabled = data.gradingAssistantEnabled;
@@ -235,6 +292,8 @@ export default function Route() {
     gradingAssistantEnabled &&
     isViewingAsTeacher &&
     isSubmitted;
+  const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
+  const isDocumentEditable = !isViewingAsTeacher;
   const gradeDisplay =
     (grade
       ? formatGrade(
@@ -244,6 +303,22 @@ export default function Route() {
         grade.score ||
         (grade.overallScore ? `${grade.overallScore}/5` : null)
       : null) ?? null;
+  const [activeGradeCommentId, setActiveGradeCommentId] = useState<
+    string | null
+  >(null);
+  const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
+  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const closeTooltipTimer = useRef<number | null>(null);
+  const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
+    parseGrammarIssues(grade?.grammarIssues)
+  );
+  const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
+    []
+  );
   const allComments = (data.doc.comments as any[]) ?? [];
   const activeComments = allComments.filter((c) => !c.archivedAt);
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
@@ -252,6 +327,46 @@ export default function Route() {
       ? [...activeComments, ...archivedComments]
       : activeComments
     : activeComments;
+  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
+  const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
+  const visibleGrammarIssues = useMemo(
+    () =>
+      grammarIssues.filter(
+        (issue) => !hiddenGrammarIssueIds.includes(issue.id)
+      ),
+    [grammarIssues, hiddenGrammarIssueIds]
+  );
+  const toggleGrammarIssueVisibility = useCallback((id: string) => {
+    setHiddenGrammarIssueIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((currentId) => currentId !== id)
+        : [...prev, id]
+    );
+  }, []);
+  const handleGrammarIssuesChange = useCallback((issues: GrammarIssue[]) => {
+    setGrammarIssues(issues);
+    setHiddenGrammarIssueIds([]);
+  }, []);
+  const editorGradeHighlights = useMemo(() => {
+    if (!isTeacherGradingTabOpen) return undefined;
+
+    const commentHighlights = (data.gradeComments as any[]).map((comment) => ({
+      id: comment.id,
+      excerpt: comment.excerpt,
+      occurrence: comment.occurrence,
+      dataAttr: 'data-grade-comment-id' as const,
+      className: 'grade-comment-mark' as const,
+    }));
+    const grammarHighlights = visibleGrammarIssues.map((issue) => ({
+      id: issue.id,
+      excerpt: issue.excerpt,
+      occurrence: issue.occurrence ?? 1,
+      dataAttr: 'data-grammar-issue-id' as const,
+      className: 'grammar-issue' as const,
+    }));
+
+    return [...commentHighlights, ...grammarHighlights];
+  }, [data.gradeComments, isTeacherGradingTabOpen, visibleGrammarIssues]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -264,6 +379,58 @@ export default function Route() {
     params.set('left', value);
     setSearchParams(params);
   };
+
+  useEffect(() => {
+    setGrammarIssues(parseGrammarIssues(grade?.grammarIssues));
+  }, [grade?.id, grade?.grammarIssues]);
+
+  useEffect(() => {
+    setHiddenGrammarIssueIds((prev) =>
+      prev.filter((id) => grammarIssues.some((issue) => issue.id === id))
+    );
+  }, [grammarIssues]);
+
+  useEffect(() => {
+    if (!tooltipIssueId) return;
+    if (visibleGrammarIssues.some((issue) => issue.id === tooltipIssueId))
+      return;
+    setTooltipIssueId(null);
+    setTooltipRect(null);
+  }, [tooltipIssueId, visibleGrammarIssues]);
+
+  useEffect(() => {
+    if (!isTeacherGradingTabOpen || !activeGradeCommentId) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const clickedInHighlight = target.closest('[data-grade-comment-id]');
+      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
+      if (clickedInHighlight || clickedInCommentCard) return;
+      setActiveGradeCommentId(null);
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [activeGradeCommentId, isTeacherGradingTabOpen]);
+
+  const activeGrammarIssue = useMemo(() => {
+    if (!tooltipIssueId) return null;
+    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
+  }, [grammarIssues, tooltipIssueId]);
+
+  useEffect(() => {
+    if (!tooltipRect) {
+      setTooltipPos(null);
+      return;
+    }
+    setTooltipPos({
+      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
+      left: Math.min(window.innerWidth - 16, tooltipRect.left),
+    });
+  }, [tooltipRect]);
 
   useEffect(() => {
     if (data.shouldSaveVersion) {
@@ -288,6 +455,32 @@ export default function Route() {
       }
     }
   }, [submitFetcher.state, submitFetcher.data, navigate]);
+
+  useEffect(() => {
+    const explicitExitTo = searchParams.get('exitTo');
+    if (explicitExitTo) {
+      setExitTarget(explicitExitTo);
+      return;
+    }
+
+    if (typeof window === 'undefined') return;
+    if (!document.referrer) return;
+
+    try {
+      const currentUrl = new URL(window.location.href);
+      const referrerUrl = new URL(document.referrer);
+      const isSameOrigin = currentUrl.origin === referrerUrl.origin;
+      const isSamePath = currentUrl.pathname === referrerUrl.pathname;
+
+      if (isSameOrigin && !isSamePath) {
+        setExitTarget(
+          `${referrerUrl.pathname}${referrerUrl.search}${referrerUrl.hash}`
+        );
+      }
+    } catch {
+      // Ignore malformed referrer values.
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const handleEditorReady = (event: Event) => {
@@ -317,31 +510,49 @@ export default function Route() {
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">
-            <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(exitTarget)}
+            >
               <ArrowLeft className="h-4" />
               Exit
             </Button>
-            <Input
-              size="sm"
-              className="rounded-lg border border-transparent font-bold transition hover:border-border"
-              defaultValue={data.doc.title}
-              placeholder="Untitled document"
-              onBlur={(e) =>
-                e.target.value !== data.doc.title
-                  ? fetcher.submit(
-                      {
-                        title: e.target.value,
-                        text: data.doc.text,
-                        html: data.doc.html,
-                      },
-                      {
-                        method: 'POST',
-                        action: `/api/model/document/${data.doc.id}?from=title-input`,
-                      }
-                    )
-                  : undefined
-              }
-            />
+            {isViewingAsTeacher ? (
+              <p className="text-xs font-semibold text-foreground md:text-md">
+                {teacherHeaderTitle}
+                <span className="px-2 text-muted-foreground">&bull;</span>
+                <span className="font-medium text-muted-foreground">
+                  {studentName}
+                </span>
+                <span className="px-2 text-muted-foreground">&bull;</span>
+                <span className="font-medium text-muted-foreground">
+                  {documentStatusLabel}
+                </span>
+              </p>
+            ) : (
+              <Input
+                size="sm"
+                className="rounded-lg border border-transparent font-bold transition hover:border-border"
+                defaultValue={data.doc.title}
+                placeholder="Untitled document"
+                onBlur={(e) =>
+                  e.target.value !== data.doc.title
+                    ? fetcher.submit(
+                        {
+                          title: e.target.value,
+                          text: data.doc.text,
+                          html: data.doc.html,
+                        },
+                        {
+                          method: 'POST',
+                          action: `/api/model/document/${data.doc.id}?from=title-input`,
+                        }
+                      )
+                    : undefined
+                }
+              />
+            )}
           </div>
           {!isViewingAsTeacher && (
             <div className="flex items-center gap-2">
@@ -358,39 +569,6 @@ export default function Route() {
               ) : null}
             </div>
           )}
-          {isViewingAsTeacher ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="info-outlined" className="md:text-md text-xs">
-                {isMobile
-                  ? data.doc.profile.user.name
-                  : `Viewing work by ${data.doc.profile.user.name}`}
-              </Badge>
-              <DocumentStatusBadge
-                submittedAt={data.doc.submittedAt}
-                grade={grade ?? null}
-              />
-              {isSubmitted && (
-                <div className="hidden md:flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
-                  <Button
-                    size="sm"
-                    variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
-                    onClick={() => changeLeftPanel('tutor')}
-                  >
-                    Tutor/History
-                  </Button>
-                  {gradingAssistantEnabled ? (
-                    <Button
-                      size="sm"
-                      variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
-                      onClick={() => changeLeftPanel('grading')}
-                    >
-                      Grading
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          ) : null}
           <div className="ml-auto flex items-center gap-4">
             {!isViewingAsTeacher && data.isDocumentSubmissionEnabled && (
               <>
@@ -411,7 +589,9 @@ export default function Route() {
                     'Submit'
                   )}
                 </Button>
-                <div className="h-[20px] border-r" />
+                {!isTeacherGradingTabOpen ? (
+                  <div className="h-[20px] border-r" />
+                ) : null}
               </>
             )}
             {isSubmitted && archivedComments.length > 0 && (
@@ -426,24 +606,66 @@ export default function Route() {
                 <div className="h-[20px] border-r" />
               </>
             )}
-            <div className="flex w-[135px] items-center gap-4">
-              {isSaving ? (
-                <div className="flex items-center gap-1 text-muted-foreground/70">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <p className="text-sm">Saving</p>
+            {isViewingAsTeacher && isSubmitted && (
+              <>
+                {grade ? (
+                  <>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to={`/app/graded/${grade.id}`}>
+                        Open Graded View
+                      </Link>
+                    </Button>
+                    <div className="h-[20px] border-r" />
+                  </>
+                ) : null}
+              </>
+            )}
+            {!isTeacherGradingTabOpen ? (
+              <div className="flex w-[135px] items-center gap-4">
+                {isSaving ? (
+                  <div className="flex items-center gap-1 text-muted-foreground/70">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <p className="text-sm">Saving</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-muted-foreground/70">
+                    <Check className="h-4 w-4" />
+                    <p className="mr-2 text-sm">Saved</p>
+                  </div>
+                )}
+                <div className="h-[20px] border-r" />
+                <DocumentVersions documentId={data.doc.id} />
+              </div>
+            ) : null}
+            {isViewingAsTeacher && isSubmitted && (
+              <>
+                {isTeacherGradingTabOpen ? null : (
+                  <div className="h-[20px] border-r" />
+                )}
+                <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
+                  <Button
+                    size="sm"
+                    variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
+                    onClick={() => changeLeftPanel('tutor')}
+                  >
+                    Tutor
+                  </Button>
+                  {gradingAssistantEnabled ? (
+                    <Button
+                      size="sm"
+                      variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
+                      onClick={() => changeLeftPanel('grading')}
+                    >
+                      Grading
+                    </Button>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="flex items-center gap-1 text-muted-foreground/70">
-                  <Check className="h-4 w-4" />
-                  <p className="mr-2 text-sm">Saved</p>
-                </div>
-              )}
-              <div className="h-[20px] border-r" />
-              <DocumentVersions documentId={data.doc.id} />
-            </div>
+              </>
+            )}
           </div>
         </nav>
         {grade &&
+          !isTeacherGradingTabOpen &&
           ((!isViewingAsTeacher && isGradeReleased) || isViewingAsTeacher) && (
             <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 dark:bg-green-950/20 px-3 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -465,25 +687,13 @@ export default function Route() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  {gradingAssistantEnabled ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      asChild
-                      className="bg-white dark:bg-background"
-                    >
-                      <Link to={`/app/graded/${grade.id}`}>
-                        Open Graded View
-                      </Link>
-                    </Button>
-                  ) : null}
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setIsGradeDetailsOpen(true)}
+                    asChild
                     className="bg-white dark:bg-background"
                   >
-                    View Details
+                    <Link to={`/app/graded/${grade.id}`}>Open Graded View</Link>
                   </Button>
                 </div>
               </div>
@@ -503,12 +713,21 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+          <div
+            className={cn(
+              'mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden',
+              isTeacherGradingTabOpen && 'draft-comments-hidden'
+            )}
+          >
             {isMobile && tab !== 'tutor' ? null : canUseGradingPanel &&
               leftPanel === 'grading' ? (
               <TeacherGradingPanel
                 documentId={data.doc.id}
                 existingGrade={grade ?? null}
+                grammarIssues={grammarIssues}
+                hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+                onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                onGrammarIssuesChange={handleGrammarIssuesChange}
               />
             ) : (
               <Tutor
@@ -518,41 +737,58 @@ export default function Route() {
                 hasPreviousCms={data.hasPreviousCms}
               />
             )}
-            {isMobile &&
-            tab !== 'editor' ? null : data.isDocumentSubmissionEnabled &&
-              isViewingAsTeacher &&
-              isSubmitted &&
-              data.doc.submittedSnapshot?.html ? (
-              <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
-                <div className="no-scrollbar grow overflow-y-scroll p-5 font-times">
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: data.doc.submittedSnapshot.html,
-                    }}
-                    className="tiptap"
-                  />
-                </div>
-              </div>
-            ) : (
+            {isMobile && tab !== 'editor' ? null : (
               <Editor
                 docId={data.doc.id}
                 docHtml={data.doc.html}
                 setIsSaving={setIsSaving}
+                isEditable={isDocumentEditable}
+                gradeHighlights={editorGradeHighlights}
+                activeGradeCommentId={
+                  isTeacherGradingTabOpen ? activeGradeCommentId : null
+                }
+                onGradeCommentSelect={
+                  isTeacherGradingTabOpen
+                    ? (id) => setActiveGradeCommentId(id)
+                    : undefined
+                }
+                onGrammarIssueHover={
+                  isTeacherGradingTabOpen
+                    ? (id, rect) => {
+                        if (id && rect) {
+                          if (closeTooltipTimer.current) {
+                            window.clearTimeout(closeTooltipTimer.current);
+                          }
+                          setTooltipIssueId(id);
+                          setTooltipRect(rect);
+                          return;
+                        }
+
+                        closeTooltipTimer.current = window.setTimeout(() => {
+                          setTooltipIssueId(null);
+                          setTooltipRect(null);
+                        }, 120);
+                      }
+                    : undefined
+                }
               />
             )}
-            {isMobile && tab !== 'comments' ? null : (
-              <Comments comments={visibleComments as any} />
+            {isMobile && tab !== 'comments' ? null : isTeacherGradingTabOpen ? (
+              <GradingCommentsSidebar
+                gradeComments={data.gradeComments}
+                gradeId={grade?.id ?? null}
+                activeGradeCommentId={activeGradeCommentId}
+                onSelectGradeComment={setActiveGradeCommentId}
+              />
+            ) : (
+              <Comments
+                comments={visibleComments as any}
+                readOnly={isViewingAsTeacher}
+              />
             )}
           </div>
         </CommentsSelectionProvider>
       </main>
-      {grade && (isGradeReleased || isViewingAsTeacher) && (
-        <GradeDetailsSheet
-          isOpen={isGradeDetailsOpen}
-          onClose={() => setIsGradeDetailsOpen(false)}
-          grade={grade}
-        />
-      )}
       {data.isDocumentSubmissionEnabled && (
         <Dialog
           open={isFinalizeDialogOpen}
@@ -619,6 +855,54 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
+      {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
+        <div
+          className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"
+          style={{
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            transform: 'translateY(0)',
+          }}
+          onMouseEnter={() => {
+            if (closeTooltipTimer.current) {
+              window.clearTimeout(closeTooltipTimer.current);
+            }
+          }}
+          onMouseLeave={() => {
+            setTooltipIssueId(null);
+            setTooltipRect(null);
+          }}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-muted-foreground">
+                {activeGrammarIssue.kind === 'style' ? 'Style' : 'Grammar'}
+                {activeGrammarIssue.ruleNumber
+                  ? ` • Rule ${activeGrammarIssue.ruleNumber}`
+                  : ''}
+              </div>
+              {activeGrammarIssue.rule ? (
+                <div className="text-sm font-medium">
+                  {activeGrammarIssue.rule}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="rounded p-1 hover:bg-muted"
+              onClick={() => {
+                setTooltipIssueId(null);
+                setTooltipRect(null);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            {activeGrammarIssue.message}
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

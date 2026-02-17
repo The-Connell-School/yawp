@@ -18,6 +18,13 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
   }
 
+  if (profile.teacherProfile) {
+    return dataResponse(
+      { error: 'Teachers cannot add document comments.' },
+      { status: 403 }
+    );
+  }
+
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 

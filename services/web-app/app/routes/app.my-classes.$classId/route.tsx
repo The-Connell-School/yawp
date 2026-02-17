@@ -32,7 +32,6 @@ import { CaretLeftIcon } from '~/components/icons';
 import { useState, useMemo, useEffect } from 'react';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
-import { GradingSheet } from './grading-sheet';
 import { ReleaseGradesSheet } from './release-grades-sheet';
 import {
   FileText,
@@ -45,6 +44,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
 import { formatGrade } from '~/domain/grading/gradeMath';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -211,12 +216,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : [];
 
-  // Get in-progress documents (not submitted, recent activity)
+  // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
     where: {
       classId,
       submittedAt: null,
-      updatedAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+      deletedAt: null,
+      archivedAt: null,
     },
     select: {
       id: true,
@@ -243,7 +249,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: {
       updatedAt: 'desc',
     },
-    take: 20, // Limit to most recent 20
   });
 
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
@@ -279,15 +284,34 @@ export default function ClassDetailRoute() {
   const [selectedPasteContent, setSelectedPasteContent] = useState<
     string | null
   >(null);
-  const [selectedDocuments, setSelectedDocuments] = useState<Set<string>>(
-    new Set()
-  );
-  const [gradingDocuments, setGradingDocuments] = useState<
-    typeof data.submittedDocuments
-  >([]);
-  const [isGradingSheetOpen, setIsGradingSheetOpen] = useState(false);
+  const [selectedGradedDocuments, setSelectedGradedDocuments] = useState<
+    Set<string>
+  >(new Set());
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
+    {
+      id: string;
+      score: string | null;
+      feedback: string | null;
+      document: {
+        id: string;
+        title: string;
+        profile: {
+          user: {
+            name: string | null;
+            email: string;
+          };
+        };
+      };
+    }[]
+  >([]);
+  const classDetailPath = `/app/my-classes/${data.klass.id}`;
+  const classDetailSearch = searchParams.toString();
+  const classDetailExitTo = classDetailSearch
+    ? `${classDetailPath}?${classDetailSearch}`
+    : classDetailPath;
+  const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
   // Tab and pagination state
   const activeTab = (searchParams.get('tab') as TabValue) || 'in-progress';
@@ -346,57 +370,68 @@ export default function ClassDetailRoute() {
     });
   }, [gradedUnreleasedDocuments]);
 
+  const unreleasedGradesByDocumentId = useMemo(() => {
+    return new Map(unreleasedGrades.map((grade) => [grade.document.id, grade]));
+  }, [unreleasedGrades]);
+
   // Handle URL param for to-release action
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'to-release') {
       if (unreleasedGrades.length > 0) {
+        setReleaseGradesForSheet(unreleasedGrades);
         setIsReleaseGradesSheetOpen(true);
         navigate(`?tab=graded`, { replace: true });
       }
     }
   }, [searchParams, navigate, unreleasedGrades]);
 
-  // Toggle document selection
-  const toggleDocumentSelection = (docId: string) => {
-    const newSelection = new Set(selectedDocuments);
+  // Handle successful release
+  const handleGradingSuccess = () => {
+    setSelectedGradedDocuments(new Set());
+    setReleaseGradesForSheet([]);
+    window.location.reload();
+  };
+
+  const toggleGradedDocumentSelection = (docId: string) => {
+    const newSelection = new Set(selectedGradedDocuments);
     if (newSelection.has(docId)) {
       newSelection.delete(docId);
     } else {
       newSelection.add(docId);
     }
-    setSelectedDocuments(newSelection);
+    setSelectedGradedDocuments(newSelection);
   };
 
-  // Toggle all documents for a specific list
-  const toggleAllDocuments = (docList: typeof data.submittedDocuments) => {
-    const docIds = docList.map((d) => d.id);
-    if (docIds.every((id) => selectedDocuments.has(id))) {
-      const newSelection = new Set(selectedDocuments);
+  const toggleAllGradedDocuments = () => {
+    const docIds = gradedUnreleasedDocuments.map((d) => d.id);
+    if (docIds.every((id) => selectedGradedDocuments.has(id))) {
+      const newSelection = new Set(selectedGradedDocuments);
       docIds.forEach((id) => newSelection.delete(id));
-      setSelectedDocuments(newSelection);
+      setSelectedGradedDocuments(newSelection);
     } else {
-      const newSelection = new Set(selectedDocuments);
+      const newSelection = new Set(selectedGradedDocuments);
       docIds.forEach((id) => newSelection.add(id));
-      setSelectedDocuments(newSelection);
+      setSelectedGradedDocuments(newSelection);
     }
   };
 
-  // Open grading sheet for selected documents
-  const openGradingSheet = (documentIds: string[]) => {
-    const docs = data.submittedDocuments.filter((d) =>
-      documentIds.includes(d.id)
-    );
-    setGradingDocuments(docs);
-    setIsGradingSheetOpen(true);
-  };
+  const selectedUnreleasedGrades = useMemo(() => {
+    return Array.from(selectedGradedDocuments)
+      .map((docId) => unreleasedGradesByDocumentId.get(docId))
+      .filter((grade): grade is (typeof unreleasedGrades)[number] => !!grade);
+  }, [selectedGradedDocuments, unreleasedGradesByDocumentId]);
 
-  // Handle successful grading
-  const handleGradingSuccess = () => {
-    setSelectedDocuments(new Set());
-    setGradingDocuments([]);
-    // Reload the page to get updated data
-    window.location.reload();
+  const canReleaseSelected = selectedUnreleasedGrades.length > 0;
+
+  const openReleaseSheetForMode = (mode: 'all' | 'selected') => {
+    if (mode === 'selected') {
+      if (!canReleaseSelected) return;
+      setReleaseGradesForSheet(selectedUnreleasedGrades);
+    } else {
+      setReleaseGradesForSheet(unreleasedGrades);
+    }
+    setIsReleaseGradesSheetOpen(true);
   };
 
   const selectedDocs = selectedProfileId
@@ -494,7 +529,7 @@ export default function ClassDetailRoute() {
                   <TableCell>
                     <Button asChild size="sm" variant="outline">
                       <Link
-                        to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                        to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                       >
                         View
                       </Link>
@@ -514,20 +549,6 @@ export default function ClassDetailRoute() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={
-                      ungradedDocuments.length > 0 &&
-                      ungradedDocuments.every((d) =>
-                        selectedDocuments.has(d.id)
-                      )
-                    }
-                    onCheckedChange={() =>
-                      toggleAllDocuments(ungradedDocuments)
-                    }
-                    aria-label="Select all"
-                  />
-                </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 <TableHead>Course Module</TableHead>
@@ -538,13 +559,6 @@ export default function ClassDetailRoute() {
             <TableBody>
               {paginatedData.map((doc) => (
                 <TableRow key={doc.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedDocuments.has(doc.id)}
-                      onCheckedChange={() => toggleDocumentSelection(doc.id)}
-                      aria-label={`Select ${doc.title}`}
-                    />
-                  </TableCell>
                   <TableCell className="font-medium">
                     {doc.profile.user.name || doc.profile.user.email}
                   </TableCell>
@@ -560,18 +574,24 @@ export default function ClassDetailRoute() {
                     <div className="flex gap-2">
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => openGradingSheet([doc.id])}
-                        disabled={!gradingAssistantEnabled}
-                      >
-                        Grade
-                      </Button>
+                      {gradingAssistantEnabled ? (
+                        <Button asChild size="sm">
+                          <Link
+                            to={`/app/documents/${doc.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                          >
+                            Grade
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button size="sm" disabled>
+                          Grade
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -588,6 +608,18 @@ export default function ClassDetailRoute() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={
+                      gradedUnreleasedDocuments.length > 0 &&
+                      gradedUnreleasedDocuments.every((d) =>
+                        selectedGradedDocuments.has(d.id)
+                      )
+                    }
+                    onCheckedChange={toggleAllGradedDocuments}
+                    aria-label="Select all graded documents"
+                  />
+                </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 <TableHead>Score</TableHead>
@@ -607,6 +639,15 @@ export default function ClassDetailRoute() {
                   '—';
                 return (
                   <TableRow key={doc.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedGradedDocuments.has(doc.id)}
+                        onCheckedChange={() =>
+                          toggleGradedDocumentSelection(doc.id)
+                        }
+                        aria-label={`Select graded ${doc.title}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       {doc.profile.user.name || doc.profile.user.email}
                     </TableCell>
@@ -621,18 +662,24 @@ export default function ClassDetailRoute() {
                       <div className="flex gap-2">
                         <Button asChild size="sm" variant="outline">
                           <Link
-                            to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                            to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                           >
                             View
                           </Link>
                         </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => openGradingSheet([doc.id])}
-                          disabled={!gradingAssistantEnabled}
-                        >
-                          Edit Grade
-                        </Button>
+                        {gradingAssistantEnabled ? (
+                          <Button asChild size="sm">
+                            <Link
+                              to={`/app/documents/${doc.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                            >
+                              Edit Grade
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button size="sm" disabled>
+                            Edit Grade
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -682,7 +729,7 @@ export default function ClassDetailRoute() {
                     <TableCell>
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/documents/${doc.id}?exitTo=/app/my-classes/${data.klass.id}`}
+                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>
@@ -724,7 +771,7 @@ export default function ClassDetailRoute() {
                     </TableCell>
                     <TableCell>
                       <Link
-                        to={`/app/documents/${alert.document.id}`}
+                        to={`/app/documents/${alert.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                         className="text-primary hover:underline"
                       >
                         {alert.document.title}
@@ -831,7 +878,7 @@ export default function ClassDetailRoute() {
                                     <DocumentLink
                                       key={doc.id}
                                       doc={doc as any}
-                                      exitTo={`/app/my-classes/${data.klass.id}`}
+                                      exitTo={classDetailExitTo}
                                     />
                                   ))}
                                 </div>
@@ -875,12 +922,39 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <Button asChild variant="outline" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
+          {data.isDocumentSubmissionEnabled &&
+            gradingAssistantEnabled &&
+            activeTab === 'graded' &&
+            gradedUnreleasedDocuments.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="default">
+                    Release Grades
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-xl">
+                  <DropdownMenuItem
+                    onSelect={() => openReleaseSheetForMode('all')}
+                    className="rounded-lg"
+                  >
+                    All graded docs ({unreleasedGrades.length})
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => openReleaseSheetForMode('selected')}
+                    disabled={!canReleaseSelected}
+                    className="rounded-lg"
+                  >
+                    Only selected docs ({selectedUnreleasedGrades.length})
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
         </div>
 
         {/* Summary Stats */}
@@ -914,7 +988,7 @@ export default function ClassDetailRoute() {
             >
               <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 mb-1">
                 <ClipboardCheck className="w-4 h-4" />
-                <span className="text-xs font-medium">To Grade</span>
+                <span className="text-xs font-medium">Submitted</span>
               </div>
               <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
                 {ungradedDocuments.length}
@@ -962,7 +1036,7 @@ export default function ClassDetailRoute() {
                     className="flex items-center gap-2 h-auto py-2"
                   >
                     <ClipboardCheck className="w-4 h-4" />
-                    <span className="hidden sm:inline">To Grade</span>
+                    <span className="hidden sm:inline">Submitted</span>
                     <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                       {ungradedDocuments.length}
                     </span>
@@ -1013,39 +1087,6 @@ export default function ClassDetailRoute() {
                   </span>
                 </TabsTrigger>
               </TabsList>
-              {data.isDocumentSubmissionEnabled &&
-                gradingAssistantEnabled &&
-                activeTab === 'to-grade' &&
-                selectedDocuments.size > 0 && (
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      openGradingSheet(Array.from(selectedDocuments))
-                    }
-                    className="ml-4"
-                  >
-                    Grade{' '}
-                    {selectedDocuments.size === 1
-                      ? 'Essay'
-                      : `${selectedDocuments.size} Essays`}
-                  </Button>
-                )}
-              {data.isDocumentSubmissionEnabled &&
-                gradingAssistantEnabled &&
-                activeTab === 'graded' &&
-                gradedUnreleasedDocuments.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    onClick={() => setIsReleaseGradesSheetOpen(true)}
-                    className="ml-4"
-                  >
-                    Release {gradedUnreleasedDocuments.length}{' '}
-                    {gradedUnreleasedDocuments.length === 1
-                      ? 'Grade'
-                      : 'Grades'}
-                  </Button>
-                )}
             </div>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>
@@ -1081,20 +1122,8 @@ export default function ClassDetailRoute() {
       </Sheet>
 
       {data.isDocumentSubmissionEnabled && gradingAssistantEnabled ? (
-        <GradingSheet
-          documents={gradingDocuments}
-          isOpen={isGradingSheetOpen}
-          onClose={() => {
-            setIsGradingSheetOpen(false);
-            setGradingDocuments([]);
-          }}
-          onSuccess={handleGradingSuccess}
-        />
-      ) : null}
-
-      {data.isDocumentSubmissionEnabled && gradingAssistantEnabled ? (
         <ReleaseGradesSheet
-          grades={unreleasedGrades}
+          grades={releaseGradesForSheet}
           isOpen={isReleaseGradesSheetOpen}
           onClose={() => setIsReleaseGradesSheetOpen(false)}
           onSuccess={handleGradingSuccess}

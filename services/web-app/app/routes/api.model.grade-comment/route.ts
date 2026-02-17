@@ -7,7 +7,7 @@ import { prisma } from '~/utils/db.server';
 const POST = z.object({
   gradeId: z.string(),
   content: z.string().min(1),
-  excerpt: z.string().min(1).max(120),
+  excerpt: z.string().max(120).optional(),
   occurrence: z
     .string()
     .optional()
@@ -43,11 +43,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const created = await prisma.gradeComment.create({
     data: {
-      gradeId: data.gradeId,
-      profileId: profile.id,
+      grade: { connect: { id: data.gradeId } },
+      profile: { connect: { id: profile.id } },
       content: data.content,
-      excerpt: data.excerpt,
       occurrence: data.occurrence,
+      ...(data.excerpt != null && data.excerpt !== '' && { excerpt: data.excerpt }),
     },
     include: {
       profile: { include: { user: { select: { name: true, email: true } } } },

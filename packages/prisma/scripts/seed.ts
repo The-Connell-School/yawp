@@ -9,6 +9,7 @@ type SeedData = {
   studentCourses: Prisma.StudentCourseCreateInput[];
   teacherCourses: Prisma.TeacherCourseCreateInput[];
   organizations: Prisma.OrganizationCreateInput[];
+  settings: Prisma.SettingCreateInput[];
 };
 
 const ORG_ID = 'the-connell-school';
@@ -25,6 +26,16 @@ const organizations: SeedData['organizations'] = [
     id: ORG_ID,
     numOfStudentSeats: TOTAL_STUDENTS + 10,
     numOfTeacherSeats: TOTAL_TEACHERS + 5,
+  },
+];
+
+const settings: SeedData['settings'] = [
+  {
+    id: 'document_submission_flag',
+    name: 'document_submission_enabled',
+    value: 'false',
+    valueType: 'boolean',
+    description: 'Allow students to submit documents for grading',
   },
 ];
 
@@ -329,6 +340,7 @@ async function seed() {
     console.error(e);
   }
   const data: SeedData = {
+    settings,
     organizations,
     users,
     studentCourses,
@@ -341,6 +353,10 @@ async function seed() {
     await Promise.all(
       data[key].map((item) => {
         switch (key) {
+          case 'settings':
+            return prisma.setting.create({
+              data: item as Prisma.SettingCreateInput,
+            });
           case 'organizations':
             return prisma.organization.create({
               data: item as Prisma.OrganizationCreateInput,

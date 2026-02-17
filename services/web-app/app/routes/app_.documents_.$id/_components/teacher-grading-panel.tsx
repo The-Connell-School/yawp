@@ -5,6 +5,13 @@ import { Badge } from '~/components/ui/badge';
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 import {
   Select,
   SelectContent,
@@ -18,11 +25,23 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
+import { Check, Loader2 } from 'lucide-react';
+import { cn } from '~/utils/misc';
 
 type RubricScore = {
   score: number;
   comment: string;
   isAi?: boolean;
+};
+
+type GrammarIssue = {
+  id: string;
+  excerpt: string;
+  occurrence?: number;
+  kind: 'error' | 'style';
+  ruleNumber?: number;
+  rule?: string;
+  message: string;
 };
 
 const scoreOptions = [
@@ -39,9 +58,84 @@ const buildEmptyRubric = () =>
     return acc;
   }, {});
 
+function normalizePercentage(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function normalizeRubricScores(raw: unknown): Record<string, RubricScore> {
+  const normalized = buildEmptyRubric();
+  if (!raw || typeof raw !== 'object') return normalized;
+
+  for (const item of rubricCategories) {
+    const candidate = (raw as Record<string, unknown>)[item.key];
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    const scoreValue = (candidate as { score?: unknown }).score;
+    const commentValue = (candidate as { comment?: unknown }).comment;
+
+    normalized[item.key] = {
+      score:
+        typeof scoreValue === 'number' && Number.isFinite(scoreValue)
+          ? Math.max(0, Math.min(5, Math.round(scoreValue)))
+          : 0,
+      comment: typeof commentValue === 'string' ? commentValue : '',
+      isAi: Boolean((candidate as { isAi?: unknown }).isAi),
+    };
+  }
+
+  return normalized;
+}
+
+function buildGradeSignature(args: {
+  overallComment: string;
+  numericPercentage: number | null;
+  rubricScores: Record<string, RubricScore>;
+}) {
+  const rubricSignature = rubricCategories
+    .map((item) => {
+      const score = args.rubricScores[item.key]?.score ?? 0;
+      const comment = args.rubricScores[item.key]?.comment ?? '';
+      return `${item.key}:${score}:${comment}`;
+    })
+    .join('|');
+
+  return [
+    args.overallComment,
+    args.numericPercentage === null
+      ? 'null'
+      : args.numericPercentage.toString(),
+    rubricSignature,
+  ].join('||');
+}
+
+function parseGrammarIssues(raw: unknown): GrammarIssue[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const issues = (raw as { issues?: unknown[] }).issues;
+  if (!Array.isArray(issues)) return [];
+  return issues.filter(
+    (issue): issue is GrammarIssue =>
+      typeof issue === 'object' &&
+      issue !== null &&
+      typeof (issue as GrammarIssue).id === 'string' &&
+      typeof (issue as GrammarIssue).excerpt === 'string' &&
+      typeof (issue as GrammarIssue).message === 'string'
+  );
+}
+
+function formatExcerpt(excerpt: string, maxChars = 90) {
+  const text = excerpt.trim();
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
+}
+
 export function TeacherGradingPanel({
   documentId,
   existingGrade,
+  grammarIssues,
+  hiddenGrammarIssueIds,
+  onToggleGrammarIssue,
+  onGrammarIssuesChange,
 }: {
   documentId: string;
   existingGrade:
@@ -57,6 +151,10 @@ export function TeacherGradingPanel({
       }
     | null
     | undefined;
+  grammarIssues: GrammarIssue[];
+  hiddenGrammarIssueIds: string[];
+  onToggleGrammarIssue: (id: string) => void;
+  onGrammarIssuesChange: (issues: GrammarIssue[]) => void;
 }) {
   const aiFetcher = useFetcher();
   const saveFetcher = useFetcher();
@@ -66,13 +164,23 @@ export function TeacherGradingPanel({
   const [numericPercentage, setNumericPercentage] = useState('');
   const [hasManualPercentOverride, setHasManualPercentOverride] =
     useState(false);
+  const [savedSignature, setSavedSignature] = useState('');
+  const pendingSaveSignatureRef = useRef('');
   const hasInitialized = useRef(false);
+  const recalcCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const recalcResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const [recalcUiState, setRecalcUiState] = useState<
+    'idle' | 'loading' | 'done'
+  >('idle');
 
   const computedNumericPercentage = useMemo(() => {
-    return computeWeightedPercentage(rubricScores as unknown as Record<
-      string,
-      unknown
-    >);
+    return computeWeightedPercentage(
+      rubricScores as unknown as Record<string, unknown>
+    );
   }, [rubricScores]);
 
   const resolvedNumericPercentage = useMemo(() => {
@@ -92,24 +200,41 @@ export function TeacherGradingPanel({
       ) || '—'
     );
   }, [resolvedNumericPercentage]);
+  const gradeBadgeClassName =
+    'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200';
 
   useEffect(() => {
     if (hasInitialized.current) return;
     hasInitialized.current = true;
 
+    let initialOverallComment = '';
+    let initialNumericPercentage = '';
+    let initialRubricScores = buildEmptyRubric();
+    let initialNormalizedPercent: number | null = null;
+
     if (existingGrade) {
-      setOverallComment(existingGrade.overallComment || existingGrade.feedback || '');
-      if (typeof existingGrade.numericPercentage === 'number') {
-        setNumericPercentage(existingGrade.numericPercentage.toString());
+      initialOverallComment =
+        existingGrade.overallComment || existingGrade.feedback || '';
+      initialNormalizedPercent = normalizePercentage(
+        existingGrade.numericPercentage
+      );
+      if (initialNormalizedPercent !== null) {
+        initialNumericPercentage = initialNormalizedPercent.toString();
         setHasManualPercentOverride(true);
       }
-      if (existingGrade.rubricScores && typeof existingGrade.rubricScores === 'object') {
-        setRubricScores({
-          ...buildEmptyRubric(),
-          ...(existingGrade.rubricScores as Record<string, RubricScore>),
-        });
-      }
+      initialRubricScores = normalizeRubricScores(existingGrade.rubricScores);
     }
+
+    setOverallComment(initialOverallComment);
+    setNumericPercentage(initialNumericPercentage);
+    setRubricScores(initialRubricScores);
+    setSavedSignature(
+      buildGradeSignature({
+        overallComment: initialOverallComment,
+        numericPercentage: initialNormalizedPercent,
+        rubricScores: initialRubricScores,
+      })
+    );
   }, [existingGrade]);
 
   useEffect(() => {
@@ -120,11 +245,18 @@ export function TeacherGradingPanel({
 
   useEffect(() => {
     if (aiFetcher.data?.success && aiFetcher.state === 'idle') {
+      const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
+      const aiOverallComment =
+        typeof aiFetcher.data.overallComment === 'string'
+          ? aiFetcher.data.overallComment
+          : overallComment;
+      const aiNumericPercentage =
+        typeof aiFetcher.data.numericPercentage === 'number'
+          ? normalizePercentage(aiFetcher.data.numericPercentage)
+          : resolvedNumericPercentage;
+
       if (aiFetcher.data.rubricScores) {
-        setRubricScores({
-          ...buildEmptyRubric(),
-          ...(aiFetcher.data.rubricScores as Record<string, RubricScore>),
-        });
+        setRubricScores(aiRubricScores);
       }
       if (typeof aiFetcher.data.overallComment === 'string') {
         setOverallComment(aiFetcher.data.overallComment);
@@ -133,10 +265,49 @@ export function TeacherGradingPanel({
         setNumericPercentage(aiFetcher.data.numericPercentage.toString());
         setHasManualPercentOverride(false);
       }
+      onGrammarIssuesChange(parseGrammarIssues(aiFetcher.data.grammarIssues));
+
+      setSavedSignature(
+        buildGradeSignature({
+          overallComment: aiOverallComment,
+          numericPercentage: aiNumericPercentage,
+          rubricScores: aiRubricScores,
+        })
+      );
     }
-  }, [aiFetcher.data, aiFetcher.state]);
+  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
+
+  const currentSignature = useMemo(
+    () =>
+      buildGradeSignature({
+        overallComment,
+        numericPercentage: resolvedNumericPercentage,
+        rubricScores,
+      }),
+    [overallComment, resolvedNumericPercentage, rubricScores]
+  );
+
+  const hasUnsavedChanges = currentSignature !== savedSignature;
+
+  useEffect(() => {
+    if (saveFetcher.data?.success && saveFetcher.state === 'idle') {
+      setSavedSignature(pendingSaveSignatureRef.current);
+    }
+  }, [saveFetcher.data, saveFetcher.state]);
+
+  useEffect(() => {
+    return () => {
+      if (recalcCompleteTimeoutRef.current) {
+        clearTimeout(recalcCompleteTimeoutRef.current);
+      }
+      if (recalcResetTimeoutRef.current) {
+        clearTimeout(recalcResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const save = () => {
+    pendingSaveSignatureRef.current = currentSignature;
     const form = new FormData();
     const percent =
       resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
@@ -147,16 +318,55 @@ export function TeacherGradingPanel({
     form.append('rubricScores', JSON.stringify(rubricScores));
     if (percent !== null) form.append('numericPercentage', percent.toString());
     if (letter) form.append('letterGrade', letter);
-    if (percent !== null) form.append('score', formatGrade(percent, letter) ?? '');
+    if (percent !== null)
+      form.append('score', formatGrade(percent, letter) ?? '');
 
     if (existingGrade?.id) {
       form.append('gradeId', existingGrade.id);
-      saveFetcher.submit(form, { method: 'POST', action: '/api/domain/update-grade' });
+      saveFetcher.submit(form, {
+        method: 'POST',
+        action: '/api/domain/update-grade',
+      });
       return;
     }
 
     form.append('documentIds', documentId);
-    saveFetcher.submit(form, { method: 'POST', action: '/api/domain/grade-essay' });
+    saveFetcher.submit(form, {
+      method: 'POST',
+      action: '/api/domain/grade-essay',
+    });
+  };
+
+  const handleRecalculate = () => {
+    if (computedNumericPercentage === null || recalcUiState !== 'idle') return;
+
+    setRecalcUiState('loading');
+
+    if (recalcCompleteTimeoutRef.current) {
+      clearTimeout(recalcCompleteTimeoutRef.current);
+    }
+    if (recalcResetTimeoutRef.current) {
+      clearTimeout(recalcResetTimeoutRef.current);
+    }
+
+    recalcCompleteTimeoutRef.current = setTimeout(() => {
+      setNumericPercentage(computedNumericPercentage.toString());
+      setHasManualPercentOverride(false);
+      setRecalcUiState('done');
+
+      recalcResetTimeoutRef.current = setTimeout(() => {
+        setRecalcUiState('idle');
+      }, 1600);
+    }, 500);
+  };
+
+  const generateAiSuggestions = () => {
+    const aiForm = new FormData();
+    aiForm.append('documentId', documentId);
+    aiFetcher.submit(aiForm, {
+      method: 'POST',
+      action: '/api/domain/grade-essay-ai',
+    });
   };
 
   return (
@@ -164,35 +374,47 @@ export function TeacherGradingPanel({
       <div className="border-b bg-white p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold">Grading</div>
-          <Badge variant="secondary">{gradeDisplay}</Badge>
+          <Badge variant="secondary" className={gradeBadgeClassName}>
+            {gradeDisplay}
+          </Badge>
         </div>
         <div className="mt-2 flex gap-2">
+          <ConfirmationDialog
+            title="Replace Existing Grading Feedback?"
+            description="Generating AI suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
+            confirmText="Replace with AI Suggestions"
+            cancelText="Go Back"
+            onConfirm={generateAiSuggestions}
+          >
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={aiFetcher.state !== 'idle'}
+            >
+              {aiFetcher.state !== 'idle'
+                ? 'Generating...'
+                : 'Generate AI Suggestions'}
+            </Button>
+          </ConfirmationDialog>
           <Button
             size="sm"
-            variant="secondary"
-            onClick={() => {
-              const aiForm = new FormData();
-              aiForm.append('documentId', documentId);
-              aiFetcher.submit(aiForm, {
-                method: 'POST',
-                action: '/api/domain/grade-essay-ai',
-              });
-            }}
-            disabled={aiFetcher.state !== 'idle'}
+            onClick={save}
+            disabled={saveFetcher.state !== 'idle' || !hasUnsavedChanges}
           >
-            {aiFetcher.state !== 'idle' ? 'Generating...' : 'Generate AI Suggestions'}
-          </Button>
-          <Button size="sm" onClick={save} disabled={saveFetcher.state !== 'idle'}>
             {saveFetcher.state !== 'idle' ? 'Saving...' : 'Save Grade'}
           </Button>
         </div>
+        {hasUnsavedChanges ? (
+          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+            Unsaved changes. Click Save Grade before leaving.
+          </div>
+        ) : null}
       </div>
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
-        <div className="rounded-lg border bg-white p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
+        <div className="rounded-lg bg-white/70 p-2 space-y-2">
+          <div className="flex items-center gap-2">
             <Label htmlFor="pct">Overall Percentage</Label>
-            <Badge variant="secondary">{gradeDisplay}</Badge>
           </div>
           <div className="flex gap-2">
             <Input
@@ -209,14 +431,23 @@ export function TeacherGradingPanel({
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                if (computedNumericPercentage === null) return;
-                setNumericPercentage(computedNumericPercentage.toString());
-                setHasManualPercentOverride(false);
-              }}
-              disabled={computedNumericPercentage === null}
+              onClick={handleRecalculate}
+              disabled={
+                computedNumericPercentage === null || recalcUiState !== 'idle'
+              }
+              className={cn(
+                'min-w-[120px] transition-all',
+                recalcUiState !== 'idle' &&
+                  'border-muted-foreground/30 bg-muted/50 text-muted-foreground'
+              )}
             >
-              Recalculate
+              {recalcUiState === 'loading' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : recalcUiState === 'done' ? (
+                <Check className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                'Recalculate'
+              )}
             </Button>
           </div>
         </div>
@@ -234,58 +465,167 @@ export function TeacherGradingPanel({
 
         <div className="space-y-3">
           <div className="text-sm font-medium">Rubric</div>
-          {rubricCategories.map((item) => {
-            const current = rubricScores[item.key] || { score: 0, comment: '' };
-            return (
-              <div key={item.key} className="rounded-lg border bg-white p-3 space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-medium">{item.label}</div>
-                    <div className="text-xs text-muted-foreground">{item.description}</div>
-                  </div>
-                  <Select
-                    value={current.score ? current.score.toString() : ''}
-                    onValueChange={(value) => {
-                      setRubricScores((prev) => ({
-                        ...prev,
-                        [item.key]: {
-                          ...prev[item.key],
-                          score: Number(value),
-                          isAi: false,
-                        },
-                      }));
-                    }}
-                  >
-                    <SelectTrigger className="w-full sm:w-[220px]">
-                      <SelectValue placeholder="Select score" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {scoreOptions.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Textarea
-                  value={current.comment}
-                  onChange={(e) =>
-                    setRubricScores((prev) => ({
-                      ...prev,
-                      [item.key]: {
-                        ...prev[item.key],
-                        comment: e.target.value,
-                        isAi: false,
-                      },
-                    }))
-                  }
-                  placeholder="Enter category feedback..."
-                  rows={3}
-                />
-              </div>
-            );
-          })}
+          <Accordion type="multiple" className="w-full rounded-lg bg-white">
+            {rubricCategories.map((item) => {
+              const current = rubricScores[item.key] || {
+                score: 0,
+                comment: '',
+              };
+              const scoreLabel = current.score
+                ? `${current.score}/5`
+                : 'Not scored';
+              const isGrammarCategory = item.key === 'grammar_and_mechanics';
+              const shownGrammarCount = grammarIssues.filter(
+                (issue) => !hiddenGrammarIssueIds.includes(issue.id)
+              ).length;
+
+              return (
+                <AccordionItem
+                  key={item.key}
+                  value={item.key}
+                  className="last:border-b-0"
+                >
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <div className="flex w-full items-center justify-between gap-3 pr-2">
+                      <div className="text-sm font-medium">{item.label}</div>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {scoreLabel}
+                      </span>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-2 pb-3">
+                    <div className="text-xs text-muted-foreground">
+                      {item.description}
+                    </div>
+                    <Select
+                      value={current.score ? current.score.toString() : ''}
+                      onValueChange={(value) => {
+                        setRubricScores((prev) => ({
+                          ...prev,
+                          [item.key]: {
+                            ...prev[item.key],
+                            score: Number(value),
+                            isAi: false,
+                          },
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select score" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scoreOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      value={current.comment}
+                      onChange={(e) =>
+                        setRubricScores((prev) => ({
+                          ...prev,
+                          [item.key]: {
+                            ...prev[item.key],
+                            comment: e.target.value,
+                            isAi: false,
+                          },
+                        }))
+                      }
+                      placeholder="Enter category feedback..."
+                      rows={4}
+                    />
+                    {isGrammarCategory ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            AI grammar issues shown: {shownGrammarCount}/
+                            {grammarIssues.length}
+                          </p>
+                          {grammarIssues.length > 0 ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => {
+                                const shouldShowAll =
+                                  shownGrammarCount !== grammarIssues.length;
+                                grammarIssues.forEach((issue) => {
+                                  const isHidden =
+                                    hiddenGrammarIssueIds.includes(issue.id);
+                                  if (shouldShowAll && isHidden) {
+                                    onToggleGrammarIssue(issue.id);
+                                  }
+                                  if (!shouldShowAll && !isHidden) {
+                                    onToggleGrammarIssue(issue.id);
+                                  }
+                                });
+                              }}
+                            >
+                              {shownGrammarCount === grammarIssues.length
+                                ? 'Hide all'
+                                : 'Show all'}
+                            </Button>
+                          ) : null}
+                        </div>
+                        {grammarIssues.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">
+                            No grammar/syntax issues yet. Generate AI
+                            suggestions to populate this list.
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {grammarIssues.map((issue) => {
+                              const isHidden = hiddenGrammarIssueIds.includes(
+                                issue.id
+                              );
+
+                              return (
+                                <div
+                                  key={issue.id}
+                                  className="rounded-md border bg-white p-2"
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                      {issue.kind === 'style'
+                                        ? 'Style'
+                                        : 'Grammar'}
+                                      {issue.ruleNumber
+                                        ? ` • Rule ${issue.ruleNumber}`
+                                        : ''}
+                                    </p>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() =>
+                                        onToggleGrammarIssue(issue.id)
+                                      }
+                                    >
+                                      {isHidden ? 'Show' : 'Hide'}
+                                    </Button>
+                                  </div>
+                                  <p className="mt-1 text-sm italic">
+                                    "{formatExcerpt(issue.excerpt)}"
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {issue.message}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
         </div>
       </div>
     </div>

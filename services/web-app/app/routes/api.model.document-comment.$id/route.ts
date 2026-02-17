@@ -20,24 +20,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
   }
 
+  if (profile.teacherProfile) {
+    return dataResponse(
+      { error: 'Teachers cannot modify document comments.' },
+      { status: 403 }
+    );
+  }
+
   const where: Prisma.DocumentCommentWhereUniqueInput = {
     id: params.id,
-    OR: [
-      { profileId: profile.id },
-      {
-        profile: {
-          studentProfile: {
-            classes: {
-              some: { teachers: { some: { profileId: profile.id } } },
-            },
-          },
-        },
-      },
-    ],
+    profileId: profile.id,
   };
 
   if (request.method === 'DELETE') {
-    await prisma.documentComment.delete({ where });
+    const deleted = await prisma.documentComment
+      .delete({ where })
+      .catch(() => null);
+    if (!deleted) {
+      return dataResponse({ error: 'Comment not found.' }, { status: 404 });
+    }
     return new Response(null, { status: 204 });
   }
 

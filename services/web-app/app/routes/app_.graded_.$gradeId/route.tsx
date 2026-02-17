@@ -4,23 +4,18 @@ import {
   type LoaderFunctionArgs,
   data as dataResponse,
   Link,
-  useFetcher,
   useLoaderData,
+  useSearchParams,
 } from 'react-router';
-import { ArrowLeft, MessageCirclePlus, X } from 'lucide-react';
-import { z } from 'zod';
+import { ArrowLeft, X } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { Textarea } from '~/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '~/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import useBreakpoint from '~/hooks/useBreakpoint';
+import { cn } from '~/utils/misc';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { redirectWithToast } from '~/utils/toast.server';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { formatGrade } from '~/domain/grading/gradeMath';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
@@ -34,6 +29,12 @@ type GrammarIssue = {
   rule?: string;
   message: string;
 };
+
+function formatExcerpt(excerpt: string | null, maxChars = 90) {
+  const text = (excerpt ?? 'General').trim();
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
 
 function isTextNode(node: Node): node is Text {
   return node.nodeType === Node.TEXT_NODE;
@@ -193,7 +194,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               submittedAt: true,
               profileId: true,
               classId: true,
-              profile: { select: { user: { select: { name: true, email: true } } } },
+              profile: {
+                select: { user: { select: { name: true, email: true } } },
+              },
               class: { select: { teachers: { select: { profileId: true } } } },
             },
           },
@@ -213,47 +216,46 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (!user?.isAdmin) {
     if (isStudentOwner) {
-      if (!grade.releasedAt) throw new Response('Not found', { status: 404 });
+      if (!grade.releasedAt) {
+        return redirectWithToast(
+          `/app/documents/${grade.snapshot.document.id}`,
+          {
+            description: 'This grade has not been released yet.',
+            type: 'error',
+          }
+        );
+      }
     } else if (!isTeacherOfClass) {
       throw new Response('Not found', { status: 404 });
     }
   }
 
-  const gradeComments = await prisma.gradeComment.findMany({
+  const teacherProfileIds = new Set(
+    (grade.snapshot.document.class?.teachers ?? []).map((t) => t.profileId)
+  );
+
+  const allGradeComments = await prisma.gradeComment.findMany({
     where: { gradeId: grade.id },
     include: {
       profile: { include: { user: { select: { name: true, email: true } } } },
       responses: {
         include: {
-          profile: { include: { user: { select: { name: true, email: true } } } },
+          profile: {
+            include: { user: { select: { name: true, email: true } } },
+          },
         },
         orderBy: { createdAt: 'asc' },
       },
     },
     orderBy: { createdAt: 'asc' },
   });
-
-  const archivedComments = await prisma.documentComment.findMany({
-    where: {
-      documentId: grade.snapshot.document.id,
-      archivedAt: { not: null },
-    },
-    include: {
-      profile: { include: { user: { select: { name: true, email: true } } } },
-      responses: {
-        include: {
-          profile: { include: { user: { select: { name: true, email: true } } } },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  const gradeComments = allGradeComments.filter((comment) =>
+    teacherProfileIds.has(comment.profileId)
+  );
 
   return dataResponse({
     grade,
     gradeComments,
-    archivedComments,
     viewer: {
       isTeacher: isTeacherOfClass || !!user?.isAdmin,
       isStudent: isStudentOwner,
@@ -261,30 +263,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-const CreateCommentSchema = z.object({
-  content: z.string().min(1),
-});
-
 export default function Route() {
   const data = useLoaderData<typeof loader>();
-  const createFetcher = useFetcher<{ success?: boolean }>();
-  const replyFetcher = useFetcher();
-  const deleteFetcher = useFetcher();
+  const breakpoint = useBreakpoint();
+  const isMobile = ['base', 'sm', 'md', 'lg'].includes(breakpoint ?? '');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') ?? 'grading';
+  const changeTab = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', value);
+    setSearchParams(params);
+  };
 
   const [showGrammar, setShowGrammar] = useState(true);
-  const [showOldComments, setShowOldComments] = useState(false);
-  const [activeGradeCommentId, setActiveGradeCommentId] = useState<string | null>(
-    null
-  );
-
-  const [isAddCommentOpen, setIsAddCommentOpen] = useState(false);
-  const [newCommentContent, setNewCommentContent] = useState('');
+  const [activeGradeCommentId, setActiveGradeCommentId] = useState<
+    string | null
+  >(null);
 
   const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(
-    null
-  );
+  const [tooltipPos, setTooltipPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
 
   const essayRef = useRef<HTMLDivElement>(null);
@@ -299,8 +300,22 @@ export default function Route() {
   const gradeComments = useMemo(() => data.gradeComments, [data.gradeComments]);
 
   const gradeDisplay =
-    formatGrade(data.grade.numericPercentage ?? null, data.grade.letterGrade ?? null) ??
-    'Graded';
+    formatGrade(
+      data.grade.numericPercentage ?? null,
+      data.grade.letterGrade ?? null
+    ) ?? 'Graded';
+
+  const focusGradeComment = (id: string) => {
+    setActiveGradeCommentId(id);
+    const mark = essayRef.current?.querySelector<HTMLElement>(
+      `[data-grade-comment-id="${id}"]`
+    );
+    mark?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    commentRefs.current[id]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+  };
 
   useEffect(() => {
     const root = essayRef.current;
@@ -340,29 +355,48 @@ export default function Route() {
 
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      const mark = target?.closest?.('[data-grade-comment-id]') as HTMLElement | null;
-      if (!mark) return;
-      const id = mark.getAttribute('data-grade-comment-id');
-      if (!id) return;
-      setActiveGradeCommentId(id);
-      commentRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const gradeMark = target?.closest?.(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (gradeMark) {
+        const id = gradeMark.getAttribute('data-grade-comment-id');
+        if (id) focusGradeComment(id);
+        return;
+      }
+      const grammarEl = target?.closest?.(
+        '[data-grammar-issue-id]'
+      ) as HTMLElement | null;
+      if (grammarEl && showGrammar) {
+        const id = grammarEl.getAttribute('data-grammar-issue-id');
+        if (id) {
+          if (closeTooltipTimer.current)
+            window.clearTimeout(closeTooltipTimer.current);
+          setTooltipIssueId(id);
+          setTooltipRect(grammarEl.getBoundingClientRect());
+        }
+      }
     };
 
     const onMouseOver = (e: MouseEvent) => {
       if (!showGrammar) return;
       const target = e.target as HTMLElement | null;
-      const el = target?.closest?.('[data-grammar-issue-id]') as HTMLElement | null;
+      const el = target?.closest?.(
+        '[data-grammar-issue-id]'
+      ) as HTMLElement | null;
       if (!el) return;
       const id = el.getAttribute('data-grammar-issue-id');
       if (!id) return;
-      if (closeTooltipTimer.current) window.clearTimeout(closeTooltipTimer.current);
+      if (closeTooltipTimer.current)
+        window.clearTimeout(closeTooltipTimer.current);
       setTooltipIssueId(id);
       setTooltipRect(el.getBoundingClientRect());
     };
 
     const onMouseOut = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      const el = target?.closest?.('[data-grammar-issue-id]') as HTMLElement | null;
+      const el = target?.closest?.(
+        '[data-grammar-issue-id]'
+      ) as HTMLElement | null;
       if (!el) return;
       closeTooltipTimer.current = window.setTimeout(() => {
         setTooltipIssueId(null);
@@ -378,7 +412,26 @@ export default function Route() {
       root.removeEventListener('mouseover', onMouseOver);
       root.removeEventListener('mouseout', onMouseOut);
     };
-  }, [showGrammar]);
+  }, [showGrammar, focusGradeComment]);
+
+  useEffect(() => {
+    const root = essayRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach((el) => {
+      el.classList.remove('focused');
+    });
+    if (!activeGradeCommentId) return;
+    root
+      .querySelectorAll<HTMLElement>(
+        `[data-grade-comment-id="${activeGradeCommentId}"]`
+      )
+      .forEach((el) => el.classList.add('focused'));
+  }, [
+    activeGradeCommentId,
+    data.grade.snapshot.html,
+    gradeComments,
+    showGrammar,
+  ]);
 
   const activeGrammarIssue = useMemo(() => {
     if (!tooltipIssueId) return null;
@@ -396,60 +449,23 @@ export default function Route() {
     });
   }, [tooltipRect]);
 
-  const openAddComment = () => {
-    if (!essayRef.current) return;
-    const selection = getSelectionInfo(essayRef.current);
-    if (!selection) return;
-    setNewCommentContent('');
-    setIsAddCommentOpen(true);
-  };
-
-  const submitAddComment = () => {
-    if (!essayRef.current) return;
-    const selection = getSelectionInfo(essayRef.current);
-    if (!selection) return;
-    const parsed = CreateCommentSchema.safeParse({ content: newCommentContent });
-    if (!parsed.success) return;
-
-    const form = new FormData();
-    form.append('gradeId', data.grade.id);
-    form.append('content', newCommentContent);
-    form.append('excerpt', selection.excerpt);
-    form.append('occurrence', selection.occurrence.toString());
-    createFetcher.submit(form, { method: 'POST', action: '/api/model/grade-comment' });
-  };
-
   useEffect(() => {
-    if (createFetcher.data?.success && createFetcher.state === 'idle') {
-      window.location.reload();
-    }
-  }, [createFetcher.data, createFetcher.state]);
+    if (!activeGradeCommentId) return;
 
-  const reply = (commentId: string, content: string) => {
-    const form = new FormData();
-    form.append('commentId', commentId);
-    form.append('content', content);
-    replyFetcher.submit(form, { method: 'POST', action: '/api/model/grade-comment-response' });
-  };
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const clickedInHighlight = target.closest('[data-grade-comment-id]');
+      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
+      if (clickedInHighlight || clickedInCommentCard) return;
+      setActiveGradeCommentId(null);
+    };
 
-  useEffect(() => {
-    if (replyFetcher.data?.success && replyFetcher.state === 'idle') {
-      window.location.reload();
-    }
-  }, [replyFetcher.data, replyFetcher.state]);
-
-  const deleteComment = (commentId: string) => {
-    deleteFetcher.submit(null, {
-      method: 'DELETE',
-      action: `/api/model/grade-comment/${commentId}`,
-    });
-  };
-
-  useEffect(() => {
-    if (deleteFetcher.data?.success && deleteFetcher.state === 'idle') {
-      window.location.reload();
-    }
-  }, [deleteFetcher.data, deleteFetcher.state]);
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [activeGradeCommentId]);
 
   const exitTo = `/app/documents/${data.grade.snapshot.document.id}`;
 
@@ -476,24 +492,45 @@ export default function Route() {
             variant="outline"
             onClick={() => setShowGrammar((v) => !v)}
           >
-            {showGrammar ? 'Hide grammar/syntax highlights' : 'Show grammar/syntax highlights'}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setShowOldComments((v) => !v)}
-          >
-            {showOldComments ? 'Hide old comments' : 'Show old comments'}
+            {showGrammar
+              ? 'Hide grammar/syntax highlights'
+              : 'Show grammar/syntax highlights'}
           </Button>
         </div>
       </nav>
 
-      <div className="flex h-full w-full overflow-hidden">
-        {/* Left: rubric */}
-        <aside className="hidden w-[360px] shrink-0 border-r bg-muted/30 p-4 overflow-y-auto md:block">
+      <Tabs onValueChange={changeTab} value={tab} className="lg:hidden">
+        <TabsList className="w-full rounded-none border-b px-3">
+          <TabsTrigger value="grading" className="w-full">
+            Grading
+          </TabsTrigger>
+          <TabsTrigger value="document" className="w-full">
+            Document
+          </TabsTrigger>
+          <TabsTrigger value="comments" className="w-full">
+            Comments
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      <div className="flex h-full w-full overflow-hidden flex-col lg:flex-row">
+        {/* Left: rubric - mobile: only when tab=grading; desktop: always */}
+        <aside
+          className={cn(
+            'shrink-0 bg-muted/30 p-4 overflow-y-auto',
+            isMobile
+              ? tab === 'grading'
+                ? 'block w-full border-b'
+                : 'hidden'
+              : 'hidden w-[360px] border-r lg:block'
+          )}
+        >
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Grading</h2>
-            <Badge variant={data.grade.releasedAt ? 'success' : 'secondary'}>
+            <Badge
+              variant="secondary"
+              className="border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
+            >
               {gradeDisplay}
             </Badge>
           </div>
@@ -530,7 +567,9 @@ export default function Route() {
                       className="px-0"
                       onClick={() => setShowGrammar((v) => !v)}
                     >
-                      {showGrammar ? 'Hide specific grammar/syntax issues' : 'Show specific grammar/syntax issues'}
+                      {showGrammar
+                        ? 'Hide specific grammar/syntax issues'
+                        : 'Show specific grammar/syntax issues'}
                     </Button>
                   )}
                   {comment ? (
@@ -544,32 +583,34 @@ export default function Route() {
           </div>
         </aside>
 
-        {/* Center: essay */}
-        <section className="relative flex-1 overflow-hidden">
+        {/* Center: essay - mobile: only when tab=document; desktop: always */}
+        <section
+          className={cn(
+            'relative flex-1 overflow-hidden min-w-0 min-h-0',
+            isMobile && tab !== 'document' && 'hidden'
+          )}
+        >
           <div
             className={[
               'h-full overflow-y-auto p-6 font-times',
-              showOldComments ? '' : 'draft-comments-hidden',
               showGrammar ? '' : 'grammar-hidden',
             ].join(' ')}
           >
             <div ref={essayRef} className="prose max-w-none" />
           </div>
-          {data.viewer.isTeacher && (
-            <Button
-              type="button"
-              size="sm"
-              className="absolute bottom-4 right-4 shadow"
-              onClick={openAddComment}
-            >
-              <MessageCirclePlus className="mr-2 h-4 w-4" />
-              Add grading comment
-            </Button>
-          )}
         </section>
 
-        {/* Right: comments */}
-        <aside className="w-[380px] shrink-0 border-l bg-muted/30 p-4 overflow-y-auto">
+        {/* Right: comments - mobile: only when tab=comments; desktop: always */}
+        <aside
+          className={cn(
+            'shrink-0 bg-muted/30 p-4 overflow-y-auto',
+            isMobile
+              ? tab === 'comments'
+                ? 'block w-full flex-1 min-h-0'
+                : 'hidden'
+              : 'w-[380px] border-l'
+          )}
+        >
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Comments</h2>
           </div>
@@ -583,33 +624,27 @@ export default function Route() {
               gradeComments.map((c: any) => (
                 <div
                   key={c.id}
+                  data-grade-comment-card={c.id}
                   ref={(el) => {
                     commentRefs.current[c.id] = el;
                   }}
                   className={[
                     'rounded-lg border bg-white p-3',
-                    activeGradeCommentId === c.id ? 'ring-2 ring-green-400' : '',
+                    activeGradeCommentId === c.id
+                      ? 'ring-2 ring-yellow-400'
+                      : '',
                   ].join(' ')}
+                  onClick={() => focusGradeComment(c.id)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-sm font-medium">
                         {c.profile.user.name || c.profile.user.email}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {c.excerpt}
+                      <div className="truncate text-xs italic text-muted-foreground">
+                        {formatExcerpt(c.excerpt)}
                       </div>
                     </div>
-                    {data.viewer.isTeacher ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteComment(c.id)}
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
                   </div>
                   <div className="mt-2 text-sm">{c.content}</div>
 
@@ -625,68 +660,12 @@ export default function Route() {
                       ))}
                     </div>
                   ) : null}
-
-                  <ReplyBox
-                    disabled={
-                      replyFetcher.state !== 'idle' ||
-                      (data.viewer.isStudent && !data.grade.releasedAt)
-                    }
-                    onReply={(text) => reply(c.id, text)}
-                  />
                 </div>
               ))
             )}
-
-            {showOldComments && data.archivedComments.length > 0 ? (
-              <div className="pt-4">
-                <div className="text-xs font-medium text-muted-foreground">
-                  Old (drafting) comments
-                </div>
-                <div className="mt-2 space-y-2">
-                  {data.archivedComments.map((c: any) => (
-                    <div key={c.id} className="rounded-lg border bg-white p-3">
-                      <div className="text-sm font-medium">
-                        {c.profile.user.name || c.profile.user.email}
-                      </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        {c.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         </aside>
       </div>
-
-      <Dialog open={isAddCommentOpen} onOpenChange={setIsAddCommentOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add grading comment</DialogTitle>
-          </DialogHeader>
-          <Textarea
-            value={newCommentContent}
-            onChange={(e) => setNewCommentContent(e.target.value)}
-            placeholder="Write your comment..."
-            rows={5}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddCommentOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                submitAddComment();
-                setIsAddCommentOpen(false);
-              }}
-              disabled={!newCommentContent.trim() || createFetcher.state !== 'idle'}
-            >
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {activeGrammarIssue && tooltipPos ? (
         <div
@@ -697,7 +676,8 @@ export default function Route() {
             transform: 'translateY(0)',
           }}
           onMouseEnter={() => {
-            if (closeTooltipTimer.current) window.clearTimeout(closeTooltipTimer.current);
+            if (closeTooltipTimer.current)
+              window.clearTimeout(closeTooltipTimer.current);
           }}
           onMouseLeave={() => {
             setTooltipIssueId(null);
@@ -713,7 +693,9 @@ export default function Route() {
                   : ''}
               </div>
               {activeGrammarIssue.rule ? (
-                <div className="text-sm font-medium">{activeGrammarIssue.rule}</div>
+                <div className="text-sm font-medium">
+                  {activeGrammarIssue.rule}
+                </div>
               ) : null}
             </div>
             <button
@@ -733,37 +715,5 @@ export default function Route() {
         </div>
       ) : null}
     </main>
-  );
-}
-
-function ReplyBox({
-  disabled,
-  onReply,
-}: {
-  disabled: boolean;
-  onReply: (text: string) => void;
-}) {
-  const [text, setText] = useState('');
-  return (
-    <div className="mt-3 flex gap-2">
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={2}
-        placeholder="Reply..."
-        disabled={disabled}
-      />
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={disabled || !text.trim()}
-        onClick={() => {
-          onReply(text.trim());
-          setText('');
-        }}
-      >
-        Reply
-      </Button>
-    </div>
   );
 }

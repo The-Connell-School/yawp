@@ -221,7 +221,7 @@ model GradeComment {
   createdAt  DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt  DateTime               @default(now()) @db.Timestamptz(6)
   content    String
-  excerpt    String
+  excerpt    String?
   occurrence Int                    @default(1)
   gradeId    String
   grade      Grade                  @relation(fields: [gradeId], references: [id], onDelete: Cascade)

@@ -468,7 +468,12 @@ export default function AppRoute() {
             {data.documents.length ? (
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {data.documents.map((doc) => (
-                  <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                  <DocumentLink
+                    key={doc.id}
+                    doc={doc}
+                    exitTo="/app"
+                    isStudentView
+                  />
                 ))}
               </div>
             ) : (
@@ -487,7 +492,13 @@ export default function AppRoute() {
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                         {data.archivedDocuments.map((doc) => (
-                          <DocumentLink key={doc.id} doc={doc} exitTo="/app" isArchived />
+                          <DocumentLink
+                            key={doc.id}
+                            doc={doc}
+                            exitTo="/app"
+                            isArchived
+                            isStudentView
+                          />
                         ))}
                       </div>
                     </AccordionContent>
@@ -496,11 +507,11 @@ export default function AppRoute() {
               </div>
             )}
           </div>
-	          {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
-	            <div className="mt-8 flex flex-col">
-	              <p className="my-2 text-foreground/60">Graded Documents</p>
-	              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-	                {data.releasedGrades.map((g) => (
+          {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
+            <div className="mt-8 flex flex-col">
+              <p className="my-2 text-foreground/60">Graded Documents</p>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {data.releasedGrades.map((g) => (
                   <Link
                     to={`/app/graded/${g.id}`}
                     key={g.id}
@@ -514,7 +525,9 @@ export default function AppRoute() {
                         {formatGrade(
                           g.numericPercentage ?? null,
                           g.letterGrade ?? null
-                        ) || g.score || 'Graded'}
+                        ) ||
+                          g.score ||
+                          'Graded'}
                       </div>
                     </div>
                     <div className="mt-3 text-xs text-muted-foreground">
@@ -582,7 +595,12 @@ export default function AppRoute() {
           {data.documents.length ? (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {data.documents.map((doc) => (
-                <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                <DocumentLink
+                  key={doc.id}
+                  doc={doc}
+                  exitTo="/app"
+                  isStudentView
+                />
               ))}
             </div>
           ) : (
@@ -601,7 +619,13 @@ export default function AppRoute() {
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                       {data.archivedDocuments.map((doc) => (
-                        <DocumentLink key={doc.id} doc={doc} exitTo="/app" isArchived />
+                        <DocumentLink
+                          key={doc.id}
+                          doc={doc}
+                          exitTo="/app"
+                          isArchived
+                          isStudentView
+                        />
                       ))}
                     </div>
                   </AccordionContent>
@@ -610,11 +634,11 @@ export default function AppRoute() {
             </div>
           )}
         </div>
-	        {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
-	          <div className="mt-8 flex flex-col">
-	            <p className="my-2 text-foreground/60">Graded Documents</p>
-	            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-	              {data.releasedGrades.map((g) => (
+        {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
+          <div className="mt-8 flex flex-col">
+            <p className="my-2 text-foreground/60">Graded Documents</p>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {data.releasedGrades.map((g) => (
                 <Link
                   to={`/app/graded/${g.id}`}
                   key={g.id}
@@ -628,7 +652,9 @@ export default function AppRoute() {
                       {formatGrade(
                         g.numericPercentage ?? null,
                         g.letterGrade ?? null
-                      ) || g.score || 'Graded'}
+                      ) ||
+                        g.score ||
+                        'Graded'}
                     </div>
                   </div>
                   <div className="mt-3 text-xs text-muted-foreground">

@@ -16,9 +16,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  // Handle archive/unarchive
+  let formData: FormData | null = null;
+
   if (request.method === 'POST') {
-    const formData = await request.formData();
+    formData = await request.formData();
     const actionType = formData.get('action');
 
     if (actionType === 'archive' || actionType === 'unarchive') {
@@ -49,7 +50,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
   }
 
-  const { error, data } = await parseFormData(request, PUT);
+  const fd = formData ?? (await request.formData());
+  const { error, data } = await parseFormData(fd, PUT);
   if (error) return validationError(error);
 
   const [user, document] = await Promise.all([

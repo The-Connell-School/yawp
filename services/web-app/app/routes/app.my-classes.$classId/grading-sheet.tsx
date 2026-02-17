@@ -81,6 +81,57 @@ const buildEmptyRubric = () =>
     return acc;
   }, {});
 
+function normalizePercentage(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function normalizeRubricScores(raw: unknown): Record<string, RubricScore> {
+  const normalized = buildEmptyRubric();
+  if (!raw || typeof raw !== 'object') return normalized;
+
+  for (const item of rubric) {
+    const candidate = (raw as Record<string, unknown>)[item.key];
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    const scoreValue = (candidate as { score?: unknown }).score;
+    const commentValue = (candidate as { comment?: unknown }).comment;
+
+    normalized[item.key] = {
+      score:
+        typeof scoreValue === 'number' && Number.isFinite(scoreValue)
+          ? Math.max(0, Math.min(5, Math.round(scoreValue)))
+          : 0,
+      comment: typeof commentValue === 'string' ? commentValue : '',
+      isAi: Boolean((candidate as { isAi?: unknown }).isAi),
+    };
+  }
+
+  return normalized;
+}
+
+function buildGradeSignature(args: {
+  overallComment: string;
+  numericPercentage: number | null;
+  rubricScores: Record<string, RubricScore>;
+}) {
+  const rubricSignature = rubric
+    .map((item) => {
+      const score = args.rubricScores[item.key]?.score ?? 0;
+      const comment = args.rubricScores[item.key]?.comment ?? '';
+      return `${item.key}:${score}:${comment}`;
+    })
+    .join('|');
+
+  return [
+    args.overallComment,
+    args.numericPercentage === null
+      ? 'null'
+      : args.numericPercentage.toString(),
+    rubricSignature,
+  ].join('||');
+}
+
 export function GradingSheet({
   documents,
   isOpen,
@@ -96,6 +147,8 @@ export function GradingSheet({
   const [rubricScores, setRubricScores] =
     useState<Record<string, RubricScore>>(buildEmptyRubric());
   const [overallComment, setOverallComment] = useState('');
+  const [savedSignature, setSavedSignature] = useState('');
+  const pendingSaveSignatureRef = useRef('');
   const hasProcessedSuccess = useRef(false);
 
   const isMultiple = documents.length > 1;
@@ -106,40 +159,55 @@ export function GradingSheet({
 
   // Initialize form with existing grade data when editing
   useEffect(() => {
+    let initialOverallComment = '';
+    let initialNumericPercentage = '';
+    let initialNormalizedPercent: number | null = null;
+    let initialRubricScores = buildEmptyRubric();
+
     if (isEditing && existingGrade) {
       setReleaseImmediately(!!existingGrade.releasedAt);
-      setOverallComment(
-        existingGrade.overallComment || existingGrade.feedback || ''
+      initialOverallComment =
+        existingGrade.overallComment || existingGrade.feedback || '';
+      initialNormalizedPercent = normalizePercentage(
+        existingGrade.numericPercentage
       );
-      if (typeof existingGrade.numericPercentage === 'number') {
-        setNumericPercentage(existingGrade.numericPercentage.toString());
+      if (initialNormalizedPercent !== null) {
+        initialNumericPercentage = initialNormalizedPercent.toString();
         setHasManualPercentOverride(true);
       } else {
-        setNumericPercentage('');
         setHasManualPercentOverride(false);
       }
-      if (
-        existingGrade.rubricScores &&
-        typeof existingGrade.rubricScores === 'object'
-      ) {
-        setRubricScores({
-          ...buildEmptyRubric(),
-          ...(existingGrade.rubricScores as Record<string, RubricScore>),
-        });
-      }
+      initialRubricScores = normalizeRubricScores(existingGrade.rubricScores);
+
+      setOverallComment(initialOverallComment);
+      setNumericPercentage(initialNumericPercentage);
+      setRubricScores(initialRubricScores);
+      setSavedSignature(
+        buildGradeSignature({
+          overallComment: initialOverallComment,
+          numericPercentage: initialNormalizedPercent,
+          rubricScores: initialRubricScores,
+        })
+      );
     } else {
       setRubricScores(buildEmptyRubric());
       setOverallComment('');
       setNumericPercentage('');
       setHasManualPercentOverride(false);
+      setSavedSignature(
+        buildGradeSignature({
+          overallComment: '',
+          numericPercentage: null,
+          rubricScores: buildEmptyRubric(),
+        })
+      );
     }
   }, [isEditing, existingGrade]);
 
   const computedNumericPercentage = useMemo(() => {
-    return computeWeightedPercentage(rubricScores as unknown as Record<
-      string,
-      unknown
-    >);
+    return computeWeightedPercentage(
+      rubricScores as unknown as Record<string, unknown>
+    );
   }, [rubricScores]);
 
   const resolvedNumericPercentage = useMemo(() => {
@@ -158,6 +226,20 @@ export function GradingSheet({
     return formatGrade(resolvedNumericPercentage, resolvedLetterGrade) ?? '—';
   }, [resolvedLetterGrade, resolvedNumericPercentage]);
 
+  const currentSignature = useMemo(
+    () =>
+      buildGradeSignature({
+        overallComment,
+        numericPercentage: resolvedNumericPercentage,
+        rubricScores,
+      }),
+    [overallComment, resolvedNumericPercentage, rubricScores]
+  );
+
+  const hasUnsavedChanges = isEditing
+    ? currentSignature !== savedSignature
+    : true;
+
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
       setNumericPercentage(computedNumericPercentage.toString());
@@ -166,6 +248,7 @@ export function GradingSheet({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    pendingSaveSignatureRef.current = currentSignature;
 
     const formData = new FormData();
 
@@ -252,11 +335,18 @@ export function GradingSheet({
 
   useEffect(() => {
     if (aiFetcher.data?.success && aiFetcher.state === 'idle') {
+      const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
+      const aiOverallComment =
+        typeof aiFetcher.data.overallComment === 'string'
+          ? aiFetcher.data.overallComment
+          : overallComment;
+      const aiNumericPercentage =
+        typeof aiFetcher.data.numericPercentage === 'number'
+          ? normalizePercentage(aiFetcher.data.numericPercentage)
+          : resolvedNumericPercentage;
+
       if (aiFetcher.data.rubricScores) {
-        setRubricScores({
-          ...buildEmptyRubric(),
-          ...(aiFetcher.data.rubricScores as Record<string, RubricScore>),
-        });
+        setRubricScores(aiRubricScores);
       }
       if (typeof aiFetcher.data.overallComment === 'string') {
         setOverallComment(aiFetcher.data.overallComment);
@@ -265,8 +355,24 @@ export function GradingSheet({
         setNumericPercentage(aiFetcher.data.numericPercentage.toString());
         setHasManualPercentOverride(false);
       }
+
+      if (isEditing) {
+        setSavedSignature(
+          buildGradeSignature({
+            overallComment: aiOverallComment,
+            numericPercentage: aiNumericPercentage,
+            rubricScores: aiRubricScores,
+          })
+        );
+      }
     }
-  }, [aiFetcher.data, aiFetcher.state]);
+  }, [aiFetcher.data, aiFetcher.state, isEditing]);
+
+  useEffect(() => {
+    if (fetcher.data?.success && fetcher.state === 'idle') {
+      setSavedSignature(pendingSaveSignatureRef.current);
+    }
+  }, [fetcher.data, fetcher.state]);
 
   const title = isEditing
     ? 'Edit Grade'
@@ -428,7 +534,8 @@ export function GradingSheet({
                     setHasManualPercentOverride(false);
                   }}
                   disabled={
-                    fetcher.state !== 'idle' || computedNumericPercentage === null
+                    fetcher.state !== 'idle' ||
+                    computedNumericPercentage === null
                   }
                 >
                   Recalculate from rubric
@@ -513,9 +620,7 @@ export function GradingSheet({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="overall-comment">
-                Overall Feedback
-              </Label>
+              <Label htmlFor="overall-comment">Overall Feedback</Label>
               <Textarea
                 id="overall-comment"
                 value={overallComment}
@@ -559,6 +664,11 @@ export function GradingSheet({
             )}
 
             <div className="flex gap-2 justify-end pt-4">
+              {isEditing && hasUnsavedChanges ? (
+                <div className="mr-auto rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
+                  Unsaved changes. Click Save Grade before leaving.
+                </div>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -567,7 +677,12 @@ export function GradingSheet({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={fetcher.state !== 'idle'}>
+              <Button
+                type="submit"
+                disabled={
+                  fetcher.state !== 'idle' || (isEditing && !hasUnsavedChanges)
+                }
+              >
                 {fetcher.state !== 'idle'
                   ? 'Saving...'
                   : isEditing
