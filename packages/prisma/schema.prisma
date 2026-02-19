@@ -23,21 +23,27 @@ model Class {
   schoolId              String
   school                School               @relation(fields: [schoolId], references: [id])
   documents             Document[]
-  allowedStudentCourses ClassStudentCourse[]
+  allowedStudentCourses        ClassStudentCourse[]
+  writingLessonAssignments      WritingLessonAssignment[]
 
   @@unique([schoolId, schoolYear, period, grade])
 }
 
 model StudentCourse {
-  id                   String                @id @default(cuid())
-  createdAt            DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime              @default(now()) @db.Timestamptz(6)
-  title                String
-  description          String?
-  position             Int
-  image                StudentCourseImage?
-  studentCourseModules StudentCourseModule[]
-  allowedInClasses     ClassStudentCourse[]
+  id                        String                              @id @default(cuid())
+  createdAt                 DateTime                            @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                            @default(now()) @db.Timestamptz(6)
+  title                     String
+  description               String?
+  position                  Int
+  hasWritingPrompt          Boolean                             @default(false)
+  writingPromptResponseType String?                             // 'free' | 'structured'
+  image                     StudentCourseImage?
+  writingPrompt             StudentCourseWritingPrompt?
+  rubric                    StudentCourseRubric?
+  writingPromptSections     StudentCourseWritingPromptSection[]
+  studentCourseModules      StudentCourseModule[]
+  allowedInClasses          ClassStudentCourse[]
 }
 
 model StudentCourseImage {
@@ -49,6 +55,43 @@ model StudentCourseImage {
   blob            Bytes
   studentCourseId String        @unique
   studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+}
+
+model StudentCourseWritingPrompt {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  contentType     String
+  blob            Bytes
+  fileName        String?
+  extractedText   String?
+  studentCourseId String        @unique
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+}
+
+model StudentCourseRubric {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  contentType     String
+  blob            Bytes
+  fileName        String?
+  extractedText   String?
+  studentCourseId String        @unique
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+}
+
+model StudentCourseWritingPromptSection {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime      @default(now()) @db.Timestamptz(6)
+  position        Int
+  label           String
+  description     String?
+  studentCourseId String
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+
+  @@index([studentCourseId])
 }
 
 model StudentCourseModule {
@@ -139,6 +182,7 @@ model Document {
   classId                     String?
   class                       Class?                       @relation(fields: [classId], references: [id], onDelete: Cascade)
   studentCourseModuleSessions StudentCourseModuleSession[]
+  writingLessonSessions       WritingLessonSession[]
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
@@ -277,6 +321,8 @@ model StudentProfile {
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   classes                     Class[]
   studentCourseModuleSessions StudentCourseModuleSession[]
+  writingLessonAssignments    WritingLessonAssignment[]
+  writingLessonSessions       WritingLessonSession[]
 }
 
 model TeacherProfile {
@@ -285,9 +331,11 @@ model TeacherProfile {
   isActive                    Boolean                      @default(true)
   profileId                   String                       @unique
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  teacherCourseModuleSessions TeacherCourseModuleSession[]
-  classes                     Class[]
-  schools                     School[]
+  teacherCourseModuleSessions  TeacherCourseModuleSession[]
+  classes                      Class[]
+  schools                      School[]
+  writingLessons               WritingLesson[]
+  writingLessonAssignments     WritingLessonAssignment[]
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
@@ -422,4 +470,84 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+// ============================================
+// WRITING LESSONS
+// ============================================
+
+enum WritingLessonTopic {
+  WORDINESS
+  TRANSITIONS
+  COMMA_OXFORD
+  COMMA_SPLICES
+  COMMA_INTRODUCTORY
+  COMMA_CLAUSES
+  PASSIVE_VOICE
+  PARALLEL_CONSTRUCTION
+  SUBJECT_VERB_AGREEMENT
+  PRONOUN_AGREEMENT
+}
+
+model WritingLesson {
+  id               String             @id @default(cuid())
+  createdAt        DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime           @default(now()) @db.Timestamptz(6)
+  topic            WritingLessonTopic
+  title            String
+  gradeLevel       String             @default("high-school")
+  content          String
+  exercises        Json
+  teacherProfileId String?
+  teacherProfile   TeacherProfile?    @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
+  isTemplate       Boolean            @default(false)
+  assignments      WritingLessonAssignment[]
+  sessions         WritingLessonSession[]
+}
+
+model WritingLessonAssignment {
+  id               String          @id @default(cuid())
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  lessonId         String
+  lesson           WritingLesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  teacherProfileId String
+  teacherProfile   TeacherProfile  @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  classId          String?
+  class            Class?          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentProfileId String?
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  dueAt            DateTime?       @db.Timestamptz(6)
+
+  @@index([classId])
+  @@index([studentProfileId])
+}
+
+model WritingLessonSession {
+  id               String                @id @default(cuid())
+  createdAt        DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime              @default(now()) @db.Timestamptz(6)
+  completedAt      DateTime?             @db.Timestamptz(6)
+  lessonId         String
+  lesson           WritingLesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentProfileId String
+  studentProfile   StudentProfile        @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  sourceDocumentId String?
+  sourceDocument   Document?             @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  attempts         WritingLessonAttempt[]
+
+  @@unique([lessonId, studentProfileId])
+}
+
+model WritingLessonAttempt {
+  id            String               @id @default(cuid())
+  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
+  sessionId     String
+  session       WritingLessonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseIndex Int
+  response      String
+  isCorrect     Boolean
+  feedback      String
+  attemptNumber Int
+
+  @@index([sessionId, exerciseIndex])
 }
