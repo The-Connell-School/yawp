@@ -181,7 +181,7 @@ app.writing-lessons/
 ### Teacher Routes (Teacher's Lounge)
 
 ```
-app.teacher-lounge.writing-lessons/
+app.teacher-courses.writing-lessons/
   _index/route.tsx          # Lesson library (teacher's saved lessons)
   new/route.tsx             # Generate new lesson (select topic, grade, generate)
   $lessonId/route.tsx       # View/edit lesson
@@ -219,7 +219,7 @@ const LESSON_TOPICS = {
 };
 
 const SYSTEM_PROMPT = `You are an expert writing tutor for the YAWP! Writing Program...`
-// Use the full SKILL.md content here
+// Use the full prompt.md content here
 ```
 
 ### Exercise Evaluation Prompt
@@ -310,7 +310,7 @@ if (doc?.text) {
 7. After all exercises, show summary + option to redo or go back
 ```
 
-### Teacher Lesson Generator (`app.teacher-lounge.writing-lessons.new`)
+### Teacher Lesson Generator (`app.teacher-courses.writing-lessons.new`)
 
 ```tsx
 // Form:
@@ -373,10 +373,10 @@ if (doc?.text) {
 - [ ] `app/routes/app.writing-lessons.$lessonId.practice/route.tsx`
 
 ### Routes (Teacher)
-- [ ] `app/routes/app.teacher-lounge.writing-lessons._index/route.tsx`
-- [ ] `app/routes/app.teacher-lounge.writing-lessons.new/route.tsx`
-- [ ] `app/routes/app.teacher-lounge.writing-lessons.$lessonId/route.tsx`
-- [ ] `app/routes/app.teacher-lounge.writing-lessons.$lessonId.assign/route.tsx`
+- [ ] `app/routes/app.teacher-courses.writing-lessons._index/route.tsx`
+- [ ] `app/routes/app.teacher-courses.writing-lessons.new/route.tsx`
+- [ ] `app/routes/app.teacher-courses.writing-lessons.$lessonId/route.tsx`
+- [ ] `app/routes/app.teacher-courses.writing-lessons.$lessonId.assign/route.tsx`
 
 ### Routes (API)
 - [ ] `app/routes/api.domain.writing-lessons.generate/route.tsx`
@@ -389,17 +389,3 @@ if (doc?.text) {
 - [ ] `app/components/writing-lessons/exercise-card.tsx`
 - [ ] `app/components/writing-lessons/feedback-display.tsx`
 - [ ] `app/components/writing-lessons/assignment-alert.tsx`
-
----
-
-## Questions for Developer
-
-1. **Teacher's Lounge**: Is there an existing teacher's lounge route structure, or should we create `app.teacher-lounge.*` routes?
-
-2. **Dashboard Integration**: Where should "Writing Lessons" appear in the main dashboard navigation for students?
-
-3. **Notifications**: Should assigned lessons trigger any notification system (email, in-app)?
-
-4. **Analytics**: Should we track completion rates, common mistakes, time spent?
-
-5. **Rate Limiting**: What rate limits should apply to lesson generation and exercise evaluation API calls?

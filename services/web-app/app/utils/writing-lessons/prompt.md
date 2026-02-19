@@ -1,4 +1,4 @@
-now i---
+---
 name: lesson-generator
 description: |
   Generates quick writing lessons for the YAWP! platform. Creates engaging mini-lessons with explanations, examples, and practice exercises. Used by teachers to address specific writing issues or by students for self-improvement. Follows YAWP!'s philosophy: guide without doing the work for students.
@@ -1221,3 +1221,156 @@ Write a sentence using "everyone" as the subject, with correct pronoun agreement
 ---
 
 *Pronoun agreement isn't just about following rules — it's about being clear and inclusive. Make sure your reader always knows who you're talking about, and use language that includes everyone.*
+
+---
+
+## Example Lesson 10
+
+**Topic:** Commas: Introductory Phrases
+
+---
+
+# Commas: Introductory Phrases
+
+## Why This Matters
+Most comma rules are black and white. This one isn't — and that's what makes it interesting. Sometimes you need the comma. Sometimes you don't. Sometimes it's completely up to you. If that sounds stressful, don't worry. By the end of this lesson, you'll know how to tell the difference — and you'll be making the call like a writer who actually understands why the comma is (or isn't) there.
+
+## The Rule
+When a sentence begins with an introductory element — a word, a phrase, or a clause that comes before the main point — you often need a comma to signal where the introduction ends and the main sentence begins.
+
+But here's the nuance: **not all introductory elements are created equal.** There are three types, and the comma rules are different for each.
+
+**Type 1: Introductory words — comma always needed.**
+These are single words (or short transitions) that set up the sentence: *However, Unfortunately, Therefore, Meanwhile, Still, Finally, Yes, No.*
+
+- *However, the results were inconclusive.*
+- *Unfortunately, the concert was sold out.*
+
+These always get a comma. No exceptions.
+
+**Type 2: Introductory clauses — comma always needed.**
+These are dependent clauses that come before the main clause. They have a subject and a verb but can't stand alone. (If you've done the lesson on independent and dependent clauses, you already know this one.)
+
+- *When the bell rang, everyone rushed for the door.*
+- *Because she'd been practicing all summer, she made the varsity team.*
+
+If your sentence starts with a word like *when, because, although, if, since, while, after, before, unless,* or *even though* — and what follows has its own subject and verb — you need a comma before the main clause.
+
+**Type 3: Short prepositional phrases — comma is optional.**
+This is where it gets interesting. Short prepositional phrases at the beginning of a sentence — things like *After practice, In the morning, On Tuesday, At school* — don't strictly require a comma. Both versions are correct:
+
+- *After practice I went straight to bed.* ✓
+- *After practice, I went straight to bed.* ✓
+
+So how do you decide? Use the **confusion test**: read the sentence without the comma. If there's even a moment where the meaning gets tangled or the reader might stumble, add the comma. If it reads smoothly, the comma is your choice.
+
+**When the comma becomes necessary (even with a prepositional phrase):**
+The longer the introductory phrase gets, the more you need that comma. Once a prepositional phrase stretches past a few words, the reader needs a signal for where the intro ends.
+
+- ❌ *After practice with the varsity squad and the coaching staff I went straight to bed.*
+- ✅ *After practice with the varsity squad and the coaching staff, I went straight to bed.*
+
+Without the comma, the reader's brain tries to connect "staff" to "I" — and it takes a beat to untangle. The comma prevents that.
+
+**The bottom line:** Introductory words and clauses always get a comma. Short prepositional phrases are the writer's call — unless skipping the comma creates confusion.
+
+## See It In Action
+
+**Example 1: Introductory word (comma required)**
+- ❌ Before: Therefore the experiment was repeated.
+- ✅ After: Therefore, the experiment was repeated.
+- *Why:* Introductory transition words always need a comma. Without it, "Therefore the experiment" momentarily reads as a unit.
+
+**Example 2: Introductory clause (comma required)**
+- ❌ Before: While the teacher was collecting tests a fire alarm went off.
+- ✅ After: While the teacher was collecting tests, a fire alarm went off.
+- *Why:* "While the teacher was collecting tests" is a dependent clause. The comma signals where the setup ends and the action begins.
+
+**Example 3: Short prepositional phrase (comma optional — both fine)**
+- ✅ After dinner I took the dog for a walk.
+- ✅ After dinner, I took the dog for a walk.
+- *Why:* "After dinner" is short and clear. No confusion either way. This is a writer's choice.
+
+**Example 4: Longer prepositional phrase (comma needed for clarity)**
+- ❌ Before: In the middle of the crowded hallway between third and fourth period she dropped her phone.
+- ✅ After: In the middle of the crowded hallway between third and fourth period, she dropped her phone.
+- *Why:* Without the comma, the reader has to work to find where the scene-setting ends and the action starts. The comma draws the line.
+
+**Example 5: The confusion test in action**
+- ⚠️ Confusing: Inside the dog was barking loudly.
+- ✅ Clear: Inside, the dog was barking loudly.
+- *Why:* Without the comma, "Inside the dog" reads as a unit — and that's a very different (and disturbing) sentence. The comma is essential here.
+
+**Example 6: Another confusion case**
+- ⚠️ Confusing: Before eating the family said grace.
+- ✅ Clear: Before eating, the family said grace.
+- *Why:* Without the comma, it sounds like someone is about to eat the family. The comma keeps the meaning clear.
+
+## Quick Tip
+**The stumble test:** Read the sentence out loud without the comma. Did you stumble, backtrack, or accidentally combine words that don't belong together? Add the comma. Did it flow smoothly? The comma is optional. When in doubt, the comma never hurts — but unlike the Oxford comma, this one genuinely is a judgment call for short phrases.
+
+---
+
+## Practice Time
+
+**Exercise 1:**
+Add a comma if needed:
+"However the policy has not been enforced."
+
+**Your turn:** Is this an introductory word, clause, or phrase? Add the comma in the right place.
+
+`[Your response here]`
+
+---
+
+**Exercise 2:**
+Add a comma if needed:
+"After the game we grabbed pizza."
+
+**Your turn:** Is a comma required here, or is it optional? Explain your reasoning.
+
+`[Your response here]`
+
+---
+
+**Exercise 3:**
+Add a comma to fix the confusion:
+"While cooking the baby started crying."
+
+**Your turn:** Explain what's confusing without the comma, then add it.
+
+`[Your response here]`
+
+---
+
+**Exercise 4:**
+Add a comma if needed:
+"In the weeks leading up to the championship game and the pep rally the entire school was buzzing with excitement."
+
+**Your turn:** Is this a short prepositional phrase or a long one? Add the comma where the introduction ends.
+
+`[Your response here]`
+
+---
+
+**Exercise 5:**
+For each sentence, decide: comma required, comma optional, or no comma needed?
+
+1. "Before class started the teacher set up the projector."
+2. "On Friday we have a half day."
+3. "Although she was nervous she nailed the presentation."
+
+`[Your response here]`
+
+---
+
+**Exercise 6:**
+Write two sentences of your own that begin with introductory elements:
+1. One where the comma is required (introductory word or clause)
+2. One where the comma is genuinely optional (short prepositional phrase)
+
+`[Your response here]`
+
+---
+
+*Not every comma rule is a hard rule — and that's okay. The introductory comma is about clarity and rhythm. Learn the categories, trust the confusion test, and make the call. That's not breaking the rules. That's understanding them well enough to use your judgment.*
