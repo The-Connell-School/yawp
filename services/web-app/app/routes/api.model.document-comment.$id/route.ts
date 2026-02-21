@@ -20,13 +20,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
   }
 
-  if (profile.teacherProfile) {
-    return dataResponse(
-      { error: 'Teachers cannot modify document comments.' },
-      { status: 403 }
-    );
-  }
-
   const where: Prisma.DocumentCommentWhereUniqueInput = {
     id: params.id,
     profileId: profile.id,

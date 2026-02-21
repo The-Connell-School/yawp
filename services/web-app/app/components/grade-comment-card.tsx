@@ -2,7 +2,7 @@ import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 
-type GradeComment = {
+export type GradeComment = {
   id: string;
   content: string;
   profile: { user: { name: string | null; email: string } };

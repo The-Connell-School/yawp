@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
-import { GradeCommentCard } from '~/components/grade-comment-card';
+import {
+  GradeCommentCard,
+  type GradeComment as CardGradeComment,
+} from '~/components/grade-comment-card';
 import { findExcerptRange } from '~/utils/excerpt-position';
 
-type GradeComment = {
-  id: string;
+type GradeComment = CardGradeComment & {
   excerpt: string | null;
   occurrence?: number | null;
-  content: string;
   createdAt: Date | string;
-  profile: { user: { name: string | null; email: string } };
   responses: {
     id: string;
     content: string;
@@ -26,6 +26,12 @@ type DraftComment = {
   occurrence: number;
   createdAt: Date;
 };
+
+function isDraftComment(
+  c: GradeComment | DraftComment
+): c is DraftComment {
+  return c.id === 'draft';
+}
 
 type Props = {
   gradeComments: GradeComment[];
@@ -162,7 +168,7 @@ export function GradingCommentsSidebar({
     });
   };
 
-  const openEditComment = (comment: GradeComment) => {
+  const openEditComment = (comment: CardGradeComment) => {
     setEditingCommentId(comment.id);
     setEditCommentContent(comment.content);
   };
@@ -235,8 +241,9 @@ export function GradingCommentsSidebar({
             </p>
           ) : (
             <div className="space-y-3">
-              {combinedItems.map((c) =>
-                c.id === 'draft' ? (
+              {combinedItems.map((c) => {
+                if (isDraftComment(c)) {
+                  return (
                   <div
                     key="draft"
                     data-grade-comment-card="draft"
@@ -281,7 +288,9 @@ export function GradingCommentsSidebar({
                       </Button>
                     </div>
                   </div>
-                ) : (
+                  );
+                }
+                return (
                   <GradeCommentCard
                     key={c.id}
                     comment={c}
@@ -300,8 +309,8 @@ export function GradingCommentsSidebar({
                       commentRefs.current[c.id] = el;
                     }}
                   />
-                )
-              )}
+                );
+              })}
             </div>
           )}
         </div>
