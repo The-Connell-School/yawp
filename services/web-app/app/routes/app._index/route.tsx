@@ -9,7 +9,6 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { cn } from '~/utils/misc';
 import {
   Accordion,
@@ -17,14 +16,10 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
-import { formatGrade } from '~/domain/grading/gradeMath';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
-  const gradingAssistantEnabled = isGradingAssistantEnabledForOrg(
-    profile.organization.id
-  );
 
   const isStudentOnlyWithNoClasses =
     profile.studentProfile &&
@@ -87,7 +82,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     courses,
     documents,
     archivedDocuments,
-    releasedGrades,
     studentProfiles,
     teacherCourses,
     teacherClasses,
@@ -110,6 +104,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             grades: {
               select: {
+                id: true,
                 score: true,
                 overallScore: true,
                 numericPercentage: true,
@@ -138,6 +133,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           select: {
             grades: {
               select: {
+                id: true,
                 score: true,
                 overallScore: true,
                 numericPercentage: true,
@@ -150,37 +146,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.studentProfile
-      ? prisma.grade.findMany({
-          where: {
-            releasedAt: { not: null },
-            snapshot: {
-              document: {
-                deletedAt: null,
-                profileId: profile.id,
-              },
-            },
-          },
-          select: {
-            id: true,
-            releasedAt: true,
-            numericPercentage: true,
-            letterGrade: true,
-            score: true,
-            snapshot: {
-              select: {
-                document: {
-                  select: {
-                    id: true,
-                    title: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { releasedAt: 'desc' },
-        })
-      : [],
     prisma.studentProfile.findMany({
       where: {
         classes: { some: { teachers: { some: { profileId: profile.id } } } },
@@ -287,12 +252,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     courses,
     documents,
     archivedDocuments,
-    releasedGrades,
     studentProfiles,
     teacherCourses,
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
-    gradingAssistantEnabled,
   });
 }
 
@@ -507,42 +470,6 @@ export default function AppRoute() {
               </div>
             )}
           </div>
-          {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
-            <div className="mt-8 flex flex-col">
-              <p className="my-2 text-foreground/60">Graded Documents</p>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.releasedGrades.map((g) => (
-                  <Link
-                    to={`/app/graded/${g.id}`}
-                    key={g.id}
-                    className="flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">
-                        {g.snapshot.document.title}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {formatGrade(
-                          g.numericPercentage ?? null,
-                          g.letterGrade ?? null
-                        ) ||
-                          g.score ||
-                          'Graded'}
-                      </div>
-                    </div>
-                    <div className="mt-3 text-xs text-muted-foreground">
-                      Returned{' '}
-                      {new Date(g.releasedAt!).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                      })}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </section>
     );
@@ -634,42 +561,6 @@ export default function AppRoute() {
             </div>
           )}
         </div>
-        {data.gradingAssistantEnabled && data.releasedGrades.length > 0 && (
-          <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Graded Documents</p>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.releasedGrades.map((g) => (
-                <Link
-                  to={`/app/graded/${g.id}`}
-                  key={g.id}
-                  className="flex flex-col justify-between rounded-lg border bg-white p-4 transition-shadow hover:shadow"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
-                      {g.snapshot.document.title}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {formatGrade(
-                        g.numericPercentage ?? null,
-                        g.letterGrade ?? null
-                      ) ||
-                        g.score ||
-                        'Graded'}
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    Returned{' '}
-                    {new Date(g.releasedAt!).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );

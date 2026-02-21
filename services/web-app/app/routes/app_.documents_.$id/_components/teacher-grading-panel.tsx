@@ -25,6 +25,10 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
+import {
+  type GrammarIssue,
+  parseGrammarIssuesPayload,
+} from '~/domain/grading/grammarIssues';
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
@@ -32,16 +36,6 @@ type RubricScore = {
   score: number;
   comment: string;
   isAi?: boolean;
-};
-
-type GrammarIssue = {
-  id: string;
-  excerpt: string;
-  occurrence?: number;
-  kind: 'error' | 'style';
-  ruleNumber?: number;
-  rule?: string;
-  message: string;
 };
 
 const scoreOptions = [
@@ -109,20 +103,6 @@ function buildGradeSignature(args: {
   ].join('||');
 }
 
-function parseGrammarIssues(raw: unknown): GrammarIssue[] {
-  if (!raw || typeof raw !== 'object') return [];
-  const issues = (raw as { issues?: unknown[] }).issues;
-  if (!Array.isArray(issues)) return [];
-  return issues.filter(
-    (issue): issue is GrammarIssue =>
-      typeof issue === 'object' &&
-      issue !== null &&
-      typeof (issue as GrammarIssue).id === 'string' &&
-      typeof (issue as GrammarIssue).excerpt === 'string' &&
-      typeof (issue as GrammarIssue).message === 'string'
-  );
-}
-
 function formatExcerpt(excerpt: string, maxChars = 90) {
   const text = excerpt.trim();
   if (text.length <= maxChars) return text;
@@ -131,6 +111,7 @@ function formatExcerpt(excerpt: string, maxChars = 90) {
 
 export function TeacherGradingPanel({
   documentId,
+  snapshotId,
   existingGrade,
   grammarIssues,
   hiddenGrammarIssueIds,
@@ -138,6 +119,7 @@ export function TeacherGradingPanel({
   onGrammarIssuesChange,
 }: {
   documentId: string;
+  snapshotId: string | null;
   existingGrade:
     | {
         id: string;
@@ -166,7 +148,6 @@ export function TeacherGradingPanel({
     useState(false);
   const [savedSignature, setSavedSignature] = useState('');
   const pendingSaveSignatureRef = useRef('');
-  const hasInitialized = useRef(false);
   const recalcCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -201,12 +182,12 @@ export function TeacherGradingPanel({
     );
   }, [resolvedNumericPercentage]);
   const gradeBadgeClassName =
-    'border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200';
+    'border-purple-300 bg-purple-100 text-purple-800 hover:!bg-purple-100 hover:!text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:!bg-purple-950/40 dark:hover:!text-purple-200';
+  const isGenerating = aiFetcher.state !== 'idle';
+  const isSaving = saveFetcher.state !== 'idle';
+  const isBusy = isGenerating || isSaving;
 
   useEffect(() => {
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-
     let initialOverallComment = '';
     let initialNumericPercentage = '';
     let initialRubricScores = buildEmptyRubric();
@@ -235,7 +216,7 @@ export function TeacherGradingPanel({
         rubricScores: initialRubricScores,
       })
     );
-  }, [existingGrade]);
+  }, [existingGrade, snapshotId]);
 
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
@@ -265,7 +246,11 @@ export function TeacherGradingPanel({
         setNumericPercentage(aiFetcher.data.numericPercentage.toString());
         setHasManualPercentOverride(false);
       }
-      onGrammarIssuesChange(parseGrammarIssues(aiFetcher.data.grammarIssues));
+      onGrammarIssuesChange(
+        parseGrammarIssuesPayload(
+          aiFetcher.data.grammarIssues ?? aiFetcher.data.grade?.grammarIssues
+        )
+      );
 
       setSavedSignature(
         buildGradeSignature({
@@ -330,7 +315,11 @@ export function TeacherGradingPanel({
       return;
     }
 
-    form.append('documentIds', documentId);
+    if (snapshotId) {
+      form.append('snapshotIds', snapshotId);
+    } else {
+      form.append('documentIds', documentId);
+    }
     saveFetcher.submit(form, {
       method: 'POST',
       action: '/api/domain/grade-essay',
@@ -362,7 +351,11 @@ export function TeacherGradingPanel({
 
   const generateAiSuggestions = () => {
     const aiForm = new FormData();
-    aiForm.append('documentId', documentId);
+    if (snapshotId) {
+      aiForm.append('snapshotId', snapshotId);
+    } else {
+      aiForm.append('documentId', documentId);
+    }
     aiFetcher.submit(aiForm, {
       method: 'POST',
       action: '/api/domain/grade-essay-ai',
@@ -381,27 +374,25 @@ export function TeacherGradingPanel({
         <div className="mt-2 flex gap-2">
           <ConfirmationDialog
             title="Replace Existing Grading Feedback?"
-            description="Generating AI suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
-            confirmText="Replace with AI Suggestions"
+            description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
+            confirmText="Replace with Grading Assistant Suggestions"
             cancelText="Go Back"
             onConfirm={generateAiSuggestions}
           >
             <Button
               size="sm"
               variant="secondary"
-              disabled={aiFetcher.state !== 'idle'}
+              disabled={isBusy}
             >
-              {aiFetcher.state !== 'idle'
-                ? 'Generating...'
-                : 'Generate AI Suggestions'}
+              {isGenerating ? 'Grading…' : 'Grading Assistant Suggestions'}
             </Button>
           </ConfirmationDialog>
           <Button
             size="sm"
             onClick={save}
-            disabled={saveFetcher.state !== 'idle' || !hasUnsavedChanges}
+            disabled={isBusy || !hasUnsavedChanges}
           >
-            {saveFetcher.state !== 'idle' ? 'Saving...' : 'Save Grade'}
+            {isSaving ? 'Saving...' : 'Save Grade'}
           </Button>
         </div>
         {hasUnsavedChanges ? (
@@ -423,6 +414,7 @@ export function TeacherGradingPanel({
               min={0}
               max={100}
               value={numericPercentage}
+              disabled={isGenerating}
               onChange={(e) => {
                 setNumericPercentage(e.target.value);
                 setHasManualPercentOverride(true);
@@ -433,7 +425,9 @@ export function TeacherGradingPanel({
               variant="outline"
               onClick={handleRecalculate}
               disabled={
-                computedNumericPercentage === null || recalcUiState !== 'idle'
+                computedNumericPercentage === null ||
+                recalcUiState !== 'idle' ||
+                isGenerating
               }
               className={cn(
                 'min-w-[120px] transition-all',
@@ -457,6 +451,7 @@ export function TeacherGradingPanel({
           <Textarea
             id="overall-comment"
             value={overallComment}
+            disabled={isGenerating}
             onChange={(e) => setOverallComment(e.target.value)}
             rows={4}
             placeholder="Write overall feedback..."
@@ -499,6 +494,7 @@ export function TeacherGradingPanel({
                     </div>
                     <Select
                       value={current.score ? current.score.toString() : ''}
+                      disabled={isGenerating}
                       onValueChange={(value) => {
                         setRubricScores((prev) => ({
                           ...prev,
@@ -523,6 +519,7 @@ export function TeacherGradingPanel({
                     </Select>
                     <Textarea
                       value={current.comment}
+                      disabled={isGenerating}
                       onChange={(e) =>
                         setRubricScores((prev) => ({
                           ...prev,
@@ -549,6 +546,7 @@ export function TeacherGradingPanel({
                               size="sm"
                               variant="ghost"
                               className="h-7 px-2 text-xs"
+                              disabled={isGenerating}
                               onClick={() => {
                                 const shouldShowAll =
                                   shownGrammarCount !== grammarIssues.length;
@@ -572,8 +570,9 @@ export function TeacherGradingPanel({
                         </div>
                         {grammarIssues.length === 0 ? (
                           <p className="text-xs text-muted-foreground">
-                            No grammar/syntax issues yet. Generate AI
-                            suggestions to populate this list.
+                            No grammar/syntax issues yet. Generate
+                            suggestions from Grading Assistant to populate this
+                            list.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -601,6 +600,7 @@ export function TeacherGradingPanel({
                                       size="sm"
                                       variant="outline"
                                       className="h-7 px-2 text-xs"
+                                      disabled={isGenerating}
                                       onClick={() =>
                                         onToggleGrammarIssue(issue.id)
                                       }

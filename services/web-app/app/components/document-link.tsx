@@ -19,6 +19,7 @@ type Props = {
     submittedAt?: Date | string | null;
     submittedSnapshot?: {
       grades: {
+        id?: string | null;
         score: string | null;
         overallScore: number | null;
         numericPercentage?: number | null;
@@ -50,11 +51,15 @@ export const DocumentLink = ({
   const showReleasedGradeBadge = isGradeReleased && gradeDisplay;
   const showSubmittedBadge =
     isStudentView && isSubmitted && !showReleasedGradeBadge;
+  const targetPath =
+    isStudentView && isGradeReleased && grade?.id
+      ? `/app/graded/${grade.id}`
+      : `/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`;
 
   return (
     <Link
       key={doc.id}
-      to={`/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`}
+      to={targetPath}
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
       {showReleasedGradeBadge ? (

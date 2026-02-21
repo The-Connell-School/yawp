@@ -16,12 +16,14 @@ import {
   firstNameFromFullName,
   personalizeOverallComment,
 } from '~/domain/grading/personalize';
+import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({
-  documentId: z.string(),
+  documentId: z.string().optional(),
+  snapshotId: z.string().optional(),
 });
 
 const rubric = rubricCategories;
@@ -39,46 +41,115 @@ const AiResponseSchema = z.object({
   overallComment: z.string().min(1),
 });
 
-const GrammarIssuesSchema = z.object({
-  issues: z
-    .array(
-      z.object({
-        excerpt: z.string().min(1).max(120),
-        occurrence: z.number().int().min(1).optional(),
-        kind: z.enum(['error', 'style']),
-        ruleNumber: z.number().int().optional(),
-        rule: z.string().optional(),
-        message: z.string().min(1).max(280),
-      })
-    )
-    .max(25),
-});
-
-function extractJson(text: string) {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    throw new Error('No JSON object found in response');
+function tryParseJson(value: string):
+  | { ok: true; value: unknown }
+  | { ok: false } {
+  try {
+    return { ok: true, value: JSON.parse(value) };
+  } catch {
+    return { ok: false };
   }
-  return text.slice(start, end + 1);
+}
+
+function findMatchingJsonEnd(source: string, startIndex: number): number {
+  const startChar = source[startIndex];
+  if (startChar !== '{' && startChar !== '[') return -1;
+
+  const stack: string[] = [startChar];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = startIndex + 1; i < source.length; i++) {
+    const ch = source[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{' || ch === '[') {
+      stack.push(ch);
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      const open = stack.pop();
+      if (!open) return -1;
+      if ((open === '{' && ch !== '}') || (open === '[' && ch !== ']')) {
+        return -1;
+      }
+      if (stack.length === 0) return i;
+    }
+  }
+
+  return -1;
+}
+
+function parseFirstJsonValue(text: string): unknown {
+  const trimmed = text.trim();
+  if (trimmed) {
+    const direct = tryParseJson(trimmed);
+    if (direct.ok) return direct.value;
+  }
+
+  const fencedBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  let fencedMatch: RegExpExecArray | null;
+  while ((fencedMatch = fencedBlockRegex.exec(text))) {
+    const candidate = fencedMatch[1]?.trim();
+    if (!candidate) continue;
+    const parsed = tryParseJson(candidate);
+    if (parsed.ok) return parsed.value;
+  }
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch !== '{' && ch !== '[') continue;
+    const end = findMatchingJsonEnd(text, i);
+    if (end === -1) continue;
+    const candidate = text.slice(i, end + 1);
+    const parsed = tryParseJson(candidate);
+    if (parsed.ok) return parsed.value;
+  }
+
+  throw new Error('No parseable JSON value found in response');
+}
+
+function extractIssueObjectCandidates(text: string): unknown[] {
+  const candidates: unknown[] = [];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== '{') continue;
+    const end = findMatchingJsonEnd(text, i);
+    if (end === -1) continue;
+    const parsed = tryParseJson(text.slice(i, end + 1));
+    if (parsed.ok) candidates.push(parsed.value);
+  }
+  return candidates;
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
 
-  // Check if document submission is enabled
-  const isSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled.',
-      type: 'error',
-    });
-  }
-
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+  if (!data.documentId && !data.snapshotId) {
+    return dataResponse(
+      { success: false, message: 'A document or snapshot is required.' },
+      { status: 400 }
+    );
+  }
 
   const profile = await prisma.profile.findFirst({
     where: {
@@ -114,45 +185,98 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const teacherClassIds = profile.teacherProfile.classes.map((c) => c.id);
 
-  const document = await prisma.document.findFirst({
-    where: {
-      id: data.documentId,
-      submittedAt: { not: null },
-      submittedSnapshotId: { not: null },
-      classId: { in: teacherClassIds },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      submittedSnapshotId: true,
-      submittedSnapshot: {
+  const snapshot = data.snapshotId
+    ? await prisma.documentSnapshot.findFirst({
+        where: {
+          id: data.snapshotId,
+          document: {
+            classId: { in: teacherClassIds },
+            deletedAt: null,
+          },
+        },
         select: {
           id: true,
           text: true,
+          document: {
+            select: {
+              id: true,
+              class: { select: { schoolId: true } },
+              profile: {
+                select: {
+                  user: { select: { name: true } },
+                },
+              },
+            },
+          },
         },
-      },
-      profile: {
-        select: {
-          user: { select: { name: true } },
-        },
-      },
-    },
-  });
+      })
+    : await prisma.document
+        .findFirst({
+          where: {
+            id: data.documentId,
+            submittedAt: { not: null },
+            submittedSnapshotId: { not: null },
+            classId: { in: teacherClassIds },
+            deletedAt: null,
+          },
+          select: {
+            submittedSnapshot: {
+              select: {
+                id: true,
+                text: true,
+              },
+            },
+            class: { select: { schoolId: true } },
+            profile: {
+              select: {
+                user: { select: { name: true } },
+              },
+            },
+            id: true,
+          },
+        })
+        .then((doc) =>
+          doc?.submittedSnapshot
+            ? {
+                id: doc.submittedSnapshot.id,
+                text: doc.submittedSnapshot.text,
+                document: {
+                  id: doc.id,
+                  class: doc.class,
+                  profile: doc.profile,
+                },
+              }
+            : null
+        );
 
-  if (!document?.submittedSnapshotId || !document.submittedSnapshot?.text) {
+  if (!snapshot?.id || !snapshot.text) {
     return dataResponse(
       { success: false, message: 'Submitted essay text not found.' },
       { status: 404 }
     );
   }
 
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
+    snapshot.document.class?.schoolId
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grading is currently disabled for this school.',
+      type: 'error',
+    });
+  }
+
   const rubricText = rubric
     .map((item) => `${item.key}: ${item.label} - ${item.description}`)
     .join('\n');
 
-  const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nAddress the student by name in a warm but professional tone in the overallComment.`;
+  const studentFirstName = firstNameFromFullName(
+    snapshot.document.profile?.user?.name
+  );
 
-  const userPrompt = `Rubric:\n${rubricText}\n\nEssay:\n${document.submittedSnapshot.text}`;
+  const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+
+  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric:\n${rubricText}\n\nEssay:\n${snapshot.text}`;
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-5';
   let responseText = '';
@@ -168,13 +292,7 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(extractJson(responseText));
-  } catch (error) {
-    throw error;
-  }
-
+  const parsedJson = parseFirstJsonValue(responseText);
   const parsed = AiResponseSchema.parse(parsedJson);
 
   const rubricScores = parsed.categories.reduce<
@@ -200,52 +318,103 @@ export async function action({ request }: ActionFunctionArgs) {
     numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
   const score = formatGrade(numericPercentage, letterGrade);
 
-  const studentFirstName = firstNameFromFullName(document.profile?.user?.name);
   const overallComment = personalizeOverallComment(
     studentFirstName,
     parsed.overallComment
   );
+  const grammarAndMechanicsScore =
+    parsed.categories.find((item) => item.key === 'grammar_and_mechanics')
+      ?.score ?? null;
 
   const now = new Date();
   const aiMeta = {
     model,
-    promptVersion: 'v1',
+    promptVersion: 'v2',
     generatedAt: now.toISOString(),
   };
 
-  let grammarIssues: Prisma.InputJsonValue | undefined = undefined;
+  let grammarIssues: Prisma.InputJsonValue | null = null;
+  const parseGrammarIssuesFromResponseText = (responseText: string) => {
+    try {
+      const parsedGrammarJson = parseFirstJsonValue(responseText);
+      const parsedFromJson = parseGrammarIssuesPayload(parsedGrammarJson, {
+        sourceText: snapshot.text,
+      });
+      if (parsedFromJson.length > 0) return parsedFromJson;
+    } catch {
+      // Fall through and attempt to salvage issue objects from partial JSON.
+    }
+
+    return parseGrammarIssuesPayload(extractIssueObjectCandidates(responseText), {
+      sourceText: snapshot.text,
+    });
+  };
+
+  const buildGrammarIssuesPayload = (issues: ReturnType<typeof parseGrammarIssuesPayload>) =>
+    ({
+      version: 1,
+      issues: issues.map((issue) => ({
+        id: crypto.randomUUID(),
+        excerpt: issue.excerpt,
+        occurrence: issue.occurrence,
+        kind: issue.kind,
+        ruleNumber: issue.ruleNumber,
+        rule: issue.rule,
+        message: issue.message,
+      })),
+    }) satisfies Prisma.InputJsonValue;
+
   try {
     const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
-    const grammarUserPrompt = `Essay:\n${document.submittedSnapshot.text}\n\nReturn up to 25 issues.`;
+    const grammarUserPrompt = `Essay:\n${snapshot.text}\n\nReturn up to 15 issues.`;
 
-    const grammarResponseText = await getLLMCompletion({
+    let grammarResponseText = await getLLMCompletion({
       model,
       system: grammarSystem,
       messages: [{ role: 'user', content: grammarUserPrompt }],
-      maxTokens: 900,
+      maxTokens: 1600,
+      temperature: 0.2,
       metadata: { feature: 'grading', kind: 'grammar-issues' },
     });
+    let parsedGrammarIssues =
+      parseGrammarIssuesFromResponseText(grammarResponseText);
 
-    const parsedGrammar = GrammarIssuesSchema.parse(
-      JSON.parse(extractJson(grammarResponseText))
-    );
+    if (
+      parsedGrammarIssues.length === 0 &&
+      grammarAndMechanicsScore !== null &&
+      grammarAndMechanicsScore <= 4
+    ) {
+      grammarResponseText = await getLLMCompletion({
+        model,
+        system: grammarSystem,
+        messages: [
+          {
+            role: 'user',
+            content: `Essay:\n${snapshot.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+          },
+        ],
+        maxTokens: 1600,
+        temperature: 0.2,
+        metadata: {
+          feature: 'grading',
+          kind: 'grammar-issues',
+          retry: 'schema-repair',
+        },
+      });
+      parsedGrammarIssues =
+        parseGrammarIssuesFromResponseText(grammarResponseText);
+    }
 
-    grammarIssues = {
-      version: 1,
-      issues: parsedGrammar.issues.map((issue) => ({
-        id: crypto.randomUUID(),
-        ...issue,
-      })),
-    } satisfies Prisma.InputJsonValue;
+    grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
   } catch {
-    grammarIssues = undefined;
+    grammarIssues = null;
   }
 
   const grade = await prisma.grade.upsert({
-    where: { snapshotId: document.submittedSnapshotId },
+    where: { snapshotId: snapshot.id },
     create: {
-      snapshotId: document.submittedSnapshotId,
+      snapshotId: snapshot.id,
       gradedById: profile.id,
       score,
       feedback: overallComment,
@@ -254,7 +423,7 @@ export async function action({ request }: ActionFunctionArgs) {
       overallComment,
       numericPercentage,
       letterGrade,
-      grammarIssues,
+      ...(grammarIssues !== null ? { grammarIssues } : {}),
       aiMeta,
     },
     update: {
@@ -265,21 +434,24 @@ export async function action({ request }: ActionFunctionArgs) {
       overallComment,
       numericPercentage,
       letterGrade,
-      grammarIssues,
+      ...(grammarIssues !== null ? { grammarIssues } : {}),
       aiMeta,
       updatedAt: now,
     },
   });
 
+  const resolvedGrammarIssues =
+    grammarIssues !== null ? grammarIssues : grade.grammarIssues;
+
   return dataResponse({
     success: true,
-    message: 'AI suggestions generated.',
+    message: 'Grading Assistant suggestions generated.',
     grade,
     rubricScores,
     overallScore,
     overallComment,
     numericPercentage,
     letterGrade,
-    grammarIssues,
+    grammarIssues: resolvedGrammarIssues,
   });
 }

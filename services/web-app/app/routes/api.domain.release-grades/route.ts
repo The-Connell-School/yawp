@@ -3,7 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({
@@ -19,17 +19,6 @@ const POST = z.object({
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-
-  // Check if document submission is enabled
-  const isSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled.',
-      type: 'error',
-    });
-  }
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -57,7 +46,22 @@ export async function action({ request }: ActionFunctionArgs) {
       gradedById: profile.id,
       releasedAt: null,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      snapshot: {
+        select: {
+          document: {
+            select: {
+              class: {
+                select: {
+                  schoolId: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (grades.length === 0) {
@@ -65,6 +69,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'No unreleased grades found.' },
       { status: 404 }
     );
+  }
+
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
+    grades.map((grade) => grade.snapshot.document.class?.schoolId)
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grade release is currently disabled for one or more schools.',
+      type: 'error',
+    });
   }
 
   const now = new Date();

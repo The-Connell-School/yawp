@@ -64,6 +64,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           select: {
             grades: {
               select: {
+                id: true,
                 score: true,
                 overallScore: true,
                 numericPercentage: true,
@@ -96,6 +97,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           select: {
             grades: {
               select: {
+                id: true,
                 score: true,
                 overallScore: true,
                 numericPercentage: true,

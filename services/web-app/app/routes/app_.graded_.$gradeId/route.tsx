@@ -8,6 +8,7 @@ import {
   useSearchParams,
 } from 'react-router';
 import { ArrowLeft, X } from 'lucide-react';
+import { GradeCommentCard } from '~/components/grade-comment-card';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
@@ -18,22 +19,42 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { formatGrade } from '~/domain/grading/gradeMath';
+import {
+  type GrammarIssue,
+  parseGrammarIssuesPayload,
+} from '~/domain/grading/grammarIssues';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
+import { findExcerptRange } from '~/utils/excerpt-position';
 
-type GrammarIssue = {
-  id: string;
-  excerpt: string;
-  occurrence?: number;
-  kind: 'error' | 'style';
-  ruleNumber?: number;
-  rule?: string;
-  message: string;
-};
+function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
+  items: T[];
+  sourceText: string;
+  getExcerpt: (item: T) => string | null | undefined;
+  getOccurrence?: (item: T) => number | null | undefined;
+}) {
+  return [...args.items].sort((a, b) => {
+    const aRange = findExcerptRange(
+      args.sourceText,
+      args.getExcerpt(a),
+      args.getOccurrence?.(a) ?? 1
+    );
+    const bRange = findExcerptRange(
+      args.sourceText,
+      args.getExcerpt(b),
+      args.getOccurrence?.(b) ?? 1
+    );
 
-function formatExcerpt(excerpt: string | null, maxChars = 90) {
-  const text = (excerpt ?? 'General').trim();
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+    if (aRange && bRange) {
+      if (aRange.start !== bRange.start) return aRange.start - bRange.start;
+      return aRange.end - bRange.end;
+    }
+    if (aRange) return -1;
+    if (bRange) return 1;
+
+    return (
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  });
 }
 
 function isTextNode(node: Node): node is Text {
@@ -51,6 +72,30 @@ function getTextNodes(root: HTMLElement) {
   return nodes;
 }
 
+function resolveTextBoundary(root: HTMLElement, absoluteOffset: number) {
+  const textNodes = getTextNodes(root);
+  if (textNodes.length === 0) return null;
+
+  const target = Math.max(0, absoluteOffset);
+  let cursor = 0;
+
+  for (const node of textNodes) {
+    const length = node.textContent?.length ?? 0;
+    const next = cursor + length;
+    if (target <= next) {
+      return {
+        node,
+        offset: Math.max(0, Math.min(length, target - cursor)),
+      };
+    }
+    cursor = next;
+  }
+
+  const lastNode = textNodes[textNodes.length - 1];
+  const lastLength = lastNode.textContent?.length ?? 0;
+  return { node: lastNode, offset: lastLength };
+}
+
 function applyExcerptHighlights(opts: {
   root: HTMLElement;
   highlights: { id: string; excerpt: string; occurrence?: number }[];
@@ -60,55 +105,50 @@ function applyExcerptHighlights(opts: {
   const { root, highlights, dataAttr, className } = opts;
   const textNodes = getTextNodes(root);
   const ranges: { start: number; end: number; id: string }[] = [];
+  const highlightById = new Map(highlights.map((h) => [h.id, h]));
 
   let global = '';
-  const nodeSpans: { node: Text; start: number; end: number }[] = [];
-  let pos = 0;
   for (const node of textNodes) {
     const text = node.textContent ?? '';
-    nodeSpans.push({ node, start: pos, end: pos + text.length });
     global += text;
-    pos += text.length;
   }
 
   for (const h of highlights) {
-    const excerpt = (h.excerpt ?? '').trim();
-    if (!excerpt) continue;
-    const targetOccurrence = h.occurrence ?? 1;
-    let occurrence = 0;
-    let from = 0;
-    while (true) {
-      const idx = global.indexOf(excerpt, from);
-      if (idx === -1) break;
-      occurrence += 1;
-      if (occurrence === targetOccurrence) {
-        ranges.push({ start: idx, end: idx + excerpt.length, id: h.id });
-        break;
-      }
-      from = idx + excerpt.length;
-    }
+    const range = findExcerptRange(global, h.excerpt, h.occurrence ?? 1);
+    if (!range) continue;
+    const start = Math.max(0, Math.min(global.length, range.start));
+    const end = Math.max(0, Math.min(global.length, range.end));
+    if (end <= start) continue;
+    ranges.push({ start, end, id: h.id });
   }
 
   ranges.sort((a, b) => b.start - a.start);
 
   for (const r of ranges) {
-    const startSpanIdx = nodeSpans.findIndex(
-      (n) => r.start >= n.start && r.start <= n.end
-    );
-    const endSpanIdx = nodeSpans.findIndex(
-      (n) => r.end >= n.start && r.end <= n.end
-    );
-    if (startSpanIdx === -1 || endSpanIdx === -1) continue;
+    const startBoundary = resolveTextBoundary(root, r.start);
+    const endBoundary = resolveTextBoundary(root, r.end);
+    if (!startBoundary || !endBoundary) continue;
+    if (
+      startBoundary.node === endBoundary.node &&
+      startBoundary.offset >= endBoundary.offset
+    ) {
+      continue;
+    }
 
-    const startSpan = nodeSpans[startSpanIdx];
-    const endSpan = nodeSpans[endSpanIdx];
     const range = document.createRange();
-    range.setStart(startSpan.node, Math.max(0, r.start - startSpan.start));
-    range.setEnd(endSpan.node, Math.max(0, r.end - endSpan.start));
+    try {
+      range.setStart(startBoundary.node, startBoundary.offset);
+      range.setEnd(endBoundary.node, endBoundary.offset);
+    } catch {
+      continue;
+    }
+    if (range.collapsed) continue;
 
     const wrapper = document.createElement('span');
     wrapper.setAttribute(dataAttr, r.id);
     wrapper.className = className;
+    const source = highlightById.get(r.id);
+    if (!source) continue;
     wrapper.appendChild(range.extractContents());
     range.insertNode(wrapper);
   }
@@ -249,9 +289,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     orderBy: { createdAt: 'asc' },
   });
-  const gradeComments = allGradeComments.filter((comment) =>
-    teacherProfileIds.has(comment.profileId)
-  );
+  const gradeComments = sortByDocumentLocation({
+    items: allGradeComments.filter((comment) =>
+      teacherProfileIds.has(comment.profileId)
+    ),
+    sourceText: grade.snapshot.text ?? '',
+    getExcerpt: (comment) => comment.excerpt,
+    getOccurrence: (comment) => comment.occurrence,
+  });
 
   return dataResponse({
     grade,
@@ -272,7 +317,7 @@ export default function Route() {
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', value);
-    setSearchParams(params);
+    setSearchParams(params, { replace: true });
   };
 
   const [showGrammar, setShowGrammar] = useState(true);
@@ -292,10 +337,10 @@ export default function Route() {
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const grammarIssues = useMemo(() => {
-    const raw = data.grade.grammarIssues as any;
-    const issues: GrammarIssue[] = raw?.issues ?? [];
-    return Array.isArray(issues) ? issues : [];
-  }, [data.grade.grammarIssues]);
+    return parseGrammarIssuesPayload(data.grade.grammarIssues, {
+      sourceText: data.grade.snapshot.text ?? '',
+    });
+  }, [data.grade.grammarIssues, data.grade.snapshot.text]);
 
   const gradeComments = useMemo(() => data.gradeComments, [data.gradeComments]);
 
@@ -304,6 +349,8 @@ export default function Route() {
       data.grade.numericPercentage ?? null,
       data.grade.letterGrade ?? null
     ) ?? 'Graded';
+  const revisePath = `/app/documents/${data.grade.snapshot.document.id}?revise=1`;
+  const viewGradePath = `/app/graded/${data.grade.id}`;
 
   const focusGradeComment = (id: string) => {
     setActiveGradeCommentId(id);
@@ -327,7 +374,7 @@ export default function Route() {
       root,
       highlights: gradeComments.map((c) => ({
         id: c.id,
-        excerpt: c.excerpt,
+        excerpt: c.excerpt ?? '',
         occurrence: c.occurrence,
       })),
       dataAttr: 'data-grade-comment-id',
@@ -467,7 +514,9 @@ export default function Route() {
     };
   }, [activeGradeCommentId]);
 
-  const exitTo = `/app/documents/${data.grade.snapshot.document.id}`;
+  const exitTo = data.viewer.isStudent
+    ? '/app'
+    : `/app/documents/${data.grade.snapshot.document.id}`;
 
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
@@ -487,6 +536,16 @@ export default function Route() {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {data.viewer.isStudent ? (
+            <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
+              <Button size="sm" variant="secondary" asChild>
+                <Link to={viewGradePath}>View Grade</Link>
+              </Button>
+              <Button size="sm" variant="ghost" asChild>
+                <Link to={revisePath}>Revise Essay</Link>
+              </Button>
+            </div>
+          ) : null}
           <Button
             size="sm"
             variant="outline"
@@ -622,45 +681,16 @@ export default function Route() {
               </div>
             ) : (
               gradeComments.map((c: any) => (
-                <div
+                <GradeCommentCard
                   key={c.id}
-                  data-grade-comment-card={c.id}
-                  ref={(el) => {
+                  comment={c}
+                  isActive={activeGradeCommentId === c.id}
+                  onClick={() => focusGradeComment(c.id)}
+                  readOnly
+                  cardRef={(el) => {
                     commentRefs.current[c.id] = el;
                   }}
-                  className={[
-                    'rounded-lg border bg-white p-3',
-                    activeGradeCommentId === c.id
-                      ? 'ring-2 ring-yellow-400'
-                      : '',
-                  ].join(' ')}
-                  onClick={() => focusGradeComment(c.id)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">
-                        {c.profile.user.name || c.profile.user.email}
-                      </div>
-                      <div className="truncate text-xs italic text-muted-foreground">
-                        {formatExcerpt(c.excerpt)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-sm">{c.content}</div>
-
-                  {c.responses?.length ? (
-                    <div className="mt-3 space-y-2 border-t pt-2">
-                      {c.responses.map((r: any) => (
-                        <div key={r.id} className="text-sm">
-                          <span className="font-medium">
-                            {r.profile.user.name || r.profile.user.email}:
-                          </span>{' '}
-                          {r.content}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+                />
               ))
             )}
           </div>

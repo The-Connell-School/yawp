@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 
 const POST = z.object({ documentId: z.string() });
 
@@ -12,17 +12,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
-
-  // Check if document submission is enabled
-  const isSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/courses', {
-      description: 'Document submission is currently disabled.',
-      type: 'error',
-    });
-  }
 
   // Verify the document exists and belongs to the user
   const document = await prisma.document.findFirst({
@@ -37,6 +26,11 @@ export async function action({ request }: ActionFunctionArgs) {
       text: true,
       title: true,
       submittedAt: true,
+      class: {
+        select: {
+          schoolId: true,
+        },
+      },
     },
   });
 
@@ -50,6 +44,16 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!document.html || !document.text) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
+      type: 'error',
+    });
+  }
+
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
+    document.class?.schoolId
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/courses', {
+      description: 'Document submission is currently disabled for this school.',
       type: 'error',
     });
   }

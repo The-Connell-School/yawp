@@ -1,5 +1,9 @@
 import { invariant } from '@epic-web/invariant';
-import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  data as dataResponse,
+  redirect,
+} from 'react-router';
 import {
   useFetcher,
   useLoaderData,
@@ -29,10 +33,17 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import { findExcerptRange } from '~/utils/excerpt-position';
+import {
+  type DocumentBackupV1,
+  getBackupPreviewText,
+  readDocumentBackup,
+  writeDocumentBackup,
+} from '~/utils/document-backup';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { Editor } from './editor/index';
+import { Editor, type EditorBridge } from './editor/index';
 import { Tutor } from './tutor';
 import { DocumentVersions } from './_components/document-versions';
 import {
@@ -41,31 +52,79 @@ import {
 } from '~/components/document-status-badge';
 import { cn } from '~/utils/misc';
 import { formatGrade } from '~/domain/grading/gradeMath';
+import {
+  type GrammarIssue,
+  parseGrammarIssuesPayload,
+} from '~/domain/grading/grammarIssues';
 import { TeacherGradingPanel } from './_components/teacher-grading-panel';
 import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
 
-type GrammarIssue = {
-  id: string;
-  excerpt: string;
-  occurrence?: number;
-  kind: 'error' | 'style';
-  ruleNumber?: number;
-  rule?: string;
-  message: string;
-};
+function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
+  items: T[];
+  sourceText: string;
+  getExcerpt: (item: T) => string | null | undefined;
+  getOccurrence?: (item: T) => number | null | undefined;
+}) {
+  return [...args.items].sort((a, b) => {
+    const aRange = findExcerptRange(
+      args.sourceText,
+      args.getExcerpt(a),
+      args.getOccurrence?.(a) ?? 1
+    );
+    const bRange = findExcerptRange(
+      args.sourceText,
+      args.getExcerpt(b),
+      args.getOccurrence?.(b) ?? 1
+    );
 
-function parseGrammarIssues(raw: unknown): GrammarIssue[] {
-  if (!raw || typeof raw !== 'object') return [];
-  const issues = (raw as { issues?: unknown[] }).issues;
-  if (!Array.isArray(issues)) return [];
-  return issues.filter(
-    (issue): issue is GrammarIssue =>
-      typeof issue === 'object' &&
-      issue !== null &&
-      typeof (issue as GrammarIssue).id === 'string' &&
-      typeof (issue as GrammarIssue).excerpt === 'string' &&
-      typeof (issue as GrammarIssue).message === 'string'
-  );
+    if (aRange && bRange) {
+      if (aRange.start !== bRange.start) return aRange.start - bRange.start;
+      return aRange.end - bRange.end;
+    }
+    if (aRange) return -1;
+    if (bRange) return 1;
+
+    return (
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  });
+}
+
+function sortDocumentCommentsByMarkupOrder<
+  T extends { id: string; createdAt: Date | string },
+>(items: T[], html: string | null | undefined) {
+  if (!html) {
+    return [...items].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }
+
+  const orderByCommentId = new Map<string, number>();
+  const regex = /data-comment-id=(['"])(.*?)\1/g;
+  let order = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(html))) {
+    const commentId = match[2];
+    if (!orderByCommentId.has(commentId)) {
+      orderByCommentId.set(commentId, order);
+      order += 1;
+    }
+  }
+
+  return [...items].sort((a, b) => {
+    const aOrder = orderByCommentId.get(a.id);
+    const bOrder = orderByCommentId.get(b.id);
+
+    if (aOrder != null && bOrder != null && aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    if (aOrder != null) return -1;
+    if (bOrder != null) return 1;
+
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -75,6 +134,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
+  const requestedSnapshotId = url.searchParams.get('snapshotId');
+  const isReviseMode = url.searchParams.get('revise') === '1';
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -114,6 +175,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       text: true,
       submittedAt: true,
       submittedSnapshotId: true,
+      class: {
+        select: {
+          schoolId: true,
+        },
+      },
       submittedSnapshot: {
         select: {
           id: true,
@@ -187,6 +253,50 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const isViewingAsTeacher = profile.id !== doc.profile.id;
+
+  const selectedSnapshot =
+    requestedSnapshotId && isViewingAsTeacher
+      ? await prisma.documentSnapshot.findFirst({
+          where: {
+            id: requestedSnapshotId,
+            documentId: doc.id,
+          },
+          select: {
+            id: true,
+            html: true,
+            text: true,
+            grades: {
+              select: {
+                id: true,
+                score: true,
+                feedback: true,
+                overallScore: true,
+                overallComment: true,
+                numericPercentage: true,
+                letterGrade: true,
+                grammarIssues: true,
+                rubricScores: true,
+                releasedAt: true,
+                createdAt: true,
+              },
+              take: 1,
+            },
+          },
+        })
+      : null;
+  const activeSnapshot = selectedSnapshot ?? doc.submittedSnapshot;
+
+  const latestGrade = doc.submittedSnapshot?.grades?.[0];
+  if (
+    !isViewingAsTeacher &&
+    latestGrade?.id &&
+    latestGrade.releasedAt &&
+    !isReviseMode
+  ) {
+    return redirect(`/app/graded/${latestGrade.id}`);
+  }
+
   if (shouldSaveVersion) {
     const latestVersion = doc.versions[0];
     if (doc.html && doc.text && latestVersion?.html !== doc.html) {
@@ -216,12 +326,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       (cm) => cm.position === currentCms.studentCourseModule.position + 1
     )?.id;
 
-  const isDocumentSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
+    doc.class?.schoolId
   );
 
-  const gradeId = doc.submittedSnapshot?.grades?.[0]?.id;
-  const gradeComments =
+  const gradeId = activeSnapshot?.grades?.[0]?.id;
+  const unsortedGradeComments =
     gradeId != null
       ? await prisma.gradeComment.findMany({
           where: { gradeId },
@@ -242,8 +352,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       : [];
 
+  const gradeComments = sortByDocumentLocation({
+    items: unsortedGradeComments,
+    sourceText: activeSnapshot?.text ?? '',
+    getExcerpt: (comment) => comment.excerpt,
+    getOccurrence: (comment) => comment.occurrence,
+  });
+
+  const sortedComments = sortDocumentCommentsByMarkupOrder(
+    doc.comments,
+    doc.html
+  );
+
   return dataResponse({
-    doc,
+    doc: {
+      ...doc,
+      comments: sortedComments,
+    },
+    activeSnapshot,
     currentCms,
     nextCmId,
     shouldSaveVersion,
@@ -265,6 +391,9 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [isBackupDialogOpen, setIsBackupDialogOpen] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [localBackup, setLocalBackup] = useState<DocumentBackupV1 | null>(null);
   const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
@@ -276,10 +405,12 @@ export default function Route() {
   );
   const tab = searchParams.get('tab') ?? 'tutor';
   const leftPanel = searchParams.get('left') ?? 'tutor';
+  const isReviseMode = searchParams.get('revise') === '1';
+  const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
-  const grade = data.doc.submittedSnapshot?.grades?.[0];
+  const grade = activeSnapshot?.grades?.[0];
   const documentStatusLabel = getDocumentStatusLabel({
     submittedAt: data.doc.submittedAt,
     grade: grade ?? null,
@@ -294,6 +425,22 @@ export default function Route() {
     isSubmitted;
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
   const isDocumentEditable = !isViewingAsTeacher;
+  const editorHtml =
+    isViewingAsTeacher && activeSnapshot?.html ? activeSnapshot.html : data.doc.html;
+  const initialEditorContent = useMemo(
+    () => ({
+      html: editorHtml ?? '',
+      text: (isViewingAsTeacher
+        ? activeSnapshot?.text
+        : data.doc.text) ?? '',
+    }),
+    [activeSnapshot?.text, data.doc.text, editorHtml, isViewingAsTeacher]
+  );
+  const latestEditorContentRef = useRef(initialEditorContent);
+  const editorBridgeRef = useRef<EditorBridge | null>(null);
+  const currentUserId = user.id ?? '';
+  const canUseLocalBackup =
+    isDocumentEditable && !isViewingAsTeacher && currentUserId.length > 0;
   const gradeDisplay =
     (grade
       ? formatGrade(
@@ -306,6 +453,10 @@ export default function Route() {
   const [activeGradeCommentId, setActiveGradeCommentId] = useState<
     string | null
   >(null);
+  const [draftHighlight, setDraftHighlight] = useState<{
+    excerpt: string;
+    occurrence: number;
+  } | null>(null);
   const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{
@@ -314,7 +465,9 @@ export default function Route() {
   } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
-    parseGrammarIssues(grade?.grammarIssues)
+    parseGrammarIssuesPayload(grade?.grammarIssues, {
+      sourceText: activeSnapshot?.text ?? '',
+    })
   );
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
@@ -324,11 +477,25 @@ export default function Route() {
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
   const visibleComments = isSubmitted
     ? showOldComments
-      ? [...activeComments, ...archivedComments]
+      ? allComments
       : activeComments
     : activeComments;
   const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
   const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
+  const studentCanViewReleasedGrade =
+    !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
+  const studentGradeViewPath =
+    studentCanViewReleasedGrade && grade?.id
+      ? `/app/graded/${grade.id}`
+      : null;
+  const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
+    searchParams.get('exitTo')
+      ? `&exitTo=${encodeURIComponent(searchParams.get('exitTo') ?? '')}`
+      : ''
+  }`;
+  const backupPreviewText = localBackup
+    ? getBackupPreviewText(localBackup.draftText, Number.MAX_SAFE_INTEGER)
+    : '';
   const visibleGrammarIssues = useMemo(
     () =>
       grammarIssues.filter(
@@ -364,25 +531,130 @@ export default function Route() {
       dataAttr: 'data-grammar-issue-id' as const,
       className: 'grammar-issue' as const,
     }));
+    const draftHighlightEntry = draftHighlight
+      ? [
+          {
+            id: 'draft',
+            excerpt: draftHighlight.excerpt,
+            occurrence: draftHighlight.occurrence,
+            dataAttr: 'data-grade-comment-id' as const,
+            className: 'grade-comment-mark' as const,
+          },
+        ]
+      : [];
 
-    return [...commentHighlights, ...grammarHighlights];
-  }, [data.gradeComments, isTeacherGradingTabOpen, visibleGrammarIssues]);
+    return [...commentHighlights, ...draftHighlightEntry, ...grammarHighlights];
+  }, [data.gradeComments, draftHighlight, isTeacherGradingTabOpen, visibleGrammarIssues]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', value);
-    setSearchParams(params);
+    setSearchParams(params, { replace: true });
   };
 
   const changeLeftPanel = (value: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('left', value);
-    setSearchParams(params);
+    setSearchParams(params, { replace: true });
   };
 
+  const handleEditorContentSnapshot = useCallback(
+    (content: { html: string; text: string }) => {
+      latestEditorContentRef.current = content;
+      if (!canUseLocalBackup) return;
+      const backup = writeDocumentBackup({
+        userId: currentUserId,
+        docId: data.doc.id,
+        content,
+      });
+      if (isBackupDialogOpen && backup) {
+        setLocalBackup(backup);
+      }
+    },
+    [canUseLocalBackup, currentUserId, data.doc.id, isBackupDialogOpen]
+  );
+
+  const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
+    editorBridgeRef.current = bridge;
+  }, []);
+
+  const handleOpenBackupDialog = useCallback(() => {
+    if (!canUseLocalBackup) return;
+    const backup = readDocumentBackup({
+      userId: currentUserId,
+      docId: data.doc.id,
+    });
+    setLocalBackup(backup);
+    setIsBackupDialogOpen(true);
+  }, [canUseLocalBackup, currentUserId, data.doc.id]);
+
+  const handleRestoreBackup = useCallback(async () => {
+    if (!localBackup) return;
+    if (!editorBridgeRef.current) {
+      toast.error('Editor is not ready yet. Please try again.');
+      return;
+    }
+
+    setIsRestoringBackup(true);
+    try {
+      editorBridgeRef.current.setContent(localBackup.draftHtml);
+      latestEditorContentRef.current = {
+        html: localBackup.draftHtml,
+        text: localBackup.draftText,
+      };
+      writeDocumentBackup({
+        userId: currentUserId,
+        docId: data.doc.id,
+        content: latestEditorContentRef.current,
+      });
+      await editorBridgeRef.current.saveNow();
+      setIsBackupDialogOpen(false);
+      toast.success('Local backup restored.');
+    } catch {
+      toast.error('Failed to restore local backup.');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  }, [localBackup, currentUserId, data.doc.id]);
+
   useEffect(() => {
-    setGrammarIssues(parseGrammarIssues(grade?.grammarIssues));
-  }, [grade?.id, grade?.grammarIssues]);
+    setGrammarIssues(
+      parseGrammarIssuesPayload(grade?.grammarIssues, {
+        sourceText: activeSnapshot?.text ?? '',
+      })
+    );
+  }, [activeSnapshot?.text, grade?.id, grade?.grammarIssues]);
+
+  useEffect(() => {
+    latestEditorContentRef.current = initialEditorContent;
+  }, [initialEditorContent]);
+
+  useEffect(() => {
+    if (!canUseLocalBackup) return;
+
+    const flushLocalBackup = () => {
+      writeDocumentBackup({
+        userId: currentUserId,
+        docId: data.doc.id,
+        content:
+          editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current,
+      });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushLocalBackup();
+    };
+
+    window.addEventListener('pagehide', flushLocalBackup);
+    window.addEventListener('beforeunload', flushLocalBackup);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.removeEventListener('pagehide', flushLocalBackup);
+      window.removeEventListener('beforeunload', flushLocalBackup);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [canUseLocalBackup, currentUserId, data.doc.id]);
 
   useEffect(() => {
     setHiddenGrammarIssueIds((prev) =>
@@ -558,7 +830,7 @@ export default function Route() {
             <div className="flex items-center gap-2">
               <DocumentStatusBadge
                 submittedAt={data.doc.submittedAt}
-                grade={grade ?? null}
+                grade={isGradeReleased ? grade ?? null : null}
               />
               {isSubmitted ? (
                 <span className="text-xs text-muted-foreground">
@@ -570,6 +842,24 @@ export default function Route() {
             </div>
           )}
           <div className="ml-auto flex items-center gap-4">
+            {studentGradeViewPath ? (
+              <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
+                <Button
+                  size="sm"
+                  variant={isReviseMode ? 'ghost' : 'secondary'}
+                  asChild
+                >
+                  <Link to={studentGradeViewPath}>View Grade</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={isReviseMode ? 'secondary' : 'ghost'}
+                  asChild
+                >
+                  <Link to={studentRevisePath}>Revise Essay</Link>
+                </Button>
+              </div>
+            ) : null}
             {!isViewingAsTeacher && data.isDocumentSubmissionEnabled && (
               <>
                 <Button
@@ -621,18 +911,28 @@ export default function Route() {
               </>
             )}
             {!isTeacherGradingTabOpen ? (
-              <div className="flex w-[135px] items-center gap-4">
+              <div className="flex items-center gap-2">
                 {isSaving ? (
-                  <div className="flex items-center gap-1 text-muted-foreground/70">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <p className="text-sm">Saving</p>
+                  <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <p className="text-xs font-medium">Saving</p>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1 text-muted-foreground/70">
-                    <Check className="h-4 w-4" />
-                    <p className="mr-2 text-sm">Saved</p>
+                  <div className="flex items-center gap-1.5 rounded-full border bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    <Check className="h-3.5 w-3.5" />
+                    <p className="mr-1 text-xs font-medium">Saved</p>
                   </div>
                 )}
+                {canUseLocalBackup ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-muted-foreground"
+                    onClick={handleOpenBackupDialog}
+                  >
+                    Restore Local
+                  </Button>
+                ) : null}
                 <div className="h-[20px] border-r" />
                 <DocumentVersions documentId={data.doc.id} />
               </div>
@@ -650,7 +950,7 @@ export default function Route() {
                   >
                     Tutor
                   </Button>
-                  {gradingAssistantEnabled ? (
+                  {canUseGradingPanel ? (
                     <Button
                       size="sm"
                       variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
@@ -723,6 +1023,7 @@ export default function Route() {
               leftPanel === 'grading' ? (
               <TeacherGradingPanel
                 documentId={data.doc.id}
+                snapshotId={activeSnapshot?.id ?? null}
                 existingGrade={grade ?? null}
                 grammarIssues={grammarIssues}
                 hiddenGrammarIssueIds={hiddenGrammarIssueIds}
@@ -735,14 +1036,22 @@ export default function Route() {
                 cms={data.currentCms}
                 nextCmId={data.nextCmId}
                 hasPreviousCms={data.hasPreviousCms}
+                getCurrentDocumentText={() =>
+                  (editorBridgeRef.current?.getContent().text ??
+                    latestEditorContentRef.current.text ??
+                    data.doc.text ??
+                    '')
+                }
               />
             )}
             {isMobile && tab !== 'editor' ? null : (
               <Editor
                 docId={data.doc.id}
-                docHtml={data.doc.html}
+                docHtml={editorHtml}
                 setIsSaving={setIsSaving}
                 isEditable={isDocumentEditable}
+                onContentSnapshot={handleEditorContentSnapshot}
+                onEditorBridgeReady={handleEditorBridgeReady}
                 gradeHighlights={editorGradeHighlights}
                 activeGradeCommentId={
                   isTeacherGradingTabOpen ? activeGradeCommentId : null
@@ -777,8 +1086,11 @@ export default function Route() {
               <GradingCommentsSidebar
                 gradeComments={data.gradeComments}
                 gradeId={grade?.id ?? null}
+                snapshotId={activeSnapshot?.id ?? null}
+                sourceText={activeSnapshot?.text ?? ''}
                 activeGradeCommentId={activeGradeCommentId}
                 onSelectGradeComment={setActiveGradeCommentId}
+                onDraftHighlightChange={setDraftHighlight}
               />
             ) : (
               <Comments
@@ -855,6 +1167,60 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
+      {canUseLocalBackup ? (
+        <Dialog
+          open={isBackupDialogOpen}
+          onOpenChange={setIsBackupDialogOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Restore local backup</DialogTitle>
+              <DialogDescription className="space-y-2">
+                Manual fallback for recovering this document from browser
+                storage.
+              </DialogDescription>
+            </DialogHeader>
+            {localBackup ? (
+              <>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Last backup: {new Date(localBackup.updatedAt).toLocaleString()}
+                  </p>
+                  <p className="mt-1 max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm">
+                    {backupPreviewText}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                No local backup was found for this document.
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsBackupDialogOpen(false)}
+                disabled={isRestoringBackup}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRestoreBackup}
+                disabled={isRestoringBackup || !localBackup}
+              >
+                {isRestoringBackup ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Restoring...
+                  </>
+                ) : (
+                  'Restore from local backup'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
       {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
         <div
           className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"

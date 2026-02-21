@@ -1,5 +1,6 @@
 import { User, ClipboardCheck, Send } from 'lucide-react';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import { redirect } from 'react-router';
 import { Link, useLoaderData, useSearchParams } from 'react-router';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
@@ -13,7 +14,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profile = await requireProfile(request, userId);
 
   if (!profile.teacherProfile) {
-    throw new Response('Teacher profile required', { status: 403 });
+    return redirect('/app');
   }
 
   const [classes, teacher] = await Promise.all([

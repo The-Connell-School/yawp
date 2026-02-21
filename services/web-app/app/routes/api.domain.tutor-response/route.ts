@@ -12,6 +12,7 @@ const POST = z.object({
   cmsId: z.string().min(1),
   speechSpeed: z.string().optional(),
   speechEnabled: z.union([z.literal('true'), z.literal('false')]),
+  content: z.string().optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -80,7 +81,7 @@ export async function action({ request }: ActionFunctionArgs) {
       .concat([
         {
           role: AgentType.User,
-          content: `content = '${cms.document.text}', response = '${data.response}'`,
+          content: `content = '${data.content ?? cms.document.text ?? ''}', response = '${data.response}'`,
         },
       ]);
 
@@ -104,7 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
             {
               agent: AgentType.User,
               content: data.response,
-              context: cms.document.text,
+              context: data.content ?? cms.document.text,
               instructionId: instruction.id,
             },
             {

@@ -1,4 +1,8 @@
-import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
+import {
+  type LoaderFunctionArgs,
+  data as dataResponse,
+  redirect,
+} from 'react-router';
 import {
   useFetcher,
   useLoaderData,
@@ -10,7 +14,7 @@ import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import {
   Sheet,
   SheetContent,
@@ -55,7 +59,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
   if (!profile.teacherProfile) {
-    throw new Response('Teacher profile required', { status: 403 });
+    return redirect('/app');
   }
   const gradingAssistantEnabled = isGradingAssistantEnabledForOrg(
     profile.organization.id
@@ -72,7 +76,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       grade: true,
       period: true,
       title: true,
-      school: { select: { name: true } },
+      school: { select: { id: true, name: true } },
       students: {
         select: {
           id: true,
@@ -155,63 +159,80 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   // Check feature flag for document submission
-  const isDocumentSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
+  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
+    klass.school?.id
   );
 
-  // Get submitted documents for this class with grades (only if feature is enabled)
-  const submittedDocuments = isDocumentSubmissionEnabled
-    ? await prisma.document.findMany({
+  // Get submitted snapshots (current submissions + historical graded submissions)
+  const submittedSnapshots = isDocumentSubmissionEnabled
+    ? await prisma.documentSnapshot.findMany({
         where: {
-          classId,
-          submittedAt: { not: null },
-        },
-        select: {
-          id: true,
-          title: true,
-          submittedAt: true,
-          submittedSnapshotId: true,
-          profile: {
-            select: {
-              id: true,
-              user: {
-                select: {
-                  name: true,
-                  email: true,
+          document: {
+            classId,
+            deletedAt: null,
+          },
+          OR: [
+            {
+              grades: {
+                some: {},
+              },
+            },
+            {
+              submittedDocuments: {
+                some: {
+                  classId,
                 },
               },
             },
-          },
-          studentCourseModuleSessions: {
-            select: {
-              studentCourseModule: { select: { title: true } },
-            },
-            take: 1,
-          },
-          submittedSnapshot: {
+          ],
+        },
+        select: {
+          id: true,
+          createdAt: true,
+          documentId: true,
+          document: {
             select: {
               id: true,
-              grades: {
+              title: true,
+              submittedSnapshotId: true,
+              profile: {
                 select: {
                   id: true,
-                  score: true,
-                  feedback: true,
-                  rubricScores: true,
-                  overallScore: true,
-                  overallComment: true,
-                  numericPercentage: true,
-                  letterGrade: true,
-                  aiMeta: true,
-                  releasedAt: true,
-                  createdAt: true,
+                  user: {
+                    select: {
+                      name: true,
+                      email: true,
+                    },
+                  },
+                },
+              },
+              studentCourseModuleSessions: {
+                select: {
+                  studentCourseModule: { select: { title: true } },
                 },
                 take: 1,
               },
             },
           },
+          grades: {
+            select: {
+              id: true,
+              score: true,
+              feedback: true,
+              rubricScores: true,
+              overallScore: true,
+              overallComment: true,
+              numericPercentage: true,
+              letterGrade: true,
+              aiMeta: true,
+              releasedAt: true,
+              createdAt: true,
+            },
+            take: 1,
+          },
         },
         orderBy: {
-          submittedAt: 'desc',
+          createdAt: 'desc',
         },
       })
     : [];
@@ -257,7 +278,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     klass,
     profiles,
     pasteAlerts,
-    submittedDocuments,
+    submittedSnapshots,
     inProgressDocuments,
     submittedPapersFilter,
     gradingAssistantEnabled,
@@ -316,6 +337,24 @@ export default function ClassDetailRoute() {
   // Tab and pagination state
   const activeTab = (searchParams.get('tab') as TabValue) || 'in-progress';
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const hasMeaningfulGrade = (grade: {
+    score: string | null;
+    feedback: string | null;
+    rubricScores?: unknown | null;
+    overallComment?: string | null;
+    numericPercentage?: number | null;
+    letterGrade?: string | null;
+  }) =>
+    Boolean(
+      grade.score ||
+        grade.feedback ||
+        grade.overallComment ||
+        grade.letterGrade ||
+        grade.numericPercentage !== null ||
+        (grade.rubricScores &&
+          typeof grade.rubricScores === 'object' &&
+          Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+    );
 
   const students = data.klass.students;
 
@@ -324,34 +363,35 @@ export default function ClassDetailRoute() {
     setPagination({ skip: 0, take: 20 });
   }, [activeTab]);
 
-  // Get ungraded documents
+  // Get ungraded submissions
   const ungradedDocuments = useMemo(() => {
-    return data.submittedDocuments.filter((doc) => {
-      const grade = doc.submittedSnapshot?.grades?.[0];
-      return !grade;
+    return data.submittedSnapshots.filter((snapshot) => {
+      const grade = snapshot.grades?.[0];
+      if (!grade) return true;
+      return !hasMeaningfulGrade(grade) && !grade.releasedAt;
     });
-  }, [data.submittedDocuments]);
+  }, [data.submittedSnapshots]);
 
-  // Get graded but unreleased documents
+  // Get graded but unreleased submissions
   const gradedUnreleasedDocuments = useMemo(() => {
-    return data.submittedDocuments.filter((doc) => {
-      const grade = doc.submittedSnapshot?.grades?.[0];
-      return grade && !grade.releasedAt;
+    return data.submittedSnapshots.filter((snapshot) => {
+      const grade = snapshot.grades?.[0];
+      return !!grade && hasMeaningfulGrade(grade) && !grade.releasedAt;
     });
-  }, [data.submittedDocuments]);
+  }, [data.submittedSnapshots]);
 
-  // Get released documents
+  // Get released submissions
   const releasedDocuments = useMemo(() => {
-    return data.submittedDocuments.filter((doc) => {
-      const grade = doc.submittedSnapshot?.grades?.[0];
-      return grade && grade.releasedAt;
+    return data.submittedSnapshots.filter((snapshot) => {
+      const grade = snapshot.grades?.[0];
+      return !!grade && hasMeaningfulGrade(grade) && !!grade.releasedAt;
     });
-  }, [data.submittedDocuments]);
+  }, [data.submittedSnapshots]);
 
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
-    return gradedUnreleasedDocuments.map((doc) => {
-      const grade = doc.submittedSnapshot!.grades[0];
+    return gradedUnreleasedDocuments.map((snapshot) => {
+      const grade = snapshot.grades[0];
       const gradeDisplay =
         formatGrade(
           grade.numericPercentage ?? null,
@@ -362,16 +402,17 @@ export default function ClassDetailRoute() {
         score: gradeDisplay,
         feedback: grade.feedback,
         document: {
-          id: doc.id,
-          title: doc.title,
-          profile: doc.profile,
+          id: snapshot.document.id,
+          title: snapshot.document.title,
+          profile: snapshot.document.profile,
         },
+        snapshotId: snapshot.id,
       };
     });
   }, [gradedUnreleasedDocuments]);
 
-  const unreleasedGradesByDocumentId = useMemo(() => {
-    return new Map(unreleasedGrades.map((grade) => [grade.document.id, grade]));
+  const unreleasedGradesBySubmissionId = useMemo(() => {
+    return new Map(unreleasedGrades.map((grade) => [grade.snapshotId, grade]));
   }, [unreleasedGrades]);
 
   // Handle URL param for to-release action
@@ -404,23 +445,23 @@ export default function ClassDetailRoute() {
   };
 
   const toggleAllGradedDocuments = () => {
-    const docIds = gradedUnreleasedDocuments.map((d) => d.id);
-    if (docIds.every((id) => selectedGradedDocuments.has(id))) {
+    const snapshotIds = gradedUnreleasedDocuments.map((d) => d.id);
+    if (snapshotIds.every((id) => selectedGradedDocuments.has(id))) {
       const newSelection = new Set(selectedGradedDocuments);
-      docIds.forEach((id) => newSelection.delete(id));
+      snapshotIds.forEach((id) => newSelection.delete(id));
       setSelectedGradedDocuments(newSelection);
     } else {
       const newSelection = new Set(selectedGradedDocuments);
-      docIds.forEach((id) => newSelection.add(id));
+      snapshotIds.forEach((id) => newSelection.add(id));
       setSelectedGradedDocuments(newSelection);
     }
   };
 
   const selectedUnreleasedGrades = useMemo(() => {
     return Array.from(selectedGradedDocuments)
-      .map((docId) => unreleasedGradesByDocumentId.get(docId))
+      .map((snapshotId) => unreleasedGradesBySubmissionId.get(snapshotId))
       .filter((grade): grade is (typeof unreleasedGrades)[number] => !!grade);
-  }, [selectedGradedDocuments, unreleasedGradesByDocumentId]);
+  }, [selectedGradedDocuments, unreleasedGradesBySubmissionId]);
 
   const canReleaseSelected = selectedUnreleasedGrades.length > 0;
 
@@ -557,24 +598,25 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((doc) => (
-                <TableRow key={doc.id}>
+              {paginatedData.map((snapshot) => (
+                <TableRow key={snapshot.id}>
                   <TableCell className="font-medium">
-                    {doc.profile.user.name || doc.profile.user.email}
+                    {snapshot.document.profile.user.name ||
+                      snapshot.document.profile.user.email}
                   </TableCell>
-                  <TableCell>{doc.title}</TableCell>
+                  <TableCell>{snapshot.document.title}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                      .title || '—'}
+                    {snapshot.document.studentCourseModuleSessions[0]
+                      ?.studentCourseModule.title || '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {timeAgo(new Date(doc.submittedAt!))}
+                    {timeAgo(new Date(snapshot.createdAt))}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
+                          to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>
@@ -582,7 +624,7 @@ export default function ClassDetailRoute() {
                       {gradingAssistantEnabled ? (
                         <Button asChild size="sm">
                           <Link
-                            to={`/app/documents/${doc.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                            to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
                           >
                             Grade
                           </Link>
@@ -628,8 +670,8 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((doc) => {
-                const grade = doc.submittedSnapshot!.grades[0];
+              {paginatedData.map((snapshot) => {
+                const grade = snapshot.grades[0];
                 const gradeDisplay =
                   formatGrade(
                     grade.numericPercentage ?? null,
@@ -638,20 +680,21 @@ export default function ClassDetailRoute() {
                   grade.score ||
                   '—';
                 return (
-                  <TableRow key={doc.id}>
+                  <TableRow key={snapshot.id}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedGradedDocuments.has(doc.id)}
+                        checked={selectedGradedDocuments.has(snapshot.id)}
                         onCheckedChange={() =>
-                          toggleGradedDocumentSelection(doc.id)
+                          toggleGradedDocumentSelection(snapshot.id)
                         }
-                        aria-label={`Select graded ${doc.title}`}
+                        aria-label={`Select graded ${snapshot.document.title}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      {doc.profile.user.name || doc.profile.user.email}
+                      {snapshot.document.profile.user.name ||
+                        snapshot.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{doc.title}</TableCell>
+                    <TableCell>{snapshot.document.title}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -662,7 +705,7 @@ export default function ClassDetailRoute() {
                       <div className="flex gap-2">
                         <Button asChild size="sm" variant="outline">
                           <Link
-                            to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
+                            to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
                           >
                             View
                           </Link>
@@ -670,7 +713,7 @@ export default function ClassDetailRoute() {
                         {gradingAssistantEnabled ? (
                           <Button asChild size="sm">
                             <Link
-                              to={`/app/documents/${doc.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                              to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
                             >
                               Edit Grade
                             </Link>
@@ -705,8 +748,8 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((doc) => {
-                const grade = doc.submittedSnapshot!.grades[0];
+              {paginatedData.map((snapshot) => {
+                const grade = snapshot.grades[0];
                 const gradeDisplay =
                   formatGrade(
                     grade.numericPercentage ?? null,
@@ -715,11 +758,12 @@ export default function ClassDetailRoute() {
                   grade.score ||
                   '—';
                 return (
-                  <TableRow key={doc.id}>
+                  <TableRow key={snapshot.id}>
                     <TableCell className="font-medium">
-                      {doc.profile.user.name || doc.profile.user.email}
+                      {snapshot.document.profile.user.name ||
+                        snapshot.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{doc.title}</TableCell>
+                    <TableCell>{snapshot.document.title}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -729,7 +773,7 @@ export default function ClassDetailRoute() {
                     <TableCell>
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
+                          to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>

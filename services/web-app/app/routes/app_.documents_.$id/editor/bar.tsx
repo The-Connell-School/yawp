@@ -71,25 +71,28 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
     >
       {isEditable
         ? visibleCommands.map(
-            ({ icon, label, command, params, activeId, override }) =>
-              override?.(editor) ?? (
-                <Tooltip text={label} delayDuration={300} key={label}>
+            ({ icon, label, command, params, activeId, isActive, override }) => {
+              if (override) return override(editor);
+              if (!command) return null;
+
+              return (
+                <Tooltip text={label} delayDuration={300} key={label ?? command}>
                   <div
-                    // @ts-ignore
-                    onClick={() =>
-                      editor.chain().focus()[command](params).run()
-                    }
+                    onClick={() => {
+                      const chain = editor.chain().focus() as any;
+                      chain[command](params).run();
+                    }}
                     className={cn(COMMAND_STYLE, {
-                      'bg-muted': editor.isActive(
-                        activeId ?? camelCase(label ?? ''),
-                        params
-                      ),
+                      'bg-foreground/20 hover:bg-foreground/20': isActive
+                        ? isActive(editor)
+                        : editor.isActive(activeId ?? camelCase(label ?? ''), params),
                     })}
                   >
                     {icon ?? label}
                   </div>
                 </Tooltip>
-              )
+              );
+            }
           )
         : null}
       {isEditable ? (
@@ -111,7 +114,7 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
               }
             }}
             className={cn(COMMAND_STYLE, {
-              'bg-muted': editor.isActive('comment'),
+              'bg-foreground/20 hover:bg-foreground/20': editor.isActive('comment'),
             })}
           >
             <MessageCirclePlusIcon className="h-5 w-5" />
@@ -131,20 +134,20 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="flex w-fit flex-col gap-1">
             {hiddenCommands.map(
-              ({ icon, label, command, params, activeId }) => (
+              ({ icon, label, command, params, activeId, isActive }, idx) => (
                 <DropdownMenuItem
-                  key={label}
+                  key={`${label ?? command ?? 'command'}-${idx}`}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (!command) return;
                     // @ts-ignore
                     editor.chain().focus()[command](params).run();
                   }}
                   className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
-                    'bg-muted': editor.isActive(
-                      activeId ?? camelCase(label ?? ''),
-                      params
-                    ),
+                    'bg-foreground/20 hover:bg-foreground/20': isActive
+                      ? isActive(editor)
+                      : editor.isActive(activeId ?? camelCase(label ?? ''), params),
                   })}
                 >
                   <span>{icon ?? label}</span>

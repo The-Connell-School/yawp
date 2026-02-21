@@ -150,12 +150,13 @@ export function GradingSheet({
   const [savedSignature, setSavedSignature] = useState('');
   const pendingSaveSignatureRef = useRef('');
   const hasProcessedSuccess = useRef(false);
+  const isGenerating = aiFetcher.state !== 'idle';
 
   const isMultiple = documents.length > 1;
   const existingGrade = !isMultiple
     ? documents[0]?.submittedSnapshot?.grades?.[0]
     : null;
-  const isEditing = !isMultiple && existingGrade;
+  const isEditing = !isMultiple && !!existingGrade;
 
   // Initialize form with existing grade data when editing
   useEffect(() => {
@@ -448,7 +449,9 @@ export function GradingSheet({
           <div className="rounded-lg border p-4 space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-medium">AI Suggestions</div>
+                <div className="text-sm font-medium">
+                  Grading Assistant Suggestions
+                </div>
                 <div className="text-xs text-muted-foreground">
                   Uses the rubric to suggest scores and comments. You can edit
                   everything.
@@ -466,18 +469,18 @@ export function GradingSheet({
                     action: '/api/domain/grade-essay-ai',
                   });
                 }}
-                disabled={isMultiple || aiFetcher.state !== 'idle'}
+                disabled={isMultiple || isGenerating}
               >
-                {aiFetcher.state !== 'idle'
-                  ? 'Generating...'
+                {isGenerating
+                  ? 'Grading…'
                   : isMultiple
-                    ? 'AI suggestions unavailable for bulk grading'
-                    : 'Generate AI Suggestions'}
+                    ? 'Suggestions unavailable for bulk grading'
+                    : 'Grading Assistant Suggestions'}
               </Button>
             </div>
             {isMultiple && (
               <div className="text-xs text-muted-foreground">
-                AI suggestions are only available for single-essay grading.
+                Suggestions are only available for single-essay grading.
               </div>
             )}
             {aiFetcher.data?.message && (
@@ -522,7 +525,7 @@ export function GradingSheet({
                       setHasManualPercentOverride(true);
                     }}
                     placeholder="e.g., 94"
-                    disabled={fetcher.state !== 'idle'}
+                    disabled={fetcher.state !== 'idle' || isGenerating}
                   />
                 </div>
                 <Button
@@ -535,7 +538,8 @@ export function GradingSheet({
                   }}
                   disabled={
                     fetcher.state !== 'idle' ||
-                    computedNumericPercentage === null
+                    computedNumericPercentage === null ||
+                    isGenerating
                   }
                 >
                   Recalculate from rubric
@@ -574,6 +578,7 @@ export function GradingSheet({
                         </div>
                         <Select
                           value={current.score ? current.score.toString() : ''}
+                          disabled={isGenerating}
                           onValueChange={(value) => {
                             setRubricScores((prev) => ({
                               ...prev,
@@ -599,6 +604,7 @@ export function GradingSheet({
                       </div>
                       <Textarea
                         value={current.comment}
+                        disabled={isGenerating || fetcher.state !== 'idle'}
                         onChange={(e) =>
                           setRubricScores((prev) => ({
                             ...prev,
@@ -611,7 +617,6 @@ export function GradingSheet({
                         }
                         placeholder="Enter category feedback..."
                         rows={3}
-                        disabled={fetcher.state !== 'idle'}
                       />
                     </div>
                   );
@@ -627,7 +632,7 @@ export function GradingSheet({
                 onChange={(e) => setOverallComment(e.target.value)}
                 placeholder="Summarize the overall feedback for the student..."
                 rows={4}
-                disabled={fetcher.state !== 'idle'}
+                disabled={fetcher.state !== 'idle' || isGenerating}
               />
             </div>
 
@@ -639,7 +644,7 @@ export function GradingSheet({
                   onCheckedChange={(checked) =>
                     setReleaseImmediately(checked === true)
                   }
-                  disabled={fetcher.state !== 'idle'}
+                  disabled={fetcher.state !== 'idle' || isGenerating}
                 />
                 <Label
                   htmlFor="release"
@@ -673,14 +678,16 @@ export function GradingSheet({
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={fetcher.state !== 'idle'}
+                disabled={fetcher.state !== 'idle' || isGenerating}
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={
-                  fetcher.state !== 'idle' || (isEditing && !hasUnsavedChanges)
+                  fetcher.state !== 'idle' ||
+                  isGenerating ||
+                  (isEditing && !hasUnsavedChanges)
                 }
               >
                 {fetcher.state !== 'idle'

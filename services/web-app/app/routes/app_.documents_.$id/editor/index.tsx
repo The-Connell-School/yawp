@@ -1,16 +1,20 @@
 import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import ListItem from '@tiptap/extension-list-item';
+import TextAlign from '@tiptap/extension-text-align';
 import TextStyle from '@tiptap/extension-text-style';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { findExcerptRange } from '~/utils/excerpt-position';
 import { useCommentsSelection } from '../comments/selection-context';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 import { Bar } from './bar';
+import { GradingSelectionToolbar } from './grading-selection-toolbar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
+import { TabIndent } from './extensions/tab-indent';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;
@@ -21,7 +25,11 @@ const debounce = (func: Function, delay: number) => {
 };
 
 const extensions = [
+  TabIndent,
   LineHeight,
+  TextAlign.configure({
+    types: ['heading', 'paragraph'],
+  }),
   Color.configure({ types: [TextStyle.name, ListItem.name] }),
   // @ts-ignore
   TextStyle.configure({ types: [ListItem.name] }),
@@ -52,6 +60,14 @@ type GradeHighlight = {
   className?: 'grade-comment-mark' | 'grammar-issue';
 };
 
+type SaveFailureReason = 'auth' | 'network' | 'server';
+
+export type EditorBridge = {
+  getContent: () => { html: string; text: string };
+  setContent: (html: string) => void;
+  saveNow: () => Promise<void>;
+};
+
 function isTextNode(node: Node): node is Text {
   return node.nodeType === Node.TEXT_NODE;
 }
@@ -65,6 +81,30 @@ function getTextNodes(root: HTMLElement) {
     if (isTextNode(current)) nodes.push(current);
   }
   return nodes;
+}
+
+function resolveTextBoundary(root: HTMLElement, absoluteOffset: number) {
+  const textNodes = getTextNodes(root);
+  if (textNodes.length === 0) return null;
+
+  const target = Math.max(0, absoluteOffset);
+  let cursor = 0;
+
+  for (const node of textNodes) {
+    const length = node.textContent?.length ?? 0;
+    const next = cursor + length;
+    if (target <= next) {
+      return {
+        node,
+        offset: Math.max(0, Math.min(length, target - cursor)),
+      };
+    }
+    cursor = next;
+  }
+
+  const lastNode = textNodes[textNodes.length - 1];
+  const lastLength = lastNode.textContent?.length ?? 0;
+  return { node: lastNode, offset: lastLength };
 }
 
 function clearReviewMarks(root: HTMLElement) {
@@ -88,56 +128,48 @@ function applyReviewHighlights(
 ) {
   const textNodes = getTextNodes(root);
   const ranges: { start: number; end: number; id: string }[] = [];
+  const highlightById = new Map(highlights.map((h) => [h.id, h]));
 
   let global = '';
-  const nodeSpans: { node: Text; start: number; end: number }[] = [];
-  let pos = 0;
   for (const node of textNodes) {
     const text = node.textContent ?? '';
-    nodeSpans.push({ node, start: pos, end: pos + text.length });
     global += text;
-    pos += text.length;
   }
 
   for (const h of highlights) {
-    const excerpt = (h.excerpt ?? '').trim();
-    if (!excerpt) continue;
-    const targetOccurrence = h.occurrence ?? 1;
-    let occurrence = 0;
-    let from = 0;
-
-    while (true) {
-      const idx = global.indexOf(excerpt, from);
-      if (idx === -1) break;
-      occurrence += 1;
-
-      if (occurrence === targetOccurrence) {
-        ranges.push({ start: idx, end: idx + excerpt.length, id: h.id });
-        break;
-      }
-
-      from = idx + excerpt.length;
-    }
+    const range = findExcerptRange(global, h.excerpt, h.occurrence ?? 1);
+    if (!range) continue;
+    const start = Math.max(0, Math.min(global.length, range.start));
+    const end = Math.max(0, Math.min(global.length, range.end));
+    if (end <= start) continue;
+    ranges.push({ start, end, id: h.id });
   }
 
   ranges.sort((a, b) => b.start - a.start);
 
   for (const r of ranges) {
-    const startSpanIdx = nodeSpans.findIndex(
-      (n) => r.start >= n.start && r.start <= n.end
-    );
-    const endSpanIdx = nodeSpans.findIndex(
-      (n) => r.end >= n.start && r.end <= n.end
-    );
-    if (startSpanIdx === -1 || endSpanIdx === -1) continue;
+    const startBoundary = resolveTextBoundary(root, r.start);
+    const endBoundary = resolveTextBoundary(root, r.end);
+    if (!startBoundary || !endBoundary) continue;
 
-    const startSpan = nodeSpans[startSpanIdx];
-    const endSpan = nodeSpans[endSpanIdx];
+    if (
+      startBoundary.node === endBoundary.node &&
+      startBoundary.offset >= endBoundary.offset
+    ) {
+      continue;
+    }
+
     const range = document.createRange();
-    range.setStart(startSpan.node, Math.max(0, r.start - startSpan.start));
-    range.setEnd(endSpan.node, Math.max(0, r.end - endSpan.start));
+    try {
+      range.setStart(startBoundary.node, startBoundary.offset);
+      range.setEnd(endBoundary.node, endBoundary.offset);
+    } catch {
+      // Highlights can overlap and mutate the DOM; skip invalid ranges safely.
+      continue;
+    }
+    if (range.collapsed) continue;
 
-    const source = highlights.find((h) => h.id === r.id);
+    const source = highlightById.get(r.id);
     const wrapper = document.createElement('span');
     wrapper.setAttribute(source?.dataAttr ?? 'data-grade-comment-id', r.id);
     wrapper.className = source?.className ?? 'grade-comment-mark';
@@ -155,6 +187,13 @@ type Props = {
   activeGradeCommentId?: string | null;
   onGradeCommentSelect?: (id: string) => void;
   onGrammarIssueHover?: (id: string | null, rect: DOMRect | null) => void;
+  onContentSnapshot?: (content: { html: string; text: string }) => void;
+  onRemoteSaveSuccess?: (content: { html: string; text: string }) => void;
+  onRemoteSaveFailure?: (args: {
+    content: { html: string; text: string };
+    reason: SaveFailureReason;
+  }) => void;
+  onEditorBridgeReady?: (bridge: EditorBridge | null) => void;
 };
 
 export const Editor = ({
@@ -166,7 +205,16 @@ export const Editor = ({
   activeGradeCommentId = null,
   onGradeCommentSelect,
   onGrammarIssueHover,
+  onContentSnapshot,
+  onRemoteSaveSuccess,
+  onRemoteSaveFailure,
+  onEditorBridgeReady,
 }: Props) => {
+  const saveNowRef = useRef<(() => Promise<void>) | null>(null);
+  const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null);
+  const saveStartedAtRef = useRef<number | null>(null);
+  const inFlightSavesRef = useRef(0);
+  const clearSavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     activeCommentId,
     hoveredCommentId,
@@ -286,31 +334,115 @@ export const Editor = ({
   useEffect(() => {
     if (!editor) return;
 
+    const getContentSnapshot = () => ({
+      html: editor.getHTML(),
+      text: editor.getText().replace(/\u00A0/g, ' '),
+    });
+
     const save = async () => {
-      setIsSaving(true);
-      const html = editor.getHTML();
-      const text = editor.getText();
+      if (clearSavingTimerRef.current) {
+        clearTimeout(clearSavingTimerRef.current);
+        clearSavingTimerRef.current = null;
+      }
+      if (inFlightSavesRef.current === 0) {
+        saveStartedAtRef.current = Date.now();
+        setIsSaving(true);
+      }
+      inFlightSavesRef.current += 1;
+
+      const content = getContentSnapshot();
       const formData = new FormData();
-      formData.append('html', html);
-      formData.append('text', text);
-      await fetch(`/api/model/document/${docId}?from=editor`, {
-        method: 'PUT',
-        body: formData,
-        keepalive: true,
-      });
-      setIsSaving(false);
+      formData.append('html', content.html);
+      formData.append('text', content.text);
+      try {
+        const response = await fetch(`/api/model/document/${docId}?from=editor`, {
+          method: 'PUT',
+          body: formData,
+          keepalive: true,
+        });
+        if (response.status === 204) {
+          onRemoteSaveSuccess?.(content);
+        } else {
+          const reason: SaveFailureReason =
+            response.redirected ||
+            response.status === 401 ||
+            response.status === 403
+              ? 'auth'
+              : 'server';
+          onRemoteSaveFailure?.({ content, reason });
+        }
+      } catch {
+        onRemoteSaveFailure?.({ content, reason: 'network' });
+      } finally {
+        inFlightSavesRef.current = Math.max(0, inFlightSavesRef.current - 1);
+        if (inFlightSavesRef.current > 0) return;
+
+        const startedAt = saveStartedAtRef.current ?? Date.now();
+        const elapsed = Date.now() - startedAt;
+        const remainingMs = Math.max(0, 1500 - elapsed);
+        clearSavingTimerRef.current = setTimeout(() => {
+          setIsSaving(false);
+          saveStartedAtRef.current = null;
+          clearSavingTimerRef.current = null;
+        }, remainingMs);
+      }
     };
+    saveNowRef.current = save;
+    onEditorBridgeReady?.({
+      getContent: getContentSnapshot,
+      setContent: (html: string) => {
+        editor.commands.setContent(html, true);
+      },
+      saveNow: save,
+    });
 
     const saveDebounced = debounce(save, 1500);
+    const emitSnapshotDebounced = debounce(() => {
+      onContentSnapshot?.(getContentSnapshot());
+    }, 400);
+    const emitSnapshotNow = () => onContentSnapshot?.(getContentSnapshot());
 
+    onContentSnapshot?.(getContentSnapshot());
     editor.on('update', saveDebounced);
+    editor.on('update', emitSnapshotDebounced);
     editor.on('blur', save);
+    editor.on('blur', emitSnapshotNow);
 
     return () => {
+      if (clearSavingTimerRef.current) {
+        clearTimeout(clearSavingTimerRef.current);
+      }
+      saveNowRef.current = null;
+      onEditorBridgeReady?.(null);
       editor.off('update', saveDebounced);
+      editor.off('update', emitSnapshotDebounced);
       editor.off('blur', save);
+      editor.off('blur', emitSnapshotNow);
     };
-  }, [editor, docId, setIsSaving]);
+  }, [
+    editor,
+    docId,
+    setIsSaving,
+    onContentSnapshot,
+    onRemoteSaveSuccess,
+    onRemoteSaveFailure,
+    onEditorBridgeReady,
+  ]);
+
+  useEffect(() => {
+    if (!editor || !isEditable) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== 's') return;
+
+      event.preventDefault();
+      void saveNowRef.current?.();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [editor, isEditable]);
 
   useEffect(() => {
     if (!editor) return;
@@ -397,6 +529,48 @@ export const Editor = ({
   }, [editor, activeCommentId, hoveredCommentId]);
 
   useEffect(() => {
+    if (!editor || isEditable || !onGradeCommentSelect) return;
+    const root = editor.view.dom as HTMLElement;
+
+    const updateSelectionToolbar = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        setSelectionToolbarRect(null);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      if (!root.contains(range.commonAncestorContainer)) {
+        setSelectionToolbarRect(null);
+        return;
+      }
+      const excerpt = sel.toString().trim();
+      if (!excerpt || excerpt.length > 120) {
+        setSelectionToolbarRect(null);
+        return;
+      }
+      setSelectionToolbarRect(range.getBoundingClientRect());
+    };
+
+    const onSelectionChange = () => {
+      requestAnimationFrame(updateSelectionToolbar);
+    };
+
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => document.removeEventListener('selectionchange', onSelectionChange);
+  }, [editor, isEditable, onGradeCommentSelect]);
+
+  const handleGradingCommentRequest = useCallback(() => {
+    if (!editor) return;
+    const info = getSelectionInfo(editor.view.dom as HTMLElement);
+    if (!info) return;
+    window.dispatchEvent(
+      new CustomEvent('grading-comment-request', { detail: info })
+    );
+    window.getSelection()?.removeAllRanges();
+    setSelectionToolbarRect(null);
+  }, [editor]);
+
+  useEffect(() => {
     // Bridge TipTap plugin custom events to context
     const onHover = (e: Event) => {
       const id = (e as CustomEvent).detail?.id as string | undefined;
@@ -426,15 +600,20 @@ export const Editor = ({
         {isEditable ? (
           <Bar editor={editor} documentId={docId} isEditable={isEditable} />
         ) : null}
-        <div
-          className="no-scrollbar grow overflow-y-scroll p-5 font-times"
-          key={`${docId}-editor`}
-        >
-          <EditorContent
-            editor={editor}
-            className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
-          />
+        <div className="no-scrollbar grow overflow-y-scroll p-5" key={`${docId}-editor`}>
+          <div className="mx-auto w-full max-w-[920px] font-times">
+            <EditorContent
+              editor={editor}
+              className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
+            />
+          </div>
         </div>
+        {selectionToolbarRect && !isEditable && onGradeCommentSelect ? (
+          <GradingSelectionToolbar
+            rect={selectionToolbarRect}
+            onCommentClick={handleGradingCommentRequest}
+          />
+        ) : null}
       </div>
     </ErrorBoundary>
   );

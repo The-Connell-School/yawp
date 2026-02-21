@@ -69,7 +69,7 @@ export async function getLLMCompletion(params: Params) {
         model: params.model,
         system,
         messages,
-        temperature: 0.6,
+        temperature: params.temperature ?? 0.6,
       });
 
       const durationMs = Date.now() - startTime;
@@ -131,7 +131,7 @@ export async function getLLMCompletion(params: Params) {
       const message = await openai.chat.completions.create({
         model: params.model,
         max_tokens: params.maxTokens,
-        temperature: 0.6,
+        temperature: params.temperature ?? 0.6,
         messages: formattedMessages,
       });
 

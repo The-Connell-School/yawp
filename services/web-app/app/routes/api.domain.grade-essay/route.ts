@@ -4,12 +4,13 @@ import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 // Schema for single or bulk grading
 const POST = z.object({
-  documentIds: z.union([z.string(), z.array(z.string())]),
+  documentIds: z.union([z.string(), z.array(z.string())]).optional(),
+  snapshotIds: z.union([z.string(), z.array(z.string())]).optional(),
   score: z.string().optional(),
   feedback: z.string().optional(),
   rubricScores: z.string().optional(),
@@ -33,26 +34,21 @@ function parseJson(value?: string) {
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
 
-  // Check if document submission is enabled
-  const isSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled.',
-      type: 'error',
-    });
-  }
-
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  // Normalize documentIds to always be an array
-  const documentIds = Array.isArray(data.documentIds)
-    ? data.documentIds
-    : [data.documentIds];
+  const documentIds = data.documentIds
+    ? Array.isArray(data.documentIds)
+      ? data.documentIds
+      : [data.documentIds]
+    : [];
+  const snapshotIds = data.snapshotIds
+    ? Array.isArray(data.snapshotIds)
+      ? data.snapshotIds
+      : [data.snapshotIds]
+    : [];
 
-  if (documentIds.length === 0) {
+  if (documentIds.length === 0 && snapshotIds.length === 0) {
     return validationError({
       fieldErrors: { documentIds: 'At least one document is required' },
     });
@@ -86,43 +82,94 @@ export async function action({ request }: ActionFunctionArgs) {
   // Get the teacher's class IDs for verification
   const teacherClassIds = profile.teacherProfile.classes.map((c) => c.id);
 
-  // Verify all documents exist, are submitted, and belong to students in teacher's classes
-  const documents = await prisma.document.findMany({
-    where: {
-      id: { in: documentIds },
-      submittedAt: { not: null },
-      submittedSnapshotId: { not: null },
-      classId: { in: teacherClassIds },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      title: true,
-      submittedSnapshotId: true,
-      profile: {
-        select: {
-          id: true,
-          user: { select: { name: true } },
+  let snapshots: {
+    id: string;
+    documentId: string;
+    document: { class: { schoolId: string } | null };
+  }[] = [];
+
+  if (snapshotIds.length > 0) {
+    snapshots = await prisma.documentSnapshot.findMany({
+      where: {
+        id: { in: snapshotIds },
+        document: {
+          classId: { in: teacherClassIds },
+          deletedAt: null,
         },
       },
-    },
-  });
+      select: {
+        id: true,
+        documentId: true,
+        document: {
+          select: {
+            class: {
+              select: {
+                schoolId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  } else {
+    const documents = await prisma.document.findMany({
+      where: {
+        id: { in: documentIds },
+        submittedAt: { not: null },
+        submittedSnapshotId: { not: null },
+        classId: { in: teacherClassIds },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        submittedSnapshotId: true,
+        class: {
+          select: {
+            schoolId: true,
+          },
+        },
+      },
+    });
 
-  if (documents.length === 0) {
+    snapshots = documents
+      .filter(
+        (doc): doc is typeof doc & { submittedSnapshotId: string } =>
+          doc.submittedSnapshotId !== null
+      )
+      .map((doc) => ({
+        id: doc.submittedSnapshotId,
+        documentId: doc.id,
+        document: { class: doc.class },
+      }));
+  }
+
+  if (snapshots.length === 0) {
     return dataResponse(
-      { success: false, message: 'No valid documents found to grade.' },
+      { success: false, message: 'No valid submissions found to grade.' },
       { status: 404 }
     );
   }
 
-  if (documents.length !== documentIds.length) {
+  if (
+    (documentIds.length > 0 && snapshots.length !== documentIds.length) ||
+    (snapshotIds.length > 0 && snapshots.length !== snapshotIds.length)
+  ) {
     return dataResponse(
       {
         success: false,
-        message: 'Some documents were not found or are not submitted.',
+        message: 'Some selected submissions were not found.',
       },
       { status: 400 }
     );
+  }
+
+  const schoolIds = snapshots.map((snapshot) => snapshot.document.class?.schoolId);
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(schoolIds);
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grading is currently disabled for one or more schools.',
+      type: 'error',
+    });
   }
 
   const now = new Date();
@@ -147,14 +194,11 @@ export async function action({ request }: ActionFunctionArgs) {
       : undefined);
 
   // Create or update grades for all submitted snapshots
-  const gradePromises = documents.map((doc) => {
-    if (!doc.submittedSnapshotId) {
-      throw new Error(`Document ${doc.id} has no submitted snapshot`);
-    }
+  const gradePromises = snapshots.map((snapshot) => {
     return prisma.grade.upsert({
-      where: { snapshotId: doc.submittedSnapshotId },
+      where: { snapshotId: snapshot.id },
       create: {
-        snapshotId: doc.submittedSnapshotId,
+        snapshotId: snapshot.id,
         gradedById: profile.id,
         score,
         feedback: data.feedback,
@@ -184,17 +228,17 @@ export async function action({ request }: ActionFunctionArgs) {
   await Promise.all(gradePromises);
 
   const message =
-    documents.length === 1
+    snapshots.length === 1
       ? releasedAt
         ? 'Essay graded and released to student.'
         : 'Essay graded. You can release it to the student when ready.'
       : releasedAt
-        ? `${documents.length} essays graded and released to students.`
-        : `${documents.length} essays graded. You can release them to students when ready.`;
+        ? `${snapshots.length} essays graded and released to students.`
+        : `${snapshots.length} essays graded. You can release them to students when ready.`;
 
   return dataResponse({
     success: true,
     message,
-    gradedCount: documents.length,
+    gradedCount: snapshots.length,
   });
 }

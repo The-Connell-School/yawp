@@ -1,3 +1,5 @@
+import { findExcerptOccurrenceAtOffset } from '~/utils/excerpt-position';
+
 function isTextNode(node: Node): node is Text {
   return node.nodeType === Node.TEXT_NODE;
 }
@@ -40,17 +42,10 @@ export function getSelectionInfo(
   if (!span) return null;
   const startOffset = span.start + range.startOffset;
 
-  let occurrence = 0;
-  let from = 0;
-  while (true) {
-    const idx = global.indexOf(excerpt, from);
-    if (idx === -1) break;
-    occurrence += 1;
-    if (startOffset >= idx && startOffset <= idx + excerpt.length) {
-      return { excerpt, occurrence };
-    }
-    from = idx + excerpt.length;
-  }
-
-  return { excerpt, occurrence: 1 };
+  const occurrence = findExcerptOccurrenceAtOffset({
+    source: global,
+    excerpt,
+    selectionStart: startOffset,
+  });
+  return { excerpt, occurrence };
 }

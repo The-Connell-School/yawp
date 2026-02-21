@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
-import { FEATURE_FLAGS, getFeatureFlag } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({
@@ -30,17 +30,6 @@ function parseJson(value?: string) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-
-  // Check if document submission is enabled
-  const isSubmissionEnabled = await getFeatureFlag(
-    FEATURE_FLAGS.DOCUMENT_SUBMISSION
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled.',
-      type: 'error',
-    });
-  }
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -70,6 +59,19 @@ export async function action({ request }: ActionFunctionArgs) {
     select: {
       id: true,
       releasedAt: true,
+      snapshot: {
+        select: {
+          document: {
+            select: {
+              class: {
+                select: {
+                  schoolId: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -78,6 +80,16 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Grade not found.' },
       { status: 404 }
     );
+  }
+
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
+    grade.snapshot.document.class?.schoolId
+  );
+  if (!isSubmissionEnabled) {
+    return redirectWithToast('/app/my-classes', {
+      description: 'Grading is currently disabled for this school.',
+      type: 'error',
+    });
   }
 
   // Update the grade

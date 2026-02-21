@@ -206,9 +206,9 @@ code {
 }
 
 .grammar-issue {
-  background-color: rgba(216, 180, 254, 0.1);
-  border-bottom: 2px dotted rgba(216, 180, 254, 0.32);
-  box-shadow: inset 0 -1px 0 rgba(216, 180, 254, 0.16);
+  background-color: rgba(216, 180, 254, 0.28);
+  border-bottom: 2px dotted rgba(192, 132, 252, 0.6);
+  box-shadow: inset 0 -1px 0 rgba(192, 132, 252, 0.25);
   border-radius: 4px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
@@ -218,8 +218,8 @@ code {
     border-color 0.2s ease;
 }
 .grammar-issue:hover {
-  background-color: rgba(216, 180, 254, 0.13);
-  border-bottom-color: rgba(216, 180, 254, 0.46);
+  background-color: rgba(216, 180, 254, 0.4);
+  border-bottom-color: rgba(192, 132, 252, 0.75);
 }
 .grammar-issue > p {
   display: inline;

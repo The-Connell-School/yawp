@@ -1,8 +1,22 @@
 /* eslint-disable no-console */
 import { PrismaClient, type Prisma } from '../generated/prisma';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { cleanupDb, createPassword } from './utils';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is not set');
+}
+
+const isLocal =
+  connectionString.includes('localhost') ||
+  connectionString.includes('127.0.0.1');
+const adapter = new PrismaPg({
+  connectionString,
+  ssl: isLocal ? false : { rejectUnauthorized: false },
+});
+
+const prisma = new PrismaClient({ adapter });
 
 type SeedData = {
   users: Prisma.UserCreateInput[];
@@ -36,6 +50,14 @@ const settings: SeedData['settings'] = [
     value: 'false',
     valueType: 'boolean',
     description: 'Allow students to submit documents for grading',
+  },
+  {
+    id: 'document_submission_school_ids',
+    name: 'document_submission_enabled_school_ids',
+    value: '',
+    valueType: 'string',
+    description:
+      'Comma-separated school IDs allowed to use document submission and grading',
   },
 ];
 
