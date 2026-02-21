@@ -437,6 +437,48 @@ export default function AppRoute() {
                 </p>
               </div>
             )}
+            {/* Writing Lessons for Teachers */}
+            <Link
+              to="/app/teacher-lounge/writing-lessons"
+              className="mt-4 flex items-center gap-3 rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4 transition-all hover:shadow hover:border-primary/50"
+            >
+              <div className="rounded-lg bg-primary/10 p-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-primary"
+                >
+                  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-medium mb-1">Writing Lessons Library</h4>
+                <p className="text-sm text-muted-foreground">
+                  Generate AI-powered lessons and assign to your students
+                </p>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-muted-foreground"
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </Link>
           </div>
           <div className="mt-8 flex flex-col">
             <p className="my-2 text-foreground/60">Student Courses</p>
@@ -589,6 +631,50 @@ export default function AppRoute() {
               </Link>
             ))}
           </div>
+        </div>
+        <div className="mt-8 flex flex-col">
+          <p className="my-2 text-foreground/60">Writing Lessons</p>
+          <Link
+            to="/app/writing-lessons"
+            className="flex items-center gap-3 rounded-lg border bg-gradient-to-br from-primary/5 to-primary/10 p-4 transition-all hover:shadow hover:border-primary/50"
+          >
+            <div className="rounded-lg bg-primary/10 p-3">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-primary"
+              >
+                <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h4 className="font-medium mb-1">Quick Writing Lessons</h4>
+              <p className="text-sm text-muted-foreground">
+                Mini-lessons on punctuation, sentence structure, and more
+              </p>
+            </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-muted-foreground"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </Link>
         </div>
         <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>

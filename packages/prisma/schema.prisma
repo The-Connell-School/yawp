@@ -8,21 +8,22 @@ datasource db {
 }
 
 model Class {
-  id                    String               @id @default(cuid())
-  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime             @default(now()) @db.Timestamptz(6)
-  code                  String
-  schoolYear            String               @default("2024-2025")
-  period                String
-  grade                 String
-  title                 String?
-  isArchived            Boolean              @default(false)
-  students              StudentProfile[]
-  teachers              TeacherProfile[]
-  schoolId              String
-  school                School               @relation(fields: [schoolId], references: [id])
-  documents             Document[]
-  allowedStudentCourses ClassStudentCourse[]
+  id                       String                    @id @default(cuid())
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  code                     String
+  schoolYear               String                    @default("2024-2025")
+  period                   String
+  grade                    String
+  title                    String?
+  isArchived               Boolean                   @default(false)
+  students                 StudentProfile[]
+  teachers                 TeacherProfile[]
+  schoolId                 String
+  school                   School                    @relation(fields: [schoolId], references: [id])
+  documents                Document[]
+  allowedStudentCourses    ClassStudentCourse[]
+  writingLessonAssignments WritingLessonAssignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
@@ -143,6 +144,7 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
+  writingLessonSessions       WritingLessonSession[]
 }
 
 model DocumentComment {
@@ -328,28 +330,32 @@ model Setting {
 }
 
 model StudentProfile {
-  id                          String                       @id @default(cuid())
-  createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
-  school                      String?
-  schoolTeacher               String?
-  grade                       String?
-  period                      String?
-  profileId                   String                       @unique
-  profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classes                     Class[]
-  studentCourseModuleSessions StudentCourseModuleSession[]
+  id                           String                       @id @default(cuid())
+  createdAt                    DateTime                     @default(now()) @db.Timestamptz(6)
+  school                       String?
+  schoolTeacher                String?
+  grade                        String?
+  period                       String?
+  profileId                    String                       @unique
+  profile                      Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  classes                      Class[]
+  studentCourseModuleSessions  StudentCourseModuleSession[]
+  writingLessonAssignments     WritingLessonAssignment[]
+  writingLessonSessions        WritingLessonSession[]
 }
 
 model TeacherProfile {
-  id                          String                       @id @default(cuid())
-  createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
-  isActive                    Boolean                      @default(true)
-  profileId                   String                       @unique
-  profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  teacherCourseModuleSessions TeacherCourseModuleSession[]
-  assignedTeacherCourses      TeacherCourse[]              @relation("TeacherCourseAssignments")
-  classes                     Class[]
-  schools                     School[]
+  id                           String                       @id @default(cuid())
+  createdAt                    DateTime                     @default(now()) @db.Timestamptz(6)
+  isActive                     Boolean                      @default(true)
+  profileId                    String                       @unique
+  profile                      Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  teacherCourseModuleSessions  TeacherCourseModuleSession[]
+  assignedTeacherCourses       TeacherCourse[]              @relation("TeacherCourseAssignments")
+  classes                      Class[]
+  schools                      School[]
+  writingLessons               WritingLesson[]
+  writingLessonAssignments     WritingLessonAssignment[]
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
@@ -505,4 +511,116 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+// ============================================
+// WRITING LESSONS
+// ============================================
+
+model WritingLesson {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  // Core content
+  topic       WritingLessonTopic
+  title       String
+  gradeLevel  String   @default("high-school") // "middle-school", "high-school", "college"
+  content     String   // Full lesson markdown (hook, rule, examples, tip, exercises)
+
+  // Parsed exercise data for AI evaluation
+  exercises   Json     // Array of { prompt: string, instruction: string, expectedFix?: string }
+
+  // Ownership
+  teacherProfileId String?
+  teacherProfile   TeacherProfile? @relation(fields: [teacherProfileId], references: [id], onDelete: SetNull)
+  isTemplate       Boolean @default(false) // System-provided template lessons
+
+  // Relations
+  assignments WritingLessonAssignment[]
+  sessions    WritingLessonSession[]
+
+  @@index([teacherProfileId])
+  @@index([topic])
+}
+
+enum WritingLessonTopic {
+  WORDINESS
+  TRANSITIONS
+  COMMA_OXFORD
+  COMMA_SPLICES
+  COMMA_INTRODUCTORY
+  COMMA_CLAUSES
+  PASSIVE_VOICE
+  PARALLEL_CONSTRUCTION
+  SUBJECT_VERB_AGREEMENT
+  PRONOUN_AGREEMENT
+}
+
+model WritingLessonAssignment {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+
+  // What's assigned
+  lessonId    String
+  lesson      WritingLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  // Who assigned it
+  teacherProfileId String
+  teacherProfile   TeacherProfile @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+
+  // Who it's assigned to (one of these)
+  classId           String?
+  class             Class?          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentProfileId  String?
+  studentProfile    StudentProfile? @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  // Optional due date
+  dueAt       DateTime? @db.Timestamptz(6)
+
+  @@index([lessonId])
+  @@index([teacherProfileId])
+  @@index([classId])
+  @@index([studentProfileId])
+}
+
+model WritingLessonSession {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+
+  // What lesson
+  lessonId    String
+  lesson      WritingLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  // Who's doing it
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+
+  // Optional: personalized with student's own document
+  sourceDocumentId String?
+  sourceDocument   Document? @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  // Exercise attempts
+  attempts    WritingLessonAttempt[]
+
+  @@unique([lessonId, studentProfileId])
+  @@index([studentProfileId])
+}
+
+model WritingLessonAttempt {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  sessionId   String
+  session     WritingLessonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  exerciseIndex Int      // Which exercise (0-indexed)
+  response      String   // Student's answer
+  isCorrect     Boolean
+  feedback      String   // AI-generated feedback
+  attemptNumber Int      // 1st, 2nd, 3rd attempt, etc.
+
+  @@index([sessionId, exerciseIndex])
 }
