@@ -23,7 +23,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
-import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
+import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
@@ -204,10 +204,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { isAdmin: true },
   });
 
-  if (!isGradingAssistantEnabledForOrg(profile.organization.id)) {
-    throw new Response('Not found', { status: 404 });
-  }
-
   const grade = await prisma.grade.findFirst({
     where: {
       id: params.gradeId,
@@ -237,7 +233,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               profile: {
                 select: { user: { select: { name: true, email: true } } },
               },
-              class: { select: { teachers: { select: { profileId: true } } } },
+              class: {
+                select: {
+                  schoolId: true,
+                  teachers: { select: { profileId: true } },
+                },
+              },
             },
           },
         },
@@ -246,6 +247,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   if (!grade) {
+    throw new Response('Not found', { status: 404 });
+  }
+
+  const gradingEnabled = await isDocumentSubmissionEnabledForSchool(
+    grade.snapshot.document.class?.schoolId
+  );
+  if (!gradingEnabled) {
     throw new Response('Not found', { status: 404 });
   }
 

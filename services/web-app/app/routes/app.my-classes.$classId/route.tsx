@@ -13,7 +13,6 @@ import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
-import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import {
   Sheet,
@@ -61,9 +60,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!profile.teacherProfile) {
     return redirect('/app');
   }
-  const gradingAssistantEnabled = isGradingAssistantEnabledForOrg(
-    profile.organization.id
-  );
   const classId = params.classId!;
 
   const klass = await prisma.class.findFirst({
@@ -281,7 +277,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submittedSnapshots,
     inProgressDocuments,
     submittedPapersFilter,
-    gradingAssistantEnabled,
     isDocumentSubmissionEnabled,
   });
 }
@@ -298,7 +293,6 @@ export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const gradingAssistantEnabled = data.gradingAssistantEnabled;
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
@@ -621,7 +615,7 @@ export default function ClassDetailRoute() {
                           View
                         </Link>
                       </Button>
-                      {gradingAssistantEnabled ? (
+                      {data.isDocumentSubmissionEnabled ? (
                         <Button asChild size="sm">
                           <Link
                             to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
@@ -710,7 +704,7 @@ export default function ClassDetailRoute() {
                             View
                           </Link>
                         </Button>
-                        {gradingAssistantEnabled ? (
+                        {data.isDocumentSubmissionEnabled ? (
                           <Button asChild size="sm">
                             <Link
                               to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
@@ -973,7 +967,6 @@ export default function ClassDetailRoute() {
             </Link>
           </Button>
           {data.isDocumentSubmissionEnabled &&
-            gradingAssistantEnabled &&
             activeTab === 'graded' &&
             gradedUnreleasedDocuments.length > 0 && (
               <DropdownMenu>
@@ -1165,7 +1158,7 @@ export default function ClassDetailRoute() {
         </SheetContent>
       </Sheet>
 
-      {data.isDocumentSubmissionEnabled && gradingAssistantEnabled ? (
+      {data.isDocumentSubmissionEnabled ? (
         <ReleaseGradesSheet
           grades={releaseGradesForSheet}
           isOpen={isReleaseGradesSheetOpen}

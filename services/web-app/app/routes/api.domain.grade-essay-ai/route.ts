@@ -17,7 +17,6 @@ import {
   personalizeOverallComment,
 } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
-import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
@@ -158,7 +157,6 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      organizationId: true,
       teacherProfile: {
         select: {
           classes: {
@@ -173,13 +171,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       { success: false, message: 'Only teachers can grade essays.' },
       { status: 403 }
-    );
-  }
-
-  if (!isGradingAssistantEnabledForOrg(profile.organizationId)) {
-    return dataResponse(
-      { success: false, message: 'Grading assistant is not enabled.' },
-      { status: 404 }
     );
   }
 

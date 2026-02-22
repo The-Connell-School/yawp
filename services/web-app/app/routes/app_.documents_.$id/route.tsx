@@ -32,7 +32,6 @@ import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { isGradingAssistantEnabledForOrg } from '~/utils/featureFlags.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
@@ -374,9 +373,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
-    gradingAssistantEnabled: isGradingAssistantEnabledForOrg(
-      profile.organization.id
-    ),
     isDocumentSubmissionEnabled,
     gradeComments,
   });
@@ -417,10 +413,8 @@ export default function Route() {
   });
   const isGradeReleased =
     grade?.releasedAt !== null && grade?.releasedAt !== undefined;
-  const gradingAssistantEnabled = data.gradingAssistantEnabled;
   const canUseGradingPanel =
     data.isDocumentSubmissionEnabled &&
-    gradingAssistantEnabled &&
     isViewingAsTeacher &&
     isSubmitted;
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
