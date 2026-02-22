@@ -15,17 +15,22 @@ import { useEffect } from 'react';
 import { PostHogProvider } from 'posthog-js/react';
 import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
-import { SessionExpiryModal } from './components/session-expiry-modal.tsx';
 import { Toaster } from './components/toaster.tsx';
 import { Tooltip } from './components/ui/tooltip.tsx';
 import { useNonce } from './contexts/nonce.ts';
+import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
 import {
   type NavState,
   navStateCookie,
 } from './routes/api.preferences.nav/cookie.server.ts';
 // @ts-expect-error - TODO: fix this
 import appCssUrl from './app.css?url';
-import { getUserId, logout } from './utils/auth.server.ts';
+import {
+  getSessionExpirationDate,
+  getUserId,
+  logout,
+  sessionKey,
+} from './utils/auth.server.ts';
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx';
 import { prisma } from './utils/db.server.ts';
 import { getEnv } from './utils/env.server.ts';
@@ -67,6 +72,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
+  const cookieHeader = request.headers.get('Cookie');
   const userId = await time(() => getUserId(request), {
     timings,
     type: 'getUserId',
@@ -103,8 +109,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     await logout({ request, redirectTo: '/' });
   }
 
+  const authSession = await authSessionStorage.getSession(cookieHeader);
+  const authSessionId = authSession.get(sessionKey);
+  const refreshedAuthSessionCookie =
+    userId && authSessionId
+      ? await authSessionStorage.commitSession(authSession, {
+          expires: getSessionExpirationDate(),
+        })
+      : null;
+
   const { toast, headers: toastHeaders } = await getToast(request);
-  const cookieHeader = request.headers.get('Cookie');
   const navCookie = (await navStateCookie.parse(cookieHeader)) || {};
   const profileId = await getProfileId(request);
   const profile =
@@ -132,6 +146,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     {
       headers: combineHeaders(
         { 'Server-Timing': timings.toString() },
+        refreshedAuthSessionCookie
+          ? { 'set-cookie': refreshedAuthSessionCookie }
+          : null,
         toastHeaders
       ),
     }
@@ -276,7 +293,6 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         </div>
       </div>
       <Toaster toast={data.toast} />
-      <SessionExpiryModal />
     </Document>
   );
 

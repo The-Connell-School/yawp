@@ -15,15 +15,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const session = await prisma.session.findUnique({
     where: { id: sessionId },
-    select: { expirationDate: true },
+    select: { id: true },
   });
 
   if (!session) {
     return data({ valid: false, reason: 'session_not_found' });
-  }
-
-  if (session.expirationDate < new Date()) {
-    return data({ valid: false, reason: 'session_expired' });
   }
 
   return data({ valid: true });
