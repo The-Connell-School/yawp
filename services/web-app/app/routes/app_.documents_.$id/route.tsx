@@ -424,17 +424,20 @@ export default function Route() {
     isViewingAsTeacher &&
     isSubmitted;
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
-  const isDocumentEditable = !isViewingAsTeacher;
+  const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
   const editorHtml =
-    isViewingAsTeacher && activeSnapshot?.html ? activeSnapshot.html : data.doc.html;
+    isViewingAsTeacher && !isDocumentEditable && activeSnapshot?.html
+      ? activeSnapshot.html
+      : data.doc.html;
   const initialEditorContent = useMemo(
     () => ({
       html: editorHtml ?? '',
-      text: (isViewingAsTeacher
-        ? activeSnapshot?.text
-        : data.doc.text) ?? '',
+      text:
+        (isViewingAsTeacher && !isDocumentEditable
+          ? activeSnapshot?.text
+          : data.doc.text) ?? '',
     }),
-    [activeSnapshot?.text, data.doc.text, editorHtml, isViewingAsTeacher]
+    [activeSnapshot?.text, data.doc.text, editorHtml, isDocumentEditable, isViewingAsTeacher]
   );
   const latestEditorContentRef = useRef(initialEditorContent);
   const editorBridgeRef = useRef<EditorBridge | null>(null);
@@ -1095,7 +1098,7 @@ export default function Route() {
             ) : (
               <Comments
                 comments={visibleComments as any}
-                readOnly={isViewingAsTeacher}
+                readOnly={!isDocumentEditable}
               />
             )}
           </div>
