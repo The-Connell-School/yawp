@@ -1,5 +1,5 @@
 import { test, expect } from '../test-setup';
-import { PrismaClient } from '@app/prisma';
+import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
 
 test.describe('Authentication - student sign up', () => {
@@ -7,17 +7,16 @@ test.describe('Authentication - student sign up', () => {
     page,
     e2eContext,
   }) => {
-    const prisma = new PrismaClient();
+    const prisma = createE2EPrismaClient();
     try {
-      // Use seeded school/teacher from e2eContext
-      const schoolCode = e2eContext.schoolCode;
-      const teacherName = e2eContext.teacherName;
+      // Use seeded class code from e2eContext
+      const classCode = e2eContext.classCode;
 
       // Act 1: request signup for student
       const studentEmail = `student-e2e-${Date.now()}@example.com`;
       await page.goto('/auth/inv/signup');
       await page.locator('input[name="email"]').fill(studentEmail);
-      await page.locator('input[name="schoolCode"]').fill(schoolCode);
+      await page.locator('input[name="code"]').fill(classCode);
       await page.getByRole('button', { name: /submit/i }).click();
 
       // Assert: invitation exists (poll to avoid race with server redirect)
@@ -60,41 +59,16 @@ test.describe('Authentication - student sign up', () => {
       await page.waitForURL('**/auth/inv/onboard-student**', {
         timeout: 15000,
       });
-      await page.waitForSelector('text=Please enter your details.', {
-        timeout: 15000,
-      });
 
       // Act 3: complete onboarding form
       await page.locator('input[name="name"]').fill('Student E2E');
 
-      // Select teacher
-      await page
-        .locator(
-          'xpath=//label[contains(normalize-space(.),"Teacher")]/following::button[1]'
-        )
-        .click();
-      await page.waitForSelector(`[role="option"]:has-text("${teacherName}")`, {
-        timeout: 10000,
-      });
-      await page
-        .locator(`[role=\"option\"]:has-text(\"${teacherName}\")`)
-        .click();
-
-      // Select grade
-      await page
-        .locator(
-          'xpath=//label[contains(normalize-space(.),"Grade")]/following::button[1]'
-        )
-        .click();
-      await page.locator('[role="option"]:has-text("9th")').click();
-
-      // Select period
-      await page
-        .locator(
-          'xpath=//label[contains(normalize-space(.),"Period")]/following::button[1]'
-        )
-        .click();
-      await page.locator('[role="option"]:has-text("1st")').click();
+      // If there are multiple classes for the code, pick a class.
+      const classSelect = page.locator('button[role="combobox"]').first();
+      if ((await classSelect.count()) > 0) {
+        await classSelect.click();
+        await page.locator('[role="option"]').nth(1).click();
+      }
 
       // Passwords
       await page.locator('input[name="password"]').fill('strong-password-123');
@@ -102,7 +76,7 @@ test.describe('Authentication - student sign up', () => {
         .locator('input[name="confirmPassword"]')
         .fill('strong-password-123');
 
-      await page.getByRole('button', { name: /create an account/i }).click();
+      await page.getByRole('button', { name: /create account/i }).click();
 
       // Assert: lands on /app dashboard
       await page.waitForURL('**/app**', { timeout: 15000 });

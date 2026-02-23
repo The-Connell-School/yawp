@@ -194,4 +194,8 @@ infra/envs/variables/
 
 playwright-report/
 test-results/
+services/web-app/e2e/.env.e2e
+services/web-app/e2e/.e2e-owned
+services/web-app/e2e/.pg-owned
+services/web-app/e2e/.e2e-context.json
 services/web-app/e2e/prisma/

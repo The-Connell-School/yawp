@@ -6,7 +6,8 @@ import chalk from 'chalk';
 export const prisma = remember('prisma', () => {
   const logThreshold = 20;
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString =
+    process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
