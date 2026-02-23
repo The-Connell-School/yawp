@@ -202,6 +202,7 @@ function applyReviewHighlights(
 type Props = {
   docId: string;
   docHtml: string | null;
+  saveSnapshotId?: string | null;
   setIsSaving: (isSaving: boolean) => void;
   isEditable?: boolean;
   gradeHighlights?: GradeHighlight[];
@@ -220,6 +221,7 @@ type Props = {
 export const Editor = ({
   docId,
   docHtml,
+  saveSnapshotId = null,
   setIsSaving,
   isEditable = true,
   gradeHighlights = [],
@@ -434,8 +436,11 @@ export const Editor = ({
       const formData = new FormData();
       formData.append('html', content.html);
       formData.append('text', content.text);
+      const saveUrl = saveSnapshotId
+        ? `/api/model/document/${docId}?from=editor&snapshotId=${encodeURIComponent(saveSnapshotId)}`
+        : `/api/model/document/${docId}?from=editor`;
       try {
-        const response = await fetch(`/api/model/document/${docId}?from=editor`, {
+        const response = await fetch(saveUrl, {
           method: 'PUT',
           body: formData,
           keepalive: true,
@@ -502,6 +507,7 @@ export const Editor = ({
   }, [
     editor,
     docId,
+    saveSnapshotId,
     setIsSaving,
     onContentSnapshot,
     onRemoteSaveSuccess,

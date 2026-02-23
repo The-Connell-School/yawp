@@ -419,19 +419,20 @@ export default function Route() {
     isSubmitted;
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
   const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
+  const isTeacherSnapshotView = isViewingAsTeacher && Boolean(activeSnapshot?.id);
   const editorHtml =
-    isViewingAsTeacher && !isDocumentEditable && activeSnapshot?.html
+    isTeacherSnapshotView && activeSnapshot?.html
       ? activeSnapshot.html
       : data.doc.html;
   const initialEditorContent = useMemo(
     () => ({
       html: editorHtml ?? '',
       text:
-        (isViewingAsTeacher && !isDocumentEditable
+        (isTeacherSnapshotView
           ? activeSnapshot?.text
           : data.doc.text) ?? '',
     }),
-    [activeSnapshot?.text, data.doc.text, editorHtml, isDocumentEditable, isViewingAsTeacher]
+    [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
   );
   const latestEditorContentRef = useRef(initialEditorContent);
   const editorBridgeRef = useRef<EditorBridge | null>(null);
@@ -866,7 +867,9 @@ export default function Route() {
                 </Button>
               </div>
             ) : null}
-            {!isViewingAsTeacher && data.isDocumentSubmissionEnabled && (
+            {!isViewingAsTeacher &&
+              data.isDocumentSubmissionEnabled &&
+              !isSubmitted && (
               <>
                 <Button
                   size="sm"
@@ -879,8 +882,6 @@ export default function Route() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Submitting...
                     </>
-                  ) : isSubmitted ? (
-                    'Submit again'
                   ) : (
                     'Submit'
                   )}
@@ -1054,6 +1055,7 @@ export default function Route() {
               <Editor
                 docId={data.doc.id}
                 docHtml={editorHtml}
+                saveSnapshotId={isTeacherSnapshotView ? activeSnapshot?.id : null}
                 setIsSaving={setIsSaving}
                 isEditable={isDocumentEditable}
                 onContentSnapshot={handleEditorContentSnapshot}
@@ -1107,7 +1109,7 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
-      {data.isDocumentSubmissionEnabled && (
+      {data.isDocumentSubmissionEnabled && !isSubmitted && (
         <Dialog
           open={isFinalizeDialogOpen}
           onOpenChange={setIsFinalizeDialogOpen}
@@ -1116,7 +1118,7 @@ export default function Route() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-yellow-600" />
-                {isSubmitted ? 'Resubmit Essay' : 'Submit Essay'}
+                Submit Essay
               </DialogTitle>
               <DialogDescription className="space-y-3 pt-2">
                 <p>Before you submit, please note the following:</p>
@@ -1127,11 +1129,10 @@ export default function Route() {
                   </li>
                   <li>
                     You can keep editing after you submit, but changes won’t be
-                    reflected in what your teacher sees unless you submit again.
+                    reflected in what your teacher sees.
                   </li>
                   <li>
-                    Your teacher will receive the current version of your
-                    document for grading.
+                    You can only submit once right now.
                   </li>
                 </ul>
                 <p className="pt-2 font-medium">

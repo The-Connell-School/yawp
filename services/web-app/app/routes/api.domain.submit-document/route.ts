@@ -41,6 +41,13 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  if (document.submittedAt) {
+    return redirectWithToast(`/app/documents/${data.documentId}`, {
+      description: 'Resubmitting is temporarily disabled.',
+      type: 'error',
+    });
+  }
+
   if (!document.html || !document.text) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
@@ -89,8 +96,6 @@ export async function action({ request }: ActionFunctionArgs) {
   return dataResponse({
     success: true,
     document: finalDocument,
-    message: document.submittedAt
-      ? 'Essay resubmitted successfully!'
-      : 'Essay submitted successfully!',
+    message: 'Essay submitted successfully!',
   });
 }

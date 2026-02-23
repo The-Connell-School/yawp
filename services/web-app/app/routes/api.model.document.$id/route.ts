@@ -15,6 +15,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const snapshotId = new URL(request.url).searchParams.get('snapshotId');
 
   let formData: FormData | null = null;
 
@@ -63,6 +64,45 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: { id: params.id },
     }),
   ]);
+
+  if (snapshotId) {
+    const snapshot = await prisma.documentSnapshot.findFirst({
+      where: {
+        id: snapshotId,
+        documentId: document.id,
+        submittedAt: { not: null },
+        ...(user.isAdmin
+          ? {}
+          : {
+              document: {
+                class: {
+                  teachers: { some: { profileId: profile.id } },
+                },
+              },
+            }),
+      },
+      select: { id: true },
+    });
+
+    if (!snapshot) {
+      return new Response(null, { status: 404 });
+    }
+
+    const snapshotData: { html?: string; text?: string } = {};
+    if (data.html !== undefined) snapshotData.html = data.html;
+    if (data.text !== undefined) snapshotData.text = data.text;
+
+    if (Object.keys(snapshotData).length === 0) {
+      return new Response(null, { status: 204 });
+    }
+
+    await prisma.documentSnapshot.update({
+      where: { id: snapshot.id },
+      data: snapshotData,
+    });
+
+    return new Response(null, { status: 204 });
+  }
 
   // Throttled version + periodic durable snapshot strategy
   const now = new Date();
