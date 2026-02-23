@@ -1,10 +1,10 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
 const POST = z.object({
   gradeIds: z.preprocess(
@@ -18,32 +18,22 @@ const POST = z.object({
 });
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  // Get teacher's profile
-  const profile = await prisma.profile.findFirst({
-    where: {
-      userId,
-      teacherProfile: { isNot: null },
-    },
-    select: { id: true },
-  });
-
-  if (!profile) {
+  const actor = await getGradingActor(request);
+  if (!canManageGrades(actor)) {
     return dataResponse(
       { success: false, message: 'Only teachers can release grades.' },
       { status: 403 }
     );
   }
 
-  // Verify all grades exist and were graded by this teacher
+  // Verify all grades exist and are eligible to be released.
   const grades = await prisma.grade.findMany({
     where: {
       id: { in: data.gradeIds },
-      gradedById: profile.id,
+      ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
       releasedAt: null,
     },
     select: {

@@ -1,11 +1,15 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
 import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import {
+  buildTeacherClassWhere,
+  canManageGrades,
+  getGradingActor,
+} from '~/utils/grading-auth.server';
 
 // Schema for single or bulk grading
 const POST = z.object({
@@ -32,8 +36,6 @@ function parseJson(value?: string) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
@@ -54,33 +56,15 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  // Get teacher's profile
-  const profile = await prisma.profile.findFirst({
-    where: {
-      userId,
-      teacherProfile: { isNot: null },
-    },
-    select: {
-      id: true,
-      teacherProfile: {
-        select: {
-          classes: {
-            select: { id: true },
-          },
-        },
-      },
-    },
-  });
-
-  if (!profile || !profile.teacherProfile) {
+  const actor = await getGradingActor(request);
+  if (!canManageGrades(actor)) {
     return dataResponse(
       { success: false, message: 'Only teachers can grade essays.' },
       { status: 403 }
     );
   }
 
-  // Get the teacher's class IDs for verification
-  const teacherClassIds = profile.teacherProfile.classes.map((c) => c.id);
+  const teacherClassWhere = buildTeacherClassWhere(actor);
 
   let snapshots: {
     id: string;
@@ -95,8 +79,8 @@ export async function action({ request }: ActionFunctionArgs) {
         submittedAt: { not: null },
         archivedAt: null,
         document: {
-          classId: { in: teacherClassIds },
           deletedAt: null,
+          ...teacherClassWhere,
         },
       },
       select: {
@@ -125,8 +109,8 @@ export async function action({ request }: ActionFunctionArgs) {
             archivedAt: null,
           },
         },
-        classId: { in: teacherClassIds },
         deletedAt: null,
+        ...teacherClassWhere,
       },
       select: {
         id: true,
@@ -207,7 +191,7 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { snapshotId: snapshot.id },
       create: {
         snapshotId: snapshot.id,
-        gradedById: profile.id,
+        gradedById: actor.profileId,
         score,
         feedback: data.feedback,
         rubricScores,

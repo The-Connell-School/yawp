@@ -57,6 +57,10 @@ import {
 } from '~/domain/grading/grammarIssues';
 import { TeacherGradingPanel } from './_components/teacher-grading-panel';
 import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
+import {
+  readLastNonDocumentRoute,
+  sanitizeExitTarget,
+} from '~/utils/document-exit';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
   items: T[];
@@ -396,9 +400,8 @@ export default function Route() {
   );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
-  const [exitTarget, setExitTarget] = useState(
-    searchParams.get('exitTo') || '/app'
-  );
+  const [exitTarget, setExitTarget] = useState('/app');
+  const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
   const leftPanel = searchParams.get('left') ?? 'tutor';
   const isReviseMode = searchParams.get('revise') === '1';
@@ -487,8 +490,8 @@ export default function Route() {
       ? `/app/graded/${grade.id}`
       : null;
   const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
-    searchParams.get('exitTo')
-      ? `&exitTo=${encodeURIComponent(searchParams.get('exitTo') ?? '')}`
+    explicitExitTarget
+      ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
       : ''
   }`;
   const backupPreviewText = localBackup
@@ -736,30 +739,13 @@ export default function Route() {
   }, [submitFetcher.state, submitFetcher.data, navigate]);
 
   useEffect(() => {
-    const explicitExitTo = searchParams.get('exitTo');
-    if (explicitExitTo) {
-      setExitTarget(explicitExitTo);
+    if (explicitExitTarget) {
+      setExitTarget(explicitExitTarget);
       return;
     }
 
-    if (typeof window === 'undefined') return;
-    if (!document.referrer) return;
-
-    try {
-      const currentUrl = new URL(window.location.href);
-      const referrerUrl = new URL(document.referrer);
-      const isSameOrigin = currentUrl.origin === referrerUrl.origin;
-      const isSamePath = currentUrl.pathname === referrerUrl.pathname;
-
-      if (isSameOrigin && !isSamePath) {
-        setExitTarget(
-          `${referrerUrl.pathname}${referrerUrl.search}${referrerUrl.hash}`
-        );
-      }
-    } catch {
-      // Ignore malformed referrer values.
-    }
-  }, [searchParams]);
+    setExitTarget(readLastNonDocumentRoute() ?? '/app');
+  }, [explicitExitTarget]);
 
   useEffect(() => {
     const handleEditorReady = (event: Event) => {

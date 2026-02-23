@@ -216,10 +216,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : []),
   ]);
 
-  return redirectWithToast(`/app/documents/${doc.id}?spa=1`, {
-    type: 'success',
-    description: 'Document created successfully.',
+  const requestUrl = new URL(request.url);
+  const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
+  const redirectParams = new URLSearchParams({
+    spa: '1',
+    exitTo: currentPath,
   });
+
+  return redirectWithToast(
+    `/app/documents/${doc.id}?${redirectParams.toString()}`,
+    {
+      type: 'success',
+      description: 'Document created successfully.',
+    }
+  );
 }
 
 export default function AppCoursesIdRoute() {

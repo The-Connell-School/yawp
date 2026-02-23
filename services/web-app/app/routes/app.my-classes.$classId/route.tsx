@@ -4,7 +4,6 @@ import {
   redirect,
 } from 'react-router';
 import {
-  useFetcher,
   useLoaderData,
   useSearchParams,
   useNavigate,
@@ -277,7 +276,6 @@ type TabValue =
   | 'to-grade'
   | 'graded'
   | 'released'
-  | 'archived'
   | 'paste-activity'
   | 'students';
 
@@ -296,11 +294,6 @@ export default function ClassDetailRoute() {
   >(new Set());
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
-  const submissionArchiveFetcher = useFetcher<{
-    success: boolean;
-    snapshotId: string;
-    archived: boolean;
-  }>();
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     {
       id: string;
@@ -326,7 +319,19 @@ export default function ClassDetailRoute() {
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
   // Tab and pagination state
-  const activeTab = (searchParams.get('tab') as TabValue) || 'in-progress';
+  const validTabs: TabValue[] = [
+    'in-progress',
+    'to-grade',
+    'graded',
+    'released',
+    'paste-activity',
+    'students',
+  ];
+  const requestedTab = searchParams.get('tab') as TabValue | null;
+  const activeTab =
+    requestedTab && validTabs.includes(requestedTab)
+      ? requestedTab
+      : 'in-progress';
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const hasMeaningfulGrade = (grade: {
     score: string | null;
@@ -352,11 +357,6 @@ export default function ClassDetailRoute() {
     () => data.submittedSnapshots.filter((snapshot) => !snapshot.archivedAt),
     [data.submittedSnapshots]
   );
-  const archivedSubmittedDocuments = useMemo(
-    () => data.submittedSnapshots.filter((snapshot) => !!snapshot.archivedAt),
-    [data.submittedSnapshots]
-  );
-
   // Reset pagination when tab changes
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
@@ -433,15 +433,6 @@ export default function ClassDetailRoute() {
     window.location.reload();
   };
 
-  useEffect(() => {
-    if (
-      submissionArchiveFetcher.state === 'idle' &&
-      submissionArchiveFetcher.data?.success
-    ) {
-      window.location.reload();
-    }
-  }, [submissionArchiveFetcher.state, submissionArchiveFetcher.data]);
-
   const toggleGradedDocumentSelection = (docId: string) => {
     const newSelection = new Set(selectedGradedDocuments);
     if (newSelection.has(docId)) {
@@ -498,8 +489,6 @@ export default function ClassDetailRoute() {
         return gradedUnreleasedDocuments;
       case 'released':
         return releasedDocuments;
-      case 'archived':
-        return archivedSubmittedDocuments;
       case 'paste-activity':
         return data.pasteAlerts;
       case 'students':
@@ -513,7 +502,6 @@ export default function ClassDetailRoute() {
     ungradedDocuments,
     gradedUnreleasedDocuments,
     releasedDocuments,
-    archivedSubmittedDocuments,
     data.pasteAlerts,
     students,
   ]) as any[];
@@ -543,7 +531,6 @@ export default function ClassDetailRoute() {
             {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
             {activeTab === 'graded' && 'No grades ready to release.'}
             {activeTab === 'released' && 'No released documents yet.'}
-            {activeTab === 'archived' && 'No archived submissions.'}
             {activeTab === 'paste-activity' &&
               'No copy/paste activity detected yet.'}
             {activeTab === 'students' && 'No students in this class yet.'}
@@ -648,20 +635,6 @@ export default function ClassDetailRoute() {
                           Grade
                         </Button>
                       )}
-                      <submissionArchiveFetcher.Form
-                        method="post"
-                        action={`/api/model/submission/${snapshot.id}`}
-                      >
-                        <input type="hidden" name="action" value="archive" />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="ghost"
-                          disabled={submissionArchiveFetcher.state !== 'idle'}
-                        >
-                          Archive
-                        </Button>
-                      </submissionArchiveFetcher.Form>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -751,20 +724,6 @@ export default function ClassDetailRoute() {
                             Edit Grade
                           </Button>
                         )}
-                        <submissionArchiveFetcher.Form
-                          method="post"
-                          action={`/api/model/submission/${snapshot.id}`}
-                        >
-                          <input type="hidden" name="action" value="archive" />
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="ghost"
-                            disabled={submissionArchiveFetcher.state !== 'idle'}
-                          >
-                            Archive
-                          </Button>
-                        </submissionArchiveFetcher.Form>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -821,87 +780,11 @@ export default function ClassDetailRoute() {
                             View
                           </Link>
                         </Button>
-                        <submissionArchiveFetcher.Form
-                          method="post"
-                          action={`/api/model/submission/${snapshot.id}`}
-                        >
-                          <input type="hidden" name="action" value="archive" />
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="ghost"
-                            disabled={submissionArchiveFetcher.state !== 'idle'}
-                          >
-                            Archive
-                          </Button>
-                        </submissionArchiveFetcher.Form>
                       </div>
                     </TableCell>
                   </TableRow>
                 );
               })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'archived') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Archived</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((snapshot) => (
-                <TableRow key={snapshot.id}>
-                  <TableCell className="font-medium">
-                    {snapshot.document.profile.user.name ||
-                      snapshot.document.profile.user.email}
-                  </TableCell>
-                  <TableCell>{snapshot.document.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {timeAgo(new Date(snapshot.submittedAt ?? snapshot.createdAt))}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {snapshot.archivedAt
-                      ? timeAgo(new Date(snapshot.archivedAt))
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                      <submissionArchiveFetcher.Form
-                        method="post"
-                        action={`/api/model/submission/${snapshot.id}`}
-                      >
-                        <input type="hidden" name="action" value="unarchive" />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="ghost"
-                          disabled={submissionArchiveFetcher.state !== 'idle'}
-                        >
-                          Unarchive
-                        </Button>
-                      </submissionArchiveFetcher.Form>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
             </TableBody>
           </Table>
         </div>
@@ -1182,7 +1065,7 @@ export default function ClassDetailRoute() {
         >
           <div>
             <div className="flex items-center justify-between">
-              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-7 h-auto">
+              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 h-auto">
                 <TabsTrigger
                   value="in-progress"
                   className="flex items-center gap-2 h-auto py-2"
@@ -1226,18 +1109,6 @@ export default function ClassDetailRoute() {
                     <span className="hidden sm:inline">Released</span>
                     <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                       {releasedDocuments.length}
-                    </span>
-                  </TabsTrigger>
-                )}
-                {data.isDocumentSubmissionEnabled && (
-                  <TabsTrigger
-                    value="archived"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="hidden sm:inline">Archived</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {archivedSubmittedDocuments.length}
                     </span>
                   </TabsTrigger>
                 )}

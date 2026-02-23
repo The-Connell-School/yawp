@@ -62,6 +62,10 @@ import { useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { z } from 'zod';
 import { NameSchema } from '~/utils/schemas/user';
+import {
+  isDocumentRoutePath,
+  writeLastNonDocumentRoute,
+} from '~/utils/document-exit';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -167,6 +171,13 @@ export default function Route() {
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [location]);
+
+  useEffect(() => {
+    if (isDocumentRoutePath(location.pathname)) return;
+    writeLastNonDocumentRoute(
+      `${location.pathname}${location.search}${location.hash}`
+    );
+  }, [location.hash, location.pathname, location.search]);
 
   return (
     <main
