@@ -1,6 +1,7 @@
 import { createCookie } from 'react-router';
 
 const cookieName = 'profile-id';
+const PROFILE_ID_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 export const profileIdCookie = createCookie(cookieName, {
   path: '/',
@@ -20,6 +21,10 @@ export async function getProfileId(request: Request): Promise<string> {
   return profileId;
 }
 
-export async function setProfileId(profileId: String) {
-  return profileIdCookie.serialize(profileId, { maxAge: 60 * 10 });
+export async function setProfileId(profileId: string) {
+  if (!profileId) return destroyProfileId();
+
+  return profileIdCookie.serialize(profileId, {
+    maxAge: PROFILE_ID_COOKIE_MAX_AGE_SECONDS,
+  });
 }
