@@ -1,5 +1,5 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@app/prisma';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import crypto from 'node:crypto';
@@ -44,9 +44,9 @@ const AiResponseSchema = z.object({
   overallComment: z.string().min(1),
 });
 
-function tryParseJson(value: string):
-  | { ok: true; value: unknown }
-  | { ok: false } {
+function tryParseJson(
+  value: string
+): { ok: true; value: unknown } | { ok: false } {
   try {
     return { ok: true, value: JSON.parse(value) };
   } catch {
@@ -355,7 +355,9 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   };
 
-  const buildGrammarIssuesPayload = (issues: ReturnType<typeof parseGrammarIssuesPayload>) =>
+  const buildGrammarIssuesPayload = (
+    issues: ReturnType<typeof parseGrammarIssuesPayload>
+  ) =>
     ({
       version: 1,
       issues: issues.map((issue) => ({
