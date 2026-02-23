@@ -57,7 +57,7 @@ type GradeHighlight = {
   excerpt: string | null;
   occurrence?: number | null;
   dataAttr?: 'data-grade-comment-id' | 'data-grammar-issue-id';
-  className?: 'grade-comment-mark' | 'grammar-issue';
+  className?: string;
 };
 
 type SaveFailureReason = 'auth' | 'network' | 'server';
@@ -159,22 +159,43 @@ function applyReviewHighlights(
       continue;
     }
 
-    const range = document.createRange();
-    try {
-      range.setStart(startBoundary.node, startBoundary.offset);
-      range.setEnd(endBoundary.node, endBoundary.offset);
-    } catch {
-      // Highlights can overlap and mutate the DOM; skip invalid ranges safely.
-      continue;
-    }
-    if (range.collapsed) continue;
-
     const source = highlightById.get(r.id);
-    const wrapper = document.createElement('span');
-    wrapper.setAttribute(source?.dataAttr ?? 'data-grade-comment-id', r.id);
-    wrapper.className = source?.className ?? 'grade-comment-mark';
-    wrapper.appendChild(range.extractContents());
-    range.insertNode(wrapper);
+    if (!source) continue;
+    const dataAttr = source.dataAttr ?? 'data-grade-comment-id';
+    const className = source.className ?? 'grade-comment-mark';
+
+    const currentNodes = getTextNodes(root);
+    const startIndex = currentNodes.indexOf(startBoundary.node);
+    const endIndex = currentNodes.indexOf(endBoundary.node);
+    if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) continue;
+
+    for (let nodeIndex = endIndex; nodeIndex >= startIndex; nodeIndex--) {
+      const node = currentNodes[nodeIndex];
+      const nodeLength = node.textContent?.length ?? 0;
+      const segmentStart = nodeIndex === startIndex ? startBoundary.offset : 0;
+      const segmentEnd = nodeIndex === endIndex ? endBoundary.offset : nodeLength;
+      if (segmentEnd <= segmentStart) continue;
+
+      const segmentRange = document.createRange();
+      try {
+        segmentRange.setStart(node, segmentStart);
+        segmentRange.setEnd(node, segmentEnd);
+      } catch {
+        continue;
+      }
+      if (segmentRange.collapsed) continue;
+
+      const wrapper = document.createElement('span');
+      wrapper.setAttribute(dataAttr, r.id);
+      wrapper.className = className;
+      try {
+        segmentRange.surroundContents(wrapper);
+      } catch {
+        // Fallback when the browser rejects surroundContents due to stale boundaries.
+        wrapper.appendChild(segmentRange.extractContents());
+        segmentRange.insertNode(wrapper);
+      }
+    }
   }
 }
 
@@ -281,6 +302,65 @@ export const Editor = ({
     root.addEventListener('click', onClick);
     return () => root.removeEventListener('click', onClick);
   }, [editor, isEditable, onGradeCommentSelect]);
+
+  useEffect(() => {
+    if (!editor || isEditable) return;
+    const root = editor.view.dom as HTMLElement;
+
+    const setGradeHover = (id: string, hovered: boolean) => {
+      root
+        .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+        .forEach((el) => {
+          el.classList.toggle('hovered', hovered);
+        });
+    };
+
+    const onMouseOver = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const mark = target?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (!mark) return;
+      const id = mark.getAttribute('data-grade-comment-id');
+      if (!id) return;
+
+      const relatedTarget = event.relatedTarget as HTMLElement | null;
+      const relatedMark = relatedTarget?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (relatedMark?.getAttribute('data-grade-comment-id') === id) return;
+
+      setGradeHover(id, true);
+    };
+
+    const onMouseOut = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const mark = target?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (!mark) return;
+      const id = mark.getAttribute('data-grade-comment-id');
+      if (!id) return;
+
+      const relatedTarget = event.relatedTarget as HTMLElement | null;
+      const relatedMark = relatedTarget?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (relatedMark?.getAttribute('data-grade-comment-id') === id) return;
+
+      setGradeHover(id, false);
+    };
+
+    root.addEventListener('mouseover', onMouseOver);
+    root.addEventListener('mouseout', onMouseOut);
+    return () => {
+      root.removeEventListener('mouseover', onMouseOver);
+      root.removeEventListener('mouseout', onMouseOut);
+      root
+        .querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
+        .forEach((el) => el.classList.remove('hovered'));
+    };
+  }, [editor, isEditable]);
 
   useEffect(() => {
     if (!editor || isEditable || !onGrammarIssueHover) return;
@@ -544,7 +624,7 @@ export const Editor = ({
         return;
       }
       const excerpt = sel.toString().trim();
-      if (!excerpt || excerpt.length > 120) {
+      if (!excerpt) {
         setSelectionToolbarRect(null);
         return;
       }

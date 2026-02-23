@@ -9,6 +9,26 @@ import { Tooltip } from '~/components/ui/tooltip';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
+function hasMeaningfulGrade(grade: {
+  score: string | null;
+  feedback: string | null;
+  rubricScores?: unknown | null;
+  overallComment?: string | null;
+  numericPercentage?: number | null;
+  letterGrade?: string | null;
+}) {
+  return Boolean(
+    grade.score ||
+      grade.feedback ||
+      grade.overallComment ||
+      grade.letterGrade ||
+      grade.numericPercentage !== null ||
+      (grade.rubricScores &&
+        typeof grade.rubricScores === 'object' &&
+        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+  );
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
@@ -46,30 +66,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get document stats for each class
   const classStats = await Promise.all(
     classes.map(async (klass: (typeof classes)[number]) => {
-      const gradedUnreleasedCount = await prisma.document.count({
+      const submissions = await prisma.documentSnapshot.findMany({
         where: {
-          classId: klass.id,
           submittedAt: { not: null },
-          submittedSnapshot: {
-            grades: {
-              some: {
-                releasedAt: null,
-              },
+          archivedAt: null,
+          document: {
+            classId: klass.id,
+            deletedAt: null,
+          },
+        },
+        select: {
+          grades: {
+            select: {
+              score: true,
+              feedback: true,
+              rubricScores: true,
+              overallComment: true,
+              numericPercentage: true,
+              letterGrade: true,
+              releasedAt: true,
             },
+            take: 1,
           },
         },
       });
 
-      // Count ungraded submissions
-      const ungradedCount = await prisma.document.count({
-        where: {
-          classId: klass.id,
-          submittedAt: { not: null },
-          submittedSnapshot: {
-            grades: { none: {} },
-          },
-        },
-      });
+      const ungradedCount = submissions.filter((snapshot) => {
+        const grade = snapshot.grades[0];
+        if (!grade) return true;
+        return !hasMeaningfulGrade(grade) && !grade.releasedAt;
+      }).length;
+
+      const gradedUnreleasedCount = submissions.filter((snapshot) => {
+        const grade = snapshot.grades[0];
+        return !!grade && hasMeaningfulGrade(grade) && !grade.releasedAt;
+      }).length;
 
       return {
         classId: klass.id,

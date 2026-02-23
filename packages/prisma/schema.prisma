@@ -180,6 +180,8 @@ model DocumentVersion {
 model DocumentSnapshot {
   id                 String     @id @default(cuid())
   createdAt          DateTime   @default(now()) @db.Timestamptz(6)
+  submittedAt        DateTime?  @db.Timestamptz(6)
+  archivedAt         DateTime?  @db.Timestamptz(6)
   text               String
   html               String
   documentId         String
@@ -188,6 +190,7 @@ model DocumentSnapshot {
   grades             Grade[]
 
   @@index([documentId, createdAt(sort: Desc)])
+  @@index([submittedAt, archivedAt])
 }
 
 model Grade {

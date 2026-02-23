@@ -180,6 +180,8 @@ export async function action({ request }: ActionFunctionArgs) {
     ? await prisma.documentSnapshot.findFirst({
         where: {
           id: data.snapshotId,
+          submittedAt: { not: null },
+          archivedAt: null,
           document: {
             classId: { in: teacherClassIds },
             deletedAt: null,
@@ -207,6 +209,12 @@ export async function action({ request }: ActionFunctionArgs) {
             id: data.documentId,
             submittedAt: { not: null },
             submittedSnapshotId: { not: null },
+            submittedSnapshot: {
+              is: {
+                submittedAt: { not: null },
+                archivedAt: null,
+              },
+            },
             classId: { in: teacherClassIds },
             deletedAt: null,
           },

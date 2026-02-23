@@ -9,7 +9,7 @@ const POST = z
     gradeId: z.string().optional(),
     snapshotId: z.string().optional(),
     content: z.string().min(1),
-    excerpt: z.string().min(1).max(120).optional(),
+    excerpt: z.string().min(1).optional(),
     occurrence: z
       .string()
       .optional()
@@ -28,6 +28,11 @@ const POST = z
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+  const isAdmin = !!user?.isAdmin;
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
@@ -40,7 +45,9 @@ export async function action({ request }: ActionFunctionArgs) {
         snapshot: {
           document: {
             deletedAt: null,
-            class: { teachers: { some: { profileId: profile.id } } },
+            ...(isAdmin
+              ? {}
+              : { class: { teachers: { some: { profileId: profile.id } } } }),
           },
         },
       },
@@ -49,7 +56,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!grade) {
       return dataResponse(
-        { success: false, message: 'Only teachers can add grading comments.' },
+        {
+          success: false,
+          message: 'Only teachers or admins can add grading comments.',
+        },
         { status: 403 }
       );
     }
@@ -59,15 +69,21 @@ export async function action({ request }: ActionFunctionArgs) {
     const snapshot = await prisma.documentSnapshot.findFirst({
       where: {
         id: data.snapshotId,
+        submittedAt: { not: null },
+        archivedAt: null,
         document: {
           deletedAt: null,
-          class: {
-            teachers: {
-              some: {
-                profileId: profile.id,
-              },
-            },
-          },
+          ...(isAdmin
+            ? {}
+            : {
+                class: {
+                  teachers: {
+                    some: {
+                      profileId: profile.id,
+                    },
+                  },
+                },
+              }),
         },
       },
       select: {
@@ -83,7 +99,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (!snapshot) {
       return dataResponse(
-        { success: false, message: 'Only teachers can add grading comments.' },
+        {
+          success: false,
+          message: 'Only teachers or admins can add grading comments.',
+        },
         { status: 403 }
       );
     }

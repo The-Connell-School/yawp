@@ -241,7 +241,8 @@ code {
 .grade-comment-mark.focused {
   background-color: #f9e055fc;
 }
-.grade-comment-mark:hover {
+.grade-comment-mark:hover,
+.grade-comment-mark.hovered {
   background-color: #f9e055fc;
 }
 .grade-comment-mark > p {

@@ -135,22 +135,40 @@ function applyExcerptHighlights(opts: {
       continue;
     }
 
-    const range = document.createRange();
-    try {
-      range.setStart(startBoundary.node, startBoundary.offset);
-      range.setEnd(endBoundary.node, endBoundary.offset);
-    } catch {
-      continue;
-    }
-    if (range.collapsed) continue;
-
-    const wrapper = document.createElement('span');
-    wrapper.setAttribute(dataAttr, r.id);
-    wrapper.className = className;
     const source = highlightById.get(r.id);
     if (!source) continue;
-    wrapper.appendChild(range.extractContents());
-    range.insertNode(wrapper);
+
+    const currentNodes = getTextNodes(root);
+    const startIndex = currentNodes.indexOf(startBoundary.node);
+    const endIndex = currentNodes.indexOf(endBoundary.node);
+    if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) continue;
+
+    for (let nodeIndex = endIndex; nodeIndex >= startIndex; nodeIndex--) {
+      const node = currentNodes[nodeIndex];
+      const nodeLength = node.textContent?.length ?? 0;
+      const segmentStart = nodeIndex === startIndex ? startBoundary.offset : 0;
+      const segmentEnd = nodeIndex === endIndex ? endBoundary.offset : nodeLength;
+      if (segmentEnd <= segmentStart) continue;
+
+      const segmentRange = document.createRange();
+      try {
+        segmentRange.setStart(node, segmentStart);
+        segmentRange.setEnd(node, segmentEnd);
+      } catch {
+        continue;
+      }
+      if (segmentRange.collapsed) continue;
+
+      const wrapper = document.createElement('span');
+      wrapper.setAttribute(dataAttr, r.id);
+      wrapper.className = className;
+      try {
+        segmentRange.surroundContents(wrapper);
+      } catch {
+        wrapper.appendChild(segmentRange.extractContents());
+        segmentRange.insertNode(wrapper);
+      }
+    }
   }
 }
 
@@ -161,7 +179,7 @@ function getSelectionInfo(root: HTMLElement) {
   if (!root.contains(range.commonAncestorContainer)) return null;
 
   const excerpt = selection.toString().trim();
-  if (!excerpt || excerpt.length > 120) return null;
+  if (!excerpt) return null;
 
   const textNodes = getTextNodes(root);
   const nodeSpans: { node: Text; start: number; end: number }[] = [];
@@ -285,7 +303,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const allGradeComments = await prisma.gradeComment.findMany({
     where: { gradeId: grade.id },
     include: {
-      profile: { include: { user: { select: { name: true, email: true } } } },
+      profile: {
+        include: {
+          user: { select: { name: true, email: true, isAdmin: true } },
+        },
+      },
       responses: {
         include: {
           profile: {
@@ -299,7 +321,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   const gradeComments = sortByDocumentLocation({
     items: allGradeComments.filter((comment) =>
-      teacherProfileIds.has(comment.profileId)
+      teacherProfileIds.has(comment.profileId) || comment.profile.user.isAdmin
     ),
     sourceText: grade.snapshot.text ?? '',
     getExcerpt: (comment) => comment.excerpt,
@@ -408,6 +430,14 @@ export default function Route() {
     const root = essayRef.current;
     if (!root) return;
 
+    const setGradeHover = (id: string, hovered: boolean) => {
+      root
+        .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+        .forEach((el) => {
+          el.classList.toggle('hovered', hovered);
+        });
+    };
+
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       const gradeMark = target?.closest?.(
@@ -433,8 +463,25 @@ export default function Route() {
     };
 
     const onMouseOver = (e: MouseEvent) => {
-      if (!showGrammar) return;
       const target = e.target as HTMLElement | null;
+      const gradeEl = target?.closest?.(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (gradeEl) {
+        const id = gradeEl.getAttribute('data-grade-comment-id');
+        if (id) {
+          const relatedTarget = e.relatedTarget as HTMLElement | null;
+          const relatedGradeEl = relatedTarget?.closest?.(
+            '[data-grade-comment-id]'
+          ) as HTMLElement | null;
+          const relatedId = relatedGradeEl?.getAttribute('data-grade-comment-id');
+          if (relatedId !== id) {
+            setGradeHover(id, true);
+          }
+        }
+      }
+
+      if (!showGrammar) return;
       const el = target?.closest?.(
         '[data-grammar-issue-id]'
       ) as HTMLElement | null;
@@ -449,6 +496,23 @@ export default function Route() {
 
     const onMouseOut = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
+      const gradeEl = target?.closest?.(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      if (gradeEl) {
+        const id = gradeEl.getAttribute('data-grade-comment-id');
+        if (id) {
+          const relatedTarget = e.relatedTarget as HTMLElement | null;
+          const relatedGradeEl = relatedTarget?.closest?.(
+            '[data-grade-comment-id]'
+          ) as HTMLElement | null;
+          const relatedId = relatedGradeEl?.getAttribute('data-grade-comment-id');
+          if (relatedId !== id) {
+            setGradeHover(id, false);
+          }
+        }
+      }
+
       const el = target?.closest?.(
         '[data-grammar-issue-id]'
       ) as HTMLElement | null;
@@ -466,6 +530,9 @@ export default function Route() {
       root.removeEventListener('click', onClick);
       root.removeEventListener('mouseover', onMouseOver);
       root.removeEventListener('mouseout', onMouseOut);
+      root
+        .querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
+        .forEach((el) => el.classList.remove('hovered'));
     };
   }, [showGrammar, focusGradeComment]);
 

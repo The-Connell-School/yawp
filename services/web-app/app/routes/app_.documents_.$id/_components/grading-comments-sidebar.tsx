@@ -257,6 +257,7 @@ export function GradingCommentsSidebar({
                       ref={draftTextareaRef}
                       value={draftContent}
                       onChange={(e) => setDraftContent(e.target.value)}
+                      onFocus={() => onSelectGradeComment?.('draft')}
                       placeholder="Write your comment..."
                       rows={3}
                       className="mt-2 resize-none"

@@ -92,6 +92,8 @@ export async function action({ request }: ActionFunctionArgs) {
     snapshots = await prisma.documentSnapshot.findMany({
       where: {
         id: { in: snapshotIds },
+        submittedAt: { not: null },
+        archivedAt: null,
         document: {
           classId: { in: teacherClassIds },
           deletedAt: null,
@@ -117,6 +119,12 @@ export async function action({ request }: ActionFunctionArgs) {
         id: { in: documentIds },
         submittedAt: { not: null },
         submittedSnapshotId: { not: null },
+        submittedSnapshot: {
+          is: {
+            submittedAt: { not: null },
+            archivedAt: null,
+          },
+        },
         classId: { in: teacherClassIds },
         deletedAt: null,
       },

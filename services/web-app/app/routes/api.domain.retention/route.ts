@@ -26,7 +26,11 @@ export async function loader({ request }: ActionFunctionArgs) {
       where: { createdAt: { lt: cutoffVersions } },
     }),
     prisma.documentSnapshot.deleteMany({
-      where: { createdAt: { lt: cutoffSnapshots } },
+      where: {
+        createdAt: { lt: cutoffSnapshots },
+        submittedAt: null,
+        grades: { none: {} },
+      },
     }),
   ]);
 

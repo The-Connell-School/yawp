@@ -68,6 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
         documentId: document.id,
         html,
         text,
+        submittedAt: now,
       },
     });
 

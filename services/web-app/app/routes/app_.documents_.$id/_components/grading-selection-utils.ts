@@ -23,7 +23,7 @@ export function getSelectionInfo(
   if (!root.contains(range.commonAncestorContainer)) return null;
 
   const excerpt = selection.toString().trim();
-  if (!excerpt || excerpt.length > 120) return null;
+  if (!excerpt) return null;
 
   const textNodes = getTextNodes(root);
   const nodeSpans: { node: Text; start: number; end: number }[] = [];

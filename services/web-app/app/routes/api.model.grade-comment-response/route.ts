@@ -12,6 +12,11 @@ const POST = z.object({
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+  const isAdmin = !!user?.isAdmin;
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
@@ -51,13 +56,13 @@ export async function action({ request }: ActionFunctionArgs) {
   const teachers = comment.grade.snapshot.document.class?.teachers ?? [];
   const isTeacherOfClass = teachers.some((t) => t.profileId === profile.id);
 
-  if (isStudentOwner) {
+  if (isStudentOwner && !isAdmin) {
     return dataResponse(
       { success: false, message: 'Students cannot reply to grade comments.' },
       { status: 403 }
     );
   }
-  if (!isTeacherOfClass) {
+  if (!isTeacherOfClass && !isAdmin) {
     return dataResponse(
       { success: false, message: 'Not authorized.' },
       { status: 403 }

@@ -13,6 +13,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
+  const isAdmin = !!user?.isAdmin;
 
   const comment = await prisma.gradeComment.findFirst({
     where: {
@@ -21,7 +26,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         snapshot: {
           document: {
             deletedAt: null,
-            class: { teachers: { some: { profileId: profile.id } } },
+            ...(isAdmin
+              ? {}
+              : { class: { teachers: { some: { profileId: profile.id } } } }),
           },
         },
       },
@@ -51,4 +58,3 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   return dataResponse({ success: true, comment: updated }, { status: 200 });
 }
-

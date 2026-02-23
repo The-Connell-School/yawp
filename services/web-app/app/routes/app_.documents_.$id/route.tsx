@@ -535,13 +535,22 @@ export default function Route() {
             excerpt: draftHighlight.excerpt,
             occurrence: draftHighlight.occurrence,
             dataAttr: 'data-grade-comment-id' as const,
-            className: 'grade-comment-mark' as const,
+            className:
+              activeGradeCommentId === 'draft'
+                ? 'grade-comment-mark focused'
+                : 'grade-comment-mark',
           },
         ]
       : [];
 
     return [...commentHighlights, ...draftHighlightEntry, ...grammarHighlights];
-  }, [data.gradeComments, draftHighlight, isTeacherGradingTabOpen, visibleGrammarIssues]);
+  }, [
+    activeGradeCommentId,
+    data.gradeComments,
+    draftHighlight,
+    isTeacherGradingTabOpen,
+    visibleGrammarIssues,
+  ]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
