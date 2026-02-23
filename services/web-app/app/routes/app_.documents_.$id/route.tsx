@@ -861,6 +861,7 @@ export default function Route() {
                   size="sm"
                   variant="outline"
                   disabled={isSubmitting || !hasEditorContent}
+                  data-testid="document-submit-button"
                   onClick={() => setIsFinalizeDialogOpen(true)}
                 >
                   {isSubmitting ? (
@@ -939,6 +940,7 @@ export default function Route() {
                   <Button
                     size="sm"
                     variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
+                    data-testid="document-leftpanel-tutor"
                     onClick={() => changeLeftPanel('tutor')}
                   >
                     Tutor
@@ -947,6 +949,7 @@ export default function Route() {
                     <Button
                       size="sm"
                       variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
+                      data-testid="document-leftpanel-grading"
                       onClick={() => changeLeftPanel('grading')}
                     >
                       Grading
@@ -1136,6 +1139,7 @@ export default function Route() {
               </Button>
               <Button
                 variant="default"
+                data-testid="document-finalize-submit"
                 onClick={() => {
                   submitFetcher.submit(
                     { documentId: data.doc.id },

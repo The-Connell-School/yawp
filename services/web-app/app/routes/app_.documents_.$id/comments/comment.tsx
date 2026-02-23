@@ -207,6 +207,8 @@ export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
             name="content"
             size="sm"
             onCmdEnter={reply}
+            textareaTestId={`comment-reply-input-${comment.id}`}
+            sendButtonTestId={`comment-reply-send-${comment.id}`}
             className="mt-2 bg-muted"
           />
         ) : null}

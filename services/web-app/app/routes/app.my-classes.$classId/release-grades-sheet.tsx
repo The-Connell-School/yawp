@@ -149,7 +149,11 @@ export function ReleaseGradesSheet({
             >
               Cancel
             </Button>
-            <Button onClick={handleRelease} disabled={fetcher.state !== 'idle'}>
+            <Button
+              onClick={handleRelease}
+              disabled={fetcher.state !== 'idle'}
+              data-testid="release-grades-confirm"
+            >
               {fetcher.state !== 'idle'
                 ? 'Releasing...'
                 : `Release ${grades.length} ${grades.length === 1 ? 'Grade' : 'Grades'}`}

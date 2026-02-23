@@ -5,12 +5,16 @@ import { Tooltip } from './ui/tooltip';
 
 export type RichTextareaProps = TextareaProps & {
   onCmdEnter?: (text: string) => void;
+  textareaTestId?: string;
+  sendButtonTestId?: string;
 };
 
 export const RichTextarea = ({
   size,
   className,
   onCmdEnter,
+  textareaTestId,
+  sendButtonTestId,
   ...textareaProps
 }: RichTextareaProps) => {
   const height = size === 'sm' ? '40px' : '50px';
@@ -36,6 +40,7 @@ export const RichTextarea = ({
         ref={textareaRef}
         onChange={handleTextareaChange}
         onKeyDown={handleKeyDown}
+        data-testid={textareaTestId}
         {...textareaProps}
       />
       <Tooltip text="Type a message first" delayDuration={200}>
@@ -49,6 +54,7 @@ export const RichTextarea = ({
             { 'bottom-1 right-1': size === 'sm' }
           )}
           disabled={!hasText || !!textareaProps?.disabled}
+          data-testid={sendButtonTestId}
           onClick={() => {
             const current = textareaRef.current;
             if (current?.value) {

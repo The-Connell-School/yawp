@@ -75,6 +75,7 @@ export async function seedE2E(): Promise<E2EContext> {
     data: {
       email: seededTeacherEmail,
       name: seededTeacherName,
+      password: { create: createPassword('teacher-e2e-password') },
       profiles: {
         create: {
           organizationId: org.id,
@@ -143,6 +144,7 @@ export async function seedE2E(): Promise<E2EContext> {
               title: `Instruction ${moduleIndex}.${instructionIndex}`,
               prompt: `Prompt for instruction ${moduleIndex}.${instructionIndex}`,
               position: instructionIndex,
+              showChatButton: true,
             })),
           },
         })),
@@ -157,11 +159,18 @@ export async function seedE2E(): Promise<E2EContext> {
   const document = await prisma.document.create({
     data: {
       title: 'E2E Doc',
-      text: 'Seeded E2E document',
-      html: '<p>Seeded E2E document</p>',
+      text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
+      html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
       profileId: profile.id,
+      classId: seededClass.id,
     },
     select: { id: true },
+  });
+  await prisma.classStudentCourse.create({
+    data: {
+      classId: seededClass.id,
+      studentCourseId: studentCourse.id,
+    },
   });
   // Link the document to the first module via a session
   await prisma.studentCourseModuleSession.create({

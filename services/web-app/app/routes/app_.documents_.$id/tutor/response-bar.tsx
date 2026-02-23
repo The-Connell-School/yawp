@@ -41,12 +41,17 @@ export const ResponseBar = ({
         size="lg"
         variant="secondary"
         className="shrink-0 px-2"
+        data-testid="tutor-chat-back"
         onClick={() => setIsAskingQuestion(false)}
       >
         <ChevronLeft />
       </Button>
       <div className="flex w-full max-w-[700px] items-center justify-center">
-        <RichTextarea onCmdEnter={respond} />
+        <RichTextarea
+          onCmdEnter={respond}
+          textareaTestId="tutor-chat-input"
+          sendButtonTestId="tutor-chat-send"
+        />
       </div>
     </div>
   ) : (
@@ -79,6 +84,7 @@ export const ResponseBar = ({
         <Button
           variant="secondary"
           className="flex items-center gap-2 text-lg"
+          data-testid="tutor-chat-open"
           onClick={() => setIsAskingQuestion(true)}
         >
           <MessageCircleIcon />

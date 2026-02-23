@@ -382,6 +382,7 @@ export function TeacherGradingPanel({
             <Button
               size="sm"
               variant="secondary"
+              data-testid="grading-assistant-generate"
               disabled={isBusy}
             >
               {isGenerating ? 'Grading…' : 'Grading Assistant Suggestions'}
@@ -389,6 +390,7 @@ export function TeacherGradingPanel({
           </ConfirmationDialog>
           <Button
             size="sm"
+            data-testid="grading-save-grade"
             onClick={save}
             disabled={isBusy || !hasUnsavedChanges}
           >
@@ -410,6 +412,7 @@ export function TeacherGradingPanel({
           <div className="flex gap-2">
             <Input
               id="pct"
+              data-testid="grading-overall-percentage"
               type="number"
               min={0}
               max={100}
@@ -450,6 +453,7 @@ export function TeacherGradingPanel({
           <Label htmlFor="overall-comment">Overall Feedback</Label>
           <Textarea
             id="overall-comment"
+            data-testid="grading-overall-comment"
             value={overallComment}
             disabled={isGenerating}
             onChange={(e) => setOverallComment(e.target.value)}
@@ -506,7 +510,10 @@ export function TeacherGradingPanel({
                         }));
                       }}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger
+                        className="w-full"
+                        data-testid={`grading-rubric-score-${item.key}`}
+                      >
                         <SelectValue placeholder="Select score" />
                       </SelectTrigger>
                       <SelectContent>
@@ -518,6 +525,7 @@ export function TeacherGradingPanel({
                       </SelectContent>
                     </Select>
                     <Textarea
+                      data-testid={`grading-rubric-comment-${item.key}`}
                       value={current.comment}
                       disabled={isGenerating}
                       onChange={(e) =>

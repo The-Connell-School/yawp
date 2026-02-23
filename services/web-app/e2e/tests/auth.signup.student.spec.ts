@@ -1,6 +1,35 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
+import type { Page } from '@playwright/test';
+
+const E2E_BASE_URL = 'http://127.0.0.1:5173';
+
+async function openVerifyPage(page: Page, verifySearch: string) {
+  await page.goto('about:blank');
+  await page.goto(`${E2E_BASE_URL}/auth/inv/verify?${verifySearch}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page).toHaveURL(/\/auth\/inv\/verify/);
+}
+
+async function fillCodeInputWithRetry(page: Page, code: string) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const input = page.getByRole('textbox', { name: /code/i }).first();
+    try {
+      await expect(input).toBeVisible({ timeout: 5000 });
+      await input.click();
+      await input.fill(code);
+      await expect(input).toHaveValue(code, { timeout: 3000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(200);
+    }
+  }
+  throw lastError;
+}
 
 test.describe('Authentication - student sign up', () => {
   test('signs up a student via invitation flow and reaches /app', async ({
@@ -49,10 +78,10 @@ test.describe('Authentication - student sign up', () => {
         type: 'onboard-student',
         target: studentEmail,
       }).toString();
-      await page.goto(`/auth/inv/verify?${verifySearch}`);
+      await openVerifyPage(page, verifySearch);
 
       // Submit verification code
-      await page.locator('input[name="code"]').fill(otp);
+      await fillCodeInputWithRetry(page, otp);
       await page.getByRole('button', { name: /submit/i }).click();
 
       // Expect redirect to onboarding form

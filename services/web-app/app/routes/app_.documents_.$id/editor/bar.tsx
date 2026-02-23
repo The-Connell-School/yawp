@@ -98,6 +98,7 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
       {isEditable ? (
         <Tooltip text="Comment" delayDuration={300}>
           <div
+            data-testid="editor-add-comment"
             onClick={() => {
               if (editor.isActive('comment')) {
                 editor.chain().focus().unsetComment().run();

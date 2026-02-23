@@ -980,7 +980,11 @@ export default function ClassDetailRoute() {
             gradedUnreleasedDocuments.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="default">
+                  <Button
+                    size="sm"
+                    variant="default"
+                    data-testid="class-release-grades-open"
+                  >
                     Release Grades
                   </Button>
                 </DropdownMenuTrigger>
