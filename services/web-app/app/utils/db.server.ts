@@ -1,11 +1,26 @@
 import { remember } from '@epic-web/remember';
 import { PrismaClient } from '@app/prisma';
+import { PrismaPg } from '@prisma/adapter-pg';
 import chalk from 'chalk';
 
 export const prisma = remember('prisma', () => {
   const logThreshold = 20;
 
+  const connectionString =
+    process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  const isLocal =
+    connectionString.includes('localhost') ||
+    connectionString.includes('127.0.0.1');
+  const adapter = new PrismaPg({
+    connectionString,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
+  });
+
   const client = new PrismaClient({
+    adapter,
     log: [
       { level: 'query', emit: 'event' },
       { level: 'error', emit: 'stdout' },
@@ -28,6 +43,5 @@ export const prisma = remember('prisma', () => {
     // eslint-disable-next-line no-console
     console.info(`prisma:query - ${dur} - ${e.query}`);
   });
-  client.$connect();
   return client;
 });

@@ -197,3 +197,56 @@ code {
 .comment-mark.ProseMirror-selectednode {
   background-color: #f9e055fc;
 }
+
+/* Graded artifact highlights */
+.draft-comments-hidden .comment-mark {
+  background-color: transparent;
+  border-bottom: none;
+  pointer-events: none;
+}
+
+.grammar-issue {
+  background-color: rgba(216, 180, 254, 0.28);
+  border-bottom: 2px dotted rgba(192, 132, 252, 0.6);
+  box-shadow: inset 0 -1px 0 rgba(192, 132, 252, 0.25);
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: help;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.grammar-issue:hover {
+  background-color: rgba(216, 180, 254, 0.4);
+  border-bottom-color: rgba(192, 132, 252, 0.75);
+}
+.grammar-issue > p {
+  display: inline;
+  margin: 0;
+  background-color: inherit;
+}
+.grammar-hidden .grammar-issue {
+  background-color: transparent;
+  border-bottom: none;
+  pointer-events: none;
+}
+
+.grade-comment-mark {
+  background-color: #fff30b38;
+  border-bottom: 2px dotted #f9e055fc;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.grade-comment-mark.focused {
+  background-color: #f9e055fc;
+}
+.grade-comment-mark:hover,
+.grade-comment-mark.hovered {
+  background-color: #f9e055fc;
+}
+.grade-comment-mark > p {
+  display: inline;
+  margin: 0;
+  background-color: inherit;
+}

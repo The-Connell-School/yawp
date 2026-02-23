@@ -4,4 +4,11 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [reactRouter(), tsconfigPaths()],
+  resolve: {
+    conditions: ['import', 'require'],
+  },
+  ssr: {
+    noExternal: ['posthog-js', 'posthog-js/react'],
+  },
+  server: { allowedHosts: true }, // Allow ngrok to forward twilio webhook calls
 });

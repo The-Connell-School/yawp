@@ -10,6 +10,7 @@ const schema = z.object({
   CACHE_DATABASE_PATH: z.string(),
   AWS_S3_BUCKET_FOR_VIDEOS: z.string(),
   AWS_S3_REGION_FOR_VIDEOS: z.string(),
+  AI_MODEL: z.string().optional(),
 });
 
 declare global {

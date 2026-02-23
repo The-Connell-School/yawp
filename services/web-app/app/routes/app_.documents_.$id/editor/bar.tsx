@@ -24,9 +24,10 @@ const PADDING = 8;
 export type BarProps = {
   editor: Editor | null;
   documentId: string;
+  isEditable?: boolean;
 };
 
-export const Bar = ({ editor, documentId }: BarProps) => {
+export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,50 +69,60 @@ export const Bar = ({ editor, documentId }: BarProps) => {
       className="bg-muted-background flex w-full items-center gap-0.5 border-b p-1"
       ref={containerRef}
     >
-      {visibleCommands.map(
-        ({ icon, label, command, params, activeId, override }) =>
-          override?.(editor) ?? (
-            <Tooltip text={label} delayDuration={300} key={label}>
-              <div
-                // @ts-ignore
-                onClick={() => editor.chain().focus()[command](params).run()}
-                className={cn(COMMAND_STYLE, {
-                  'bg-muted': editor.isActive(
-                    activeId ?? camelCase(label ?? ''),
-                    params
-                  ),
-                })}
-              >
-                {icon ?? label}
-              </div>
-            </Tooltip>
-          )
-      )}
-      <Tooltip text="Comment" delayDuration={300}>
-        <div
-          onClick={() => {
-            if (editor.isActive('comment')) {
-              editor.chain().focus().unsetComment().run();
-            } else {
-              const id = v4();
-              const { from, to } = editor.state.selection;
-              const content = editor.state.doc.textBetween(from, to, ' ');
-              if (!content) return;
-              editor.chain().focus().setComment(id).run();
-              createDocumentCommentFetcher.submit(
-                { id, content, documentId },
-                { method: 'POST', action: '/api/model/document-comment' }
+      {isEditable
+        ? visibleCommands.map(
+            ({ icon, label, command, params, activeId, isActive, override }) => {
+              if (override) return override(editor);
+              if (!command) return null;
+
+              return (
+                <Tooltip text={label} delayDuration={300} key={label ?? command}>
+                  <div
+                    onClick={() => {
+                      const chain = editor.chain().focus() as any;
+                      chain[command](params).run();
+                    }}
+                    className={cn(COMMAND_STYLE, {
+                      'bg-foreground/20 hover:bg-foreground/20': isActive
+                        ? isActive(editor)
+                        : editor.isActive(activeId ?? camelCase(label ?? ''), params),
+                    })}
+                  >
+                    {icon ?? label}
+                  </div>
+                </Tooltip>
               );
             }
-          }}
-          className={cn(COMMAND_STYLE, {
-            'bg-muted': editor.isActive('comment'),
-          })}
-        >
-          <MessageCirclePlusIcon className="h-5 w-5" />
-        </div>
-      </Tooltip>
-      {hiddenCommands.length > 0 && (
+          )
+        : null}
+      {isEditable ? (
+        <Tooltip text="Comment" delayDuration={300}>
+          <div
+            data-testid="editor-add-comment"
+            onClick={() => {
+              if (editor.isActive('comment')) {
+                editor.chain().focus().unsetComment().run();
+              } else {
+                const id = v4();
+                const { from, to } = editor.state.selection;
+                const content = editor.state.doc.textBetween(from, to, ' ');
+                if (!content) return;
+                editor.chain().focus().setComment(id).run();
+                createDocumentCommentFetcher.submit(
+                  { id, content, documentId },
+                  { method: 'POST', action: '/api/model/document-comment' }
+                );
+              }
+            }}
+            className={cn(COMMAND_STYLE, {
+              'bg-foreground/20 hover:bg-foreground/20': editor.isActive('comment'),
+            })}
+          >
+            <MessageCirclePlusIcon className="h-5 w-5" />
+          </div>
+        </Tooltip>
+      ) : null}
+      {isEditable && hiddenCommands.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger>
             <Button
@@ -124,20 +135,20 @@ export const Bar = ({ editor, documentId }: BarProps) => {
           </DropdownMenuTrigger>
           <DropdownMenuContent className="flex w-fit flex-col gap-1">
             {hiddenCommands.map(
-              ({ icon, label, command, params, activeId }) => (
+              ({ icon, label, command, params, activeId, isActive }, idx) => (
                 <DropdownMenuItem
-                  key={label}
+                  key={`${label ?? command ?? 'command'}-${idx}`}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (!command) return;
                     // @ts-ignore
                     editor.chain().focus()[command](params).run();
                   }}
                   className={cn(COMMAND_STYLE, 'flex items-center gap-3', {
-                    'bg-muted': editor.isActive(
-                      activeId ?? camelCase(label ?? ''),
-                      params
-                    ),
+                    'bg-foreground/20 hover:bg-foreground/20': isActive
+                      ? isActive(editor)
+                      : editor.isActive(activeId ?? camelCase(label ?? ''), params),
                   })}
                 >
                   <span>{icon ?? label}</span>

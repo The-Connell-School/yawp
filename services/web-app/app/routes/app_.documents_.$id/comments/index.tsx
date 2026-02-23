@@ -8,9 +8,15 @@ import { cn } from '~/utils/misc';
 import { Comment, type Comment as CommentType } from './comment';
 import { useCommentsSelection } from './selection-context';
 
-type Props = { comments: CommentType[] };
+type Props = { comments: CommentType[]; readOnly?: boolean };
 
-export const Comments = ({ comments }: Props) => {
+type ExtendedProps = Props & { className?: string };
+
+export const Comments = ({
+  comments,
+  readOnly = false,
+  className,
+}: ExtendedProps) => {
   const user = useUser();
   const fetcher = useFetchers().find(
     (f) => f.key === 'create-document-comment'
@@ -24,21 +30,28 @@ export const Comments = ({ comments }: Props) => {
   useBlurComments(comments);
   useFocusOptimisticComment(fetcher);
 
-  const optimisticComment: CommentType | [] = fetcher?.formData
-    ? {
-        profile: user.selectedProfile as any,
-        profileId: user.selectedProfile!.id,
-        id: 'optimistic-document-comment',
-        createdAt: new Date(),
-        content: fetcher.formData.get('content') as string,
-        highlightId: fetcher.formData.get('highlightId') as string,
-        responses: [],
-        documentId: '',
-      }
-    : [];
+  const optimisticComment: CommentType | [] =
+    !readOnly && fetcher?.formData
+      ? {
+          profile: user.selectedProfile as any,
+          profileId: user.selectedProfile!.id,
+          id: 'optimistic-document-comment',
+          createdAt: new Date(),
+          content: fetcher.formData.get('content') as string,
+          highlightId: fetcher.formData.get('highlightId') as string,
+          archivedAt: null,
+          responses: [],
+          documentId: '',
+        }
+      : [];
 
   return (
-    <div className="no-scrollbar h-full w-full overflow-y-scroll md:w-3/5">
+    <div
+      className={cn(
+        'no-scrollbar h-full w-full overflow-y-scroll md:w-3/5',
+        className
+      )}
+    >
       <Button
         variant="ghost"
         size="sm"
@@ -65,7 +78,7 @@ export const Comments = ({ comments }: Props) => {
         {comments.length > 0 ? (
           <>
             {comments.concat(optimisticComment).map((comment) => (
-              <Comment key={comment.id} {...comment} />
+              <Comment key={comment.id} {...comment} readOnly={readOnly} />
             ))}
           </>
         ) : (

@@ -9,7 +9,7 @@ COPY package.json bun.lockb ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 RUN bun install --ignore-scripts
-RUN bun prisma:generate
+RUN bun prisma generate
 RUN bun web-app:build
 
 FROM base AS production

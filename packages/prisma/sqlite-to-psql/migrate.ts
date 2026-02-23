@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '../generated/prisma';
 import { Database } from 'bun:sqlite';
-import { Prisma } from '@prisma/client';
 
 const sqliteDb = new Database(__dirname + '/test.db');
 const psqlPrisma = new PrismaClient();

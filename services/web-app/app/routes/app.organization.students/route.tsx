@@ -1,14 +1,15 @@
 import {
   data as dataResponse,
-  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
   useSearchParams,
   useNavigate,
+  useFetcher,
 } from 'react-router';
 import { CookieColumns } from '~/hooks/useTable';
 import { Button } from '~/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -22,9 +23,12 @@ import { Checkbox } from '~/components/ui/checkbox';
 import { ArrowDown, ArrowUp, ArrowUpDown, Pencil } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { cn } from '~/utils/misc';
-import { useFetcher } from 'react-router';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
-import { requireProfile, requireOwner } from '~/utils/auth.server';
+import {
+  getPasswordHash,
+  requireProfile,
+  requireOwner,
+} from '~/utils/auth.server';
 import {
   getOrganizationStudentsTableCookie,
   setOrganizationStudentsTableCookie,
@@ -39,8 +43,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Label } from '~/components/ui/label';
+import { Textarea } from '~/components/ui/textarea';
+import { parseFormData, validationError } from '@rvf/react-router';
+import { z } from 'zod';
 
 const COLUMNS: CookieColumns = {
   name: {
@@ -58,6 +65,130 @@ const COLUMNS: CookieColumns = {
   actions: {
     label: 'Actions',
   },
+};
+
+const BulkStudentsSchema = z.object({
+  students: z.string().min(1, 'At least one student is required'),
+  classId: z.string().min(1, 'Class is required'),
+});
+
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+const parseStudentRows = (raw: string) => {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const entries: Array<{
+    name: string;
+    email: string;
+    password: string;
+    line: number;
+  }> = [];
+  const invalidLines: number[] = [];
+
+  lines.forEach((line, index) => {
+    const parts = line.split(',');
+    if (parts.length < 3) {
+      invalidLines.push(index + 1);
+      return;
+    }
+
+    const name = parts[0]?.trim() ?? '';
+    const email = parts[1]?.trim() ?? '';
+    const password = parts.slice(2).join(',').trim();
+
+    if (!name || !email || !password) {
+      invalidLines.push(index + 1);
+      return;
+    }
+
+    entries.push({ name, email, password, line: index + 1 });
+  });
+
+  return { entries, invalidLines, total: lines.length };
+};
+
+const createOrEnrollStudent = async (
+  input: { name: string; email: string; password: string; classId: string },
+  organizationId: string
+) => {
+  const email = normalizeEmail(input.email);
+  const name = input.name.trim();
+  const password = input.password;
+  const classId = input.classId;
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      profiles: {
+        select: {
+          id: true,
+          organizationId: true,
+          studentProfile: {
+            select: {
+              id: true,
+              classes: { where: { id: classId }, select: { id: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (existingUser) {
+    const orgProfile = existingUser.profiles.find(
+      (p) => p.organizationId === organizationId
+    );
+
+    if (!orgProfile) {
+      return {
+        success: false,
+        email,
+        error: 'User belongs to another organization.',
+      };
+    }
+
+    if (orgProfile.studentProfile) {
+      if (orgProfile.studentProfile.classes.length === 0) {
+        await prisma.studentProfile.update({
+          where: { id: orgProfile.studentProfile.id },
+          data: { classes: { connect: { id: classId } } },
+        });
+      }
+
+      return { success: true, email };
+    }
+
+    await prisma.studentProfile.create({
+      data: {
+        profile: { connect: { id: orgProfile.id } },
+        classes: { connect: { id: classId } },
+      },
+    });
+
+    return { success: true, email };
+  }
+
+  const hashedPassword = await getPasswordHash(password);
+
+  await prisma.profile.create({
+    data: {
+      user: {
+        create: {
+          email,
+          name,
+          password: { create: { hash: hashedPassword } },
+        },
+      },
+      organization: { connect: { id: organizationId } },
+      studentProfile: { create: { classes: { connect: { id: classId } } } },
+    },
+  });
+
+  return { success: true, email };
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -195,6 +326,63 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  if (intent === 'import-students-bulk') {
+    const { data, error } = await parseFormData(formData, BulkStudentsSchema);
+    if (error) return validationError(error);
+
+    const klass = await prisma.class.findFirst({
+      where: {
+        id: data.classId,
+        school: { organizationId: profile.organization.id },
+        isArchived: false,
+      },
+      select: { id: true },
+    });
+
+    if (!klass) {
+      return dataResponse({ error: 'Class not found' }, { status: 404 });
+    }
+
+    const { entries, invalidLines } = parseStudentRows(data.students);
+
+    if (entries.length === 0) {
+      return dataResponse(
+        {
+          intent,
+          error:
+            invalidLines.length > 0
+              ? `Invalid rows: ${invalidLines.join(', ')}`
+              : 'No valid students found',
+        },
+        { status: 400 }
+      );
+    }
+
+    const deduped = new Map<string, (typeof entries)[number]>();
+    for (const entry of entries) {
+      deduped.set(normalizeEmail(entry.email), entry);
+    }
+
+    const results = await Promise.all(
+      Array.from(deduped.values()).map((entry) => {
+        const validated = {
+          name: entry.name,
+          email: entry.email,
+          password: entry.password,
+          classId: data.classId,
+        };
+        return createOrEnrollStudent(validated, profile.organization.id);
+      })
+    );
+
+    return dataResponse({
+      intent,
+      results,
+      invalidLines,
+      dedupedCount: deduped.size,
+    });
+  }
+
   if (intent === 'edit-student') {
     const studentId = formData.get('studentId') as string;
     const classIds = formData.getAll('classIds') as string[];
@@ -250,15 +438,42 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function OrganizationStudentsRoute() {
   const { students, totalCount, classes, table, q } =
     useLoaderData<typeof loader>();
+  const addStudentFetcher = useFetcher<typeof action>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [addStudentSheetOpen, setAddStudentSheetOpen] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
+  const classOptions = useMemo(
+    () =>
+      classes.map((klass) => ({
+        value: klass.id,
+        label: `${klass.school.name} - ${klass.grade} - Period ${klass.period} (${klass.schoolYear})`,
+      })),
+    [classes]
+  );
+  const bulkPreview = useMemo(() => parseStudentRows(bulkInput), [bulkInput]);
+  const actionResult =
+    addStudentFetcher.data && 'results' in addStudentFetcher.data
+      ? addStudentFetcher.data
+      : null;
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<
     (typeof students)[0] | null
   >(null);
+
+  useEffect(() => {
+    if (
+      (addStudentFetcher.data &&
+        'success' in addStudentFetcher.data &&
+        addStudentFetcher.data.success) ||
+      actionResult?.results?.[0]?.success
+    ) {
+      setAddStudentSheetOpen(false);
+    }
+  }, [addStudentFetcher.data, actionResult]);
 
   const handleSort = (column: string, direction: 'asc' | 'desc') => {
     setIsLoading(true);
@@ -295,18 +510,121 @@ export default function OrganizationStudentsRoute() {
               }}
             />
           </div>
+          <Button
+            size="sm"
+            disabled={classes.length === 0}
+            onClick={() => setAddStudentSheetOpen(true)}
+          >
+            Add Students
+          </Button>
         </div>
+
+        <Sheet open={addStudentSheetOpen} onOpenChange={setAddStudentSheetOpen}>
+          <SheetContent className="!w-[90vw] !max-w-[600px]">
+            <SheetHeader>
+              <SheetTitle>Add Students</SheetTitle>
+            </SheetHeader>
+            <addStudentFetcher.Form method="post" className="mt-4 space-y-4">
+              <input type="hidden" name="intent" value="import-students-bulk" />
+              <div className="space-y-2">
+                <Label htmlFor="classId">Class</Label>
+                <select
+                  id="classId"
+                  name="classId"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  required
+                >
+                  {classOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="students">
+                  Students (one per line: name, email, password)
+                </Label>
+                <Textarea
+                  id="students"
+                  name="students"
+                  placeholder="John Doe, john@example.com, password123"
+                  rows={8}
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Parsed: {bulkPreview.entries.length} valid,{' '}
+                  {bulkPreview.invalidLines.length} invalid
+                </p>
+              </div>
+              {addStudentFetcher.data &&
+                'error' in addStudentFetcher.data &&
+                addStudentFetcher.data.error && (
+                  <div className="text-sm text-red-600">
+                    {addStudentFetcher.data.error}
+                  </div>
+                )}
+              {actionResult?.intent === 'import-students-bulk' && (
+                <div className="text-sm text-green-600">
+                  {actionResult.results?.filter(
+                    (r: { success: boolean }) => r.success
+                  ).length ?? 0}{' '}
+                  created,{' '}
+                  {actionResult.results?.filter(
+                    (r: { success: boolean }) => !r.success
+                  ).length ?? 0}{' '}
+                  failed
+                </div>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={addStudentFetcher.state !== 'idle'}
+              >
+                {addStudentFetcher.state !== 'idle'
+                  ? 'Creating...'
+                  : 'Create Students'}
+              </Button>
+            </addStudentFetcher.Form>
+          </SheetContent>
+        </Sheet>
 
         <div>
           <div className="relative flex-1 overflow-y-auto min-h-[200px]">
             {students.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-                <span className="text-lg font-bold">No students found</span>
-                <span className="text-sm text-muted-foreground">
-                  {q
-                    ? 'Try adjusting your search'
-                    : 'Students will appear here once they sign up and join classes'}
-                </span>
+              <div className="flex h-full flex-col items-center justify-center gap-4 border border-dashed bg-muted p-8">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-lg font-bold">No students found</span>
+                  <span className="text-sm text-muted-foreground">
+                    {q
+                      ? 'Try adjusting your search'
+                      : 'Students will appear here once they sign up and join classes'}
+                  </span>
+                </div>
+                {table.skip > 0 && (
+                  <div className="flex flex-col items-center gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                    </p>
+                    <Button
+                      variant="default"
+                      onClick={() => {
+                        fetcher.submit(
+                          {
+                            intent: 'updateFilters',
+                            key: 'skip-take',
+                            value: `0-${table.take}`,
+                          },
+                          { method: 'POST' }
+                        );
+                      }}
+                    >
+                      Go to Page 1
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div

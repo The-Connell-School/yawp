@@ -12,6 +12,7 @@ const POST = z.object({
   cmsId: z.string().min(1),
   speechSpeed: z.string().optional(),
   speechEnabled: z.union([z.literal('true'), z.literal('false')]),
+  content: z.string().optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -121,7 +122,7 @@ Use this rubric to evaluate the student's response. Reference specific rubric cr
       .concat([
         {
           role: AgentType.User,
-          content: `content = '${cms.document.text}', response = '${data.response}'`,
+          content: `content = '${data.content ?? cms.document.text ?? ''}', response = '${data.response}'`,
         },
       ]);
 
@@ -145,7 +146,7 @@ Use this rubric to evaluate the student's response. Reference specific rubric cr
             {
               agent: AgentType.User,
               content: data.response,
-              context: cms.document.text,
+              context: data.content ?? cms.document.text,
               instructionId: instruction.id,
             },
             {

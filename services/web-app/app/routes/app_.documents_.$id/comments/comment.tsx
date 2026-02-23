@@ -22,7 +22,9 @@ export type Comment = DocumentComment & {
   })[];
 };
 
-export const Comment = (comment: Comment) => {
+type CommentProps = Comment & { readOnly?: boolean };
+
+export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
   const {
     activeCommentId,
     setActiveCommentId,
@@ -159,8 +161,9 @@ export const Comment = (comment: Comment) => {
             ? comment.content.slice(0, 90) + '...'
             : comment.content}
         </p>
-        {comment.profileId === user.selectedProfile?.id ||
-        isTeacherOfCommentUser ? (
+        {!readOnly &&
+        (comment.profileId === user.selectedProfile?.id ||
+          isTeacherOfCommentUser) ? (
           <Button
             {...dc.getButtonProps({
               onClick: (event) => {
@@ -198,13 +201,17 @@ export const Comment = (comment: Comment) => {
               </p>
             </div>
           ))}
-        <RichTextarea
-          placeholder="Reply..."
-          name="content"
-          size="sm"
-          onCmdEnter={reply}
-          className="mt-2 bg-muted"
-        />
+        {!readOnly ? (
+          <RichTextarea
+            placeholder="Reply..."
+            name="content"
+            size="sm"
+            onCmdEnter={reply}
+            textareaTestId={`comment-reply-input-${comment.id}`}
+            sendButtonTestId={`comment-reply-send-${comment.id}`}
+            className="mt-2 bg-muted"
+          />
+        ) : null}
       </div>
     </div>
   );

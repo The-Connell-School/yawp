@@ -11,6 +11,9 @@ import {
   Heading2Icon,
   Heading3Icon,
   AlignVerticalSpaceAround,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
   Check,
   ListOrderedIcon,
   QuoteIcon,
@@ -28,7 +31,7 @@ import { Tooltip } from '~/components/ui/tooltip.js';
 import { cn } from '~/utils/misc.js';
 
 export const COMMAND_STYLE =
-  'p-2 hover:bg-muted cursor-pointer rounded-sm transition-colors h-8 flex items-center justify-center';
+  'p-2 hover:bg-foreground/15 cursor-pointer rounded-sm transition-colors h-8 flex items-center justify-center';
 
 export type Command = {
   icon?: ReactNode;
@@ -38,6 +41,7 @@ export type Command = {
   checkDisabled?: boolean;
   disableActiveStyles?: boolean;
   activeId?: string;
+  isActive?: (editor: TiptapEditor) => boolean;
   override?: (editor: TiptapEditor) => ReactNode;
 };
 
@@ -163,6 +167,67 @@ export const commands: Command[] = [
     command: 'toggleHeading',
     activeId: 'heading',
     params: { level: 3 },
+  },
+  {
+    override: (editor) => {
+      const alignments = [
+        { value: 'left', label: 'Left', icon: <AlignLeft className="h-4 w-4" /> },
+        {
+          value: 'center',
+          label: 'Center',
+          icon: <AlignCenter className="h-4 w-4" />,
+        },
+        { value: 'right', label: 'Right', icon: <AlignRight className="h-4 w-4" /> },
+      ] as const;
+      const isLeft =
+        !editor.isActive({ textAlign: 'center' }) &&
+        !editor.isActive({ textAlign: 'right' }) &&
+        !editor.isActive({ textAlign: 'justify' });
+
+      return (
+        <DropdownMenu key="text-align">
+          <Tooltip text="Align" delayDuration={300}>
+            <DropdownMenuTrigger>
+              <div
+                className={cn(COMMAND_STYLE, {
+                  'bg-muted': !isLeft,
+                })}
+              >
+                <AlignLeft className="h-4 w-4" />
+              </div>
+            </DropdownMenuTrigger>
+          </Tooltip>
+          <DropdownMenuContent className="grid w-fit min-w-0 gap-1">
+            {alignments.map((alignment) => {
+              const isActive =
+                alignment.value === 'left'
+                  ? isLeft
+                  : editor.isActive({ textAlign: alignment.value });
+
+              return (
+                <DropdownMenuItem
+                  key={alignment.value}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    editor.chain().focus().setTextAlign(alignment.value).run();
+                  }}
+                  className={cn(
+                    COMMAND_STYLE,
+                    'flex w-[120px] items-center gap-2 justify-start',
+                    { 'bg-muted': isActive }
+                  )}
+                >
+                  <Check className={cn('h-4 w-4', { invisible: !isActive })} />
+                  {alignment.icon}
+                  <span>{alignment.label}</span>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
   },
   {
     override: (editor) => (

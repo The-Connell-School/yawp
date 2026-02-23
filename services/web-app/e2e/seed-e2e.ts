@@ -1,11 +1,38 @@
 /* eslint-disable no-console */
-import { PrismaClient } from '@app/prisma';
 import {
-  createPassword,
-  cleanupDb,
-} from '../../../packages/prisma/scripts/utils';
+  createE2EPrismaClient,
+  type E2EPrismaClient,
+} from './prisma-client';
+import bcrypt from 'bcryptjs';
 
-let prisma: PrismaClient | null = null;
+let prisma: E2EPrismaClient | null = null;
+
+function createPassword(password: string) {
+  return {
+    hash: bcrypt.hashSync(password, 10),
+  };
+}
+
+async function cleanupDb(prismaClient: E2EPrismaClient) {
+  const tables = await prismaClient.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = 'public'
+      AND tablename <> '_prisma_migrations'
+  `;
+
+  if (tables.length === 0) {
+    return;
+  }
+
+  const quotedTables = tables
+    .map(({ tablename }) => `"public"."${tablename.replace(/"/g, '""')}"`)
+    .join(', ');
+
+  await prismaClient.$executeRawUnsafe(
+    `TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE;`
+  );
+}
 
 export type E2EContext = {
   organizationId: string;
@@ -15,8 +42,9 @@ export type E2EContext = {
   studentCourseId: string;
   documentId: string;
   // Added for signup flow
+  classId: string;
+  classCode: string;
   schoolId: string;
-  schoolCode: string;
   teacherProfileId: string;
   teacherName: string;
   teacherEmail: string;
@@ -24,7 +52,7 @@ export type E2EContext = {
 
 export async function seedE2E(): Promise<E2EContext> {
   if (!prisma) {
-    prisma = new PrismaClient();
+    prisma = createE2EPrismaClient();
   }
   console.log('🌱 Seeding E2E DB...');
   await cleanupDb(prisma);
@@ -34,10 +62,10 @@ export async function seedE2E(): Promise<E2EContext> {
     data: { id: 'the-connell-school', name: 'The Connell School' },
   });
 
-  // Seed a school for student signup flow
-  const schoolCode = 'E2E-TEST';
+  // Seed a school and class for student signup flow
+  const classCode = 'E2E-CLASS';
   const school = await prisma.school.create({
-    data: { name: 'E2E High', code: schoolCode, organizationId: org.id },
+    data: { name: 'E2E High', code: 'E2E-SCHOOL', organizationId: org.id },
   });
 
   // Seed a teacher assigned to that school
@@ -47,6 +75,7 @@ export async function seedE2E(): Promise<E2EContext> {
     data: {
       email: seededTeacherEmail,
       name: seededTeacherName,
+      password: { create: createPassword('teacher-e2e-password') },
       profiles: {
         create: {
           organizationId: org.id,
@@ -61,6 +90,17 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.teacherProfile.update({
     where: { id: seededTeacherProfileId },
     data: { schools: { connect: { id: school.id } } },
+  });
+  const seededClass = await prisma.class.create({
+    data: {
+      code: classCode,
+      schoolYear: '2024-2025',
+      period: '1st',
+      grade: '9th',
+      schoolId: school.id,
+      teachers: { connect: { id: seededTeacherProfileId } },
+    },
+    select: { id: true },
   });
 
   // Test users
@@ -86,7 +126,10 @@ export async function seedE2E(): Promise<E2EContext> {
   });
   // Create a StudentProfile to satisfy FK on StudentCourseModuleSession
   const studentProfile = await prisma.studentProfile.create({
-    data: { profileId: profile.id },
+    data: {
+      profileId: profile.id,
+      classes: { connect: { id: seededClass.id } },
+    },
   });
   const studentCourse = await prisma.studentCourse.create({
     data: {
@@ -101,6 +144,7 @@ export async function seedE2E(): Promise<E2EContext> {
               title: `Instruction ${moduleIndex}.${instructionIndex}`,
               prompt: `Prompt for instruction ${moduleIndex}.${instructionIndex}`,
               position: instructionIndex,
+              showChatButton: true,
             })),
           },
         })),
@@ -115,11 +159,18 @@ export async function seedE2E(): Promise<E2EContext> {
   const document = await prisma.document.create({
     data: {
       title: 'E2E Doc',
-      text: 'Seeded E2E document',
-      html: '<p>Seeded E2E document</p>',
+      text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
+      html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
       profileId: profile.id,
+      classId: seededClass.id,
     },
     select: { id: true },
+  });
+  await prisma.classStudentCourse.create({
+    data: {
+      classId: seededClass.id,
+      studentCourseId: studentCourse.id,
+    },
   });
   // Link the document to the first module via a session
   await prisma.studentCourseModuleSession.create({
@@ -140,12 +191,13 @@ export async function seedE2E(): Promise<E2EContext> {
     profileId: profile.id,
     studentCourseId: studentCourse.id,
     documentId: document.id,
+    classId: seededClass.id,
+    classCode,
     schoolId: school.id,
-    schoolCode,
     teacherProfileId: seededTeacherProfileId,
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
   };
 }
 
-// Note: this module is imported by Playwright global-setup, not run directly.
+// Note: this module is imported by the E2E prepare script, not run directly.

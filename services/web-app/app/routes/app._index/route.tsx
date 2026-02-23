@@ -61,6 +61,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
+  let teacherCourseWhere:
+    | { assignedTeachers: { some: { id: string } } }
+    | undefined = undefined;
+  if (profile.teacherProfile) {
+    const assignmentCounts = await prisma.teacherProfile.findUnique({
+      where: { id: profile.teacherProfile.id },
+      select: { _count: { select: { assignedTeacherCourses: true } } },
+    });
+    const hasAssignedCourses =
+      (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    if (hasAssignedCourses) {
+      teacherCourseWhere = {
+        assignedTeachers: { some: { id: profile.teacherProfile.id } },
+      };
+    }
+  }
+
   const [
     courses,
     documents,
@@ -83,6 +100,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                id: true,
+                score: true,
+                overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     prisma.document.findMany({
@@ -97,6 +129,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                id: true,
+                score: true,
+                overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     prisma.studentProfile.findMany({
@@ -108,6 +155,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Fetch teacher courses if user has teacher profile
     profile?.teacherProfile
       ? prisma.teacherCourse.findMany({
+          where: teacherCourseWhere,
           select: {
             image: { select: { id: true } },
             id: true,
@@ -383,7 +431,12 @@ export default function AppRoute() {
             {data.documents.length ? (
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {data.documents.map((doc) => (
-                  <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                  <DocumentLink
+                    key={doc.id}
+                    doc={doc}
+                    exitTo="/app"
+                    isStudentView
+                  />
                 ))}
               </div>
             ) : (
@@ -402,7 +455,13 @@ export default function AppRoute() {
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                         {data.archivedDocuments.map((doc) => (
-                          <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                          <DocumentLink
+                            key={doc.id}
+                            doc={doc}
+                            exitTo="/app"
+                            isArchived
+                            isStudentView
+                          />
                         ))}
                       </div>
                     </AccordionContent>
@@ -463,7 +522,12 @@ export default function AppRoute() {
           {data.documents.length ? (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {data.documents.map((doc) => (
-                <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                <DocumentLink
+                  key={doc.id}
+                  doc={doc}
+                  exitTo="/app"
+                  isStudentView
+                />
               ))}
             </div>
           ) : (
@@ -482,7 +546,13 @@ export default function AppRoute() {
                   <AccordionContent>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
                       {data.archivedDocuments.map((doc) => (
-                        <DocumentLink key={doc.id} doc={doc} exitTo="/app" />
+                        <DocumentLink
+                          key={doc.id}
+                          doc={doc}
+                          exitTo="/app"
+                          isArchived
+                          isStudentView
+                        />
                       ))}
                     </div>
                   </AccordionContent>

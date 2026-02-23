@@ -38,7 +38,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: { id: params.id },
       include: {
         image: true,
-        studentCourseModules: { orderBy: { position: 'asc' } },
+        studentCourseModules: {
+          where: { deletedAt: null },
+          orderBy: { position: 'asc' },
+        },
         writingPromptSections: { orderBy: { position: 'asc' } },
       },
     }),
@@ -58,6 +61,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
         },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                id: true,
+                score: true,
+                overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
       },
     }),
     prisma.document.findMany({
@@ -75,6 +93,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           take: 1,
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
+        },
+        submittedSnapshot: {
+          select: {
+            grades: {
+              select: {
+                id: true,
+                score: true,
+                overallScore: true,
+                numericPercentage: true,
+                letterGrade: true,
+                releasedAt: true,
+              },
+              take: 1,
+            },
+          },
         },
       },
     }),
@@ -101,7 +134,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const firstCourseModule = await prisma.studentCourseModule.findFirst({
-    where: { studentCourseId: params.id },
+    where: { studentCourseId: params.id, deletedAt: null },
     orderBy: { position: 'asc' },
     include: {
       instructions: {
@@ -208,10 +241,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : []),
   ]);
 
-  return redirectWithToast(`/app/documents/${doc.id}?spa=1`, {
-    type: 'success',
-    description: 'Document created successfully.',
+  const requestUrl = new URL(request.url);
+  const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
+  const redirectParams = new URLSearchParams({
+    spa: '1',
+    exitTo: currentPath,
   });
+
+  return redirectWithToast(
+    `/app/documents/${doc.id}?${redirectParams.toString()}`,
+    {
+      type: 'success',
+      description: 'Document created successfully.',
+    }
+  );
 }
 
 export default function AppCoursesIdRoute() {
@@ -291,6 +334,7 @@ export default function AppCoursesIdRoute() {
                   key={doc.id}
                   doc={doc}
                   exitTo={`/app/courses/${data.course.id}`}
+                  isStudentView
                 />
               ))}
             </div>
@@ -308,6 +352,8 @@ export default function AppCoursesIdRoute() {
                             key={doc.id}
                             doc={doc}
                             exitTo={`/app/courses/${data.course.id}`}
+                            isArchived
+                            isStudentView
                           />
                         ))}
                       </div>

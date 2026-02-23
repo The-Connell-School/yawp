@@ -42,6 +42,7 @@ type Props = {
   docId: string;
   nextCmId?: string;
   hasPreviousCms?: boolean;
+  getCurrentDocumentText?: () => string | null;
   cms: {
     studentCourseModule: {
       studentCourse: {
@@ -74,7 +75,13 @@ function base64ToArrayBuffer(base64: string) {
   return bytes.buffer;
 }
 
-export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
+export const Tutor = ({
+  cms,
+  nextCmId,
+  docId,
+  hasPreviousCms,
+  getCurrentDocumentText,
+}: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
     true
@@ -113,6 +120,18 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
   const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
   const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
   const isCurrentCms = cmsIdx === 0;
+  const navigateToCmsIdx = (nextIdx: number | undefined) => {
+    const params = new URLSearchParams(searchParams);
+    if (nextIdx === undefined || nextIdx === 0) {
+      params.delete('cmsIdx');
+    } else {
+      params.set('cmsIdx', String(nextIdx));
+    }
+    const query = params.toString();
+    navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
+      replace: true,
+    });
+  };
 
   const optimistic = tutorResponseFetcher.formData;
   const optimisticMessage = optimistic
@@ -135,7 +154,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
         cmsId: cms.id,
         speechEnabled,
         speechSpeed: '1.5',
-        content: localStorage.getItem(`document-${docId}`),
+        content: getCurrentDocumentText?.() ?? '',
       },
       { method: 'POST', action: '/api/domain/tutor-response' }
     );
@@ -244,14 +263,18 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
       }
     );
     setShowResetConfirmation(false);
-    setSearchParams((prev) => {
-      prev.delete('cmsIdx');
-      return prev;
-    });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('cmsIdx');
+        return next;
+      },
+      { replace: true }
+    );
   };
 
   return (
-    <div className="flex w-full flex-col border-r pb-2 md:w-3/5">
+    <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
       <audio ref={audioRef} hidden />
       <div
         className={cn(
@@ -268,7 +291,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
                 disabled={prevCmsIdx === undefined}
                 onClick={() =>
                   prevCmsIdx !== undefined &&
-                  navigate(`/app/documents/${docId}?cmsIdx=${prevCmsIdx}`)
+                  navigateToCmsIdx(prevCmsIdx)
                 }
               >
                 <ChevronLeftIcon size={20} />
@@ -284,7 +307,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
                 disabled={nextCmsIdx === undefined}
                 onClick={() =>
                   nextCmsIdx !== undefined &&
-                  navigate(`/app/documents/${docId}?cmsIdx=${nextCmsIdx}`)
+                  navigateToCmsIdx(nextCmsIdx)
                 }
               >
                 <ChevronRightIcon size={20} />
@@ -467,9 +490,7 @@ export const Tutor = ({ cms, nextCmId, docId, hasPreviousCms }: Props) => {
             .
           </div>
           <Button
-            onClick={() =>
-              navigate(`/app/documents/${docId}?cmsIdx=${nextCmsIdx}`)
-            }
+            onClick={() => navigateToCmsIdx(nextCmsIdx)}
           >
             Next <ArrowRightIcon size={18} className="ml-2" />
           </Button>

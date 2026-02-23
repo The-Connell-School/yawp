@@ -183,6 +183,7 @@ dist
 # Finder (MacOS) folder config
 .DS_Store
 packages/prisma/client
+packages/prisma/generated
 services/web-app/.react-router
 services/web-app/build
 sandbox.ts
@@ -193,5 +194,9 @@ infra/envs/variables/
 
 playwright-report/
 test-results/
+services/web-app/e2e/.env.e2e
+services/web-app/e2e/.e2e-owned
+services/web-app/e2e/.pg-owned
+services/web-app/e2e/.e2e-context.json
 services/web-app/e2e/prisma/
 packages/prisma/generated/

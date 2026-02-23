@@ -8,11 +8,18 @@ export const StudentOnboardingMetadataSchema = z
   .object({
     schoolId: z.string(),
     klassId: z.string(),
+    klassIds: z.array(z.string()).min(1),
   })
   .partial()
-  .refine((data) => data.schoolId || data.klassId, {
-    message: 'At least one of schoolId or klassId is required',
-  });
+  .refine(
+    (data) =>
+      data.klassId ||
+      (data.klassIds && data.klassIds.length > 0) ||
+      data.schoolId,
+    {
+      message: 'At least one of klassId, klassIds, or schoolId is required',
+    }
+  );
 
 export const TeacherOnboardingMetadataSchema = z.object({
   organizationId: z.string(),

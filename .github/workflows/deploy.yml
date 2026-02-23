@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,9 +35,9 @@ jobs:
         run: bun install
 
       - name: ⚙️ Generate Prisma Client
-        run: bun prisma:generate
+        run: bun prisma generate
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_typecheck
 
       - name: 🔎 Type check
         run: bun web-app:typecheck
@@ -43,6 +46,19 @@ jobs:
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
     needs: [typecheck-web-app]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v3
@@ -59,7 +75,9 @@ jobs:
         run: bun install
 
       - name: ⚙️ Generate Prisma Client
-        run: bun prisma:generate
+        run: bun prisma generate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
 
       - name: Install Playwright browsers
         working-directory: services/web-app
@@ -69,40 +87,42 @@ jobs:
         working-directory: services/web-app
         env:
           CI: true
-        run: bun run test:e2e
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yop_e2e
+        run: bun run test:e2e:smoke
 
-  # deploy-web-app-production:
-  #   name: 🚀 Deploy Web App (Production)
-  #   runs-on: ubuntu-22.04
-  #   # needs: [typecheck-web-app]
+  deploy-web-app-production:
+    name: 🚀 Deploy Web App (Production)
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # needs: [typecheck-web-app]
 
-  #   environment:
-  #     name: production
-  #     url: https://yawp.school
+    environment:
+      name: production
+      url: https://yawp.school
 
-  #   steps:
-  #     - name: ⬇️ Checkout repo
-  #       uses: actions/checkout@v3
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
 
-  #     - name: 📥 Download deps
-  #       uses: oven-sh/setup-bun@v1
+      - name: 📥 Download deps
+        uses: oven-sh/setup-bun@v1
 
-  #     - name: 🔑 Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: us-east-1
+      - name: 🔑 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-  #     - name: 🔐 Login to Amazon ECR
-  #       id: login-ecr
-  #       uses: aws-actions/amazon-ecr-login@v2
+      - name: 🔐 Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-  #     - name: 📦 Build Docker image
-  #       run: bun web-app:docker:build
+      - name: 📦 Build Docker image
+        run: bun web-app:docker:build
 
-  #     - name: 🏷️ Tag Docker image
-  #       run: bun web-app:docker:production:tag
+      - name: 🏷️ Tag Docker image
+        run: bun web-app:docker:production:tag
 
-  #     - name: 🚀 Push Docker image
-  #       run: bun web-app:docker:production:push
+      - name: 🚀 Push Docker image
+        run: bun web-app:docker:production:push
