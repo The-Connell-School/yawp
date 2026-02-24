@@ -24,7 +24,10 @@ import {
 } from '~/components/ui/accordion';
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser.js';
-import { getBase64Audio } from '~/services/openai.js';
+import {
+  createStudentDocumentForCourse,
+  StudentDocumentCreationError,
+} from '~/domain/student-documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -132,89 +135,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const firstCourseModule = await prisma.studentCourseModule.findFirst({
-    where: { studentCourseId: params.id, deletedAt: null },
-    orderBy: { position: 'asc' },
-    include: {
-      instructions: {
-        orderBy: { position: 'asc' },
-        include: { buttons: { orderBy: { position: 'asc' } } },
-      },
-    },
-  });
-
-  if (!firstCourseModule) {
-    return redirectWithToast(`/app/courses/${params.id}`, {
-      type: 'error',
-      description: 'No course modules for this course.',
+  let documentId = '';
+  try {
+    const created = await createStudentDocumentForCourse({
+      profileId: profile.id,
+      studentCourseId: params.id!,
+      audioEnabled: data.audioEnabled === 'true',
     });
+    documentId = created.documentId;
+  } catch (creationError) {
+    if (creationError instanceof StudentDocumentCreationError) {
+      return redirectWithToast(`/app/courses/${params.id}`, {
+        type: 'error',
+        description: creationError.message,
+      });
+    }
+    throw creationError;
   }
-
-  const firstInstruction = firstCourseModule.instructions[0];
-  const shouldFetchAudio =
-    data.audioEnabled &&
-    firstInstruction?.prompt &&
-    !(await prisma.instructionAudio.findUnique({
-      where: { studentCourseModuleInstructionId: firstInstruction.id },
-    }));
-
-  const audio = shouldFetchAudio
-    ? await getBase64Audio(firstInstruction.prompt, '1.5')
-    : null;
-
-  let studentProfile = await prisma.studentProfile.findUnique({
-    where: { profileId: profile.id },
-    include: { classes: true },
-  });
-
-  if (!studentProfile) {
-    studentProfile = await prisma.studentProfile.create({
-      data: { profileId: profile.id },
-      include: { classes: true },
-    });
-  }
-
-  const [doc] = await Promise.all([
-    prisma.document.create({
-      data: {
-        profileId: profile.id,
-        text: '',
-        html: '',
-        title: '',
-        ...(studentProfile.classes[0] && {
-          classId: studentProfile.classes[0].id,
-        }),
-        studentCourseModuleSessions: {
-          create: {
-            studentProfileId: studentProfile.id,
-            instructionsCompleted: 0,
-            studentCourseModuleId: firstCourseModule.id,
-            ...(firstInstruction && {
-              messages: {
-                create: [
-                  {
-                    content: firstInstruction.prompt,
-                    agent: 'assistant',
-                    instructionId: firstInstruction.id,
-                  },
-                ],
-              },
-            }),
-          },
-        },
-      },
-    }),
-    ...(audio
-      ? [
-          prisma.instructionAudio.create({
-            data: {
-              studentCourseModuleInstructionId: firstInstruction.id,
-              blob: Buffer.from(audio, 'base64'),
-            },
-          }),
-        ]
-      : []),
-  ]);
 
   const requestUrl = new URL(request.url);
   const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
@@ -224,7 +161,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
 
   return redirectWithToast(
-    `/app/documents/${doc.id}?${redirectParams.toString()}`,
+    `/app/documents/${documentId}?${redirectParams.toString()}`,
     {
       type: 'success',
       description: 'Document created successfully.',

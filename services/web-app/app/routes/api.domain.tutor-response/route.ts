@@ -38,7 +38,16 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         },
         messages: true,
-        document: { select: { text: true } },
+        document: {
+          select: {
+            text: true,
+            assignment: {
+              select: {
+                tutorContext: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -58,9 +67,14 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const system = `
-		${cms.studentCourseModule.tutorInstructions}
-		${instruction.tutorInstructions}`;
+    const system = [
+      cms.studentCourseModule.tutorInstructions,
+      instruction.tutorInstructions,
+      cms.document.assignment?.tutorContext,
+    ]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join('\n\n');
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,

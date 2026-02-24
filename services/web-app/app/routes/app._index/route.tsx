@@ -3,19 +3,23 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import { Form, Link, useLoaderData, useSearchParams } from 'react-router';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { cn } from '~/utils/misc';
+import { useLocalStorage } from 'usehooks-ts';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { Badge } from '~/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import { formatDateOnly } from '~/utils/date-only';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -33,6 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Determine which student courses to show
   let allowedCourseIds: string[] | null = null;
+  let studentClassIds: string[] = [];
   if (profile.studentProfile) {
     const studentClasses = await prisma.class.findMany({
       where: {
@@ -46,6 +51,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     });
+    studentClassIds = studentClasses.map((klass) => klass.id);
 
     // Collect all allowed course IDs from all classes
     const courseIdSet = new Set<string>();
@@ -86,6 +92,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherCourses,
     teacherClasses,
     teacherSchoolCount,
+    assignments,
   ] = await Promise.all([
     prisma.studentCourse.findMany({
       where: allowedCourseIds ? { id: { in: allowedCourseIds } } : undefined,
@@ -206,6 +213,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
           })
           .then((tp) => tp?.schools.length ?? 0)
       : 0,
+    profile.studentProfile
+      ? prisma.assignment.findMany({
+          where: {
+            classId: { in: studentClassIds },
+          },
+          select: {
+            id: true,
+            title: true,
+            prompt: true,
+            dueDate: true,
+            class: {
+              select: {
+                id: true,
+                grade: true,
+                period: true,
+                title: true,
+              },
+            },
+            studentCourse: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+        })
+      : [],
   ]);
 
   // Compute recent activity per class for teachers, based on latest student document
@@ -256,13 +291,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherCourses,
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
+    assignments,
   });
 }
 
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [speechEnabled] = useLocalStorage('speechEnabled', false);
   const isTeacher = user.selectedProfile?.teacherProfile !== null;
+  const currentStudentTab = searchParams.get('tab') === 'assignments'
+    ? 'assignments'
+    : 'courses';
 
   if (isTeacher) {
     return (
@@ -493,29 +534,114 @@ export default function AppRoute() {
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
         <div className="flex flex-col">
-          <p className="my-2 text-foreground/60">Courses</p>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            {data.courses.map((course) => (
-              <Link
-                to={`/app/courses/${course.id}`}
-                key={course.id}
-                className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-              >
-                {course.image ? (
-                  <img
-                    src={`/api/image/course/${course.image.id}`}
-                    alt=""
-                    className="h-32 w-auto rounded-t-lg object-cover"
-                  />
-                ) : (
-                  <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                )}
-                <div className="max-w-42 flex items-center justify-between p-3">
-                  <h4 className="text-foreground/90">{course.title}</h4>
-                </div>
-              </Link>
-            ))}
+          <div className="mb-2">
+            <Tabs
+              value={currentStudentTab}
+              onValueChange={(value) => {
+                const next = new URLSearchParams(searchParams);
+                if (value === 'assignments') {
+                  next.set('tab', 'assignments');
+                } else {
+                  next.delete('tab');
+                }
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              <TabsList>
+                <TabsTrigger value="courses">
+                  Courses ({data.courses.length})
+                </TabsTrigger>
+                <TabsTrigger value="assignments">
+                  Assignments ({data.assignments.length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
+          {currentStudentTab === 'courses' ? (
+            <>
+              <p className="my-2 text-foreground/60">Courses</p>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {data.courses.map((course) => (
+                  <Link
+                    to={`/app/courses/${course.id}`}
+                    key={course.id}
+                    className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
+                  >
+                    {course.image ? (
+                      <img
+                        src={`/api/image/course/${course.image.id}`}
+                        alt=""
+                        className="h-32 w-auto rounded-t-lg object-cover"
+                      />
+                    ) : (
+                      <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
+                    )}
+                    <div className="max-w-42 flex items-center justify-between p-3">
+                      <h4 className="text-foreground/90">{course.title}</h4>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="my-2 text-foreground/60">Assignments</p>
+              {data.assignments.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                  {data.assignments.map((assignment) => (
+                    <Form
+                      method="post"
+                      action={`/app/assignments/${assignment.id}/start`}
+                      key={assignment.id}
+                    >
+                      <input
+                        type="hidden"
+                        name="audioEnabled"
+                        value={speechEnabled ? 'true' : 'false'}
+                      />
+                      <button
+                        type="submit"
+                        className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"
+                      >
+                        <div className="h-24 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20 px-3 py-2">
+                          <p className="line-clamp-3 text-xs text-muted-foreground">
+                            {assignment.prompt}
+                          </p>
+                        </div>
+                        <div className="flex flex-1 flex-col gap-1 p-3">
+                          <h4 className="text-foreground/90 font-medium">
+                            {assignment.title?.trim() || 'Untitled Assignment'}
+                          </h4>
+                          <p className="text-xs text-muted-foreground">
+                            {assignment.studentCourse.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Grade {assignment.class.grade} • Period{' '}
+                            {assignment.class.period}
+                            {assignment.class.title
+                              ? ` • ${assignment.class.title}`
+                              : ''}
+                          </p>
+                          {assignment.dueDate ? (
+                            <div className="pt-1">
+                              <Badge variant="outline" size="sm">
+                                Due {formatDateOnly(assignment.dueDate)}
+                              </Badge>
+                            </div>
+                          ) : null}
+                        </div>
+                      </button>
+                    </Form>
+                  ))}
+                </div>
+              ) : (
+                <NoDataPlaceholder
+                  title="No assignments"
+                  subtitle="When your teacher posts assignments, they will appear here."
+                />
+              )}
+            </>
+          )}
         </div>
         <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>

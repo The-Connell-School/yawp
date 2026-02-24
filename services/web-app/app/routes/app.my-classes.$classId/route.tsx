@@ -1,9 +1,11 @@
 import {
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
   data as dataResponse,
   redirect,
 } from 'react-router';
 import {
+  Form,
   useLoaderData,
   useSearchParams,
   useNavigate,
@@ -52,6 +54,214 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
+import { AssignmentSheet } from './assignment-sheet';
+import { formatDateOnly } from '~/utils/date-only';
+
+function parseDateOnlyToUtc(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
+  if (!profile.teacherProfile) {
+    return dataResponse(
+      { success: false, message: 'Only teachers can manage assignments.' },
+      { status: 403 }
+    );
+  }
+
+  const classId = params.classId;
+  if (!classId) {
+    return dataResponse(
+      { success: false, message: 'Class is required.' },
+      { status: 400 }
+    );
+  }
+
+  const classAccess = await prisma.class.findFirst({
+    where: {
+      id: classId,
+      teachers: { some: { id: profile.teacherProfile.id } },
+    },
+    select: {
+      id: true,
+      allowedStudentCourses: {
+        select: { studentCourseId: true },
+      },
+    },
+  });
+
+  if (!classAccess) {
+    return dataResponse(
+      { success: false, message: 'Class not found.' },
+      { status: 404 }
+    );
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
+
+  if (intent === 'delete-assignment') {
+    const assignmentId = formData.get('assignmentId')?.toString();
+    if (!assignmentId) {
+      return dataResponse(
+        { success: false, message: 'Assignment is required.' },
+        { status: 400 }
+      );
+    }
+
+    const assignment = await prisma.assignment.findFirst({
+      where: { id: assignmentId, classId },
+      select: { id: true },
+    });
+
+    if (!assignment) {
+      return dataResponse(
+        { success: false, message: 'Assignment not found.' },
+        { status: 404 }
+      );
+    }
+
+    await prisma.assignment.delete({
+      where: { id: assignment.id },
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Assignment deleted successfully.',
+    });
+  }
+
+  if (intent === 'create-assignment' || intent === 'update-assignment') {
+    const assignmentId = formData.get('assignmentId')?.toString();
+    const studentCourseId = formData.get('studentCourseId')?.toString();
+    const titleRaw = formData.get('title')?.toString() ?? '';
+    const promptRaw = formData.get('prompt')?.toString() ?? '';
+    const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
+    const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
+
+    const title = titleRaw.trim() || null;
+    const prompt = promptRaw.trim();
+    const tutorContext = tutorContextRaw.trim() || null;
+    const dueDateInput = dueDateRaw.trim();
+    const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
+
+    if (!studentCourseId) {
+      return dataResponse(
+        { success: false, message: 'Student course is required.' },
+        { status: 400 }
+      );
+    }
+    if (
+      !classAccess.allowedStudentCourses.some(
+        (course) => course.studentCourseId === studentCourseId
+      )
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Selected course is not available for this class.',
+        },
+        { status: 400 }
+      );
+    }
+    if (!prompt) {
+      return dataResponse(
+        { success: false, message: 'Prompt is required.' },
+        { status: 400 }
+      );
+    }
+    if (dueDateInput && !dueDate) {
+      return dataResponse(
+        { success: false, message: 'Due date is invalid.' },
+        { status: 400 }
+      );
+    }
+
+    if (intent === 'create-assignment') {
+      await prisma.assignment.create({
+        data: {
+          classId,
+          studentCourseId,
+          title,
+          prompt,
+          tutorContext,
+          dueDate,
+        },
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created successfully.',
+      });
+    }
+
+    if (!assignmentId) {
+      return dataResponse(
+        { success: false, message: 'Assignment is required.' },
+        { status: 400 }
+      );
+    }
+
+    const assignment = await prisma.assignment.findFirst({
+      where: { id: assignmentId, classId },
+      select: { id: true },
+    });
+
+    if (!assignment) {
+      return dataResponse(
+        { success: false, message: 'Assignment not found.' },
+        { status: 404 }
+      );
+    }
+
+    await prisma.assignment.update({
+      where: { id: assignment.id },
+      data: {
+        studentCourseId,
+        title,
+        prompt,
+        tutorContext,
+        dueDate,
+      },
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Assignment updated successfully.',
+    });
+  }
+
+  return dataResponse(
+    { success: false, message: 'Unsupported action.' },
+    { status: 400 }
+  );
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -72,6 +282,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       period: true,
       title: true,
       school: { select: { id: true, name: true } },
+      allowedStudentCourses: {
+        select: {
+          studentCourseId: true,
+          studentCourse: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
+        orderBy: {
+          studentCourse: { position: 'asc' },
+        },
+      },
       students: {
         select: {
           id: true,
@@ -181,6 +405,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               id: true,
               title: true,
               submittedSnapshotId: true,
+              assignment: {
+                select: {
+                  id: true,
+                  title: true,
+                },
+              },
               profile: {
                 select: {
                   id: true,
@@ -235,6 +465,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       updatedAt: true,
+      assignment: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
       profile: {
         select: {
           id: true,
@@ -258,6 +494,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
+  const assignments = await prisma.assignment.findMany({
+    where: { classId },
+    select: {
+      id: true,
+      title: true,
+      prompt: true,
+      tutorContext: true,
+      dueDate: true,
+      studentCourseId: true,
+      studentCourse: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+      _count: {
+        select: {
+          documents: true,
+        },
+      },
+    },
+    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+  });
+
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
 
   return dataResponse({
@@ -266,6 +526,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     pasteAlerts,
     submittedSnapshots,
     inProgressDocuments,
+    assignments,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
   });
@@ -276,6 +537,7 @@ type TabValue =
   | 'to-grade'
   | 'graded'
   | 'released'
+  | 'assignments'
   | 'paste-activity'
   | 'students';
 
@@ -283,6 +545,10 @@ export default function ClassDetailRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
+    null
+  );
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null
   );
@@ -324,6 +590,7 @@ export default function ClassDetailRoute() {
     'to-grade',
     'graded',
     'released',
+    'assignments',
     'paste-activity',
     'students',
   ];
@@ -332,6 +599,15 @@ export default function ClassDetailRoute() {
     requestedTab && validTabs.includes(requestedTab)
       ? requestedTab
       : 'in-progress';
+  const assignmentFilterParam = searchParams.get('assignmentId') ?? 'all';
+  const selectedAssignmentId =
+    assignmentFilterParam !== 'all' &&
+    data.assignments.some((assignment) => assignment.id === assignmentFilterParam)
+      ? assignmentFilterParam
+      : 'all';
+  const editingAssignment =
+    data.assignments.find((assignment) => assignment.id === editingAssignmentId) ??
+    null;
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const hasMeaningfulGrade = (grade: {
     score: string | null;
@@ -387,9 +663,44 @@ export default function ClassDetailRoute() {
     });
   }, [activeSubmittedSnapshots]);
 
+  const matchesSelectedAssignment = (assignmentId?: string | null) =>
+    selectedAssignmentId === 'all' || assignmentId === selectedAssignmentId;
+
+  const filteredInProgressDocuments = useMemo(
+    () =>
+      data.inProgressDocuments.filter((document) =>
+        matchesSelectedAssignment(document.assignment?.id)
+      ),
+    [data.inProgressDocuments, selectedAssignmentId]
+  );
+
+  const filteredUngradedDocuments = useMemo(
+    () =>
+      ungradedDocuments.filter((snapshot) =>
+        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      ),
+    [ungradedDocuments, selectedAssignmentId]
+  );
+
+  const filteredGradedUnreleasedDocuments = useMemo(
+    () =>
+      gradedUnreleasedDocuments.filter((snapshot) =>
+        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      ),
+    [gradedUnreleasedDocuments, selectedAssignmentId]
+  );
+
+  const filteredReleasedDocuments = useMemo(
+    () =>
+      releasedDocuments.filter((snapshot) =>
+        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      ),
+    [releasedDocuments, selectedAssignmentId]
+  );
+
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
-    return gradedUnreleasedDocuments.map((snapshot) => {
+    return filteredGradedUnreleasedDocuments.map((snapshot) => {
       const grade = snapshot.grades[0];
       const gradeDisplay =
         formatGrade(
@@ -408,7 +719,7 @@ export default function ClassDetailRoute() {
         snapshotId: snapshot.id,
       };
     });
-  }, [gradedUnreleasedDocuments]);
+  }, [filteredGradedUnreleasedDocuments]);
 
   const unreleasedGradesBySubmissionId = useMemo(() => {
     return new Map(unreleasedGrades.map((grade) => [grade.snapshotId, grade]));
@@ -421,7 +732,9 @@ export default function ClassDetailRoute() {
       if (unreleasedGrades.length > 0) {
         setReleaseGradesForSheet(unreleasedGrades);
         setIsReleaseGradesSheetOpen(true);
-        navigate(`?tab=graded`, { replace: true });
+        const next = new URLSearchParams(searchParams);
+        next.set('tab', 'graded');
+        navigate(`?${next.toString()}`, { replace: true });
       }
     }
   }, [searchParams, navigate, unreleasedGrades]);
@@ -444,7 +757,7 @@ export default function ClassDetailRoute() {
   };
 
   const toggleAllGradedDocuments = () => {
-    const snapshotIds = gradedUnreleasedDocuments.map((d) => d.id);
+    const snapshotIds = filteredGradedUnreleasedDocuments.map((d) => d.id);
     if (snapshotIds.every((id) => selectedGradedDocuments.has(id))) {
       const newSelection = new Set(selectedGradedDocuments);
       snapshotIds.forEach((id) => newSelection.delete(id));
@@ -482,13 +795,15 @@ export default function ClassDetailRoute() {
   const currentTabData = useMemo(() => {
     switch (activeTab) {
       case 'in-progress':
-        return data.inProgressDocuments;
+        return filteredInProgressDocuments;
       case 'to-grade':
-        return ungradedDocuments;
+        return filteredUngradedDocuments;
       case 'graded':
-        return gradedUnreleasedDocuments;
+        return filteredGradedUnreleasedDocuments;
       case 'released':
-        return releasedDocuments;
+        return filteredReleasedDocuments;
+      case 'assignments':
+        return data.assignments;
       case 'paste-activity':
         return data.pasteAlerts;
       case 'students':
@@ -498,10 +813,11 @@ export default function ClassDetailRoute() {
     }
   }, [
     activeTab,
-    data.inProgressDocuments,
-    ungradedDocuments,
-    gradedUnreleasedDocuments,
-    releasedDocuments,
+    filteredInProgressDocuments,
+    filteredUngradedDocuments,
+    filteredGradedUnreleasedDocuments,
+    filteredReleasedDocuments,
+    data.assignments,
     data.pasteAlerts,
     students,
   ]) as any[];
@@ -514,7 +830,19 @@ export default function ClassDetailRoute() {
   }, [currentTabData, pagination.skip, pagination.take]) as any[];
 
   const handleTabChange = (value: string) => {
-    navigate(`?tab=${value}`);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', value);
+    navigate(`?${next.toString()}`);
+  };
+
+  const handleAssignmentFilterChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') {
+      next.delete('assignmentId');
+    } else {
+      next.set('assignmentId', value);
+    }
+    navigate(`?${next.toString()}`);
   };
 
   const handlePaginationChange = (skip: number, take: number) => {
@@ -531,6 +859,7 @@ export default function ClassDetailRoute() {
             {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
             {activeTab === 'graded' && 'No grades ready to release.'}
             {activeTab === 'released' && 'No released documents yet.'}
+            {activeTab === 'assignments' && 'No assignments yet.'}
             {activeTab === 'paste-activity' &&
               'No copy/paste activity detected yet.'}
             {activeTab === 'students' && 'No students in this class yet.'}
@@ -547,6 +876,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Document</TableHead>
+                <TableHead>Assignment</TableHead>
                 <TableHead>Course Module</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead>Action</TableHead>
@@ -559,6 +889,9 @@ export default function ClassDetailRoute() {
                     {doc.profile.user.name || doc.profile.user.email}
                   </TableCell>
                   <TableCell>{doc.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {doc.assignment?.title || '—'}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {doc.studentCourseModuleSessions[0]?.studentCourseModule
                       .title || '—'}
@@ -591,6 +924,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
+                <TableHead>Assignment</TableHead>
                 <TableHead>Course Module</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Action</TableHead>
@@ -604,6 +938,9 @@ export default function ClassDetailRoute() {
                       snapshot.document.profile.user.email}
                   </TableCell>
                   <TableCell>{snapshot.document.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {snapshot.document.assignment?.title || '—'}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {snapshot.document.studentCourseModuleSessions[0]
                       ?.studentCourseModule.title || '—'}
@@ -654,8 +991,8 @@ export default function ClassDetailRoute() {
                 <TableHead className="w-12">
                   <Checkbox
                     checked={
-                      gradedUnreleasedDocuments.length > 0 &&
-                      gradedUnreleasedDocuments.every((d) =>
+                      filteredGradedUnreleasedDocuments.length > 0 &&
+                      filteredGradedUnreleasedDocuments.every((d) =>
                         selectedGradedDocuments.has(d.id)
                       )
                     }
@@ -665,6 +1002,7 @@ export default function ClassDetailRoute() {
                 </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
+                <TableHead>Assignment</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Graded</TableHead>
                 <TableHead>Action</TableHead>
@@ -696,6 +1034,9 @@ export default function ClassDetailRoute() {
                         snapshot.document.profile.user.email}
                     </TableCell>
                     <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {snapshot.document.assignment?.title || '—'}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -743,6 +1084,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
+                <TableHead>Assignment</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Released</TableHead>
                 <TableHead>Action</TableHead>
@@ -765,6 +1107,9 @@ export default function ClassDetailRoute() {
                         snapshot.document.profile.user.email}
                     </TableCell>
                     <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {snapshot.document.assignment?.title || '—'}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -785,6 +1130,85 @@ export default function ClassDetailRoute() {
                   </TableRow>
                 );
               })}
+            </TableBody>
+          </Table>
+        </div>
+      );
+    }
+
+    if (activeTab === 'assignments') {
+      return (
+        <div className="rounded-lg bg-muted/50">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Course</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Prompt</TableHead>
+                <TableHead>Docs</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedData.map((assignment) => (
+                <TableRow key={assignment.id}>
+                  <TableCell className="font-medium">
+                    {assignment.title || 'Untitled Assignment'}
+                  </TableCell>
+                  <TableCell>{assignment.studentCourse.title}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[320px]">
+                    <p className="line-clamp-2">{assignment.prompt}</p>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{assignment._count.documents}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        onClick={() => {
+                          setEditingAssignmentId(assignment.id);
+                          setIsAssignmentSheetOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Form
+                        method="post"
+                        onSubmit={(event) => {
+                          if (
+                            !window.confirm(
+                              'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
+                            )
+                          ) {
+                            event.preventDefault();
+                          }
+                        }}
+                      >
+                        <input
+                          type="hidden"
+                          name="intent"
+                          value="delete-assignment"
+                        />
+                        <input
+                          type="hidden"
+                          name="assignmentId"
+                          value={assignment.id}
+                        />
+                        <Button size="sm" variant="destructive" type="submit">
+                          Delete
+                        </Button>
+                      </Form>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -969,43 +1393,78 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Button asChild variant="outline" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
-          {data.isDocumentSubmissionEnabled &&
-            activeTab === 'graded' &&
-            gradedUnreleasedDocuments.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    data-testid="class-release-grades-open"
-                  >
-                    Release Grades
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="rounded-xl">
-                  <DropdownMenuItem
-                    onSelect={() => openReleaseSheetForMode('all')}
-                    className="rounded-lg"
-                  >
-                    All graded docs ({unreleasedGrades.length})
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => openReleaseSheetForMode('selected')}
-                    disabled={!canReleaseSelected}
-                    className="rounded-lg"
-                  >
-                    Only selected docs ({selectedUnreleasedGrades.length})
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+          <div className="flex items-center gap-2">
+            {activeTab === 'assignments' ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingAssignmentId(null);
+                  setIsAssignmentSheetOpen(true);
+                }}
+              >
+                + New Assignment
+              </Button>
+            ) : null}
+            {data.isDocumentSubmissionEnabled &&
+              activeTab === 'graded' &&
+              filteredGradedUnreleasedDocuments.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      data-testid="class-release-grades-open"
+                    >
+                      Release Grades
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-xl">
+                    <DropdownMenuItem
+                      onSelect={() => openReleaseSheetForMode('all')}
+                      className="rounded-lg"
+                    >
+                      All graded docs ({unreleasedGrades.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => openReleaseSheetForMode('selected')}
+                      disabled={!canReleaseSelected}
+                      className="rounded-lg"
+                    >
+                      Only selected docs ({selectedUnreleasedGrades.length})
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+          </div>
         </div>
+
+        {['in-progress', 'to-grade', 'graded', 'released'].includes(activeTab) ? (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Assignment:</span>
+            <Select
+              value={selectedAssignmentId}
+              onValueChange={handleAssignmentFilterChange}
+            >
+              <SelectTrigger className="w-full sm:w-[320px]">
+                <SelectValue placeholder="All assignments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All assignments</SelectItem>
+                {data.assignments.map((assignment) => (
+                  <SelectItem key={assignment.id} value={assignment.id}>
+                    {assignment.title || 'Untitled Assignment'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
@@ -1028,7 +1487,7 @@ export default function ClassDetailRoute() {
               <span className="text-xs font-medium">In Progress</span>
             </div>
             <span className="text-3xl font-bold">
-              {data.inProgressDocuments.length}
+              {filteredInProgressDocuments.length}
             </span>
           </button>
           {data.isDocumentSubmissionEnabled && (
@@ -1041,7 +1500,7 @@ export default function ClassDetailRoute() {
                 <span className="text-xs font-medium">Submitted</span>
               </div>
               <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {ungradedDocuments.length}
+                {filteredUngradedDocuments.length}
               </span>
             </button>
           )}
@@ -1055,7 +1514,7 @@ export default function ClassDetailRoute() {
                 <span className="text-xs font-medium">To Release</span>
               </div>
               <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {gradedUnreleasedDocuments.length}
+                {filteredGradedUnreleasedDocuments.length}
               </span>
             </button>
           )}
@@ -1069,7 +1528,13 @@ export default function ClassDetailRoute() {
         >
           <div>
             <div className="flex items-center justify-between">
-              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 h-auto">
+              <TabsList
+                className={`grid w-full h-auto ${
+                  data.isDocumentSubmissionEnabled
+                    ? 'grid-cols-3 lg:grid-cols-7'
+                    : 'grid-cols-3 lg:grid-cols-4'
+                }`}
+              >
                 <TabsTrigger
                   value="in-progress"
                   className="flex items-center gap-2 h-auto py-2"
@@ -1077,7 +1542,7 @@ export default function ClassDetailRoute() {
                   <FileText className="w-4 h-4" />
                   <span className="hidden sm:inline">In Progress</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.inProgressDocuments.length}
+                    {filteredInProgressDocuments.length}
                   </span>
                 </TabsTrigger>
                 {data.isDocumentSubmissionEnabled && (
@@ -1088,7 +1553,7 @@ export default function ClassDetailRoute() {
                     <ClipboardCheck className="w-4 h-4" />
                     <span className="hidden sm:inline">Submitted</span>
                     <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {ungradedDocuments.length}
+                      {filteredUngradedDocuments.length}
                     </span>
                   </TabsTrigger>
                 )}
@@ -1100,7 +1565,7 @@ export default function ClassDetailRoute() {
                     <Send className="w-4 h-4" />
                     <span className="hidden sm:inline">Graded</span>
                     <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {gradedUnreleasedDocuments.length}
+                      {filteredGradedUnreleasedDocuments.length}
                     </span>
                   </TabsTrigger>
                 )}
@@ -1112,10 +1577,20 @@ export default function ClassDetailRoute() {
                     <ClipboardCheck className="w-4 h-4" />
                     <span className="hidden sm:inline">Released</span>
                     <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {releasedDocuments.length}
+                      {filteredReleasedDocuments.length}
                     </span>
                   </TabsTrigger>
                 )}
+                <TabsTrigger
+                  value="assignments"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Assignments</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {data.assignments.length}
+                  </span>
+                </TabsTrigger>
                 <TabsTrigger
                   value="paste-activity"
                   className="flex items-center gap-2 h-auto py-2"
@@ -1154,6 +1629,20 @@ export default function ClassDetailRoute() {
           </div>
         </Tabs>
       </div>
+
+      <AssignmentSheet
+        classId={data.klass.id}
+        allowedStudentCourses={data.klass.allowedStudentCourses.map((course) => ({
+          id: course.studentCourse.id,
+          title: course.studentCourse.title,
+        }))}
+        open={isAssignmentSheetOpen}
+        onOpenChange={(open) => {
+          setIsAssignmentSheetOpen(open);
+          if (!open) setEditingAssignmentId(null);
+        }}
+        editingAssignment={editingAssignment}
+      />
 
       <Sheet
         open={selectedPasteContent !== null}

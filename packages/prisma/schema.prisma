@@ -22,6 +22,7 @@ model Class {
   schoolId              String
   school                School               @relation(fields: [schoolId], references: [id])
   documents             Document[]
+  assignments           Assignment[]
   allowedStudentCourses ClassStudentCourse[]
 
   @@unique([schoolId, code])
@@ -37,7 +38,27 @@ model StudentCourse {
   position             Int
   image                StudentCourseImage?
   studentCourseModules StudentCourseModule[]
+  assignments          Assignment[]
   allowedInClasses     ClassStudentCourse[]
+}
+
+model Assignment {
+  id              String       @id @default(cuid())
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @db.Timestamptz(6)
+  classId         String
+  class           Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  studentCourseId String
+  studentCourse   StudentCourse @relation(fields: [studentCourseId], references: [id], onDelete: Cascade)
+  title           String?
+  prompt          String
+  tutorContext    String?
+  dueDate         DateTime?    @db.Timestamptz(6)
+  documents       Document[]
+
+  @@index([classId, createdAt(sort: Desc)])
+  @@index([studentCourseId])
+  @@index([dueDate])
 }
 
 model StudentCourseImage {
@@ -138,11 +159,15 @@ model Document {
   profileId                   String
   classId                     String?
   class                       Class?                       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  assignmentId                String?
+  assignment                  Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   pasteAlerts                 PasteAlert[]
+
+  @@index([assignmentId])
 }
 
 model DocumentComment {
