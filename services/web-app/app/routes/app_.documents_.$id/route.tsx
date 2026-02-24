@@ -853,8 +853,7 @@ export default function Route() {
                 </Button>
               </div>
             ) : null}
-            {!isViewingAsTeacher &&
-              data.isDocumentSubmissionEnabled &&
+            {data.isDocumentSubmissionEnabled &&
               !isSubmitted && (
               <>
                 <Button
