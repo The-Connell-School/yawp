@@ -117,6 +117,17 @@ export async function ensureDocumentSubmitted(params: {
   return snapshot.id;
 }
 
+export async function ensureDocumentUnsubmitted(params: {
+  prisma: E2EPrismaClient;
+  documentId: string;
+}) {
+  const { prisma, documentId } = params;
+  await prisma.document.update({
+    where: { id: documentId },
+    data: { submittedAt: null, submittedSnapshotId: null },
+  });
+}
+
 export async function createTeacherInvitation(params: {
   prisma: E2EPrismaClient;
   email: string;

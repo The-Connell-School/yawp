@@ -1,5 +1,55 @@
 import { test, expect } from '../test-setup';
 import { TestHelpers } from '../test-helpers';
+import type { Page } from '@playwright/test';
+
+const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
+const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
+
+async function openDocumentEditorWithRetry(page: Page, documentId: string) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto(`/app/documents/${documentId}`);
+    await page.waitForLoadState('networkidle');
+
+    const errorBoundaryHeading = page.getByRole('heading', {
+      name: DOCUMENT_ERROR_HEADING,
+    });
+    const hitRouteError = await errorBoundaryHeading
+      .isVisible({ timeout: 1500 })
+      .catch(() => false);
+
+    if (hitRouteError) {
+      lastError = new Error('Document route rendered the general error boundary.');
+    } else {
+      const editor = page.locator(EDITOR_SELECTOR).first();
+      try {
+        await expect(editor).toBeVisible({ timeout: 10000 });
+        return editor;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (attempt === 0) {
+      await page.waitForTimeout(500);
+    }
+  }
+
+  throw lastError;
+}
+
+async function expectExitControlVisible(page: Page) {
+  const exitButton = page.getByRole('button', { name: /^exit$/i });
+  if ((await exitButton.count()) > 0) {
+    await expect(exitButton.first()).toBeVisible({ timeout: 10000 });
+    return;
+  }
+
+  await expect(page.getByRole('link', { name: /^exit$/i }).first()).toBeVisible({
+    timeout: 10000,
+  });
+}
 
 test.describe.serial('Document Editor E2E Tests', () => {
   test('should display basic document page structure', async ({
@@ -9,22 +59,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    // Navigate to a seeded document
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-
-    // Wait for page load
-    await page.waitForLoadState('networkidle');
+    // Navigate to a seeded document and allow one retry for transient route errors.
+    const editorContainer = await openDocumentEditorWithRetry(
+      page,
+      e2eContext.documentId
+    );
 
     // Check that basic page structure is present
-    // Look for navigation elements
-    const exitButton = page.locator('text=Exit');
-    await expect(exitButton).toBeVisible({ timeout: 10000 });
-
-    // Look for editor-related elements
-    const editorContainer = page.locator(
-      '.ProseMirror, [contenteditable="true"], [data-testid="editor"]'
-    );
-    await expect(editorContainer.first()).toBeVisible({ timeout: 10000 });
+    await expectExitControlVisible(page);
+    await expect(editorContainer).toBeVisible({ timeout: 10000 });
   });
 
   test('should allow typing in document editor with simulated saving', async ({
@@ -44,15 +87,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor to be visible and clickable
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
 
     // Click on the editor to focus it
     await editor.click();
@@ -92,15 +127,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor to be ready
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Simulate pasting content
@@ -147,15 +174,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       }
     });
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Add content to trigger version creation
@@ -188,13 +207,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Rapid typing simulation

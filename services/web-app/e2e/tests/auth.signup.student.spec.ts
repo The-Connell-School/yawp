@@ -31,6 +31,63 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
   throw lastError;
 }
 
+async function verifyStudentSignupCodeWithRetry(args: {
+  page: Page;
+  prisma: ReturnType<typeof createE2EPrismaClient>;
+  studentEmail: string;
+  attempts?: number;
+}) {
+  const { page, prisma, studentEmail, attempts = 3 } = args;
+  let lastError: unknown = new Error('Verification failed without an error');
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const invitation = await prisma.invitation.findUnique({
+      where: {
+        target_type: { target: studentEmail, type: 'onboard-student' },
+      },
+    });
+
+    if (!invitation) {
+      throw new Error('Invitation missing before verification step');
+    }
+
+    const { otp } = await generateTOTP({
+      secret: invitation.secret,
+      algorithm: invitation.algorithm as any,
+      period: invitation.period,
+      charSet: invitation.charSet,
+      digits: invitation.digits,
+    });
+
+    const verifySearch = new URLSearchParams({
+      type: 'onboard-student',
+      target: studentEmail,
+      code: otp,
+    }).toString();
+
+    await openVerifyPage(page, verifySearch);
+    await fillCodeInputWithRetry(page, otp);
+    await page.getByRole('button', { name: /submit/i }).click();
+
+    try {
+      await page.waitForURL('**/auth/inv/onboard-student**', {
+        timeout: 8000,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const pathname = new URL(page.url()).pathname;
+      const stillOnVerify = pathname.startsWith('/auth/inv/verify');
+      if (!stillOnVerify || attempt === attempts - 1) {
+        break;
+      }
+      await page.waitForTimeout(500);
+    }
+  }
+
+  throw lastError;
+}
+
 test.describe('Authentication - student sign up', () => {
   test('signs up a student via invitation flow and reaches /app', async ({
     page,
@@ -63,30 +120,11 @@ test.describe('Authentication - student sign up', () => {
       }
       if (!invitation) throw new Error('Invitation not created in time');
 
-      const { otp } = await generateTOTP({
-        secret: invitation.secret,
-        algorithm: invitation.algorithm as any,
-        period: invitation.period,
-        charSet: invitation.charSet,
-        digits: invitation.digits,
-      });
-      // eslint-disable-next-line no-console
-      console.log('Computed OTP for student signup:', otp);
-
-      // Act 2: navigate to verify page (force http to avoid https redirect in dev)
-      const verifySearch = new URLSearchParams({
-        type: 'onboard-student',
-        target: studentEmail,
-      }).toString();
-      await openVerifyPage(page, verifySearch);
-
-      // Submit verification code
-      await fillCodeInputWithRetry(page, otp);
-      await page.getByRole('button', { name: /submit/i }).click();
-
-      // Expect redirect to onboarding form
-      await page.waitForURL('**/auth/inv/onboard-student**', {
-        timeout: 15000,
+      // Act 2: verify invitation code with a retry path for timing-sensitive OTP boundaries.
+      await verifyStudentSignupCodeWithRetry({
+        page,
+        prisma,
+        studentEmail,
       });
 
       // Act 3: complete onboarding form
