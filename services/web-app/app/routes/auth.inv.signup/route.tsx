@@ -21,6 +21,7 @@ import { EmailSchema } from '~/utils/schemas/user';
 import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import { getDomainUrl } from '~/utils/misc';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -31,6 +32,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const { error, data } = await parseFormData(formData, Schema);
   if (error) return validationError(error);
+  const normalizedEmail = normalizeEmail(data.email);
 
   const classes = await prisma.class.findMany({
     where: { code: { equals: data.code, mode: 'insensitive' }, isArchived: false },
@@ -42,8 +44,13 @@ export async function action({ request }: ActionFunctionArgs) {
     return validationError({ fieldErrors: { code: 'Invalid code.' } }, data);
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: data.email },
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: 'insensitive',
+      },
+    },
     select: { id: true },
   });
 
@@ -61,7 +68,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const type = 'onboard-student';
-  const target = data.email;
+  const target = normalizedEmail;
   const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
   verifyUrl.searchParams.set('type', type);
   verifyUrl.searchParams.set('target', target);
@@ -82,7 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Check for existing invitation and delete if found
   const existingInvitation = await prisma.invitation.findFirst({
     where: {
-      target,
+      target: { equals: target, mode: 'insensitive' },
       type,
     },
   });
@@ -96,7 +103,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await prisma.invitation.create({ data: verificationData });
 
   const response = await sendEmail({
-    to: data.email,
+    to: normalizedEmail,
     subject: `Welcome to Yawp!`,
     react: (
       <E.Html lang="en" dir="ltr">

@@ -25,6 +25,7 @@ import { parseFormData, useForm } from '@rvf/react-router';
 import { validationError } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { setProfileId } from '~/cookies/profile-id.server';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 export const Schema = z
   .object({
@@ -36,7 +37,8 @@ async function requireInvitationDetails(request: Request) {
   const invitation = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
-  const email = invitation.get('email');
+  const rawEmail = invitation.get('email') as string | undefined;
+  const email = rawEmail ? normalizeEmail(rawEmail) : undefined;
   const organizationId = invitation.get('organizationId');
 
   if (!email || !organizationId) {

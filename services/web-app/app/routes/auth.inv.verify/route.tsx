@@ -16,6 +16,7 @@ import {
   TeacherOnboardingMetadataSchema,
 } from '~/utils/schemas/invitation';
 import type { Profile, User } from '@app/prisma';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 const Schema = z.object({
   code: z.string().min(6).max(6),
@@ -33,9 +34,16 @@ export async function action({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const { target, type } = data;
+  const normalizedTarget = normalizeEmail(target);
 
-  const invitation = await prisma.invitation.findUnique({
-    where: { target_type: { target, type } },
+  const invitation = await prisma.invitation.findFirst({
+    where: {
+      type,
+      target: {
+        equals: normalizedTarget,
+        mode: 'insensitive',
+      },
+    },
     select: {
       expiresAt: true,
       algorithm: true,
@@ -83,8 +91,13 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: target },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedTarget,
+          mode: 'insensitive',
+        },
+      },
     });
 
     if (existingUser) {
@@ -95,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
       invitationCookie.set('klassId', klassId);
       invitationCookie.set('klassIds', klassIds);
       invitationCookie.set('schoolId', schoolId);
-      invitationCookie.set('email', target);
+      invitationCookie.set('email', normalizedTarget);
       return redirect('/auth/inv/onboard-student', {
         headers: {
           'set-cookie':
@@ -112,8 +125,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return validationError({ fieldErrors: { code: 'Invalid code.' } });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: target },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedTarget,
+          mode: 'insensitive',
+        },
+      },
       include: {
         profiles: {
           where: { organizationId: organizationId },
@@ -177,7 +195,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     } else {
       invitationCookie.set('organizationId', organizationId);
-      invitationCookie.set('email', target);
+      invitationCookie.set('email', normalizedTarget);
       return redirect('/auth/inv/onboard-teacher', {
         headers: {
           'set-cookie':
@@ -194,8 +212,13 @@ export async function action({ request }: ActionFunctionArgs) {
       return validationError({ fieldErrors: { code: 'Invalid code.' } });
     }
 
-    const existingUser = await prisma.user.findUnique({
-      where: { email: target },
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedTarget,
+          mode: 'insensitive',
+        },
+      },
       include: {
         profiles: { where: { organizationId: organizationId } },
       },
@@ -237,7 +260,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     } else {
       invitationCookie.set('organizationId', organizationId);
-      invitationCookie.set('email', target);
+      invitationCookie.set('email', normalizedTarget);
       return redirect('/auth/inv/onboard-owner', {
         headers: {
           'set-cookie':
@@ -246,7 +269,7 @@ export async function action({ request }: ActionFunctionArgs) {
       });
     }
   } else if (type === 'password-reset') {
-    invitationCookie.set('email', target);
+    invitationCookie.set('email', normalizedTarget);
     return redirect('/auth/inv/forgot-password-reset', {
       headers: {
         'set-cookie':

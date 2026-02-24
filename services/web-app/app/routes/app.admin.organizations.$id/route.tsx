@@ -39,6 +39,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
@@ -162,10 +163,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse({ error: 'Emails are required' }, { status: 400 });
     }
 
-    const emailList = emails
-      .split(/[,\n]/)
-      .map((email: string) => email.trim())
-      .filter((email: string) => email && email.includes('@'));
+    const emailList = Array.from(
+      new Set(
+        emails
+          .split(/[,\n]/)
+          .map((email: string) => normalizeEmail(email))
+          .filter((email: string) => email && email.includes('@'))
+      )
+    );
 
     if (emailList.length === 0) {
       return dataResponse(
@@ -185,7 +190,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         // Check for existing verification and delete if found
         const existingInvitation = await prisma.invitation.findFirst({
           where: {
-            target: email,
+            target: { equals: email, mode: 'insensitive' },
             type: 'onboard-owner',
             metadata: JSON.stringify({ organizationId: params.id }),
           },

@@ -14,12 +14,14 @@ import { invitationCookieStorage } from '~/cookie-session-storages/invitation.se
 import { validationError, parseFormData, useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { redirectWithToast } from '~/utils/toast.server';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 async function requireInvitation(request: Request) {
   const invitation = await invitationCookieStorage.getSession(
     request.headers.get('cookie')
   );
-  const email = invitation.get('email');
+  const rawEmail = invitation.get('email') as string | undefined;
+  const email = rawEmail ? normalizeEmail(rawEmail) : undefined;
 
   if (!email) {
     throw redirectWithToast('/auth/login', {

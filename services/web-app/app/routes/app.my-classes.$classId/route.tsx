@@ -52,6 +52,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
+import {
+  studentModuleSessionListSelect,
+  studentModuleSessionSingleSelect,
+} from './module-session-select.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -103,12 +107,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           updatedAt: true,
           html: true,
           text: true,
-          studentCourseModuleSessions: {
-            select: {
-              studentCourseModule: { select: { title: true } },
-              document: { select: { title: true } },
-            },
-          },
+          studentCourseModuleSessions: studentModuleSessionListSelect,
           _count: {
             select: {
               pasteAlerts: true,
@@ -192,12 +191,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourseModuleSessions: {
-                select: {
-                  studentCourseModule: { select: { title: true } },
-                },
-                take: 1,
-              },
+              studentCourseModuleSessions: studentModuleSessionSingleSelect,
             },
           },
           grades: {
@@ -246,12 +240,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      studentCourseModuleSessions: {
-        select: {
-          studentCourseModule: { select: { title: true } },
-        },
-        take: 1,
-      },
+      studentCourseModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
       updatedAt: 'desc',
