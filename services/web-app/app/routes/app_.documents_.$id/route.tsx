@@ -35,6 +35,8 @@ import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
+  appendDocumentBackupLeaveSnapshot,
+  type DocumentBackupLeaveSnapshot,
   type DocumentBackupV1,
   getBackupPreviewText,
   readDocumentBackup,
@@ -394,6 +396,9 @@ export default function Route() {
   const [isBackupDialogOpen, setIsBackupDialogOpen] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [localBackup, setLocalBackup] = useState<DocumentBackupV1 | null>(null);
+  const [selectedLeaveSnapshotId, setSelectedLeaveSnapshotId] = useState<
+    string | null
+  >(null);
   const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
@@ -442,6 +447,11 @@ export default function Route() {
   const currentUserId = user.id ?? '';
   const canUseLocalBackup =
     isDocumentEditable && !isViewingAsTeacher && currentUserId.length > 0;
+  const [isSessionLocked, setIsSessionLocked] = useState(false);
+  const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] =
+    useState(false);
+  const isEditorLocked =
+    isSessionLocked || (isDocumentEditable && !isInitialAuthCheckComplete);
   const gradeDisplay =
     (grade
       ? formatGrade(
@@ -494,8 +504,36 @@ export default function Route() {
       ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
       : ''
   }`;
-  const backupPreviewText = localBackup
-    ? getBackupPreviewText(localBackup.draftText, Number.MAX_SAFE_INTEGER)
+  const localBackupSnapshots = useMemo<DocumentBackupLeaveSnapshot[]>(() => {
+    if (!localBackup) return [];
+    const leaveSnapshots = [...(localBackup.leaveSnapshots ?? [])].sort(
+      (a, b) => b.updatedAt - a.updatedAt
+    );
+    if (leaveSnapshots.length > 0) return leaveSnapshots;
+
+    return [
+      {
+        id: `${localBackup.updatedAt}-${localBackup.draftHash}`,
+        draftHtml: localBackup.draftHtml,
+        draftText: localBackup.draftText,
+        draftHash: localBackup.draftHash,
+        updatedAt: localBackup.updatedAt,
+      },
+    ];
+  }, [localBackup]);
+  const selectedLeaveSnapshot = useMemo(() => {
+    if (localBackupSnapshots.length === 0) return null;
+    return (
+      localBackupSnapshots.find(
+        (snapshot) => snapshot.id === selectedLeaveSnapshotId
+      ) ?? localBackupSnapshots[0]
+    );
+  }, [localBackupSnapshots, selectedLeaveSnapshotId]);
+  const backupPreviewText = selectedLeaveSnapshot
+    ? getBackupPreviewText(
+        selectedLeaveSnapshot.draftText,
+        Number.MAX_SAFE_INTEGER
+      )
     : '';
   const visibleGrammarIssues = useMemo(
     () =>
@@ -514,6 +552,12 @@ export default function Route() {
   const handleGrammarIssuesChange = useCallback((issues: GrammarIssue[]) => {
     setGrammarIssues(issues);
     setHiddenGrammarIssueIds([]);
+  }, []);
+  const handleRemoveGrammarIssue = useCallback((id: string) => {
+    setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
+    setHiddenGrammarIssueIds((prev) =>
+      prev.filter((currentId) => currentId !== id)
+    );
   }, []);
   const editorGradeHighlights = useMemo(() => {
     if (!isTeacherGradingTabOpen) return undefined;
@@ -568,6 +612,60 @@ export default function Route() {
     setSearchParams(params, { replace: true });
   };
 
+  const lockSession = useCallback(() => {
+    setIsSessionLocked(true);
+  }, []);
+
+  const handleLoginRedirect = useCallback(() => {
+    const redirectTo = encodeURIComponent(
+      window.location.pathname + window.location.search
+    );
+    window.location.href = `/auth/login?redirectTo=${redirectTo}`;
+  }, []);
+
+  const checkAuthSession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/check', {
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          lockSession();
+          return false;
+        }
+        return true;
+      }
+
+      const data = (await response.json()) as { valid?: boolean };
+      if (!data?.valid) {
+        lockSession();
+        return false;
+      }
+
+      return true;
+    } catch {
+      // Ignore transient network failures.
+      return true;
+    }
+  }, [lockSession]);
+
+  const handleRemoteSaveFailure = useCallback(
+    (args: { reason: 'auth' | 'network' | 'server' }) => {
+      if (args.reason !== 'auth') return;
+      lockSession();
+    },
+    [lockSession]
+  );
+
+  const handleTutorBeforeRespond = useCallback(async () => {
+    if (isSessionLocked) return false;
+
+    await editorBridgeRef.current?.saveNow();
+
+    const isValidSession = await checkAuthSession();
+    return isValidSession && !isSessionLocked;
+  }, [checkAuthSession, isSessionLocked]);
+
   const handleEditorContentSnapshot = useCallback(
     (content: { html: string; text: string }) => {
       latestEditorContentRef.current = content;
@@ -595,11 +693,15 @@ export default function Route() {
       docId: data.doc.id,
     });
     setLocalBackup(backup);
+    setSelectedLeaveSnapshotId(
+      backup?.leaveSnapshots?.[0]?.id ??
+        (backup ? `${backup.updatedAt}-${backup.draftHash}` : null)
+    );
     setIsBackupDialogOpen(true);
   }, [canUseLocalBackup, currentUserId, data.doc.id]);
 
   const handleRestoreBackup = useCallback(async () => {
-    if (!localBackup) return;
+    if (!selectedLeaveSnapshot) return;
     if (!editorBridgeRef.current) {
       toast.error('Editor is not ready yet. Please try again.');
       return;
@@ -607,10 +709,10 @@ export default function Route() {
 
     setIsRestoringBackup(true);
     try {
-      editorBridgeRef.current.setContent(localBackup.draftHtml);
+      editorBridgeRef.current.setContent(selectedLeaveSnapshot.draftHtml);
       latestEditorContentRef.current = {
-        html: localBackup.draftHtml,
-        text: localBackup.draftText,
+        html: selectedLeaveSnapshot.draftHtml,
+        text: selectedLeaveSnapshot.draftText,
       };
       writeDocumentBackup({
         userId: currentUserId,
@@ -625,7 +727,7 @@ export default function Route() {
     } finally {
       setIsRestoringBackup(false);
     }
-  }, [localBackup, currentUserId, data.doc.id]);
+  }, [selectedLeaveSnapshot, currentUserId, data.doc.id]);
 
   useEffect(() => {
     setGrammarIssues(
@@ -640,15 +742,60 @@ export default function Route() {
   }, [initialEditorContent]);
 
   useEffect(() => {
+    setIsSessionLocked(false);
+  }, [data.doc.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!isDocumentEditable) {
+      setIsInitialAuthCheckComplete(true);
+      return;
+    }
+
+    setIsInitialAuthCheckComplete(false);
+
+    const runInitialCheck = async () => {
+      await checkAuthSession();
+      if (!cancelled) {
+        setIsInitialAuthCheckComplete(true);
+      }
+    };
+
+    const onFocus = () => {
+      if (document.visibilityState !== 'visible') return;
+      void checkAuthSession();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      void checkAuthSession();
+    };
+
+    void runInitialCheck();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [checkAuthSession, data.doc.id, isDocumentEditable]);
+
+  useEffect(() => {
     if (!canUseLocalBackup) return;
 
     const flushLocalBackup = () => {
-      writeDocumentBackup({
+      const backup = appendDocumentBackupLeaveSnapshot({
         userId: currentUserId,
         docId: data.doc.id,
         content:
           editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current,
       });
+      if (isBackupDialogOpen && backup) {
+        setLocalBackup(backup);
+      }
     };
 
     const onVisibility = () => {
@@ -664,7 +811,27 @@ export default function Route() {
       window.removeEventListener('beforeunload', flushLocalBackup);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [canUseLocalBackup, currentUserId, data.doc.id]);
+  }, [canUseLocalBackup, currentUserId, data.doc.id, isBackupDialogOpen]);
+
+  useEffect(() => {
+    if (!isBackupDialogOpen) return;
+
+    if (localBackupSnapshots.length === 0) {
+      if (selectedLeaveSnapshotId !== null) {
+        setSelectedLeaveSnapshotId(null);
+      }
+      return;
+    }
+
+    if (
+      !selectedLeaveSnapshotId ||
+      !localBackupSnapshots.some(
+        (snapshot) => snapshot.id === selectedLeaveSnapshotId
+      )
+    ) {
+      setSelectedLeaveSnapshotId(localBackupSnapshots[0].id);
+    }
+  }, [isBackupDialogOpen, localBackupSnapshots, selectedLeaveSnapshotId]);
 
   useEffect(() => {
     setHiddenGrammarIssueIds((prev) =>
@@ -1023,6 +1190,7 @@ export default function Route() {
                 grammarIssues={grammarIssues}
                 hiddenGrammarIssueIds={hiddenGrammarIssueIds}
                 onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                onRemoveGrammarIssue={handleRemoveGrammarIssue}
                 onGrammarIssuesChange={handleGrammarIssuesChange}
               />
             ) : (
@@ -1031,6 +1199,8 @@ export default function Route() {
                 cms={data.currentCms}
                 nextCmId={data.nextCmId}
                 hasPreviousCms={data.hasPreviousCms}
+                isSessionLocked={isSessionLocked}
+                beforeRespond={handleTutorBeforeRespond}
                 getCurrentDocumentText={() =>
                   (editorBridgeRef.current?.getContent().text ??
                     latestEditorContentRef.current.text ??
@@ -1045,9 +1215,10 @@ export default function Route() {
                 docHtml={editorHtml}
                 saveSnapshotId={isTeacherSnapshotView ? activeSnapshot?.id : null}
                 setIsSaving={setIsSaving}
-                isEditable={isDocumentEditable}
+                isEditable={isDocumentEditable && !isEditorLocked}
                 onContentSnapshot={handleEditorContentSnapshot}
                 onEditorBridgeReady={handleEditorBridgeReady}
+                onRemoteSaveFailure={handleRemoteSaveFailure}
                 gradeHighlights={editorGradeHighlights}
                 activeGradeCommentId={
                   isTeacherGradingTabOpen ? activeGradeCommentId : null
@@ -1163,6 +1334,30 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
+      <Dialog open={isSessionLocked} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-md"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Session Expired</DialogTitle>
+            <DialogDescription>
+              Your session expired while editing. Editing is now paused to
+              prevent data loss. Please log in again to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              data-testid="session-expired-login"
+              onClick={handleLoginRedirect}
+              className="w-full sm:w-auto"
+            >
+              Log In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {canUseLocalBackup ? (
         <Dialog
           open={isBackupDialogOpen}
@@ -1176,13 +1371,42 @@ export default function Route() {
                 storage.
               </DialogDescription>
             </DialogHeader>
-            {localBackup ? (
+            {localBackupSnapshots.length > 0 ? (
               <>
+                <div
+                  className="max-h-[40vh] space-y-2 overflow-y-auto rounded-md border bg-muted/30 p-2"
+                  data-testid="restore-local-list"
+                >
+                  {localBackupSnapshots.map((snapshot) => (
+                    <button
+                      type="button"
+                      key={snapshot.id}
+                      data-testid="restore-local-entry"
+                      onClick={() => setSelectedLeaveSnapshotId(snapshot.id)}
+                      className={cn(
+                        'w-full rounded-md border bg-background p-3 text-left transition',
+                        selectedLeaveSnapshot?.id === snapshot.id
+                          ? 'border-primary'
+                          : 'border-transparent hover:border-border'
+                      )}
+                    >
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Saved: {new Date(snapshot.updatedAt).toLocaleString()}
+                      </p>
+                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm">
+                        {getBackupPreviewText(snapshot.draftText, 180)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Last backup: {new Date(localBackup.updatedAt).toLocaleString()}
+                    Selected backup:{' '}
+                    {selectedLeaveSnapshot
+                      ? new Date(selectedLeaveSnapshot.updatedAt).toLocaleString()
+                      : 'None'}
                   </p>
-                  <p className="mt-1 max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm">
+                  <p className="mt-1 max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm">
                     {backupPreviewText}
                   </p>
                 </div>
@@ -1202,7 +1426,7 @@ export default function Route() {
               </Button>
               <Button
                 onClick={handleRestoreBackup}
-                disabled={isRestoringBackup || !localBackup}
+                disabled={isRestoringBackup || !selectedLeaveSnapshot}
               >
                 {isRestoringBackup ? (
                   <>

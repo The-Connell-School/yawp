@@ -1,4 +1,5 @@
 export const DOCUMENT_BACKUP_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const DOCUMENT_BACKUP_LEAVE_SNAPSHOT_LIMIT = 4;
 
 const DOCUMENT_BACKUP_PREFIX = 'yawp:doc-backup:v1';
 
@@ -19,6 +20,15 @@ export type DocumentBackupV1 = {
   lastRemoteSyncHash: string | null;
   lastRemoteSyncAt: number | null;
   dismissedServerHash: string | null;
+  leaveSnapshots?: DocumentBackupLeaveSnapshot[];
+};
+
+export type DocumentBackupLeaveSnapshot = {
+  id: string;
+  draftHtml: string;
+  draftText: string;
+  draftHash: string;
+  updatedAt: number;
 };
 
 export type RecoveryCandidate = {
@@ -62,8 +72,36 @@ function isDocumentBackupV1(value: unknown): value is DocumentBackupV1 {
     (typeof candidate.lastRemoteSyncAt === 'number' ||
       candidate.lastRemoteSyncAt === null) &&
     (typeof candidate.dismissedServerHash === 'string' ||
-      candidate.dismissedServerHash === null)
+      candidate.dismissedServerHash === null) &&
+    (candidate.leaveSnapshots === undefined ||
+      (Array.isArray(candidate.leaveSnapshots) &&
+        candidate.leaveSnapshots.every(isDocumentBackupLeaveSnapshot)))
   );
+}
+
+function isDocumentBackupLeaveSnapshot(
+  value: unknown
+): value is DocumentBackupLeaveSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.draftHtml === 'string' &&
+    typeof candidate.draftText === 'string' &&
+    typeof candidate.draftHash === 'string' &&
+    typeof candidate.updatedAt === 'number'
+  );
+}
+
+function normalizeLeaveSnapshots(
+  value: DocumentBackupV1['leaveSnapshots']
+): DocumentBackupLeaveSnapshot[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(isDocumentBackupLeaveSnapshot)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, DOCUMENT_BACKUP_LEAVE_SNAPSHOT_LIMIT);
 }
 
 function removeBackupItem(key: string) {
@@ -101,7 +139,11 @@ export function readDocumentBackup(args: {
       removeBackupItem(key);
       return null;
     }
-    return parsed;
+    const leaveSnapshots = normalizeLeaveSnapshots(parsed.leaveSnapshots);
+    return {
+      ...parsed,
+      leaveSnapshots: leaveSnapshots.length > 0 ? leaveSnapshots : undefined,
+    };
   } catch {
     removeBackupItem(key);
     return null;
@@ -136,6 +178,7 @@ export function writeDocumentBackup(args: {
     lastRemoteSyncHash: existing?.lastRemoteSyncHash ?? null,
     lastRemoteSyncAt: existing?.lastRemoteSyncAt ?? null,
     dismissedServerHash: existing?.dismissedServerHash ?? null,
+    leaveSnapshots: existing?.leaveSnapshots,
   };
 
   try {
@@ -143,6 +186,65 @@ export function writeDocumentBackup(args: {
     return next;
   } catch {
     return null;
+  }
+}
+
+export function appendDocumentBackupLeaveSnapshot(args: {
+  userId: string;
+  docId: string;
+  content: DocumentContentSnapshot;
+  now?: number;
+}): DocumentBackupV1 | null {
+  if (typeof window === 'undefined') return null;
+  const now = args.now ?? Date.now();
+  const current =
+    writeDocumentBackup({
+      userId: args.userId,
+      docId: args.docId,
+      content: args.content,
+      now,
+    }) ??
+    readDocumentBackup({
+      userId: args.userId,
+      docId: args.docId,
+      now,
+    });
+
+  if (!current) return null;
+
+  const existingSnapshots = normalizeLeaveSnapshots(current.leaveSnapshots);
+  if (existingSnapshots[0]?.draftHash === current.draftHash) {
+    return {
+      ...current,
+      leaveSnapshots:
+        existingSnapshots.length > 0 ? existingSnapshots : undefined,
+    };
+  }
+
+  const nextSnapshots = [
+    {
+      id: `${now}-${current.draftHash}`,
+      draftHtml: current.draftHtml,
+      draftText: current.draftText,
+      draftHash: current.draftHash,
+      updatedAt: now,
+    },
+    ...existingSnapshots,
+  ].slice(0, DOCUMENT_BACKUP_LEAVE_SNAPSHOT_LIMIT);
+
+  const key = getDocumentBackupKey(args);
+  const next: DocumentBackupV1 = {
+    ...current,
+    leaveSnapshots: nextSnapshots,
+    updatedAt: now,
+    expiresAt: now + DOCUMENT_BACKUP_TTL_MS,
+  };
+
+  try {
+    localStorage.setItem(key, JSON.stringify(next));
+    return next;
+  } catch {
+    return current;
   }
 }
 

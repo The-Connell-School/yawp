@@ -62,6 +62,16 @@ export async function setDocumentSubmissionForSchool(params: {
   });
 }
 
+export async function invalidateUserSessions(params: {
+  prisma: E2EPrismaClient;
+  userId: string;
+}) {
+  const { prisma, userId } = params;
+  await prisma.session.deleteMany({
+    where: { userId },
+  });
+}
+
 export async function ensureDocumentSubmitted(params: {
   prisma: E2EPrismaClient;
   documentId: string;

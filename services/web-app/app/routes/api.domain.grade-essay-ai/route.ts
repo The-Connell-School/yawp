@@ -11,10 +11,7 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
-import {
-  firstNameFromFullName,
-  personalizeOverallComment,
-} from '~/domain/grading/personalize';
+import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -312,6 +309,7 @@ export async function action({ request }: ActionFunctionArgs) {
     parsed.categories.reduce((sum, item) => sum + item.score, 0) /
     parsed.categories.length;
   const overallScore = Math.round(average);
+  const overallComment = parsed.overallComment;
 
   const numericPercentage = computeWeightedPercentage(
     rubricScores as unknown as Record<string, unknown>
@@ -320,10 +318,6 @@ export async function action({ request }: ActionFunctionArgs) {
     numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
   const score = formatGrade(numericPercentage, letterGrade);
 
-  const overallComment = personalizeOverallComment(
-    studentFirstName,
-    parsed.overallComment
-  );
   const grammarAndMechanicsScore =
     parsed.categories.find((item) => item.key === 'grammar_and_mechanics')
       ?.score ?? null;

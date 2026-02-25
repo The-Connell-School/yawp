@@ -17,6 +17,7 @@ const POST = z.object({
   numericPercentage: z.string().optional(),
   letterGrade: z.string().optional(),
   aiMeta: z.string().optional(),
+  grammarIssues: z.string().optional(),
 });
 
 function parseJson(value?: string) {
@@ -84,6 +85,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Update the grade
   const rubricScores = parseJson(data.rubricScores);
   const aiMeta = parseJson(data.aiMeta);
+  const grammarIssues = parseJson(data.grammarIssues);
   const overallScore =
     data.overallScore && Number.isFinite(Number(data.overallScore))
       ? Number(data.overallScore)
@@ -112,6 +114,7 @@ export async function action({ request }: ActionFunctionArgs) {
       numericPercentage,
       letterGrade,
       aiMeta,
+      ...(grammarIssues !== null ? { grammarIssues } : {}),
       updatedAt: new Date(),
     },
   });

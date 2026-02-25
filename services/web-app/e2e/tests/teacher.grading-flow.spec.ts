@@ -36,6 +36,17 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
   throw lastError;
 }
 
+function parseShownGrammarCounts(text: string): { shown: number; total: number } {
+  const match = text.match(/AI grammar issues shown:\s*(\d+)\s*\/\s*(\d+)/i);
+  if (!match) {
+    throw new Error(`Unable to parse grammar issue counts from: ${text}`);
+  }
+  return {
+    shown: Number(match[1]),
+    total: Number(match[2]),
+  };
+}
+
 const RUBRIC_KEYS = [
   'thesis_and_content',
   'organization_and_structure',
@@ -206,6 +217,29 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(page.getByTestId('grading-overall-comment')).not.toHaveValue(
         ''
       );
+
+      const grammarCounter = page.getByText(/AI grammar issues shown:/i);
+      const beforeRemove = parseShownGrammarCounts(
+        (await grammarCounter.textContent()) ?? ''
+      );
+      await page.getByRole('button', { name: /^remove$/i }).first().click();
+      await expect
+        .poll(async () => {
+          const text = (await grammarCounter.textContent()) ?? '';
+          return parseShownGrammarCounts(text).total;
+        })
+        .toBe(Math.max(0, beforeRemove.total - 1));
+      await page.getByTestId('grading-save-grade').click();
+      await expect(page.getByTestId('grading-save-grade')).toBeDisabled({
+        timeout: 15000,
+      });
+      await page.reload();
+      await page.waitForLoadState('networkidle');
+      const afterReload = parseShownGrammarCounts(
+        ((await page.getByText(/AI grammar issues shown:/i).textContent()) ??
+          '') as string
+      );
+      expect(afterReload.total).toBe(Math.max(0, beforeRemove.total - 1));
 
       await page.evaluate(() => {
         const root = document.querySelector('.ProseMirror');

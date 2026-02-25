@@ -23,6 +23,7 @@ const POST = z.object({
   numericPercentage: z.string().optional(),
   letterGrade: z.string().optional(),
   aiMeta: z.string().optional(),
+  grammarIssues: z.string().optional(),
   releaseImmediately: z.enum(['on']).optional(), // Checkbox value
 });
 
@@ -168,6 +169,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const releasedAt = data.releaseImmediately === 'on' ? now : null;
   const rubricScores = parseJson(data.rubricScores);
   const aiMeta = parseJson(data.aiMeta);
+  const grammarIssues = parseJson(data.grammarIssues);
   const overallScore =
     data.overallScore && Number.isFinite(Number(data.overallScore))
       ? Number(data.overallScore)
@@ -200,6 +202,7 @@ export async function action({ request }: ActionFunctionArgs) {
         numericPercentage,
         letterGrade,
         aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
         releasedAt,
       },
       update: {
@@ -211,6 +214,7 @@ export async function action({ request }: ActionFunctionArgs) {
         numericPercentage,
         letterGrade,
         aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
         releasedAt,
         updatedAt: now,
       },

@@ -2,16 +2,10 @@ import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
+  Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
 import { PlusIcon } from 'lucide-react';
-import {
-  parseFormData,
-  ValidatedForm,
-  validationError,
-} from '@rvf/react-router';
-import { useLocalStorage } from 'usehooks-ts';
-import { z } from 'zod';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -24,7 +18,6 @@ import {
 } from '~/components/ui/accordion';
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser.js';
-import { getBase64Audio } from '~/services/openai.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -121,16 +114,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({ course, documents, archivedDocuments });
 }
-
-const validator = z.object({
-  audioEnabled: z.union([z.literal('true'), z.literal('false')]),
-});
-
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
-  const { error, data } = await parseFormData(request, validator);
-  if (error) return validationError(error);
 
   const firstCourseModule = await prisma.studentCourseModule.findFirst({
     where: { studentCourseId: params.id, deletedAt: null },
@@ -151,16 +137,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const firstInstruction = firstCourseModule.instructions[0];
-  const shouldFetchAudio =
-    data.audioEnabled &&
-    firstInstruction?.prompt &&
-    !(await prisma.instructionAudio.findUnique({
-      where: { studentCourseModuleInstructionId: firstInstruction.id },
-    }));
-
-  const audio = shouldFetchAudio
-    ? await getBase64Audio(firstInstruction.prompt, '1.5')
-    : null;
 
   let studentProfile = await prisma.studentProfile.findUnique({
     where: { profileId: profile.id },
@@ -174,52 +150,39 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
-  const [doc] = await Promise.all([
-    prisma.document.create({
-      data: {
-        profileId: profile.id,
-        text: '',
-        html: '',
-        title: '',
-        ...(studentProfile.classes[0] && {
-          classId: studentProfile.classes[0].id,
-        }),
-        studentCourseModuleSessions: {
-          create: {
-            studentProfileId: studentProfile.id,
-            instructionsCompleted: 0,
-            studentCourseModuleId: firstCourseModule.id,
-            ...(firstInstruction && {
-              messages: {
-                create: [
-                  {
-                    content: firstInstruction.prompt,
-                    agent: 'assistant',
-                    instructionId: firstInstruction.id,
-                  },
-                ],
-              },
-            }),
-          },
-        },
-      },
-    }),
-    ...(audio
-      ? [
-          prisma.instructionAudio.create({
-            data: {
-              studentCourseModuleInstructionId: firstInstruction.id,
-              blob: Buffer.from(audio, 'base64'),
+  const doc = await prisma.document.create({
+    data: {
+      profileId: profile.id,
+      text: '',
+      html: '',
+      title: '',
+      ...(studentProfile.classes[0] && {
+        classId: studentProfile.classes[0].id,
+      }),
+      studentCourseModuleSessions: {
+        create: {
+          studentProfileId: studentProfile.id,
+          instructionsCompleted: 0,
+          studentCourseModuleId: firstCourseModule.id,
+          ...(firstInstruction && {
+            messages: {
+              create: [
+                {
+                  content: firstInstruction.prompt,
+                  agent: 'assistant',
+                  instructionId: firstInstruction.id,
+                },
+              ],
             },
           }),
-        ]
-      : []),
-  ]);
+        },
+      },
+    },
+  });
 
   const requestUrl = new URL(request.url);
   const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
   const redirectParams = new URLSearchParams({
-    spa: '1',
     exitTo: currentPath,
   });
 
@@ -237,7 +200,6 @@ export default function AppCoursesIdRoute() {
   const data = useLoaderData<typeof loader>();
   const isTeacher = !!user.selectedProfile?.teacherProfile;
   const hasModules = data.course.studentCourseModules.length > 0;
-  const [speechEnabled] = useLocalStorage('speechEnabled', false);
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
 
@@ -250,16 +212,7 @@ export default function AppCoursesIdRoute() {
               <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
             </Link>
           </Button>
-          <ValidatedForm
-            method="post"
-            schema={validator}
-            defaultValues={{ audioEnabled: speechEnabled ? 'true' : 'false' }}
-          >
-            <input
-              type="hidden"
-              value={speechEnabled ? 'true' : 'false'}
-              name="audioEnabled"
-            />
+          <Form method="post">
             <Button
               type="submit"
               className="w-fit"
@@ -268,7 +221,7 @@ export default function AppCoursesIdRoute() {
             >
               New <PlusIcon className="ml-1 h-5 w-5" />
             </Button>
-          </ValidatedForm>
+          </Form>
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
           {data.course.image ? (

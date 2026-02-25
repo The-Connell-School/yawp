@@ -1,6 +1,8 @@
 import { test, expect } from '../test-setup';
 import { TestHelpers } from '../test-helpers';
 import type { Page } from '@playwright/test';
+import { createE2EPrismaClient } from '../prisma-client';
+import { invalidateUserSessions } from '../db-helpers';
 
 const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
 const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
@@ -235,5 +237,108 @@ test.describe.serial('Document Editor E2E Tests', () => {
       documentId: e2eContext.documentId,
       courseId: e2eContext.studentCourseId,
     });
+  });
+
+  test('locks editor and shows session modal when autosave gets auth failure', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      await editor.click();
+      await editor.type('Baseline text before session expiry.');
+      await page.waitForTimeout(2200);
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await editor.click();
+      await editor.type(' This text should trigger auth failure lock.');
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect
+        .poll(
+          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          { timeout: 5000 }
+        )
+        .toBe('false');
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('locks editor on focus auth check after session expires in background', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      await expect(editor).toBeVisible({ timeout: 10000 });
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect
+        .poll(
+          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          { timeout: 5000 }
+        )
+        .toBe('false');
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('blocks tutor actions when session is locked', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      await openDocumentEditorWithRetry(page, e2eContext.documentId);
+
+      let tutorRequests = 0;
+      await page.route('**/api/domain/tutor-response', async (route) => {
+        if (route.request().method() === 'POST') tutorRequests += 1;
+        await route.continue();
+      });
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('tutor-chat-open')).toBeDisabled();
+      await expect.poll(() => tutorRequests).toBe(0);
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 });

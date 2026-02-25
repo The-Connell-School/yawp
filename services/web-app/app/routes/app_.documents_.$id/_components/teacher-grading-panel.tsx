@@ -116,6 +116,7 @@ export function TeacherGradingPanel({
   grammarIssues,
   hiddenGrammarIssueIds,
   onToggleGrammarIssue,
+  onRemoveGrammarIssue,
   onGrammarIssuesChange,
 }: {
   documentId: string;
@@ -136,6 +137,7 @@ export function TeacherGradingPanel({
   grammarIssues: GrammarIssue[];
   hiddenGrammarIssueIds: string[];
   onToggleGrammarIssue: (id: string) => void;
+  onRemoveGrammarIssue: (id: string) => void;
   onGrammarIssuesChange: (issues: GrammarIssue[]) => void;
 }) {
   const aiFetcher = useFetcher();
@@ -301,6 +303,7 @@ export function TeacherGradingPanel({
     form.append('feedback', overallComment);
     form.append('overallComment', overallComment);
     form.append('rubricScores', JSON.stringify(rubricScores));
+    form.append('grammarIssues', JSON.stringify(grammarIssues));
     if (percent !== null) form.append('numericPercentage', percent.toString());
     if (letter) form.append('letterGrade', letter);
     if (percent !== null)
@@ -603,18 +606,32 @@ export function TeacherGradingPanel({
                                         ? ` • Rule ${issue.ruleNumber}`
                                         : ''}
                                     </p>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 px-2 text-xs"
-                                      disabled={isGenerating}
-                                      onClick={() =>
-                                        onToggleGrammarIssue(issue.id)
-                                      }
-                                    >
-                                      {isHidden ? 'Show' : 'Hide'}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        disabled={isGenerating}
+                                        onClick={() =>
+                                          onToggleGrammarIssue(issue.id)
+                                        }
+                                      >
+                                        {isHidden ? 'Show' : 'Hide'}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        disabled={isGenerating}
+                                        onClick={() =>
+                                          onRemoveGrammarIssue(issue.id)
+                                        }
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
                                   </div>
                                   <p className="mt-1 text-sm italic">
                                     "{formatExcerpt(issue.excerpt)}"
