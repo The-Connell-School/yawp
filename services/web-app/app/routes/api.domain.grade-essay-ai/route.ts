@@ -173,6 +173,7 @@ export async function action({ request }: ActionFunctionArgs) {
         select: {
           id: true,
           text: true,
+          html: true,
           document: {
             select: {
               id: true,
@@ -206,6 +207,7 @@ export async function action({ request }: ActionFunctionArgs) {
               select: {
                 id: true,
                 text: true,
+                html: true,
               },
             },
             class: { select: { schoolId: true } },
@@ -222,6 +224,7 @@ export async function action({ request }: ActionFunctionArgs) {
             ? {
                 id: doc.submittedSnapshot.id,
                 text: doc.submittedSnapshot.text,
+                html: doc.submittedSnapshot.html,
                 document: {
                   id: doc.id,
                   class: doc.class,
@@ -417,6 +420,8 @@ export async function action({ request }: ActionFunctionArgs) {
     create: {
       snapshotId: submittedSnapshot.id,
       gradedById: actor.profileId,
+      essayText: submittedSnapshot.text,
+      essayHtml: submittedSnapshot.html,
       score,
       feedback: overallComment,
       rubricScores: rubricScores as Prisma.InputJsonValue,
@@ -426,8 +431,10 @@ export async function action({ request }: ActionFunctionArgs) {
       letterGrade,
       ...(grammarIssues !== null ? { grammarIssues } : {}),
       aiMeta,
-    },
+    } as any,
     update: {
+      essayText: submittedSnapshot.text,
+      essayHtml: submittedSnapshot.html,
       score,
       feedback: overallComment,
       rubricScores: rubricScores as Prisma.InputJsonValue,
@@ -438,7 +445,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ...(grammarIssues !== null ? { grammarIssues } : {}),
       aiMeta,
       updatedAt: now,
-    },
+    } as any,
   });
 
   const resolvedGrammarIssues =

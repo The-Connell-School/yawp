@@ -19,24 +19,14 @@ export async function loader({ request }: ActionFunctionArgs) {
   const now = new Date();
   const oneDay = 24 * 60 * 60 * 1000;
   const cutoffVersions = new Date(now.getTime() - 3 * oneDay);
-  const cutoffSnapshots = new Date(now.getTime() - 90 * oneDay);
 
-  const [versionsResult, snapshotsResult] = await Promise.all([
-    prisma.documentVersion.deleteMany({
-      where: { createdAt: { lt: cutoffVersions } },
-    }),
-    prisma.documentSnapshot.deleteMany({
-      where: {
-        createdAt: { lt: cutoffSnapshots },
-        submittedAt: null,
-        grades: { none: {} },
-      },
-    }),
-  ]);
+  const versionsResult = await prisma.documentVersion.deleteMany({
+    where: { createdAt: { lt: cutoffVersions } },
+  });
 
   return dataResponse({
     deletedVersions: versionsResult.count,
-    deletedSnapshots: snapshotsResult.count,
+    deletedSnapshots: 0,
   });
 }
 
