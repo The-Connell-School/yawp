@@ -265,6 +265,27 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByText('Grade comment from teacher E2E flow.')
       ).toBeVisible({ timeout: 10000 });
 
+      const gradeBeforeSnapshotMutation = (await (prisma as any).grade.findUnique(
+        {
+          where: { snapshotId },
+          select: { id: true, essayText: true },
+        }
+      )) as { id: string; essayText: string | null } | null;
+      expect(gradeBeforeSnapshotMutation?.id).toBeTruthy();
+      expect(gradeBeforeSnapshotMutation?.essayText).toContain(
+        'This are a practice essay with grammar mistake.'
+      );
+
+      const mutatedSnapshotText =
+        'SNAPSHOT MUTATION SHOULD NOT APPEAR IN GRADED VIEW';
+      await prisma.documentSnapshot.update({
+        where: { id: snapshotId },
+        data: {
+          text: mutatedSnapshotText,
+          html: `<p>${mutatedSnapshotText}</p>`,
+        },
+      });
+
       await page.getByRole('button', { name: /exit/i }).click();
       await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`, {
         timeout: 15000,
@@ -282,6 +303,14 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(
         page.getByRole('cell', { name: /E2E Doc/i }).first()
       ).toBeVisible({ timeout: 15000 });
+
+      await page.goto(`/app/graded/${gradeBeforeSnapshotMutation!.id}`);
+      await page.waitForLoadState('networkidle');
+      const gradedEssay = page.locator('.prose').first();
+      await expect(gradedEssay).toContainText(
+        'This are a practice essay with grammar mistake.'
+      );
+      await expect(gradedEssay).not.toContainText(mutatedSnapshotText);
       expect(aiRequests).toBe(1);
     } finally {
       await prisma.$disconnect();

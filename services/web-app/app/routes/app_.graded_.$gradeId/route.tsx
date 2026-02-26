@@ -19,6 +19,7 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { formatGrade } from '~/domain/grading/gradeMath';
+import { resolveGradeEssayContent } from '~/domain/grading/grade-essay-content';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -222,7 +223,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { isAdmin: true },
   });
 
-  const grade = await prisma.grade.findFirst({
+  const grade = await (prisma as any).grade.findFirst({
     where: {
       id: params.gradeId,
       snapshot: { document: { deletedAt: null } },
@@ -236,6 +237,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       numericPercentage: true,
       letterGrade: true,
       grammarIssues: true,
+      essayText: true,
+      essayHtml: true,
       snapshot: {
         select: {
           id: true,
@@ -277,7 +280,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isStudentOwner = grade.snapshot.document.profileId === profile.id;
   const isTeacherOfClass = (grade.snapshot.document.class?.teachers ?? []).some(
-    (t) => t.profileId === profile.id
+    (t: { profileId: string }) => t.profileId === profile.id
   );
 
   if (!user?.isAdmin) {
@@ -297,7 +300,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const teacherProfileIds = new Set(
-    (grade.snapshot.document.class?.teachers ?? []).map((t) => t.profileId)
+    (grade.snapshot.document.class?.teachers ?? []).map(
+      (t: { profileId: string }) => t.profileId
+    )
   );
 
   const allGradeComments = await prisma.gradeComment.findMany({
@@ -323,7 +328,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     items: allGradeComments.filter((comment) =>
       teacherProfileIds.has(comment.profileId) || comment.profile.user.isAdmin
     ),
-    sourceText: grade.snapshot.text ?? '',
+    sourceText: resolveGradeEssayContent(grade).essayText,
     getExcerpt: (comment) => comment.excerpt,
     getOccurrence: (comment) => comment.occurrence,
   });
@@ -363,14 +368,19 @@ export default function Route() {
   } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
 
+  const { essayText, essayHtml } = useMemo(
+    () => resolveGradeEssayContent(data.grade as any),
+    [data.grade]
+  );
+
   const essayRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const grammarIssues = useMemo(() => {
     return parseGrammarIssuesPayload(data.grade.grammarIssues, {
-      sourceText: data.grade.snapshot.text ?? '',
+      sourceText: essayText,
     });
-  }, [data.grade.grammarIssues, data.grade.snapshot.text]);
+  }, [data.grade.grammarIssues, essayText]);
 
   const gradeComments = useMemo(() => data.gradeComments, [data.gradeComments]);
 
@@ -397,7 +407,7 @@ export default function Route() {
   useEffect(() => {
     const root = essayRef.current;
     if (!root) return;
-    root.innerHTML = data.grade.snapshot.html;
+    root.innerHTML = essayHtml;
 
     // Grade comments (green)
     applyExcerptHighlights({
@@ -424,7 +434,7 @@ export default function Route() {
         className: 'grammar-issue',
       });
     }
-  }, [data.grade.snapshot.html, gradeComments, grammarIssues, showGrammar]);
+  }, [essayHtml, gradeComments, grammarIssues, showGrammar]);
 
   useEffect(() => {
     const root = essayRef.current;
@@ -550,7 +560,7 @@ export default function Route() {
       .forEach((el) => el.classList.add('focused'));
   }, [
     activeGradeCommentId,
-    data.grade.snapshot.html,
+    essayHtml,
     gradeComments,
     showGrammar,
   ]);
