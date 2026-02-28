@@ -88,11 +88,13 @@ describe('api.domain.grade-essay', () => {
     expect(upsertArg).toMatchObject({
       where: { snapshotId: 'snapshot-1' },
       create: {
+        documentId: 'doc-1',
         snapshotId: 'snapshot-1',
         essayText: 'Frozen essay text',
         essayHtml: '<p>Frozen essay text</p>',
       },
       update: {
+        documentId: 'doc-1',
         essayText: 'Frozen essay text',
         essayHtml: '<p>Frozen essay text</p>',
       },

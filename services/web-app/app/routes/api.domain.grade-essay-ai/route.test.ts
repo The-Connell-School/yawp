@@ -8,9 +8,6 @@ const prisma = {
   document: {
     findFirst: mock(),
   },
-  grade: {
-    upsert: mock(),
-  },
 };
 
 const getLLMCompletion = mock();
@@ -53,7 +50,6 @@ describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.documentSnapshot.findFirst.mockReset();
     prisma.document.findFirst.mockReset();
-    prisma.grade.upsert.mockReset();
     getLLMCompletion.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
     isDocumentSubmissionEnabledForSchool.mockReset();
@@ -78,9 +74,10 @@ describe('api.domain.grade-essay-ai', () => {
       .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
   });
 
-  test('stores frozen snapshot text/html when writing AI grade suggestions', async () => {
+  test('returns AI suggestions without persisting a grade', async () => {
     prisma.documentSnapshot.findFirst.mockResolvedValue({
       id: 'snapshot-1',
+      documentId: 'doc-1',
       text: 'Frozen AI essay text',
       html: '<p>Frozen AI essay text</p>',
       document: {
@@ -88,10 +85,6 @@ describe('api.domain.grade-essay-ai', () => {
         class: { schoolId: 'school-1' },
         profile: { user: { name: 'Jordan Student' } },
       },
-    });
-    prisma.grade.upsert.mockResolvedValue({
-      id: 'grade-1',
-      grammarIssues: null,
     });
 
     const form = new FormData();
@@ -105,22 +98,15 @@ describe('api.domain.grade-essay-ai', () => {
       }
     );
 
-    await action({ request } as any);
+    const response = await action({ request } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
 
-    expect(prisma.grade.upsert).toHaveBeenCalledTimes(1);
-
-    const upsertArg = prisma.grade.upsert.mock.calls[0]?.[0];
-    expect(upsertArg).toMatchObject({
-      where: { snapshotId: 'snapshot-1' },
-      create: {
-        snapshotId: 'snapshot-1',
-        essayText: 'Frozen AI essay text',
-        essayHtml: '<p>Frozen AI essay text</p>',
-      },
-      update: {
-        essayText: 'Frozen AI essay text',
-        essayHtml: '<p>Frozen AI essay text</p>',
-      },
-    });
+    expect(payload.success).toBe(true);
+    expect(payload.message).toBe('Grading Assistant suggestions generated.');
+    expect(payload.grade).toBeUndefined();
+    expect(payload.overallComment).toBe(
+      'Jordan, this draft has clear progress and focus.'
+    );
+    expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
   });
 });

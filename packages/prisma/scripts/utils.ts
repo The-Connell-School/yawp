@@ -29,6 +29,9 @@ export async function cleanupDb(prisma: PrismaClient) {
   await prisma.teacherCourse.deleteMany();
 
   // Documents and comments
+  await prisma.gradeCommentResponse.deleteMany();
+  await prisma.gradeComment.deleteMany();
+  await prisma.grade.deleteMany();
   await prisma.documentCommentResponse.deleteMany();
   await prisma.documentComment.deleteMany();
   await prisma.documentVersion.deleteMany();

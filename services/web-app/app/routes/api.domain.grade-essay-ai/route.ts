@@ -325,13 +325,6 @@ export async function action({ request }: ActionFunctionArgs) {
     parsed.categories.find((item) => item.key === 'grammar_and_mechanics')
       ?.score ?? null;
 
-  const now = new Date();
-  const aiMeta = {
-    model,
-    promptVersion: 'v2',
-    generatedAt: now.toISOString(),
-  };
-
   let grammarIssues: Prisma.InputJsonValue | null = null;
   const parseGrammarIssuesFromResponseText = (responseText: string) => {
     try {
@@ -415,51 +408,15 @@ export async function action({ request }: ActionFunctionArgs) {
     grammarIssues = null;
   }
 
-  const grade = await prisma.grade.upsert({
-    where: { snapshotId: submittedSnapshot.id },
-    create: {
-      snapshotId: submittedSnapshot.id,
-      gradedById: actor.profileId,
-      essayText: submittedSnapshot.text,
-      essayHtml: submittedSnapshot.html,
-      score,
-      feedback: overallComment,
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta,
-    } as any,
-    update: {
-      essayText: submittedSnapshot.text,
-      essayHtml: submittedSnapshot.html,
-      score,
-      feedback: overallComment,
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta,
-      updatedAt: now,
-    } as any,
-  });
-
-  const resolvedGrammarIssues =
-    grammarIssues !== null ? grammarIssues : grade.grammarIssues;
-
   return dataResponse({
     success: true,
     message: 'Grading Assistant suggestions generated.',
-    grade,
     rubricScores,
     overallScore,
     overallComment,
     numericPercentage,
     letterGrade,
-    grammarIssues: resolvedGrammarIssues,
+    score,
+    grammarIssues,
   });
 }

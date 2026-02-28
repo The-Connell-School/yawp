@@ -36,7 +36,10 @@ async function fillCodeInputWithRetry(page: Page, code: string) {
   throw lastError;
 }
 
-function parseShownGrammarCounts(text: string): { shown: number; total: number } {
+function parseShownGrammarCounts(text: string): {
+  shown: number;
+  total: number;
+} {
   const match = text.match(/AI grammar issues shown:\s*(\d+)\s*\/\s*(\d+)/i);
   if (!match) {
     throw new Error(`Unable to parse grammar issue counts from: ${text}`);
@@ -120,9 +123,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}`);
       await page.waitForLoadState('networkidle');
 
-      await expect(
-        page.getByRole('tab', { name: /submitted/i })
-      ).toHaveCount(0);
+      await expect(page.getByRole('tab', { name: /submitted/i })).toHaveCount(
+        0
+      );
       await expect(page.getByRole('tab', { name: /graded/i })).toHaveCount(0);
 
       await page.goto(
@@ -164,7 +167,10 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         timeout: 10000,
       });
       await page.getByRole('tab', { name: /submitted/i }).click();
-      await page.getByRole('link', { name: /^grade$/i }).first().click();
+      await page
+        .getByRole('link', { name: /^grade$/i })
+        .first()
+        .click();
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
       await page.waitForLoadState('networkidle');
 
@@ -187,19 +193,27 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       let aiRequests = 0;
       await page.route('**/api/domain/grade-essay-ai', async (route) => {
         if (route.request().method() === 'POST') aiRequests += 1;
+        await new Promise((resolve) => setTimeout(resolve, 750));
         await route.continue();
       });
 
+      const gradingAssistantButton = page.getByTestId(
+        'grading-assistant-generate'
+      );
       await page.getByTestId('grading-assistant-generate').click();
       await page
         .getByRole('button', {
           name: /replace with grading assistant suggestions/i,
         })
         .click();
+      await expect(gradingAssistantButton).toContainText('Grading');
+      await expect(
+        gradingAssistantButton.locator('svg.animate-spin')
+      ).toBeVisible({
+        timeout: 15000,
+      });
 
-      await expect
-        .poll(() => aiRequests, { timeout: 120000 })
-        .toBe(1);
+      await expect.poll(() => aiRequests, { timeout: 120000 }).toBe(1);
       await page.waitForResponse(
         (response) =>
           response.url().includes('/api/domain/grade-essay-ai') &&
@@ -217,12 +231,21 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(page.getByTestId('grading-overall-comment')).not.toHaveValue(
         ''
       );
+      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
+        timeout: 15000,
+      });
 
       const grammarCounter = page.getByText(/AI grammar issues shown:/i);
       const beforeRemove = parseShownGrammarCounts(
         (await grammarCounter.textContent()) ?? ''
       );
-      await page.getByRole('button', { name: /^remove$/i }).first().click();
+      await page
+        .getByRole('button', { name: /^remove$/i })
+        .first()
+        .click();
+      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
+        timeout: 15000,
+      });
       await expect
         .poll(async () => {
           const text = (await grammarCounter.textContent()) ?? '';
@@ -265,12 +288,12 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByText('Grade comment from teacher E2E flow.')
       ).toBeVisible({ timeout: 10000 });
 
-      const gradeBeforeSnapshotMutation = (await (prisma as any).grade.findUnique(
-        {
-          where: { snapshotId },
-          select: { id: true, essayText: true },
-        }
-      )) as { id: string; essayText: string | null } | null;
+      const gradeBeforeSnapshotMutation = (await (
+        prisma as any
+      ).grade.findUnique({
+        where: { snapshotId },
+        select: { id: true, essayText: true },
+      })) as { id: string; essayText: string | null } | null;
       expect(gradeBeforeSnapshotMutation?.id).toBeTruthy();
       expect(gradeBeforeSnapshotMutation?.essayText).toContain(
         'This are a practice essay with grammar mistake.'

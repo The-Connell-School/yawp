@@ -89,9 +89,7 @@ function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
     if (aRange) return -1;
     if (bRange) return 1;
 
-    return (
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
 
@@ -331,9 +329,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       (cm) => cm.position === currentCms.studentCourseModule.position + 1
     )?.id;
 
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    doc.class?.schoolId
-  );
+  const isDocumentSubmissionEnabled =
+    await isDocumentSubmissionEnabledForSchool(doc.class?.schoolId);
 
   const gradeId = activeSnapshot?.grades?.[0]?.id;
   const unsortedGradeComments =
@@ -422,12 +419,11 @@ export default function Route() {
   const isGradeReleased =
     grade?.releasedAt !== null && grade?.releasedAt !== undefined;
   const canUseGradingPanel =
-    data.isDocumentSubmissionEnabled &&
-    isViewingAsTeacher &&
-    isSubmitted;
+    data.isDocumentSubmissionEnabled && isViewingAsTeacher && isSubmitted;
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
   const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
-  const isTeacherSnapshotView = isViewingAsTeacher && Boolean(activeSnapshot?.id);
+  const isTeacherSnapshotView =
+    isViewingAsTeacher && Boolean(activeSnapshot?.id);
   const editorHtml =
     isTeacherSnapshotView && activeSnapshot?.html
       ? activeSnapshot.html
@@ -436,9 +432,7 @@ export default function Route() {
     () => ({
       html: editorHtml ?? '',
       text:
-        (isTeacherSnapshotView
-          ? activeSnapshot?.text
-          : data.doc.text) ?? '',
+        (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '',
     }),
     [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
   );
@@ -475,10 +469,15 @@ export default function Route() {
     left: number;
   } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
+  const persistedGrammarIssues = useMemo(
+    () =>
+      parseGrammarIssuesPayload(grade?.grammarIssues, {
+        sourceText: activeSnapshot?.text ?? '',
+      }),
+    [activeSnapshot?.text, grade?.id, grade?.grammarIssues]
+  );
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
-    parseGrammarIssuesPayload(grade?.grammarIssues, {
-      sourceText: activeSnapshot?.text ?? '',
-    })
+    persistedGrammarIssues
   );
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
@@ -496,9 +495,7 @@ export default function Route() {
   const studentCanViewReleasedGrade =
     !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
   const studentGradeViewPath =
-    studentCanViewReleasedGrade && grade?.id
-      ? `/app/graded/${grade.id}`
-      : null;
+    studentCanViewReleasedGrade && grade?.id ? `/app/graded/${grade.id}` : null;
   const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
     explicitExitTarget
       ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
@@ -730,12 +727,8 @@ export default function Route() {
   }, [selectedLeaveSnapshot, currentUserId, data.doc.id]);
 
   useEffect(() => {
-    setGrammarIssues(
-      parseGrammarIssuesPayload(grade?.grammarIssues, {
-        sourceText: activeSnapshot?.text ?? '',
-      })
-    );
-  }, [activeSnapshot?.text, grade?.id, grade?.grammarIssues]);
+    setGrammarIssues(persistedGrammarIssues);
+  }, [persistedGrammarIssues]);
 
   useEffect(() => {
     latestEditorContentRef.current = initialEditorContent;
@@ -791,7 +784,8 @@ export default function Route() {
         userId: currentUserId,
         docId: data.doc.id,
         content:
-          editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current,
+          editorBridgeRef.current?.getContent() ??
+          latestEditorContentRef.current,
       });
       if (isBackupDialogOpen && backup) {
         setLocalBackup(backup);
@@ -990,7 +984,7 @@ export default function Route() {
             <div className="flex items-center gap-2">
               <DocumentStatusBadge
                 submittedAt={data.doc.submittedAt}
-                grade={isGradeReleased ? grade ?? null : null}
+                grade={isGradeReleased ? (grade ?? null) : null}
               />
               {isSubmitted ? (
                 <span className="text-xs text-muted-foreground">
@@ -1020,8 +1014,7 @@ export default function Route() {
                 </Button>
               </div>
             ) : null}
-            {data.isDocumentSubmissionEnabled &&
-              !isSubmitted && (
+            {data.isDocumentSubmissionEnabled && !isSubmitted && (
               <>
                 <Button
                   size="sm"
@@ -1188,6 +1181,7 @@ export default function Route() {
                 snapshotId={activeSnapshot?.id ?? null}
                 existingGrade={grade ?? null}
                 grammarIssues={grammarIssues}
+                persistedGrammarIssues={persistedGrammarIssues}
                 hiddenGrammarIssueIds={hiddenGrammarIssueIds}
                 onToggleGrammarIssue={toggleGrammarIssueVisibility}
                 onRemoveGrammarIssue={handleRemoveGrammarIssue}
@@ -1202,10 +1196,10 @@ export default function Route() {
                 isSessionLocked={isSessionLocked}
                 beforeRespond={handleTutorBeforeRespond}
                 getCurrentDocumentText={() =>
-                  (editorBridgeRef.current?.getContent().text ??
-                    latestEditorContentRef.current.text ??
-                    data.doc.text ??
-                    '')
+                  editorBridgeRef.current?.getContent().text ??
+                  latestEditorContentRef.current.text ??
+                  data.doc.text ??
+                  ''
                 }
               />
             )}
@@ -1213,7 +1207,9 @@ export default function Route() {
               <Editor
                 docId={data.doc.id}
                 docHtml={editorHtml}
-                saveSnapshotId={isTeacherSnapshotView ? activeSnapshot?.id : null}
+                saveSnapshotId={
+                  isTeacherSnapshotView ? activeSnapshot?.id : null
+                }
                 setIsSaving={setIsSaving}
                 isEditable={isDocumentEditable && !isEditorLocked}
                 onContentSnapshot={handleEditorContentSnapshot}
@@ -1290,9 +1286,7 @@ export default function Route() {
                     You can keep editing after you submit, but changes won’t be
                     reflected in what your teacher sees.
                   </li>
-                  <li>
-                    You can only submit once right now.
-                  </li>
+                  <li>You can only submit once right now.</li>
                 </ul>
                 <p className="pt-2 font-medium">
                   Are you sure you want to submit this essay?
@@ -1359,10 +1353,7 @@ export default function Route() {
         </DialogContent>
       </Dialog>
       {canUseLocalBackup ? (
-        <Dialog
-          open={isBackupDialogOpen}
-          onOpenChange={setIsBackupDialogOpen}
-        >
+        <Dialog open={isBackupDialogOpen} onOpenChange={setIsBackupDialogOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Restore local backup</DialogTitle>
@@ -1403,7 +1394,9 @@ export default function Route() {
                   <p className="text-xs font-medium text-muted-foreground">
                     Selected backup:{' '}
                     {selectedLeaveSnapshot
-                      ? new Date(selectedLeaveSnapshot.updatedAt).toLocaleString()
+                      ? new Date(
+                          selectedLeaveSnapshot.updatedAt
+                        ).toLocaleString()
                       : 'None'}
                   </p>
                   <p className="mt-1 max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm">

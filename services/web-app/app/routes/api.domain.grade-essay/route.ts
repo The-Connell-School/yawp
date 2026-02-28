@@ -204,6 +204,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return prisma.grade.upsert({
       where: { snapshotId: snapshot.id },
       create: {
+        documentId: snapshot.documentId,
         snapshotId: snapshot.id,
         gradedById: actor.profileId,
         essayText: snapshot.text,
@@ -220,6 +221,7 @@ export async function action({ request }: ActionFunctionArgs) {
         releasedAt,
       } as any,
       update: {
+        documentId: snapshot.documentId,
         essayText: snapshot.text,
         essayHtml: snapshot.html,
         score,

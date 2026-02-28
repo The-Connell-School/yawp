@@ -30,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Verify all grades exist and are eligible to be released.
-  const grades = await prisma.grade.findMany({
+  const grades = await (prisma as any).grade.findMany({
     where: {
       id: { in: data.gradeIds },
       ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
@@ -38,15 +38,11 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      snapshot: {
+      document: {
         select: {
-          document: {
+          class: {
             select: {
-              class: {
-                select: {
-                  schoolId: true,
-                },
-              },
+              schoolId: true,
             },
           },
         },
@@ -62,7 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    grades.map((grade) => grade.snapshot.document.class?.schoolId)
+    grades.map((grade: any) => grade.document.class?.schoolId)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
@@ -76,7 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Release all grades
   await prisma.grade.updateMany({
     where: {
-      id: { in: grades.map((g) => g.id) },
+      id: { in: grades.map((g: any) => g.id) },
     },
     data: {
       releasedAt: now,

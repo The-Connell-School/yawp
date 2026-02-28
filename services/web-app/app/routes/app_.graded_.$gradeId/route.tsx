@@ -226,7 +226,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const grade = await (prisma as any).grade.findFirst({
     where: {
       id: params.gradeId,
-      snapshot: { document: { deletedAt: null } },
+      document: { deletedAt: null },
     },
     select: {
       id: true,
@@ -239,29 +239,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       grammarIssues: true,
       essayText: true,
       essayHtml: true,
+      document: {
+        select: {
+          id: true,
+          title: true,
+          submittedAt: true,
+          profileId: true,
+          classId: true,
+          profile: {
+            select: { user: { select: { name: true, email: true } } },
+          },
+          class: {
+            select: {
+              schoolId: true,
+              teachers: { select: { profileId: true } },
+            },
+          },
+        },
+      },
       snapshot: {
         select: {
           id: true,
           html: true,
           text: true,
-          document: {
-            select: {
-              id: true,
-              title: true,
-              submittedAt: true,
-              profileId: true,
-              classId: true,
-              profile: {
-                select: { user: { select: { name: true, email: true } } },
-              },
-              class: {
-                select: {
-                  schoolId: true,
-                  teachers: { select: { profileId: true } },
-                },
-              },
-            },
-          },
         },
       },
     },
@@ -272,14 +272,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const gradingEnabled = await isDocumentSubmissionEnabledForSchool(
-    grade.snapshot.document.class?.schoolId
+    grade.document.class?.schoolId
   );
   if (!gradingEnabled) {
     throw new Response('Not found', { status: 404 });
   }
 
-  const isStudentOwner = grade.snapshot.document.profileId === profile.id;
-  const isTeacherOfClass = (grade.snapshot.document.class?.teachers ?? []).some(
+  const isStudentOwner = grade.document.profileId === profile.id;
+  const isTeacherOfClass = (grade.document.class?.teachers ?? []).some(
     (t: { profileId: string }) => t.profileId === profile.id
   );
 
@@ -287,7 +287,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     if (isStudentOwner) {
       if (!grade.releasedAt) {
         return redirectWithToast(
-          `/app/documents/${grade.snapshot.document.id}`,
+          `/app/documents/${grade.document.id}`,
           {
             description: 'This grade has not been released yet.',
             type: 'error',
@@ -300,7 +300,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const teacherProfileIds = new Set(
-    (grade.snapshot.document.class?.teachers ?? []).map(
+    (grade.document.class?.teachers ?? []).map(
       (t: { profileId: string }) => t.profileId
     )
   );
@@ -389,7 +389,7 @@ export default function Route() {
       data.grade.numericPercentage ?? null,
       data.grade.letterGrade ?? null
     ) ?? 'Graded';
-  const revisePath = `/app/documents/${data.grade.snapshot.document.id}?revise=1`;
+  const revisePath = `/app/documents/${data.grade.document.id}?revise=1`;
   const viewGradePath = `/app/graded/${data.grade.id}`;
 
   const focusGradeComment = (id: string) => {
@@ -601,7 +601,7 @@ export default function Route() {
 
   const exitTo = data.viewer.isStudent
     ? '/app'
-    : `/app/documents/${data.grade.snapshot.document.id}`;
+    : `/app/documents/${data.grade.document.id}`;
 
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
@@ -614,7 +614,7 @@ export default function Route() {
         </Button>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
-            {data.grade.snapshot.document.title}
+            {data.grade.document.title}
           </div>
           <div className="text-xs text-muted-foreground">
             {data.grade.releasedAt ? 'Returned' : 'Graded'} • {gradeDisplay}
