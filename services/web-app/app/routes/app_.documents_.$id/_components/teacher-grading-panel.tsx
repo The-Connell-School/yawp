@@ -29,6 +29,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
+import { buildPersistedGradeSignature } from '~/domain/grading/persisted-grade-signature';
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
@@ -81,28 +82,6 @@ function normalizeRubricScores(raw: unknown): Record<string, RubricScore> {
   return normalized;
 }
 
-function buildGradeSignature(args: {
-  overallComment: string;
-  numericPercentage: number | null;
-  rubricScores: Record<string, RubricScore>;
-}) {
-  const rubricSignature = rubricCategories
-    .map((item) => {
-      const score = args.rubricScores[item.key]?.score ?? 0;
-      const comment = args.rubricScores[item.key]?.comment ?? '';
-      return `${item.key}:${score}:${comment}`;
-    })
-    .join('|');
-
-  return [
-    args.overallComment,
-    args.numericPercentage === null
-      ? 'null'
-      : args.numericPercentage.toString(),
-    rubricSignature,
-  ].join('||');
-}
-
 function formatExcerpt(excerpt: string, maxChars = 90) {
   const text = excerpt.trim();
   if (text.length <= maxChars) return text;
@@ -114,8 +93,10 @@ export function TeacherGradingPanel({
   snapshotId,
   existingGrade,
   grammarIssues,
+  persistedGrammarIssues,
   hiddenGrammarIssueIds,
   onToggleGrammarIssue,
+  onRemoveGrammarIssue,
   onGrammarIssuesChange,
 }: {
   documentId: string;
@@ -134,8 +115,10 @@ export function TeacherGradingPanel({
     | null
     | undefined;
   grammarIssues: GrammarIssue[];
+  persistedGrammarIssues: GrammarIssue[];
   hiddenGrammarIssueIds: string[];
   onToggleGrammarIssue: (id: string) => void;
+  onRemoveGrammarIssue: (id: string) => void;
   onGrammarIssuesChange: (issues: GrammarIssue[]) => void;
 }) {
   const aiFetcher = useFetcher();
@@ -210,13 +193,14 @@ export function TeacherGradingPanel({
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
     setSavedSignature(
-      buildGradeSignature({
+      buildPersistedGradeSignature({
         overallComment: initialOverallComment,
         numericPercentage: initialNormalizedPercent,
         rubricScores: initialRubricScores,
+        grammarIssues: persistedGrammarIssues,
       })
     );
-  }, [existingGrade, snapshotId]);
+  }, [existingGrade, persistedGrammarIssues, snapshotId]);
 
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
@@ -227,14 +211,6 @@ export function TeacherGradingPanel({
   useEffect(() => {
     if (aiFetcher.data?.success && aiFetcher.state === 'idle') {
       const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
-      const aiOverallComment =
-        typeof aiFetcher.data.overallComment === 'string'
-          ? aiFetcher.data.overallComment
-          : overallComment;
-      const aiNumericPercentage =
-        typeof aiFetcher.data.numericPercentage === 'number'
-          ? normalizePercentage(aiFetcher.data.numericPercentage)
-          : resolvedNumericPercentage;
 
       if (aiFetcher.data.rubricScores) {
         setRubricScores(aiRubricScores);
@@ -247,29 +223,20 @@ export function TeacherGradingPanel({
         setHasManualPercentOverride(false);
       }
       onGrammarIssuesChange(
-        parseGrammarIssuesPayload(
-          aiFetcher.data.grammarIssues ?? aiFetcher.data.grade?.grammarIssues
-        )
-      );
-
-      setSavedSignature(
-        buildGradeSignature({
-          overallComment: aiOverallComment,
-          numericPercentage: aiNumericPercentage,
-          rubricScores: aiRubricScores,
-        })
+        parseGrammarIssuesPayload(aiFetcher.data.grammarIssues)
       );
     }
   }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
 
   const currentSignature = useMemo(
     () =>
-      buildGradeSignature({
+      buildPersistedGradeSignature({
         overallComment,
         numericPercentage: resolvedNumericPercentage,
         rubricScores,
+        grammarIssues,
       }),
-    [overallComment, resolvedNumericPercentage, rubricScores]
+    [grammarIssues, overallComment, resolvedNumericPercentage, rubricScores]
   );
 
   const hasUnsavedChanges = currentSignature !== savedSignature;
@@ -301,6 +268,7 @@ export function TeacherGradingPanel({
     form.append('feedback', overallComment);
     form.append('overallComment', overallComment);
     form.append('rubricScores', JSON.stringify(rubricScores));
+    form.append('grammarIssues', JSON.stringify(grammarIssues));
     if (percent !== null) form.append('numericPercentage', percent.toString());
     if (letter) form.append('letterGrade', letter);
     if (percent !== null)
@@ -385,7 +353,14 @@ export function TeacherGradingPanel({
               data-testid="grading-assistant-generate"
               disabled={isBusy}
             >
-              {isGenerating ? 'Grading…' : 'Grading Assistant Suggestions'}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Grading...
+                </>
+              ) : (
+                'Grading Assistant Suggestions'
+              )}
             </Button>
           </ConfirmationDialog>
           <Button
@@ -578,9 +553,8 @@ export function TeacherGradingPanel({
                         </div>
                         {grammarIssues.length === 0 ? (
                           <p className="text-xs text-muted-foreground">
-                            No grammar/syntax issues yet. Generate
-                            suggestions from Grading Assistant to populate this
-                            list.
+                            No grammar/syntax issues yet. Generate suggestions
+                            from Grading Assistant to populate this list.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -603,18 +577,32 @@ export function TeacherGradingPanel({
                                         ? ` • Rule ${issue.ruleNumber}`
                                         : ''}
                                     </p>
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 px-2 text-xs"
-                                      disabled={isGenerating}
-                                      onClick={() =>
-                                        onToggleGrammarIssue(issue.id)
-                                      }
-                                    >
-                                      {isHidden ? 'Show' : 'Hide'}
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        disabled={isGenerating}
+                                        onClick={() =>
+                                          onToggleGrammarIssue(issue.id)
+                                        }
+                                      >
+                                        {isHidden ? 'Show' : 'Hide'}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
+                                        disabled={isGenerating}
+                                        onClick={() =>
+                                          onRemoveGrammarIssue(issue.id)
+                                        }
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
                                   </div>
                                   <p className="mt-1 text-sm italic">
                                     "{formatExcerpt(issue.excerpt)}"

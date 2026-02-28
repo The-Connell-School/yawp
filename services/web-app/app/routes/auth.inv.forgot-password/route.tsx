@@ -19,6 +19,7 @@ import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { generateTOTP } from '~/utils/totp.server';
 import { Prisma } from '@app/prisma';
 import { getDomainUrl } from '~/utils/misc';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -31,9 +32,12 @@ export async function action({ request }: ActionFunctionArgs) {
   if (parsed.error) return validationError(parsed.error);
 
   const { email } = parsed.data;
+  const normalizedEmail = normalizeEmail(email);
 
-  const user = await prisma.user.findUnique({
-    where: { email: email },
+  const user = await prisma.user.findFirst({
+    where: {
+      email: { equals: normalizedEmail, mode: 'insensitive' },
+    },
     select: { email: true },
   });
 
@@ -52,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const type = 'password-reset';
-  const target = email;
+  const target = normalizedEmail;
   const verifyUrl = new URL(`${getDomainUrl(request)}/auth/inv/verify`);
   verifyUrl.searchParams.set('type', type);
   verifyUrl.searchParams.set('target', target);
@@ -64,6 +68,13 @@ export async function action({ request }: ActionFunctionArgs) {
     ...verificationConfig,
     expiresAt: new Date(Date.now() + verificationConfig.period * 1000),
   };
+
+  await prisma.invitation.deleteMany({
+    where: {
+      type,
+      target: { equals: target, mode: 'insensitive' },
+    },
+  });
 
   await prisma.invitation.create({ data: verificationData });
 

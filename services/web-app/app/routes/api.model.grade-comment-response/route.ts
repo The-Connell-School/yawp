@@ -20,22 +20,18 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  const comment = await prisma.gradeComment.findFirst({
+  const comment = await (prisma as any).gradeComment.findFirst({
     where: { id: data.commentId },
     select: {
       id: true,
       grade: {
         select: {
           releasedAt: true,
-          snapshot: {
+          document: {
             select: {
-              document: {
-                select: {
-                  profileId: true,
-                  class: {
-                    select: { teachers: { select: { profileId: true } } },
-                  },
-                },
+              profileId: true,
+              class: {
+                select: { teachers: { select: { profileId: true } } },
               },
             },
           },
@@ -52,9 +48,11 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isStudentOwner =
-    comment.grade.snapshot.document.profileId === profile.id;
-  const teachers = comment.grade.snapshot.document.class?.teachers ?? [];
-  const isTeacherOfClass = teachers.some((t) => t.profileId === profile.id);
+    comment.grade.document.profileId === profile.id;
+  const teachers = comment.grade.document.class?.teachers ?? [];
+  const isTeacherOfClass = teachers.some(
+    (t: { profileId: string }) => t.profileId === profile.id
+  );
 
   if (isStudentOwner && !isAdmin) {
     return dataResponse(

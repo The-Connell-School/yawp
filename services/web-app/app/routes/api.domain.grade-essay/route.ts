@@ -23,6 +23,7 @@ const POST = z.object({
   numericPercentage: z.string().optional(),
   letterGrade: z.string().optional(),
   aiMeta: z.string().optional(),
+  grammarIssues: z.string().optional(),
   releaseImmediately: z.enum(['on']).optional(), // Checkbox value
 });
 
@@ -69,6 +70,8 @@ export async function action({ request }: ActionFunctionArgs) {
   let snapshots: {
     id: string;
     documentId: string;
+    text: string;
+    html: string;
     document: { class: { schoolId: string } | null };
   }[] = [];
 
@@ -86,6 +89,8 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         documentId: true,
+        text: true,
+        html: true,
         document: {
           select: {
             class: {
@@ -115,6 +120,13 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         submittedSnapshotId: true,
+        submittedSnapshot: {
+          select: {
+            id: true,
+            text: true,
+            html: true,
+          },
+        },
         class: {
           select: {
             schoolId: true,
@@ -124,13 +136,14 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     snapshots = documents
-      .filter(
-        (doc): doc is typeof doc & { submittedSnapshotId: string } =>
-          doc.submittedSnapshotId !== null
+      .filter((doc): doc is typeof doc & { submittedSnapshot: { id: string; text: string; html: string } } =>
+        doc.submittedSnapshot !== null
       )
       .map((doc) => ({
-        id: doc.submittedSnapshotId,
+        id: doc.submittedSnapshot.id,
         documentId: doc.id,
+        text: doc.submittedSnapshot.text,
+        html: doc.submittedSnapshot.html,
         document: { class: doc.class },
       }));
   }
@@ -168,6 +181,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const releasedAt = data.releaseImmediately === 'on' ? now : null;
   const rubricScores = parseJson(data.rubricScores);
   const aiMeta = parseJson(data.aiMeta);
+  const grammarIssues = parseJson(data.grammarIssues);
   const overallScore =
     data.overallScore && Number.isFinite(Number(data.overallScore))
       ? Number(data.overallScore)
@@ -190,8 +204,11 @@ export async function action({ request }: ActionFunctionArgs) {
     return prisma.grade.upsert({
       where: { snapshotId: snapshot.id },
       create: {
+        documentId: snapshot.documentId,
         snapshotId: snapshot.id,
         gradedById: actor.profileId,
+        essayText: snapshot.text,
+        essayHtml: snapshot.html,
         score,
         feedback: data.feedback,
         rubricScores,
@@ -200,9 +217,13 @@ export async function action({ request }: ActionFunctionArgs) {
         numericPercentage,
         letterGrade,
         aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
         releasedAt,
-      },
+      } as any,
       update: {
+        documentId: snapshot.documentId,
+        essayText: snapshot.text,
+        essayHtml: snapshot.html,
         score,
         feedback: data.feedback,
         rubricScores,
@@ -211,9 +232,10 @@ export async function action({ request }: ActionFunctionArgs) {
         numericPercentage,
         letterGrade,
         aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
         releasedAt,
         updatedAt: now,
-      },
+      } as any,
     });
   });
 

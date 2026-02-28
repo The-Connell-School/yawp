@@ -11,10 +11,7 @@ import {
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
-import {
-  firstNameFromFullName,
-  personalizeOverallComment,
-} from '~/domain/grading/personalize';
+import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -82,6 +79,7 @@ export async function action({ request }: ActionFunctionArgs) {
         select: {
           id: true,
           text: true,
+          html: true,
           document: {
             select: {
               id: true,
@@ -115,6 +113,7 @@ export async function action({ request }: ActionFunctionArgs) {
               select: {
                 id: true,
                 text: true,
+                html: true,
               },
             },
             class: { select: { schoolId: true } },
@@ -131,6 +130,7 @@ export async function action({ request }: ActionFunctionArgs) {
             ? {
                 id: doc.submittedSnapshot.id,
                 text: doc.submittedSnapshot.text,
+                html: doc.submittedSnapshot.html,
                 document: {
                   id: doc.id,
                   class: doc.class,
@@ -218,6 +218,7 @@ export async function action({ request }: ActionFunctionArgs) {
     parsed.categories.reduce((sum, item) => sum + item.score, 0) /
     parsed.categories.length;
   const overallScore = Math.round(average);
+  const overallComment = parsed.overallComment;
 
   const numericPercentage = computeWeightedPercentage(
     rubricScores as unknown as Record<string, unknown>
@@ -226,20 +227,9 @@ export async function action({ request }: ActionFunctionArgs) {
     numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
   const score = formatGrade(numericPercentage, letterGrade);
 
-  const overallComment = personalizeOverallComment(
-    studentFirstName,
-    parsed.overallComment
-  );
   const grammarAndMechanicsScore =
     parsed.categories.find((item) => item.key === 'grammar_and_mechanics')
       ?.score ?? null;
-
-  const now = new Date();
-  const aiMeta = {
-    model,
-    promptVersion: 'v2',
-    generatedAt: now.toISOString(),
-  };
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
   const parseGrammarIssuesFromResponseText = (responseText: string) => {
@@ -324,47 +314,15 @@ export async function action({ request }: ActionFunctionArgs) {
     grammarIssues = null;
   }
 
-  const grade = await prisma.grade.upsert({
-    where: { snapshotId: submittedSnapshot.id },
-    create: {
-      snapshotId: submittedSnapshot.id,
-      gradedById: actor.profileId,
-      score,
-      feedback: overallComment,
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta,
-    },
-    update: {
-      score,
-      feedback: overallComment,
-      rubricScores: rubricScores as Prisma.InputJsonValue,
-      overallScore,
-      overallComment,
-      numericPercentage,
-      letterGrade,
-      ...(grammarIssues !== null ? { grammarIssues } : {}),
-      aiMeta,
-      updatedAt: now,
-    },
-  });
-
-  const resolvedGrammarIssues =
-    grammarIssues !== null ? grammarIssues : grade.grammarIssues;
-
   return dataResponse({
     success: true,
     message: 'Grading Assistant suggestions generated.',
-    grade,
     rubricScores,
     overallScore,
     overallComment,
     numericPercentage,
     letterGrade,
-    grammarIssues: resolvedGrammarIssues,
+    score,
+    grammarIssues,
   });
 }

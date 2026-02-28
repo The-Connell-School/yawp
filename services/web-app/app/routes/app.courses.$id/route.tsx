@@ -2,16 +2,10 @@ import {
   type LoaderFunctionArgs,
   data as dataResponse,
   type ActionFunctionArgs,
+  Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
 import { PlusIcon } from 'lucide-react';
-import {
-  parseFormData,
-  ValidatedForm,
-  validationError,
-} from '@rvf/react-router';
-import { useLocalStorage } from 'usehooks-ts';
-import { z } from 'zod';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -124,23 +118,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({ course, documents, archivedDocuments });
 }
-
-const validator = z.object({
-  audioEnabled: z.union([z.literal('true'), z.literal('false')]),
-});
-
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
-  const { error, data } = await parseFormData(request, validator);
-  if (error) return validationError(error);
+
+  const formData = await request.formData();
+  const audioEnabled = formData.get('audioEnabled') === 'true';
 
   let documentId = '';
   try {
     const created = await createStudentDocumentForCourse({
       profileId: profile.id,
       studentCourseId: params.id!,
-      audioEnabled: data.audioEnabled === 'true',
+      audioEnabled,
     });
     documentId = created.documentId;
   } catch (creationError) {
@@ -156,7 +146,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const requestUrl = new URL(request.url);
   const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
   const redirectParams = new URLSearchParams({
-    spa: '1',
     exitTo: currentPath,
   });
 
@@ -174,7 +163,6 @@ export default function AppCoursesIdRoute() {
   const data = useLoaderData<typeof loader>();
   const isTeacher = !!user.selectedProfile?.teacherProfile;
   const hasModules = data.course.studentCourseModules.length > 0;
-  const [speechEnabled] = useLocalStorage('speechEnabled', false);
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
 
@@ -187,16 +175,7 @@ export default function AppCoursesIdRoute() {
               <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
             </Link>
           </Button>
-          <ValidatedForm
-            method="post"
-            schema={validator}
-            defaultValues={{ audioEnabled: speechEnabled ? 'true' : 'false' }}
-          >
-            <input
-              type="hidden"
-              value={speechEnabled ? 'true' : 'false'}
-              name="audioEnabled"
-            />
+          <Form method="post">
             <Button
               type="submit"
               className="w-fit"
@@ -205,7 +184,7 @@ export default function AppCoursesIdRoute() {
             >
               New <PlusIcon className="ml-1 h-5 w-5" />
             </Button>
-          </ValidatedForm>
+          </Form>
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
           {data.course.image ? (

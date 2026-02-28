@@ -63,6 +63,10 @@ import {
 } from '~/components/ui/select';
 import { AssignmentSheet } from './assignment-sheet';
 import { formatDateOnly } from '~/utils/date-only';
+import {
+  studentModuleSessionListSelect,
+  studentModuleSessionSingleSelect,
+} from './module-session-select.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -327,12 +331,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           updatedAt: true,
           html: true,
           text: true,
-          studentCourseModuleSessions: {
-            select: {
-              studentCourseModule: { select: { title: true } },
-              document: { select: { title: true } },
-            },
-          },
+          studentCourseModuleSessions: studentModuleSessionListSelect,
           _count: {
             select: {
               pasteAlerts: true,
@@ -422,12 +421,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourseModuleSessions: {
-                select: {
-                  studentCourseModule: { select: { title: true } },
-                },
-                take: 1,
-              },
+              studentCourseModuleSessions: studentModuleSessionSingleSelect,
             },
           },
           grades: {
@@ -482,12 +476,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      studentCourseModuleSessions: {
-        select: {
-          studentCourseModule: { select: { title: true } },
-        },
-        take: 1,
-      },
+      studentCourseModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
       updatedAt: 'desc',

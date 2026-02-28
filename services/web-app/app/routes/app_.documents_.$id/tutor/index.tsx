@@ -2,13 +2,10 @@ import { useFetcher, useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  AudioLines,
   ChevronLeftIcon,
   ChevronRightIcon,
   MessageSquareOff,
   MessageSquareText,
-  PauseCircleIcon,
-  PlayCircle,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
@@ -21,28 +18,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover';
-import { Slider } from '~/components/ui/slider.js';
-import { Switch } from '~/components/ui/switch';
 import { Tooltip } from '~/components/ui/tooltip';
 import { useAsyncFetcherSubmit } from '~/hooks/useAsyncFetcher.ts';
-import { useAudio } from '~/hooks/useAudio.js';
 import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
-import posthog from 'posthog-js';
 
 type Props = {
   docId: string;
   nextCmId?: string;
   hasPreviousCms?: boolean;
   getCurrentDocumentText?: () => string | null;
+  beforeRespond?: () => Promise<boolean>;
+  isSessionLocked?: boolean;
   cms: {
     studentCourseModule: {
       studentCourse: {
@@ -65,22 +55,14 @@ type Props = {
   };
 };
 
-function base64ToArrayBuffer(base64: string) {
-  var binary_string = window.atob(base64);
-  var len = binary_string.length;
-  var bytes = new Uint8Array(len);
-  for (var i = 0; i < len; i++) {
-    bytes[i] = binary_string.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
 export const Tutor = ({
   cms,
   nextCmId,
   docId,
   hasPreviousCms,
   getCurrentDocumentText,
+  beforeRespond,
+  isSessionLocked = false,
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
@@ -93,20 +75,10 @@ export const Tutor = ({
   const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>();
   const incrementInstructionFetcher = useFetcher();
   const advanceCourseModuleFetcher = useFetcher();
-  const audioFetcher = useFetcher<{ audio: string }>();
   const messagesRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const shouldPlayAudio = searchParams.get('spa') === '1';
-  const audioControls = useAudio(audioRef.current);
   const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
-
-  const [speechEnabled, setSpeechEnabled] = useLocalStorage(
-    'speechEnabled',
-    false
-  );
-  const [speechSpeed, setSpeechSpeed] = useLocalStorage('speechSpeed', 1);
 
   const finishedCms =
     cms.instructionsCompleted === cms.studentCourseModule.instructions.length;
@@ -147,13 +119,18 @@ export const Tutor = ({
   const userIsTeacher = user.selectedProfile?.teacherProfile !== null;
   const { submit, isLoading } = useAsyncFetcherSubmit();
 
-  const respond = (response: string) => {
+  const respond = async (response: string) => {
+    if (isSessionLocked) return;
+    if (beforeRespond) {
+      const canProceed = await beforeRespond();
+      if (!canProceed) return;
+    }
     tutorResponseFetcher.submit(
       {
         response,
         cmsId: cms.id,
-        speechEnabled,
-        speechSpeed: '1.5',
+        // Audio is intentionally disabled to avoid large payloads.
+        speechEnabled: 'false',
         content: getCurrentDocumentText?.() ?? '',
       },
       { method: 'POST', action: '/api/domain/tutor-response' }
@@ -161,6 +138,7 @@ export const Tutor = ({
   };
 
   const incrementInstruction = (label?: string) => {
+    if (isSessionLocked) return;
     incrementInstructionFetcher.submit(
       {
         'instructionsCompleted.increment': 1,
@@ -174,6 +152,7 @@ export const Tutor = ({
   };
 
   const decrementInstruction = () => {
+    if (isSessionLocked) return;
     incrementInstructionFetcher.submit(
       { 'instructionsCompleted.decrement': 1 },
       {
@@ -184,6 +163,7 @@ export const Tutor = ({
   };
 
   const advanceToNextCourseModule = () => {
+    if (isSessionLocked) return;
     advanceCourseModuleFetcher.submit(
       { studentCourseModuleId: nextCmId ?? '', documentId: docId },
       {
@@ -191,20 +171,6 @@ export const Tutor = ({
         action: '/api/model/course-module-session',
       }
     );
-  };
-
-  const playBase64StringAudio = (base64: string) => {
-    const audioData = base64;
-    const audioArrayBuffer = base64ToArrayBuffer(audioData);
-    const audioBlob = new Blob([audioArrayBuffer]);
-    const audioUrl = URL.createObjectURL(audioBlob);
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      audioRef.current.load();
-      audioRef.current.play();
-      audioRef.current.playbackRate = speechSpeed;
-      audioRef.current.onended = () => audioControls.setIsPlaying(false);
-    }
   };
 
   const messages = cms.messages
@@ -220,41 +186,20 @@ export const Tutor = ({
   }, [messages.length]);
 
   useEffect(() => {
-    if (speechEnabled && audioFetcher.data?.audio) {
-      try {
-        playBase64StringAudio(audioFetcher.data.audio);
-        audioControls.setIsPlaying(true);
-      } catch (error) {
-        posthog.capture('audio_error', {
-          error: error instanceof Error ? error.message : String(error),
-          audio: audioFetcher.data.audio,
-          cmsId: cms.id,
-        });
-        console.error(error);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioFetcher.data, speechEnabled]);
+    if (!searchParams.has('spa')) return;
 
-  useEffect(() => {
-    if (shouldPlayAudio) {
-      const { pathname, search } = window.location;
-      const searchParams = new URLSearchParams(search);
-      searchParams.delete('spa');
-      navigate(`${pathname}?${searchParams}`, { replace: true });
-
-      if (speechEnabled) {
-        audioFetcher.load(`/api/domain/audio/${instruction.id}`);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shouldPlayAudio, navigate]);
+    const next = new URLSearchParams(searchParams);
+    next.delete('spa');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleReset = () => {
+    if (isSessionLocked) return;
     setShowResetConfirmation(true);
   };
 
   const confirmReset = async () => {
+    if (isSessionLocked) return;
     await submit(
       { cmsId: cms.id },
       {
@@ -275,7 +220,6 @@ export const Tutor = ({
 
   return (
     <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
-      <audio ref={audioRef} hidden />
       <div
         className={cn(
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
@@ -290,6 +234,7 @@ export const Tutor = ({
                 size="icon-sm"
                 disabled={prevCmsIdx === undefined}
                 onClick={() =>
+                  !isSessionLocked &&
                   prevCmsIdx !== undefined &&
                   navigateToCmsIdx(prevCmsIdx)
                 }
@@ -306,6 +251,7 @@ export const Tutor = ({
                 size="icon-sm"
                 disabled={nextCmsIdx === undefined}
                 onClick={() =>
+                  !isSessionLocked &&
                   nextCmsIdx !== undefined &&
                   navigateToCmsIdx(nextCmsIdx)
                 }
@@ -323,6 +269,7 @@ export const Tutor = ({
                 variant="ghost"
                 size="icon-sm"
                 className="min-w-8"
+                disabled={isSessionLocked}
                 onClick={() => setMessagesExpanded(!messagesExpanded)}
               >
                 {messagesExpanded ? (
@@ -332,73 +279,6 @@ export const Tutor = ({
                 )}
               </Button>
             </Tooltip>
-          )}
-          {cms.studentCourseModule.isSelfGuided ? null : (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon-sm" className="min-w-8">
-                  <AudioLines
-                    size={20}
-                    strokeWidth={2}
-                    className={
-                      audioControls.isPlaying ? 'text-primary' : undefined
-                    }
-                  />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="-mt-0.5">
-                <p className="mb-2 font-bold">Audio</p>
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-sm">Enabled</p>
-                  <Switch
-                    checked={speechEnabled}
-                    onCheckedChange={setSpeechEnabled}
-                  />
-                </div>
-                <div className="border-b-black-100 my-2 border-b" />
-                <div
-                  className={cn(
-                    'grid grid-cols-4',
-                    !speechEnabled && 'pointer-events-none opacity-50'
-                  )}
-                >
-                  <div className="flex flex-col items-center">
-                    <p className="mb-0.5 text-sm text-muted-foreground">
-                      {audioControls.isPlaying ? 'Playing...' : 'Stopped'}
-                    </p>
-                    <Button
-                      onClick={audioControls.togglePlayPause}
-                      size="sm"
-                      variant="ghost"
-                      disabled={audioRef.current?.src === ''}
-                    >
-                      {audioControls.isPlaying ? (
-                        <PauseCircleIcon />
-                      ) : (
-                        <PlayCircle />
-                      )}
-                    </Button>
-                  </div>
-                  <div className="col-span-3 w-full">
-                    <p className="w-full text-center text-sm text-muted-foreground">
-                      Speed
-                    </p>
-                    <div className="mt-4 flex items-end">
-                      <Slider
-                        min={0.9}
-                        max={2.1}
-                        step={0.2}
-                        value={[speechSpeed]}
-                        onValueChange={([v]) => {
-                          audioControls.setPlaybackRate(v);
-                          setSpeechSpeed(v);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
           )}
         </div>
       </div>
@@ -413,6 +293,7 @@ export const Tutor = ({
             <Button
               variant="outline"
               className="w-fit"
+              disabled={isSessionLocked}
               onClick={advanceToNextCourseModule}
             >
               Next <ArrowRightIcon size={18} className="ml-2" />
@@ -481,6 +362,7 @@ export const Tutor = ({
             This step has been completed. Click next to continue <br />
             or
             <Button
+              disabled={isSessionLocked}
               variant="link"
               onClick={handleReset}
               className="h-4 pl-1 pr-0"
@@ -490,6 +372,7 @@ export const Tutor = ({
             .
           </div>
           <Button
+            disabled={isSessionLocked}
             onClick={() => navigateToCmsIdx(nextCmsIdx)}
           >
             Next <ArrowRightIcon size={18} className="ml-2" />
@@ -540,6 +423,7 @@ export const Tutor = ({
           respond={respond}
           showChatButton={!!instruction.showChatButton}
           showNextButton={!!instruction.showNextButton}
+          disabled={isSessionLocked}
           advanceInstruction={
             isLastCmInstruction
               ? (label?: string) => {

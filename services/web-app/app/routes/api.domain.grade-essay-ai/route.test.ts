@@ -1,0 +1,112 @@
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { rubricKeys } from '~/domain/grading/rubric';
+
+const prisma = {
+  documentSnapshot: {
+    findFirst: mock(),
+  },
+  document: {
+    findFirst: mock(),
+  },
+};
+
+const getLLMCompletion = mock();
+const isDocumentSubmissionEnabledForSchools = mock();
+const isDocumentSubmissionEnabledForSchool = mock();
+const getGradingActor = mock();
+const canManageGrades = mock();
+const buildTeacherClassWhere = mock();
+const redirectWithToast = mock();
+
+mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
+mock.module('~/utils/feature-flags.server', () => ({
+  isDocumentSubmissionEnabledForSchools,
+  isDocumentSubmissionEnabledForSchool,
+}));
+mock.module('~/utils/grading-auth.server', () => ({
+  getGradingActor,
+  canManageGrades,
+  buildTeacherClassWhere,
+}));
+mock.module('~/utils/toast.server', () => ({
+  redirectWithToast,
+}));
+
+const { action } = await import('./route');
+
+function buildRubricResponseJson() {
+  return JSON.stringify({
+    categories: rubricKeys.map((key) => ({
+      key,
+      score: 3,
+      comment: `Comment for ${key}`,
+    })),
+    overallComment: 'Jordan, this draft has clear progress and focus.',
+  });
+}
+
+describe('api.domain.grade-essay-ai', () => {
+  beforeEach(() => {
+    prisma.documentSnapshot.findFirst.mockReset();
+    prisma.document.findFirst.mockReset();
+    getLLMCompletion.mockReset();
+    isDocumentSubmissionEnabledForSchools.mockReset();
+    isDocumentSubmissionEnabledForSchool.mockReset();
+    getGradingActor.mockReset();
+    canManageGrades.mockReset();
+    buildTeacherClassWhere.mockReset();
+    redirectWithToast.mockReset();
+
+    getGradingActor.mockResolvedValue({
+      profileId: 'teacher-profile-1',
+      isTeacher: true,
+      isAdmin: false,
+    });
+    canManageGrades.mockReturnValue(true);
+    buildTeacherClassWhere.mockReturnValue({});
+    isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
+    redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
+
+    getLLMCompletion
+      .mockResolvedValueOnce(buildRubricResponseJson())
+      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+  });
+
+  test('returns AI suggestions without persisting a grade', async () => {
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-1',
+      documentId: 'doc-1',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-1',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-1');
+
+    const request = new Request(
+      'https://example.com/api/domain/grade-essay-ai',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
+
+    const response = await action({ request } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    expect(payload.message).toBe('Grading Assistant suggestions generated.');
+    expect(payload.grade).toBeUndefined();
+    expect(payload.overallComment).toBe(
+      'Jordan, this draft has clear progress and focus.'
+    );
+    expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+  });
+});

@@ -6,6 +6,7 @@ import { prisma } from './db.server.ts';
 import { combineHeaders } from './misc.tsx';
 import { authSessionStorage } from '../cookie-session-storages/authentication.server.ts';
 import { getProfileId, setProfileId } from '~/cookies/profile-id.server';
+import { normalizeEmail } from './normalize-email';
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 365 * 100;
 export const getSessionExpirationDate = () =>
@@ -174,9 +175,24 @@ export async function resetUserPassword({
   email: User['email'];
   password: string;
 }) {
+  const normalizedEmail = normalizeEmail(email);
+  const user = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: 'insensitive',
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
   const hashedPassword = await getPasswordHash(password);
   return prisma.user.update({
-    where: { email },
+    where: { id: user.id },
     data: {
       password: {
         update: {
@@ -207,7 +223,7 @@ export async function signup({
   const hashedPassword = await getPasswordHash(password);
   const user = await prisma.user.create({
     data: {
-      email: email.toLowerCase(),
+      email: normalizeEmail(email),
       name,
       password: { create: { hash: hashedPassword } },
       profiles: {
@@ -282,8 +298,16 @@ export async function verifyUserPassword(
   where: Pick<User, 'email'> | Pick<User, 'id'>,
   password: Password['hash']
 ) {
-  const userWithPassword = await prisma.user.findUnique({
-    where,
+  const userWithPassword = await prisma.user.findFirst({
+    where:
+      'email' in where
+        ? {
+            email: {
+              equals: normalizeEmail(where.email),
+              mode: 'insensitive',
+            },
+          }
+        : where,
     select: { id: true, password: { select: { hash: true } } },
   });
 

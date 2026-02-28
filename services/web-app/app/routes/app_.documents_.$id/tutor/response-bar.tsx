@@ -4,7 +4,7 @@ import {
   ChevronRightIcon,
   MessageCircleIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RichTextarea } from '~/components/rich-textarea';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip.js';
@@ -17,7 +17,8 @@ type Props = {
   showNextButton?: boolean;
   className?: string;
   advanceInstruction?: (label?: string) => void;
-  respond: (response: string) => void;
+  respond: (response: string) => void | Promise<void>;
+  disabled?: boolean;
 };
 
 export const ResponseBar = ({
@@ -27,11 +28,20 @@ export const ResponseBar = ({
   advanceInstruction,
   respond,
   className,
+  disabled = false,
 }: Props) => {
   const navigation = useNavigation();
   const [isAskingQuestion, setIsAskingQuestion] = useState(false);
   const [check, setCheck] = useState(false);
   const isPending = navigation.state !== 'idle';
+  const isDisabled = disabled || isPending;
+
+  useEffect(() => {
+    if (disabled) {
+      setIsAskingQuestion(false);
+      setCheck(false);
+    }
+  }, [disabled]);
 
   return isAskingQuestion ? (
     <div
@@ -42,15 +52,20 @@ export const ResponseBar = ({
         variant="secondary"
         className="shrink-0 px-2"
         data-testid="tutor-chat-back"
+        disabled={isDisabled}
         onClick={() => setIsAskingQuestion(false)}
       >
         <ChevronLeft />
       </Button>
       <div className="flex w-full max-w-[700px] items-center justify-center">
         <RichTextarea
-          onCmdEnter={respond}
+          onCmdEnter={(message) => {
+            if (isDisabled) return;
+            void respond(message);
+          }}
           textareaTestId="tutor-chat-input"
           sendButtonTestId="tutor-chat-send"
+          disabled={isDisabled}
         />
       </div>
     </div>
@@ -66,11 +81,13 @@ export const ResponseBar = ({
           key={index}
           variant="secondary"
           className={cn('flex items-center gap-1 text-lg')}
+          disabled={isDisabled}
           onClick={() => {
+            if (isDisabled) return;
             if (button.action === 'advance') {
               return advanceInstruction?.(button.label);
             } else if (button.action === 'response') {
-              return respond(button.label);
+              return void respond(button.label);
             } else {
               throw new Error('Invalid button action');
             }
@@ -85,6 +102,7 @@ export const ResponseBar = ({
           variant="secondary"
           className="flex items-center gap-2 text-lg"
           data-testid="tutor-chat-open"
+          disabled={isDisabled}
           onClick={() => setIsAskingQuestion(true)}
         >
           <MessageCircleIcon />
@@ -101,6 +119,7 @@ export const ResponseBar = ({
             variant={check ? 'default' : 'secondary'}
             className={cn('flex items-center gap-1 text-lg', {})}
             onClick={() => {
+              if (isDisabled) return;
               if (check) {
                 setCheck(false);
                 advanceInstruction && advanceInstruction();
@@ -109,6 +128,7 @@ export const ResponseBar = ({
               }
             }}
             onBlur={() => check && setCheck(false)}
+            disabled={isDisabled}
             isLoading={isPending}
           >
             {check ? 'You sure?' : <ChevronRightIcon />}

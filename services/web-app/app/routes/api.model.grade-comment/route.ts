@@ -39,16 +39,14 @@ export async function action({ request }: ActionFunctionArgs) {
   let resolvedGradeId: string | null = null;
 
   if (data.gradeId) {
-    const grade = await prisma.grade.findFirst({
+    const grade = await (prisma as any).grade.findFirst({
       where: {
         id: data.gradeId,
-        snapshot: {
-          document: {
-            deletedAt: null,
-            ...(isAdmin
-              ? {}
-              : { class: { teachers: { some: { profileId: profile.id } } } }),
-          },
+        document: {
+          deletedAt: null,
+          ...(isAdmin
+            ? {}
+            : { class: { teachers: { some: { profileId: profile.id } } } }),
         },
       },
       select: { id: true },
@@ -88,6 +86,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
       select: {
         id: true,
+        documentId: true,
         grades: {
           select: {
             id: true,
@@ -110,9 +109,10 @@ export async function action({ request }: ActionFunctionArgs) {
     if (snapshot.grades[0]?.id) {
       resolvedGradeId = snapshot.grades[0].id;
     } else {
-      const shellGrade = await prisma.grade.upsert({
+      const shellGrade = await (prisma as any).grade.upsert({
         where: { snapshotId: snapshot.id },
         create: {
+          documentId: snapshot.documentId,
           snapshotId: snapshot.id,
           gradedById: profile.id,
         },

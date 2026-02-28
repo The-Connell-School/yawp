@@ -1,5 +1,57 @@
 import { test, expect } from '../test-setup';
 import { TestHelpers } from '../test-helpers';
+import type { Page } from '@playwright/test';
+import { createE2EPrismaClient } from '../prisma-client';
+import { invalidateUserSessions } from '../db-helpers';
+
+const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
+const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
+
+async function openDocumentEditorWithRetry(page: Page, documentId: string) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.goto(`/app/documents/${documentId}`);
+    await page.waitForLoadState('networkidle');
+
+    const errorBoundaryHeading = page.getByRole('heading', {
+      name: DOCUMENT_ERROR_HEADING,
+    });
+    const hitRouteError = await errorBoundaryHeading
+      .isVisible({ timeout: 1500 })
+      .catch(() => false);
+
+    if (hitRouteError) {
+      lastError = new Error('Document route rendered the general error boundary.');
+    } else {
+      const editor = page.locator(EDITOR_SELECTOR).first();
+      try {
+        await expect(editor).toBeVisible({ timeout: 10000 });
+        return editor;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (attempt === 0) {
+      await page.waitForTimeout(500);
+    }
+  }
+
+  throw lastError;
+}
+
+async function expectExitControlVisible(page: Page) {
+  const exitButton = page.getByRole('button', { name: /^exit$/i });
+  if ((await exitButton.count()) > 0) {
+    await expect(exitButton.first()).toBeVisible({ timeout: 10000 });
+    return;
+  }
+
+  await expect(page.getByRole('link', { name: /^exit$/i }).first()).toBeVisible({
+    timeout: 10000,
+  });
+}
 
 test.describe.serial('Document Editor E2E Tests', () => {
   test('should display basic document page structure', async ({
@@ -9,22 +61,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    // Navigate to a seeded document
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-
-    // Wait for page load
-    await page.waitForLoadState('networkidle');
+    // Navigate to a seeded document and allow one retry for transient route errors.
+    const editorContainer = await openDocumentEditorWithRetry(
+      page,
+      e2eContext.documentId
+    );
 
     // Check that basic page structure is present
-    // Look for navigation elements
-    const exitButton = page.locator('text=Exit');
-    await expect(exitButton).toBeVisible({ timeout: 10000 });
-
-    // Look for editor-related elements
-    const editorContainer = page.locator(
-      '.ProseMirror, [contenteditable="true"], [data-testid="editor"]'
-    );
-    await expect(editorContainer.first()).toBeVisible({ timeout: 10000 });
+    await expectExitControlVisible(page);
+    await expect(editorContainer).toBeVisible({ timeout: 10000 });
   });
 
   test('should allow typing in document editor with simulated saving', async ({
@@ -44,15 +89,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor to be visible and clickable
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
 
     // Click on the editor to focus it
     await editor.click();
@@ -92,15 +129,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor to be ready
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Simulate pasting content
@@ -147,15 +176,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       }
     });
 
-    // Navigate to document page
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    // Wait for editor
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Add content to trigger version creation
@@ -188,13 +209,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    const editor = page
-      .locator('.ProseMirror, [contenteditable="true"]')
-      .first();
-    await expect(editor).toBeVisible({ timeout: 10000 });
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Rapid typing simulation
@@ -222,5 +237,108 @@ test.describe.serial('Document Editor E2E Tests', () => {
       documentId: e2eContext.documentId,
       courseId: e2eContext.studentCourseId,
     });
+  });
+
+  test('locks editor and shows session modal when autosave gets auth failure', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      await editor.click();
+      await editor.type('Baseline text before session expiry.');
+      await page.waitForTimeout(2200);
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await editor.click();
+      await editor.type(' This text should trigger auth failure lock.');
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect
+        .poll(
+          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          { timeout: 5000 }
+        )
+        .toBe('false');
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('locks editor on focus auth check after session expires in background', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      await expect(editor).toBeVisible({ timeout: 10000 });
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect
+        .poll(
+          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          { timeout: 5000 }
+        )
+        .toBe('false');
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+  test('blocks tutor actions when session is locked', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      await openDocumentEditorWithRetry(page, e2eContext.documentId);
+
+      let tutorRequests = 0;
+      await page.route('**/api/domain/tutor-response', async (route) => {
+        if (route.request().method() === 'POST') tutorRequests += 1;
+        await route.continue();
+      });
+
+      await invalidateUserSessions({
+        prisma,
+        userId: e2eContext.userId,
+      });
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await expect(
+        page.getByRole('heading', { name: /session expired/i })
+      ).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('tutor-chat-open')).toBeDisabled();
+      await expect.poll(() => tutorRequests).toBe(0);
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 });

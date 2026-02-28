@@ -165,6 +165,7 @@ model Document {
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
+  grades                      Grade[]
   pasteAlerts                 PasteAlert[]
 
   @@index([assignmentId])
@@ -232,13 +233,18 @@ model Grade {
   grammarIssues     Json?
   promptConfig      Json?
   aiMeta            Json?
+  essayText         String?
+  essayHtml         String?
   releasedAt        DateTime?        @db.Timestamptz(6) // When released to student (null = not released)
-  snapshotId        String           @unique // Grade is tied to specific submission snapshot
-  snapshot          DocumentSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  documentId        String
+  document          Document         @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  snapshotId        String?          @unique // Legacy link to source submission snapshot
+  snapshot          DocumentSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
   gradedById        String
   gradedBy          Profile          @relation(fields: [gradedById], references: [id], onDelete: Cascade)
   comments          GradeComment[]
 
+  @@index([documentId])
   @@index([snapshotId])
   @@index([gradedById])
   @@index([releasedAt])

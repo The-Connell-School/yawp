@@ -1,7 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireUserId } from '~/utils/auth.server';
+import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
@@ -10,15 +10,40 @@ const POST = z.object({ documentId: z.string() });
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  // Verify the document exists and belongs to the user
   const document = await prisma.document.findFirst({
     where: {
       id: data.documentId,
-      profile: { userId },
       deletedAt: null,
+      ...(user?.isAdmin
+        ? {}
+        : {
+            OR: [
+              { profile: { id: profile.id } },
+              {
+                profile: {
+                  studentProfile: {
+                    classes: {
+                      some: {
+                        teachers: {
+                          some: {
+                            profileId: profile.id,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
     },
     select: {
       id: true,

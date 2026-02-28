@@ -62,6 +62,16 @@ export async function setDocumentSubmissionForSchool(params: {
   });
 }
 
+export async function invalidateUserSessions(params: {
+  prisma: E2EPrismaClient;
+  userId: string;
+}) {
+  const { prisma, userId } = params;
+  await prisma.session.deleteMany({
+    where: { userId },
+  });
+}
+
 export async function ensureDocumentSubmitted(params: {
   prisma: E2EPrismaClient;
   documentId: string;
@@ -115,6 +125,17 @@ export async function ensureDocumentSubmitted(params: {
   });
 
   return snapshot.id;
+}
+
+export async function ensureDocumentUnsubmitted(params: {
+  prisma: E2EPrismaClient;
+  documentId: string;
+}) {
+  const { prisma, documentId } = params;
+  await prisma.document.update({
+    where: { id: documentId },
+    data: { submittedAt: null, submittedSnapshotId: null },
+  });
 }
 
 export async function createTeacherInvitation(params: {

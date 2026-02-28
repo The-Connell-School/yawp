@@ -19,6 +19,7 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { rubricCategories } from '~/domain/grading/rubric';
 import { formatGrade } from '~/domain/grading/gradeMath';
+import { resolveGradeEssayContent } from '~/domain/grading/grade-essay-content';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -222,10 +223,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: { isAdmin: true },
   });
 
-  const grade = await prisma.grade.findFirst({
+  const grade = await (prisma as any).grade.findFirst({
     where: {
       id: params.gradeId,
-      snapshot: { document: { deletedAt: null } },
+      document: { deletedAt: null },
     },
     select: {
       id: true,
@@ -236,29 +237,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       numericPercentage: true,
       letterGrade: true,
       grammarIssues: true,
+      essayText: true,
+      essayHtml: true,
+      document: {
+        select: {
+          id: true,
+          title: true,
+          submittedAt: true,
+          profileId: true,
+          classId: true,
+          profile: {
+            select: { user: { select: { name: true, email: true } } },
+          },
+          class: {
+            select: {
+              schoolId: true,
+              teachers: { select: { profileId: true } },
+            },
+          },
+        },
+      },
       snapshot: {
         select: {
           id: true,
           html: true,
           text: true,
-          document: {
-            select: {
-              id: true,
-              title: true,
-              submittedAt: true,
-              profileId: true,
-              classId: true,
-              profile: {
-                select: { user: { select: { name: true, email: true } } },
-              },
-              class: {
-                select: {
-                  schoolId: true,
-                  teachers: { select: { profileId: true } },
-                },
-              },
-            },
-          },
         },
       },
     },
@@ -269,22 +272,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const gradingEnabled = await isDocumentSubmissionEnabledForSchool(
-    grade.snapshot.document.class?.schoolId
+    grade.document.class?.schoolId
   );
   if (!gradingEnabled) {
     throw new Response('Not found', { status: 404 });
   }
 
-  const isStudentOwner = grade.snapshot.document.profileId === profile.id;
-  const isTeacherOfClass = (grade.snapshot.document.class?.teachers ?? []).some(
-    (t) => t.profileId === profile.id
+  const isStudentOwner = grade.document.profileId === profile.id;
+  const isTeacherOfClass = (grade.document.class?.teachers ?? []).some(
+    (t: { profileId: string }) => t.profileId === profile.id
   );
 
   if (!user?.isAdmin) {
     if (isStudentOwner) {
       if (!grade.releasedAt) {
         return redirectWithToast(
-          `/app/documents/${grade.snapshot.document.id}`,
+          `/app/documents/${grade.document.id}`,
           {
             description: 'This grade has not been released yet.',
             type: 'error',
@@ -297,7 +300,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const teacherProfileIds = new Set(
-    (grade.snapshot.document.class?.teachers ?? []).map((t) => t.profileId)
+    (grade.document.class?.teachers ?? []).map(
+      (t: { profileId: string }) => t.profileId
+    )
   );
 
   const allGradeComments = await prisma.gradeComment.findMany({
@@ -323,7 +328,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     items: allGradeComments.filter((comment) =>
       teacherProfileIds.has(comment.profileId) || comment.profile.user.isAdmin
     ),
-    sourceText: grade.snapshot.text ?? '',
+    sourceText: resolveGradeEssayContent(grade).essayText,
     getExcerpt: (comment) => comment.excerpt,
     getOccurrence: (comment) => comment.occurrence,
   });
@@ -363,14 +368,19 @@ export default function Route() {
   } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
 
+  const { essayText, essayHtml } = useMemo(
+    () => resolveGradeEssayContent(data.grade as any),
+    [data.grade]
+  );
+
   const essayRef = useRef<HTMLDivElement>(null);
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const grammarIssues = useMemo(() => {
     return parseGrammarIssuesPayload(data.grade.grammarIssues, {
-      sourceText: data.grade.snapshot.text ?? '',
+      sourceText: essayText,
     });
-  }, [data.grade.grammarIssues, data.grade.snapshot.text]);
+  }, [data.grade.grammarIssues, essayText]);
 
   const gradeComments = useMemo(() => data.gradeComments, [data.gradeComments]);
 
@@ -379,7 +389,7 @@ export default function Route() {
       data.grade.numericPercentage ?? null,
       data.grade.letterGrade ?? null
     ) ?? 'Graded';
-  const revisePath = `/app/documents/${data.grade.snapshot.document.id}?revise=1`;
+  const revisePath = `/app/documents/${data.grade.document.id}?revise=1`;
   const viewGradePath = `/app/graded/${data.grade.id}`;
 
   const focusGradeComment = (id: string) => {
@@ -397,7 +407,7 @@ export default function Route() {
   useEffect(() => {
     const root = essayRef.current;
     if (!root) return;
-    root.innerHTML = data.grade.snapshot.html;
+    root.innerHTML = essayHtml;
 
     // Grade comments (green)
     applyExcerptHighlights({
@@ -424,7 +434,7 @@ export default function Route() {
         className: 'grammar-issue',
       });
     }
-  }, [data.grade.snapshot.html, gradeComments, grammarIssues, showGrammar]);
+  }, [essayHtml, gradeComments, grammarIssues, showGrammar]);
 
   useEffect(() => {
     const root = essayRef.current;
@@ -550,7 +560,7 @@ export default function Route() {
       .forEach((el) => el.classList.add('focused'));
   }, [
     activeGradeCommentId,
-    data.grade.snapshot.html,
+    essayHtml,
     gradeComments,
     showGrammar,
   ]);
@@ -591,7 +601,7 @@ export default function Route() {
 
   const exitTo = data.viewer.isStudent
     ? '/app'
-    : `/app/documents/${data.grade.snapshot.document.id}`;
+    : `/app/documents/${data.grade.document.id}`;
 
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
@@ -604,7 +614,7 @@ export default function Route() {
         </Button>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
-            {data.grade.snapshot.document.title}
+            {data.grade.document.title}
           </div>
           <div className="text-xs text-muted-foreground">
             {data.grade.releasedAt ? 'Returned' : 'Graded'} • {gradeDisplay}

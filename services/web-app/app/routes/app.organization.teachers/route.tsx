@@ -39,6 +39,7 @@ import {
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
+import { normalizeEmail } from '~/utils/normalize-email';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
@@ -196,10 +197,14 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Emails are required' }, { status: 400 });
     }
 
-    const emailList = emails
-      .split(/[,\n]/)
-      .map((email: string) => email.trim())
-      .filter((email: string) => email && email.includes('@'));
+    const emailList = Array.from(
+      new Set(
+        emails
+          .split(/[,\n]/)
+          .map((email: string) => normalizeEmail(email))
+          .filter((email: string) => email && email.includes('@'))
+      )
+    );
 
     if (emailList.length === 0) {
       return dataResponse(
@@ -219,7 +224,7 @@ export async function action({ request }: ActionFunctionArgs) {
         // Check for existing invitation and delete if found
         const existingInvitation = await prisma.invitation.findFirst({
           where: {
-            target: email,
+            target: { equals: email, mode: 'insensitive' },
             type: 'onboard-teacher',
             metadata: JSON.stringify({
               organizationId: profile.organization.id,
