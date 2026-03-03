@@ -7,6 +7,10 @@ import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { rubricCategories, rubricKeys } from '~/domain/grading/rubric';
 import {
+  gradingAssistantRubricInstructions,
+  gradingAssistantScoreScaleInstructions,
+} from '~/domain/grading/rubric-instructions';
+import {
   computeWeightedPercentage,
   formatGrade,
   letterFromPercent,
@@ -29,8 +33,6 @@ const POST = z.object({
   documentId: z.string().optional(),
   snapshotId: z.string().optional(),
 });
-
-const rubric = rubricCategories;
 
 const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
 
@@ -174,17 +176,20 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  const rubricText = rubric
-    .map((item) => `${item.key}: ${item.label} - ${item.description}`)
+  const rubricText = rubricCategories
+    .map(
+      (item) =>
+        `${item.key}: ${item.label} (${Math.round(item.weight * 100)}%) - ${item.description}`
+    )
     .join('\n');
 
   const studentFirstName = firstNameFromFullName(
     submittedSnapshot.document.profile?.user?.name
   );
 
-  const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${gradingAssistantScoreScaleInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric:\n${rubricText}\n\nEssay:\n${submittedSnapshot.text}`;
+  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submittedSnapshot.text}`;
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-5';
   let responseText = '';

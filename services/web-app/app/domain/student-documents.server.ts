@@ -1,4 +1,3 @@
-import { getBase64Audio } from '~/services/openai';
 import { prisma } from '~/utils/db.server';
 
 export class StudentDocumentCreationError extends Error {}
@@ -6,7 +5,6 @@ export class StudentDocumentCreationError extends Error {}
 type CreateStudentDocumentInput = {
   profileId: string;
   studentCourseId: string;
-  audioEnabled: boolean;
   classId?: string | null;
   assignmentId?: string | null;
 };
@@ -51,19 +49,6 @@ export async function createStudentDocumentForCourse(
   }
 
   const resolvedClassId = input.classId ?? studentProfile.classes[0]?.id;
-  let shouldFetchAudio = false;
-  if (input.audioEnabled && firstInstruction?.prompt) {
-    const existingAudio = await prisma.instructionAudio.findUnique({
-      where: { studentCourseModuleInstructionId: firstInstruction.id },
-      select: { id: true },
-    });
-    shouldFetchAudio = !existingAudio;
-  }
-
-  const generatedAudio =
-    shouldFetchAudio && firstInstruction
-      ? await getBase64Audio(firstInstruction.prompt, '1.5')
-      : null;
 
   const document = await prisma.document.create({
     data: {
@@ -96,17 +81,6 @@ export async function createStudentDocumentForCourse(
     },
     select: { id: true },
   });
-
-  if (generatedAudio && firstInstruction) {
-    await prisma.instructionAudio.upsert({
-      where: { studentCourseModuleInstructionId: firstInstruction.id },
-      update: {},
-      create: {
-        studentCourseModuleInstructionId: firstInstruction.id,
-        blob: Buffer.from(generatedAudio, 'base64'),
-      },
-    });
-  }
 
   return { documentId: document.id };
 }

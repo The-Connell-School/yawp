@@ -1,7 +1,6 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { getBase64Audio } from '~/services/openai.js';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 
@@ -10,8 +9,6 @@ const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 const POST = z.object({
   response: z.string().min(1),
   cmsId: z.string().min(1),
-  speechSpeed: z.string().optional(),
-  speechEnabled: z.union([z.literal('true'), z.literal('false')]),
   content: z.string().optional(),
 });
 
@@ -132,12 +129,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return dataResponse({
-      audio:
-        data.speechEnabled === 'true'
-          ? await getBase64Audio(completion, data.speechSpeed)
-          : '',
-    });
+    return dataResponse({});
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(error);

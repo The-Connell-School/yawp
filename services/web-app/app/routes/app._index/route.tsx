@@ -10,7 +10,6 @@ import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { cn } from '~/utils/misc';
-import { useLocalStorage } from 'usehooks-ts';
 import {
   Accordion,
   AccordionContent,
@@ -299,7 +298,6 @@ export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [speechEnabled] = useLocalStorage('speechEnabled', false);
   const isTeacher = user.selectedProfile?.teacherProfile !== null;
   const currentStudentTab = searchParams.get('tab') === 'assignments'
     ? 'assignments'
@@ -594,11 +592,6 @@ export default function AppRoute() {
                       action={`/app/assignments/${assignment.id}/start`}
                       key={assignment.id}
                     >
-                      <input
-                        type="hidden"
-                        name="audioEnabled"
-                        value={speechEnabled ? 'true' : 'false'}
-                      />
                       <button
                         type="submit"
                         className="flex h-full w-full flex-col rounded-lg border bg-muted text-left transition-shadow hover:shadow"

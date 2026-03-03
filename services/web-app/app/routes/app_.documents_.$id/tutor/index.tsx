@@ -72,7 +72,7 @@ export const Tutor = ({
     `doc-${docId}-reset-confirmation`,
     false
   );
-  const tutorResponseFetcher = useFetcher<{ error?: string; audio?: string }>();
+  const tutorResponseFetcher = useFetcher<{ error?: string }>();
   const incrementInstructionFetcher = useFetcher();
   const advanceCourseModuleFetcher = useFetcher();
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -129,8 +129,6 @@ export const Tutor = ({
       {
         response,
         cmsId: cms.id,
-        // Audio is intentionally disabled to avoid large payloads.
-        speechEnabled: 'false',
         content: getCurrentDocumentText?.() ?? '',
       },
       { method: 'POST', action: '/api/domain/tutor-response' }

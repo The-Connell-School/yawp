@@ -100,7 +100,6 @@ model StudentCourseModuleInstruction {
   showNextButton        Boolean?                               @default(true)
   studentCourseModuleId String
   studentCourseModule   StudentCourseModule                    @relation(fields: [studentCourseModuleId], references: [id], onDelete: Cascade)
-  instructionAudio      InstructionAudio?
   buttons               StudentCourseModuleInstructionButton[]
 }
 
@@ -278,15 +277,6 @@ model GradeCommentResponse {
 
   @@index([commentId])
   @@index([profileId])
-}
-
-model InstructionAudio {
-  id                               String                         @id @default(cuid())
-  createdAt                        DateTime                       @default(now()) @db.Timestamptz(6)
-  updatedAt                        DateTime                       @default(now()) @db.Timestamptz(6)
-  blob                             Bytes
-  studentCourseModuleInstructionId String                         @unique
-  studentCourseModuleInstruction   StudentCourseModuleInstruction @relation(fields: [studentCourseModuleInstructionId], references: [id], onDelete: Cascade)
 }
 
 model Organization {

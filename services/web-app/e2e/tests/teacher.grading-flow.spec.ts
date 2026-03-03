@@ -57,6 +57,25 @@ const RUBRIC_KEYS = [
   'voice_and_style',
   'grammar_and_mechanics',
 ] as const;
+const RUBRIC_EXPECTATIONS: Record<
+  (typeof RUBRIC_KEYS)[number],
+  {
+    label: RegExp;
+    score: '1' | '2' | '3' | '4' | '5';
+  }
+> = {
+  thesis_and_content: { label: /Thesis\/Content/i, score: '5' },
+  organization_and_structure: {
+    label: /Organization\/Structure/i,
+    score: '1',
+  },
+  evidence_and_support: { label: /Evidence\/Support/i, score: '5' },
+  voice_and_style: { label: /Voice\/Style/i, score: '1' },
+  grammar_and_mechanics: {
+    label: /Grammar\/Syntax\/Formatting/i,
+    score: '1',
+  },
+};
 
 test.describe.serial('Teacher onboarding and grading lifecycle', () => {
   test('completes teacher flow with one live grading-assistant call', async ({
@@ -175,12 +194,28 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.waitForLoadState('networkidle');
 
       for (const key of RUBRIC_KEYS) {
+        await expect(
+          page.getByRole('button', { name: RUBRIC_EXPECTATIONS[key].label })
+        ).toBeVisible();
         await page.getByTestId(`grading-rubric-score-${key}`).click();
-        await page.getByRole('option', { name: /3 - proficient/i }).click();
+        await page
+          .getByRole('option', {
+            name: new RegExp(`^${RUBRIC_EXPECTATIONS[key].score}\\s+-\\s+`, 'i'),
+          })
+          .click();
         await page
           .getByTestId(`grading-rubric-comment-${key}`)
           .fill(`Manual rubric note for ${key}.`);
       }
+
+      await page.getByRole('button', { name: /^recalculate$/i }).click();
+      await expect
+        .poll(
+          async () =>
+            await page.getByTestId('grading-overall-percentage').inputValue(),
+          { timeout: 15000 }
+        )
+        .toBe('77');
 
       await page
         .getByTestId('grading-overall-comment')

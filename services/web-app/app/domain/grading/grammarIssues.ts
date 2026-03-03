@@ -96,7 +96,7 @@ function normalizeExcerptForSource(args: {
   sourceText?: string;
   excerpt: string;
   occurrence?: number;
-}) {
+}): { excerpt: string | null; occurrence?: number } {
   const { sourceText } = args;
   let { excerpt, occurrence } = args;
 
@@ -116,12 +116,13 @@ function normalizeExcerptForSource(args: {
     withoutEdgePunctuation &&
     findExcerptRange(sourceText, withoutEdgePunctuation, targetOccurrence)
   ) {
-    excerpt = withoutEdgePunctuation;
-  } else if (findExcerptRange(sourceText, excerpt, 1)) {
-    occurrence = 1;
+    return { excerpt: withoutEdgePunctuation, occurrence };
+  }
+  if (findExcerptRange(sourceText, excerpt, 1)) {
+    return { excerpt, occurrence: 1 };
   }
 
-  return { excerpt, occurrence };
+  return { excerpt: null, occurrence };
 }
 
 function normalizeIssue(
@@ -184,6 +185,7 @@ function normalizeIssue(
     excerpt,
     occurrence,
   });
+  if (normalizedExcerpt.excerpt === null) return null;
   excerpt = normalizedExcerpt.excerpt;
   occurrence = normalizedExcerpt.occurrence;
 

@@ -1,33 +1,38 @@
 export const rubricCategories = [
   {
     key: 'thesis_and_content',
-    label: 'Thesis and Content',
-    description: 'Clear argument, main idea, and relevance of content.',
-    weight: 0.3,
+    label: 'Thesis/Content',
+    description:
+      'Original, defensible thesis with sustained critical thinking and meaningful deductions.',
+    weight: 0.25,
   },
   {
     key: 'organization_and_structure',
-    label: 'Organization and Structure',
-    description: 'Introduction, body, conclusion flow, and transitions.',
+    label: 'Organization/Structure',
+    description:
+      'Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking.',
     weight: 0.25,
   },
   {
     key: 'evidence_and_support',
-    label: 'Evidence and Support',
-    description: 'Use of examples, quotes, reasoning, and analysis.',
-    weight: 0.25,
+    label: 'Evidence/Support',
+    description:
+      'Precise, well-integrated evidence that deepens analysis and builds authority.',
+    weight: 0.2,
   },
   {
     key: 'voice_and_style',
-    label: 'Voice and Style',
-    description: 'Appropriate tone, word choice, and sentence variety.',
-    weight: 0.15,
+    label: 'Voice/Style',
+    description:
+      'Authentic voice with engaging, precise language and consistent tone.',
+    weight: 0.2,
   },
   {
     key: 'grammar_and_mechanics',
-    label: 'Grammar & Syntax',
-    description: 'Sentence structure, punctuation, and spelling.',
-    weight: 0.05,
+    label: 'Grammar/Syntax/Formatting',
+    description:
+      'Technical correctness and polished presentation that support clarity.',
+    weight: 0.1,
   },
 ] as const;
 

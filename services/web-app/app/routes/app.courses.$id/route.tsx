@@ -122,15 +122,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const formData = await request.formData();
-  const audioEnabled = formData.get('audioEnabled') === 'true';
-
   let documentId = '';
   try {
     const created = await createStudentDocumentForCourse({
       profileId: profile.id,
       studentCourseId: params.id!,
-      audioEnabled,
     });
     documentId = created.documentId;
   } catch (creationError) {

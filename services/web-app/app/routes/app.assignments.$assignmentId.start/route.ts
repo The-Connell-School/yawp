@@ -9,9 +9,7 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
-const POST = z.object({
-  audioEnabled: z.union([z.literal('true'), z.literal('false')]),
-});
+const POST = z.object({});
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -59,7 +57,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       studentCourseId: assignment.studentCourseId,
       classId: assignment.classId,
       assignmentId: assignment.id,
-      audioEnabled: data.audioEnabled === 'true',
     });
     documentId = created.documentId;
   } catch (creationError) {

@@ -12,7 +12,6 @@ export async function cleanupDb(prisma: PrismaClient) {
   // Delete child records before parents to satisfy FK constraints
   // Student course related
   await prisma.studentCourseModuleInstructionButton.deleteMany();
-  await prisma.instructionAudio.deleteMany();
   await prisma.studentCourseModuleInstruction.deleteMany();
   await prisma.studentCourseModuleSessionMessage.deleteMany();
   await prisma.studentCourseModuleSession.deleteMany();

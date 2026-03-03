@@ -35,11 +35,13 @@ mock.module('~/utils/toast.server', () => ({
 
 const { action } = await import('./route');
 
-function buildRubricResponseJson() {
+function buildRubricResponseJson(
+  scoresByKey: Partial<Record<(typeof rubricKeys)[number], number>> = {}
+) {
   return JSON.stringify({
     categories: rubricKeys.map((key) => ({
       key,
-      score: 3,
+      score: scoresByKey[key] ?? 3,
       comment: `Comment for ${key}`,
     })),
     overallComment: 'Jordan, this draft has clear progress and focus.',
@@ -71,7 +73,17 @@ describe('api.domain.grade-essay-ai', () => {
 
     getLLMCompletion
       .mockResolvedValueOnce(buildRubricResponseJson())
-      .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          issues: [
+            {
+              excerpt: 'Frozen',
+              kind: 'error',
+              message: 'This phrase needs a stronger verb choice.',
+            },
+          ],
+        })
+      );
   });
 
   test('returns AI suggestions without persisting a grade', async () => {
@@ -108,5 +120,95 @@ describe('api.domain.grade-essay-ai', () => {
       'Jordan, this draft has clear progress and focus.'
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+  });
+
+  test('uses the updated rubric instructions in the grading prompt', async () => {
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-2',
+      documentId: 'doc-2',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-2',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-2');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    const firstCallArgs = getLLMCompletion.mock.calls[0]?.[0];
+    const prompt = firstCallArgs?.messages?.[0]?.content;
+
+    expect(prompt).toContain('Philosophy Note');
+    expect(prompt).toContain('Technical perfection without compelling content');
+    expect(prompt).toContain('Thesis/Content (25%)');
+    expect(prompt).toContain('Organization/Structure (25%)');
+    expect(prompt).toContain('Evidence/Support (20%)');
+    expect(prompt).toContain('Voice/Style (20%)');
+    expect(prompt).toContain('Grammar/Syntax/Formatting (10%)');
+    expect(prompt).toContain(
+      'To calculate final grade, multiply each category score by its weight and sum the results.'
+    );
+  });
+
+  test('returns numeric percentage using the updated category weights', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion
+      .mockResolvedValueOnce(
+        buildRubricResponseJson({
+          thesis_and_content: 5,
+          organization_and_structure: 1,
+          evidence_and_support: 5,
+          voice_and_style: 1,
+          grammar_and_mechanics: 1,
+        })
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          issues: [
+            {
+              excerpt: 'Frozen',
+              kind: 'error',
+              message: 'This phrase needs a stronger verb choice.',
+            },
+          ],
+        })
+      );
+
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-3',
+      documentId: 'doc-3',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-3',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-3');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.numericPercentage).toBe(77);
+    expect(payload.letterGrade).toBe('C');
+    expect(payload.score).toBe('77% (C)');
   });
 });
