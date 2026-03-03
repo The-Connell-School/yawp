@@ -79,6 +79,7 @@ export async function seedE2E(): Promise<E2EContext> {
       profiles: {
         create: {
           organizationId: org.id,
+          isOwner: true,
           teacherProfile: { create: {} },
         },
       },

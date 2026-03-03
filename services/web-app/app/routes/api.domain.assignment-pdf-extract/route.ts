@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -26,6 +27,19 @@ export async function action({ request }: ActionFunctionArgs) {
       {
         success: false,
         message: 'Only teachers can extract assignment prompts.',
+      },
+      { status: 403 }
+    );
+  }
+
+  const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
+    profile.organization.id
+  );
+  if (!assignmentsEnabled) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Assignments are not enabled for your organization.',
       },
       { status: 403 }
     );

@@ -7,6 +7,7 @@ import {
 } from '~/domain/student-documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({});
@@ -24,6 +25,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
+
+  const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
+    profile.organization.id
+  );
+  if (!assignmentsEnabled) {
+    return redirectWithToast('/app', {
+      type: 'error',
+      description: 'Assignments are not enabled for your organization.',
+    });
+  }
 
   const assignment = await prisma.assignment.findFirst({
     where: {

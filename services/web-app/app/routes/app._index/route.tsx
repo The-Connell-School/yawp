@@ -9,6 +9,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
 import { cn } from '~/utils/misc';
 import {
   Accordion,
@@ -32,6 +33,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   if (isStudentOnlyWithNoClasses) {
     return redirect('/enter-code');
+  }
+
+  const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
+    profile.organization.id
+  );
+
+  const url = new URL(request.url);
+  if (
+    !assignmentsEnabled &&
+    profile.studentProfile &&
+    url.searchParams.get('tab') === 'assignments'
+  ) {
+    return redirect('/app');
   }
 
   // Determine which student courses to show
@@ -212,7 +226,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           })
           .then((tp) => tp?.schools.length ?? 0)
       : 0,
-    profile.studentProfile
+    profile.studentProfile && assignmentsEnabled
       ? prisma.assignment.findMany({
           where: {
             classId: { in: studentClassIds },
@@ -291,6 +305,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
+    assignmentsEnabled,
   });
 }
 
@@ -299,9 +314,11 @@ export default function AppRoute() {
   const user = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
   const isTeacher = user.selectedProfile?.teacherProfile !== null;
-  const currentStudentTab = searchParams.get('tab') === 'assignments'
-    ? 'assignments'
-    : 'courses';
+  const assignmentsEnabled = data.assignmentsEnabled ?? false;
+  const currentStudentTab =
+    assignmentsEnabled && searchParams.get('tab') === 'assignments'
+      ? 'assignments'
+      : 'courses';
 
   if (isTeacher) {
     return (
@@ -532,29 +549,31 @@ export default function AppRoute() {
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
         <div className="flex flex-col">
-          <div className="mb-2">
-            <Tabs
-              value={currentStudentTab}
-              onValueChange={(value) => {
-                const next = new URLSearchParams(searchParams);
-                if (value === 'assignments') {
-                  next.set('tab', 'assignments');
-                } else {
-                  next.delete('tab');
-                }
-                setSearchParams(next, { replace: true });
-              }}
-            >
-              <TabsList>
-                <TabsTrigger value="courses">
-                  Courses ({data.courses.length})
-                </TabsTrigger>
-                <TabsTrigger value="assignments">
-                  Assignments ({data.assignments.length})
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+          {assignmentsEnabled ? (
+            <div className="mb-2">
+              <Tabs
+                value={currentStudentTab}
+                onValueChange={(value) => {
+                  const next = new URLSearchParams(searchParams);
+                  if (value === 'assignments') {
+                    next.set('tab', 'assignments');
+                  } else {
+                    next.delete('tab');
+                  }
+                  setSearchParams(next, { replace: true });
+                }}
+              >
+                <TabsList>
+                  <TabsTrigger value="courses">
+                    Courses ({data.courses.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="assignments">
+                    Assignments ({data.assignments.length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          ) : null}
           {currentStudentTab === 'courses' ? (
             <>
               <p className="my-2 text-foreground/60">Courses</p>

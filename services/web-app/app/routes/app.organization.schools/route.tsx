@@ -60,7 +60,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const [schools, teachers, submissionSetting] = await Promise.all([
+  const [schools, teachers, submissionSetting, assignmentsSetting] =
+    await Promise.all([
     prisma.school.findMany({
       where,
       include: {
@@ -112,10 +113,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
         value: true,
       },
     }),
+    prisma.setting.findUnique({
+      where: {
+        name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
+      },
+      select: {
+        value: true,
+      },
+    }),
   ]);
 
   const enabledSchoolIds = parseSettingIdList(submissionSetting?.value);
-  return dataResponse({ schools, teachers, q, enabledSchoolIds: Array.from(enabledSchoolIds) });
+  const enabledAssignmentOrgIds = parseSettingIdList(assignmentsSetting?.value);
+  const assignmentsEnabledForOrg = enabledAssignmentOrgIds.has(
+    profile.organization.id
+  );
+  return dataResponse({
+    schools,
+    teachers,
+    q,
+    enabledSchoolIds: Array.from(enabledSchoolIds),
+    assignmentsEnabledForOrg,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -302,11 +321,56 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ success: true });
   }
 
+  if (intent === 'toggle-assignments') {
+    const enabled = formData.get('enabled') === 'true';
+
+    const existing = await prisma.setting.findUnique({
+      where: {
+        name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
+      },
+      select: {
+        id: true,
+        value: true,
+      },
+    });
+
+    const enabledOrgIds = parseSettingIdList(existing?.value);
+    if (enabled) {
+      enabledOrgIds.add(profile.organization.id);
+    } else {
+      enabledOrgIds.delete(profile.organization.id);
+    }
+
+    const value = Array.from(enabledOrgIds).join(',');
+    await prisma.setting.upsert({
+      where: {
+        name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
+      },
+      create: {
+        name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
+        description: 'Organization IDs allowed to use assignments',
+        value,
+        valueType: 'string',
+      },
+      update: {
+        value,
+      },
+    });
+
+    return dataResponse({ success: true });
+  }
+
   return dataResponse({ error: 'Invalid intent' }, { status: 400 });
 }
 
 export default function OrganizationSchoolsRoute() {
-  const { schools, teachers, q, enabledSchoolIds } = useLoaderData<typeof loader>();
+  const {
+    schools,
+    teachers,
+    q,
+    enabledSchoolIds,
+    assignmentsEnabledForOrg,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -329,6 +393,31 @@ export default function OrganizationSchoolsRoute() {
 
   return (
     <div className="flex flex-col gap-4 pb-16 md:p-5 h-screen overflow-auto">
+      <div className="rounded-lg border bg-muted/50 p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">Assignments</p>
+            <p className="text-sm text-muted-foreground">
+              Enable writing assignments for this organization
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={assignmentsEnabledForOrg}
+              disabled={fetcher.state !== 'idle'}
+              onCheckedChange={(checked) => {
+                const toggleForm = new FormData();
+                toggleForm.append('intent', 'toggle-assignments');
+                toggleForm.append('enabled', checked ? 'true' : 'false');
+                fetcher.submit(toggleForm, { method: 'POST' });
+              }}
+            />
+            <span className="text-xs text-muted-foreground">
+              {assignmentsEnabledForOrg ? 'On' : 'Off'}
+            </span>
+          </div>
+        </div>
+      </div>
       <div className="flex-1 rounded-lg">
         <div className="flex justify-between items-center">
           <div className="my-2 flex gap-2 items-center">

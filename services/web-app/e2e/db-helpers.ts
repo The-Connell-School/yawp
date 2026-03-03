@@ -4,6 +4,7 @@ import { generateTOTP } from '../app/utils/totp.server';
 const DOCUMENT_SUBMISSION_FLAG = 'document_submission_enabled';
 const DOCUMENT_SUBMISSION_SCHOOL_IDS =
   'document_submission_enabled_school_ids';
+const ASSIGNMENTS_ENABLED_ORG_IDS = 'assignments_enabled_org_ids';
 
 function parseIdList(value: string | null | undefined) {
   return new Set(
@@ -57,6 +58,37 @@ export async function setDocumentSubmissionForSchool(params: {
     },
     update: {
       value: Array.from(schoolIds).join(','),
+      valueType: 'string',
+    },
+  });
+}
+
+export async function setAssignmentsForOrganization(params: {
+  prisma: E2EPrismaClient;
+  organizationId: string;
+  enabled: boolean;
+}) {
+  const { prisma, organizationId, enabled } = params;
+  const existing = await prisma.setting.findUnique({
+    where: { name: ASSIGNMENTS_ENABLED_ORG_IDS },
+    select: { value: true },
+  });
+  const orgIds = parseIdList(existing?.value);
+  if (enabled) {
+    orgIds.add(organizationId);
+  } else {
+    orgIds.delete(organizationId);
+  }
+  await prisma.setting.upsert({
+    where: { name: ASSIGNMENTS_ENABLED_ORG_IDS },
+    create: {
+      name: ASSIGNMENTS_ENABLED_ORG_IDS,
+      description: 'Organization IDs allowed to use assignments',
+      value: Array.from(orgIds).join(','),
+      valueType: 'string',
+    },
+    update: {
+      value: Array.from(orgIds).join(','),
       valueType: 'string',
     },
   });

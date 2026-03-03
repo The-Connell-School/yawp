@@ -32,7 +32,10 @@ import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import {
+  isDocumentSubmissionEnabledForSchool,
+  isAssignmentsEnabledForOrganization,
+} from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
   appendDocumentBackupLeaveSnapshot,
@@ -182,6 +185,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       class: {
         select: {
           schoolId: true,
+          school: { select: { organizationId: true } },
         },
       },
       assignment: {
@@ -339,8 +343,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       (cm) => cm.position === currentCms.studentCourseModule.position + 1
     )?.id;
 
-  const isDocumentSubmissionEnabled =
-    await isDocumentSubmissionEnabledForSchool(doc.class?.schoolId);
+  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+    isDocumentSubmissionEnabledForSchool(doc.class?.schoolId),
+    isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
+  ]);
 
   const gradeId = activeSnapshot?.grades?.[0]?.id;
   const unsortedGradeComments =
@@ -387,6 +393,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
     isDocumentSubmissionEnabled,
+    assignmentsEnabled,
     gradeComments,
   });
 }
@@ -1129,7 +1136,7 @@ export default function Route() {
             )}
           </div>
         </nav>
-        {data.doc.assignment ? (
+        {data.assignmentsEnabled && data.doc.assignment ? (
           <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">

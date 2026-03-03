@@ -14,7 +14,10 @@ import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import {
+  isDocumentSubmissionEnabledForSchool,
+  isAssignmentsEnabledForOrganization,
+} from '~/utils/feature-flags.server';
 import {
   Sheet,
   SheetContent,
@@ -129,6 +132,38 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
+
+  if (
+    intent === 'delete-assignment' ||
+    intent === 'create-assignment' ||
+    intent === 'update-assignment'
+  ) {
+    const classWithOrg = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        teachers: { some: { id: profile.teacherProfile.id } },
+      },
+      select: { school: { select: { organizationId: true } } },
+    });
+    if (!classWithOrg) {
+      return dataResponse(
+        { success: false, message: 'Class not found.' },
+        { status: 404 }
+      );
+    }
+    const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
+      classWithOrg.school.organizationId
+    );
+    if (!assignmentsEnabled) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Assignments are not enabled for your organization.',
+        },
+        { status: 403 }
+      );
+    }
+  }
 
   if (intent === 'delete-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
@@ -285,7 +320,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       grade: true,
       period: true,
       title: true,
-      school: { select: { id: true, name: true } },
+      school: { select: { id: true, name: true, organizationId: true } },
       allowedStudentCourses: {
         select: {
           studentCourseId: true,
@@ -376,10 +411,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     take: 50, // Limit to most recent 50 alerts
   });
 
-  // Check feature flag for document submission
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    klass.school?.id
-  );
+  // Check feature flags
+  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+    isDocumentSubmissionEnabledForSchool(klass.school?.id),
+    isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+  ]);
 
   // Get all submission snapshots for this class (active + archived)
   const submittedSnapshots = isDocumentSubmissionEnabled
@@ -483,29 +519,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const assignments = await prisma.assignment.findMany({
-    where: { classId },
-    select: {
-      id: true,
-      title: true,
-      prompt: true,
-      tutorContext: true,
-      dueDate: true,
-      studentCourseId: true,
-      studentCourse: {
+  const assignments = assignmentsEnabled
+    ? await prisma.assignment.findMany({
+        where: { classId },
         select: {
           id: true,
           title: true,
+          prompt: true,
+          tutorContext: true,
+          dueDate: true,
+          studentCourseId: true,
+          studentCourse: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          _count: {
+            select: {
+              documents: true,
+            },
+          },
         },
-      },
-      _count: {
-        select: {
-          documents: true,
-        },
-      },
-    },
-    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
-  });
+        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+      })
+    : [];
 
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
 
@@ -516,6 +554,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submittedSnapshots,
     inProgressDocuments,
     assignments,
+    assignmentsEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
   });
@@ -573,13 +612,13 @@ export default function ClassDetailRoute() {
     : classDetailPath;
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
-  // Tab and pagination state
+  const assignmentsEnabled = data.assignmentsEnabled ?? false;
   const validTabs: TabValue[] = [
     'in-progress',
     'to-grade',
     'graded',
     'released',
-    'assignments',
+    ...(assignmentsEnabled ? (['assignments'] as const) : []),
     'paste-activity',
     'students',
   ];
@@ -865,7 +904,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Document</TableHead>
-                <TableHead>Assignment</TableHead>
+                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Course Module</TableHead>
                 <TableHead>Last Updated</TableHead>
                 <TableHead>Action</TableHead>
@@ -878,9 +917,11 @@ export default function ClassDetailRoute() {
                     {doc.profile.user.name || doc.profile.user.email}
                   </TableCell>
                   <TableCell>{doc.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {doc.assignment?.title || '—'}
-                  </TableCell>
+                  {assignmentsEnabled && (
+                    <TableCell className="text-muted-foreground">
+                      {doc.assignment?.title || '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground">
                     {doc.studentCourseModuleSessions[0]?.studentCourseModule
                       .title || '—'}
@@ -913,7 +954,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
-                <TableHead>Assignment</TableHead>
+                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Course Module</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Action</TableHead>
@@ -927,9 +968,11 @@ export default function ClassDetailRoute() {
                       snapshot.document.profile.user.email}
                   </TableCell>
                   <TableCell>{snapshot.document.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {snapshot.document.assignment?.title || '—'}
-                  </TableCell>
+                  {assignmentsEnabled && (
+                    <TableCell className="text-muted-foreground">
+                      {snapshot.document.assignment?.title || '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground">
                     {snapshot.document.studentCourseModuleSessions[0]
                       ?.studentCourseModule.title || '—'}
@@ -991,7 +1034,7 @@ export default function ClassDetailRoute() {
                 </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
-                <TableHead>Assignment</TableHead>
+                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Score</TableHead>
                 <TableHead>Graded</TableHead>
                 <TableHead>Action</TableHead>
@@ -1023,9 +1066,11 @@ export default function ClassDetailRoute() {
                         snapshot.document.profile.user.email}
                     </TableCell>
                     <TableCell>{snapshot.document.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {snapshot.document.assignment?.title || '—'}
-                    </TableCell>
+                    {assignmentsEnabled && (
+                      <TableCell className="text-muted-foreground">
+                        {snapshot.document.assignment?.title || '—'}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -1073,7 +1118,7 @@ export default function ClassDetailRoute() {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
-                <TableHead>Assignment</TableHead>
+                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Score</TableHead>
                 <TableHead>Released</TableHead>
                 <TableHead>Action</TableHead>
@@ -1096,9 +1141,11 @@ export default function ClassDetailRoute() {
                         snapshot.document.profile.user.email}
                     </TableCell>
                     <TableCell>{snapshot.document.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {snapshot.document.assignment?.title || '—'}
-                    </TableCell>
+                    {assignmentsEnabled && (
+                      <TableCell className="text-muted-foreground">
+                        {snapshot.document.assignment?.title || '—'}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
@@ -1433,7 +1480,10 @@ export default function ClassDetailRoute() {
           </div>
         </div>
 
-        {['in-progress', 'to-grade', 'graded', 'released'].includes(activeTab) ? (
+        {assignmentsEnabled &&
+        ['in-progress', 'to-grade', 'graded', 'released'].includes(
+          activeTab
+        ) ? (
           <div className="mb-4 flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Assignment:</span>
             <Select
@@ -1520,8 +1570,12 @@ export default function ClassDetailRoute() {
               <TabsList
                 className={`grid w-full h-auto ${
                   data.isDocumentSubmissionEnabled
-                    ? 'grid-cols-3 lg:grid-cols-7'
-                    : 'grid-cols-3 lg:grid-cols-4'
+                    ? assignmentsEnabled
+                      ? 'grid-cols-3 lg:grid-cols-7'
+                      : 'grid-cols-3 lg:grid-cols-6'
+                    : assignmentsEnabled
+                      ? 'grid-cols-3 lg:grid-cols-4'
+                      : 'grid-cols-3 lg:grid-cols-3'
                 }`}
               >
                 <TabsTrigger
@@ -1570,16 +1624,18 @@ export default function ClassDetailRoute() {
                     </span>
                   </TabsTrigger>
                 )}
-                <TabsTrigger
-                  value="assignments"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Assignments</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.assignments.length}
-                  </span>
-                </TabsTrigger>
+                {assignmentsEnabled && (
+                  <TabsTrigger
+                    value="assignments"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="hidden sm:inline">Assignments</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {data.assignments.length}
+                    </span>
+                  </TabsTrigger>
+                )}
                 <TabsTrigger
                   value="paste-activity"
                   className="flex items-center gap-2 h-auto py-2"
@@ -1619,19 +1675,23 @@ export default function ClassDetailRoute() {
         </Tabs>
       </div>
 
-      <AssignmentSheet
-        classId={data.klass.id}
-        allowedStudentCourses={data.klass.allowedStudentCourses.map((course) => ({
-          id: course.studentCourse.id,
-          title: course.studentCourse.title,
-        }))}
-        open={isAssignmentSheetOpen}
-        onOpenChange={(open) => {
-          setIsAssignmentSheetOpen(open);
-          if (!open) setEditingAssignmentId(null);
-        }}
-        editingAssignment={editingAssignment}
-      />
+      {assignmentsEnabled && (
+        <AssignmentSheet
+          classId={data.klass.id}
+          allowedStudentCourses={data.klass.allowedStudentCourses.map(
+            (course) => ({
+              id: course.studentCourse.id,
+              title: course.studentCourse.title,
+            })
+          )}
+          open={isAssignmentSheetOpen}
+          onOpenChange={(open) => {
+            setIsAssignmentSheetOpen(open);
+            if (!open) setEditingAssignmentId(null);
+          }}
+          editingAssignment={editingAssignment}
+        />
+      )}
 
       <Sheet
         open={selectedPasteContent !== null}
