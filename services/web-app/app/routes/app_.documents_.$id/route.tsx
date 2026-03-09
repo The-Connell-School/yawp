@@ -664,9 +664,23 @@ export default function Route() {
     []
   );
 
-  const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
-    editorBridgeRef.current = bridge;
-  }, []);
+  const handleEditorBridgeReady = useCallback(
+    (bridge: EditorBridge | null) => {
+      editorBridgeRef.current = bridge;
+      if (!bridge || !isDocumentEditable || !isInitialAuthCheckComplete) return;
+      const pending = getPendingSave(data.doc.id);
+      if (!pending) return;
+      bridge.setContent(pending.html);
+      latestEditorContentRef.current = { html: pending.html, text: pending.text };
+      toast.info('Recovered unsaved changes');
+      void bridge.saveNow();
+    },
+    [
+      data.doc.id,
+      isDocumentEditable,
+      isInitialAuthCheckComplete,
+    ]
+  );
 
   useEffect(() => {
     setGrammarIssues(persistedGrammarIssues);
