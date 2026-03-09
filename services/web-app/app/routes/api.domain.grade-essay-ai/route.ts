@@ -227,7 +227,9 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return AiResponseSchema.parse(parseFirstJsonValue(repairedResponseText));
+    const repairedParsedJson = parseFirstJsonValue(repairedResponseText);
+
+    return AiResponseSchema.parse(repairedParsedJson);
   };
 
   const parsed = await parseAiResponse(responseText);
