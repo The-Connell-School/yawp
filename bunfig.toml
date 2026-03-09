@@ -1,0 +1,3 @@
+[test]
+root = "services/web-app/app"
+preload = ["./services/web-app/test-preload.ts"]

@@ -36,14 +36,14 @@ const POST = z.object({
 
 const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
 
+const AiCategorySchema = z.object({
+  key: RubricKeySchema,
+  score: z.number().int().min(1).max(5),
+  comment: z.string().min(1),
+});
+
 const AiResponseSchema = z.object({
-  categories: z.array(
-    z.object({
-      key: RubricKeySchema,
-      score: z.number().int().min(1).max(5),
-      comment: z.string().min(1),
-    })
-  ),
+  categories: z.array(AiCategorySchema),
   overallComment: z.string().min(1),
 });
 
@@ -205,8 +205,32 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
-  const parsedJson = parseFirstJsonValue(responseText);
-  const parsed = AiResponseSchema.parse(parsedJson);
+  const parseAiResponse = async (rawResponseText: string) => {
+    const parsedJson = parseFirstJsonValue(rawResponseText);
+    const parsed = AiResponseSchema.safeParse(parsedJson);
+    if (parsed.success) return parsed.data;
+
+    const repairedResponseText = await getLLMCompletion({
+      model,
+      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": 1-5, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Original grading response:\n${rawResponseText}`,
+        },
+      ],
+      maxTokens: 900,
+      temperature: 0.1,
+      metadata: {
+        feature: 'grading',
+        kind: 'rubric-schema-repair',
+      },
+    });
+
+    return AiResponseSchema.parse(parseFirstJsonValue(repairedResponseText));
+  };
+
+  const parsed = await parseAiResponse(responseText);
 
   const rubricScores = parsed.categories.reduce<
     Record<string, Prisma.InputJsonValue>

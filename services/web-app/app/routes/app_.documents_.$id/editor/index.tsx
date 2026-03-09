@@ -497,6 +497,8 @@ export const Editor = ({
       if (clearSavingTimerRef.current) {
         clearTimeout(clearSavingTimerRef.current);
       }
+      // Fire one final save on unmount (keepalive ensures it survives unload)
+      void save();
       saveNowRef.current = null;
       onEditorBridgeReady?.(null);
       editor.off('update', saveDebounced);

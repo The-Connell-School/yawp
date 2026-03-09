@@ -48,6 +48,18 @@ function buildRubricResponseJson(
   });
 }
 
+function buildRubricCategoriesJson(
+  scoresByKey: Partial<Record<(typeof rubricKeys)[number], number>> = {}
+) {
+  return JSON.stringify(
+    rubricKeys.map((key) => ({
+      key,
+      score: scoresByKey[key] ?? 3,
+      comment: `Comment for ${key}`,
+    }))
+  );
+}
+
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.documentSnapshot.findFirst.mockReset();
@@ -210,5 +222,53 @@ describe('api.domain.grade-essay-ai', () => {
     expect(payload.numericPercentage).toBe(77);
     expect(payload.letterGrade).toBe('C');
     expect(payload.score).toBe('77% (C)');
+  });
+
+  test('repairs a top-level categories array response from the model', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion
+      .mockResolvedValueOnce(buildRubricCategoriesJson())
+      .mockResolvedValueOnce(buildRubricResponseJson())
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          issues: [
+            {
+              excerpt: 'Frozen',
+              kind: 'error',
+              message: 'This phrase needs a stronger verb choice.',
+            },
+          ],
+        })
+      );
+
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-4',
+      documentId: 'doc-4',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-4',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-4');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    expect(payload.overallComment).toBe(
+      'Jordan, this draft has clear progress and focus.'
+    );
+    expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+    expect(getLLMCompletion).toHaveBeenCalledTimes(3);
   });
 });

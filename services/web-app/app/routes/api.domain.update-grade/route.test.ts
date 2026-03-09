@@ -10,6 +10,7 @@ const prisma = {
 const isDocumentSubmissionEnabledForSchool = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
+const buildTeacherClassWhere = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -19,6 +20,7 @@ mock.module('~/utils/feature-flags.server', () => ({
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
+  buildTeacherClassWhere,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,

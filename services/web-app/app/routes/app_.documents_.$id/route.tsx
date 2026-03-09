@@ -38,13 +38,10 @@ import {
 } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import {
-  appendDocumentBackupLeaveSnapshot,
-  type DocumentBackupLeaveSnapshot,
-  type DocumentBackupV1,
-  getBackupPreviewText,
-  readDocumentBackup,
-  writeDocumentBackup,
-} from '~/utils/document-backup';
+  setPendingSave,
+  getPendingSave,
+  clearPendingSave,
+} from '~/utils/pending-document-save';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
@@ -407,12 +404,7 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [isBackupDialogOpen, setIsBackupDialogOpen] = useState(false);
-  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
-  const [localBackup, setLocalBackup] = useState<DocumentBackupV1 | null>(null);
-  const [selectedLeaveSnapshotId, setSelectedLeaveSnapshotId] = useState<
-    string | null
-  >(null);
+  const [hasSaveError, setHasSaveError] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
@@ -455,9 +447,6 @@ export default function Route() {
   );
   const latestEditorContentRef = useRef(initialEditorContent);
   const editorBridgeRef = useRef<EditorBridge | null>(null);
-  const currentUserId = user.id ?? '';
-  const canUseLocalBackup =
-    isDocumentEditable && !isViewingAsTeacher && currentUserId.length > 0;
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] =
     useState(false);
@@ -518,37 +507,7 @@ export default function Route() {
       ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
       : ''
   }`;
-  const localBackupSnapshots = useMemo<DocumentBackupLeaveSnapshot[]>(() => {
-    if (!localBackup) return [];
-    const leaveSnapshots = [...(localBackup.leaveSnapshots ?? [])].sort(
-      (a, b) => b.updatedAt - a.updatedAt
-    );
-    if (leaveSnapshots.length > 0) return leaveSnapshots;
-
-    return [
-      {
-        id: `${localBackup.updatedAt}-${localBackup.draftHash}`,
-        draftHtml: localBackup.draftHtml,
-        draftText: localBackup.draftText,
-        draftHash: localBackup.draftHash,
-        updatedAt: localBackup.updatedAt,
-      },
-    ];
-  }, [localBackup]);
-  const selectedLeaveSnapshot = useMemo(() => {
-    if (localBackupSnapshots.length === 0) return null;
-    return (
-      localBackupSnapshots.find(
-        (snapshot) => snapshot.id === selectedLeaveSnapshotId
-      ) ?? localBackupSnapshots[0]
-    );
-  }, [localBackupSnapshots, selectedLeaveSnapshotId]);
-  const backupPreviewText = selectedLeaveSnapshot
-    ? getBackupPreviewText(
-        selectedLeaveSnapshot.draftText,
-        Number.MAX_SAFE_INTEGER
-      )
-    : '';
+  const saveFailureCountRef = useRef(0);
   const visibleGrammarIssues = useMemo(
     () =>
       grammarIssues.filter(
@@ -664,11 +623,29 @@ export default function Route() {
   }, [lockSession]);
 
   const handleRemoteSaveFailure = useCallback(
-    (args: { reason: 'auth' | 'network' | 'server' }) => {
-      if (args.reason !== 'auth') return;
-      lockSession();
+    (args: {
+      content: { html: string; text: string };
+      reason: 'auth' | 'network' | 'server';
+    }) => {
+      setPendingSave(data.doc.id, args.content);
+      saveFailureCountRef.current += 1;
+      if (saveFailureCountRef.current >= 2) {
+        setHasSaveError(true);
+      }
+      if (args.reason === 'auth') {
+        lockSession();
+      }
     },
-    [lockSession]
+    [data.doc.id, lockSession]
+  );
+
+  const handleRemoteSaveSuccess = useCallback(
+    (_content: { html: string; text: string }) => {
+      clearPendingSave(data.doc.id);
+      saveFailureCountRef.current = 0;
+      setHasSaveError(false);
+    },
+    [data.doc.id]
   );
 
   const handleTutorBeforeRespond = useCallback(async () => {
@@ -683,65 +660,13 @@ export default function Route() {
   const handleEditorContentSnapshot = useCallback(
     (content: { html: string; text: string }) => {
       latestEditorContentRef.current = content;
-      if (!canUseLocalBackup) return;
-      const backup = writeDocumentBackup({
-        userId: currentUserId,
-        docId: data.doc.id,
-        content,
-      });
-      if (isBackupDialogOpen && backup) {
-        setLocalBackup(backup);
-      }
     },
-    [canUseLocalBackup, currentUserId, data.doc.id, isBackupDialogOpen]
+    []
   );
 
   const handleEditorBridgeReady = useCallback((bridge: EditorBridge | null) => {
     editorBridgeRef.current = bridge;
   }, []);
-
-  const handleOpenBackupDialog = useCallback(() => {
-    if (!canUseLocalBackup) return;
-    const backup = readDocumentBackup({
-      userId: currentUserId,
-      docId: data.doc.id,
-    });
-    setLocalBackup(backup);
-    setSelectedLeaveSnapshotId(
-      backup?.leaveSnapshots?.[0]?.id ??
-        (backup ? `${backup.updatedAt}-${backup.draftHash}` : null)
-    );
-    setIsBackupDialogOpen(true);
-  }, [canUseLocalBackup, currentUserId, data.doc.id]);
-
-  const handleRestoreBackup = useCallback(async () => {
-    if (!selectedLeaveSnapshot) return;
-    if (!editorBridgeRef.current) {
-      toast.error('Editor is not ready yet. Please try again.');
-      return;
-    }
-
-    setIsRestoringBackup(true);
-    try {
-      editorBridgeRef.current.setContent(selectedLeaveSnapshot.draftHtml);
-      latestEditorContentRef.current = {
-        html: selectedLeaveSnapshot.draftHtml,
-        text: selectedLeaveSnapshot.draftText,
-      };
-      writeDocumentBackup({
-        userId: currentUserId,
-        docId: data.doc.id,
-        content: latestEditorContentRef.current,
-      });
-      await editorBridgeRef.current.saveNow();
-      setIsBackupDialogOpen(false);
-      toast.success('Local backup restored.');
-    } catch {
-      toast.error('Failed to restore local backup.');
-    } finally {
-      setIsRestoringBackup(false);
-    }
-  }, [selectedLeaveSnapshot, currentUserId, data.doc.id]);
 
   useEffect(() => {
     setGrammarIssues(persistedGrammarIssues);
@@ -793,56 +718,55 @@ export default function Route() {
     };
   }, [checkAuthSession, data.doc.id, isDocumentEditable]);
 
+  // Flush pending save on page unload / visibility hidden
   useEffect(() => {
-    if (!canUseLocalBackup) return;
+    if (!isDocumentEditable) return;
 
-    const flushLocalBackup = () => {
-      const backup = appendDocumentBackupLeaveSnapshot({
-        userId: currentUserId,
-        docId: data.doc.id,
-        content:
-          editorBridgeRef.current?.getContent() ??
-          latestEditorContentRef.current,
-      });
-      if (isBackupDialogOpen && backup) {
-        setLocalBackup(backup);
-      }
+    const flushPendingSave = () => {
+      const content =
+        editorBridgeRef.current?.getContent() ??
+        latestEditorContentRef.current;
+      setPendingSave(data.doc.id, content);
     };
 
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flushLocalBackup();
+      if (document.visibilityState === 'hidden') flushPendingSave();
     };
 
-    window.addEventListener('pagehide', flushLocalBackup);
-    window.addEventListener('beforeunload', flushLocalBackup);
+    window.addEventListener('pagehide', flushPendingSave);
+    window.addEventListener('beforeunload', flushPendingSave);
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      window.removeEventListener('pagehide', flushLocalBackup);
-      window.removeEventListener('beforeunload', flushLocalBackup);
+      window.removeEventListener('pagehide', flushPendingSave);
+      window.removeEventListener('beforeunload', flushPendingSave);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [canUseLocalBackup, currentUserId, data.doc.id, isBackupDialogOpen]);
+  }, [isDocumentEditable, data.doc.id]);
 
+  // Recover pending save on load
   useEffect(() => {
-    if (!isBackupDialogOpen) return;
+    if (!isInitialAuthCheckComplete || !isDocumentEditable) return;
 
-    if (localBackupSnapshots.length === 0) {
-      if (selectedLeaveSnapshotId !== null) {
-        setSelectedLeaveSnapshotId(null);
-      }
-      return;
-    }
+    const pending = getPendingSave(data.doc.id);
+    if (!pending || !editorBridgeRef.current) return;
 
-    if (
-      !selectedLeaveSnapshotId ||
-      !localBackupSnapshots.some(
-        (snapshot) => snapshot.id === selectedLeaveSnapshotId
-      )
-    ) {
-      setSelectedLeaveSnapshotId(localBackupSnapshots[0].id);
-    }
-  }, [isBackupDialogOpen, localBackupSnapshots, selectedLeaveSnapshotId]);
+    editorBridgeRef.current.setContent(pending.html);
+    latestEditorContentRef.current = { html: pending.html, text: pending.text };
+    toast.info('Recovered unsaved changes');
+    void editorBridgeRef.current.saveNow();
+  }, [isInitialAuthCheckComplete, isDocumentEditable, data.doc.id]);
+
+  // Periodic auth heartbeat
+  useEffect(() => {
+    if (!isDocumentEditable) return;
+
+    const interval = setInterval(() => {
+      void checkAuthSession();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [isDocumentEditable, checkAuthSession]);
 
   useEffect(() => {
     setHiddenGrammarIssueIds((prev) =>
@@ -1082,7 +1006,12 @@ export default function Route() {
             )}
             {!isTeacherGradingTabOpen ? (
               <div className="flex items-center gap-2">
-                {isSaving ? (
+                {hasSaveError ? (
+                  <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <p className="text-xs font-medium">Save failed</p>
+                  </div>
+                ) : isSaving ? (
                   <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     <p className="text-xs font-medium">Saving</p>
@@ -1093,16 +1022,6 @@ export default function Route() {
                     <p className="mr-1 text-xs font-medium">Saved</p>
                   </div>
                 )}
-                {canUseLocalBackup ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs text-muted-foreground"
-                    onClick={handleOpenBackupDialog}
-                  >
-                    Restore Local
-                  </Button>
-                ) : null}
                 <div className="h-[20px] border-r" />
                 <DocumentVersions documentId={data.doc.id} />
               </div>
@@ -1253,6 +1172,7 @@ export default function Route() {
                 isEditable={isDocumentEditable && !isEditorLocked}
                 onContentSnapshot={handleEditorContentSnapshot}
                 onEditorBridgeReady={handleEditorBridgeReady}
+                onRemoteSaveSuccess={handleRemoteSaveSuccess}
                 onRemoteSaveFailure={handleRemoteSaveFailure}
                 gradeHighlights={editorGradeHighlights}
                 activeGradeCommentId={
@@ -1391,88 +1311,6 @@ export default function Route() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {canUseLocalBackup ? (
-        <Dialog open={isBackupDialogOpen} onOpenChange={setIsBackupDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Restore local backup</DialogTitle>
-              <DialogDescription className="space-y-2">
-                Manual fallback for recovering this document from browser
-                storage.
-              </DialogDescription>
-            </DialogHeader>
-            {localBackupSnapshots.length > 0 ? (
-              <>
-                <div
-                  className="max-h-[40vh] space-y-2 overflow-y-auto rounded-md border bg-muted/30 p-2"
-                  data-testid="restore-local-list"
-                >
-                  {localBackupSnapshots.map((snapshot) => (
-                    <button
-                      type="button"
-                      key={snapshot.id}
-                      data-testid="restore-local-entry"
-                      onClick={() => setSelectedLeaveSnapshotId(snapshot.id)}
-                      className={cn(
-                        'w-full rounded-md border bg-background p-3 text-left transition',
-                        selectedLeaveSnapshot?.id === snapshot.id
-                          ? 'border-primary'
-                          : 'border-transparent hover:border-border'
-                      )}
-                    >
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Saved: {new Date(snapshot.updatedAt).toLocaleString()}
-                      </p>
-                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm">
-                        {getBackupPreviewText(snapshot.draftText, 180)}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-                <div className="rounded-md border bg-muted/30 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Selected backup:{' '}
-                    {selectedLeaveSnapshot
-                      ? new Date(
-                          selectedLeaveSnapshot.updatedAt
-                        ).toLocaleString()
-                      : 'None'}
-                  </p>
-                  <p className="mt-1 max-h-[40vh] overflow-y-auto whitespace-pre-wrap text-sm">
-                    {backupPreviewText}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                No local backup was found for this document.
-              </div>
-            )}
-            <DialogFooter className="gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setIsBackupDialogOpen(false)}
-                disabled={isRestoringBackup}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleRestoreBackup}
-                disabled={isRestoringBackup || !selectedLeaveSnapshot}
-              >
-                {isRestoringBackup ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Restoring...
-                  </>
-                ) : (
-                  'Restore from local backup'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      ) : null}
       {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
         <div
           className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"
