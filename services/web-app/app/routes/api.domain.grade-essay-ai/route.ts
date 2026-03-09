@@ -42,8 +42,44 @@ const AiCategorySchema = z.object({
   comment: z.string().min(1),
 });
 
+const AiCategoriesSchema = z.array(AiCategorySchema).superRefine(
+  (categories, ctx) => {
+    if (categories.length !== rubricKeys.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
+      });
+    }
+
+    const seen = new Set<string>();
+    for (const category of categories) {
+      if (seen.has(category.key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate rubric category key: ${category.key}`,
+        });
+        continue;
+      }
+      seen.add(category.key);
+    }
+
+    for (const key of rubricKeys) {
+      if (!seen.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Missing rubric category key: ${key}`,
+        });
+      }
+    }
+  }
+);
+
 const AiResponseSchema = z.object({
-  categories: z.array(AiCategorySchema),
+  categories: AiCategoriesSchema,
+  overallComment: z.string().min(1),
+});
+
+const AiOverallCommentSchema = z.object({
   overallComment: z.string().min(1),
 });
 
@@ -205,10 +241,65 @@ export async function action({ request }: ActionFunctionArgs) {
     throw error;
   }
 
+  const buildAiResponseFromCategories = async (
+    categories: z.infer<typeof AiCategoriesSchema>
+  ) => {
+    const overallCommentResponseText = await getLLMCompletion({
+      model,
+      system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submittedSnapshot.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+        },
+      ],
+      maxTokens: 300,
+      temperature: 0.2,
+      metadata: {
+        feature: 'grading',
+        kind: 'overall-comment',
+      },
+    });
+    const parsedOverallComment = AiOverallCommentSchema.parse(
+      parseFirstJsonValue(overallCommentResponseText)
+    );
+
+    return {
+      categories,
+      overallComment: parsedOverallComment.overallComment,
+    };
+  };
+
+  const extractCategories = (
+    value: unknown
+  ): z.infer<typeof AiCategoriesSchema> | null => {
+    const categoriesCandidate =
+      Array.isArray(value)
+        ? value
+        : value && typeof value === 'object'
+          ? (value as { categories?: unknown }).categories
+          : null;
+    const parsedCategories = AiCategoriesSchema.safeParse(categoriesCandidate);
+    return parsedCategories.success ? parsedCategories.data : null;
+  };
+
+  const tryParseAiResponse = (value: unknown) => {
+    const parsedResponse = AiResponseSchema.safeParse(value);
+    if (parsedResponse.success) return parsedResponse.data;
+
+    const categories = extractCategories(value);
+    if (!categories) return null;
+
+    return { categories, overallComment: null };
+  };
+
   const parseAiResponse = async (rawResponseText: string) => {
     const parsedJson = parseFirstJsonValue(rawResponseText);
-    const parsed = AiResponseSchema.safeParse(parsedJson);
-    if (parsed.success) return parsed.data;
+    const parsed = tryParseAiResponse(parsedJson);
+    if (parsed?.overallComment) return parsed;
+    if (parsed?.categories) {
+      return buildAiResponseFromCategories(parsed.categories);
+    }
 
     const repairedResponseText = await getLLMCompletion({
       model,
@@ -228,11 +319,27 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     const repairedParsedJson = parseFirstJsonValue(repairedResponseText);
+    const repairedParsed = tryParseAiResponse(repairedParsedJson);
+    if (repairedParsed?.overallComment) return repairedParsed;
+    if (repairedParsed?.categories) {
+      return buildAiResponseFromCategories(repairedParsed.categories);
+    }
 
-    return AiResponseSchema.parse(repairedParsedJson);
+    throw new Error('Malformed grading assistant response');
   };
 
-  const parsed = await parseAiResponse(responseText);
+  let parsed: z.infer<typeof AiResponseSchema>;
+  try {
+    parsed = await parseAiResponse(responseText);
+  } catch {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading Assistant returned malformed data. Please try again.',
+      },
+      { status: 502 }
+    );
+  }
 
   const rubricScores = parsed.categories.reduce<
     Record<string, Prisma.InputJsonValue>

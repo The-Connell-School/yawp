@@ -60,6 +60,12 @@ function buildRubricCategoriesJson(
   );
 }
 
+function buildOverallCommentJson() {
+  return JSON.stringify({
+    overallComment: 'Jordan, this draft has clear progress and focus.',
+  });
+}
+
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.documentSnapshot.findFirst.mockReset();
@@ -228,7 +234,7 @@ describe('api.domain.grade-essay-ai', () => {
     getLLMCompletion.mockReset();
     getLLMCompletion
       .mockResolvedValueOnce(buildRubricCategoriesJson())
-      .mockResolvedValueOnce(buildRubricResponseJson())
+      .mockResolvedValueOnce(buildOverallCommentJson())
       .mockResolvedValueOnce(
         JSON.stringify({
           issues: [
@@ -270,5 +276,40 @@ describe('api.domain.grade-essay-ai', () => {
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
     expect(getLLMCompletion).toHaveBeenCalledTimes(3);
+  });
+
+  test('returns a 502 response when the model returns an empty categories array', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion
+      .mockResolvedValueOnce(JSON.stringify([]))
+      .mockResolvedValueOnce(JSON.stringify([]));
+
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-5',
+      documentId: 'doc-5',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-5',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-5');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(response.init?.status).toBe(502);
+    expect((response as { data: Record<string, unknown> }).data).toEqual({
+      success: false,
+      message: 'Grading Assistant returned malformed data. Please try again.',
+    });
   });
 });
