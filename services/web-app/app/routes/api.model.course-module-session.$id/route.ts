@@ -42,45 +42,61 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const nextInstruction = cms.instructionsCompleted + 1;
-  const hasCompletedAllInstructions =
-    nextInstruction === cms.studentCourseModule.instructions.length;
+  const instructions = cms.studentCourseModule.instructions;
+  const instructionsLength = instructions.length;
+  const currentInstruction = instructions[cms.instructionsCompleted];
+  const nextInstructionRecord = instructions[cms.instructionsCompleted + 1];
 
   const isIncrementing =
     typeof data.instructionsCompleted === 'object' &&
     'increment' in data.instructionsCompleted;
 
+  const hasCompletedAllInstructions =
+    cms.instructionsCompleted >= instructionsLength;
+  const canCreateMessages =
+    isIncrementing &&
+    !hasCompletedAllInstructions &&
+    currentInstruction &&
+    nextInstructionRecord;
+
+  const clampedInstructionsCompleted =
+    typeof data.instructionsCompleted === 'number'
+      ? Math.max(
+          0,
+          Math.min(data.instructionsCompleted, instructionsLength)
+        )
+      : undefined;
+
+  const updateData: Record<string, unknown> = {
+    ...omit(data, ['incrementButtonText']),
+    ...(clampedInstructionsCompleted !== undefined
+      ? { instructionsCompleted: clampedInstructionsCompleted }
+      : {}),
+    ...(canCreateMessages
+      ? {
+          messages: {
+            createMany: {
+              data: [
+                {
+                  content: data.incrementButtonText ?? 'Ready!',
+                  agent: 'user',
+                  instructionId: currentInstruction.id,
+                },
+                {
+                  content: nextInstructionRecord.prompt,
+                  agent: 'assistant',
+                  instructionId: nextInstructionRecord.id,
+                },
+              ],
+            },
+          },
+        }
+      : {}),
+  };
+
   const updated = await prisma.studentCourseModuleSession.update({
     where: { id: params.id },
-    data: {
-      ...omit(data, ['incrementButtonText']),
-      ...(!hasCompletedAllInstructions && isIncrementing
-        ? {
-            messages: {
-              createMany: {
-                data: [
-                  {
-                    content: data.incrementButtonText ?? 'Ready!',
-                    agent: 'user',
-                    instructionId:
-                      cms.studentCourseModule.instructions[
-                        cms.instructionsCompleted
-                      ].id,
-                  },
-                  {
-                    content:
-                      cms.studentCourseModule.instructions[nextInstruction]
-                        .prompt,
-                    agent: 'assistant',
-                    instructionId:
-                      cms.studentCourseModule.instructions[nextInstruction].id,
-                  },
-                ],
-              },
-            },
-          }
-        : {}),
-    },
+    data: updateData,
   });
 
   return dataResponse(updated, { status: 200 });
