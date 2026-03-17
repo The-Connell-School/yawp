@@ -10,5 +10,8 @@ export default defineConfig({
   ssr: {
     noExternal: ['posthog-js', 'posthog-js/react'],
   },
-  server: { allowedHosts: true }, // Allow ngrok to forward twilio webhook calls
+  server: {
+    port: 5176,
+    allowedHosts: true, // Allow ngrok to forward twilio webhook calls
+  },
 });
