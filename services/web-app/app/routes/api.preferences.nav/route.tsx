@@ -7,15 +7,17 @@ import {
 } from '@rvf/react-router';
 import { z } from 'zod';
 import { useRequestInfo } from '~/hooks/useRequestInfo';
-import { type NavState, navStateCookie } from './cookie.server';
 
 // Preference:
 // for left navigation menu width (collapsed or expanded).
 
+type NavState = 'expanded' | 'collapsed';
+
 const path = '/api/preferences/nav';
 const Schema = z.object({ state: z.enum(['expanded', 'collapsed']) });
 
-async function actionHandler({ request }: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
+  const { navStateCookie } = await import('./cookie.server');
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 

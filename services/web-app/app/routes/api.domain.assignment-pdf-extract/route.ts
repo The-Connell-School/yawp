@@ -18,7 +18,7 @@ function safeText(value: string | undefined): string {
   return value?.trim() ?? '';
 }
 
-async function actionHandler({ request }: ActionFunctionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
