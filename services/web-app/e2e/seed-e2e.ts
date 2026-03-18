@@ -38,6 +38,8 @@ export type E2EContext = {
   organizationId: string;
   userId: string;
   userEmail: string;
+  adminUserId: string;
+  adminEmail: string;
   profileId: string;
   studentCourseId: string;
   documentId: string;
@@ -112,6 +114,13 @@ export async function seedE2E(): Promise<E2EContext> {
       password: { create: createPassword('johndoe') },
       profiles: { create: [{ organizationId: org.id, isOwner: false }] },
     },
+    {
+      email: 'admin.e2e@yawp.test',
+      name: 'Admin E2E',
+      isAdmin: true,
+      password: { create: createPassword('admin-e2e-password') },
+      profiles: { create: [{ organizationId: org.id, isOwner: true }] },
+    },
   ];
 
   for (const u of users) {
@@ -121,6 +130,9 @@ export async function seedE2E(): Promise<E2EContext> {
   // Minimal content needed by app index and editor navigation
   const user = await prisma.user.findUniqueOrThrow({
     where: { email: 'jdoe@brock.software' },
+  });
+  const adminUser = await prisma.user.findUniqueOrThrow({
+    where: { email: 'admin.e2e@yawp.test' },
   });
   const profile = await prisma.profile.findFirstOrThrow({
     where: { userId: user.id },
@@ -189,6 +201,8 @@ export async function seedE2E(): Promise<E2EContext> {
     organizationId: org.id,
     userId: user.id,
     userEmail: user.email,
+    adminUserId: adminUser.id,
+    adminEmail: adminUser.email,
     profileId: profile.id,
     studentCourseId: studentCourse.id,
     documentId: document.id,

@@ -1,6 +1,9 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { prisma } from '~/utils/db.server';
 
+const DEFAULT_AUDIT_RETENTION_DAYS = 7;
+const DEFAULT_DOCUMENT_RETENTION_DAYS = 3;
+
 function assertInternalToken(request: Request) {
   const token =
     new URL(request.url).searchParams.get('token') ||
@@ -11,6 +14,18 @@ function assertInternalToken(request: Request) {
   return true;
 }
 
+function getRetentionDays(envVarName: string, fallback: number) {
+  const rawValue = process.env[envVarName];
+  if (!rawValue) return fallback;
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
 export async function loader({ request }: ActionFunctionArgs) {
   if (!assertInternalToken(request)) {
     return new Response('Unauthorized', { status: 401 });
@@ -18,15 +33,40 @@ export async function loader({ request }: ActionFunctionArgs) {
 
   const now = new Date();
   const oneDay = 24 * 60 * 60 * 1000;
-  const cutoffVersions = new Date(now.getTime() - 3 * oneDay);
+  const documentRetentionDays = getRetentionDays(
+    'DOCUMENT_VERSION_RETENTION_DAYS',
+    DEFAULT_DOCUMENT_RETENTION_DAYS
+  );
+  const auditRetentionDays = getRetentionDays(
+    'AUDIT_LOG_RETENTION_DAYS',
+    DEFAULT_AUDIT_RETENTION_DAYS
+  );
+  const documentWriteJournalRetentionDays = getRetentionDays(
+    'DOCUMENT_WRITE_JOURNAL_RETENTION_DAYS',
+    auditRetentionDays
+  );
+
+  const cutoffVersions = new Date(now.getTime() - documentRetentionDays * oneDay);
+  const cutoffAuditEvents = new Date(now.getTime() - auditRetentionDays * oneDay);
+  const cutoffDocumentWriteJournals = new Date(
+    now.getTime() - documentWriteJournalRetentionDays * oneDay
+  );
 
   const versionsResult = await prisma.documentVersion.deleteMany({
     where: { createdAt: { lt: cutoffVersions } },
+  });
+  const auditEventsResult = await prisma.auditEvent.deleteMany({
+    where: { createdAt: { lt: cutoffAuditEvents } },
+  });
+  const documentWriteJournalsResult = await prisma.documentWriteJournal.deleteMany({
+    where: { createdAt: { lt: cutoffDocumentWriteJournals } },
   });
 
   return dataResponse({
     deletedVersions: versionsResult.count,
     deletedSnapshots: 0,
+    deletedAuditEvents: auditEventsResult.count,
+    deletedDocumentWriteJournals: documentWriteJournalsResult.count,
   });
 }
 

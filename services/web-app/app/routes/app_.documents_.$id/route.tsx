@@ -42,6 +42,7 @@ import {
   getPendingSave,
   clearPendingSave,
 } from '~/utils/pending-document-save';
+import { queueBrowserAuditEvent } from '~/utils/audit-browser';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
@@ -174,6 +175,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      revision: true,
       title: true,
       html: true,
       text: true,
@@ -445,6 +447,11 @@ export default function Route() {
     }),
     [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
   );
+  const editorSessionId = useMemo(() => crypto.randomUUID(), [data.doc.id]);
+  const loginReturnStorageKey = useMemo(
+    () => `yawp:audit:login-return:${data.doc.id}`,
+    [data.doc.id]
+  );
   const latestEditorContentRef = useRef(initialEditorContent);
   const editorBridgeRef = useRef<EditorBridge | null>(null);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
@@ -590,11 +597,34 @@ export default function Route() {
   }, []);
 
   const handleLoginRedirect = useCallback(() => {
+    const content =
+      editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current;
+    setPendingSave(data.doc.id, content);
+    sessionStorage.setItem(loginReturnStorageKey, '1');
     const redirectTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
+    queueBrowserAuditEvent(
+      {
+        eventType: 'auth.logout_redirected',
+        documentId: data.doc.id,
+        userId: user.id,
+        profileId: user.selectedProfile?.id ?? null,
+        editorSessionId,
+        payload: {
+          redirectTo,
+        },
+      },
+      { flush: true, useBeacon: true }
+    );
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
-  }, []);
+  }, [
+    data.doc.id,
+    editorSessionId,
+    loginReturnStorageKey,
+    user.id,
+    user.selectedProfile?.id,
+  ]);
 
   const checkAuthSession = useCallback(async () => {
     try {
@@ -640,7 +670,7 @@ export default function Route() {
   );
 
   const handleRemoteSaveSuccess = useCallback(
-    (_content: { html: string; text: string }) => {
+    (_args: { content: { html: string; text: string }; revision: number }) => {
       clearPendingSave(data.doc.id);
       saveFailureCountRef.current = 0;
       setHasSaveError(false);
@@ -664,21 +694,43 @@ export default function Route() {
     []
   );
 
+  const recoverPendingSave = useCallback(
+    (bridge: EditorBridge, source: string) => {
+      const pending = getPendingSave(data.doc.id);
+      if (!pending) return false;
+
+      bridge.setContent(pending.html);
+      latestEditorContentRef.current = { html: pending.html, text: pending.text };
+      toast.info('Recovered unsaved changes');
+      queueBrowserAuditEvent(
+        {
+          eventType: 'document.pending_save_restored',
+          documentId: data.doc.id,
+          userId: user.id,
+          profileId: user.selectedProfile?.id ?? null,
+          editorSessionId,
+          payload: {
+            source,
+          },
+        },
+        { flush: true }
+      );
+      void bridge.saveNow({ source: 'editor-recovery' });
+      return true;
+    },
+    [data.doc.id, editorSessionId, user.id, user.selectedProfile?.id]
+  );
+
   const handleEditorBridgeReady = useCallback(
     (bridge: EditorBridge | null) => {
       editorBridgeRef.current = bridge;
       if (!bridge || !isDocumentEditable || !isInitialAuthCheckComplete) return;
-      const pending = getPendingSave(data.doc.id);
-      if (!pending) return;
-      bridge.setContent(pending.html);
-      latestEditorContentRef.current = { html: pending.html, text: pending.text };
-      toast.info('Recovered unsaved changes');
-      void bridge.saveNow();
+      recoverPendingSave(bridge, 'bridge-ready');
     },
     [
-      data.doc.id,
       isDocumentEditable,
       isInitialAuthCheckComplete,
+      recoverPendingSave,
     ]
   );
 
@@ -693,6 +745,74 @@ export default function Route() {
   useEffect(() => {
     setIsSessionLocked(false);
   }, [data.doc.id]);
+
+  useEffect(() => {
+    queueBrowserAuditEvent({
+      eventType: 'document.editor_open',
+      documentId: data.doc.id,
+      userId: user.id,
+      profileId: user.selectedProfile?.id ?? null,
+      editorSessionId,
+      payload: {
+        revision: data.doc.revision,
+        submittedAt: data.doc.submittedAt,
+      },
+    });
+  }, [
+    data.doc.id,
+    data.doc.revision,
+    data.doc.submittedAt,
+    editorSessionId,
+    user.id,
+    user.selectedProfile?.id,
+  ]);
+
+  useEffect(() => {
+    if (!isSessionLocked) return;
+    queueBrowserAuditEvent(
+      {
+        eventType: 'document.editor_locked',
+        documentId: data.doc.id,
+        userId: user.id,
+        profileId: user.selectedProfile?.id ?? null,
+        editorSessionId,
+        payload: {
+          reason: 'session_expired',
+        },
+      },
+      { flush: true }
+    );
+  }, [
+    data.doc.id,
+    editorSessionId,
+    isSessionLocked,
+    user.id,
+    user.selectedProfile?.id,
+  ]);
+
+  useEffect(() => {
+    if (!isInitialAuthCheckComplete || isSessionLocked) return;
+    if (!sessionStorage.getItem(loginReturnStorageKey)) return;
+    sessionStorage.removeItem(loginReturnStorageKey);
+    queueBrowserAuditEvent(
+      {
+        eventType: 'auth.login_returned',
+        documentId: data.doc.id,
+        userId: user.id,
+        profileId: user.selectedProfile?.id ?? null,
+        editorSessionId,
+      },
+      { flush: true }
+    );
+  }, [
+    data.doc.id,
+    editorSessionId,
+    isInitialAuthCheckComplete,
+    isSessionLocked,
+    loginReturnStorageKey,
+    user.id,
+    user.selectedProfile?.id,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -762,14 +882,13 @@ export default function Route() {
   useEffect(() => {
     if (!isInitialAuthCheckComplete || !isDocumentEditable) return;
 
-    const pending = getPendingSave(data.doc.id);
-    if (!pending || !editorBridgeRef.current) return;
-
-    editorBridgeRef.current.setContent(pending.html);
-    latestEditorContentRef.current = { html: pending.html, text: pending.text };
-    toast.info('Recovered unsaved changes');
-    void editorBridgeRef.current.saveNow();
-  }, [isInitialAuthCheckComplete, isDocumentEditable, data.doc.id]);
+    if (!editorBridgeRef.current) return;
+    recoverPendingSave(editorBridgeRef.current, 'load');
+  }, [
+    isInitialAuthCheckComplete,
+    isDocumentEditable,
+    recoverPendingSave,
+  ]);
 
   // Periodic auth heartbeat
   useEffect(() => {
@@ -922,8 +1041,6 @@ export default function Route() {
                     ? fetcher.submit(
                         {
                           title: e.target.value,
-                          text: data.doc.text,
-                          html: data.doc.html,
                         },
                         {
                           method: 'POST',
@@ -1179,6 +1296,8 @@ export default function Route() {
               <Editor
                 docId={data.doc.id}
                 docHtml={editorHtml}
+                initialRevision={data.doc.revision}
+                editorSessionId={editorSessionId}
                 saveSnapshotId={
                   isTeacherSnapshotView ? activeSnapshot?.id : null
                 }

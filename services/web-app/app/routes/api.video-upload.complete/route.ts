@@ -2,7 +2,7 @@ import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireAdmin } from '~/utils/auth.server';
 import { completeMultipartUpload } from '~/services/s3.server';
 
-export async function action({ request }: ActionFunctionArgs) {
+async function actionHandler({ request }: ActionFunctionArgs) {
   await requireAdmin(request);
   const form = await request.formData();
   const key = form.get('key')?.toString();

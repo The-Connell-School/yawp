@@ -11,6 +11,7 @@ import { Link, useSearchParams } from 'react-router';
 import { ArrowRightIcon } from 'lucide-react';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { z } from 'zod';
+import { safeRedirect } from 'remix-utils/safe-redirect';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormInput } from '~/components/forms/form-input-2';
 import { Button, button } from '~/components/ui/button';
@@ -24,6 +25,7 @@ import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
+import { recordAuditEvent } from '~/utils/audit.server';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -36,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({});
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+const actionImpl = async ({ request }: ActionFunctionArgs) => {
   await requireAnonymous(request);
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
@@ -45,11 +47,19 @@ export async function action({ request }: ActionFunctionArgs) {
     const { email, password } = data;
     const user = await verifyUserPassword({ email }, password);
 
-    if (!user)
+    if (!user) {
+      await recordAuditEvent({
+        eventType: 'auth.login.failed',
+        payload: {
+          email,
+          redirectTo: data.redirectTo ?? null,
+        },
+      });
       return validationError(
         { fieldErrors: { email: 'Invalid email or password' } },
         data
       );
+    }
 
     const session = await prisma.session.create({
       select: { id: true, expirationDate: true, userId: true },
@@ -63,7 +73,17 @@ export async function action({ request }: ActionFunctionArgs) {
     const authSession = await authSessionStorage.getSession(cookies);
     authSession.set(sessionKey, session.id);
 
-    return redirect('/app', {
+    await recordAuditEvent({
+      eventType: 'auth.login.succeeded',
+      userId: user.id,
+      sessionId: session.id,
+      payload: {
+        email,
+        redirectTo: data.redirectTo ?? null,
+      },
+    });
+
+    return redirect(safeRedirect(data.redirectTo, '/app'), {
       headers: {
         'set-cookie': await authSessionStorage.commitSession(authSession, {
           expires: session.expirationDate,
@@ -72,11 +92,23 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   } catch (error) {
     posthog?.captureException(error, 'anonymous');
+    await recordAuditEvent({
+      eventType: 'auth.login.error',
+      payload: {
+        email: data.email,
+        redirectTo: data.redirectTo ?? null,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
     return validationError(
       { fieldErrors: { email: 'Invalid email or password' } },
       data
     );
   }
+};
+
+export async function action(args: ActionFunctionArgs) {
+  return actionImpl(args);
 }
 
 export default function LoginPage() {
@@ -109,7 +141,7 @@ export default function LoginPage() {
       </div>
       <div className="mx-auto mt-10 w-full max-w-md px-8">
         <Form {...form.getFormProps()} className="flex flex-col gap-3">
-          <input type="hidden" name="redirectTo" />
+          <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
           <FormInput
             scope={form.scope('email')}
             type="email"

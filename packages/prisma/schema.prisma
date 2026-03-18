@@ -146,6 +146,7 @@ model Document {
   id                          String                       @id @default(cuid())
   createdAt                   DateTime                     @default(now()) @db.Timestamptz(6)
   updatedAt                   DateTime                     @default(now()) @db.Timestamptz(6)
+  revision                    Int                          @default(0)
   deletedAt                   DateTime?                    @db.Timestamptz(6)
   archivedAt                  DateTime?                    @db.Timestamptz(6)
   title                       String                       @default("Untitled")
@@ -164,6 +165,7 @@ model Document {
   comments                    DocumentComment[]
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
+  writeJournals               DocumentWriteJournal[]
   grades                      Grade[]
   pasteAlerts                 PasteAlert[]
 
@@ -216,6 +218,38 @@ model DocumentSnapshot {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([submittedAt, archivedAt])
+}
+
+model DocumentWriteJournal {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  eventType         String
+  source            String
+  status            String
+  failureReason     String?
+  requestId         String?
+  traceId           String?
+  userId            String?
+  profileId         String?
+  sessionId         String?
+  editorSessionId   String?
+  clientSeq         Int?
+  baseRevision      Int?
+  resultingRevision Int?
+  documentId        String
+  document          Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  title             String?
+  html              String
+  text              String
+  htmlHash          String
+  textHash          String
+  metadata          Json?
+
+  @@index([documentId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([requestId])
+  @@index([traceId])
+  @@index([editorSessionId, clientSeq(sort: Desc)])
 }
 
 model Grade {
@@ -339,6 +373,37 @@ model Session {
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model AuditEvent {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  source          String
+  eventType       String
+  requestId       String?
+  traceId         String?
+  route           String?
+  path            String?
+  method          String?
+  statusCode      Int?
+  durationMs      Int?
+  success         Boolean?
+  userId          String?
+  profileId       String?
+  sessionId       String?
+  editorSessionId String?
+  documentId      String?
+  organizationId  String?
+  classId         String?
+  payload         Json?
+  metadata        Json?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([requestId])
+  @@index([traceId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([documentId, createdAt(sort: Desc)])
 }
 
 model Setting {

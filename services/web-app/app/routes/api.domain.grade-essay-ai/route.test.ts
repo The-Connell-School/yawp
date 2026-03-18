@@ -299,15 +299,20 @@ describe('api.domain.grade-essay-ai', () => {
     const form = new FormData();
     form.append('snapshotId', 'snapshot-5');
 
-    const response = await action({
+    const response = (await action({
       request: new Request('https://example.com/api/domain/grade-essay-ai', {
         method: 'POST',
         body: form,
       }),
-    } as any);
+    } as any)) as {
+      init?: {
+        status?: number;
+      };
+      data: Record<string, unknown>;
+    };
 
     expect(response.init?.status).toBe(502);
-    expect((response as { data: Record<string, unknown> }).data).toEqual({
+    expect(response.data).toEqual({
       success: false,
       message: 'Grading Assistant returned malformed data. Please try again.',
     });

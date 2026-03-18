@@ -65,7 +65,7 @@ type SaveFailureReason = 'auth' | 'network' | 'server';
 export type EditorBridge = {
   getContent: () => { html: string; text: string };
   setContent: (html: string) => void;
-  saveNow: () => Promise<void>;
+  saveNow: (options?: { source?: string }) => Promise<void>;
 };
 
 function isTextNode(node: Node): node is Text {
@@ -202,6 +202,8 @@ function applyReviewHighlights(
 type Props = {
   docId: string;
   docHtml: string | null;
+  initialRevision: number;
+  editorSessionId: string;
   saveSnapshotId?: string | null;
   setIsSaving: (isSaving: boolean) => void;
   isEditable?: boolean;
@@ -210,7 +212,10 @@ type Props = {
   onGradeCommentSelect?: (id: string) => void;
   onGrammarIssueHover?: (id: string | null, rect: DOMRect | null) => void;
   onContentSnapshot?: (content: { html: string; text: string }) => void;
-  onRemoteSaveSuccess?: (content: { html: string; text: string }) => void;
+  onRemoteSaveSuccess?: (args: {
+    content: { html: string; text: string };
+    revision: number;
+  }) => void;
   onRemoteSaveFailure?: (args: {
     content: { html: string; text: string };
     reason: SaveFailureReason;
@@ -221,6 +226,8 @@ type Props = {
 export const Editor = ({
   docId,
   docHtml,
+  initialRevision,
+  editorSessionId,
   saveSnapshotId = null,
   setIsSaving,
   isEditable = true,
@@ -238,6 +245,8 @@ export const Editor = ({
   const saveStartedAtRef = useRef<number | null>(null);
   const inFlightSavesRef = useRef(0);
   const clearSavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clientSeqRef = useRef(0);
+  const currentRevisionRef = useRef(initialRevision);
   const {
     activeCommentId,
     hoveredCommentId,
@@ -421,7 +430,10 @@ export const Editor = ({
       text: editor.getText().replace(/\u00A0/g, ' '),
     });
 
-    const save = async () => {
+    currentRevisionRef.current = initialRevision;
+    clientSeqRef.current = 0;
+
+    const save = async (options?: { source?: string }) => {
       if (clearSavingTimerRef.current) {
         clearTimeout(clearSavingTimerRef.current);
         clearSavingTimerRef.current = null;
@@ -434,28 +446,52 @@ export const Editor = ({
 
       const content = getContentSnapshot();
       const formData = new FormData();
+      const clientSeq = ++clientSeqRef.current;
+      const baseRevision = currentRevisionRef.current;
       formData.append('html', content.html);
       formData.append('text', content.text);
+      formData.append('editorSessionId', editorSessionId);
+      formData.append('clientSeq', String(clientSeq));
+      formData.append('baseRevision', String(baseRevision));
+      const saveSource = options?.source ?? 'editor';
       const saveUrl = saveSnapshotId
-        ? `/api/model/document/${docId}?from=editor&snapshotId=${encodeURIComponent(saveSnapshotId)}`
-        : `/api/model/document/${docId}?from=editor`;
+        ? `/api/model/document/${docId}?from=${encodeURIComponent(saveSource)}&snapshotId=${encodeURIComponent(saveSnapshotId)}`
+        : `/api/model/document/${docId}?from=${encodeURIComponent(saveSource)}`;
       try {
         const response = await fetch(saveUrl, {
           method: 'PUT',
           body: formData,
           keepalive: true,
         });
-        if (response.status === 204) {
-          onRemoteSaveSuccess?.(content);
-        } else {
-          const reason: SaveFailureReason =
-            response.redirected ||
-            response.status === 401 ||
-            response.status === 403
-              ? 'auth'
-              : 'server';
-          onRemoteSaveFailure?.({ content, reason });
+        if (response.ok) {
+          const body = await response.json().catch(() => null);
+          const revision =
+            typeof body?.revision === 'number'
+              ? body.revision
+              : currentRevisionRef.current;
+          currentRevisionRef.current = Math.max(
+            currentRevisionRef.current,
+            revision
+          );
+          onRemoteSaveSuccess?.({ content, revision: currentRevisionRef.current });
+          return;
         }
+
+        if (response.status === 409) {
+          const body = await response.json().catch(() => null);
+          if (
+            body?.error === 'stale_client_sequence' ||
+            body?.error === 'stale_base_revision'
+          ) {
+            return;
+          }
+        }
+
+        const reason: SaveFailureReason =
+          response.redirected || response.status === 401 || response.status === 403
+            ? 'auth'
+            : 'server';
+        onRemoteSaveFailure?.({ content, reason });
       } catch {
         onRemoteSaveFailure?.({ content, reason: 'network' });
       } finally {
@@ -472,7 +508,7 @@ export const Editor = ({
         }, remainingMs);
       }
     };
-    saveNowRef.current = save;
+    saveNowRef.current = () => save();
     onEditorBridgeReady?.({
       getContent: getContentSnapshot,
       setContent: (html: string) => {
@@ -486,11 +522,14 @@ export const Editor = ({
       onContentSnapshot?.(getContentSnapshot());
     }, 400);
     const emitSnapshotNow = () => onContentSnapshot?.(getContentSnapshot());
+    const saveOnBlur = () => {
+      void save({ source: 'editor-blur' });
+    };
 
     onContentSnapshot?.(getContentSnapshot());
     editor.on('update', saveDebounced);
     editor.on('update', emitSnapshotDebounced);
-    editor.on('blur', save);
+    editor.on('blur', saveOnBlur);
     editor.on('blur', emitSnapshotNow);
 
     return () => {
@@ -498,17 +537,19 @@ export const Editor = ({
         clearTimeout(clearSavingTimerRef.current);
       }
       // Fire one final save on unmount (keepalive ensures it survives unload)
-      void save();
+      void save({ source: 'editor-unmount' });
       saveNowRef.current = null;
       onEditorBridgeReady?.(null);
       editor.off('update', saveDebounced);
       editor.off('update', emitSnapshotDebounced);
-      editor.off('blur', save);
+      editor.off('blur', saveOnBlur);
       editor.off('blur', emitSnapshotNow);
     };
   }, [
     editor,
     docId,
+    editorSessionId,
+    initialRevision,
     saveSnapshotId,
     setIsSaving,
     onContentSnapshot,

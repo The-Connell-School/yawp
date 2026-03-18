@@ -77,17 +77,17 @@ export class TestHelpers {
    */
   async waitForSave() {
     // Wait for "Saving" indicator
-    await this.page.waitForSelector('text=Saving', { timeout: 5000 });
+    await this.page.getByText(/^Saving$/).first().waitFor({ timeout: 5000 });
 
     // Wait for "Saved" indicator
-    await this.page.waitForSelector('text=Saved', { timeout: 10000 });
+    await this.page.getByText(/^Saved$/).first().waitFor({ timeout: 10000 });
   }
 
   /**
    * Check if content is saved by verifying the saved indicator
    */
   async verifySaved() {
-    await expect(this.page.locator('text=Saved')).toBeVisible();
+    await expect(this.page.getByText(/^Saved$/).first()).toBeVisible();
   }
 
   /**

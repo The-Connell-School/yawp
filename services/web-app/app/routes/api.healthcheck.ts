@@ -1,6 +1,7 @@
+import { type LoaderFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server.ts';
 
-export async function loader() {
+export async function loader(_args: LoaderFunctionArgs) {
   try {
     await prisma.user.count();
     return new Response('OK');

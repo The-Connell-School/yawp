@@ -15,7 +15,7 @@ import { type NavState, navStateCookie } from './cookie.server';
 const path = '/api/preferences/nav';
 const Schema = z.object({ state: z.enum(['expanded', 'collapsed']) });
 
-export async function action({ request }: ActionFunctionArgs) {
+async function actionHandler({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, Schema);
   if (error) return validationError(error);
 
