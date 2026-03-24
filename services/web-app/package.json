@@ -88,6 +88,7 @@
     "lucide-react": "^0.503.0",
     "openai": "^4.98.0",
     "pg": "^8.13.1",
+    "pg-connection-string": "^2.7.0",
     "posthog-js": "^1.184.1",
     "posthog-node": "^4.4.0",
     "prosemirror-state": "^1.4.3",
