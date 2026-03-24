@@ -40,7 +40,7 @@ model Submission {
   aiMeta            Json?
   gradedAt          DateTime?           @db.Timestamptz(6)
   gradedById        String?
-  gradedBy          Profile?            @relation(fields: [gradedById], references: [id], onDelete: Cascade)
+  gradedBy          Profile?            @relation(fields: [gradedById], references: [id], onDelete: SetNull)
 
   // Release
   releasedAt        DateTime?           @db.Timestamptz(6)
@@ -50,11 +50,21 @@ model Submission {
   document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments          SubmissionComment[]
 
+  // Phase 1 migration helper (drop in Phase 3)
+  legacySnapshotId  String?             @unique
+
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([gradedById])
   @@index([releasedAt])
 }
 ```
+
+**Key decisions:**
+
+- `gradedBy` uses `onDelete: SetNull` (not Cascade) — if a teacher's profile is deleted, the submission and its grades are preserved with `gradedById` nulled out. This fixes a data-loss risk present in the existing `Grade` model.
+- `document` uses `onDelete: Restrict` — documents use soft-delete (`deletedAt`) exclusively. The app layer enforces soft-delete; `Restrict` is a safety net to prevent accidental hard-deletes from destroying graded submissions.
+- `legacySnapshotId` is a temporary unique field for Phase 1 dual-write. It maps a `Submission` back to its source `DocumentSnapshot`, enabling upsert-style dual-writes and backfill deduplication. Dropped in Phase 3.
+- `updatedAt` uses `@default(now())` matching the existing schema pattern. The `update-submission` endpoint must always set `updatedAt: new Date()` on every save.
 
 ### SubmissionComment
 
@@ -90,12 +100,22 @@ model Document {
 }
 ```
 
+### Profile changes
+
+```prisma
+model Profile {
+  // NEW relations (add alongside existing gradesGiven, gradeComments, etc.)
+  submissionsGraded    Submission[]
+  submissionComments   SubmissionComment[]
+}
+```
+
 ### Removed models (in Phase 3)
 
 - `GradeCommentResponse` — no responses to submission comments
 - `GradeComment` — replaced by `SubmissionComment`
 - `Grade` — replaced by `Submission`
-- `DocumentSnapshot` — evaluate if still needed for non-submission version history
+- `DocumentSnapshot` — drop. The separate `DocumentVersion` model already handles version history. `DocumentSnapshot` only served the submission use case, which `Submission` now covers. The `archivedAt` field on `DocumentSnapshot` is not carried forward — `Submission` replaces archival semantics with the Released lifecycle state.
 
 ## Submission Lifecycle
 
@@ -123,10 +143,12 @@ Each Submission is an independent grading unit. The teacher grades and releases 
 
 | Tab | Query |
 |-----|-------|
-| In Progress | Documents with zero submissions |
+| In Progress | Documents with zero submissions, OR documents whose latest submission has been released (student is working on a revision) |
 | Submitted | Submissions where `gradedAt` is null |
 | Graded | Submissions where `gradedAt` set, `releasedAt` null |
 | Released | Submissions where `releasedAt` set |
+
+**Note:** "In Progress" includes both never-submitted documents and documents where the student is revising after receiving feedback. The key signal is "no pending ungraded submission exists."
 
 ## Auto-Save Grading
 
@@ -158,6 +180,8 @@ POST /api/domain/update-submission
 }
 ```
 
+This is a new endpoint that replaces `api.domain.grade-essay` for the write path in Phase 2. During Phase 1, `api.domain.grade-essay` continues to work and dual-writes to both `Grade` and `Submission`. In Phase 2, the frontend switches to `update-submission` and the old endpoint becomes unused. In Phase 3, `api.domain.grade-essay` is removed.
+
 ### `gradedAt` / `gradedById`
 
 Set automatically on the first update that includes any grading data. Subsequent saves update `updatedAt` but don't change `gradedAt`. "Graded" means "a teacher has touched this."
@@ -186,7 +210,7 @@ A teacher creates an assignment within a single class. Assignment belongs to one
 1. Teacher creates an assignment from a class page (Assignments tab)
 2. Form shows: title, prompt, tutor context, due date, student course — same as today
 3. **New:** Multi-select for "Assign to classes" showing all classes where the selected StudentCourse is allowed (via `ClassStudentCourse`). Current class pre-selected.
-4. On submit, backend creates one `Assignment` record per selected class with identical field values
+4. On submit, backend creates one `Assignment` record per selected class with identical field values, wrapped in a `prisma.$transaction` to ensure all-or-nothing creation
 5. Each copy is fully independent after creation — editing one doesn't affect others
 
 ### Class list filtering
@@ -250,6 +274,12 @@ Snapshot of the rubric/grading configuration used at grading time. Shape varies 
 3. Update grade-essay flow to write to both `Grade` + `Submission`
 4. Update release-grades flow to write `releasedAt` to both `Grade` + `Submission`
 5. Write a backfill script: create `Submission` records from existing `DocumentSnapshot` + `Grade` pairs
+   - For each `DocumentSnapshot` with a linked `Grade`: create a `Submission` with snapshot fields from the snapshot, grading fields from the grade, and `legacySnapshotId` set to the snapshot's id
+   - **Field priority for backfill:** Use `Grade.essayTitle`/`essayText`/`essayHtml` when present (these may differ from the snapshot if the snapshot was modified). Fall back to `DocumentSnapshot.title`/`text`/`html`.
+   - **`submittedAt` mapping:** Use `DocumentSnapshot.submittedAt` when present; fall back to `DocumentSnapshot.createdAt`. This field is non-nullable on `Submission`, so backfill must always produce a value.
+   - For `DocumentSnapshot` records without a linked `Grade`: create a `Submission` with only snapshot fields populated (grading fields null)
+   - Use `legacySnapshotId` to deduplicate — skip if a `Submission` with that `legacySnapshotId` already exists
+   - **Dual-write timing note:** During Phase 1, a `Submission` is created at submit time (before grading), but a `Grade` is only created at grading time. The two tables are not 1:1 at all times — `Submission` records may exist without a corresponding `Grade` until the teacher grades them. This is expected and correct.
 
 End of Phase 1: every submission exists in both old and new tables. All writes go to both.
 
@@ -262,6 +292,7 @@ Switch reads from old tables to new, route by route:
 - Grade comments sidebar → read from `SubmissionComment`
 - AI grading → read/write against `Submission`
 - Student dashboard grade badges → check `Submission.releasedAt`
+- Frontend switches from `api.domain.grade-essay` to `api.domain.update-submission`
 
 Each route migrates independently. Old routes keep working until switched.
 
@@ -271,10 +302,12 @@ Once all reads are migrated:
 
 1. Stop dual-writing to old tables
 2. Remove `document.submittedAt` and `document.submittedSnapshotId` columns
-3. Drop `GradeCommentResponse` table
-4. Drop `GradeComment` table
-5. Drop `Grade` table
-6. Evaluate whether `DocumentSnapshot` still needed for version history — if not, drop
+3. Drop `legacySnapshotId` column from `Submission`
+4. Drop `GradeCommentResponse` table
+5. Drop `GradeComment` table
+6. Drop `Grade` table
+7. Drop `DocumentSnapshot` table (`DocumentVersion` already covers version history)
+8. Remove `api.domain.grade-essay` endpoint
 
 ### Ordering principle
 
@@ -283,5 +316,5 @@ Each phase is independently deployable. Stopping after Phase 1 means everything 
 ### Route/URL transitions
 
 - `/app/graded/:gradeId` — keep working during transition, eventually redirect to `/app/submissions/:submissionId`
-- API routes like `api.domain.grade-essay` — keep route paths, change internal writes
+- API routes like `api.domain.grade-essay` — dual-writes in Phase 1, unused in Phase 2, removed in Phase 3
 - E2E tests update as each route migrates
