@@ -48,6 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
+      snapshotId: true,
       releasedAt: true,
       document: {
         select: {
@@ -114,6 +115,27 @@ export async function action({ request }: ActionFunctionArgs) {
       updatedAt: new Date(),
     },
   });
+
+  // Dual-write to Submission table (Phase 1)
+  if (grade.snapshotId) {
+    await prisma.submission.update({
+      where: { legacySnapshotId: grade.snapshotId },
+      data: {
+        score,
+        feedback: data.feedback,
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
+        updatedAt: new Date(),
+      },
+    }).catch((err: any) => {
+      console.warn('Dual-write to Submission failed (Phase 1):', err.message);
+    });
+  }
 
   return dataResponse({
     success: true,
