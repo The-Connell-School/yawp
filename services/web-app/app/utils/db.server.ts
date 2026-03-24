@@ -1,6 +1,7 @@
 import { remember } from '@epic-web/remember';
 import { PrismaClient } from '@app/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { parse } from 'pg-connection-string';
 import chalk from 'chalk';
 import { getAuditContext, withAuditSuppressed } from './audit-context.server';
 import {
@@ -8,6 +9,64 @@ import {
   serializeAuditError,
   summarizePrismaResult,
 } from './audit-format.server';
+
+/**
+ * Prisma resolves the Postgres namespace from `DATABASE_URL` (e.g. `?schema=pr_7`).
+ * `DATABASE_SCHEMA` is set on App Runner for PR previews; append the param before the client starts.
+ */
+function ensureDatabaseUrlIncludesSchemaQueryParam(): void {
+  const schema = process.env.DATABASE_SCHEMA?.trim();
+  if (!schema) return;
+
+  const base = process.env.DATABASE_URL;
+  if (!base) {
+    throw new Error('DATABASE_URL is required');
+  }
+  if (/[?&]schema=/i.test(base)) return;
+
+  const joiner = base.includes('?') ? '&' : '?';
+  process.env.DATABASE_URL = `${base}${joiner}schema=${encodeURIComponent(schema)}`;
+}
+
+function requireDatabaseUrl(): string {
+  const base =
+    process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  if (!base) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  return base;
+}
+
+/** Drop `sslmode` from the URL so `pg` does not merge parsed `ssl` over our option. */
+function stripSslModeQuery(connectionString: string): string {
+  const u = new URL(connectionString.replace(/^postgresql:/i, 'http:'));
+  u.searchParams.delete('sslmode');
+  return u.toString().replace(/^http:/, 'postgresql:');
+}
+
+function pgPoolConfig() {
+  ensureDatabaseUrlIncludesSchemaQueryParam();
+  const full = requireDatabaseUrl();
+  const requiresTls =
+    process.env.DATABASE_SSL_REQUIRE === 'true' ||
+    /\.rds\.amazonaws\.com/i.test(full) ||
+    /[?&]sslmode=require(?:&|$)/i.test(full) ||
+    /[?&]sslmode=verify-ca(?:&|$)/i.test(full) ||
+    /[?&]sslmode=verify-full(?:&|$)/i.test(full);
+
+  const connStr = requiresTls ? stripSslModeQuery(full) : full;
+  const parsed = parse(connStr) as Record<string, unknown>;
+  const { ssl: _drop, schema: _schemaParam, ...rest } = parsed;
+
+  const schema = process.env.DATABASE_SCHEMA?.trim();
+
+  return {
+    ...rest,
+    connectionTimeoutMillis: 15_000,
+    ...(schema ? { options: `-c search_path=${schema}` } : {}),
+    ...(requiresTls ? { ssl: { rejectUnauthorized: false } } : {}),
+  };
+}
 
 export const prismaRaw = remember('prisma.raw', () => {
   const logThreshold = 20;
@@ -17,13 +76,21 @@ export const prismaRaw = remember('prisma.raw', () => {
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
-  const isLocal =
-    connectionString.includes('localhost') ||
-    connectionString.includes('127.0.0.1');
-  const adapter = new PrismaPg({
-    connectionString,
-    ssl: isLocal ? false : { rejectUnauthorized: false },
-  });
+  const schema = process.env.DATABASE_SCHEMA?.trim();
+  const isSimpleLocal =
+    !schema &&
+    (connectionString.includes('localhost') ||
+      connectionString.includes('127.0.0.1'));
+
+  const adapter = isSimpleLocal
+    ? new PrismaPg({
+        connectionString,
+        ssl: false,
+      })
+    : new PrismaPg(
+        pgPoolConfig() as never,
+        schema ? { schema } : undefined
+      );
 
   const client = new PrismaClient({
     adapter,
