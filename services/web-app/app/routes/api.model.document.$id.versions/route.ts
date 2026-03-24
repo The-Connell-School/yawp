@@ -13,20 +13,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const skip = (page - 1) * limit;
   const mode = url.searchParams.get('mode') || 'versions';
 
-  const versions =
-    mode === 'snapshots'
-      ? await prisma.documentSnapshot.findMany({
-          where: { documentId: params.id },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        })
-      : await prisma.documentVersion.findMany({
-          where: { documentId: params.id },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: limit,
-        });
+  let versions;
+
+  if (mode === 'snapshots') {
+    versions = await prisma.documentSnapshot.findMany({
+      where: { documentId: params.id },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    });
+  } else if (mode === 'journal') {
+    versions = await prisma.documentWriteJournal.findMany({
+      where: { documentId: params.id },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        createdAt: true,
+        eventType: true,
+        status: true,
+        failureReason: true,
+        title: true,
+        html: true,
+        text: true,
+      },
+    });
+  } else {
+    versions = await prisma.documentVersion.findMany({
+      where: { documentId: params.id },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+    });
+  }
 
   return new Response(JSON.stringify(versions), {
     status: 200,
