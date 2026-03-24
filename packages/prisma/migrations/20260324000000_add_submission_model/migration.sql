@@ -53,9 +53,6 @@ CREATE INDEX "Submission_releasedAt_idx" ON "Submission"("releasedAt");
 CREATE UNIQUE INDEX "Submission_legacySnapshotId_key" ON "Submission"("legacySnapshotId");
 
 -- CreateIndex
-CREATE INDEX "Submission_legacySnapshotId_idx" ON "Submission"("legacySnapshotId");
-
--- CreateIndex
 CREATE INDEX "SubmissionComment_submissionId_createdAt_idx" ON "SubmissionComment"("submissionId", "createdAt" DESC);
 
 -- CreateIndex

@@ -262,7 +262,6 @@ model Submission {
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([gradedById])
   @@index([releasedAt])
-  @@index([legacySnapshotId])
 }
 
 model SubmissionComment {
