@@ -10,6 +10,9 @@ const prisma = {
   grade: {
     upsert: mock(),
   },
+  submission: {
+    update: mock(),
+  },
 };
 
 const isDocumentSubmissionEnabledForSchool = mock();
@@ -40,6 +43,8 @@ describe('api.domain.grade-essay', () => {
     prisma.documentSnapshot.findMany.mockReset();
     prisma.document.findMany.mockReset();
     prisma.grade.upsert.mockReset();
+    prisma.submission.update.mockReset();
+    prisma.submission.update.mockResolvedValue({ id: 'submission-1' });
     isDocumentSubmissionEnabledForSchool.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
     getGradingActor.mockReset();
@@ -158,5 +163,42 @@ describe('api.domain.grade-essay', () => {
 
     expect(upsertArg.create.releasedAt).toBeInstanceOf(Date);
     expect(upsertArg.update.releasedAt).toBeInstanceOf(Date);
+  });
+
+  test('dual-writes grading data to the Submission table', async () => {
+    prisma.documentSnapshot.findMany.mockResolvedValue([
+      {
+        id: 'snapshot-1',
+        documentId: 'doc-1',
+        title: 'Essay Title',
+        text: 'Frozen essay text',
+        html: '<p>Frozen essay text</p>',
+        document: { class: { schoolId: 'school-1' } },
+      },
+    ]);
+    prisma.grade.upsert.mockResolvedValue({ id: 'grade-1' });
+
+    const form = new FormData();
+    form.append('snapshotIds', 'snapshot-1');
+    form.append('overallComment', 'Good work.');
+    form.append('numericPercentage', '90');
+
+    const request = new Request('https://example.com/api/domain/grade-essay', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    const updateArg = prisma.submission.update.mock.calls[0]?.[0];
+    expect(updateArg.where).toEqual({ legacySnapshotId: 'snapshot-1' });
+    expect(updateArg.data).toMatchObject({
+      overallComment: 'Good work.',
+      numericPercentage: 90,
+      gradedById: 'teacher-profile-1',
+    });
+    expect(updateArg.data.gradedAt).toBeInstanceOf(Date);
+    expect(updateArg.data.updatedAt).toBeInstanceOf(Date);
   });
 });

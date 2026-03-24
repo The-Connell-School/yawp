@@ -247,6 +247,32 @@ export async function action({ request }: ActionFunctionArgs) {
 
   await Promise.all(gradePromises);
 
+  // Dual-write to Submission table (Phase 1)
+  const submissionPromises = snapshots.map((snapshot) => {
+    return prisma.submission.update({
+      where: { legacySnapshotId: snapshot.id },
+      data: {
+        score,
+        feedback: data.feedback,
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        aiMeta,
+        ...(grammarIssues !== null ? { grammarIssues } : {}),
+        ...(releaseImmediately ? { releasedAt: now } : {}),
+        gradedAt: now,
+        gradedById: actor.profileId,
+        updatedAt: now,
+      },
+    }).catch((err: any) => {
+      console.warn('Dual-write to Submission failed (Phase 1):', err.message);
+    });
+  });
+
+  await Promise.all(submissionPromises);
+
   const message =
     snapshots.length === 1
       ? releaseImmediately
