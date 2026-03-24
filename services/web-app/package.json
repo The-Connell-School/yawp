@@ -11,6 +11,7 @@
   "scripts": {
     "build": "react-router build",
     "dev": "portless yawp react-router dev",
+    "dev:e2e": "portless yawp-e2e react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "test:e2e": "bun run test:e2e:smoke",

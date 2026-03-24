@@ -16,6 +16,11 @@ export const test = base.extend<TestFixtures>({
     const e2eDir = path.resolve(__dirname, '.');
     const ctxPath = path.join(e2eDir, '.e2e-context.json');
     const envPath = path.join(e2eDir, '.env.e2e');
+    if (!fs.existsSync(ctxPath)) {
+      const { prepareE2E } = await import('./prepare-e2e');
+      await prepareE2E();
+    }
+
     if (fs.existsSync(envPath)) {
       const envEntries = fs
         .readFileSync(envPath, 'utf8')

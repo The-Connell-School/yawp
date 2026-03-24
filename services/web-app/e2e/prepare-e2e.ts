@@ -117,8 +117,9 @@ type PreparedConnection = {
 
 async function prepareConnection(e2eDir: string): Promise<PreparedConnection> {
   const pgOwnedPath = path.join(e2eDir, '.pg-owned');
-  const providedDbUrl =
-    process.env.E2E_DATABASE_URL || (process.env.CI ? process.env.DATABASE_URL : undefined);
+  // Only `E2E_DATABASE_URL` pins Postgres (e.g. CI service). Do not fall back to `DATABASE_URL`
+  // when `CI=true` — local dev often sets `DATABASE_URL` to a non-e2e DB and breaks prepare.
+  const providedDbUrl = process.env.E2E_DATABASE_URL || undefined;
   if (providedDbUrl?.startsWith('postgres://') || providedDbUrl?.startsWith('postgresql://')) {
     try {
       fs.unlinkSync(pgOwnedPath);
