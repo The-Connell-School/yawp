@@ -1,5 +1,6 @@
 import { type DocumentVersion, type DocumentSnapshot } from '@app/prisma';
 import { HistoryIcon, RefreshCwIcon } from 'lucide-react';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -17,11 +18,30 @@ type Props = { documentId: string };
 
 const VERSIONS_PER_PAGE = 5;
 
-type VersionLike = (DocumentVersion | DocumentSnapshot) & { createdAt: string };
+const EVENT_TYPE_LABELS: Record<string, string> = {
+  'document.save': 'Save',
+  'document.title_update': 'Title Update',
+  'document.restore': 'Restore',
+  'document.submit': 'Submit',
+};
+
+const STATUS_VARIANTS: Record<string, 'success' | 'destructive' | 'info-outlined'> = {
+  accepted: 'success',
+  rejected: 'destructive',
+  pending: 'info-outlined',
+};
+
+type VersionLike = (DocumentVersion | DocumentSnapshot) & {
+  createdAt: string;
+  eventType?: string;
+  status?: string;
+  failureReason?: string | null;
+  title?: string;
+};
 
 export const DocumentVersions = ({ documentId }: Props) => {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'versions' | 'snapshots'>('snapshots');
+  const [mode, setMode] = useState<'versions' | 'snapshots' | 'journal'>('snapshots');
   const [version, setVersion] = useState<VersionLike | null>(null);
   const [allVersions, setAllVersions] = useState<VersionLike[]>([]);
   const [page, setPage] = useState(1);
@@ -113,43 +133,65 @@ export const DocumentVersions = ({ documentId }: Props) => {
               <Button
                 variant={mode === 'snapshots' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => {
-                  setMode('snapshots');
-                  setAllVersions([]);
-                  setPage(1);
-                  setHasMore(true);
-                  loadVersions(1);
-                }}
+                onClick={() => setMode('snapshots')}
               >
                 Snapshots
               </Button>
               <Button
                 variant={mode === 'versions' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => {
-                  setMode('versions');
-                  setAllVersions([]);
-                  setPage(1);
-                  setHasMore(true);
-                  loadVersions(1);
-                }}
+                onClick={() => setMode('versions')}
               >
                 Autosaves
               </Button>
+              <Button
+                variant={mode === 'journal' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setMode('journal')}
+              >
+                Save Log
+              </Button>
             </div>
             {allVersions.map((v) => (
-              <div key={v.id} className="flex">
+              <div key={v.id} className="flex" {...(mode === 'journal' ? { 'data-testid': 'journal-entry' } : {})}>
                 <button
                   onClick={() => setVersion(v)}
                   className={cn(
-                    'h-fit grow rounded px-3 py-2 text-sm text-muted-foreground hover:bg-muted/70 sm:text-base',
+                    'h-fit grow rounded px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/70 sm:text-base',
                     {
                       'bg-muted text-foreground hover:bg-muted':
                         v.id === version?.id,
                     }
                   )}
                 >
-                  {new Date(v.createdAt).toLocaleString()}
+                  <div>{new Date(v.createdAt).toLocaleString()}</div>
+                  {mode === 'journal' && v.eventType && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <Badge variant="secondary" size="sm">
+                        {EVENT_TYPE_LABELS[v.eventType] ?? v.eventType}
+                      </Badge>
+                      {v.status && (
+                        <Badge
+                          variant={STATUS_VARIANTS[v.status] ?? 'outline'}
+                          size="sm"
+                        >
+                          {v.status}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+                  {mode === 'journal' &&
+                    v.eventType === 'document.title_update' &&
+                    v.title && (
+                      <div className="mt-1 truncate text-xs text-muted-foreground">
+                        Title: {v.title}
+                      </div>
+                    )}
+                  {mode === 'journal' && v.failureReason && (
+                    <div className="mt-1 text-xs text-destructive">
+                      {v.failureReason}
+                    </div>
+                  )}
                 </button>
               </div>
             ))}
@@ -172,7 +214,7 @@ export const DocumentVersions = ({ documentId }: Props) => {
               </Button>
             )}
           </div>
-          <div className="no-scrollbar flex w-full grow flex-col gap-2 overflow-scroll rounded-lg bg-muted p-1">
+          <div className="no-scrollbar flex w-full grow flex-col gap-2 overflow-scroll rounded-lg bg-muted p-1" {...(mode === 'journal' ? { 'data-testid': 'journal-preview' } : {})}>
             {version ? (
               <div
                 dangerouslySetInnerHTML={{ __html: version.html }}
