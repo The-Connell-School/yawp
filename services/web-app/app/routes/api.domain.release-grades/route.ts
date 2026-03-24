@@ -38,6 +38,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
+      snapshotId: true,
       document: {
         select: {
           class: {
@@ -79,6 +80,22 @@ export async function action({ request }: ActionFunctionArgs) {
       updatedAt: now,
     },
   });
+
+  // Dual-write to Submission table (Phase 1)
+  const snapshotIds = grades
+    .map((g: any) => g.snapshotId)
+    .filter(Boolean);
+  if (snapshotIds.length > 0) {
+    await prisma.submission.updateMany({
+      where: { legacySnapshotId: { in: snapshotIds } },
+      data: {
+        releasedAt: now,
+        updatedAt: now,
+      },
+    }).catch((err: any) => {
+      console.warn('Dual-write to Submission failed (Phase 1):', err.message);
+    });
+  }
 
   const message =
     grades.length === 1
