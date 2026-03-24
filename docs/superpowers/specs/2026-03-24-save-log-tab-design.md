@@ -19,7 +19,7 @@ Extend the existing versions loader to handle `mode=journal`:
 - Query `prisma.documentWriteJournal.findMany` where `documentId = params.id`
 - Order by `createdAt: desc`
 - Apply same `skip`/`take` pagination as existing modes
-- Select: `id`, `createdAt`, `eventType`, `status`, `failureReason`, `html`, `text`
+- Select: `id`, `createdAt`, `eventType`, `status`, `failureReason`, `title`, `html`, `text`
 
 ### UI Changes
 
@@ -27,12 +27,14 @@ Extend the existing versions loader to handle `mode=journal`:
 
 1. Add `'journal'` to the `mode` state type: `'versions' | 'snapshots' | 'journal'`
 2. Add a third "Save Log" button alongside "Snapshots" and "Autosaves"
-3. Update the `VersionLike` type to include optional `eventType`, `status`, and `failureReason` fields
+3. Update the `VersionLike` type to include optional `eventType`, `status`, `failureReason`, and `title` fields
+4. Fix pre-existing stale closure: mode-switch button handlers should only call `setMode(...)` and let the existing `useEffect` on `[open, mode]` handle the reload
 4. In the list, each journal entry displays:
    - Formatted timestamp (same as existing)
    - Event type badge: `save`, `title_update`, `restore`, `submit`
    - Status badge: `accepted` (green), `rejected` (red), `pending` (yellow)
    - Rejection reason shown inline below the entry when present
+   - For `title_update` entries, show the `title` value since the body didn't change
 5. Preview panel renders the journal entry's `html` (same as existing)
 6. Restore button works identically — posts `versionId` = journal entry ID
 
@@ -51,7 +53,30 @@ const journalEntry = (version || snapshot) ? null : await prisma.documentWriteJo
 });
 ```
 
-The rest of the restore logic remains unchanged — it uses `sourceRecord.html` and `sourceRecord.text` to update the document, which the journal entry provides.
+Update the guard clause and source record assignment:
+
+```
+if (!version && !snapshot && !journalEntry) {
+  return redirectWithToast('/app', { description: 'Document version not found.', type: 'error' });
+}
+const sourceRecord = version ?? snapshot ?? journalEntry;
+```
+
+Update the pre-restore backup condition to also handle the journal path:
+
+```
+if (sourceRecord && sourceRecord.document.html && sourceRecord.document.text) {
+  await prisma.documentVersion.create({ ... });
+}
+```
+
+Set `restoredFromType` metadata to `'journal'` when restoring from a journal entry:
+
+```
+metadata: {
+  restoredFromType: version ? 'version' : snapshot ? 'snapshot' : 'journal',
+}
+```
 
 ## Data Flow
 
