@@ -243,16 +243,59 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (intent === 'create-assignment') {
-      await prisma.assignment.create({
-        data: {
-          classId,
-          studentCourseId,
-          title,
-          prompt,
-          tutorContext,
-          dueDate,
-        },
-      });
+      const additionalClassIds = formData.get('additionalClassIds');
+      const allClassIds = [classId];
+      if (typeof additionalClassIds === 'string' && additionalClassIds.trim()) {
+        allClassIds.push(
+          ...additionalClassIds
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+        );
+      }
+
+      // Deduplicate
+      const uniqueClassIds = [...new Set(allClassIds)];
+
+      // Authorization: verify teacher has access to ALL classes and the student course is allowed
+      if (uniqueClassIds.length > 1) {
+        const validClasses = await prisma.class.findMany({
+          where: {
+            id: { in: uniqueClassIds },
+            teachers: { some: { id: profile.teacherProfile.id } },
+            allowedStudentCourses: {
+              some: { studentCourseId },
+            },
+          },
+          select: { id: true },
+        });
+        const validIds = new Set(validClasses.map((c) => c.id));
+        const invalidIds = uniqueClassIds.filter((id) => !validIds.has(id));
+        if (invalidIds.length > 0) {
+          return dataResponse(
+            {
+              success: false,
+              message: 'You do not have access to one or more selected classes.',
+            },
+            { status: 403 }
+          );
+        }
+      }
+
+      await prisma.$transaction(
+        uniqueClassIds.map((cid) =>
+          prisma.assignment.create({
+            data: {
+              classId: cid,
+              studentCourseId,
+              title,
+              prompt,
+              tutorContext,
+              dueDate,
+            },
+          })
+        )
+      );
 
       return dataResponse({
         success: true,
@@ -546,6 +589,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       })
     : [];
 
+  const teacherClasses = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: profile.teacherProfile.id } },
+      isArchived: false,
+      id: { not: classId },
+    },
+    select: {
+      id: true,
+      code: true,
+      period: true,
+      grade: true,
+      title: true,
+      allowedStudentCourses: {
+        select: { studentCourseId: true },
+      },
+    },
+  });
+
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
 
   return dataResponse({
@@ -558,6 +619,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
+    teacherClasses,
   });
 }
 
@@ -1685,6 +1747,7 @@ export default function ClassDetailRoute() {
               title: course.studentCourse.title,
             })
           )}
+          teacherClasses={data.teacherClasses}
           open={isAssignmentSheetOpen}
           onOpenChange={(open) => {
             setIsAssignmentSheetOpen(open);

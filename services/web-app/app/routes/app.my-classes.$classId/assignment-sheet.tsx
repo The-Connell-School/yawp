@@ -32,6 +32,14 @@ type AssignmentRecord = {
 type AssignmentSheetProps = {
   classId: string;
   allowedStudentCourses: { id: string; title: string }[];
+  teacherClasses: {
+    id: string;
+    code: string;
+    period: string;
+    grade: string;
+    title: string | null;
+    allowedStudentCourses: { studentCourseId: string }[];
+  }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentRecord | null;
@@ -40,6 +48,7 @@ type AssignmentSheetProps = {
 export function AssignmentSheet({
   classId,
   allowedStudentCourses,
+  teacherClasses,
   open,
   onOpenChange,
   editingAssignment,
@@ -53,6 +62,15 @@ export function AssignmentSheet({
   const [dueDate, setDueDate] = useState('');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+
+  const availableClasses = useMemo(
+    () =>
+      teacherClasses.filter((c) =>
+        c.allowedStudentCourses.some((ac) => ac.studentCourseId === studentCourseId)
+      ),
+    [teacherClasses, studentCourseId]
+  );
 
   const isEditing = Boolean(editingAssignment?.id);
   const isSaving = fetcher.state !== 'idle';
@@ -79,6 +97,7 @@ export function AssignmentSheet({
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
     setPromptMode('manual');
     setPdfFile(null);
+    setSelectedClassIds([]);
   }, [allowedStudentCourses, editingAssignment, open]);
 
   useEffect(() => {
@@ -162,6 +181,35 @@ export function AssignmentSheet({
             </Select>
             <input type="hidden" name="studentCourseId" value={studentCourseId} />
           </div>
+
+          {!isEditing && availableClasses.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Also assign to these classes</Label>
+              <div className="space-y-1">
+                {availableClasses.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedClassIds.includes(c.id)}
+                      onChange={(e) => {
+                        setSelectedClassIds((prev) =>
+                          e.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((id) => id !== c.id)
+                        );
+                      }}
+                    />
+                    {c.title || `${c.grade} - Period ${c.period}`} ({c.code})
+                  </label>
+                ))}
+              </div>
+              <input
+                type="hidden"
+                name="additionalClassIds"
+                value={selectedClassIds.join(',')}
+              />
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label>Prompt Source</Label>
