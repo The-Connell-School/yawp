@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
+let lastTx: any = null;
+
 const prisma = {
   user: {
     findUnique: mock(),
@@ -95,8 +97,11 @@ describe('api.domain.submit-document', () => {
             revision: 4,
           }),
         },
+        submission: {
+          create: mock().mockResolvedValue({ id: 'submission-1' }),
+        },
       };
-
+      lastTx = tx;
       return callback(tx);
     });
   });
@@ -138,5 +143,29 @@ describe('api.domain.submit-document', () => {
         resultingRevision: 4,
       },
     });
+  });
+
+  test('creates a Submission alongside the DocumentSnapshot on submit', async () => {
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as { data: { success: boolean } };
+
+    expect(response.data.success).toBe(true);
+    expect(lastTx.submission.create).toHaveBeenCalledTimes(1);
+    const createArg = lastTx.submission.create.mock.calls[0]?.[0];
+    expect(createArg.data).toMatchObject({
+      documentId: 'doc-1',
+      title: 'Essay',
+      text: 'Draft',
+      html: '<p>Draft</p>',
+      legacySnapshotId: 'snapshot-1',
+    });
+    expect(createArg.data.submittedAt).toBeInstanceOf(Date);
   });
 });

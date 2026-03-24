@@ -133,6 +133,17 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         },
       });
 
+      await tx.submission.create({
+        data: {
+          documentId: document.id,
+          title: document.title,
+          text,
+          html,
+          submittedAt: now,
+          legacySnapshotId: snapshot.id,
+        },
+      });
+
       await tx.documentComment.updateMany({
         where: { documentId: document.id, archivedAt: null },
         data: { archivedAt: now },
