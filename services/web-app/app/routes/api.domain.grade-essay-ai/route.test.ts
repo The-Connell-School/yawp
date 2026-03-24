@@ -317,4 +317,33 @@ describe('api.domain.grade-essay-ai', () => {
       message: 'Grading Assistant returned malformed data. Please try again.',
     });
   });
+
+  test('uses deterministic temperature for all grading assistant LLM calls', async () => {
+    prisma.documentSnapshot.findFirst.mockResolvedValue({
+      id: 'snapshot-temp-1',
+      documentId: 'doc-temp-1',
+      text: 'Frozen AI essay text',
+      html: '<p>Frozen AI essay text</p>',
+      document: {
+        id: 'doc-temp-1',
+        class: { schoolId: 'school-1' },
+        profile: { user: { name: 'Jordan Student' } },
+      },
+    });
+
+    const form = new FormData();
+    form.append('snapshotId', 'snapshot-temp-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(getLLMCompletion).toHaveBeenCalled();
+    for (const call of getLLMCompletion.mock.calls) {
+      expect(call?.[0]?.temperature).toBe(0);
+    }
+  });
 });

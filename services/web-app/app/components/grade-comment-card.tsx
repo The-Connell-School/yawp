@@ -23,6 +23,7 @@ type Props = {
   onEditContentChange?: (v: string) => void;
   onSaveEdit?: () => void;
   onCancelEdit?: () => void;
+  onEditBlur?: () => void;
   onEdit?: (comment: GradeComment) => void;
   onDelete?: (comment: GradeComment) => void;
   isSaving?: boolean;
@@ -40,6 +41,7 @@ export function GradeCommentCard({
   onEditContentChange,
   onSaveEdit,
   onCancelEdit,
+  onEditBlur,
   onEdit,
   onDelete,
   isSaving = false,
@@ -95,7 +97,10 @@ export function GradeCommentCard({
           </div>
         )}
         {!readOnly && isEditing && onSaveEdit && onCancelEdit && (
-          <div className="flex items-center gap-2">
+          <div
+            data-grade-comment-edit-controls="true"
+            className="flex items-center gap-2"
+          >
             <Button
               type="button"
               size="sm"
@@ -126,6 +131,7 @@ export function GradeCommentCard({
         <Textarea
           value={editCommentContent}
           onChange={(e) => onEditContentChange(e.target.value)}
+          onBlur={onEditBlur}
           placeholder="Update your comment..."
           rows={4}
           className="mt-2 resize-none"

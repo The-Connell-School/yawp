@@ -70,7 +70,7 @@ const settings: SeedData['settings'] = [
   {
     id: 'document_submission_flag',
     name: 'document_submission_enabled',
-    value: 'false',
+    value: 'true',
     valueType: 'boolean',
     description: 'Allow students to submit documents for grading',
   },
@@ -81,6 +81,14 @@ const settings: SeedData['settings'] = [
     valueType: 'string',
     description:
       'Comma-separated school IDs allowed to use document submission and grading',
+  },
+  {
+    id: 'assignments_enabled_org_ids',
+    name: 'assignments_enabled_org_ids',
+    value: ORG_ID,
+    valueType: 'string',
+    description:
+      'Comma-separated organization IDs allowed to use assignments',
   },
 ];
 

@@ -72,6 +72,7 @@ export async function action({ request }: ActionFunctionArgs) {
     documentId: string;
     text: string;
     html: string;
+    title: string | null;
     document: { class: { schoolId: string } | null };
   }[] = [];
 
@@ -89,6 +90,7 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         documentId: true,
+        title: true,
         text: true,
         html: true,
         document: {
@@ -123,6 +125,7 @@ export async function action({ request }: ActionFunctionArgs) {
         submittedSnapshot: {
           select: {
             id: true,
+            title: true,
             text: true,
             html: true,
           },
@@ -136,12 +139,13 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     snapshots = documents
-      .filter((doc): doc is typeof doc & { submittedSnapshot: { id: string; text: string; html: string } } =>
+      .filter((doc): doc is typeof doc & { submittedSnapshot: { id: string; title: string | null; text: string; html: string } } =>
         doc.submittedSnapshot !== null
       )
       .map((doc) => ({
         id: doc.submittedSnapshot.id,
         documentId: doc.id,
+        title: doc.submittedSnapshot.title,
         text: doc.submittedSnapshot.text,
         html: doc.submittedSnapshot.html,
         document: { class: doc.class },
@@ -178,7 +182,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const now = new Date();
-  const releasedAt = data.releaseImmediately === 'on' ? now : null;
+  const releaseImmediately = data.releaseImmediately === 'on';
   const rubricScores = parseJson(data.rubricScores);
   const aiMeta = parseJson(data.aiMeta);
   const grammarIssues = parseJson(data.grammarIssues);
@@ -207,6 +211,7 @@ export async function action({ request }: ActionFunctionArgs) {
         documentId: snapshot.documentId,
         snapshotId: snapshot.id,
         gradedById: actor.profileId,
+        essayTitle: snapshot.title,
         essayText: snapshot.text,
         essayHtml: snapshot.html,
         score,
@@ -218,10 +223,11 @@ export async function action({ request }: ActionFunctionArgs) {
         letterGrade,
         aiMeta,
         ...(grammarIssues !== null ? { grammarIssues } : {}),
-        releasedAt,
+        ...(releaseImmediately ? { releasedAt: now } : {}),
       } as any,
       update: {
         documentId: snapshot.documentId,
+        essayTitle: snapshot.title,
         essayText: snapshot.text,
         essayHtml: snapshot.html,
         score,
@@ -233,7 +239,7 @@ export async function action({ request }: ActionFunctionArgs) {
         letterGrade,
         aiMeta,
         ...(grammarIssues !== null ? { grammarIssues } : {}),
-        releasedAt,
+        ...(releaseImmediately ? { releasedAt: now } : {}),
         updatedAt: now,
       } as any,
     });
@@ -243,10 +249,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const message =
     snapshots.length === 1
-      ? releasedAt
+      ? releaseImmediately
         ? 'Essay graded and released to student.'
         : 'Essay graded. You can release it to the student when ready.'
-      : releasedAt
+      : releaseImmediately
         ? `${snapshots.length} essays graded and released to students.`
         : `${snapshots.length} essays graded. You can release them to students when ready.`;
 

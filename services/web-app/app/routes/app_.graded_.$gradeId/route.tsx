@@ -237,6 +237,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       numericPercentage: true,
       letterGrade: true,
       grammarIssues: true,
+      essayTitle: true,
       essayText: true,
       essayHtml: true,
       document: {
@@ -614,7 +615,7 @@ export default function Route() {
         </Button>
         <div className="min-w-0">
           <div className="truncate text-sm font-medium">
-            {data.grade.document.title}
+            {data.grade.essayTitle ?? data.grade.document.title}
           </div>
           <div className="text-xs text-muted-foreground">
             {data.grade.releasedAt ? 'Returned' : 'Graded'} • {gradeDisplay}

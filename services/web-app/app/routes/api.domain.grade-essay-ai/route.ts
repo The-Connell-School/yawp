@@ -35,6 +35,7 @@ const POST = z.object({
 });
 
 const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
+const DETERMINISTIC_TEMPERATURE = 0;
 
 const AiCategorySchema = z.object({
   key: RubricKeySchema,
@@ -236,6 +237,7 @@ export async function action({ request }: ActionFunctionArgs) {
       system,
       messages: [{ role: 'user', content: userPrompt }],
       maxTokens: 900,
+      temperature: DETERMINISTIC_TEMPERATURE,
     });
   } catch (error) {
     throw error;
@@ -254,7 +256,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       ],
       maxTokens: 300,
-      temperature: 0.2,
+      temperature: DETERMINISTIC_TEMPERATURE,
       metadata: {
         feature: 'grading',
         kind: 'overall-comment',
@@ -311,7 +313,7 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       ],
       maxTokens: 900,
-      temperature: 0.1,
+      temperature: DETERMINISTIC_TEMPERATURE,
       metadata: {
         feature: 'grading',
         kind: 'rubric-schema-repair',
@@ -415,7 +417,7 @@ export async function action({ request }: ActionFunctionArgs) {
       system: grammarSystem,
       messages: [{ role: 'user', content: grammarUserPrompt }],
       maxTokens: 1600,
-      temperature: 0.2,
+      temperature: DETERMINISTIC_TEMPERATURE,
       metadata: { feature: 'grading', kind: 'grammar-issues' },
     });
     let parsedGrammarIssues =
@@ -436,7 +438,7 @@ export async function action({ request }: ActionFunctionArgs) {
           },
         ],
         maxTokens: 1600,
-        temperature: 0.2,
+        temperature: DETERMINISTIC_TEMPERATURE,
         metadata: {
           feature: 'grading',
           kind: 'grammar-issues',

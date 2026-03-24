@@ -48,4 +48,32 @@ test.describe.serial('Teacher submitting document for student', () => {
       await prisma.$disconnect();
     }
   });
+
+  test('teacher can edit student document title', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/documents/${e2eContext.documentId}`);
+      await page.waitForLoadState('networkidle');
+
+      const titleInput = page.getByTestId('document-title-input');
+      await expect(titleInput).toBeVisible({ timeout: 10000 });
+      await titleInput.fill('Teacher-renamed document');
+      await titleInput.blur();
+
+      await page.waitForTimeout(1500);
+
+      const doc = await prisma.document.findUnique({
+        where: { id: e2eContext.documentId },
+        select: { title: true },
+      });
+      expect(doc?.title).toBe('Teacher-renamed document');
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
 });

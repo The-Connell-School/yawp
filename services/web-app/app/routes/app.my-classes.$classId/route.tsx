@@ -431,6 +431,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         select: {
           id: true,
+          title: true,
           createdAt: true,
           submittedAt: true,
           archivedAt: true,
@@ -1058,14 +1059,14 @@ export default function ClassDetailRoute() {
                         onCheckedChange={() =>
                           toggleGradedDocumentSelection(snapshot.id)
                         }
-                        aria-label={`Select graded ${snapshot.document.title}`}
+                        aria-label={`Select graded ${snapshot.title ?? snapshot.document.title}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
                       {snapshot.document.profile.user.name ||
                         snapshot.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell>{snapshot.title ?? snapshot.document.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
                         {snapshot.document.assignment?.title || '—'}
@@ -1140,7 +1141,7 @@ export default function ClassDetailRoute() {
                       {snapshot.document.profile.user.name ||
                         snapshot.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell>{snapshot.title ?? snapshot.document.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
                         {snapshot.document.assignment?.title || '—'}

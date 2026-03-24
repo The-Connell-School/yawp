@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
@@ -30,7 +30,7 @@ import {
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
 import { buildPersistedGradeSignature } from '~/domain/grading/persisted-grade-signature';
-import { Check, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 
 type RubricScore = {
@@ -52,6 +52,7 @@ const buildEmptyRubric = () =>
     acc[item.key] = { score: 0, comment: '' };
     return acc;
   }, {});
+const AUTOSAVE_DEBOUNCE_MS = 1200;
 
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -131,6 +132,8 @@ export function TeacherGradingPanel({
     useState(false);
   const [savedSignature, setSavedSignature] = useState('');
   const pendingSaveSignatureRef = useRef('');
+  const autosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHydratingRef = useRef(true);
   const recalcCompleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -139,6 +142,9 @@ export function TeacherGradingPanel({
   );
   const [recalcUiState, setRecalcUiState] = useState<
     'idle' | 'loading' | 'done'
+  >('idle');
+  const [saveUiState, setSaveUiState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
   >('idle');
 
   const computedNumericPercentage = useMemo(() => {
@@ -168,9 +174,10 @@ export function TeacherGradingPanel({
     'border-purple-300 bg-purple-100 text-purple-800 hover:!bg-purple-100 hover:!text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:!bg-purple-950/40 dark:hover:!text-purple-200';
   const isGenerating = aiFetcher.state !== 'idle';
   const isSaving = saveFetcher.state !== 'idle';
-  const isBusy = isGenerating || isSaving;
+  const isBusy = isGenerating;
 
   useEffect(() => {
+    isHydratingRef.current = true;
     let initialOverallComment = '';
     let initialNumericPercentage = '';
     let initialRubricScores = buildEmptyRubric();
@@ -200,6 +207,8 @@ export function TeacherGradingPanel({
         grammarIssues: persistedGrammarIssues,
       })
     );
+    setSaveUiState('saved');
+    isHydratingRef.current = false;
   }, [existingGrade, persistedGrammarIssues, snapshotId]);
 
   useEffect(() => {
@@ -239,16 +248,23 @@ export function TeacherGradingPanel({
     [grammarIssues, overallComment, resolvedNumericPercentage, rubricScores]
   );
 
-  const hasUnsavedChanges = currentSignature !== savedSignature;
-
   useEffect(() => {
-    if (saveFetcher.data?.success && saveFetcher.state === 'idle') {
+    if (saveFetcher.state !== 'idle') return;
+    if (saveFetcher.data?.success) {
       setSavedSignature(pendingSaveSignatureRef.current);
+      setSaveUiState('saved');
+      return;
+    }
+    if (saveFetcher.data && !saveFetcher.data.success) {
+      setSaveUiState('error');
     }
   }, [saveFetcher.data, saveFetcher.state]);
 
   useEffect(() => {
     return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
       if (recalcCompleteTimeoutRef.current) {
         clearTimeout(recalcCompleteTimeoutRef.current);
       }
@@ -258,41 +274,98 @@ export function TeacherGradingPanel({
     };
   }, []);
 
-  const save = () => {
-    pendingSaveSignatureRef.current = currentSignature;
-    const form = new FormData();
-    const percent =
-      resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
-    const letter = percent === null ? null : letterFromPercent(percent);
+  const submitGrade = useCallback(
+    (setSavingUi = true) => {
+      const form = new FormData();
+      const percent =
+        resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
+      const letter = percent === null ? null : letterFromPercent(percent);
 
-    form.append('feedback', overallComment);
-    form.append('overallComment', overallComment);
-    form.append('rubricScores', JSON.stringify(rubricScores));
-    form.append('grammarIssues', JSON.stringify(grammarIssues));
-    if (percent !== null) form.append('numericPercentage', percent.toString());
-    if (letter) form.append('letterGrade', letter);
-    if (percent !== null)
-      form.append('score', formatGrade(percent, letter) ?? '');
+      form.append('feedback', overallComment);
+      form.append('overallComment', overallComment);
+      form.append('rubricScores', JSON.stringify(rubricScores));
+      form.append('grammarIssues', JSON.stringify(grammarIssues));
+      if (percent !== null) form.append('numericPercentage', percent.toString());
+      if (letter) form.append('letterGrade', letter);
+      if (percent !== null)
+        form.append('score', formatGrade(percent, letter) ?? '');
 
-    if (existingGrade?.id) {
-      form.append('gradeId', existingGrade.id);
+      if (snapshotId) {
+        form.append('snapshotIds', snapshotId);
+      } else {
+        form.append('documentIds', documentId);
+      }
+
+      if (setSavingUi) {
+        setSaveUiState('saving');
+      }
+
       saveFetcher.submit(form, {
         method: 'POST',
-        action: '/api/domain/update-grade',
+        action: '/api/domain/grade-essay',
       });
-      return;
-    }
+    },
+    [
+      documentId,
+      grammarIssues,
+      overallComment,
+      resolvedNumericPercentage,
+      rubricScores,
+      saveFetcher,
+      snapshotId,
+    ]
+  );
 
-    if (snapshotId) {
-      form.append('snapshotIds', snapshotId);
-    } else {
-      form.append('documentIds', documentId);
+  const saveNowIfNeeded = useCallback(
+    (setSavingUi = true) => {
+      if (isHydratingRef.current) return;
+      if (currentSignature === savedSignature) return;
+      if (saveFetcher.state !== 'idle') return;
+
+      pendingSaveSignatureRef.current = currentSignature;
+      submitGrade(setSavingUi);
+    },
+    [currentSignature, saveFetcher.state, savedSignature, submitGrade]
+  );
+
+  const flushAutosave = useCallback(() => {
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+      autosaveTimeoutRef.current = null;
     }
-    saveFetcher.submit(form, {
-      method: 'POST',
-      action: '/api/domain/grade-essay',
-    });
-  };
+    saveNowIfNeeded();
+  }, [saveNowIfNeeded]);
+
+  useEffect(() => {
+    if (isHydratingRef.current) return;
+    if (currentSignature === savedSignature) return;
+    if (saveFetcher.state !== 'idle') return;
+
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+    autosaveTimeoutRef.current = setTimeout(() => {
+      autosaveTimeoutRef.current = null;
+      saveNowIfNeeded();
+    }, AUTOSAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [
+    currentSignature,
+    saveFetcher.state,
+    saveNowIfNeeded,
+    savedSignature,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      saveNowIfNeeded(false);
+    };
+  }, [saveNowIfNeeded]);
 
   const handleRecalculate = () => {
     if (computedNumericPercentage === null || recalcUiState !== 'idle') return;
@@ -339,7 +412,7 @@ export function TeacherGradingPanel({
             {gradeDisplay}
           </Badge>
         </div>
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex items-center justify-between gap-2">
           <ConfirmationDialog
             title="Replace Existing Grading Feedback?"
             description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
@@ -363,20 +436,33 @@ export function TeacherGradingPanel({
               )}
             </Button>
           </ConfirmationDialog>
-          <Button
-            size="sm"
-            data-testid="grading-save-grade"
-            onClick={save}
-            disabled={isBusy || !hasUnsavedChanges}
+          <div
+            data-testid="grading-save-status"
+            className={cn(
+              'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+              isSaving || saveUiState === 'saving'
+                ? 'bg-muted/50 text-muted-foreground'
+                : saveUiState === 'error'
+                  ? 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+                  : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+            )}
           >
-            {isSaving ? 'Saving...' : 'Save Grade'}
-          </Button>
-        </div>
-        {hasUnsavedChanges ? (
-          <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900">
-            Unsaved changes. Click Save Grade before leaving.
+            {isSaving || saveUiState === 'saving' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : saveUiState === 'error' ? (
+              <AlertCircle className="h-3.5 w-3.5" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span>
+              {isSaving || saveUiState === 'saving'
+                ? 'Saving'
+                : saveUiState === 'error'
+                  ? 'Save failed'
+                  : 'Saved'}
+            </span>
           </div>
-        ) : null}
+        </div>
       </div>
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
@@ -393,6 +479,7 @@ export function TeacherGradingPanel({
               max={100}
               value={numericPercentage}
               disabled={isGenerating}
+              onBlur={flushAutosave}
               onChange={(e) => {
                 setNumericPercentage(e.target.value);
                 setHasManualPercentOverride(true);
@@ -431,6 +518,7 @@ export function TeacherGradingPanel({
             data-testid="grading-overall-comment"
             value={overallComment}
             disabled={isGenerating}
+            onBlur={flushAutosave}
             onChange={(e) => setOverallComment(e.target.value)}
             rows={4}
             placeholder="Write overall feedback..."
@@ -488,6 +576,7 @@ export function TeacherGradingPanel({
                       <SelectTrigger
                         className="w-full"
                         data-testid={`grading-rubric-score-${item.key}`}
+                        onBlur={flushAutosave}
                       >
                         <SelectValue placeholder="Select score" />
                       </SelectTrigger>
@@ -503,6 +592,7 @@ export function TeacherGradingPanel({
                       data-testid={`grading-rubric-comment-${item.key}`}
                       value={current.comment}
                       disabled={isGenerating}
+                      onBlur={flushAutosave}
                       onChange={(e) =>
                         setRubricScores((prev) => ({
                           ...prev,
