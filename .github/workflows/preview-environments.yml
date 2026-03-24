@@ -1,0 +1,283 @@
+name: PR preview (App Runner)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  preview-deploy:
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.title, '[skip preview]') == false &&
+      contains(github.event.pull_request.body, '[skip preview]') == false &&
+      contains(github.event.pull_request.head.ref, '[skip preview]') == false
+    runs-on: ubuntu-22.04
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PREVIEW_TF_STATE_BUCKET: ${{ vars.PREVIEW_TF_STATE_BUCKET }}
+      PREVIEW_ECR_REPOSITORY: ${{ vars.PREVIEW_ECR_REPOSITORY }}
+      PREVIEW_DB_URL_SECRET_ARN: ${{ vars.PREVIEW_DB_URL_SECRET_ARN }}
+      PREVIEW_SESSION_SECRET_ARN: ${{ vars.PREVIEW_SESSION_SECRET_ARN }}
+      PREVIEW_HONEYPOT_SECRET_ARN: ${{ vars.PREVIEW_HONEYPOT_SECRET_ARN }}
+      PREVIEW_OPENAI_ORG_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_ORG_SECRET_ARN }}
+      PREVIEW_OPENAI_KEY_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_KEY_SECRET_ARN }}
+      PREVIEW_ANTHROPIC_KEY_SECRET_ARN: ${{ vars.PREVIEW_ANTHROPIC_KEY_SECRET_ARN }}
+      PREVIEW_INTERNAL_TOKEN_SECRET_ARN: ${{ vars.PREVIEW_INTERNAL_TOKEN_SECRET_ARN }}
+      PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
+      PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
+      PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
+    steps:
+      - name: Normalize configuration
+        run: |
+          echo "AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}" >> "$GITHUB_ENV"
+          echo "PREVIEW_APP_NAME=${PREVIEW_APP_NAME_INPUT:-yawp-preview}" >> "$GITHUB_ENV"
+        env:
+          PREVIEW_AWS_REGION: ${{ vars.PREVIEW_AWS_REGION }}
+          PREVIEW_APP_NAME_INPUT: ${{ vars.PREVIEW_APP_NAME }}
+
+      - name: Check preview configuration
+        run: |
+          test -n "${{ secrets.AWS_ROLE_ARN }}" || { echo "Missing secret AWS_ROLE_ARN (OIDC role for preview deploy)"; exit 1; }
+          test -n "$PREVIEW_TF_STATE_BUCKET" || { echo "Missing var PREVIEW_TF_STATE_BUCKET"; exit 1; }
+          test -n "$PREVIEW_ECR_REPOSITORY" || { echo "Missing var PREVIEW_ECR_REPOSITORY"; exit 1; }
+          test -n "$PREVIEW_DB_URL_SECRET_ARN" || { echo "Missing var PREVIEW_DB_URL_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_SESSION_SECRET_ARN" || { echo "Missing var PREVIEW_SESSION_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_HONEYPOT_SECRET_ARN" || { echo "Missing var PREVIEW_HONEYPOT_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_OPENAI_ORG_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_ORG_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_OPENAI_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_KEY_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_ANTHROPIC_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_ANTHROPIC_KEY_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_INTERNAL_TOKEN_SECRET_ARN" || { echo "Missing var PREVIEW_INTERNAL_TOKEN_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_RESEND_SECRET_ARN" || { echo "Missing var PREVIEW_RESEND_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_SENTRY_DSN_SECRET_ARN" || { echo "Missing var PREVIEW_SENTRY_DSN_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_AWS_S3_BUCKET" || { echo "Missing var PREVIEW_AWS_S3_BUCKET (use staging bucket name, not production)"; exit 1; }
+          test -n "$PREVIEW_RESEND_FROM_EMAIL" || { echo "Missing var PREVIEW_RESEND_FROM_EMAIL"; exit 1; }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+          terraform_wrapper: false
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Load base database URL from Secrets Manager
+        run: |
+          BASE_DATABASE_URL=$(aws secretsmanager get-secret-value \
+            --secret-id "$PREVIEW_DB_URL_SECRET_ARN" \
+            --query SecretString --output text)
+          if [[ "$BASE_DATABASE_URL" != *sslmode=* ]]; then
+            if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
+              BASE_DATABASE_URL="${BASE_DATABASE_URL}&sslmode=require"
+            else
+              BASE_DATABASE_URL="${BASE_DATABASE_URL}?sslmode=require"
+            fi
+          fi
+          echo "::add-mask::$BASE_DATABASE_URL"
+          echo "BASE_DATABASE_URL=$BASE_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Create PR schema and migrate
+        run: |
+          set -euo pipefail
+          SCHEMA="pr_${PR_NUMBER}"
+          export DATABASE_URL="$BASE_DATABASE_URL"
+          echo "CREATE SCHEMA IF NOT EXISTS ${SCHEMA};" | (cd packages/prisma && bunx prisma db execute --stdin)
+          if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
+            MIGRATE_URL="${BASE_DATABASE_URL}&schema=${SCHEMA}"
+          else
+            MIGRATE_URL="${BASE_DATABASE_URL}?schema=${SCHEMA}"
+          fi
+          echo "::add-mask::$MIGRATE_URL"
+          (cd packages/prisma && DATABASE_URL="$MIGRATE_URL" bunx prisma migrate deploy)
+          bun run prisma:generate
+          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/seed.ts
+
+      - name: Build and push image to ECR
+        run: |
+          set -euo pipefail
+          REGISTRY="${PREVIEW_ECR_REPOSITORY%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+          docker build -f services/web-app/Dockerfile \
+            --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/preview_build \
+            -t "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}" .
+          docker push "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+
+      - name: Terraform apply (infra-pr)
+        id: tf
+        env:
+          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
+          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+        run: |
+          set -euo pipefail
+          export TF_VAR_app_name="$PREVIEW_APP_NAME"
+          export TF_VAR_env="pr-${PR_NUMBER}"
+          export TF_VAR_database_schema="pr_${PR_NUMBER}"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
+          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
+          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
+          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
+          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
+          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
+          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
+          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
+          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
+          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
+          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
+          terraform -chdir=infra-pr init \
+            -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
+            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+          terraform -chdir=infra-pr apply -auto-approve
+          URL=$(terraform -chdir=infra-pr output -raw apprunner_service_url)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Start App Runner deployment
+        run: |
+          set -euo pipefail
+          SVC_ARN=$(terraform -chdir=infra-pr output -raw apprunner_service_arn)
+          aws apprunner start-deployment --service-arn "$SVC_ARN" --region "${AWS_REGION}"
+
+      - name: Wait for preview URL
+        run: |
+          set -euo pipefail
+          RAW="${{ steps.tf.outputs.url }}"
+          if [[ "$RAW" != http* ]]; then PREVIEW_BASE_URL="https://${RAW}"; else PREVIEW_BASE_URL="$RAW"; fi
+          echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
+          echo "Waiting for $PREVIEW_BASE_URL/api/healthcheck ..."
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null --max-time 25 "$PREVIEW_BASE_URL/api/healthcheck"; then
+              echo "Preview responded after attempt $i."
+              exit 0
+            fi
+            echo "Attempt $i/60 — App Runner may still be deploying..."
+            sleep 10
+          done
+          echo "Preview URL did not return HTTP 200 in time."
+          exit 1
+
+      - name: Install Playwright (Chromium)
+        run: cd services/web-app && bunx playwright install --with-deps chromium
+
+      - name: PR preview smoke tests
+        run: cd services/web-app && bun run scripts/smoke-pr-preview.mjs
+
+      - name: Comment preview URL on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-preview-${{ github.event.pull_request.number }}
+          append: false
+          message: |
+            **PR preview** (App Runner)
+
+            - **URL:** ${{ steps.tf.outputs.url }}
+            - **Postgres schema:** `pr_${{ github.event.pull_request.number }}`
+            - **Image:** `${{ vars.PREVIEW_ECR_REPOSITORY }}:pr-${{ env.PR_NUMBER }}`
+            - **Seed:** `packages/prisma/scripts/seed.ts` (test users e.g. `teacher@fake.test` / `teacher123`)
+            - **Smoke:** `services/web-app/scripts/smoke-pr-preview.mjs`
+
+  preview-destroy:
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.title, '[skip preview]') == false &&
+      contains(github.event.pull_request.body, '[skip preview]') == false &&
+      contains(github.event.pull_request.head.ref, '[skip preview]') == false
+    runs-on: ubuntu-22.04
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PREVIEW_TF_STATE_BUCKET: ${{ vars.PREVIEW_TF_STATE_BUCKET }}
+      PREVIEW_ECR_REPOSITORY: ${{ vars.PREVIEW_ECR_REPOSITORY }}
+      PREVIEW_DB_URL_SECRET_ARN: ${{ vars.PREVIEW_DB_URL_SECRET_ARN }}
+      PREVIEW_SESSION_SECRET_ARN: ${{ vars.PREVIEW_SESSION_SECRET_ARN }}
+      PREVIEW_HONEYPOT_SECRET_ARN: ${{ vars.PREVIEW_HONEYPOT_SECRET_ARN }}
+      PREVIEW_OPENAI_ORG_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_ORG_SECRET_ARN }}
+      PREVIEW_OPENAI_KEY_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_KEY_SECRET_ARN }}
+      PREVIEW_ANTHROPIC_KEY_SECRET_ARN: ${{ vars.PREVIEW_ANTHROPIC_KEY_SECRET_ARN }}
+      PREVIEW_INTERNAL_TOKEN_SECRET_ARN: ${{ vars.PREVIEW_INTERNAL_TOKEN_SECRET_ARN }}
+      PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
+      PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
+      PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
+    steps:
+      - name: Normalize configuration
+        run: |
+          echo "AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}" >> "$GITHUB_ENV"
+          echo "PREVIEW_APP_NAME=${PREVIEW_APP_NAME_INPUT:-yawp-preview}" >> "$GITHUB_ENV"
+        env:
+          PREVIEW_AWS_REGION: ${{ vars.PREVIEW_AWS_REGION }}
+          PREVIEW_APP_NAME_INPUT: ${{ vars.PREVIEW_APP_NAME }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+          terraform_wrapper: false
+
+      - name: Terraform destroy (infra-pr)
+        env:
+          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
+          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+        run: |
+          set -euo pipefail
+          export TF_VAR_app_name="$PREVIEW_APP_NAME"
+          export TF_VAR_env="pr-${PR_NUMBER}"
+          export TF_VAR_database_schema="pr_${PR_NUMBER}"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
+          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
+          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
+          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
+          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
+          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
+          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
+          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
+          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
+          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
+          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
+          terraform -chdir=infra-pr init \
+            -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
+            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+          terraform -chdir=infra-pr destroy -auto-approve
