@@ -29,14 +29,22 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         include: { document: true },
       });
 
-  if (!version && !snapshot) {
+  const journalEntry =
+    version || snapshot
+      ? null
+      : await prisma.documentWriteJournal.findFirst({
+          where: { id: data.versionId, document: { profile: { userId } } },
+          include: { document: true },
+        });
+
+  if (!version && !snapshot && !journalEntry) {
     return redirectWithToast('/app', {
       description: 'Document version not found.',
       type: 'error',
     });
   }
 
-  const sourceRecord = version ?? snapshot;
+  const sourceRecord = version ?? snapshot ?? journalEntry;
 
   const journal = await prisma.documentWriteJournal.create({
     data: {
@@ -54,21 +62,21 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       metadata: {
         method: request.method,
         restoredFromId: data.versionId,
-        restoredFromType: version ? 'version' : 'snapshot',
+        restoredFromType: version ? 'version' : snapshot ? 'snapshot' : 'journal',
       },
     },
   });
 
   if (
-    (version || snapshot) &&
-    (version?.document.html || snapshot?.document.html) &&
-    (version?.document.text || snapshot?.document.text)
+    sourceRecord &&
+    sourceRecord.document.html &&
+    sourceRecord.document.text
   ) {
     await prisma.documentVersion.create({
       data: {
-        documentId: (version ?? snapshot)!.documentId,
-        html: (version ?? snapshot)!.document.html!,
-        text: (version ?? snapshot)!.document.text!,
+        documentId: sourceRecord!.documentId,
+        html: sourceRecord!.document.html,
+        text: sourceRecord!.document.text,
       },
     });
   }
