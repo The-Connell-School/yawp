@@ -55,7 +55,10 @@ import {
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
 import { TeacherGradingPanel } from './_components/teacher-grading-panel';
-import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
+import {
+  GradingCommentsSidebar,
+  type GradeComment as SidebarGradeComment,
+} from './_components/grading-comments-sidebar';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -196,6 +199,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submittedSnapshot: {
         select: {
           id: true,
+          title: true,
           html: true,
           text: true,
           grades: {
@@ -277,6 +281,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
           select: {
             id: true,
+            title: true,
             html: true,
             text: true,
             grades: {
@@ -488,6 +493,9 @@ export default function Route() {
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
+  const [gradeComments, setGradeComments] = useState<SidebarGradeComment[]>(
+    data.gradeComments as unknown as SidebarGradeComment[]
+  );
   const allComments = (data.doc.comments as any[]) ?? [];
   const activeComments = allComments.filter((c) => !c.archivedAt);
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
@@ -496,7 +504,6 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
   const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
   const studentCanViewReleasedGrade =
     !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
@@ -531,10 +538,39 @@ export default function Route() {
       prev.filter((currentId) => currentId !== id)
     );
   }, []);
+  const handleCreateGradeComment = useCallback(
+    (comment: SidebarGradeComment) => {
+      setGradeComments((prev) =>
+        sortByDocumentLocation({
+          items: [...prev, comment],
+          sourceText: activeSnapshot?.text ?? '',
+          getExcerpt: (item) => item.excerpt,
+          getOccurrence: (item) => item.occurrence,
+        })
+      );
+    },
+    [activeSnapshot?.text]
+  );
+  const handleUpdateGradeComment = useCallback(
+    (commentId: string, content: string) => {
+      setGradeComments((prev) =>
+        prev.map((comment) =>
+          comment.id === commentId ? { ...comment, content } : comment
+        )
+      );
+    },
+    []
+  );
+  const handleDeleteGradeComment = useCallback((commentId: string) => {
+    setGradeComments((prev) =>
+      prev.filter((comment) => comment.id !== commentId)
+    );
+    setActiveGradeCommentId((prev) => (prev === commentId ? null : prev));
+  }, []);
   const editorGradeHighlights = useMemo(() => {
     if (!isTeacherGradingTabOpen) return undefined;
 
-    const commentHighlights = (data.gradeComments as any[]).map((comment) => ({
+    const commentHighlights = gradeComments.map((comment) => ({
       id: comment.id,
       excerpt: comment.excerpt,
       occurrence: comment.occurrence,
@@ -566,11 +602,15 @@ export default function Route() {
     return [...commentHighlights, ...draftHighlightEntry, ...grammarHighlights];
   }, [
     activeGradeCommentId,
-    data.gradeComments,
     draftHighlight,
+    gradeComments,
     isTeacherGradingTabOpen,
     visibleGrammarIssues,
   ]);
+
+  useEffect(() => {
+    setGradeComments(data.gradeComments as unknown as SidebarGradeComment[]);
+  }, [data.gradeComments, activeSnapshot?.id]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -810,39 +850,40 @@ export default function Route() {
               <ArrowLeft className="h-4" />
               Exit
             </Button>
+            <Input
+              size="sm"
+              data-testid="document-title-input"
+              className="rounded-lg border border-transparent font-bold transition hover:border-border"
+              defaultValue={
+                isTeacherSnapshotView
+                  ? (activeSnapshot?.title ?? data.doc.title)
+                  : data.doc.title
+              }
+              placeholder="Untitled document"
+              readOnly={isTeacherSnapshotView}
+              onBlur={(e) =>
+                !isTeacherSnapshotView &&
+                e.target.value !== data.doc.title
+                  ? fetcher.submit(
+                      {
+                        title: e.target.value,
+                      },
+                      {
+                        method: 'POST',
+                        action: `/api/model/document/${data.doc.id}?from=title-input`,
+                      }
+                    )
+                  : undefined
+              }
+            />
             {isViewingAsTeacher ? (
-              <p className="text-xs font-semibold text-foreground md:text-md">
-                {teacherHeaderTitle}
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {studentName}
-                </span>
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {documentStatusLabel}
-                </span>
-              </p>
-            ) : (
-              <Input
-                size="sm"
-                className="rounded-lg border border-transparent font-bold transition hover:border-border"
-                defaultValue={data.doc.title}
-                placeholder="Untitled document"
-                onBlur={(e) =>
-                  e.target.value !== data.doc.title
-                    ? fetcher.submit(
-                        {
-                          title: e.target.value,
-                        },
-                        {
-                          method: 'POST',
-                          action: `/api/model/document/${data.doc.id}?from=title-input`,
-                        }
-                      )
-                    : undefined
-                }
-              />
-            )}
+              <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground md:text-md">
+                <span className="px-2">&bull;</span>
+                {studentName}
+                <span className="px-2">&bull;</span>
+                {documentStatusLabel}
+              </span>
+            ) : null}
           </div>
           {!isViewingAsTeacher && (
             <div className="flex items-center gap-2">
@@ -1123,13 +1164,16 @@ export default function Route() {
             )}
             {isMobile && tab !== 'comments' ? null : isTeacherGradingTabOpen ? (
               <GradingCommentsSidebar
-                gradeComments={data.gradeComments}
+                gradeComments={gradeComments}
                 gradeId={grade?.id ?? null}
                 snapshotId={activeSnapshot?.id ?? null}
                 sourceText={activeSnapshot?.text ?? ''}
                 activeGradeCommentId={activeGradeCommentId}
                 onSelectGradeComment={setActiveGradeCommentId}
                 onDraftHighlightChange={setDraftHighlight}
+                onCreateGradeComment={handleCreateGradeComment}
+                onUpdateGradeComment={handleUpdateGradeComment}
+                onDeleteGradeComment={handleDeleteGradeComment}
               />
             ) : (
               <Comments
@@ -1180,7 +1224,23 @@ export default function Route() {
               <Button
                 variant="default"
                 data-testid="document-finalize-submit"
-                onClick={() => {
+                onClick={async () => {
+                  // Flush any pending title save before submitting
+                  const titleInput = document.querySelector<HTMLInputElement>(
+                    '[data-testid="document-title-input"]'
+                  );
+                  if (titleInput && titleInput.value !== data.doc.title) {
+                    await fetch(
+                      `/api/model/document/${data.doc.id}?from=title-input`,
+                      {
+                        method: 'POST',
+                        body: new URLSearchParams({
+                          title: titleInput.value,
+                        }),
+                      }
+                    );
+                  }
+
                   submitFetcher.submit(
                     { documentId: data.doc.id },
                     {

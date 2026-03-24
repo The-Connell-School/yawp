@@ -210,6 +210,7 @@ model DocumentSnapshot {
   createdAt          DateTime   @default(now()) @db.Timestamptz(6)
   submittedAt        DateTime?  @db.Timestamptz(6)
   archivedAt         DateTime?  @db.Timestamptz(6)
+  title              String?
   text               String
   html               String
   documentId         String
@@ -279,6 +280,7 @@ model Grade {
   grammarIssues     Json?
   promptConfig      Json?
   aiMeta            Json?
+  essayTitle        String?
   essayText         String?
   essayHtml         String?
   releasedAt        DateTime?        @db.Timestamptz(6) // When released to student (null = not released)

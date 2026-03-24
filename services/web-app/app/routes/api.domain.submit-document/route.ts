@@ -126,6 +126,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       const snapshot = await tx.documentSnapshot.create({
         data: {
           documentId: document.id,
+          title: document.title,
           html,
           text,
           submittedAt: now,

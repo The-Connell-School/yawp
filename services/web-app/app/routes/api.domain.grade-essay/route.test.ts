@@ -100,4 +100,63 @@ describe('api.domain.grade-essay', () => {
       },
     });
   });
+
+  test('does not clear releasedAt when releaseImmediately is omitted', async () => {
+    prisma.documentSnapshot.findMany.mockResolvedValue([
+      {
+        id: 'snapshot-1',
+        documentId: 'doc-1',
+        text: 'Frozen essay text',
+        html: '<p>Frozen essay text</p>',
+        document: { class: { schoolId: 'school-1' } },
+      },
+    ]);
+    prisma.grade.upsert.mockResolvedValue({ id: 'grade-1' });
+
+    const form = new FormData();
+    form.append('snapshotIds', 'snapshot-1');
+    form.append('overallComment', 'Keep release state unchanged.');
+
+    const request = new Request('https://example.com/api/domain/grade-essay', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    const upsertArg = prisma.grade.upsert.mock.calls[0]?.[0];
+
+    expect(upsertArg.update).not.toHaveProperty('releasedAt');
+    expect(upsertArg.create).not.toHaveProperty('releasedAt');
+  });
+
+  test('sets releasedAt when releaseImmediately is on', async () => {
+    prisma.documentSnapshot.findMany.mockResolvedValue([
+      {
+        id: 'snapshot-1',
+        documentId: 'doc-1',
+        text: 'Frozen essay text',
+        html: '<p>Frozen essay text</p>',
+        document: { class: { schoolId: 'school-1' } },
+      },
+    ]);
+    prisma.grade.upsert.mockResolvedValue({ id: 'grade-1' });
+
+    const form = new FormData();
+    form.append('snapshotIds', 'snapshot-1');
+    form.append('overallComment', 'Release now.');
+    form.append('releaseImmediately', 'on');
+
+    const request = new Request('https://example.com/api/domain/grade-essay', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    const upsertArg = prisma.grade.upsert.mock.calls[0]?.[0];
+
+    expect(upsertArg.create.releasedAt).toBeInstanceOf(Date);
+    expect(upsertArg.update.releasedAt).toBeInstanceOf(Date);
+  });
 });
