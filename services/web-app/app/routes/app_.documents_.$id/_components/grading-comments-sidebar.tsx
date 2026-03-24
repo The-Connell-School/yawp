@@ -8,7 +8,7 @@ import {
 } from '~/components/grade-comment-card';
 import { findExcerptRange } from '~/utils/excerpt-position';
 
-type GradeComment = CardGradeComment & {
+export type GradeComment = CardGradeComment & {
   excerpt: string | null;
   occurrence?: number | null;
   createdAt: Date | string;
@@ -41,6 +41,9 @@ type Props = {
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
   onDraftHighlightChange?: (highlight: { excerpt: string; occurrence: number } | null) => void;
+  onCreateGradeComment?: (comment: GradeComment) => void;
+  onUpdateGradeComment?: (commentId: string, content: string) => void;
+  onDeleteGradeComment?: (commentId: string) => void;
 };
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(
@@ -80,16 +83,22 @@ export function GradingCommentsSidebar({
   activeGradeCommentId = null,
   onSelectGradeComment,
   onDraftHighlightChange,
+  onCreateGradeComment,
+  onUpdateGradeComment,
+  onDeleteGradeComment,
 }: Props) {
   const [draftComment, setDraftComment] = useState<DraftComment | null>(null);
   const [draftContent, setDraftContent] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState('');
-  const createFetcher = useFetcher<{ success?: boolean }>();
+  const createFetcher = useFetcher<{ success?: boolean; comment?: GradeComment }>();
   const deleteFetcher = useFetcher<{ success?: boolean }>();
   const updateFetcher = useFetcher<{ success?: boolean }>();
   const commentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const draftTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingDeleteCommentIdRef = useRef<string | null>(null);
+  const pendingEditCommentIdRef = useRef<string | null>(null);
+  const pendingEditCommentContentRef = useRef('');
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -150,11 +159,17 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (createFetcher.data?.success && createFetcher.state === 'idle') {
+      if (createFetcher.data.comment) {
+        onCreateGradeComment?.(createFetcher.data.comment);
+      }
       setDraftComment(null);
       setDraftContent('');
-      window.location.reload();
     }
-  }, [createFetcher.data, createFetcher.state]);
+  }, [
+    createFetcher.data,
+    createFetcher.state,
+    onCreateGradeComment,
+  ]);
 
   const cancelDraft = () => {
     setDraftComment(null);
@@ -162,6 +177,7 @@ export function GradingCommentsSidebar({
   };
 
   const deleteComment = (commentId: string) => {
+    pendingDeleteCommentIdRef.current = commentId;
     deleteFetcher.submit(null, {
       method: 'DELETE',
       action: `/api/model/grade-comment/${commentId}`,
@@ -180,27 +196,61 @@ export function GradingCommentsSidebar({
 
   const submitEditComment = () => {
     if (!editingCommentId || !editCommentContent.trim()) return;
+    const trimmed = editCommentContent.trim();
+    const currentComment = gradeComments.find((c) => c.id === editingCommentId);
+    if (currentComment && currentComment.content === trimmed) {
+      setEditingCommentId(null);
+      setEditCommentContent('');
+      return;
+    }
+
+    pendingEditCommentIdRef.current = editingCommentId;
+    pendingEditCommentContentRef.current = trimmed;
     const form = new FormData();
-    form.append('content', editCommentContent.trim());
+    form.append('content', trimmed);
     updateFetcher.submit(form, {
       method: 'POST',
       action: `/api/model/grade-comment/${editingCommentId}`,
     });
   };
 
+  const handleEditBlur = () => {
+    window.setTimeout(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.closest('[data-grade-comment-edit-controls="true"]')) {
+        return;
+      }
+      submitEditComment();
+    }, 0);
+  };
+
   useEffect(() => {
     if (deleteFetcher.data?.success && deleteFetcher.state === 'idle') {
-      window.location.reload();
+      if (pendingDeleteCommentIdRef.current) {
+        onDeleteGradeComment?.(pendingDeleteCommentIdRef.current);
+      }
+      pendingDeleteCommentIdRef.current = null;
     }
-  }, [deleteFetcher.data, deleteFetcher.state]);
+  }, [deleteFetcher.data, deleteFetcher.state, onDeleteGradeComment]);
 
   useEffect(() => {
     if (updateFetcher.data?.success && updateFetcher.state === 'idle') {
+      if (pendingEditCommentIdRef.current) {
+        onUpdateGradeComment?.(
+          pendingEditCommentIdRef.current,
+          pendingEditCommentContentRef.current
+        );
+      }
+      pendingEditCommentIdRef.current = null;
+      pendingEditCommentContentRef.current = '';
       setEditingCommentId(null);
       setEditCommentContent('');
-      window.location.reload();
     }
-  }, [updateFetcher.data, updateFetcher.state]);
+  }, [
+    onUpdateGradeComment,
+    updateFetcher.data,
+    updateFetcher.state,
+  ]);
 
   useEffect(() => {
     if (!activeGradeCommentId || activeGradeCommentId === 'draft') return;
@@ -302,6 +352,7 @@ export function GradingCommentsSidebar({
                     onEditContentChange={setEditCommentContent}
                     onSaveEdit={submitEditComment}
                     onCancelEdit={cancelEdit}
+                    onEditBlur={handleEditBlur}
                     onEdit={openEditComment}
                     onDelete={(comment) => deleteComment(comment.id)}
                     isSaving={updateFetcher.state !== 'idle'}

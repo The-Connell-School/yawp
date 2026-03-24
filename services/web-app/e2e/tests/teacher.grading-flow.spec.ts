@@ -220,10 +220,16 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page
         .getByTestId('grading-overall-comment')
         .fill('Manual overall teacher feedback before AI suggestions.');
-      await page.getByTestId('grading-save-grade').click();
-      await expect(page.getByTestId('grading-save-grade')).toBeDisabled({
+      await expect(page.getByTestId('grading-save-status')).toBeVisible({
         timeout: 15000,
       });
+      await expect
+        .poll(
+          async () =>
+            (await page.getByTestId('grading-save-status').textContent()) ?? '',
+          { timeout: 15000 }
+        )
+        .toMatch(/saved/i);
 
       let aiRequests = 0;
       await page.route('**/api/domain/grade-essay-ai', async (route) => {
@@ -266,9 +272,13 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(page.getByTestId('grading-overall-comment')).not.toHaveValue(
         ''
       );
-      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
-        timeout: 15000,
-      });
+      await expect
+        .poll(
+          async () =>
+            (await page.getByTestId('grading-save-status').textContent()) ?? '',
+          { timeout: 15000 }
+        )
+        .toMatch(/saved/i);
 
       const grammarCounter = page.getByText(/AI grammar issues shown:/i);
       const beforeRemove = parseShownGrammarCounts(
@@ -278,19 +288,19 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         .getByRole('button', { name: /^remove$/i })
         .first()
         .click();
-      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
-        timeout: 15000,
-      });
       await expect
         .poll(async () => {
           const text = (await grammarCounter.textContent()) ?? '';
           return parseShownGrammarCounts(text).total;
         })
         .toBe(Math.max(0, beforeRemove.total - 1));
-      await page.getByTestId('grading-save-grade').click();
-      await expect(page.getByTestId('grading-save-grade')).toBeDisabled({
-        timeout: 15000,
-      });
+      await expect
+        .poll(
+          async () =>
+            (await page.getByTestId('grading-save-status').textContent()) ?? '',
+          { timeout: 15000 }
+        )
+        .toMatch(/saved/i);
       await page.reload();
       await page.waitForLoadState('networkidle');
       const afterReload = parseShownGrammarCounts(
