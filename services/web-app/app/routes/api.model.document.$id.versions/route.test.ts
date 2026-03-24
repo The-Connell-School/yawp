@@ -70,4 +70,54 @@ describe('api.model.document.$id.versions', () => {
     expect(prisma.documentSnapshot.findMany).not.toHaveBeenCalled();
     expect(prisma.documentVersion.findMany).not.toHaveBeenCalled();
   });
+
+  test('returns document versions when mode is not specified', async () => {
+    const versions = [
+      { id: 'v1', createdAt: new Date(), html: '<p>V1</p>', text: 'V1' },
+    ];
+    prisma.documentVersion.findMany.mockResolvedValue(versions);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1/versions?page=1&limit=5'
+      ),
+      params: { id: 'doc-1' },
+    } as any);
+
+    const data = await response.json();
+    expect(data).toHaveLength(1);
+    expect(prisma.documentVersion.findMany).toHaveBeenCalledWith({
+      where: { documentId: 'doc-1' },
+      orderBy: { createdAt: 'desc' },
+      skip: 0,
+      take: 5,
+    });
+    expect(prisma.documentSnapshot.findMany).not.toHaveBeenCalled();
+    expect(prisma.documentWriteJournal.findMany).not.toHaveBeenCalled();
+  });
+
+  test('returns snapshots when mode=snapshots', async () => {
+    const snapshots = [
+      { id: 's1', createdAt: new Date(), html: '<p>S1</p>', text: 'S1' },
+    ];
+    prisma.documentSnapshot.findMany.mockResolvedValue(snapshots);
+
+    const response = await loader({
+      request: new Request(
+        'https://example.com/api/model/document/doc-1/versions?mode=snapshots&page=2&limit=5'
+      ),
+      params: { id: 'doc-1' },
+    } as any);
+
+    const data = await response.json();
+    expect(data).toHaveLength(1);
+    expect(prisma.documentSnapshot.findMany).toHaveBeenCalledWith({
+      where: { documentId: 'doc-1' },
+      orderBy: { createdAt: 'desc' },
+      skip: 5,
+      take: 5,
+    });
+    expect(prisma.documentVersion.findMany).not.toHaveBeenCalled();
+    expect(prisma.documentWriteJournal.findMany).not.toHaveBeenCalled();
+  });
 });
