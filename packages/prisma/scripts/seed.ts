@@ -571,14 +571,14 @@ async function seed() {
       const topic = ESSAY_TOPICS[studentIndex % ESSAY_TOPICS.length];
       const baseTitle = `Essay on ${topic}`;
       return Promise.all(
-        Array.from({ length: DOCUMENTS_PER_STUDENT }, (_, docIndex) => {
+        Array.from({ length: DOCUMENTS_PER_STUDENT }, async (_, docIndex) => {
           const text = `Topic: ${topic}\n\nThis is draft ${docIndex + 1} by ${
             student.profile.user.name ?? student.profile.user.email
           }.`;
           const html = `<p><strong>Topic:</strong> ${topic}</p><p>This is draft ${
             docIndex + 1
           } by ${student.profile.user.name ?? student.profile.user.email}.</p>`;
-          return prisma.document.create({
+          const doc = await prisma.document.create({
             data: {
               title: `${baseTitle} (${docIndex + 1})`,
               text,
@@ -610,7 +610,25 @@ async function seed() {
                 ],
               },
             },
+            include: { snapshots: { select: { id: true }, take: 1 } },
           });
+
+          // Create Submission linked to the snapshot
+          const snapshotId = doc.snapshots[0]?.id;
+          if (snapshotId) {
+            await prisma.submission.create({
+              data: {
+                documentId: doc.id,
+                title: `${baseTitle} (${docIndex + 1})`,
+                text,
+                html,
+                submittedAt: new Date(),
+                legacySnapshotId: snapshotId,
+              },
+            });
+          }
+
+          return doc;
         })
       );
     })
