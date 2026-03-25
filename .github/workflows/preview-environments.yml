@@ -105,6 +105,9 @@ jobs:
           echo "BASE_DATABASE_URL=$BASE_DATABASE_URL" >> "$GITHUB_ENV"
 
       - name: Create PR schema and migrate
+        env:
+          # GitHub-hosted runners + RDS TLS (preview only; not for production deploy)
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
         run: |
           set -euo pipefail
           SCHEMA="pr_${PR_NUMBER}"
