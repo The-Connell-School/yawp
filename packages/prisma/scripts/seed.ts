@@ -8,13 +8,36 @@ if (!connectionString) {
   throw new Error('DATABASE_URL environment variable is not set');
 }
 
+function getSchemaFromDatabaseUrl(url: string): string | undefined {
+  const match = url.match(/[?&]schema=([^&]+)/i);
+  if (!match) return undefined;
+  return decodeURIComponent(match[1]);
+}
+
+const schema =
+  process.env.DATABASE_SCHEMA?.trim() || getSchemaFromDatabaseUrl(connectionString);
+
 const isLocal =
   connectionString.includes('localhost') ||
   connectionString.includes('127.0.0.1');
-const adapter = new PrismaPg({
-  connectionString,
-  ssl: isLocal ? false : { rejectUnauthorized: false },
-});
+
+const isSimpleLocal =
+  !schema &&
+  (connectionString.includes('localhost') ||
+    connectionString.includes('127.0.0.1'));
+
+const adapter = isSimpleLocal
+  ? new PrismaPg({
+      connectionString,
+      ssl: false,
+    })
+  : new PrismaPg(
+      {
+        connectionString,
+        ssl: isLocal ? false : { rejectUnauthorized: false },
+      },
+      schema ? { schema } : undefined
+    );
 
 const prisma = new PrismaClient({ adapter });
 
