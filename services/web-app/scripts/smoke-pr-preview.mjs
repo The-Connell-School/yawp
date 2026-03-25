@@ -44,7 +44,7 @@ async function main() {
     await page.getByLabel(/email/i).fill(DEFAULT_EMAIL);
     await page.locator('input[type="password"]').fill(DEFAULT_PASSWORD);
     await page.getByRole('button', { name: /^log in$/i }).click();
-    await page.waitForURL(/\/app\//, { timeout: 60_000 });
+    await page.waitForURL(/\/app(\/|$)/, { timeout: 60_000 });
     ok('Sign in → app');
 
     console.log('\n--- smoke result ---');
