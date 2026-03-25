@@ -83,7 +83,7 @@ variable "aws_s3_region_for_videos" {
 variable "ai_model" {
   type        = string
   description = "AI model id passed to the app."
-  default     = "claude-3-7-sonnet-20250219"
+  default     = "claude-sonnet-4-6"
 }
 
 variable "resend_from_email" {

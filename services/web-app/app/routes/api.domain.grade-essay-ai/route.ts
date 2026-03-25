@@ -228,7 +228,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submittedSnapshot.text}`;
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-5';
+  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   let responseText = '';
 
   try {
