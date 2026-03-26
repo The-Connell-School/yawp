@@ -4,10 +4,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error `pg` types are not installed in the web-app package.
 import { Client } from 'pg';
-import { seedE2E } from './seed-e2e';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
 const E2E_DB_NAME = 'yop_e2e';
+const DUMP_S3_URI = 's3://yawp-production-database-exports/Mar03260636.dump';
 
 function run(
   cmd: string,
@@ -83,7 +83,7 @@ async function waitForDockerPostgresReady(pgUser: string) {
   throw new Error('Postgres did not become ready in time');
 }
 
-async function ensureDatabaseExists(databaseUrl: string) {
+async function resetDatabase(databaseUrl: string) {
   const parsed = new URL(databaseUrl);
   const dbName = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
   if (!dbName) {
@@ -96,15 +96,13 @@ async function ensureDatabaseExists(databaseUrl: string) {
   const client = new Client({ connectionString: adminUrl.toString() });
   await client.connect();
   try {
-    const result = await client.query(
-      'SELECT 1 FROM pg_database WHERE datname = $1',
+    const escapedDbName = dbName.replace(/"/g, '""');
+    await client.query(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
       [dbName]
     );
-
-    if (result.rowCount === 0) {
-      const escapedDbName = dbName.replace(/"/g, '""');
-      await client.query(`CREATE DATABASE "${escapedDbName}"`);
-    }
+    await client.query(`DROP DATABASE IF EXISTS "${escapedDbName}"`);
+    await client.query(`CREATE DATABASE "${escapedDbName}"`);
   } finally {
     await client.end();
   }
@@ -178,6 +176,24 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
   }
 }
 
+function downloadDump(e2eDir: string) {
+  const dataDir = path.join(e2eDir, '.data');
+  const dumpPath = path.join(dataDir, 'production.dump');
+  if (fs.existsSync(dumpPath)) {
+    console.log('Using cached dump at', dumpPath);
+    return dumpPath;
+  }
+  fs.mkdirSync(dataDir, { recursive: true });
+  console.log('Downloading production dump from S3...');
+  run(`aws s3 cp ${DUMP_S3_URI} ${shellEscape(dumpPath)} --profile yawp`);
+  return dumpPath;
+}
+
+function restoreDump(dumpPath: string, databaseUrl: string) {
+  console.log('Restoring production dump...');
+  run(`psql -f ${shellEscape(dumpPath)} ${shellEscape(databaseUrl)}`, { stdio: 'pipe' });
+}
+
 export async function prepareE2E() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -186,16 +202,36 @@ export async function prepareE2E() {
   const e2eDir = path.join(rootDir, 'services/web-app/e2e');
   const ctxPath = path.join(e2eDir, '.e2e-context.json');
 
+  // 1. Prepare Postgres connection
   const { databaseUrl, startedContainer } = await prepareConnection(e2eDir);
-  await ensureDatabaseExists(databaseUrl);
+
+  // 2. Drop and recreate database for clean restore
+  await resetDatabase(databaseUrl);
   writeE2EEnv(e2eDir, databaseUrl);
 
+  // 3. Download production dump (cached locally)
+  const dumpPath = downloadDump(e2eDir);
+
+  // 4. Restore dump into fresh database
+  restoreDump(dumpPath, databaseUrl);
+
+  // 5. Run any newer migrations
   const env = { ...process.env, DATABASE_URL: databaseUrl };
   run('bun prisma generate', { cwd: prismaDir, env });
   run('bun prisma migrate deploy', { cwd: prismaDir, env });
 
-  const context = await seedE2E();
-  fs.writeFileSync(ctxPath, JSON.stringify(context, null, 2));
+  // 6. Overlay test users and capture context
+  const ctxOutput = execSync(
+    'bun run packages/prisma/scripts/seed-overlay.ts',
+    { cwd: rootDir, env: { ...env }, stdio: 'pipe' }
+  ).toString();
+
+  // The overlay prints JSON context as its last output
+  const jsonMatch = ctxOutput.match(/\{[\s\S]*\}$/m);
+  if (!jsonMatch) {
+    throw new Error('seed-overlay did not produce valid JSON context');
+  }
+  fs.writeFileSync(ctxPath, jsonMatch[0]);
 
   // eslint-disable-next-line no-console
   console.log('E2E prepare complete', {
