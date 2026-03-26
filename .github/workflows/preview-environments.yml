@@ -104,24 +104,37 @@ jobs:
           echo "::add-mask::$BASE_DATABASE_URL"
           echo "BASE_DATABASE_URL=$BASE_DATABASE_URL" >> "$GITHUB_ENV"
 
-      - name: Create PR schema and migrate
+      - name: Create PR schema, restore dump, and migrate
         env:
-          # GitHub-hosted runners + RDS TLS (preview only; not for production deploy)
           NODE_TLS_REJECT_UNAUTHORIZED: "0"
         run: |
           set -euo pipefail
           SCHEMA="pr_${PR_NUMBER}"
           export DATABASE_URL="$BASE_DATABASE_URL"
+
+          # Create schema
           echo "CREATE SCHEMA IF NOT EXISTS ${SCHEMA};" | (cd packages/prisma && bunx prisma db execute --stdin)
+
+          # Build schema-qualified URL
           if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
             MIGRATE_URL="${BASE_DATABASE_URL}&schema=${SCHEMA}"
           else
             MIGRATE_URL="${BASE_DATABASE_URL}?schema=${SCHEMA}"
           fi
           echo "::add-mask::$MIGRATE_URL"
+
+          # Restore production dump with schema remapping
+          echo "Restoring production dump into schema ${SCHEMA}..."
+          aws s3 cp s3://yawp-production-database-exports/Mar03260636.dump - \
+            | sed "s/public\./${SCHEMA}./g; s/search_path = public/search_path = ${SCHEMA}/g" \
+            | psql "$MIGRATE_URL"
+
+          # Apply any newer migrations
           (cd packages/prisma && DATABASE_URL="$MIGRATE_URL" bunx prisma migrate deploy)
           bun run prisma:generate
-          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/seed.ts
+
+          # Overlay test users (for smoke tests)
+          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/seed-overlay.ts
 
       - name: Build and push image to ECR
         run: |
@@ -206,7 +219,7 @@ jobs:
             - **URL:** ${{ steps.tf.outputs.url }}
             - **Postgres schema:** `pr_${{ github.event.pull_request.number }}`
             - **Image:** `${{ vars.PREVIEW_ECR_REPOSITORY }}:pr-${{ env.PR_NUMBER }}`
-            - **Seed:** `packages/prisma/scripts/seed.ts` (test users e.g. `teacher@fake.test` / `teacher123`)
+            - **Data:** Production dump + test overlay (e.g. `teacher@fake.test` / `teacher123`)
             - **Smoke:** `services/web-app/scripts/smoke-pr-preview.mjs`
 
   preview-destroy:
