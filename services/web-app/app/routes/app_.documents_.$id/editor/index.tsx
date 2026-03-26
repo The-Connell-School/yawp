@@ -545,28 +545,35 @@ export const Editor = ({
   useEffect(() => {
     if (!editor) return;
 
-    // Track if content was copied from tutor messages
-    const handleCopy = (event: ClipboardEvent) => {
+    const sameDocCopyKey = `same-doc-copy-${docId}`;
+    let sameDocCopyTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const handleCopy = () => {
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0) return;
 
       const range = selection.getRangeAt(0);
       const container = range.commonAncestorContainer;
-
-      // Check if the selection contains or is within a tutor message element
-      const tutorMessageElement = (
+      const element =
         container.nodeType === Node.TEXT_NODE
           ? container.parentElement
-          : (container as Element)
-      )?.closest('[data-tutor-message="true"]');
+          : (container as Element);
 
-      if (tutorMessageElement) {
-        // Store flag that content was copied from tutor message
-        sessionStorage.setItem(`tutor-copy-${docId}`, 'true');
-        // Clear flag after 5 seconds to prevent stale flags
-        setTimeout(() => {
-          sessionStorage.removeItem(`tutor-copy-${docId}`);
+      const inEditor = Boolean(element && editor.view.dom.contains(element));
+
+      if (sameDocCopyTimeoutId) {
+        clearTimeout(sameDocCopyTimeoutId);
+        sameDocCopyTimeoutId = null;
+      }
+
+      if (inEditor) {
+        sessionStorage.setItem(sameDocCopyKey, 'true');
+        sameDocCopyTimeoutId = setTimeout(() => {
+          sessionStorage.removeItem(sameDocCopyKey);
+          sameDocCopyTimeoutId = null;
         }, 5000);
+      } else {
+        sessionStorage.removeItem(sameDocCopyKey);
       }
     };
 
@@ -574,15 +581,14 @@ export const Editor = ({
       const pastedText = event.clipboardData?.getData('text/plain') || '';
       const textLength = pastedText.length;
 
-      // Only detect large pastes if they came from tutor messages
-      const copiedFromTutor =
-        sessionStorage.getItem(`tutor-copy-${docId}`) === 'true';
+      const copiedFromSameDoc =
+        sessionStorage.getItem(sameDocCopyKey) === 'true';
 
-      if (textLength >= 200 && copiedFromTutor) {
-        // Clear the flag after using it
-        sessionStorage.removeItem(`tutor-copy-${docId}`);
+      if (copiedFromSameDoc) {
+        sessionStorage.removeItem(sameDocCopyKey);
+      }
 
-        // Send paste alert to API asynchronously
+      if (textLength >= PASTE_ALERT_MIN_CHARS && !copiedFromSameDoc) {
         fetch('/api/paste-alert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -597,13 +603,13 @@ export const Editor = ({
       }
     };
 
-    // Listen for copy events on the entire document to catch copies from tutor messages
     document.addEventListener('copy', handleCopy);
     editor.view.dom.addEventListener('paste', handlePaste);
 
     return () => {
       document.removeEventListener('copy', handleCopy);
       editor.view.dom.removeEventListener('paste', handlePaste);
+      if (sameDocCopyTimeoutId) clearTimeout(sameDocCopyTimeoutId);
     };
   }, [editor, docId]);
 
