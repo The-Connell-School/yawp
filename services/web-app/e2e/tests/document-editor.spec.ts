@@ -6,6 +6,9 @@ import { invalidateUserSessions } from '../db-helpers';
 
 const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
 const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
+const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
+const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
+const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 
 async function openDocumentEditorWithRetry(page: Page, documentId: string) {
   let lastError: unknown;
@@ -417,4 +420,61 @@ test.describe.serial('Document Editor E2E Tests', () => {
     }
   });
 
+  test('posts paste-alert when pasting large text not copied from editor', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const longText = 'x'.repeat(201);
+
+    await page.evaluate(async (text) => {
+      await navigator.clipboard.writeText(text);
+    }, longText);
+
+    await editor.click();
+
+    const pasteAlertPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes('/api/paste-alert') && req.method() === 'POST',
+      { timeout: 15000 }
+    );
+
+    await page.keyboard.press(PASTE_SHORTCUT);
+    await pasteAlertPromise;
+  });
+
+  test('does not post paste-alert when pasting large text copied from same editor', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const longText = 'y'.repeat(201);
+
+    await editor.click();
+    await page.keyboard.insertText(longText);
+    await expect(editor).toContainText(longText);
+
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.keyboard.press(COPY_SHORTCUT);
+
+    let pasteAlertCount = 0;
+    page.on('request', (req) => {
+      if (req.url().includes('/api/paste-alert') && req.method() === 'POST') {
+        pasteAlertCount++;
+      }
+    });
+
+    await page.keyboard.press(PASTE_SHORTCUT);
+    await page.waitForTimeout(500);
+
+    expect(pasteAlertCount).toBe(0);
+  });
 });
