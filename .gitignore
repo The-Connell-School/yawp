@@ -199,3 +199,4 @@ services/web-app/e2e/.e2e-owned
 services/web-app/e2e/.pg-owned
 services/web-app/e2e/.e2e-context.json
 services/web-app/e2e/prisma/
+services/web-app/e2e/.data/
