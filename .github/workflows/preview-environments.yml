@@ -62,7 +62,6 @@ jobs:
           test -n "$PREVIEW_RESEND_SECRET_ARN" || { echo "Missing var PREVIEW_RESEND_SECRET_ARN"; exit 1; }
           test -n "$PREVIEW_SENTRY_DSN_SECRET_ARN" || { echo "Missing var PREVIEW_SENTRY_DSN_SECRET_ARN"; exit 1; }
           test -n "$PREVIEW_AWS_S3_BUCKET" || { echo "Missing var PREVIEW_AWS_S3_BUCKET (use staging bucket name, not production)"; exit 1; }
-          test -n "$PREVIEW_DB_DUMP_S3_URI" || { echo "Missing var PREVIEW_DB_DUMP_S3_URI (s3://bucket/key the preview OIDC role can read)"; exit 1; }
           test -n "$PREVIEW_RESEND_FROM_EMAIL" || { echo "Missing var PREVIEW_RESEND_FROM_EMAIL"; exit 1; }
 
       - name: Checkout
@@ -133,6 +132,9 @@ jobs:
           EXISTING_TABLES="${EXISTING_TABLES// /}"
           if [[ "${EXISTING_TABLES:-0}" -gt 0 ]]; then
             echo "Schema ${SCHEMA} already has ${EXISTING_TABLES} table(s); skipping dump restore to preserve data."
+          elif [[ -z "${PREVIEW_DB_DUMP_S3_URI:-}" ]]; then
+            echo "Schema ${SCHEMA} is empty but PREVIEW_DB_DUMP_S3_URI is unset; set repo variable s3://bucket/key (OIDC role must have s3:GetObject)."
+            exit 1
           else
             echo "Restoring production dump into schema ${SCHEMA}..."
             aws s3 cp "$PREVIEW_DB_DUMP_S3_URI" - \
