@@ -188,6 +188,9 @@ services/web-app/.react-router
 services/web-app/build
 sandbox.ts
 infra/.terraform
+infra/preview-github-dump-access/.terraform
+infra/preview-github-dump-access/terraform.tfstate
+infra/preview-github-dump-access/*.tfstate*
 infra/envs/variables/
 **/*.db
 **/*.production

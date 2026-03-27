@@ -238,6 +238,40 @@ export async function seedOverlay(): Promise<E2EContext> {
     await upsertUser(u);
   }
 
+  // 7b. Preview smoke uses teacher@fake.test — production data may already have that user without a
+  // TeacherProfile; without it login lands on /no-profile instead of /app.
+  const smokeTeacherUser = await prisma.user.findUnique({
+    where: { email: 'teacher@fake.test' },
+  });
+  if (smokeTeacherUser) {
+    let smokeTeacherProfile = await prisma.profile.findFirst({
+      where: { userId: smokeTeacherUser.id, organizationId: org.id },
+      include: { teacherProfile: true },
+    });
+    if (!smokeTeacherProfile) {
+      smokeTeacherProfile = await prisma.profile.create({
+        data: {
+          userId: smokeTeacherUser.id,
+          organizationId: org.id,
+          isOwner: true,
+          teacherProfile: { create: {} },
+        },
+        include: { teacherProfile: true },
+      });
+    }
+    if (!smokeTeacherProfile.teacherProfile) {
+      await prisma.teacherProfile.create({ data: { profileId: smokeTeacherProfile.id } });
+      smokeTeacherProfile = await prisma.profile.findUniqueOrThrow({
+        where: { id: smokeTeacherProfile.id },
+        include: { teacherProfile: true },
+      });
+    }
+    await prisma.teacherProfile.update({
+      where: { id: smokeTeacherProfile.teacherProfile!.id },
+      data: { schools: { connect: { id: school.id } } },
+    });
+  }
+
   // 8. Student course with modules + instructions
   let studentCourse = await prisma.studentCourse.findFirst({
     where: { title: 'E2E Course' },
