@@ -185,7 +185,17 @@ jobs:
             -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
-          terraform -chdir=infra-pr apply -auto-approve
+          for attempt in $(seq 1 8); do
+            set +e
+            terraform -chdir=infra-pr apply -auto-approve 2>&1 | tee /tmp/tf-apply.log
+            tf_rc=$?
+            set -e
+            if [[ "$tf_rc" -eq 0 ]]; then break; fi
+            if ! grep -q 'OPERATION_IN_PROGRESS' /tmp/tf-apply.log; then exit "$tf_rc"; fi
+            if [[ "$attempt" -eq 8 ]]; then exit "$tf_rc"; fi
+            echo "App Runner busy; sleeping 45s before terraform retry ($attempt/8)..."
+            sleep 45
+          done
           URL=$(terraform -chdir=infra-pr output -raw apprunner_service_url)
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
