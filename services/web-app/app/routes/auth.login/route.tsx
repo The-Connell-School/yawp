@@ -25,7 +25,6 @@ import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
-import { recordAuditEvent } from '~/utils/audit.server';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -48,13 +47,6 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     const user = await verifyUserPassword({ email }, password);
 
     if (!user) {
-      await recordAuditEvent({
-        eventType: 'auth.login.failed',
-        payload: {
-          email,
-          redirectTo: data.redirectTo ?? null,
-        },
-      });
       return validationError(
         { fieldErrors: { email: 'Invalid email or password' } },
         data
@@ -73,16 +65,6 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     const authSession = await authSessionStorage.getSession(cookies);
     authSession.set(sessionKey, session.id);
 
-    await recordAuditEvent({
-      eventType: 'auth.login.succeeded',
-      userId: user.id,
-      sessionId: session.id,
-      payload: {
-        email,
-        redirectTo: data.redirectTo ?? null,
-      },
-    });
-
     return redirect(safeRedirect(data.redirectTo, '/app'), {
       headers: {
         'set-cookie': await authSessionStorage.commitSession(authSession, {
@@ -92,14 +74,6 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   } catch (error) {
     posthog?.captureException(error, 'anonymous');
-    await recordAuditEvent({
-      eventType: 'auth.login.error',
-      payload: {
-        email: data.email,
-        redirectTo: data.redirectTo ?? null,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    });
     return validationError(
       { fieldErrors: { email: 'Invalid email or password' } },
       data

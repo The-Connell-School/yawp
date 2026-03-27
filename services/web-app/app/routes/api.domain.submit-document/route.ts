@@ -4,8 +4,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { getAuditContext, updateAuditContext } from '~/utils/audit-context.server';
-import { auditAction } from '~/utils/audit.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 
@@ -101,22 +99,14 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const html = document.html;
   const text = document.text;
   const now = new Date();
-  const auditContext = getAuditContext();
-
-  updateAuditContext({
-    documentId: document.id,
-  });
 
   const journal = await prisma.documentWriteJournal.create({
     data: {
       eventType: 'document.submit',
       source: 'submit-document',
       status: 'pending',
-      requestId: auditContext?.requestId ?? null,
-      traceId: auditContext?.traceId ?? null,
       userId,
       profileId: profile.id,
-      sessionId: auditContext?.sessionId ?? null,
       documentId: document.id,
       title: document.title,
       html,
@@ -183,4 +173,4 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-export const action = auditAction(actionImpl);
+export const action = actionImpl;

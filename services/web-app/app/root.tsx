@@ -41,7 +41,6 @@ import type { Route } from './+types/root.ts';
 import posthog from 'posthog-js';
 import omit from 'lodash/omit';
 import { getProfileId } from './cookies/profile-id.server.ts';
-import { BrowserAuditTracker } from './utils/audit-browser.ts';
 
 export const links: LinksFunction = () => {
   return [
@@ -287,10 +286,6 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
           </div>
         </Tooltip>
       ) : null}
-      <BrowserAuditTracker
-        userId={data.user?.id}
-        profileId={data.user?.selectedProfile?.id}
-      />
       <GlobalLoading />
       <div className="flex h-screen min-h-screen flex-col justify-between">
         <div className="flex-1 bg-background">

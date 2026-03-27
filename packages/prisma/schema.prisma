@@ -377,37 +377,6 @@ model Session {
   @@index([userId])
 }
 
-model AuditEvent {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  source          String
-  eventType       String
-  requestId       String?
-  traceId         String?
-  route           String?
-  path            String?
-  method          String?
-  statusCode      Int?
-  durationMs      Int?
-  success         Boolean?
-  userId          String?
-  profileId       String?
-  sessionId       String?
-  editorSessionId String?
-  documentId      String?
-  organizationId  String?
-  classId         String?
-  payload         Json?
-  metadata        Json?
-
-  @@index([createdAt(sort: Desc)])
-  @@index([eventType, createdAt(sort: Desc)])
-  @@index([requestId])
-  @@index([traceId])
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([documentId, createdAt(sort: Desc)])
-}
-
 model Setting {
   id          String   @id @default(cuid())
   createdAt   DateTime @default(now()) @db.Timestamptz(6)

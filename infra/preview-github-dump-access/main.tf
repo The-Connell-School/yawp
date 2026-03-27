@@ -1,5 +1,6 @@
-# Attach inline policy to yawp-preview-github-actions so PR workflows can
-# stream the DB dump from S3 (default: s3://yawp-preview-videos/production.dump).
+# Attach inline policies to yawp-preview-github-actions:
+# - S3 read for production dump (PR preview DB restore)
+# - iam:ListInstanceProfilesForRole on per-PR roles (Terraform needs this before DeleteRole)
 #
 # Apply once: terraform -chdir=infra/preview-github-dump-access init && terraform apply
 
@@ -38,6 +39,8 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_iam_role" "github_actions" {
   name = var.github_actions_role_name
 }
@@ -59,15 +62,34 @@ resource "aws_iam_role_policy" "preview_production_dump_read" {
         Resource = "arn:aws:s3:::${var.dump_bucket}/${var.dump_key}"
       },
       {
-        Sid    = "ListBucketForDumpKey"
-        Effect = "Allow"
-        Action = ["s3:ListBucket"]
+        Sid      = "ListBucketForDumpKey"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
         Resource = "arn:aws:s3:::${var.dump_bucket}"
         Condition = {
           StringLike = {
             "s3:prefix" = ["${var.dump_key}"]
           }
         }
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "preview_terraform_list_instance_profiles_for_role" {
+  name = "preview-terraform-list-instance-profiles-for-role"
+  role = data.aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "TerraformDestroyPreviewIamRoles"
+        Effect = "Allow"
+        Action = [
+          "iam:ListInstanceProfilesForRole",
+        ]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/yawp-preview-pr-*"
       },
     ]
   })

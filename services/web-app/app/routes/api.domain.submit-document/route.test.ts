@@ -39,10 +39,6 @@ mock.module('~/utils/toast.server', () => ({
       headers: { 'Content-Type': 'application/json' },
     }),
 }));
-mock.module('~/utils/audit.server', () => ({
-  auditAction: (handler: any) => handler,
-}));
-
 const { action } = await import('./route');
 
 describe('api.domain.submit-document', () => {

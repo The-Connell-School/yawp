@@ -7,7 +7,6 @@ import { combineHeaders } from './misc.tsx';
 import { authSessionStorage } from '../cookie-session-storages/authentication.server.ts';
 import { getProfileId, setProfileId } from '~/cookies/profile-id.server';
 import { normalizeEmail } from './normalize-email';
-import { updateAuditContext } from './audit-context.server';
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 365 * 100;
 export const getSessionExpirationDate = () =>
@@ -32,10 +31,6 @@ export async function getUserId(request: Request) {
       },
     });
   }
-  updateAuditContext({
-    sessionId,
-    userId: session.user.id,
-  });
   return session.user.id;
 }
 
@@ -80,10 +75,6 @@ export async function requireProfile(request: Request, userId: string) {
       });
     }
 
-    updateAuditContext({
-      profileId: profile.id,
-      organizationId: profile.organization.id,
-    });
     return profile;
   } else {
     const profile = await prisma.profile.findFirst({
@@ -102,10 +93,6 @@ export async function requireProfile(request: Request, userId: string) {
       throw redirect('/no-profile');
     }
 
-    updateAuditContext({
-      profileId: profile.id,
-      organizationId: profile.organization.id,
-    });
     return profile;
   }
 }
