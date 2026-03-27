@@ -132,12 +132,10 @@ jobs:
           EXISTING_TABLES="${EXISTING_TABLES// /}"
           if [[ "${EXISTING_TABLES:-0}" -gt 0 ]]; then
             echo "Schema ${SCHEMA} already has ${EXISTING_TABLES} table(s); skipping dump restore to preserve data."
-          elif [[ -z "${PREVIEW_DB_DUMP_S3_URI:-}" ]]; then
-            echo "Schema ${SCHEMA} is empty but PREVIEW_DB_DUMP_S3_URI is unset; set repo variable s3://bucket/key (OIDC role must have s3:GetObject)."
-            exit 1
           else
-            echo "Restoring production dump into schema ${SCHEMA}..."
-            aws s3 cp "$PREVIEW_DB_DUMP_S3_URI" - \
+            DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/production.dump}"
+            echo "Restoring production dump into schema ${SCHEMA} from ${DUMP_URI}..."
+            aws s3 cp "$DUMP_URI" - \
               | sed "s/public\./${SCHEMA}./g; s/search_path = public/search_path = ${SCHEMA}/g" \
               | psql "$PSQL_URL"
           fi
