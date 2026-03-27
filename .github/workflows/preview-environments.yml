@@ -36,6 +36,7 @@ jobs:
       PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
       PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
       PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
+      PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI }}
       PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
     steps:
       - name: Normalize configuration
@@ -61,6 +62,7 @@ jobs:
           test -n "$PREVIEW_RESEND_SECRET_ARN" || { echo "Missing var PREVIEW_RESEND_SECRET_ARN"; exit 1; }
           test -n "$PREVIEW_SENTRY_DSN_SECRET_ARN" || { echo "Missing var PREVIEW_SENTRY_DSN_SECRET_ARN"; exit 1; }
           test -n "$PREVIEW_AWS_S3_BUCKET" || { echo "Missing var PREVIEW_AWS_S3_BUCKET (use staging bucket name, not production)"; exit 1; }
+          test -n "$PREVIEW_DB_DUMP_S3_URI" || { echo "Missing var PREVIEW_DB_DUMP_S3_URI (s3://bucket/key the preview OIDC role can read)"; exit 1; }
           test -n "$PREVIEW_RESEND_FROM_EMAIL" || { echo "Missing var PREVIEW_RESEND_FROM_EMAIL"; exit 1; }
 
       - name: Checkout
@@ -123,11 +125,20 @@ jobs:
           fi
           echo "::add-mask::$MIGRATE_URL"
 
-          # Restore production dump with schema remapping
-          echo "Restoring production dump into schema ${SCHEMA}..."
-          aws s3 cp s3://yawp-production-database-exports/Mar03260636.dump - \
-            | sed "s/public\./${SCHEMA}./g; s/search_path = public/search_path = ${SCHEMA}/g" \
-            | psql "$MIGRATE_URL"
+          # psql/libpq rejects Prisma's ?schema= — use URL without it (sed output is schema-qualified)
+          PSQL_URL="$(node -e "const u=new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
+          echo "::add-mask::$PSQL_URL"
+
+          EXISTING_TABLES="$(psql "$PSQL_URL" -tAc "SELECT COUNT(*)::text FROM pg_tables WHERE schemaname = '${SCHEMA}'")"
+          EXISTING_TABLES="${EXISTING_TABLES// /}"
+          if [[ "${EXISTING_TABLES:-0}" -gt 0 ]]; then
+            echo "Schema ${SCHEMA} already has ${EXISTING_TABLES} table(s); skipping dump restore to preserve data."
+          else
+            echo "Restoring production dump into schema ${SCHEMA}..."
+            aws s3 cp "$PREVIEW_DB_DUMP_S3_URI" - \
+              | sed "s/public\./${SCHEMA}./g; s/search_path = public/search_path = ${SCHEMA}/g" \
+              | psql "$PSQL_URL"
+          fi
 
           # Apply any newer migrations
           (cd packages/prisma && DATABASE_URL="$MIGRATE_URL" bunx prisma migrate deploy)
