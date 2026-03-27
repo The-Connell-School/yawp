@@ -569,7 +569,11 @@ function AuditItem({ item }: { item: TimelineEntry }) {
 }
 
 export default function AdminAuditRoute() {
-  const { filters, timeline } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
+  if (!('timeline' in data)) {
+    return null;
+  }
+  const { filters, timeline } = data;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
