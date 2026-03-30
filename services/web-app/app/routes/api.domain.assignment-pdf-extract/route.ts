@@ -115,7 +115,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const model =
     process.env.AI_MODEL && process.env.AI_MODEL.includes('claude')
       ? process.env.AI_MODEL
-      : 'claude-sonnet-4-5';
+      : 'claude-sonnet-4-6';
 
   const system = [
     'You extract classroom writing assignments from PDFs.',

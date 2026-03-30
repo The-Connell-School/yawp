@@ -99,7 +99,7 @@ export async function action({ request }: ActionFunctionArgs) {
     let completion: string;
     try {
       completion = await getLLMCompletion({
-        model: (process.env.AI_MODEL as any) ?? 'claude-3-5-sonnet-20240620',
+        model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
         messages,
         system,
         maxTokens: 500,
