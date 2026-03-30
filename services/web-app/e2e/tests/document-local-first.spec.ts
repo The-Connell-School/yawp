@@ -6,7 +6,7 @@ test.describe('Local-first document persistence', () => {
     signIn,
     e2eContext,
   }) => {
-    await signIn(e2eContext.teacherEmail, e2eContext.teacherPassword);
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
 
     // Navigate to a document
     await page.goto('/app');
