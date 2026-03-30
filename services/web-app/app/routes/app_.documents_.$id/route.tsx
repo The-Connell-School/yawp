@@ -171,6 +171,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       revision: true,
       title: true,
       html: true,
@@ -1081,6 +1082,7 @@ export default function Route() {
                 docId={data.doc.id}
                 docHtml={editorHtml}
                 initialRevision={data.doc.revision}
+                serverUpdatedAt={new Date(data.doc.updatedAt).getTime()}
                 editorSessionId={editorSessionId}
                 saveSnapshotId={
                   isTeacherSnapshotView ? activeSnapshot?.id : null

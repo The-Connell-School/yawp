@@ -20,6 +20,10 @@ export class SyncService {
   }
 
   start(docId: string): void {
+    if (this._retryTimer) {
+      clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
     this._docId = docId;
     this._stopped = false;
     this._retryCount = 0;
@@ -65,12 +69,12 @@ export class SyncService {
   }
 
   /** Force an immediate sync (Cmd+S, visibility change, session-end) */
-  async forceSave(): Promise<void> {
+  async forceSave(options?: { trigger?: string }): Promise<void> {
     if (this._debounceTimer) {
       clearTimeout(this._debounceTimer);
       this._debounceTimer = null;
     }
-    await this._sync();
+    await this._sync(options?.trigger);
   }
 
   private _setStatus(status: SyncStatus): void {
@@ -85,7 +89,7 @@ export class SyncService {
     }
   }
 
-  private async _sync(): Promise<void> {
+  private async _sync(trigger?: string): Promise<void> {
     if (this._stopped || !this._docId) return;
 
     const entry = await this._store.get(this._docId);
@@ -106,6 +110,7 @@ export class SyncService {
           html: entry.html,
           text: entry.text,
           contentHash: entry.contentHash,
+          trigger,
         }),
       });
 

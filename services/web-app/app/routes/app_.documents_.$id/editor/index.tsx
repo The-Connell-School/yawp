@@ -10,6 +10,7 @@ import { findExcerptRange } from '~/utils/excerpt-position';
 import { documentStore } from '~/utils/document-store';
 import { SyncService, type SyncStatus } from '~/utils/sync-service';
 import { contentHash } from '~/utils/content-hash';
+import { toast } from 'sonner';
 import { useCommentsSelection } from '../comments/selection-context';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 import { Bar } from './bar';
@@ -60,7 +61,7 @@ type GradeHighlight = {
 export type EditorBridge = {
   getContent: () => { html: string; text: string };
   setContent: (html: string) => void;
-  saveNow: (options?: { source?: string }) => Promise<void>;
+  saveNow: (options?: { trigger?: string }) => Promise<void>;
 };
 
 function isTextNode(node: Node): node is Text {
@@ -198,6 +199,7 @@ type Props = {
   docId: string;
   docHtml: string | null;
   initialRevision: number;
+  serverUpdatedAt: number;
   editorSessionId: string;
   saveSnapshotId?: string | null;
   isEditable?: boolean;
@@ -214,6 +216,7 @@ export const Editor = ({
   docId,
   docHtml,
   initialRevision,
+  serverUpdatedAt,
   editorSessionId,
   saveSnapshotId = null,
   isEditable = true,
@@ -441,9 +444,29 @@ export const Editor = ({
         });
         syncService.setLastSyncedHash(hash);
       } else {
-        // Local entry has unsynced changes — recover it
-        editor.commands.setContent(existing.html, false);
-        syncService.forceSave();
+        // Local entry has unsynced changes — compare timestamps
+        const localIsNewer = existing.updatedAt > serverUpdatedAt;
+        if (localIsNewer) {
+          editor.commands.setContent(existing.html, false);
+          toast.info('Recovered unsaved changes');
+          void syncService.forceSave();
+        } else {
+          // Server is newer (e.g., teacher restored a version) — discard stale local
+          const content = getContentSnapshot();
+          const hash = await contentHash(content.html, content.text);
+          await documentStore.put({
+            docId,
+            html: content.html,
+            text: content.text,
+            updatedAt: Date.now(),
+            serverRevision: initialRevision,
+            syncStatus: 'synced',
+            lastSyncedAt: Date.now(),
+            lastSyncError: null,
+            contentHash: hash,
+          });
+          syncService.setLastSyncedHash(hash);
+        }
       }
     })();
 
@@ -477,7 +500,7 @@ export const Editor = ({
     // Sync on visibility change
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        void syncService.forceSave();
+        void syncService.forceSave({ trigger: 'session-end' });
       }
     };
 
@@ -486,7 +509,7 @@ export const Editor = ({
       setContent: (html: string) => {
         editor.commands.setContent(html, true);
       },
-      saveNow: () => syncService.forceSave(),
+      saveNow: (options) => syncService.forceSave(options),
     });
 
     onContentSnapshot?.(getContentSnapshot());
@@ -505,7 +528,7 @@ export const Editor = ({
       editor.off('update', emitSnapshotDebounced);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [editor, docId, editorSessionId, initialRevision, isEditable, onContentSnapshot, onSyncStatusChange, onEditorBridgeReady]);
+  }, [editor, docId, editorSessionId, initialRevision, serverUpdatedAt, isEditable, onContentSnapshot, onSyncStatusChange, onEditorBridgeReady]);
 
   useEffect(() => {
     if (!editor || !isEditable) return;
