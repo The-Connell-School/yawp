@@ -5,7 +5,6 @@ const verifyUserPassword = mock();
 const getSessionExpirationDate = mock();
 const getSession = mock();
 const commitSession = mock();
-const recordAuditEvent = mock();
 const captureException = mock();
 
 const prisma = {
@@ -32,9 +31,6 @@ mock.module('~/services/posthog.server', () => ({
     captureException,
   },
 }));
-mock.module('~/utils/audit.server', () => ({
-  recordAuditEvent,
-}));
 
 const { action } = await import('./route');
 
@@ -45,7 +41,6 @@ describe('auth.login', () => {
     getSessionExpirationDate.mockReset();
     getSession.mockReset();
     commitSession.mockReset();
-    recordAuditEvent.mockReset();
     captureException.mockReset();
     prisma.session.create.mockReset();
 
@@ -80,14 +75,5 @@ describe('auth.login', () => {
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app/documents/doc-1?tab=editor');
-    expect(recordAuditEvent).toHaveBeenCalledWith({
-      eventType: 'auth.login.succeeded',
-      userId: 'user-1',
-      sessionId: 'session-1',
-      payload: {
-        email: 'student@example.com',
-        redirectTo: '/app/documents/doc-1?tab=editor',
-      },
-    });
   });
 });

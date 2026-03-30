@@ -27,16 +27,11 @@ const prisma = {
 
 const requireUserId = mock();
 const requireProfile = mock();
-const recordAuditEvent = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireProfile,
-}));
-mock.module('~/utils/audit.server', () => ({
-  auditAction: (handler: any) => handler,
-  recordAuditEvent,
 }));
 
 const { action } = await import('./route');
@@ -57,7 +52,6 @@ describe('api.model.document.$id', () => {
     prisma.documentWriteJournal.update.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
-    recordAuditEvent.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({ id: 'profile-1' });

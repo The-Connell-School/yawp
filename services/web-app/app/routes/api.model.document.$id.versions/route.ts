@@ -1,10 +1,9 @@
 import { invariant } from '@epic-web/invariant';
-import { data, type LoaderFunctionArgs } from 'react-router';
-import { auditLoader } from '~/utils/audit.server';
+import { type LoaderFunctionArgs } from 'react-router';
 import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
-async function loaderHandler({ request, params }: LoaderFunctionArgs) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No id provided');
   await requireUserId(request);
 
@@ -34,5 +33,3 @@ async function loaderHandler({ request, params }: LoaderFunctionArgs) {
     headers: { 'Content-Type': 'application/json' },
   });
 }
-
-export const loader = auditLoader(loaderHandler);

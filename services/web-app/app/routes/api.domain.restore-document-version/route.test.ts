@@ -18,7 +18,6 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const recordAuditEvent = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -30,10 +29,6 @@ mock.module('~/utils/toast.server', () => ({
       status: 302,
       headers: { 'Content-Type': 'application/json' },
     }),
-}));
-mock.module('~/utils/audit.server', () => ({
-  auditAction: (handler: any) => handler,
-  recordAuditEvent,
 }));
 
 const { action } = await import('./route');
@@ -47,7 +42,6 @@ describe('api.domain.restore-document-version', () => {
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
     requireUserId.mockReset();
-    recordAuditEvent.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     prisma.documentVersion.findFirst.mockResolvedValue({
