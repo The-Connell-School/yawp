@@ -224,42 +224,31 @@ export const DocumentVersions = ({ documentId }: Props) => {
         </SheetHeader>
         <div className="flex grow flex-col overflow-hidden sm:flex-row">
           <div className="no-scrollbar mb-2 flex max-h-[300px] min-h-[200px] flex-col gap-1 overflow-scroll p-1 sm:mb-0 sm:max-h-full sm:w-1/2">
-            <div className="flex items-center gap-2 p-1">
-              <Button
-                variant={mode === 'snapshots' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setMode('snapshots');
-                  setAllVersions([]);
-                  setPage(1);
-                  setHasMore(true);
-                  loadVersions(1);
-                }}
-              >
-                Snapshots
-              </Button>
-              <Button
-                variant={mode === 'versions' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setMode('versions');
-                  setAllVersions([]);
-                  setPage(1);
-                  setHasMore(true);
-                  loadVersions(1);
-                }}
-              >
-                Autosaves
-              </Button>
-              <Button
-                variant={mode === 'revisions' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  setMode('revisions');
-                }}
-              >
-                Revisions
-              </Button>
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+              {(['snapshots', 'versions', 'revisions'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    if (tab !== 'revisions') {
+                      setMode(tab);
+                      setAllVersions([]);
+                      setPage(1);
+                      setHasMore(true);
+                      loadVersions(1);
+                    } else {
+                      setMode('revisions');
+                    }
+                  }}
+                  className={cn(
+                    'rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                    mode === tab
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {tab === 'versions' ? 'Autosaves' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
             </div>
             {mode !== 'revisions' ? (
               <>
