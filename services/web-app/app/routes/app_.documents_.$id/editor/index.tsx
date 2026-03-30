@@ -661,6 +661,8 @@ export const Editor = ({
       }
     };
 
+    const PASTE_ALERT_MIN_CHARS = 500;
+
     const handlePaste = (event: ClipboardEvent) => {
       const pastedText = event.clipboardData?.getData('text/plain') || '';
       const textLength = pastedText.length;
