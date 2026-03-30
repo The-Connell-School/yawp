@@ -1077,10 +1077,8 @@ export default function Route() {
                     <p className="mr-1 text-xs font-medium">Saved</p>
                   </div>
                 )}
-                <SaveStatusIndicator status={syncStatus} />
                 <div className="h-[20px] border-r" />
                 <DocumentVersions documentId={data.doc.id} />
-                <DocumentHistory documentId={data.doc.id} />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (
