@@ -13,7 +13,7 @@ import { cn } from '~/utils/misc';
 import { useEffect, useMemo, useState } from 'react';
 import { useFetcher } from 'react-router';
 
-type Props = { documentId: string };
+type Props = { documentId: string; defaultMode?: 'versions' | 'snapshots' | 'revisions' };
 
 const VERSIONS_PER_PAGE = 5;
 const REVISIONS_PER_PAGE = 50;
@@ -91,9 +91,9 @@ function TriggerBadge({ trigger }: { trigger: string }) {
   );
 }
 
-export const DocumentVersions = ({ documentId }: Props) => {
+export const DocumentVersions = ({ documentId, defaultMode = 'snapshots' }: Props) => {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<'versions' | 'snapshots' | 'revisions'>('snapshots');
+  const [mode, setMode] = useState<'versions' | 'snapshots' | 'revisions'>(defaultMode);
   const [version, setVersion] = useState<VersionLike | null>(null);
   const [allVersions, setAllVersions] = useState<VersionLike[]>([]);
   const [page, setPage] = useState(1);

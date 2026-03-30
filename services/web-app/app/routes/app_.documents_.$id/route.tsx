@@ -66,7 +66,7 @@ import {
 import { formatDateOnly } from '~/utils/date-only';
 import type { SyncStatus } from '~/utils/sync-service';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
-import { DocumentHistory } from './_components/document-history';
+import { syncLocalFirstFromUrl } from '~/utils/local-first-flag';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
   items: T[];
@@ -408,6 +408,7 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
+  const [localFirstEnabled] = useState(() => syncLocalFirstFromUrl());
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [hasSaveError, setHasSaveError] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
@@ -1061,7 +1062,9 @@ export default function Route() {
             )}
             {!isTeacherGradingTabOpen ? (
               <div className="flex items-center gap-2">
-                {hasSaveError ? (
+                {localFirstEnabled ? (
+                  <SaveStatusIndicator status={syncStatus} />
+                ) : hasSaveError ? (
                   <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
                     <AlertCircle className="h-3.5 w-3.5" />
                     <p className="text-xs font-medium">Save failed</p>
@@ -1078,7 +1081,7 @@ export default function Route() {
                   </div>
                 )}
                 <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} />
+                <DocumentVersions documentId={data.doc.id} defaultMode={localFirstEnabled ? 'revisions' : 'snapshots'} />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (
