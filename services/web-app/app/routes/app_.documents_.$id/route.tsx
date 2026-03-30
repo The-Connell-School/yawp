@@ -11,7 +11,7 @@ import {
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -37,17 +37,13 @@ import {
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
-import {
-  setPendingSave,
-  getPendingSave,
-  clearPendingSave,
-} from '~/utils/pending-document-save';
-import { queueBrowserAuditEvent } from '~/utils/audit-browser';
+import { SaveStatusIndicator } from '~/components/save-status-indicator';
+import type { SyncStatus } from '~/utils/sync-service';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
 import { Tutor } from './tutor';
-import { DocumentVersions } from './_components/document-versions';
+import { DocumentHistory } from './_components/document-history';
 import {
   DocumentStatusBadge,
   getDocumentStatusLabel,
@@ -175,6 +171,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       revision: true,
       title: true,
       html: true,
@@ -404,9 +401,8 @@ export default function Route() {
   const submitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
-  const [isSaving, setIsSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [hasSaveError, setHasSaveError] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
@@ -454,11 +450,8 @@ export default function Route() {
   );
   const latestEditorContentRef = useRef(initialEditorContent);
   const editorBridgeRef = useRef<EditorBridge | null>(null);
-  const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] =
     useState(false);
-  const isEditorLocked =
-    isSessionLocked || (isDocumentEditable && !isInitialAuthCheckComplete);
   const gradeDisplay =
     (grade
       ? formatGrade(
@@ -514,7 +507,6 @@ export default function Route() {
       ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
       : ''
   }`;
-  const saveFailureCountRef = useRef(0);
   const visibleGrammarIssues = useMemo(
     () =>
       grammarIssues.filter(
@@ -592,40 +584,6 @@ export default function Route() {
     setSearchParams(params, { replace: true });
   };
 
-  const lockSession = useCallback(() => {
-    setIsSessionLocked(true);
-  }, []);
-
-  const handleLoginRedirect = useCallback(() => {
-    const content =
-      editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current;
-    setPendingSave(data.doc.id, content);
-    sessionStorage.setItem(loginReturnStorageKey, '1');
-    const redirectTo = encodeURIComponent(
-      window.location.pathname + window.location.search
-    );
-    queueBrowserAuditEvent(
-      {
-        eventType: 'auth.logout_redirected',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-        payload: {
-          redirectTo,
-        },
-      },
-      { flush: true, useBeacon: true }
-    );
-    window.location.href = `/auth/login?redirectTo=${redirectTo}`;
-  }, [
-    data.doc.id,
-    editorSessionId,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
   const checkAuthSession = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/check', {
@@ -633,7 +591,6 @@ export default function Route() {
       });
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          lockSession();
           return false;
         }
         return true;
@@ -641,7 +598,6 @@ export default function Route() {
 
       const data = (await response.json()) as { valid?: boolean };
       if (!data?.valid) {
-        lockSession();
         return false;
       }
 
@@ -650,42 +606,14 @@ export default function Route() {
       // Ignore transient network failures.
       return true;
     }
-  }, [lockSession]);
-
-  const handleRemoteSaveFailure = useCallback(
-    (args: {
-      content: { html: string; text: string };
-      reason: 'auth' | 'network' | 'server';
-    }) => {
-      setPendingSave(data.doc.id, args.content);
-      saveFailureCountRef.current += 1;
-      if (saveFailureCountRef.current >= 2) {
-        setHasSaveError(true);
-      }
-      if (args.reason === 'auth') {
-        lockSession();
-      }
-    },
-    [data.doc.id, lockSession]
-  );
-
-  const handleRemoteSaveSuccess = useCallback(
-    (_args: { content: { html: string; text: string }; revision: number }) => {
-      clearPendingSave(data.doc.id);
-      saveFailureCountRef.current = 0;
-      setHasSaveError(false);
-    },
-    [data.doc.id]
-  );
+  }, []);
 
   const handleTutorBeforeRespond = useCallback(async () => {
-    if (isSessionLocked) return false;
-
     await editorBridgeRef.current?.saveNow();
 
     const isValidSession = await checkAuthSession();
-    return isValidSession && !isSessionLocked;
-  }, [checkAuthSession, isSessionLocked]);
+    return isValidSession;
+  }, [checkAuthSession]);
 
   const handleEditorContentSnapshot = useCallback(
     (content: { html: string; text: string }) => {
@@ -694,44 +622,11 @@ export default function Route() {
     []
   );
 
-  const recoverPendingSave = useCallback(
-    (bridge: EditorBridge, source: string) => {
-      const pending = getPendingSave(data.doc.id);
-      if (!pending) return false;
-
-      bridge.setContent(pending.html);
-      latestEditorContentRef.current = { html: pending.html, text: pending.text };
-      toast.info('Recovered unsaved changes');
-      queueBrowserAuditEvent(
-        {
-          eventType: 'document.pending_save_restored',
-          documentId: data.doc.id,
-          userId: user.id,
-          profileId: user.selectedProfile?.id ?? null,
-          editorSessionId,
-          payload: {
-            source,
-          },
-        },
-        { flush: true }
-      );
-      void bridge.saveNow({ source: 'editor-recovery' });
-      return true;
-    },
-    [data.doc.id, editorSessionId, user.id, user.selectedProfile?.id]
-  );
-
   const handleEditorBridgeReady = useCallback(
     (bridge: EditorBridge | null) => {
       editorBridgeRef.current = bridge;
-      if (!bridge || !isDocumentEditable || !isInitialAuthCheckComplete) return;
-      recoverPendingSave(bridge, 'bridge-ready');
     },
-    [
-      isDocumentEditable,
-      isInitialAuthCheckComplete,
-      recoverPendingSave,
-    ]
+    []
   );
 
   useEffect(() => {
@@ -743,76 +638,10 @@ export default function Route() {
   }, [initialEditorContent]);
 
   useEffect(() => {
-    setIsSessionLocked(false);
-  }, [data.doc.id]);
-
-  useEffect(() => {
-    queueBrowserAuditEvent({
-      eventType: 'document.editor_open',
-      documentId: data.doc.id,
-      userId: user.id,
-      profileId: user.selectedProfile?.id ?? null,
-      editorSessionId,
-      payload: {
-        revision: data.doc.revision,
-        submittedAt: data.doc.submittedAt,
-      },
-    });
-  }, [
-    data.doc.id,
-    data.doc.revision,
-    data.doc.submittedAt,
-    editorSessionId,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  useEffect(() => {
-    if (!isSessionLocked) return;
-    queueBrowserAuditEvent(
-      {
-        eventType: 'document.editor_locked',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-        payload: {
-          reason: 'session_expired',
-        },
-      },
-      { flush: true }
-    );
-  }, [
-    data.doc.id,
-    editorSessionId,
-    isSessionLocked,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || isSessionLocked) return;
+    if (!isInitialAuthCheckComplete) return;
     if (!sessionStorage.getItem(loginReturnStorageKey)) return;
     sessionStorage.removeItem(loginReturnStorageKey);
-    queueBrowserAuditEvent(
-      {
-        eventType: 'auth.login_returned',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-      },
-      { flush: true }
-    );
-  }, [
-    data.doc.id,
-    editorSessionId,
-    isInitialAuthCheckComplete,
-    isSessionLocked,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
+  }, [isInitialAuthCheckComplete, loginReturnStorageKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -852,43 +681,6 @@ export default function Route() {
     };
   }, [checkAuthSession, data.doc.id, isDocumentEditable]);
 
-  // Flush pending save on page unload / visibility hidden
-  useEffect(() => {
-    if (!isDocumentEditable) return;
-
-    const flushPendingSave = () => {
-      const content =
-        editorBridgeRef.current?.getContent() ??
-        latestEditorContentRef.current;
-      setPendingSave(data.doc.id, content);
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flushPendingSave();
-    };
-
-    window.addEventListener('pagehide', flushPendingSave);
-    window.addEventListener('beforeunload', flushPendingSave);
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      window.removeEventListener('pagehide', flushPendingSave);
-      window.removeEventListener('beforeunload', flushPendingSave);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [isDocumentEditable, data.doc.id]);
-
-  // Recover pending save on load
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || !isDocumentEditable) return;
-
-    if (!editorBridgeRef.current) return;
-    recoverPendingSave(editorBridgeRef.current, 'load');
-  }, [
-    isInitialAuthCheckComplete,
-    isDocumentEditable,
-    recoverPendingSave,
-  ]);
 
   // Periodic auth heartbeat
   useEffect(() => {
@@ -1137,24 +929,17 @@ export default function Route() {
             )}
             {!isTeacherGradingTabOpen ? (
               <div className="flex items-center gap-2">
-                {hasSaveError ? (
-                  <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <p className="text-xs font-medium">Save failed</p>
-                  </div>
-                ) : isSaving ? (
-                  <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <p className="text-xs font-medium">Saving</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 rounded-full border bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    <Check className="h-3.5 w-3.5" />
-                    <p className="mr-1 text-xs font-medium">Saved</p>
-                  </div>
-                )}
+                <SaveStatusIndicator
+                  status={syncStatus}
+                  onLoginClick={() => {
+                    const redirectTo = encodeURIComponent(
+                      window.location.pathname + window.location.search
+                    );
+                    window.location.href = `/auth/login?redirectTo=${redirectTo}`;
+                  }}
+                />
                 <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} />
+                <DocumentHistory documentId={data.doc.id} />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (
@@ -1282,7 +1067,7 @@ export default function Route() {
                 cms={data.currentCms}
                 nextCmId={data.nextCmId}
                 hasPreviousCms={data.hasPreviousCms}
-                isSessionLocked={isSessionLocked}
+                isSessionLocked={syncStatus === 'auth-expired'}
                 beforeRespond={handleTutorBeforeRespond}
                 getCurrentDocumentText={() =>
                   editorBridgeRef.current?.getContent().text ??
@@ -1297,16 +1082,15 @@ export default function Route() {
                 docId={data.doc.id}
                 docHtml={editorHtml}
                 initialRevision={data.doc.revision}
+                serverUpdatedAt={new Date(data.doc.updatedAt).getTime()}
                 editorSessionId={editorSessionId}
                 saveSnapshotId={
                   isTeacherSnapshotView ? activeSnapshot?.id : null
                 }
-                setIsSaving={setIsSaving}
-                isEditable={isDocumentEditable && !isEditorLocked}
+                isEditable={isDocumentEditable}
                 onContentSnapshot={handleEditorContentSnapshot}
                 onEditorBridgeReady={handleEditorBridgeReady}
-                onRemoteSaveSuccess={handleRemoteSaveSuccess}
-                onRemoteSaveFailure={handleRemoteSaveFailure}
+                onSyncStatusChange={setSyncStatus}
                 gradeHighlights={editorGradeHighlights}
                 activeGradeCommentId={
                   isTeacherGradingTabOpen ? activeGradeCommentId : null
@@ -1420,30 +1204,6 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
-      <Dialog open={isSessionLocked} onOpenChange={() => {}}>
-        <DialogContent
-          className="sm:max-w-md"
-          onPointerDownOutside={(event) => event.preventDefault()}
-          onEscapeKeyDown={(event) => event.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Session Expired</DialogTitle>
-            <DialogDescription>
-              Your session expired while editing. Editing is now paused to
-              prevent data loss. Please log in again to continue.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              data-testid="session-expired-login"
-              onClick={handleLoginRedirect}
-              className="w-full sm:w-auto"
-            >
-              Log In
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
         <div
           className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"

@@ -7,6 +7,10 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { findExcerptRange } from '~/utils/excerpt-position';
+import { documentStore } from '~/utils/document-store';
+import { SyncService, type SyncStatus } from '~/utils/sync-service';
+import { contentHash } from '~/utils/content-hash';
+import { toast } from 'sonner';
 import { useCommentsSelection } from '../comments/selection-context';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 import { Bar } from './bar';
@@ -16,13 +20,7 @@ import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
 
-const debounce = (func: Function, delay: number) => {
-  let timeoutId: NodeJS.Timeout;
-  return (...args: any[]) => {
-    clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => func(...args), delay);
-  };
-};
+const PASTE_ALERT_MIN_CHARS = 200;
 
 const extensions = [
   TabIndent,
@@ -60,12 +58,10 @@ type GradeHighlight = {
   className?: string;
 };
 
-type SaveFailureReason = 'auth' | 'network' | 'server';
-
 export type EditorBridge = {
   getContent: () => { html: string; text: string };
   setContent: (html: string) => void;
-  saveNow: (options?: { source?: string }) => Promise<void>;
+  saveNow: (options?: { trigger?: string }) => Promise<void>;
 };
 
 function isTextNode(node: Node): node is Text {
@@ -203,23 +199,16 @@ type Props = {
   docId: string;
   docHtml: string | null;
   initialRevision: number;
+  serverUpdatedAt: number;
   editorSessionId: string;
   saveSnapshotId?: string | null;
-  setIsSaving: (isSaving: boolean) => void;
   isEditable?: boolean;
   gradeHighlights?: GradeHighlight[];
   activeGradeCommentId?: string | null;
   onGradeCommentSelect?: (id: string) => void;
   onGrammarIssueHover?: (id: string | null, rect: DOMRect | null) => void;
   onContentSnapshot?: (content: { html: string; text: string }) => void;
-  onRemoteSaveSuccess?: (args: {
-    content: { html: string; text: string };
-    revision: number;
-  }) => void;
-  onRemoteSaveFailure?: (args: {
-    content: { html: string; text: string };
-    reason: SaveFailureReason;
-  }) => void;
+  onSyncStatusChange?: (status: SyncStatus) => void;
   onEditorBridgeReady?: (bridge: EditorBridge | null) => void;
 };
 
@@ -227,26 +216,22 @@ export const Editor = ({
   docId,
   docHtml,
   initialRevision,
+  serverUpdatedAt,
   editorSessionId,
   saveSnapshotId = null,
-  setIsSaving,
   isEditable = true,
   gradeHighlights = [],
   activeGradeCommentId = null,
   onGradeCommentSelect,
   onGrammarIssueHover,
   onContentSnapshot,
-  onRemoteSaveSuccess,
-  onRemoteSaveFailure,
+  onSyncStatusChange,
   onEditorBridgeReady,
 }: Props) => {
-  const saveNowRef = useRef<(() => Promise<void>) | null>(null);
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null);
-  const saveStartedAtRef = useRef<number | null>(null);
-  const inFlightSavesRef = useRef(0);
-  const clearSavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clientSeqRef = useRef(0);
-  const currentRevisionRef = useRef(initialRevision);
+
+  // --- Local-first save integration ---
+  const syncServiceRef = useRef<SyncService | null>(null);
   const {
     activeCommentId,
     hoveredCommentId,
@@ -423,140 +408,127 @@ export const Editor = ({
   }, [editor]);
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !isEditable) return;
 
     const getContentSnapshot = () => ({
       html: editor.getHTML(),
       text: editor.getText().replace(/\u00A0/g, ' '),
     });
 
-    currentRevisionRef.current = initialRevision;
-    clientSeqRef.current = 0;
+    // Initialize SyncService
+    const syncService = new SyncService(documentStore);
+    syncServiceRef.current = syncService;
 
-    const save = async (options?: { source?: string }) => {
-      if (clearSavingTimerRef.current) {
-        clearTimeout(clearSavingTimerRef.current);
-        clearSavingTimerRef.current = null;
-      }
-      if (inFlightSavesRef.current === 0) {
-        saveStartedAtRef.current = Date.now();
-        setIsSaving(true);
-      }
-      inFlightSavesRef.current += 1;
+    const unsubStatus = syncService.onStatusChange((status) => {
+      onSyncStatusChange?.(status);
+    });
 
-      const content = getContentSnapshot();
-      const formData = new FormData();
-      const clientSeq = ++clientSeqRef.current;
-      const baseRevision = currentRevisionRef.current;
-      formData.append('html', content.html);
-      formData.append('text', content.text);
-      formData.append('editorSessionId', editorSessionId);
-      formData.append('clientSeq', String(clientSeq));
-      formData.append('baseRevision', String(baseRevision));
-      const saveSource = options?.source ?? 'editor';
-      const saveUrl = saveSnapshotId
-        ? `/api/model/document/${docId}?from=${encodeURIComponent(saveSource)}&snapshotId=${encodeURIComponent(saveSnapshotId)}`
-        : `/api/model/document/${docId}?from=${encodeURIComponent(saveSource)}`;
-      try {
-        const response = await fetch(saveUrl, {
-          method: 'PUT',
-          body: formData,
-          keepalive: true,
+    syncService.start(docId);
+
+    // Seed IndexedDB with server content or recover unsynced local content
+    void (async () => {
+      const existing = await documentStore.get(docId);
+      if (!existing || existing.syncStatus === 'synced') {
+        const content = getContentSnapshot();
+        const hash = await contentHash(content.html, content.text);
+        await documentStore.put({
+          docId,
+          html: content.html,
+          text: content.text,
+          updatedAt: Date.now(),
+          serverRevision: initialRevision,
+          syncStatus: 'synced',
+          lastSyncedAt: Date.now(),
+          lastSyncError: null,
+          contentHash: hash,
         });
-        if (response.ok) {
-          const body = await response.json().catch(() => null);
-          const revision =
-            typeof body?.revision === 'number'
-              ? body.revision
-              : currentRevisionRef.current;
-          currentRevisionRef.current = Math.max(
-            currentRevisionRef.current,
-            revision
-          );
-          onRemoteSaveSuccess?.({ content, revision: currentRevisionRef.current });
-          return;
+        syncService.setLastSyncedHash(hash);
+      } else {
+        // Local entry has unsynced changes — compare timestamps
+        const localIsNewer = existing.updatedAt > serverUpdatedAt;
+        if (localIsNewer) {
+          editor.commands.setContent(existing.html, false);
+          toast.info('Recovered unsaved changes');
+          void syncService.forceSave();
+        } else {
+          // Server is newer (e.g., teacher restored a version) — discard stale local
+          const content = getContentSnapshot();
+          const hash = await contentHash(content.html, content.text);
+          await documentStore.put({
+            docId,
+            html: content.html,
+            text: content.text,
+            updatedAt: Date.now(),
+            serverRevision: initialRevision,
+            syncStatus: 'synced',
+            lastSyncedAt: Date.now(),
+            lastSyncError: null,
+            contentHash: hash,
+          });
+          syncService.setLastSyncedHash(hash);
         }
+      }
+    })();
 
-        if (response.status === 409) {
-          const body = await response.json().catch(() => null);
-          if (
-            body?.error === 'stale_client_sequence' ||
-            body?.error === 'stale_base_revision'
-          ) {
-            return;
-          }
-        }
+    // On every editor update: write to IndexedDB immediately, schedule server sync
+    const onUpdate = async () => {
+      const content = getContentSnapshot();
+      const hash = await contentHash(content.html, content.text);
+      const current = await documentStore.get(docId);
+      await documentStore.put({
+        docId,
+        html: content.html,
+        text: content.text,
+        updatedAt: Date.now(),
+        serverRevision: current?.serverRevision ?? initialRevision,
+        syncStatus: 'pending',
+        lastSyncedAt: current?.lastSyncedAt ?? null,
+        lastSyncError: null,
+        contentHash: hash,
+      });
+      syncService.scheduleSave();
+    };
 
-        const reason: SaveFailureReason =
-          response.redirected || response.status === 401 || response.status === 403
-            ? 'auth'
-            : 'server';
-        onRemoteSaveFailure?.({ content, reason });
-      } catch {
-        onRemoteSaveFailure?.({ content, reason: 'network' });
-      } finally {
-        inFlightSavesRef.current = Math.max(0, inFlightSavesRef.current - 1);
-        if (inFlightSavesRef.current > 0) return;
+    const emitSnapshotDebounced = (() => {
+      let timer: ReturnType<typeof setTimeout>;
+      return () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => onContentSnapshot?.(getContentSnapshot()), 400);
+      };
+    })();
 
-        const startedAt = saveStartedAtRef.current ?? Date.now();
-        const elapsed = Date.now() - startedAt;
-        const remainingMs = Math.max(0, 1500 - elapsed);
-        clearSavingTimerRef.current = setTimeout(() => {
-          setIsSaving(false);
-          saveStartedAtRef.current = null;
-          clearSavingTimerRef.current = null;
-        }, remainingMs);
+    // Sync on visibility change
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        void syncService.forceSave({ trigger: 'session-end' });
       }
     };
-    saveNowRef.current = () => save();
+
     onEditorBridgeReady?.({
       getContent: getContentSnapshot,
       setContent: (html: string) => {
         editor.commands.setContent(html, true);
       },
-      saveNow: save,
+      saveNow: (options) => syncService.forceSave(options),
     });
 
-    const saveDebounced = debounce(save, 1500);
-    const emitSnapshotDebounced = debounce(() => {
-      onContentSnapshot?.(getContentSnapshot());
-    }, 400);
-    const emitSnapshotNow = () => onContentSnapshot?.(getContentSnapshot());
-    const saveOnBlur = () => {
-      void save({ source: 'editor-blur' });
-    };
-
     onContentSnapshot?.(getContentSnapshot());
-    editor.on('update', saveDebounced);
+    editor.on('update', onUpdate);
     editor.on('update', emitSnapshotDebounced);
-    editor.on('blur', saveOnBlur);
-    editor.on('blur', emitSnapshotNow);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      if (clearSavingTimerRef.current) {
-        clearTimeout(clearSavingTimerRef.current);
-      }
-      // Fire one final save on unmount (keepalive ensures it survives unload)
-      void save({ source: 'editor-unmount' });
-      saveNowRef.current = null;
+      // Force a final sync attempt before unmount
+      void syncService.forceSave();
+      syncService.stop();
+      syncServiceRef.current = null;
+      unsubStatus();
       onEditorBridgeReady?.(null);
-      editor.off('update', saveDebounced);
+      editor.off('update', onUpdate);
       editor.off('update', emitSnapshotDebounced);
-      editor.off('blur', saveOnBlur);
-      editor.off('blur', emitSnapshotNow);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [
-    editor,
-    docId,
-    editorSessionId,
-    initialRevision,
-    saveSnapshotId,
-    setIsSaving,
-    onContentSnapshot,
-    onRemoteSaveSuccess,
-    onRemoteSaveFailure,
-    onEditorBridgeReady,
-  ]);
+  }, [editor, docId, editorSessionId, initialRevision, serverUpdatedAt, isEditable, onContentSnapshot, onSyncStatusChange, onEditorBridgeReady]);
 
   useEffect(() => {
     if (!editor || !isEditable) return;
@@ -564,9 +536,8 @@ export const Editor = ({
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return;
       if (event.key.toLowerCase() !== 's') return;
-
       event.preventDefault();
-      void saveNowRef.current?.();
+      void syncServiceRef.current?.forceSave();
     };
 
     window.addEventListener('keydown', onKeyDown);

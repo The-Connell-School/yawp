@@ -166,6 +166,7 @@ model Document {
   versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   writeJournals               DocumentWriteJournal[]
+  revisions                   DocumentRevision[]
   grades                      Grade[]
   pasteAlerts                 PasteAlert[]
 
@@ -250,6 +251,18 @@ model DocumentWriteJournal {
   @@index([requestId])
   @@index([traceId])
   @@index([editorSessionId, clientSeq(sort: Desc)])
+}
+
+model DocumentRevision {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  html       String
+  text       String
+  trigger    String   // 'auto' | 'submit' | 'session-start' | 'session-end'
+
+  @@index([documentId, createdAt(sort: Desc)])
 }
 
 model Grade {

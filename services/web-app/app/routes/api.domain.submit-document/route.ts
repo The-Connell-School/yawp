@@ -156,6 +156,20 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       });
     });
 
+    // Create permanent revision for history
+    try {
+      await prisma.documentRevision.create({
+        data: {
+          documentId: document.id,
+          html: document.html ?? '',
+          text: document.text ?? '',
+          trigger: 'submit',
+        },
+      });
+    } catch {
+      // Revision creation is non-fatal
+    }
+
     await prisma.documentWriteJournal.update({
       where: { id: journal.id },
       data: {
