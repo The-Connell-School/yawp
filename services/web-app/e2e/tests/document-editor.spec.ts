@@ -1,8 +1,6 @@
 import { test, expect } from '../test-setup';
 import { TestHelpers } from '../test-helpers';
 import type { Page } from '@playwright/test';
-import { createE2EPrismaClient } from '../prisma-client';
-import { invalidateUserSessions } from '../db-helpers';
 
 const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
 const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
@@ -260,42 +258,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     });
   });
 
-  test('shows session expired indicator when autosave gets auth failure', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    const prisma = createE2EPrismaClient();
-    try {
-      await signIn('jdoe@brock.software', 'johndoe');
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
-      await editor.click();
-      await editor.type('Baseline text before session expiry.');
-      await page.waitForTimeout(5000);
-
-      await invalidateUserSessions({
-        prisma,
-        userId: e2eContext.userId,
-      });
-
-      await editor.click();
-      await editor.type(' This text should trigger auth failure.');
-      // Wait for sync to attempt and fail with 401
-      await page.waitForTimeout(5000);
-
-      // New behavior: inline "Session expired" indicator instead of modal
-      await expect(page.getByText(/session expired/i)).toBeVisible({ timeout: 10000 });
-
-      // Editor stays editable — content is safe in IndexedDB
-      await expect
-        .poll(
-          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
-          { timeout: 5000 }
-        )
-        .toBe('true');
-    } finally {
-      await prisma.$disconnect();
-    }
-  });
+  // Auth expiry e2e test removed: invalidating DB sessions doesn't cause
+  // Cognito JWT validation to fail, so we can't simulate a real 401 in e2e.
+  // The SyncService's auth-expired handling is covered by unit tests.
 
 });
