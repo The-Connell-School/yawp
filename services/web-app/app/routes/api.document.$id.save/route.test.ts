@@ -72,7 +72,8 @@ describe('api.document.$id.save', () => {
     expect(body.savedAt).toBeDefined();
 
     expect(prisma.document.update).toHaveBeenCalledTimes(1);
-    expect(prisma.document.update.mock.calls[0][0]).toMatchObject({
+    const updateCall = prisma.document.update.mock.calls[0][0];
+    expect(updateCall).toMatchObject({
       where: { id: 'doc-1' },
       data: {
         html: '<p>new content</p>',
@@ -80,6 +81,7 @@ describe('api.document.$id.save', () => {
         revision: { increment: 1 },
       },
     });
+    expect(updateCall.data.updatedAt).toBeInstanceOf(Date);
   });
 
   test('creates a revision when none exists (session-start)', async () => {

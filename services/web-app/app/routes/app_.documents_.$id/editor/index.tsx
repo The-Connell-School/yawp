@@ -10,7 +10,6 @@ import { findExcerptRange } from '~/utils/excerpt-position';
 import { documentStore } from '~/utils/document-store';
 import { SyncService, type SyncStatus } from '~/utils/sync-service';
 import { contentHash } from '~/utils/content-hash';
-import { toast } from 'sonner';
 import { useCommentsSelection } from '../comments/selection-context';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 import { Bar } from './bar';
@@ -448,7 +447,6 @@ export const Editor = ({
         const localIsNewer = existing.updatedAt > serverUpdatedAt;
         if (localIsNewer) {
           editor.commands.setContent(existing.html, false);
-          toast.info('Recovered unsaved changes');
           void syncService.forceSave();
         } else {
           // Server is newer (e.g., teacher restored a version) — discard stale local

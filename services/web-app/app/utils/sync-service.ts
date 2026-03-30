@@ -14,7 +14,7 @@ export class SyncService {
   private _lastSyncedHash: string | null = null;
   private _stopped = false;
 
-  constructor(store: DocumentStore, fetchFn: typeof fetch = globalThis.fetch) {
+  constructor(store: DocumentStore, fetchFn: typeof fetch = globalThis.fetch.bind(globalThis)) {
     this._store = store;
     this._fetch = fetchFn;
   }
@@ -140,6 +140,7 @@ export class SyncService {
       this._scheduleRetry();
     } catch (err) {
       // Network error — retry
+      console.warn('[SyncService] fetch failed:', err);
       const message = err instanceof Error ? err.message : 'unknown';
       await this._store.markFailed(this._docId!, message);
       this._setStatus('offline');

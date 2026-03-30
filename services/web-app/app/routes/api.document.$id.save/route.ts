@@ -68,6 +68,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       html,
       text,
       revision: { increment: 1 },
+      updatedAt: new Date(),
     },
     select: { revision: true, updatedAt: true },
   });
