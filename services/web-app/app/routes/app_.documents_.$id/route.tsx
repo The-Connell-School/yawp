@@ -43,7 +43,7 @@ import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
 import { Tutor } from './tutor';
-import { DocumentVersions } from './_components/document-versions';
+import { DocumentHistory } from './_components/document-history';
 import {
   DocumentStatusBadge,
   getDocumentStatusLabel,
@@ -939,7 +939,7 @@ export default function Route() {
                   }}
                 />
                 <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} />
+                <DocumentHistory documentId={data.doc.id} />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (
