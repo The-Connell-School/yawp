@@ -82,8 +82,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     let saveRequestCount = 0;
 
     // Intercept document save API to track save operations but allow real saves
-    await page.route('**/api/model/document/**', async (route) => {
-      if (route.request().method() === 'PUT') {
+    await page.route('**/api/document/*/save', async (route) => {
+      if (route.request().method() === 'POST') {
         saveRequestCount++;
       }
       await route.continue();
@@ -101,8 +101,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to trigger (editor uses a 1500ms debounce)
-    await page.waitForTimeout(2000);
+    // Wait for auto-save to trigger (SyncService uses a 2000ms debounce)
+    await page.waitForTimeout(4000);
 
     // Check that a save request was made
     expect(saveRequestCount).toBeGreaterThan(0);
@@ -157,37 +157,16 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    let versionCreated = false;
-
-    // Mock document version creation API
-    await page.route('**/api/model/document/**/versions', (route) => {
-      if (route.request().method() === 'POST') {
-        versionCreated = true;
-        route.fulfill({
-          status: 201,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            id: 'new-version-id',
-            createdAt: new Date().toISOString(),
-          }),
-        });
-      } else {
-        route.continue();
-      }
-    });
-
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
-    // Add content to trigger version creation
+    // Add content — revisions are created server-side during save
     await editor.type('Content that should create a version.');
 
-    // Wait for auto-save
-    await page.waitForTimeout(500);
+    // Wait for auto-save (SyncService debounce is 2s)
+    await page.waitForTimeout(4000);
 
-    // Check if version creation would be triggered
-    // In the actual app, versions are created on document updates
-    // For now, just verify editor functionality works
+    // Verify editor functionality works
     await expect(editor).toContainText('Content that should create a version.');
   });
 
@@ -201,8 +180,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const saveRequests: string[] = [];
 
     // Track all save requests to verify debouncing works (allow real saves)
-    await page.route('**/api/model/document/**', async (route) => {
-      if (route.request().method() === 'PUT') {
+    await page.route('**/api/document/*/save', async (route) => {
+      if (route.request().method() === 'POST') {
         const body = route.request().postData() ?? '';
         saveRequests.push(body);
       }
@@ -218,8 +197,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await editor.type(`${word} `, { delay: 100 }); // Fast typing
     }
 
-    // Wait for debounced save (editor uses a 1500ms debounce)
-    await page.waitForTimeout(2500);
+    // Wait for debounced save (SyncService uses a 2000ms debounce)
+    await page.waitForTimeout(4000);
 
     // Verify all content is present
     for (const word of words) {
@@ -253,8 +232,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     let firstSaveReleased = false;
     let seenSaveCount = 0;
 
-    await page.route('**/api/model/document/**', async (route) => {
-      if (route.request().method() !== 'PUT') {
+    await page.route('**/api/document/*/save', async (route) => {
+      if (route.request().method() !== 'POST') {
         await route.continue();
         return;
       }
