@@ -18,7 +18,7 @@ describe('SyncService', () => {
         })
       )
     );
-    service = new SyncService(store, mockFetch as typeof fetch);
+    service = new SyncService(store, mockFetch as unknown as typeof fetch);
   });
 
   afterEach(() => {
