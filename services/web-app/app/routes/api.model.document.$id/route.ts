@@ -5,8 +5,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { getAuditContext, updateAuditContext } from '~/utils/audit-context.server';
-import { auditAction, recordAuditEvent } from '~/utils/audit.server';
 
 const PUT = z.object({
   text: z.string().optional(),
@@ -34,9 +32,6 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
-  updateAuditContext({
-    documentId: params.id,
-  });
   const snapshotId = new URL(request.url).searchParams.get('snapshotId');
 
   let formData: FormData | null = null;
@@ -76,11 +71,6 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const fd = formData ?? (await request.formData());
   const { error, data } = await parseFormData(fd, PUT);
   if (error) return validationError(error);
-  updateAuditContext({
-    documentId: params.id,
-    editorSessionId: data.editorSessionId ?? null,
-  });
-
   const [user, document] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -92,7 +82,6 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   ]);
 
   const source = new URL(request.url).searchParams.get('from') ?? 'unknown';
-  const auditContext = getAuditContext();
   const hasBodyMutation = data.html !== undefined || data.text !== undefined;
   const resolvedHtml = data.html ?? document.html ?? '';
   const resolvedText = data.text ?? document.text ?? '';
@@ -115,11 +104,8 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       eventType: hasBodyMutation ? 'document.save' : 'document.title_update',
       source,
       status: 'pending',
-      requestId: auditContext?.requestId ?? null,
-      traceId: auditContext?.traceId ?? null,
       userId,
       profileId: profile.id,
-      sessionId: auditContext?.sessionId ?? null,
       editorSessionId: data.editorSessionId ?? null,
       clientSeq: data.clientSeq ?? null,
       baseRevision: data.baseRevision ?? null,
@@ -367,14 +353,8 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
         },
       });
     }
-  } catch (err) {
-    await recordAuditEvent({
-      eventType: 'document.snapshot.failed',
-      documentId: document.id,
-      payload: {
-        error: err instanceof Error ? err.message : String(err),
-      },
-    });
+  } catch {
+    // Snapshot creation is non-fatal
   }
 
   if (!update) {
@@ -401,4 +381,6 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 };
 
-export const action = auditAction(actionImpl);
+export async function action(args: ActionFunctionArgs) {
+  return actionImpl(args);
+}

@@ -17,6 +17,9 @@ const prisma = {
     create: mock(),
     update: mock(),
   },
+  documentRevision: {
+    create: mock(),
+  },
   $transaction: mock(),
 };
 
@@ -39,9 +42,6 @@ mock.module('~/utils/toast.server', () => ({
       headers: { 'Content-Type': 'application/json' },
     }),
 }));
-mock.module('~/utils/audit.server', () => ({
-  auditAction: (handler: any) => handler,
-}));
 
 const { action } = await import('./route');
 
@@ -53,6 +53,7 @@ describe('api.domain.submit-document', () => {
     prisma.documentComment.updateMany.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
+    prisma.documentRevision.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();

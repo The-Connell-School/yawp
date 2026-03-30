@@ -4,8 +4,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { getAuditContext, updateAuditContext } from '~/utils/audit-context.server';
-import { auditAction, recordAuditEvent } from '~/utils/audit.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({ versionId: z.string() });
@@ -39,21 +37,13 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   }
 
   const sourceRecord = version ?? snapshot;
-  const auditContext = getAuditContext();
-
-  updateAuditContext({
-    documentId: sourceRecord!.documentId,
-  });
 
   const journal = await prisma.documentWriteJournal.create({
     data: {
       eventType: 'document.restore',
       source: 'restore-document-version',
       status: 'pending',
-      requestId: auditContext?.requestId ?? null,
-      traceId: auditContext?.traceId ?? null,
       userId,
-      sessionId: auditContext?.sessionId ?? null,
       documentId: sourceRecord!.documentId,
       title: sourceRecord!.document.title,
       html: sourceRecord!.html,
@@ -111,16 +101,10 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           error instanceof Error ? error.message : 'document_restore_failed',
       },
     });
-    await recordAuditEvent({
-      eventType: 'document.restore.failed',
-      documentId: sourceRecord!.documentId,
-      payload: {
-        versionId: data.versionId,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    });
     throw error;
   }
 };
 
-export const action = auditAction(actionImpl);
+export async function action(args: ActionFunctionArgs) {
+  return actionImpl(args);
+}
