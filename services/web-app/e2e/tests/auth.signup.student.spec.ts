@@ -128,6 +128,7 @@ test.describe('Authentication - student sign up', () => {
       });
 
       // Act 3: complete onboarding form
+      await page.waitForLoadState('networkidle');
       await page.locator('input[name="name"]').fill('Student E2E');
 
       // If there are multiple classes for the code, pick a class.
