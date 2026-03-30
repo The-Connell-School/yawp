@@ -42,7 +42,6 @@ import {
   getPendingSave,
   clearPendingSave,
 } from '~/utils/pending-document-save';
-import { queueBrowserAuditEvent } from '~/utils/audit-browser';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
@@ -604,19 +603,6 @@ export default function Route() {
     const redirectTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
-    queueBrowserAuditEvent(
-      {
-        eventType: 'auth.logout_redirected',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-        payload: {
-          redirectTo,
-        },
-      },
-      { flush: true, useBeacon: true }
-    );
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
   }, [
     data.doc.id,
@@ -702,19 +688,6 @@ export default function Route() {
       bridge.setContent(pending.html);
       latestEditorContentRef.current = { html: pending.html, text: pending.text };
       toast.info('Recovered unsaved changes');
-      queueBrowserAuditEvent(
-        {
-          eventType: 'document.pending_save_restored',
-          documentId: data.doc.id,
-          userId: user.id,
-          profileId: user.selectedProfile?.id ?? null,
-          editorSessionId,
-          payload: {
-            source,
-          },
-        },
-        { flush: true }
-      );
       void bridge.saveNow({ source: 'editor-recovery' });
       return true;
     },
@@ -746,64 +719,11 @@ export default function Route() {
     setIsSessionLocked(false);
   }, [data.doc.id]);
 
-  useEffect(() => {
-    queueBrowserAuditEvent({
-      eventType: 'document.editor_open',
-      documentId: data.doc.id,
-      userId: user.id,
-      profileId: user.selectedProfile?.id ?? null,
-      editorSessionId,
-      payload: {
-        revision: data.doc.revision,
-        submittedAt: data.doc.submittedAt,
-      },
-    });
-  }, [
-    data.doc.id,
-    data.doc.revision,
-    data.doc.submittedAt,
-    editorSessionId,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  useEffect(() => {
-    if (!isSessionLocked) return;
-    queueBrowserAuditEvent(
-      {
-        eventType: 'document.editor_locked',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-        payload: {
-          reason: 'session_expired',
-        },
-      },
-      { flush: true }
-    );
-  }, [
-    data.doc.id,
-    editorSessionId,
-    isSessionLocked,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
 
   useEffect(() => {
     if (!isInitialAuthCheckComplete || isSessionLocked) return;
     if (!sessionStorage.getItem(loginReturnStorageKey)) return;
     sessionStorage.removeItem(loginReturnStorageKey);
-    queueBrowserAuditEvent(
-      {
-        eventType: 'auth.login_returned',
-        documentId: data.doc.id,
-        userId: user.id,
-        profileId: user.selectedProfile?.id ?? null,
-        editorSessionId,
-      },
-      { flush: true }
-    );
   }, [
     data.doc.id,
     editorSessionId,
