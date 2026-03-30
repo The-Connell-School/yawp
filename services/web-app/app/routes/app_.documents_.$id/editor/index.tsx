@@ -15,6 +15,9 @@ import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';
+import { documentStore } from '~/utils/document-store';
+import { SyncService } from '~/utils/sync-service';
+import { contentHash } from '~/utils/content-hash';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;
@@ -221,6 +224,7 @@ type Props = {
     reason: SaveFailureReason;
   }) => void;
   onEditorBridgeReady?: (bridge: EditorBridge | null) => void;
+  onSyncStatusChange?: (status: import('~/utils/sync-service').SyncStatus) => void;
 };
 
 export const Editor = ({
@@ -239,6 +243,7 @@ export const Editor = ({
   onRemoteSaveSuccess,
   onRemoteSaveFailure,
   onEditorBridgeReady,
+  onSyncStatusChange,
 }: Props) => {
   const saveNowRef = useRef<(() => Promise<void>) | null>(null);
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null);
@@ -247,6 +252,7 @@ export const Editor = ({
   const clearSavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clientSeqRef = useRef(0);
   const currentRevisionRef = useRef(initialRevision);
+  const syncServiceRef = useRef<SyncService | null>(null);
   const {
     activeCommentId,
     hoveredCommentId,
@@ -532,6 +538,25 @@ export const Editor = ({
     editor.on('blur', saveOnBlur);
     editor.on('blur', emitSnapshotNow);
 
+    // Local-first: write to IndexedDB on every update
+    editor.on('update', async ({ editor: e }) => {
+      const html = e.getHTML();
+      const text = e.getText();
+      const hash = await contentHash(html, text);
+      await documentStore.put({
+        docId,
+        html,
+        text,
+        updatedAt: Date.now(),
+        serverRevision: currentRevisionRef.current,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: hash,
+      });
+      syncServiceRef.current?.scheduleSave();
+    });
+
     return () => {
       if (clearSavingTimerRef.current) {
         clearTimeout(clearSavingTimerRef.current);
@@ -572,6 +597,34 @@ export const Editor = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [editor, isEditable]);
+
+  // Local-first sync: runs alongside existing save flow
+  useEffect(() => {
+    if (!docId) return;
+
+    const syncService = new SyncService(documentStore);
+    syncService.start(docId);
+
+    const unsub = onSyncStatusChange
+      ? syncService.onStatusChange(onSyncStatusChange)
+      : undefined;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        void syncService.forceSave({ trigger: 'session-end' });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    syncServiceRef.current = syncService;
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void syncService.forceSave({ trigger: 'session-end' });
+      syncService.stop();
+      unsub?.();
+    };
+  }, [docId]);
 
   useEffect(() => {
     if (!editor) return;
