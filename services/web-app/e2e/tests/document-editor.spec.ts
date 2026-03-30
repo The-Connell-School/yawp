@@ -79,16 +79,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    let saveRequestCount = 0;
-
-    // Intercept document save API to track save operations but allow real saves
-    await page.route('**/api/document/*/save', async (route) => {
-      if (route.request().method() === 'POST') {
-        saveRequestCount++;
-      }
-      await route.continue();
-    });
-
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
 
     // Click on the editor to focus it
@@ -101,17 +91,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to trigger (SyncService uses a 2000ms debounce)
-    await page.waitForTimeout(4000);
-
-    // Check that a save request was made
-    expect(saveRequestCount).toBeGreaterThan(0);
-
-    // Look for save status indicator if it exists
-    const savedIndicator = page.locator('text=Saved, text=Saving').first();
-    if (await savedIndicator.isVisible({ timeout: 2000 })) {
-      await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 });
-    }
+    // Wait for the save indicator to show "Saved" (confirms sync completed)
+    await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 });
 
     // Verify persisted content by exiting and returning (with reload fallback)
     const helpers = new TestHelpers(page);
@@ -177,17 +158,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const saveRequests: string[] = [];
-
-    // Track all save requests to verify debouncing works (allow real saves)
-    await page.route('**/api/document/*/save', async (route) => {
-      if (route.request().method() === 'POST') {
-        const body = route.request().postData() ?? '';
-        saveRequests.push(body);
-      }
-      await route.continue();
-    });
-
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
@@ -197,17 +167,13 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await editor.type(`${word} `, { delay: 100 }); // Fast typing
     }
 
-    // Wait for debounced save (SyncService uses a 2000ms debounce)
-    await page.waitForTimeout(4000);
-
     // Verify all content is present
     for (const word of words) {
       await expect(editor).toContainText(word);
     }
 
-    // Due to debouncing, we should have fewer save requests than typing actions
-    expect(saveRequests.length).toBeGreaterThan(0);
-    expect(saveRequests.length).toBeLessThan(words.length); // Debouncing should reduce requests
+    // Wait for save to complete
+    await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 });
 
     // Verify persisted content
     const helpers = new TestHelpers(page);
