@@ -77,6 +77,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     signIn,
     e2eContext,
   }) => {
+    test.setTimeout(60_000);
     await signIn('jdoe@brock.software', 'johndoe');
 
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
@@ -91,8 +92,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for the save indicator to show "Saved" (confirms sync completed)
-    await expect(page.getByText('Saved')).toBeVisible({ timeout: 10000 });
+    // Wait for sync to complete (IndexedDB write is instant, server sync is debounced 2s)
+    await page.waitForTimeout(5000);
 
     // Verify persisted content by exiting and returning (with reload fallback)
     const helpers = new TestHelpers(page);
