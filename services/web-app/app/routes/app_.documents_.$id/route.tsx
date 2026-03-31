@@ -398,30 +398,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-/**
- * Block loader revalidation only for document-save mutations.
- * The editor holds its own state — revalidating after a save risks
- * overwriting unsaved content with stale DB data.
- * All other fetcher mutations (tutor, comments, grading, etc.) need
- * revalidation so their UI updates with fresh loader data.
- */
-export function shouldRevalidate({
-  formAction,
-  defaultShouldRevalidate,
-}: {
-  formAction?: string;
-  defaultShouldRevalidate: boolean;
-  [key: string]: unknown;
-}) {
-  if (
-    formAction &&
-    (formAction.includes('/api/model/document/') ||
-      formAction.includes('/api/document/') && formAction.includes('/save'))
-  ) {
-    return false;
-  }
-  return defaultShouldRevalidate;
-}
 
 export default function Route() {
   const data = useLoaderData<typeof loader>();
