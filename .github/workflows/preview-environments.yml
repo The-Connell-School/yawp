@@ -185,12 +185,33 @@ jobs:
             -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
+          # Import IAM roles if they already exist (leftover from prior deploys)
+          for role_resource in aws_iam_role.apprunner_access aws_iam_role.apprunner_instance; do
+            role_name="${TF_VAR_app_name}-${TF_VAR_env}-${role_resource##*.}"
+            role_name="${role_name//_/-}"
+            if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
+              echo "Importing existing IAM role: $role_name"
+              terraform -chdir=infra-pr import "$role_resource" "$role_name" 2>/dev/null || true
+            fi
+          done
           for attempt in $(seq 1 8); do
             set +e
             terraform -chdir=infra-pr apply -auto-approve 2>&1 | tee /tmp/tf-apply.log
             tf_rc=$?
             set -e
             if [[ "$tf_rc" -eq 0 ]]; then break; fi
+            if grep -q 'EntityAlreadyExists' /tmp/tf-apply.log; then
+              echo "IAM entity exists; attempting import and retry ($attempt/8)..."
+              # Extract role names from error and import
+              grep -oP 'Role with name \K[^ ]+' /tmp/tf-apply.log | while read -r rname; do
+                if echo "$rname" | grep -q "access"; then
+                  terraform -chdir=infra-pr import aws_iam_role.apprunner_access "$rname" 2>/dev/null || true
+                elif echo "$rname" | grep -q "instance"; then
+                  terraform -chdir=infra-pr import aws_iam_role.apprunner_instance "$rname" 2>/dev/null || true
+                fi
+              done
+              continue
+            fi
             if ! grep -q 'OPERATION_IN_PROGRESS' /tmp/tf-apply.log; then exit "$tf_rc"; fi
             if [[ "$attempt" -eq 8 ]]; then exit "$tf_rc"; fi
             echo "App Runner busy; sleeping 45s before terraform retry ($attempt/8)..."
