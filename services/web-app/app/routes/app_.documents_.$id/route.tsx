@@ -399,9 +399,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 /**
- * Prevent loader revalidation when fetcher mutations fire (tutor, comments, etc.).
- * The editor holds its own state — revalidating the loader mid-edit risks
+ * Block loader revalidation only for document-save mutations.
+ * The editor holds its own state — revalidating after a save risks
  * overwriting unsaved content with stale DB data.
+ * All other fetcher mutations (tutor, comments, grading, etc.) need
+ * revalidation so their UI updates with fresh loader data.
  */
 export function shouldRevalidate({
   formAction,
@@ -411,9 +413,13 @@ export function shouldRevalidate({
   defaultShouldRevalidate: boolean;
   [key: string]: unknown;
 }) {
-  // Allow revalidation for navigations to this route (initial load, hard refresh)
-  // Block revalidation from fetcher submissions (tutor, comments, grading, etc.)
-  if (formAction) return false;
+  if (
+    formAction &&
+    (formAction.includes('/api/model/document/') ||
+      formAction.includes('/api/document/') && formAction.includes('/save'))
+  ) {
+    return false;
+  }
   return defaultShouldRevalidate;
 }
 
