@@ -534,35 +534,49 @@ export const Editor = ({
 
     onContentSnapshot?.(getContentSnapshot());
 
+    // When editing a teacher snapshot, use the old save flow (PUT with snapshotId).
+    // For normal student editing, use SyncService (local-first POST).
+    const useOldSaveFlow = !!saveSnapshotId;
+
+    if (useOldSaveFlow) {
+      editor.on('update', saveDebounced);
+      editor.on('blur', saveOnBlur);
+    } else {
+      // Local-first: write to IndexedDB on every update, sync via SyncService
+      editor.on('update', async ({ editor: e }) => {
+        const html = e.getHTML();
+        const text = e.getText();
+        const hash = await contentHash(html, text);
+        await documentStore.put({
+          docId,
+          html,
+          text,
+          updatedAt: Date.now(),
+          serverRevision: currentRevisionRef.current,
+          syncStatus: 'pending',
+          lastSyncedAt: null,
+          lastSyncError: null,
+          contentHash: hash,
+        });
+        syncServiceRef.current?.scheduleSave();
+      });
+    }
+
     editor.on('update', emitSnapshotDebounced);
     editor.on('blur', emitSnapshotNow);
-
-    // Local-first: write to IndexedDB on every update, sync via SyncService
-    editor.on('update', async ({ editor: e }) => {
-      const html = e.getHTML();
-      const text = e.getText();
-      const hash = await contentHash(html, text);
-      await documentStore.put({
-        docId,
-        html,
-        text,
-        updatedAt: Date.now(),
-        serverRevision: currentRevisionRef.current,
-        syncStatus: 'pending',
-        lastSyncedAt: null,
-        lastSyncError: null,
-        contentHash: hash,
-      });
-      syncServiceRef.current?.scheduleSave();
-    });
 
     return () => {
       if (clearSavingTimerRef.current) {
         clearTimeout(clearSavingTimerRef.current);
       }
+      if (useOldSaveFlow) {
+        void save({ source: 'editor-unmount' });
+      }
       saveNowRef.current = null;
       onEditorBridgeReady?.(null);
+      editor.off('update', saveDebounced);
       editor.off('update', emitSnapshotDebounced);
+      editor.off('blur', saveOnBlur);
       editor.off('blur', emitSnapshotNow);
     };
   }, [
