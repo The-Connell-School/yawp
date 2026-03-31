@@ -271,7 +271,7 @@ test.describe.serial('Document Regression Suite', () => {
     }
   });
 
-  test('restore button exists in history sheet', async ({
+  test('history sheet has close button but no restore button', async ({
     page,
     signIn,
     e2eContext,
@@ -285,9 +285,13 @@ test.describe.serial('Document Regression Suite', () => {
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
-    // Verify restore button exists (even if broken, it should be present)
+    // Restore button was removed (it was broken)
     const restoreButton = sheet.locator('button', { hasText: /restore/i });
-    await expect(restoreButton.first()).toBeVisible({ timeout: 3000 });
+    await expect(restoreButton).not.toBeVisible({ timeout: 2000 });
+
+    // Close button should exist
+    const closeButton = sheet.locator('button', { hasText: /close/i });
+    await expect(closeButton.first()).toBeVisible();
   });
 
   test('editor remains functional after closing history sheet', async ({

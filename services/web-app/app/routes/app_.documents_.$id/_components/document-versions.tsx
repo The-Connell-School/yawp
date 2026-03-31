@@ -99,7 +99,6 @@ export const DocumentVersions = ({ documentId, defaultMode = 'snapshots' }: Prop
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const fetcher = useFetcher<VersionLike[]>({ key: 'document-versions' });
-  const restoreFetcher = useFetcher({ key: 'restore-version' });
 
   // Revisions state
   const [allRevisions, setAllRevisions] = useState<Revision[]>([]);
@@ -188,13 +187,6 @@ export const DocumentVersions = ({ documentId, defaultMode = 'snapshots' }: Prop
     setHasMore(true);
     loadVersions(1);
   };
-
-  useEffect(() => {
-    if (restoreFetcher.state === 'idle' && restoreFetcher.data) {
-      setOpen(false);
-      window.location.reload();
-    }
-  }, [restoreFetcher.state, restoreFetcher.data]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -401,24 +393,7 @@ export const DocumentVersions = ({ documentId, defaultMode = 'snapshots' }: Prop
           </div>
         </div>
         <SheetFooter>
-          <div className="flex items-center gap-2">
-            <restoreFetcher.Form
-              method="post"
-              action="/api/domain/restore-document-version"
-            >
-              <input type="hidden" name="versionId" value={version?.id ?? ''} />
-              <Button
-                type="submit"
-                variant="destructive"
-                disabled={!version || restoreFetcher.state === 'submitting'}
-              >
-                {restoreFetcher.state === 'submitting'
-                  ? 'Restoring…'
-                  : 'Restore and Reload'}
-              </Button>
-            </restoreFetcher.Form>
-            <Button onClick={() => setOpen(false)}>Close</Button>
-          </div>
+          <Button onClick={() => setOpen(false)}>Close</Button>
         </SheetFooter>
       </SheetContent>
     </Sheet>
