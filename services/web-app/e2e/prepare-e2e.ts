@@ -209,29 +209,41 @@ export async function prepareE2E() {
   await resetDatabase(databaseUrl);
   writeE2EEnv(e2eDir, databaseUrl);
 
-  // 3. Download production dump (cached locally)
-  const dumpPath = downloadDump(e2eDir);
-
-  // 4. Restore dump into fresh database
-  restoreDump(dumpPath, databaseUrl);
-
-  // 5. Run any newer migrations
   const env = { ...process.env, DATABASE_URL: databaseUrl };
+  let usedProductionDump = false;
+
+  // 3. Try production dump approach (requires AWS credentials)
+  try {
+    const dumpPath = downloadDump(e2eDir);
+    restoreDump(dumpPath, databaseUrl);
+    usedProductionDump = true;
+  } catch (err) {
+    console.warn('⚠️  Production dump not available, falling back to synthetic seed');
+    console.warn('   ', err instanceof Error ? err.message : err);
+  }
+
+  // 4. Run migrations
   run('bun prisma generate', { cwd: prismaDir, env });
   run('bun prisma migrate deploy', { cwd: prismaDir, env });
 
-  // 6. Overlay test users and capture context
-  const ctxOutput = execSync(
-    'bun run packages/prisma/scripts/seed-overlay.ts',
-    { cwd: rootDir, env: { ...env }, stdio: 'pipe' }
-  ).toString();
+  if (usedProductionDump) {
+    // 5a. Overlay test users on production data and capture context
+    const ctxOutput = execSync(
+      'bun run packages/prisma/scripts/seed-overlay.ts',
+      { cwd: rootDir, env: { ...env }, stdio: 'pipe' }
+    ).toString();
 
-  // The overlay prints JSON context as its last output
-  const jsonMatch = ctxOutput.match(/\{[\s\S]*\}$/m);
-  if (!jsonMatch) {
-    throw new Error('seed-overlay did not produce valid JSON context');
+    const jsonMatch = ctxOutput.match(/\{[\s\S]*\}$/m);
+    if (!jsonMatch) {
+      throw new Error('seed-overlay did not produce valid JSON context');
+    }
+    fs.writeFileSync(ctxPath, jsonMatch[0]);
+  } else {
+    // 5b. Fall back to synthetic seed
+    const { seedE2E } = await import('./seed-e2e');
+    const context = await seedE2E();
+    fs.writeFileSync(ctxPath, JSON.stringify(context, null, 2));
   }
-  fs.writeFileSync(ctxPath, jsonMatch[0]);
 
   // eslint-disable-next-line no-console
   console.log('E2E prepare complete', {

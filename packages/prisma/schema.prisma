@@ -168,6 +168,7 @@ model Document {
   writeJournals               DocumentWriteJournal[]
   grades                      Grade[]
   pasteAlerts                 PasteAlert[]
+  revisions                   DocumentRevision[]
 
   @@index([assignmentId])
 }
@@ -218,6 +219,18 @@ model DocumentSnapshot {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([submittedAt, archivedAt])
+}
+
+model DocumentRevision {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  html       String
+  text       String
+  trigger    String
+
+  @@index([documentId, createdAt(sort: Desc)])
 }
 
 model DocumentWriteJournal {

@@ -84,9 +84,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
 
     let saveRequestCount = 0;
 
-    // Intercept document save API to track save operations but allow real saves
+    // Intercept document save APIs to track save operations but allow real saves
     await page.route('**/api/model/document/**', async (route) => {
       if (route.request().method() === 'PUT') {
+        saveRequestCount++;
+      }
+      await route.continue();
+    });
+    await page.route('**/api/document/*/save', async (route) => {
+      if (route.request().method() === 'POST') {
         saveRequestCount++;
       }
       await route.continue();
@@ -104,8 +110,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to trigger (editor uses a 1500ms debounce)
-    await page.waitForTimeout(2000);
+    // Wait for auto-save to trigger (SyncService uses a 2s debounce)
+    await page.waitForTimeout(4000);
 
     // Check that a save request was made
     expect(saveRequestCount).toBeGreaterThan(0);

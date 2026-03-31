@@ -208,6 +208,22 @@ jobs:
       - name: Wait for preview URL
         run: |
           set -euo pipefail
+          SVC_ARN=$(terraform -chdir=infra-pr output -raw apprunner_service_arn)
+          echo "Waiting for App Runner status RUNNING (not OPERATION_IN_PROGRESS) after deployment..."
+          STATUS=""
+          for i in $(seq 1 90); do
+            STATUS=$(aws apprunner describe-service --service-arn "$SVC_ARN" --region "${AWS_REGION}" --query 'Service.Status' --output text)
+            if [[ "$STATUS" == "RUNNING" ]]; then
+              echo "App Runner status RUNNING after attempt $i."
+              break
+            fi
+            echo "Attempt $i/90 — App Runner status: $STATUS"
+            sleep 10
+          done
+          if [[ "${STATUS:-}" != "RUNNING" ]]; then
+            echo "App Runner did not reach RUNNING in time (last status: ${STATUS:-unknown})."
+            exit 1
+          fi
           RAW="${{ steps.tf.outputs.url }}"
           if [[ "$RAW" != http* ]]; then PREVIEW_BASE_URL="https://${RAW}"; else PREVIEW_BASE_URL="$RAW"; fi
           echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
@@ -217,7 +233,7 @@ jobs:
               echo "Preview responded after attempt $i."
               exit 0
             fi
-            echo "Attempt $i/60 — App Runner may still be deploying..."
+            echo "Attempt $i/60 — App Runner may still be warming up..."
             sleep 10
           done
           echo "Preview URL did not return HTTP 200 in time."
