@@ -308,8 +308,8 @@ test.describe.serial('Document Regression Suite', () => {
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
-    // Close via the Close button
-    const closeButton = sheet.locator('button', { hasText: /close/i });
+    // Close via the Close button (use last() to avoid the sheet's built-in X close)
+    const closeButton = sheet.locator('button', { hasText: /^close$/i }).last();
     await closeButton.click();
     await expect(sheet).not.toBeVisible({ timeout: 3000 });
 
