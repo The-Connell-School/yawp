@@ -398,6 +398,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
+/**
+ * Prevent loader revalidation when fetcher mutations fire (tutor, comments, etc.).
+ * The editor holds its own state — revalidating the loader mid-edit risks
+ * overwriting unsaved content with stale DB data.
+ */
+export function shouldRevalidate({
+  formAction,
+  defaultShouldRevalidate,
+}: {
+  formAction?: string;
+  defaultShouldRevalidate: boolean;
+  [key: string]: unknown;
+}) {
+  // Allow revalidation for navigations to this route (initial load, hard refresh)
+  // Block revalidation from fetcher submissions (tutor, comments, grading, etc.)
+  if (formAction) return false;
+  return defaultShouldRevalidate;
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
