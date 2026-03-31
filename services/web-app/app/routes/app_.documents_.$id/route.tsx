@@ -66,7 +66,6 @@ import {
 import { formatDateOnly } from '~/utils/date-only';
 import type { SyncStatus } from '~/utils/sync-service';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
-import { syncLocalFirstFromUrl } from '~/utils/local-first-flag';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
   items: T[];
@@ -408,7 +407,6 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
-  const [localFirstEnabled] = useState(() => syncLocalFirstFromUrl());
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [hasSaveError, setHasSaveError] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
@@ -1062,26 +1060,9 @@ export default function Route() {
             )}
             {!isTeacherGradingTabOpen ? (
               <div className="flex items-center gap-2">
-                {localFirstEnabled ? (
-                  <SaveStatusIndicator status={syncStatus} />
-                ) : hasSaveError ? (
-                  <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <p className="text-xs font-medium">Save failed</p>
-                  </div>
-                ) : isSaving ? (
-                  <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <p className="text-xs font-medium">Saving</p>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 rounded-full border bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    <Check className="h-3.5 w-3.5" />
-                    <p className="mr-1 text-xs font-medium">Saved</p>
-                  </div>
-                )}
+                <SaveStatusIndicator status={syncStatus} />
                 <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} defaultMode={localFirstEnabled ? 'revisions' : 'snapshots'} />
+                <DocumentVersions documentId={data.doc.id} defaultMode="revisions" />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (

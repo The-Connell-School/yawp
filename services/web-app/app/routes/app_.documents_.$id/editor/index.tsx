@@ -18,7 +18,6 @@ import { TabIndent } from './extensions/tab-indent';
 import { documentStore } from '~/utils/document-store';
 import { SyncService } from '~/utils/sync-service';
 import { contentHash } from '~/utils/content-hash';
-import { isLocalFirstEnabled } from '~/utils/local-first-flag';
 
 const debounce = (func: Function, delay: number) => {
   let timeoutId: NodeJS.Timeout;
@@ -535,18 +534,10 @@ export const Editor = ({
 
     onContentSnapshot?.(getContentSnapshot());
 
-    const localFirstActive = isLocalFirstEnabled();
-
-    // Old save flow: only register when local-first is OFF
-    if (!localFirstActive) {
-      editor.on('update', saveDebounced);
-      editor.on('blur', saveOnBlur);
-    }
-
     editor.on('update', emitSnapshotDebounced);
     editor.on('blur', emitSnapshotNow);
 
-    // Local-first: write to IndexedDB on every update
+    // Local-first: write to IndexedDB on every update, sync via SyncService
     editor.on('update', async ({ editor: e }) => {
       const html = e.getHTML();
       const text = e.getText();
@@ -569,14 +560,9 @@ export const Editor = ({
       if (clearSavingTimerRef.current) {
         clearTimeout(clearSavingTimerRef.current);
       }
-      if (!localFirstActive) {
-        void save({ source: 'editor-unmount' });
-      }
       saveNowRef.current = null;
       onEditorBridgeReady?.(null);
-      editor.off('update', saveDebounced);
       editor.off('update', emitSnapshotDebounced);
-      editor.off('blur', saveOnBlur);
       editor.off('blur', emitSnapshotNow);
     };
   }, [
