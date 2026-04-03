@@ -89,8 +89,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     await prisma.documentRevision.create({
       data: {
         documentId: document.id,
-        html: document.html ?? '',
-        text: document.text ?? '',
+        html: html,
+        text: text,
         trigger: resolvedTrigger ?? (!lastRevision ? 'session-start' : 'auto'),
       },
     });
