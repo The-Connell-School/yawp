@@ -1,14 +1,16 @@
-import { type Fetcher, useFetchers } from 'react-router';
 import { MessageCircleOff, MessageCircle } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
-import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { Comment, type Comment as CommentType } from './comment';
 import { useCommentsSelection } from './selection-context';
 
-type Props = { comments: CommentType[]; readOnly?: boolean };
+type Props = {
+  comments: CommentType[];
+  readOnly?: boolean;
+  onResponseCreated?: (commentId: string, response: any) => void;
+};
 
 type ExtendedProps = Props & { className?: string };
 
@@ -16,11 +18,8 @@ export const Comments = ({
   comments,
   readOnly = false,
   className,
+  onResponseCreated,
 }: ExtendedProps) => {
-  const user = useUser();
-  const fetcher = useFetchers().find(
-    (f) => f.key === 'create-document-comment'
-  );
   const { activeCommentId, setActiveCommentId } = useCommentsSelection();
   const [commentsExpanded, setCommentsExpanded] = useLocalStorage(
     `commentsExpanded-${comments[0]?.documentId}`,
@@ -28,22 +27,6 @@ export const Comments = ({
   );
 
   useBlurComments(comments);
-  useFocusOptimisticComment(fetcher);
-
-  const optimisticComment: CommentType | [] =
-    !readOnly && fetcher?.formData
-      ? {
-          profile: user.selectedProfile as any,
-          profileId: user.selectedProfile!.id,
-          id: 'optimistic-document-comment',
-          createdAt: new Date(),
-          content: fetcher.formData.get('content') as string,
-          highlightId: fetcher.formData.get('highlightId') as string,
-          archivedAt: null,
-          responses: [],
-          documentId: '',
-        }
-      : [];
 
   return (
     <div
@@ -77,8 +60,13 @@ export const Comments = ({
       >
         {comments.length > 0 ? (
           <>
-            {comments.concat(optimisticComment).map((comment) => (
-              <Comment key={comment.id} {...comment} readOnly={readOnly} />
+            {comments.map((comment) => (
+              <Comment
+                key={comment.id}
+                {...comment}
+                readOnly={readOnly}
+                onResponseCreated={onResponseCreated}
+              />
             ))}
           </>
         ) : (
@@ -122,16 +110,4 @@ const useBlurComments = (comments: CommentType[]) => {
       document.removeEventListener('click', handleClickOutside);
     };
   }, [comments]);
-};
-
-const useFocusOptimisticComment = (fetcher: Fetcher | undefined) => {
-  useEffect(() => {
-    if (fetcher && fetcher.state === 'idle' && fetcher.data) {
-      const comment = document.getElementById(`comment-${fetcher.data.id}`);
-      if (comment) {
-        comment.scrollIntoView({ behavior: 'smooth' });
-        comment.classList.add('bg-primary/20', 'shadow-lg');
-      }
-    }
-  }, [fetcher]);
 };

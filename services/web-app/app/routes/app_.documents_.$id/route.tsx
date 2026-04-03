@@ -401,11 +401,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-export function shouldRevalidate(_args: ShouldRevalidateFunctionArgs) {
-  // Never revalidate the document page loader from fetcher submissions.
-  // The editor owns document state client-side. Server state flows
-  // through explicit fetch() calls, not loader revalidation.
-  // This prevents stale DB content from interfering with editor state.
+export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  // Allow revalidation when navigating with ?spa=1 (used by tutor/CMS
+  // actions that need fresh server data after a mutation).
+  if (args.nextUrl.searchParams.has('spa')) {
+    return true;
+  }
+
+  // Block all other revalidation — the editor owns document state
+  // client-side. Server state flows through explicit fetch() calls,
+  // not loader revalidation. This prevents stale DB content from
+  // interfering with editor state.
   return false;
 }
 
@@ -548,9 +554,12 @@ export default function Route() {
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
-  const allComments = (data.doc.comments as any[]) ?? [];
-  const activeComments = allComments.filter((c) => !c.archivedAt);
-  const archivedComments = allComments.filter((c) => !!c.archivedAt);
+  const [comments, setComments] = useState<any[]>(
+    () => (data.doc.comments as any[]) ?? []
+  );
+  const allComments = comments;
+  const activeComments = allComments.filter((c: any) => !c.archivedAt);
+  const archivedComments = allComments.filter((c: any) => !!c.archivedAt);
   const visibleComments = isSubmitted
     ? showOldComments
       ? allComments
@@ -592,6 +601,24 @@ export default function Route() {
       prev.filter((currentId) => currentId !== id)
     );
   }, []);
+
+  const handleCommentCreated = useCallback((comment: any) => {
+    setComments((prev: any[]) => [...prev, comment]);
+  }, []);
+
+  const handleResponseCreated = useCallback(
+    (commentId: string, response: any) => {
+      setComments((prev: any[]) =>
+        prev.map((c: any) =>
+          c.id === commentId
+            ? { ...c, responses: [...(c.responses ?? []), response] }
+            : c
+        )
+      );
+    },
+    []
+  );
+
   const editorGradeHighlights = useMemo(() => {
     if (!isTeacherGradingTabOpen) return undefined;
 
@@ -768,6 +795,11 @@ export default function Route() {
   useEffect(() => {
     latestEditorContentRef.current = initialEditorContent;
   }, [initialEditorContent]);
+
+  // Sync local comments state when loader data changes (e.g., after ?spa=1 navigation)
+  useEffect(() => {
+    setComments((data.doc.comments as any[]) ?? []);
+  }, [data.doc.comments]);
 
   useEffect(() => {
     setIsSessionLocked(false);
@@ -1267,6 +1299,7 @@ export default function Route() {
                 onRemoteSaveSuccess={handleRemoteSaveSuccess}
                 onRemoteSaveFailure={handleRemoteSaveFailure}
                 onSyncStatusChange={setSyncStatus}
+                onCommentCreated={handleCommentCreated}
                 gradeHighlights={editorGradeHighlights}
                 activeGradeCommentId={
                   isTeacherGradingTabOpen ? activeGradeCommentId : null
@@ -1311,6 +1344,7 @@ export default function Route() {
               <Comments
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
+                onResponseCreated={handleResponseCreated}
               />
             )}
           </div>

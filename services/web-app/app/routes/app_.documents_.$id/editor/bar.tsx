@@ -1,4 +1,3 @@
-import { useFetcher } from 'react-router';
 import { type Editor } from '@tiptap/react';
 import { MessageCirclePlusIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -25,15 +24,13 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
+  onCommentCreated?: (comment: any) => void;
 };
 
-export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
+export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const createDocumentCommentFetcher = useFetcher<{ id: string }>({
-    key: 'create-document-comment',
-  });
 
   useEffect(() => {
     const updateButtonVisibility = () => {
@@ -99,7 +96,7 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
         <Tooltip text="Comment" delayDuration={300}>
           <div
             data-testid="editor-add-comment"
-            onClick={() => {
+            onClick={async () => {
               if (editor.isActive('comment')) {
                 editor.chain().focus().unsetComment().run();
               } else {
@@ -108,10 +105,22 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
                 const content = editor.state.doc.textBetween(from, to, ' ');
                 if (!content) return;
                 editor.chain().focus().setComment(id).run();
-                createDocumentCommentFetcher.submit(
-                  { id, content, documentId },
-                  { method: 'POST', action: '/api/model/document-comment' }
-                );
+                const formData = new FormData();
+                formData.append('id', id);
+                formData.append('content', content);
+                formData.append('documentId', documentId);
+                try {
+                  const res = await fetch('/api/model/document-comment', {
+                    method: 'POST',
+                    body: formData,
+                  });
+                  if (res.ok) {
+                    const created = await res.json();
+                    onCommentCreated?.({ ...created, responses: [] });
+                  }
+                } catch {
+                  // Silently fail — comment mark is already in the editor
+                }
               }
             }}
             className={cn(COMMAND_STYLE, {

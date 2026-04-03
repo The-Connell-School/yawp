@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -7,7 +7,7 @@ import {
   MessageSquareOff,
   MessageSquareText,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
 import {
@@ -72,9 +72,13 @@ export const Tutor = ({
     `doc-${docId}-reset-confirmation`,
     false
   );
-  const tutorResponseFetcher = useFetcher<{ error?: string }>();
-  const incrementInstructionFetcher = useFetcher();
-  const advanceCourseModuleFetcher = useFetcher();
+  const [isTutorResponding, setIsTutorResponding] = useState(false);
+  const [tutorError, setTutorError] = useState<string | null>(null);
+  const [optimisticMessage, setOptimisticMessage] = useState<{
+    agent: string;
+    createdAt: Date;
+    content: string;
+  } | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,76 +109,112 @@ export const Tutor = ({
     });
   };
 
-  const optimistic = tutorResponseFetcher.formData;
-  const optimisticMessage = optimistic
-    ? ({
-        agent: 'user',
-        createdAt: new Date(),
-        content: optimistic.get('response'),
-      } as any)
-    : null;
-
   const user = useUser();
   const userIsAdmin = user.isAdmin;
   const userIsTeacher = user.selectedProfile?.teacherProfile !== null;
   const { submit, isLoading } = useAsyncFetcherSubmit();
 
-  const respond = async (response: string) => {
+  const respond = useCallback(async (response: string) => {
     if (isSessionLocked) return;
     if (beforeRespond) {
       const canProceed = await beforeRespond();
       if (!canProceed) return;
     }
-    tutorResponseFetcher.submit(
-      {
-        response,
-        cmsId: cms.id,
-        content: getCurrentDocumentText?.() ?? '',
-      },
-      { method: 'POST', action: '/api/domain/tutor-response' }
-    );
-  };
-
-  const incrementInstruction = (label?: string) => {
-    if (isSessionLocked) return;
-    incrementInstructionFetcher.submit(
-      {
-        'instructionsCompleted.increment': 1,
-        ...(label ? { incrementButtonText: label } : {}),
-      },
-      {
+    setTutorError(null);
+    setOptimisticMessage({
+      agent: 'user',
+      createdAt: new Date(),
+      content: response,
+    });
+    setIsTutorResponding(true);
+    try {
+      const formData = new FormData();
+      formData.append('response', response);
+      formData.append('cmsId', cms.id);
+      formData.append('content', getCurrentDocumentText?.() ?? '');
+      const res = await fetch('/api/domain/tutor-response', {
         method: 'POST',
-        action: `/api/model/course-module-session/${cms.id}`,
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        setTutorError(json.error ?? 'An error occurred.');
+        setOptimisticMessage(null);
+      } else {
+        // Tutor response created server-side — navigate to refresh messages
+        setOptimisticMessage(null);
+        setIsTutorResponding(false);
+        navigate(`/app/documents/${docId}?spa=1`, { replace: true });
+        return;
       }
-    );
-  };
+    } catch {
+      setTutorError('Failed to get a response from the tutor. Please try again.');
+      setOptimisticMessage(null);
+    } finally {
+      setIsTutorResponding(false);
+    }
+  }, [isSessionLocked, beforeRespond, cms.id, getCurrentDocumentText, navigate, docId]);
 
-  const decrementInstruction = () => {
+  const incrementInstruction = useCallback(async (label?: string) => {
     if (isSessionLocked) return;
-    incrementInstructionFetcher.submit(
-      { 'instructionsCompleted.decrement': 1 },
-      {
+    const formData = new FormData();
+    formData.append('instructionsCompleted.increment', '1');
+    if (label) formData.append('incrementButtonText', label);
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
         method: 'POST',
-        action: `/api/model/course-module-session/${cms.id}`,
+        body: formData,
+      });
+      if (res.ok) {
+        // Instruction changed — navigate to refresh CMS data including new messages
+        navigate(`/app/documents/${docId}?spa=1`, { replace: true });
       }
-    );
-  };
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, navigate, docId]);
 
-  const advanceToNextCourseModule = () => {
+  const decrementInstruction = useCallback(async () => {
     if (isSessionLocked) return;
-    advanceCourseModuleFetcher.submit(
-      { studentCourseModuleId: nextCmId ?? '', documentId: docId },
-      {
+    const formData = new FormData();
+    formData.append('instructionsCompleted.decrement', '1');
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
         method: 'POST',
-        action: '/api/model/course-module-session',
+        body: formData,
+      });
+      if (res.ok) {
+        // Instruction changed — navigate to refresh CMS data
+        navigate(`/app/documents/${docId}?spa=1`, { replace: true });
       }
-    );
-  };
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, navigate, docId]);
+
+  const advanceToNextCourseModule = useCallback(async () => {
+    if (isSessionLocked) return;
+    const formData = new FormData();
+    formData.append('studentCourseModuleId', nextCmId ?? '');
+    formData.append('documentId', docId);
+    try {
+      const res = await fetch('/api/model/course-module-session', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        // New CMS created — navigate with spa param to force loader rerun
+        navigate(`/app/documents/${docId}?spa=1`, { replace: true });
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, nextCmId, docId, navigate]);
 
   const messages = cms.messages
     .filter((m) => ['user', 'assistant'].includes(m.agent))
-    .concat(optimisticMessage ?? [])
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    .concat(optimisticMessage ? [optimisticMessage as any] : [])
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   useEffect(() => {
     messagesRef.current?.scrollTo({
@@ -343,12 +383,12 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {tutorResponseFetcher.state !== 'idle' && optimistic ? (
+          {isTutorResponding && optimisticMessage ? (
             <Loading />
           ) : null}
-          {tutorResponseFetcher.data?.error ? (
+          {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
-              {tutorResponseFetcher.data.error}
+              {tutorError}
             </p>
           ) : null}
         </div>

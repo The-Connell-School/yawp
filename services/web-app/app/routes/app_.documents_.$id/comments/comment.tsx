@@ -5,12 +5,11 @@ import {
   Profile,
 } from '@app/prisma';
 import { useFetcher } from 'react-router';
-import { useRef, type MouseEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
 import { Button } from '~/components/ui/button';
-import { UserImage } from '~/components/user-image';
 import { useUser } from '~/hooks/useUser';
 import { useDoubleCheck } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
@@ -22,9 +21,12 @@ export type Comment = DocumentComment & {
   })[];
 };
 
-type CommentProps = Comment & { readOnly?: boolean };
+type CommentProps = Comment & {
+  readOnly?: boolean;
+  onResponseCreated?: (commentId: string, response: any) => void;
+};
 
-export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
+export const Comment = ({ readOnly = false, onResponseCreated, ...comment }: CommentProps) => {
   const {
     activeCommentId,
     setActiveCommentId,
@@ -32,33 +34,52 @@ export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
     setHoveredCommentId,
   } = useCommentsSelection();
   const deleteCommentFetcher = useFetcher();
-  const createCommentResponseFetcher = useFetcher();
   const dc = useDoubleCheck();
   const user = useUser();
   const ref = useRef(null);
+  const [optimisticResponses, setOptimisticResponses] = useState<any[]>([]);
 
   const isTeacherOfCommentUser =
     user.selectedProfile?.teacherProfile?.profileId === comment.profileId;
 
-  const optimisticData = createCommentResponseFetcher.formData;
-  const optimisticDocumentCommentResponse = optimisticData
-    ? [
-        {
-          id: 'unknown',
-          createdAt: new Date(),
-          content: optimisticData.get('content') as string,
-          commentId: comment.id,
-          profileId: user.selectedProfile!.id,
+  const reply = async (content: string) => {
+    const optimistic = {
+      id: `optimistic-${Date.now()}`,
+      createdAt: new Date(),
+      content,
+      commentId: comment.id,
+      profileId: user.selectedProfile!.id,
+      profile: user.selectedProfile as any,
+    };
+    setOptimisticResponses((prev) => [...prev, optimistic]);
+    try {
+      const formData = new FormData();
+      formData.append('commentId', comment.id);
+      formData.append('content', content);
+      const res = await fetch('/api/model/document-comment-response', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setOptimisticResponses((prev) =>
+          prev.filter((r) => r.id !== optimistic.id)
+        );
+        onResponseCreated?.(comment.id, {
+          ...created,
           profile: user.selectedProfile as any,
-        },
-      ]
-    : [];
-
-  const reply = (content: string) =>
-    createCommentResponseFetcher.submit(
-      { commentId: comment.id, content },
-      { method: 'POST', action: '/api/model/document-comment-response' }
-    );
+        });
+      } else {
+        setOptimisticResponses((prev) =>
+          prev.filter((r) => r.id !== optimistic.id)
+        );
+      }
+    } catch {
+      setOptimisticResponses((prev) =>
+        prev.filter((r) => r.id !== optimistic.id)
+      );
+    }
+  };
 
   const deleteComment = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -183,7 +204,7 @@ export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
       </div>
       <div className="flex flex-col gap-2">
         {comment.responses
-          .concat(optimisticDocumentCommentResponse)
+          .concat(optimisticResponses)
           .map((response) => (
             <div key={response.id}>
               <div className="mt-1 flex items-center gap-2">

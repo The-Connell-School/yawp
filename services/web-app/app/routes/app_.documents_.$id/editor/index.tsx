@@ -225,6 +225,7 @@ type Props = {
   }) => void;
   onEditorBridgeReady?: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: import('~/utils/sync-service').SyncStatus) => void;
+  onCommentCreated?: (comment: any) => void;
 };
 
 export const Editor = ({
@@ -244,6 +245,7 @@ export const Editor = ({
   onRemoteSaveFailure,
   onEditorBridgeReady,
   onSyncStatusChange,
+  onCommentCreated,
 }: Props) => {
   const saveNowRef = useRef<(() => Promise<void>) | null>(null);
   const [selectionToolbarRect, setSelectionToolbarRect] = useState<DOMRect | null>(null);
@@ -824,7 +826,7 @@ export const Editor = ({
     <ErrorBoundary>
       <div className="flex w-full flex-col overflow-hidden border-r md:h-full">
         {isEditable ? (
-          <Bar editor={editor} documentId={docId} isEditable={isEditable} />
+          <Bar editor={editor} documentId={docId} isEditable={isEditable} onCommentCreated={onCommentCreated} />
         ) : null}
         <div className="no-scrollbar grow overflow-y-scroll p-5" key={`${docId}-editor`}>
           <div className="mx-auto w-full max-w-[920px] font-times">
