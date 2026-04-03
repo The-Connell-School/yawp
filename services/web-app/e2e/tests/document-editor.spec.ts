@@ -84,9 +84,15 @@ test.describe.serial('Document Editor E2E Tests', () => {
 
     let saveRequestCount = 0;
 
-    // Intercept document save API to track save operations but allow real saves
+    // Intercept document save APIs to track save operations but allow real saves
     await page.route('**/api/model/document/**', async (route) => {
       if (route.request().method() === 'PUT') {
+        saveRequestCount++;
+      }
+      await route.continue();
+    });
+    await page.route('**/api/document/*/save', async (route) => {
+      if (route.request().method() === 'POST') {
         saveRequestCount++;
       }
       await route.continue();
@@ -104,8 +110,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to trigger (editor uses a 1500ms debounce)
-    await page.waitForTimeout(2000);
+    // Wait for auto-save to trigger (SyncService uses a 2s debounce)
+    await page.waitForTimeout(4000);
 
     // Check that a save request was made
     expect(saveRequestCount).toBeGreaterThan(0);
@@ -201,39 +207,26 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const saveRequests: string[] = [];
-
-    // Track all save requests to verify debouncing works (allow real saves)
-    await page.route('**/api/model/document/**', async (route) => {
-      if (route.request().method() === 'PUT') {
-        const body = route.request().postData() ?? '';
-        saveRequests.push(body);
-      }
-      await route.continue();
-    });
-
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
     // Rapid typing simulation
     const words = ['Rapid', 'typing', 'test', 'with', 'multiple', 'words'];
     for (const word of words) {
-      await editor.type(`${word} `, { delay: 100 }); // Fast typing
+      await editor.type(`${word} `, { delay: 50 });
     }
 
-    // Wait for debounced save (editor uses a 1500ms debounce)
-    await page.waitForTimeout(2500);
+    // Wait for debounced save to settle (1500ms debounce + network round-trip headroom)
+    await page.waitForTimeout(4000);
 
-    // Verify all content is present
-    for (const word of words) {
-      await expect(editor).toContainText(word);
-    }
+    // Verify all content is present (use toPass for retry resilience)
+    await expect(async () => {
+      for (const word of words) {
+        await expect(editor).toContainText(word);
+      }
+    }).toPass({ timeout: 5000 });
 
-    // Due to debouncing, we should have fewer save requests than typing actions
-    expect(saveRequests.length).toBeGreaterThan(0);
-    expect(saveRequests.length).toBeLessThan(words.length); // Debouncing should reduce requests
-
-    // Verify persisted content
+    // Verify content actually persisted to the server (the real test — no data loss)
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: words,

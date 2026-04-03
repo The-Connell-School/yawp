@@ -185,12 +185,52 @@ jobs:
             -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
+          # Import IAM roles if they already exist (leftover from prior deploys)
+          for role_resource in aws_iam_role.apprunner_access aws_iam_role.apprunner_instance; do
+            role_name="${TF_VAR_app_name}-${TF_VAR_env}-${role_resource##*.}"
+            role_name="${role_name//_/-}"
+            if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
+              echo "Importing existing IAM role: $role_name"
+              terraform -chdir=infra-pr import "$role_resource" "$role_name" 2>/dev/null || true
+            fi
+          done
+          # Import App Runner service if it already exists but is missing from state
+          SVC_NAME="${TF_VAR_app_name}-${TF_VAR_env}"
+          EXISTING_SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
+            --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
+            --output text 2>/dev/null || true)
+          if [[ -n "$EXISTING_SVC_ARN" && "$EXISTING_SVC_ARN" != "None" ]]; then
+            echo "Importing existing App Runner service: $SVC_NAME ($EXISTING_SVC_ARN)"
+            terraform -chdir=infra-pr import aws_apprunner_service.web "$EXISTING_SVC_ARN" 2>/dev/null || true
+          fi
           for attempt in $(seq 1 8); do
             set +e
             terraform -chdir=infra-pr apply -auto-approve 2>&1 | tee /tmp/tf-apply.log
             tf_rc=$?
             set -e
             if [[ "$tf_rc" -eq 0 ]]; then break; fi
+            if grep -q 'EntityAlreadyExists' /tmp/tf-apply.log; then
+              echo "IAM entity exists; attempting import and retry ($attempt/8)..."
+              # Extract role names from error and import
+              grep -oP 'Role with name \K[^ ]+' /tmp/tf-apply.log | while read -r rname; do
+                if echo "$rname" | grep -q "access"; then
+                  terraform -chdir=infra-pr import aws_iam_role.apprunner_access "$rname" 2>/dev/null || true
+                elif echo "$rname" | grep -q "instance"; then
+                  terraform -chdir=infra-pr import aws_iam_role.apprunner_instance "$rname" 2>/dev/null || true
+                fi
+              done
+              continue
+            fi
+            if grep -q 'already exists' /tmp/tf-apply.log || grep -q 'InvalidRequestException' /tmp/tf-apply.log; then
+              echo "App Runner service already exists; attempting import and retry ($attempt/8)..."
+              SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
+                --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
+                --output text 2>/dev/null || true)
+              if [[ -n "$SVC_ARN" && "$SVC_ARN" != "None" ]]; then
+                terraform -chdir=infra-pr import aws_apprunner_service.web "$SVC_ARN" 2>/dev/null || true
+              fi
+              continue
+            fi
             if ! grep -q 'OPERATION_IN_PROGRESS' /tmp/tf-apply.log; then exit "$tf_rc"; fi
             if [[ "$attempt" -eq 8 ]]; then exit "$tf_rc"; fi
             echo "App Runner busy; sleeping 45s before terraform retry ($attempt/8)..."
@@ -208,6 +248,22 @@ jobs:
       - name: Wait for preview URL
         run: |
           set -euo pipefail
+          SVC_ARN=$(terraform -chdir=infra-pr output -raw apprunner_service_arn)
+          echo "Waiting for App Runner status RUNNING (not OPERATION_IN_PROGRESS) after deployment..."
+          STATUS=""
+          for i in $(seq 1 90); do
+            STATUS=$(aws apprunner describe-service --service-arn "$SVC_ARN" --region "${AWS_REGION}" --query 'Service.Status' --output text)
+            if [[ "$STATUS" == "RUNNING" ]]; then
+              echo "App Runner status RUNNING after attempt $i."
+              break
+            fi
+            echo "Attempt $i/90 — App Runner status: $STATUS"
+            sleep 10
+          done
+          if [[ "${STATUS:-}" != "RUNNING" ]]; then
+            echo "App Runner did not reach RUNNING in time (last status: ${STATUS:-unknown})."
+            exit 1
+          fi
           RAW="${{ steps.tf.outputs.url }}"
           if [[ "$RAW" != http* ]]; then PREVIEW_BASE_URL="https://${RAW}"; else PREVIEW_BASE_URL="$RAW"; fi
           echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
@@ -217,7 +273,7 @@ jobs:
               echo "Preview responded after attempt $i."
               exit 0
             fi
-            echo "Attempt $i/60 — App Runner may still be deploying..."
+            echo "Attempt $i/60 — App Runner may still be warming up..."
             sleep 10
           done
           echo "Preview URL did not return HTTP 200 in time."
