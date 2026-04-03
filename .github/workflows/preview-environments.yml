@@ -194,6 +194,15 @@ jobs:
               terraform -chdir=infra-pr import "$role_resource" "$role_name" 2>/dev/null || true
             fi
           done
+          # Import App Runner service if it already exists but is missing from state
+          SVC_NAME="${TF_VAR_app_name}-${TF_VAR_env}"
+          EXISTING_SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
+            --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
+            --output text 2>/dev/null || true)
+          if [[ -n "$EXISTING_SVC_ARN" && "$EXISTING_SVC_ARN" != "None" ]]; then
+            echo "Importing existing App Runner service: $SVC_NAME ($EXISTING_SVC_ARN)"
+            terraform -chdir=infra-pr import aws_apprunner_service.web "$EXISTING_SVC_ARN" 2>/dev/null || true
+          fi
           for attempt in $(seq 1 8); do
             set +e
             terraform -chdir=infra-pr apply -auto-approve 2>&1 | tee /tmp/tf-apply.log
@@ -210,6 +219,16 @@ jobs:
                   terraform -chdir=infra-pr import aws_iam_role.apprunner_instance "$rname" 2>/dev/null || true
                 fi
               done
+              continue
+            fi
+            if grep -q 'already exists' /tmp/tf-apply.log || grep -q 'InvalidRequestException' /tmp/tf-apply.log; then
+              echo "App Runner service already exists; attempting import and retry ($attempt/8)..."
+              SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
+                --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
+                --output text 2>/dev/null || true)
+              if [[ -n "$SVC_ARN" && "$SVC_ARN" != "None" ]]; then
+                terraform -chdir=infra-pr import aws_apprunner_service.web "$SVC_ARN" 2>/dev/null || true
+              fi
               continue
             fi
             if ! grep -q 'OPERATION_IN_PROGRESS' /tmp/tf-apply.log; then exit "$tf_rc"; fi
