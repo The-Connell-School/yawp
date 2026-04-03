@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
 const DB_NAME = 'yawp-documents';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'documents';
 
 export interface DocumentStoreEntry {
@@ -32,9 +32,22 @@ export class DocumentStore {
     }
     if (!this._dbPromise) {
       this._dbPromise = openDB(DB_NAME, DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
+        upgrade(db, oldVersion, _newVersion, transaction) {
+          if (oldVersion < 1) {
             db.createObjectStore(STORE_NAME, { keyPath: 'docId' });
+          }
+          if (oldVersion < 2) {
+            // Migration: backfill localVersion on existing records
+            const store = transaction.objectStore(STORE_NAME);
+            store.openCursor().then(function migrate(cursor) {
+              if (!cursor) return;
+              const value = cursor.value;
+              if (value.localVersion === undefined) {
+                value.localVersion = 0;
+                cursor.update(value);
+              }
+              return cursor.continue().then(migrate);
+            });
           }
         },
       });
@@ -61,6 +74,10 @@ export class DocumentStore {
       this._mem().set(entry.docId, { ...entry });
       return;
     }
+    // Note: This version gate is safe for single-tab sequential writes (our use case).
+    // IDB readwrite transactions do not provide true serializable isolation — concurrent
+    // transactions from the same JS context can interleave. If multi-tab or worker
+    // scenarios are needed, add a promise-based transaction queue.
     const db = await this._getDb();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);

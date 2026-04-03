@@ -253,7 +253,7 @@ export const Editor = ({
   const clientSeqRef = useRef(0);
   const currentRevisionRef = useRef(initialRevision);
   const syncServiceRef = useRef<SyncService | null>(null);
-  const localVersionRef = useRef(Date.now());
+  const localVersionRef = useRef(0);
   const {
     activeCommentId,
     hoveredCommentId,
@@ -613,6 +613,13 @@ export const Editor = ({
   // Local-first sync: runs alongside existing save flow
   useEffect(() => {
     if (!docId) return;
+
+    // Resume localVersion counter from where the previous session left off
+    documentStore.get(docId).then((entry) => {
+      if (entry?.localVersion) {
+        localVersionRef.current = entry.localVersion;
+      }
+    });
 
     const syncService = new SyncService(documentStore);
     syncService.start(docId);

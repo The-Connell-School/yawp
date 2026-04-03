@@ -10,6 +10,26 @@ describe('DocumentStore', () => {
   });
 
   describe('put', () => {
+    it('first write to a new docId succeeds (no existing record)', async () => {
+      await store.put({
+        docId: 'brand-new',
+        html: '<p>new</p>',
+        text: 'new',
+        updatedAt: 1000,
+        serverRevision: 0,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'newHash',
+        localVersion: 1,
+      });
+      const entry = await store.get('brand-new');
+      expect(entry).not.toBeNull();
+      expect(entry!.docId).toBe('brand-new');
+      expect(entry!.html).toBe('<p>new</p>');
+      expect(entry!.localVersion).toBe(1);
+    });
+
     it('stores a document entry', async () => {
       await store.put({
         docId: 'doc-1',
@@ -146,6 +166,24 @@ describe('DocumentStore', () => {
       expect(entry!.serverRevision).toBe(2);
       expect(entry!.lastSyncedAt).toBe(2000);
       expect(entry!.lastSyncError).toBeNull();
+    });
+
+    it('preserves localVersion after markSynced', async () => {
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>hi</p>',
+        text: 'hi',
+        updatedAt: 1000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'abc',
+        localVersion: 7,
+      });
+      await store.markSynced('doc-1', 2, 2000);
+      const entry = await store.get('doc-1');
+      expect(entry!.localVersion).toBe(7);
     });
   });
 
