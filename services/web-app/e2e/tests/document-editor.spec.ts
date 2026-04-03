@@ -210,7 +210,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const saveRequests: string[] = [];
 
     // Track all save requests to verify debouncing works (allow real saves)
-    await page.route('**/api/model/document/**', async (route) => {
+    // Use single * glob — the URL is /api/model/document/<id>?from=... (no trailing path segment)
+    await page.route('**/api/model/document/*', async (route) => {
       if (route.request().method() === 'PUT') {
         const body = route.request().postData() ?? '';
         saveRequests.push(body);
@@ -221,12 +222,10 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
-    // Rapid typing simulation — use insertText for speed to avoid per-char timing variance
+    // Type words with enough delay for the editor to register changes and trigger debounced save
     const words = ['Rapid', 'typing', 'test', 'with', 'multiple', 'words'];
     for (const word of words) {
-      await page.keyboard.insertText(`${word} `);
-      // Small pause between words to keep them "rapid" but deterministic
-      await page.waitForTimeout(50);
+      await editor.type(`${word} `, { delay: 50 });
     }
 
     // Wait for debounced save to settle (1500ms debounce + network round-trip headroom)
