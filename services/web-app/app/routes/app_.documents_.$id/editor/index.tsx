@@ -523,7 +523,32 @@ export const Editor = ({
       setContent: (html: string) => {
         editor.commands.setContent(html, true);
       },
-      saveNow: save,
+      saveNow: async (options) => {
+        // For local-first flow, flush via SyncService so the server gets the
+        // latest IDB content. Fall back to the legacy PUT for snapshot edits.
+        if (syncServiceRef.current && !saveSnapshotId) {
+          // Ensure the very latest editor content is in IDB before syncing,
+          // in case the async update handler hasn't finished yet.
+          const content = getContentSnapshot();
+          const hash = await contentHash(content.html, content.text);
+          localVersionRef.current += 1;
+          await documentStore.put({
+            docId,
+            html: content.html,
+            text: content.text,
+            updatedAt: Date.now(),
+            serverRevision: currentRevisionRef.current,
+            syncStatus: 'pending',
+            lastSyncedAt: null,
+            lastSyncError: null,
+            contentHash: hash,
+            localVersion: localVersionRef.current,
+          });
+          await syncServiceRef.current.forceSave({ trigger: options?.source ?? 'manual' });
+        } else {
+          await save(options);
+        }
+      },
     });
 
     const saveDebounced = debounce(save, 1500);

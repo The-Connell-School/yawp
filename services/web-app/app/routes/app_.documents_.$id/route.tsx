@@ -419,7 +419,6 @@ export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
-  const submitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [isSaving, setIsSaving] = useState(false);
@@ -430,6 +429,7 @@ export default function Route() {
   const [hasEditorContent, setHasEditorContent] = useState(
     !!(data.doc.html && data.doc.text)
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const [exitTarget, setExitTarget] = useState('/app');
@@ -439,7 +439,6 @@ export default function Route() {
   const isReviseMode = searchParams.get('revise') === '1';
   const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
   const grade = activeSnapshot?.grades?.[0];
   const documentStatusLabel = getDocumentStatusLabel({
@@ -964,20 +963,41 @@ export default function Route() {
     }
   }, [data.shouldSaveVersion, navigate]);
 
-  useEffect(() => {
-    if (submitFetcher.state === 'idle' && submitFetcher.data) {
-      if (submitFetcher.data.success) {
+  const handleSubmitDocument = useCallback(async () => {
+    setIsSubmitting(true);
+    try {
+      // 1. Force-flush editor content to server so submission reads latest HTML
+      if (editorBridgeRef.current) {
+        await editorBridgeRef.current.saveNow({ source: 'pre-submit-flush' });
+      }
+
+      // 2. Submit document (server now has latest content)
+      const body = new FormData();
+      body.append('documentId', data.doc.id);
+
+      const res = await fetch('/api/domain/submit-document', {
+        method: 'POST',
+        body,
+      });
+
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
         toast.success(
-          submitFetcher.data.message || 'Essay submitted successfully!'
+          json?.message || 'Essay submitted successfully!'
         );
         setIsFinalizeDialogOpen(false);
-        // Reload the page to reflect the new submission status
         navigate(window.location.pathname + window.location.search, {
           replace: true,
         });
+      } else {
+        toast.error('Failed to submit essay. Please try again.');
       }
+    } catch {
+      toast.error('Failed to submit essay. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [submitFetcher.state, submitFetcher.data, navigate]);
+  }, [data.doc.id, navigate]);
 
   useEffect(() => {
     if (explicitExitTarget) {
@@ -1390,15 +1410,7 @@ export default function Route() {
               <Button
                 variant="default"
                 data-testid="document-finalize-submit"
-                onClick={() => {
-                  submitFetcher.submit(
-                    { documentId: data.doc.id },
-                    {
-                      method: 'POST',
-                      action: '/api/domain/submit-document',
-                    }
-                  );
-                }}
+                onClick={() => void handleSubmitDocument()}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
