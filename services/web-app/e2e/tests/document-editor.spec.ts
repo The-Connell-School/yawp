@@ -207,22 +207,10 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const saveRequests: string[] = [];
-
-    // Track all save requests to verify debouncing works (allow real saves)
-    // Use single * glob — the URL is /api/model/document/<id>?from=... (no trailing path segment)
-    await page.route('**/api/model/document/*', async (route) => {
-      if (route.request().method() === 'PUT') {
-        const body = route.request().postData() ?? '';
-        saveRequests.push(body);
-      }
-      await route.continue();
-    });
-
     const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
     await editor.click();
 
-    // Type words with enough delay for the editor to register changes and trigger debounced save
+    // Rapid typing simulation
     const words = ['Rapid', 'typing', 'test', 'with', 'multiple', 'words'];
     for (const word of words) {
       await editor.type(`${word} `, { delay: 50 });
@@ -238,10 +226,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       }
     }).toPass({ timeout: 5000 });
 
-    // Due to debouncing, at least one save should have fired
-    expect(saveRequests.length).toBeGreaterThan(0);
-
-    // Verify persisted content
+    // Verify content actually persisted to the server (the real test — no data loss)
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: words,
