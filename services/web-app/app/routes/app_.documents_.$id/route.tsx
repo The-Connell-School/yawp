@@ -1,6 +1,7 @@
 import { invariant } from '@epic-web/invariant';
 import {
   type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
   data as dataResponse,
   redirect,
 } from 'react-router';
@@ -400,6 +401,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
+export function shouldRevalidate(_args: ShouldRevalidateFunctionArgs) {
+  // Never revalidate the document page loader from fetcher submissions.
+  // The editor owns document state client-side. Server state flows
+  // through explicit fetch() calls, not loader revalidation.
+  // This prevents stale DB content from interfering with editor state.
+  return false;
+}
 
 export default function Route() {
   const data = useLoaderData<typeof loader>();
