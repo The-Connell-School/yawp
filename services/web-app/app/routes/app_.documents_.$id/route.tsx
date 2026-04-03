@@ -66,6 +66,7 @@ import {
 import { formatDateOnly } from '~/utils/date-only';
 import type { SyncStatus } from '~/utils/sync-service';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
+import { documentStore } from '~/utils/document-store';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
   items: T[];
@@ -176,6 +177,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       revision: true,
       title: true,
       html: true,
@@ -438,17 +440,57 @@ export default function Route() {
   const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
   const isTeacherSnapshotView =
     isViewingAsTeacher && Boolean(activeSnapshot?.id);
-  const editorHtml =
+  const serverHtml =
     isTeacherSnapshotView && activeSnapshot?.html
       ? activeSnapshot.html
       : data.doc.html;
+  const serverText =
+    (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '';
+  const [hydratedContent, setHydratedContent] = useState<{
+    html: string;
+    text: string;
+    source: 'server' | 'local';
+  } | null>(null);
+
+  // On mount, check IDB for newer local content
+  useEffect(() => {
+    if (isTeacherSnapshotView) {
+      setHydratedContent({ html: serverHtml ?? '', text: serverText, source: 'server' });
+      return;
+    }
+
+    let cancelled = false;
+    documentStore
+      .get(data.doc.id)
+      .then((entry) => {
+        if (cancelled) return;
+        if (
+          entry &&
+          entry.updatedAt > new Date(data.doc.updatedAt).getTime()
+        ) {
+          setHydratedContent({ html: entry.html, text: entry.text, source: 'local' });
+        } else {
+          setHydratedContent({ html: serverHtml ?? '', text: serverText, source: 'server' });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setHydratedContent({ html: serverHtml ?? '', text: serverText, source: 'server' });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const editorHtml = hydratedContent?.html ?? serverHtml;
   const initialEditorContent = useMemo(
     () => ({
-      html: editorHtml ?? '',
-      text:
-        (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '',
+      html: hydratedContent?.html ?? serverHtml ?? '',
+      text: hydratedContent?.text ?? serverText,
     }),
-    [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
+    [hydratedContent, serverHtml, serverText]
   );
   const editorSessionId = useMemo(() => crypto.randomUUID(), [data.doc.id]);
   const loginReturnStorageKey = useMemo(

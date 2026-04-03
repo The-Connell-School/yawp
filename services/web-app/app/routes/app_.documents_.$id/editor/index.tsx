@@ -614,10 +614,27 @@ export const Editor = ({
   useEffect(() => {
     if (!docId) return;
 
-    // Resume localVersion counter from where the previous session left off
-    documentStore.get(docId).then((entry) => {
+    // Resume localVersion counter from where the previous session left off,
+    // or seed IDB from server content on first visit
+    documentStore.get(docId).then(async (entry) => {
       if (entry?.localVersion) {
         localVersionRef.current = entry.localVersion;
+      } else if (docHtml) {
+        // First visit — seed IDB from server content
+        const hash = await contentHash(docHtml, '');
+        localVersionRef.current = 1;
+        await documentStore.put({
+          docId,
+          html: docHtml,
+          text: '',
+          updatedAt: Date.now(),
+          localVersion: 1,
+          serverRevision: initialRevision,
+          syncStatus: 'synced',
+          lastSyncedAt: Date.now(),
+          lastSyncError: null,
+          contentHash: hash,
+        });
       }
     });
 
