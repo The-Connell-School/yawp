@@ -253,6 +253,7 @@ export const Editor = ({
   const clientSeqRef = useRef(0);
   const currentRevisionRef = useRef(initialRevision);
   const syncServiceRef = useRef<SyncService | null>(null);
+  const localVersionRef = useRef(Date.now());
   const {
     activeCommentId,
     hoveredCommentId,
@@ -547,6 +548,7 @@ export const Editor = ({
         const html = e.getHTML();
         const text = e.getText();
         const hash = await contentHash(html, text);
+        localVersionRef.current += 1;
         await documentStore.put({
           docId,
           html,
@@ -557,6 +559,7 @@ export const Editor = ({
           lastSyncedAt: null,
           lastSyncError: null,
           contentHash: hash,
+          localVersion: localVersionRef.current,
         });
         syncServiceRef.current?.scheduleSave();
       });

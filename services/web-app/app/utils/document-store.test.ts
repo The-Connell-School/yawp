@@ -21,6 +21,7 @@ describe('DocumentStore', () => {
         lastSyncedAt: null,
         lastSyncError: null,
         contentHash: 'abc123',
+        localVersion: 1,
       });
       const entry = await store.get('doc-1');
       expect(entry).not.toBeNull();
@@ -28,7 +29,7 @@ describe('DocumentStore', () => {
       expect(entry!.syncStatus).toBe('pending');
     });
 
-    it('overwrites existing entry', async () => {
+    it('overwrites existing entry when localVersion is higher', async () => {
       await store.put({
         docId: 'doc-1',
         html: '<p>first</p>',
@@ -39,6 +40,7 @@ describe('DocumentStore', () => {
         lastSyncedAt: 1000,
         lastSyncError: null,
         contentHash: 'aaa',
+        localVersion: 1,
       });
       await store.put({
         docId: 'doc-1',
@@ -50,10 +52,70 @@ describe('DocumentStore', () => {
         lastSyncedAt: 1000,
         lastSyncError: null,
         contentHash: 'bbb',
+        localVersion: 2,
       });
       const entry = await store.get('doc-1');
       expect(entry!.html).toBe('<p>second</p>');
       expect(entry!.updatedAt).toBe(2000);
+    });
+
+    it('rejects write when localVersion is lower than existing', async () => {
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>fresh</p>',
+        text: 'fresh',
+        updatedAt: 2000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'aaa',
+        localVersion: 5,
+      });
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>stale</p>',
+        text: 'stale',
+        updatedAt: 1000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'bbb',
+        localVersion: 3,
+      });
+      const entry = await store.get('doc-1');
+      expect(entry!.html).toBe('<p>fresh</p>');
+      expect(entry!.localVersion).toBe(5);
+    });
+
+    it('rejects write when localVersion equals existing', async () => {
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>first</p>',
+        text: 'first',
+        updatedAt: 1000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'aaa',
+        localVersion: 3,
+      });
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>duplicate</p>',
+        text: 'duplicate',
+        updatedAt: 2000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'bbb',
+        localVersion: 3,
+      });
+      const entry = await store.get('doc-1');
+      expect(entry!.html).toBe('<p>first</p>');
     });
   });
 
@@ -76,6 +138,7 @@ describe('DocumentStore', () => {
         lastSyncedAt: null,
         lastSyncError: null,
         contentHash: 'abc',
+        localVersion: 1,
       });
       await store.markSynced('doc-1', 2, 2000);
       const entry = await store.get('doc-1');
@@ -98,6 +161,7 @@ describe('DocumentStore', () => {
         lastSyncedAt: null,
         lastSyncError: null,
         contentHash: 'abc',
+        localVersion: 1,
       });
       await store.markFailed('doc-1', 'network error');
       const entry = await store.get('doc-1');
@@ -118,6 +182,7 @@ describe('DocumentStore', () => {
         lastSyncedAt: 1000,
         lastSyncError: null,
         contentHash: 'abc',
+        localVersion: 1,
       });
       await store.delete('doc-1');
       const entry = await store.get('doc-1');

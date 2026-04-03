@@ -14,6 +14,8 @@ export interface DocumentStoreEntry {
   lastSyncedAt: number | null;
   lastSyncError: string | null;
   contentHash: string;
+  /** Monotonically increasing; prevents stale overwrites */
+  localVersion: number;
 }
 
 export class DocumentStore {
@@ -47,7 +49,35 @@ export class DocumentStore {
     return this._memoryStore;
   }
 
+  /**
+   * Version-gated write. Silently rejects if the existing entry has a
+   * localVersion >= the incoming entry's localVersion, preventing stale
+   * data from overwriting fresher content.
+   */
   async put(entry: DocumentStoreEntry): Promise<void> {
+    if (this._useMemory()) {
+      const existing = this._mem().get(entry.docId);
+      if (existing && existing.localVersion >= entry.localVersion) return;
+      this._mem().set(entry.docId, { ...entry });
+      return;
+    }
+    const db = await this._getDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const existing = await store.get(entry.docId);
+    if (existing && existing.localVersion >= entry.localVersion) {
+      tx.abort();
+      return;
+    }
+    await store.put(entry);
+    await tx.done;
+  }
+
+  /**
+   * Bypass version gating — for internal updates that don't change content
+   * (e.g. markSynced, markFailed).
+   */
+  private async _rawPut(entry: DocumentStoreEntry): Promise<void> {
     if (this._useMemory()) {
       this._mem().set(entry.docId, { ...entry });
       return;
@@ -72,7 +102,7 @@ export class DocumentStore {
   ): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
-    await this.put({
+    await this._rawPut({
       ...entry,
       syncStatus: 'synced',
       serverRevision,
@@ -84,7 +114,7 @@ export class DocumentStore {
   async markFailed(docId: string, error: string): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
-    await this.put({
+    await this._rawPut({
       ...entry,
       syncStatus: 'failed',
       lastSyncError: error,
