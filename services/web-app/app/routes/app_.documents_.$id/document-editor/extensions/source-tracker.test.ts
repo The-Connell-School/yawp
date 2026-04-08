@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register();
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { SourceTracker, USER_SOURCE_META } from './source-tracker';
