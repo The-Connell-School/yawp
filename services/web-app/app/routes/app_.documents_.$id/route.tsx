@@ -1,6 +1,7 @@
 import { invariant } from '@epic-web/invariant';
 import {
   type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
   data as dataResponse,
   redirect,
 } from 'react-router';
@@ -11,9 +12,8 @@ import {
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -37,14 +37,10 @@ import {
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import { findExcerptRange } from '~/utils/excerpt-position';
-import {
-  setPendingSave,
-  getPendingSave,
-  clearPendingSave,
-} from '~/utils/pending-document-save';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { Editor, type EditorBridge } from './editor/index';
+import { DocumentEditor } from './document-editor/document-editor';
+import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentVersions } from './_components/document-versions';
 import {
@@ -66,6 +62,10 @@ import {
 import { formatDateOnly } from '~/utils/date-only';
 import type { SyncStatus } from '~/utils/sync-service';
 import { SaveStatusIndicator } from '~/components/save-status-indicator';
+import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
+import { useCommentsState } from './hooks/use-comments-state';
+import { useTutorState } from './hooks/use-tutor-state';
+import { useDocumentSubmit } from './hooks/use-document-submit';
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
   items: T[];
@@ -176,6 +176,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       revision: true,
       title: true,
       html: true,
@@ -398,32 +399,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
+export function shouldRevalidate(_args: ShouldRevalidateFunctionArgs) {
+  // Never revalidate the document page loader. The editor owns
+  // document state client-side. Server state flows through explicit
+  // fetch() calls + local React state, not loader revalidation.
+  return false;
+}
 
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
-  const submitFetcher = useFetcher();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
-  const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [hasSaveError, setHasSaveError] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
-  const [hasEditorContent, setHasEditorContent] = useState(
-    !!(data.doc.html && data.doc.text)
-  );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
-  const [exitTarget, setExitTarget] = useState('/app');
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
   const leftPanel = searchParams.get('left') ?? 'tutor';
   const isReviseMode = searchParams.get('revise') === '1';
   const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitting = submitFetcher.state !== 'idle';
   const isSubmitted = data.doc.submittedAt !== null;
   const grade = activeSnapshot?.grades?.[0];
   const documentStatusLabel = getDocumentStatusLabel({
@@ -438,30 +437,46 @@ export default function Route() {
   const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
   const isTeacherSnapshotView =
     isViewingAsTeacher && Boolean(activeSnapshot?.id);
-  const editorHtml =
-    isTeacherSnapshotView && activeSnapshot?.html
+  const editorServerHtml =
+    (isTeacherSnapshotView && activeSnapshot?.html
       ? activeSnapshot.html
-      : data.doc.html;
-  const initialEditorContent = useMemo(
-    () => ({
-      html: editorHtml ?? '',
-      text:
-        (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '',
-    }),
-    [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
+      : data.doc.html) ?? '';
+  const editorServerText =
+    (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '';
+
+  // Exit target is computed once on mount (session-storage read is idempotent)
+  const [exitTarget] = useState<string>(
+    () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
-  const editorSessionId = useMemo(() => crypto.randomUUID(), [data.doc.id]);
-  const loginReturnStorageKey = useMemo(
-    () => `yawp:audit:login-return:${data.doc.id}`,
-    [data.doc.id]
-  );
-  const latestEditorContentRef = useRef(initialEditorContent);
+
+  // Editor bridge handle — stable ref populated by DocumentEditor.onBridgeReady
   const editorBridgeRef = useRef<EditorBridge | null>(null);
-  const [isSessionLocked, setIsSessionLocked] = useState(false);
-  const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] =
-    useState(false);
-  const isEditorLocked =
-    isSessionLocked || (isDocumentEditable && !isInitialAuthCheckComplete);
+
+  // ── Extracted hooks ────────────────────────────────────────────────
+  const auth = useAuthHeartbeat({
+    documentId: data.doc.id,
+    isEditable: isDocumentEditable,
+  });
+  const tutor = useTutorState(data.currentCms as any);
+  const commentsState = useCommentsState(
+    (data.doc.comments as any[]) ?? []
+  );
+  const submit = useDocumentSubmit({
+    documentId: data.doc.id,
+    editorBridgeRef,
+    onSubmitted: () => {
+      setIsFinalizeDialogOpen(false);
+      // Reload the page to reflect the new submission status
+      navigate(window.location.pathname + window.location.search, {
+        replace: true,
+      });
+    },
+  });
+
+  const isEditorEditable =
+    isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
+
+  // ── Teacher-grading UI state (Phase 3 will extract these) ──────────
   const gradeDisplay =
     (grade
       ? formatGrade(
@@ -480,10 +495,6 @@ export default function Route() {
   } | null>(null);
   const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
   const closeTooltipTimer = useRef<number | null>(null);
   const persistedGrammarIssues = useMemo(
     () =>
@@ -498,26 +509,25 @@ export default function Route() {
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
-  const allComments = (data.doc.comments as any[]) ?? [];
-  const activeComments = allComments.filter((c) => !c.archivedAt);
-  const archivedComments = allComments.filter((c) => !!c.archivedAt);
-  const visibleComments = isSubmitted
-    ? showOldComments
-      ? allComments
-      : activeComments
-    : activeComments;
-  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
-  const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
-  const studentCanViewReleasedGrade =
-    !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
-  const studentGradeViewPath =
-    studentCanViewReleasedGrade && grade?.id ? `/app/graded/${grade.id}` : null;
-  const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
-    explicitExitTarget
-      ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
-      : ''
-  }`;
-  const saveFailureCountRef = useRef(0);
+
+  // Derived-state pattern: resync grammar issues in render when the
+  // persisted-from-loader value changes (no useEffect needed).
+  const lastPersistedRef = useRef(persistedGrammarIssues);
+  if (lastPersistedRef.current !== persistedGrammarIssues) {
+    lastPersistedRef.current = persistedGrammarIssues;
+    setGrammarIssues(persistedGrammarIssues);
+    setHiddenGrammarIssueIds([]);
+  }
+
+  // Derived value (no state needed for tooltip position)
+  const tooltipPos = useMemo(() => {
+    if (!tooltipRect) return null;
+    return {
+      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
+      left: Math.min(window.innerWidth - 16, tooltipRect.left),
+    };
+  }, [tooltipRect]);
+
   const visibleGrammarIssues = useMemo(
     () =>
       grammarIssues.filter(
@@ -542,46 +552,51 @@ export default function Route() {
       prev.filter((currentId) => currentId !== id)
     );
   }, []);
-  const editorGradeHighlights = useMemo(() => {
-    if (!isTeacherGradingTabOpen) return undefined;
+  const activeGrammarIssue = useMemo(() => {
+    if (!tooltipIssueId) return null;
+    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
+  }, [grammarIssues, tooltipIssueId]);
 
-    const commentHighlights = (data.gradeComments as any[]).map((comment) => ({
-      id: comment.id,
-      excerpt: comment.excerpt,
-      occurrence: comment.occurrence,
-      dataAttr: 'data-grade-comment-id' as const,
-      className: 'grade-comment-mark' as const,
-    }));
-    const grammarHighlights = visibleGrammarIssues.map((issue) => ({
-      id: issue.id,
-      excerpt: issue.excerpt,
-      occurrence: issue.occurrence ?? 1,
-      dataAttr: 'data-grammar-issue-id' as const,
-      className: 'grammar-issue' as const,
-    }));
-    const draftHighlightEntry = draftHighlight
-      ? [
-          {
-            id: 'draft',
-            excerpt: draftHighlight.excerpt,
-            occurrence: draftHighlight.occurrence,
-            dataAttr: 'data-grade-comment-id' as const,
-            className:
-              activeGradeCommentId === 'draft'
-                ? 'grade-comment-mark focused'
-                : 'grade-comment-mark',
-          },
-        ]
-      : [];
+  // Outside-click handler for active grade comment (teacher grading view).
+  // This effect will move into grade-highlights-overlay in Phase 3.
+  useEffect(() => {
+    if (!isTeacherGradingTabOpen || !activeGradeCommentId) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const clickedInHighlight = target.closest('[data-grade-comment-id]');
+      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
+      if (clickedInHighlight || clickedInCommentCard) return;
+      setActiveGradeCommentId(null);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [activeGradeCommentId, isTeacherGradingTabOpen]);
 
-    return [...commentHighlights, ...draftHighlightEntry, ...grammarHighlights];
-  }, [
-    activeGradeCommentId,
-    data.gradeComments,
-    draftHighlight,
-    isTeacherGradingTabOpen,
-    visibleGrammarIssues,
-  ]);
+  // ── Derived UI data ────────────────────────────────────────────────
+  const allComments = commentsState.comments as any[];
+  const activeComments = allComments.filter((c) => !c.archivedAt);
+  const archivedComments = allComments.filter((c) => !!c.archivedAt);
+  const visibleComments = isSubmitted
+    ? showOldComments
+      ? allComments
+      : activeComments
+    : activeComments;
+  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
+  const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
+  const studentCanViewReleasedGrade =
+    !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
+  const studentGradeViewPath =
+    studentCanViewReleasedGrade && grade?.id ? `/app/graded/${grade.id}` : null;
+  const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
+    explicitExitTarget
+      ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
+      : ''
+  }`;
+  // Submit button is always enabled — the editor has content by the
+  // time the user can click it. (Old polling logic deleted with Task 17.)
+  const hasEditorContent = true;
+  const isSubmitting = submit.isSubmitting;
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -595,338 +610,18 @@ export default function Route() {
     setSearchParams(params, { replace: true });
   };
 
-  const lockSession = useCallback(() => {
-    setIsSessionLocked(true);
-  }, []);
+  const handleTutorBeforeRespond = useCallback(async () => {
+    if (auth.isLocked) return false;
+    await editorBridgeRef.current?.saveNow({ source: 'tutor-pre-respond' });
+    const isValidSession = await auth.checkAuthSession();
+    return isValidSession && !auth.isLocked;
+  }, [auth]);
 
   const handleLoginRedirect = useCallback(() => {
-    const content =
-      editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current;
-    setPendingSave(data.doc.id, content);
-    sessionStorage.setItem(loginReturnStorageKey, '1');
     const redirectTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
-  }, [
-    data.doc.id,
-    editorSessionId,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  const checkAuthSession = useCallback(async () => {
-    try {
-      const response = await fetch('/api/auth/check', {
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          lockSession();
-          return false;
-        }
-        return true;
-      }
-
-      const data = (await response.json()) as { valid?: boolean };
-      if (!data?.valid) {
-        lockSession();
-        return false;
-      }
-
-      return true;
-    } catch {
-      // Ignore transient network failures.
-      return true;
-    }
-  }, [lockSession]);
-
-  const handleRemoteSaveFailure = useCallback(
-    (args: {
-      content: { html: string; text: string };
-      reason: 'auth' | 'network' | 'server';
-    }) => {
-      setPendingSave(data.doc.id, args.content);
-      saveFailureCountRef.current += 1;
-      if (saveFailureCountRef.current >= 2) {
-        setHasSaveError(true);
-      }
-      if (args.reason === 'auth') {
-        lockSession();
-      }
-    },
-    [data.doc.id, lockSession]
-  );
-
-  const handleRemoteSaveSuccess = useCallback(
-    (_args: { content: { html: string; text: string }; revision: number }) => {
-      clearPendingSave(data.doc.id);
-      saveFailureCountRef.current = 0;
-      setHasSaveError(false);
-    },
-    [data.doc.id]
-  );
-
-  const handleTutorBeforeRespond = useCallback(async () => {
-    if (isSessionLocked) return false;
-
-    await editorBridgeRef.current?.saveNow();
-
-    const isValidSession = await checkAuthSession();
-    return isValidSession && !isSessionLocked;
-  }, [checkAuthSession, isSessionLocked]);
-
-  const handleEditorContentSnapshot = useCallback(
-    (content: { html: string; text: string }) => {
-      latestEditorContentRef.current = content;
-    },
-    []
-  );
-
-  const recoverPendingSave = useCallback(
-    (bridge: EditorBridge, source: string) => {
-      const pending = getPendingSave(data.doc.id);
-      if (!pending) return false;
-
-      bridge.setContent(pending.html);
-      latestEditorContentRef.current = { html: pending.html, text: pending.text };
-      toast.info('Recovered unsaved changes');
-      void bridge.saveNow({ source: 'editor-recovery' });
-      return true;
-    },
-    [data.doc.id, editorSessionId, user.id, user.selectedProfile?.id]
-  );
-
-  const handleEditorBridgeReady = useCallback(
-    (bridge: EditorBridge | null) => {
-      editorBridgeRef.current = bridge;
-      if (!bridge || !isDocumentEditable || !isInitialAuthCheckComplete) return;
-      recoverPendingSave(bridge, 'bridge-ready');
-    },
-    [
-      isDocumentEditable,
-      isInitialAuthCheckComplete,
-      recoverPendingSave,
-    ]
-  );
-
-  useEffect(() => {
-    setGrammarIssues(persistedGrammarIssues);
-  }, [persistedGrammarIssues]);
-
-  useEffect(() => {
-    latestEditorContentRef.current = initialEditorContent;
-  }, [initialEditorContent]);
-
-  useEffect(() => {
-    setIsSessionLocked(false);
-  }, [data.doc.id]);
-
-
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || isSessionLocked) return;
-    if (!sessionStorage.getItem(loginReturnStorageKey)) return;
-    sessionStorage.removeItem(loginReturnStorageKey);
-  }, [
-    data.doc.id,
-    editorSessionId,
-    isInitialAuthCheckComplete,
-    isSessionLocked,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!isDocumentEditable) {
-      setIsInitialAuthCheckComplete(true);
-      return;
-    }
-
-    setIsInitialAuthCheckComplete(false);
-
-    const runInitialCheck = async () => {
-      await checkAuthSession();
-      if (!cancelled) {
-        setIsInitialAuthCheckComplete(true);
-      }
-    };
-
-    const onFocus = () => {
-      if (document.visibilityState !== 'visible') return;
-      void checkAuthSession();
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
-      void checkAuthSession();
-    };
-
-    void runInitialCheck();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [checkAuthSession, data.doc.id, isDocumentEditable]);
-
-  // Flush pending save on page unload / visibility hidden
-  useEffect(() => {
-    if (!isDocumentEditable) return;
-
-    const flushPendingSave = () => {
-      const content =
-        editorBridgeRef.current?.getContent() ??
-        latestEditorContentRef.current;
-      setPendingSave(data.doc.id, content);
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flushPendingSave();
-    };
-
-    window.addEventListener('pagehide', flushPendingSave);
-    window.addEventListener('beforeunload', flushPendingSave);
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      window.removeEventListener('pagehide', flushPendingSave);
-      window.removeEventListener('beforeunload', flushPendingSave);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [isDocumentEditable, data.doc.id]);
-
-  // Recover pending save on load
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || !isDocumentEditable) return;
-
-    if (!editorBridgeRef.current) return;
-    recoverPendingSave(editorBridgeRef.current, 'load');
-  }, [
-    isInitialAuthCheckComplete,
-    isDocumentEditable,
-    recoverPendingSave,
-  ]);
-
-  // Periodic auth heartbeat
-  useEffect(() => {
-    if (!isDocumentEditable) return;
-
-    const interval = setInterval(() => {
-      void checkAuthSession();
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [isDocumentEditable, checkAuthSession]);
-
-  useEffect(() => {
-    setHiddenGrammarIssueIds((prev) =>
-      prev.filter((id) => grammarIssues.some((issue) => issue.id === id))
-    );
-  }, [grammarIssues]);
-
-  useEffect(() => {
-    if (!tooltipIssueId) return;
-    if (visibleGrammarIssues.some((issue) => issue.id === tooltipIssueId))
-      return;
-    setTooltipIssueId(null);
-    setTooltipRect(null);
-  }, [tooltipIssueId, visibleGrammarIssues]);
-
-  useEffect(() => {
-    if (!isTeacherGradingTabOpen || !activeGradeCommentId) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      const clickedInHighlight = target.closest('[data-grade-comment-id]');
-      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
-      if (clickedInHighlight || clickedInCommentCard) return;
-      setActiveGradeCommentId(null);
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [activeGradeCommentId, isTeacherGradingTabOpen]);
-
-  const activeGrammarIssue = useMemo(() => {
-    if (!tooltipIssueId) return null;
-    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
-  }, [grammarIssues, tooltipIssueId]);
-
-  useEffect(() => {
-    if (!tooltipRect) {
-      setTooltipPos(null);
-      return;
-    }
-    setTooltipPos({
-      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
-      left: Math.min(window.innerWidth - 16, tooltipRect.left),
-    });
-  }, [tooltipRect]);
-
-  useEffect(() => {
-    if (data.shouldSaveVersion) {
-      const { pathname, search } = window.location;
-      const searchParams = new URLSearchParams(search);
-      searchParams.delete('ssv');
-      navigate(`${pathname}?${searchParams}`, { replace: true });
-    }
-  }, [data.shouldSaveVersion, navigate]);
-
-  useEffect(() => {
-    if (submitFetcher.state === 'idle' && submitFetcher.data) {
-      if (submitFetcher.data.success) {
-        toast.success(
-          submitFetcher.data.message || 'Essay submitted successfully!'
-        );
-        setIsFinalizeDialogOpen(false);
-        // Reload the page to reflect the new submission status
-        navigate(window.location.pathname + window.location.search, {
-          replace: true,
-        });
-      }
-    }
-  }, [submitFetcher.state, submitFetcher.data, navigate]);
-
-  useEffect(() => {
-    if (explicitExitTarget) {
-      setExitTarget(explicitExitTarget);
-      return;
-    }
-
-    setExitTarget(readLastNonDocumentRoute() ?? '/app');
-  }, [explicitExitTarget]);
-
-  useEffect(() => {
-    const handleEditorReady = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const getContent = customEvent.detail?.getContent;
-      if (!getContent) return;
-
-      // Check content immediately
-      const content = getContent();
-      setHasEditorContent(!!(content?.html && content?.text));
-
-      // Set up interval to check content
-      const interval = setInterval(() => {
-        const currentContent = getContent();
-        setHasEditorContent(!!(currentContent?.html && currentContent?.text));
-      }, 500);
-
-      return () => clearInterval(interval);
-    };
-
-    window.addEventListener('editor-ready', handleEditorReady);
-    return () => window.removeEventListener('editor-ready', handleEditorReady);
   }, []);
 
   return (
@@ -1188,62 +883,33 @@ export default function Route() {
             ) : (
               <Tutor
                 docId={data.doc.id}
-                cms={data.currentCms}
+                cms={(tutor.cms ?? data.currentCms) as any}
                 nextCmId={data.nextCmId}
                 hasPreviousCms={data.hasPreviousCms}
-                isSessionLocked={isSessionLocked}
+                isSessionLocked={auth.isLocked}
                 beforeRespond={handleTutorBeforeRespond}
+                onCmsUpdate={tutor.updateCms}
                 getCurrentDocumentText={() =>
                   editorBridgeRef.current?.getContent().text ??
-                  latestEditorContentRef.current.text ??
                   data.doc.text ??
                   ''
                 }
               />
             )}
             {isMobile && tab !== 'editor' ? null : (
-              <Editor
+              <DocumentEditor
                 docId={data.doc.id}
-                docHtml={editorHtml}
+                serverHtml={editorServerHtml}
+                serverText={editorServerText}
+                serverUpdatedAt={data.doc.updatedAt}
                 initialRevision={data.doc.revision}
-                editorSessionId={editorSessionId}
-                saveSnapshotId={
-                  isTeacherSnapshotView ? activeSnapshot?.id : null
-                }
-                setIsSaving={setIsSaving}
-                isEditable={isDocumentEditable && !isEditorLocked}
-                onContentSnapshot={handleEditorContentSnapshot}
-                onEditorBridgeReady={handleEditorBridgeReady}
-                onRemoteSaveSuccess={handleRemoteSaveSuccess}
-                onRemoteSaveFailure={handleRemoteSaveFailure}
+                isEditable={isEditorEditable}
+                onBridgeReady={(b) => {
+                  editorBridgeRef.current = b;
+                }}
                 onSyncStatusChange={setSyncStatus}
-                gradeHighlights={editorGradeHighlights}
-                activeGradeCommentId={
-                  isTeacherGradingTabOpen ? activeGradeCommentId : null
-                }
-                onGradeCommentSelect={
-                  isTeacherGradingTabOpen
-                    ? (id) => setActiveGradeCommentId(id)
-                    : undefined
-                }
-                onGrammarIssueHover={
-                  isTeacherGradingTabOpen
-                    ? (id, rect) => {
-                        if (id && rect) {
-                          if (closeTooltipTimer.current) {
-                            window.clearTimeout(closeTooltipTimer.current);
-                          }
-                          setTooltipIssueId(id);
-                          setTooltipRect(rect);
-                          return;
-                        }
-
-                        closeTooltipTimer.current = window.setTimeout(() => {
-                          setTooltipIssueId(null);
-                          setTooltipRect(null);
-                        }, 120);
-                      }
-                    : undefined
+                onCommentCreated={(c) =>
+                  commentsState.addComment(c as any)
                 }
               />
             )}
@@ -1307,13 +973,7 @@ export default function Route() {
                 variant="default"
                 data-testid="document-finalize-submit"
                 onClick={() => {
-                  submitFetcher.submit(
-                    { documentId: data.doc.id },
-                    {
-                      method: 'POST',
-                      action: '/api/domain/submit-document',
-                    }
-                  );
+                  void submit.submitNow();
                 }}
                 disabled={isSubmitting}
               >
@@ -1330,7 +990,7 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
-      <Dialog open={isSessionLocked} onOpenChange={() => {}}>
+      <Dialog open={auth.isLocked} onOpenChange={() => {}}>
         <DialogContent
           className="sm:max-w-md"
           onPointerDownOutside={(event) => event.preventDefault()}
