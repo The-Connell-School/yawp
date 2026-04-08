@@ -436,7 +436,14 @@ export const Editor = ({
       text: editor.getText().replace(/\u00A0/g, ' '),
     });
 
-    currentRevisionRef.current = initialRevision;
+    // Don't regress the revision watermark on effect re-runs (e.g. when the
+    // loader provides a stale initialRevision after a revalidation). The ref
+    // tracks the highest server revision the client has confirmed, and is
+    // also bumped by the sync-service onRevisionUpdate listener below.
+    currentRevisionRef.current = Math.max(
+      currentRevisionRef.current,
+      initialRevision
+    );
     clientSeqRef.current = 0;
 
     const save = async (options?: { source?: string }) => {
@@ -618,6 +625,20 @@ export const Editor = ({
       ? syncService.onStatusChange(onSyncStatusChange)
       : undefined;
 
+    // Advance the editor's revision watermark whenever sync-service learns of
+    // a new server revision (either via a successful save or a 409 response
+    // carrying currentRevision). Without this, currentRevisionRef stays stuck
+    // at initialRevision while the server marches forward via sync-service
+    // POSTs, causing legitimate editor PUT saves to be rejected as
+    // stale_base_revision and (more importantly) leaving stale baseRevision
+    // values in IndexedDB that the next sync-service push would carry.
+    const unsubRevision = syncService.onRevisionUpdate((revision) => {
+      currentRevisionRef.current = Math.max(
+        currentRevisionRef.current,
+        revision
+      );
+    });
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         void syncService.forceSave({ trigger: 'session-end' });
@@ -632,6 +653,7 @@ export const Editor = ({
       void syncService.forceSave({ trigger: 'session-end' });
       syncService.stop();
       unsub?.();
+      unsubRevision();
     };
   }, [docId]);
 

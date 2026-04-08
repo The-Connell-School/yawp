@@ -12,11 +12,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const profile = await requireProfile(request, userId);
 
   const body = await request.json();
-  const { html, text, contentHash, trigger } = body as {
+  const { html, text, contentHash, trigger, baseRevision } = body as {
     html: string;
     text: string;
     contentHash: string;
     trigger?: string;
+    baseRevision?: number;
   };
 
   const [user, document] = await Promise.all([
@@ -54,10 +55,37 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       documentId: document.id,
       htmlHash: contentHash,
       textHash: contentHash,
+      baseRevision: baseRevision ?? null,
       html,
       text,
     },
   });
+
+  // Concurrency check: if the client supplied a baseRevision, it must match the
+  // current document revision. This prevents stale sync-service writes (e.g. from
+  // a backgrounded tab or an editor whose in-memory state regressed) from
+  // clobbering newer content. Clients that don't send baseRevision are still
+  // accepted for backward compatibility with older deployed builds.
+  if (typeof baseRevision === 'number' && baseRevision !== document.revision) {
+    await prisma.documentWriteJournal.update({
+      where: { id: journal.id },
+      data: {
+        status: 'rejected',
+        failureReason: 'stale_base_revision',
+      },
+    });
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: 'stale_base_revision',
+        currentRevision: document.revision,
+      }),
+      {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
 
   const updated = await prisma.document.update({
     where: { id: document.id },
@@ -89,8 +117,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     await prisma.documentRevision.create({
       data: {
         documentId: document.id,
-        html: document.html ?? '',
-        text: document.text ?? '',
+        // Snapshot the NEW content we just wrote, not the pre-update doc state.
+        // The previous code captured the stale `document.html`/`document.text`
+        // read before the update, so revision history showed the wrong content.
+        html,
+        text,
         trigger: resolvedTrigger ?? (!lastRevision ? 'session-start' : 'auto'),
       },
     });
