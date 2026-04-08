@@ -549,15 +549,21 @@ export const Editor = ({
       editor.on('update', saveDebounced);
       editor.on('blur', saveOnBlur);
     } else {
-      // Local-first: write to IndexedDB on every update, sync via SyncService
-      editor.on('update', async ({ editor: e }) => {
-        const html = e.getHTML();
-        const text = e.getText();
-        const hash = await contentHash(html, text);
+      // Local-first: write to IndexedDB on every update, sync via SyncService.
+      // CRITICAL: use getContentSnapshot() so the text representation matches
+      // the PUT save path exactly. The PUT path strips non-breaking spaces
+      // (\u00A0 → ' ') before computing the server-side content; if the IDB
+      // write used the raw `editor.getText()` instead, sync-service would later
+      // POST a contentHash that doesn't match the server's hash and the 409
+      // path would surface a fake "Out of sync" — common after page refresh
+      // because recoverPendingSave() does setContent + saveNow back-to-back.
+      editor.on('update', async () => {
+        const content = getContentSnapshot();
+        const hash = await contentHash(content.html, content.text);
         await documentStore.put({
           docId,
-          html,
-          text,
+          html: content.html,
+          text: content.text,
           updatedAt: Date.now(),
           serverRevision: currentRevisionRef.current,
           syncStatus: 'pending',
