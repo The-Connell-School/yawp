@@ -17,10 +17,10 @@ describe('SourceTracker extension', () => {
   });
 
   it('tags transactions originating from user input events', () => {
-    let lastMeta: string | null = null;
+    const captured: { meta: string | null } = { meta: null };
     editor.on('transaction', ({ transaction }) => {
       if (transaction.docChanged) {
-        lastMeta = transaction.getMeta(USER_SOURCE_META) ?? null;
+        captured.meta = transaction.getMeta(USER_SOURCE_META) ?? null;
       }
     });
 
@@ -30,20 +30,20 @@ describe('SourceTracker extension', () => {
     // Simulate the resulting input by dispatching a transaction
     editor.commands.insertContent('a');
 
-    expect(lastMeta).toBe('user');
+    expect(captured.meta).toBe('user');
   });
 
   it('does NOT tag transactions originating from explicit code', () => {
-    let lastMeta: string | null = null;
+    const captured: { meta: string | null } = { meta: null };
     editor.on('transaction', ({ transaction }) => {
       if (transaction.docChanged) {
-        lastMeta = transaction.getMeta(USER_SOURCE_META) ?? null;
+        captured.meta = transaction.getMeta(USER_SOURCE_META) ?? null;
       }
     });
 
     // No DOM event — pure code-initiated transaction
     editor.commands.insertContent('hello world');
 
-    expect(lastMeta).toBeNull();
+    expect(captured.meta).toBeNull();
   });
 });
