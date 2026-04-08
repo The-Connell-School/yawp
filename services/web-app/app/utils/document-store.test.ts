@@ -206,6 +206,26 @@ describe('DocumentStore', () => {
       expect(entry!.syncStatus).toBe('failed');
       expect(entry!.lastSyncError).toBe('network error');
     });
+
+    it('preserves localVersion after markFailed', async () => {
+      await store.put({
+        docId: 'doc-1',
+        html: '<p>hi</p>',
+        text: 'hi',
+        updatedAt: 1000,
+        serverRevision: 1,
+        syncStatus: 'pending',
+        lastSyncedAt: null,
+        lastSyncError: null,
+        contentHash: 'abc',
+        localVersion: 5,
+      });
+      await store.markFailed('doc-1', 'stale write rejected');
+      const entry = await store.get('doc-1');
+      expect(entry!.localVersion).toBe(5);
+      expect(entry!.syncStatus).toBe('failed');
+      expect(entry!.lastSyncError).toBe('stale write rejected');
+    });
   });
 
   describe('delete', () => {
