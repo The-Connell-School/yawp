@@ -1,5 +1,10 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-GlobalRegistrator.register();
+// Guard: register only if not already registered (multi-file bun:test runs share a process)
+try {
+  GlobalRegistrator.register();
+} catch {
+  // Already registered by another test file in this process — safe to ignore
+}
 
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { Editor } from '@tiptap/core';
