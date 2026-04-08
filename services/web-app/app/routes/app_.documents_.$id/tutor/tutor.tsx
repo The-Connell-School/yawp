@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -7,14 +7,13 @@ import {
   MessageSquareOff,
   MessageSquareText,
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
-import { shouldSuppressOptimisticBubble } from './optimistic-bubble';
 import { ResponseBar } from './response-bar';
 
 type Props = {
@@ -24,6 +23,7 @@ type Props = {
   getCurrentDocumentText?: () => string | null;
   beforeRespond?: () => Promise<boolean>;
   isSessionLocked?: boolean;
+  onCmsUpdate?: (cms: any) => void;
   cms: {
     studentCourseModule: {
       studentCourse: {
@@ -54,14 +54,19 @@ export const Tutor = ({
   getCurrentDocumentText,
   beforeRespond,
   isSessionLocked = false,
+  onCmsUpdate,
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
     true
   );
-  const tutorResponseFetcher = useFetcher<{ error?: string }>();
-  const incrementInstructionFetcher = useFetcher();
-  const advanceCourseModuleFetcher = useFetcher();
+  const [isTutorResponding, setIsTutorResponding] = useState(false);
+  const [tutorError, setTutorError] = useState<string | null>(null);
+  const [optimisticMessage, setOptimisticMessage] = useState<{
+    agent: string;
+    createdAt: Date;
+    content: string;
+  } | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,88 +97,115 @@ export const Tutor = ({
     });
   };
 
-  const optimistic = tutorResponseFetcher.formData;
-  const optimisticContent = optimistic?.get('response');
 
-  // During the revalidation window (fetcher.state === 'loading'),
-  // formData is still set but cms.messages has already been refreshed
-  // to include the real user + tutor messages. Rendering the
-  // optimistic bubble in that window puts a stale copy of the
-  // student's message below the tutor's reply, because createdAt is
-  // re-minted on every render and sorts to the bottom. Suppress it
-  // only in that window, so double-sends during 'submitting' still
-  // render their own optimistic bubble.
-  const suppressOptimistic = shouldSuppressOptimisticBubble({
-    fetcherState: tutorResponseFetcher.state,
-    optimisticContent,
-    messages: cms.messages,
-  });
-
-  const optimisticMessage =
-    optimistic && !suppressOptimistic
-      ? ({
-          agent: 'user',
-          createdAt: new Date(),
-          content: optimisticContent,
-        } as any)
-      : null;
-
-  const respond = async (response: string) => {
+  const respond = useCallback(async (response: string) => {
     if (isSessionLocked) return;
     if (beforeRespond) {
       const canProceed = await beforeRespond();
       if (!canProceed) return;
     }
-    tutorResponseFetcher.submit(
-      {
-        response,
-        cmsId: cms.id,
-        content: getCurrentDocumentText?.() ?? '',
-      },
-      { method: 'POST', action: '/api/domain/tutor-response' }
-    );
-  };
-
-  const incrementInstruction = (label?: string) => {
-    if (isSessionLocked) return;
-    incrementInstructionFetcher.submit(
-      {
-        'instructionsCompleted.increment': 1,
-        ...(label ? { incrementButtonText: label } : {}),
-      },
-      {
+    setTutorError(null);
+    setOptimisticMessage({
+      agent: 'user',
+      createdAt: new Date(),
+      content: response,
+    });
+    setIsTutorResponding(true);
+    try {
+      const formData = new FormData();
+      formData.append('response', response);
+      formData.append('cmsId', cms.id);
+      formData.append('content', getCurrentDocumentText?.() ?? '');
+      const res = await fetch('/api/domain/tutor-response', {
         method: 'POST',
-        action: `/api/model/course-module-session/${cms.id}`,
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        setTutorError(json.error ?? 'An error occurred.');
+        setOptimisticMessage(null);
+      } else {
+        setOptimisticMessage(null);
+        setIsTutorResponding(false);
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+        return;
       }
-    );
-  };
+    } catch {
+      setTutorError('Failed to get a response from the tutor. Please try again.');
+      setOptimisticMessage(null);
+    } finally {
+      setIsTutorResponding(false);
+    }
+  }, [isSessionLocked, beforeRespond, cms.id, getCurrentDocumentText, onCmsUpdate]);
 
-  const decrementInstruction = () => {
+  const incrementInstruction = useCallback(async (label?: string) => {
     if (isSessionLocked) return;
-    incrementInstructionFetcher.submit(
-      { 'instructionsCompleted.decrement': 1 },
-      {
+    const formData = new FormData();
+    formData.append('instructionsCompleted.increment', '1');
+    if (label) formData.append('incrementButtonText', label);
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
         method: 'POST',
-        action: `/api/model/course-module-session/${cms.id}`,
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
       }
-    );
-  };
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, onCmsUpdate]);
 
-  const advanceToNextCourseModule = () => {
+  const decrementInstruction = useCallback(async () => {
     if (isSessionLocked) return;
-    advanceCourseModuleFetcher.submit(
-      { studentCourseModuleId: nextCmId ?? '', documentId: docId },
-      {
+    const formData = new FormData();
+    formData.append('instructionsCompleted.decrement', '1');
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
         method: 'POST',
-        action: '/api/model/course-module-session',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
       }
-    );
-  };
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, onCmsUpdate]);
+
+  const advanceToNextCourseModule = useCallback(async () => {
+    if (isSessionLocked) return;
+    const formData = new FormData();
+    formData.append('studentCourseModuleId', nextCmId ?? '');
+    formData.append('documentId', docId);
+    try {
+      const res = await fetch('/api/model/course-module-session', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, nextCmId, docId, onCmsUpdate]);
 
   const messages = cms.messages
     .filter((m) => ['user', 'assistant'].includes(m.agent))
-    .concat(optimisticMessage ?? [])
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    .concat(optimisticMessage ? [optimisticMessage as any] : [])
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   useEffect(() => {
     messagesRef.current?.scrollTo({
@@ -182,13 +214,6 @@ export const Tutor = ({
     });
   }, [messages.length]);
 
-  useEffect(() => {
-    if (!searchParams.has('spa')) return;
-
-    const next = new URLSearchParams(searchParams);
-    next.delete('spa');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   return (
     <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
@@ -317,12 +342,12 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {tutorResponseFetcher.state !== 'idle' && optimistic ? (
+          {isTutorResponding && optimisticMessage ? (
             <Loading />
           ) : null}
-          {tutorResponseFetcher.data?.error ? (
+          {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
-              {tutorResponseFetcher.data.error}
+              {tutorError}
             </p>
           ) : null}
         </div>

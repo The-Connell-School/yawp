@@ -45,7 +45,7 @@ import {
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { Editor, type EditorBridge } from './editor/index';
-import { Tutor } from './tutor';
+import { Tutor } from './tutor/tutor';
 import { DocumentVersions } from './_components/document-versions';
 import {
   DocumentStatusBadge,

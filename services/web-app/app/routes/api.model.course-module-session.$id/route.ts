@@ -94,10 +94,33 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : {}),
   };
 
-  const updated = await prisma.studentCourseModuleSession.update({
+  await prisma.studentCourseModuleSession.update({
     where: { id: params.id },
     data: updateData,
   });
 
-  return dataResponse(updated, { status: 200 });
+  const updatedCms = await prisma.studentCourseModuleSession.findUnique({
+    where: { id: params.id },
+    include: {
+      messages: { orderBy: { createdAt: 'asc' } },
+      studentCourseModule: {
+        include: {
+          instructions: {
+            orderBy: { position: 'asc' },
+            include: { buttons: { orderBy: { position: 'asc' } } },
+          },
+          studentCourse: {
+            select: {
+              studentCourseModules: {
+                select: { id: true, position: true },
+                orderBy: { position: 'asc' },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return dataResponse({ cms: updatedCms }, { status: 200 });
 }
