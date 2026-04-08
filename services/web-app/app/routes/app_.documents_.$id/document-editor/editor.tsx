@@ -7,7 +7,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
-import { Bar } from '../editor/bar';
+import { Bar } from './editor-bar';
 import { ErrorBoundary } from '../editor/error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
@@ -49,6 +49,7 @@ type Props = {
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onEditorDomReady?: (root: HTMLElement | null) => void;
+  onCommentCreated?: (comment: { id: string }) => void;
 };
 
 export function Editor({
@@ -59,6 +60,7 @@ export function Editor({
   onBridgeReady,
   onSyncStatusChange,
   onEditorDomReady,
+  onCommentCreated,
 }: Props) {
   const editor = useEditor({
     extensions,
@@ -117,6 +119,7 @@ export function Editor({
             editor={editor}
             documentId={docId}
             isEditable={isEditable}
+            onCommentCreated={onCommentCreated}
           />
         ) : null}
         <div className="no-scrollbar grow overflow-y-scroll p-5" key={`${docId}-editor`}>

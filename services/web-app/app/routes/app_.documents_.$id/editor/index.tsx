@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { findExcerptRange } from '~/utils/excerpt-position';
 import { useCommentsSelection } from '../comments/selection-context';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
-import { Bar } from './bar';
+import { Bar } from '../document-editor/editor-bar';
 import { GradingSelectionToolbar } from './grading-selection-toolbar';
 import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from '../document-editor/extensions/comment';

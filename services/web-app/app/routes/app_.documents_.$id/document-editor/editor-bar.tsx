@@ -1,4 +1,3 @@
-import { useFetcher } from 'react-router';
 import { type Editor } from '@tiptap/react';
 import { MessageCirclePlusIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -13,7 +12,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
-import { type Command, commands, COMMAND_STYLE } from './commands';
+import { type Command, commands, COMMAND_STYLE } from '../editor/commands';
 import camelCase from 'lodash/camelCase';
 
 const DROPDOWN_WIDTH = 32;
@@ -25,15 +24,13 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
+  onCommentCreated?: (comment: { id: string }) => void;
 };
 
-export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
+export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }: BarProps) => {
   const [visibleCommands, setVisibleCommands] = useState(commands);
   const [hiddenCommands, setHiddenCommands] = useState<Command[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const createDocumentCommentFetcher = useFetcher<{ id: string }>({
-    key: 'create-document-comment',
-  });
 
   useEffect(() => {
     const updateButtonVisibility = () => {
@@ -108,10 +105,20 @@ export const Bar = ({ editor, documentId, isEditable = true }: BarProps) => {
                 const content = editor.state.doc.textBetween(from, to, ' ');
                 if (!content) return;
                 editor.chain().focus().setComment(id).run();
-                createDocumentCommentFetcher.submit(
-                  { id, content, documentId },
-                  { method: 'POST', action: '/api/model/document-comment' }
-                );
+                const formData = new FormData();
+                formData.append('id', id);
+                formData.append('content', content);
+                formData.append('documentId', documentId);
+                fetch('/api/model/document-comment', { method: 'POST', body: formData })
+                  .then((res) => res.json())
+                  .then((data) => {
+                    if (data?.id && onCommentCreated) {
+                      onCommentCreated({ id: data.id });
+                    }
+                  })
+                  .catch((err) => {
+                    console.error('Failed to create comment:', err);
+                  });
               }
             }}
             className={cn(COMMAND_STYLE, {
