@@ -39,7 +39,7 @@ export class DocumentStore {
           if (oldVersion < 2) {
             // Migration: backfill localVersion on existing records
             const store = transaction.objectStore(STORE_NAME);
-            store.openCursor().then(function migrate(cursor) {
+            store.openCursor().then(function migrate(cursor): Promise<void> | void {
               if (!cursor) return;
               const value = cursor.value;
               if (value.localVersion === undefined) {
