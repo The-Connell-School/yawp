@@ -1,6 +1,12 @@
 import { type DocumentStore } from './document-store';
 
-export type SyncStatus = 'synced' | 'saving' | 'offline' | 'auth-expired' | 'error';
+export type SyncStatus =
+  | 'synced'
+  | 'saving'
+  | 'offline'
+  | 'auth-expired'
+  | 'error'
+  | 'conflict';
 
 export class SyncService {
   private _store: DocumentStore;
@@ -8,10 +14,12 @@ export class SyncService {
   private _docId: string | null = null;
   private _status: SyncStatus = 'synced';
   private _listeners: Set<(status: SyncStatus) => void> = new Set();
+  private _revisionListeners: Set<(revision: number) => void> = new Set();
   private _debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private _retryTimer: ReturnType<typeof setTimeout> | null = null;
   private _retryCount = 0;
   private _lastSyncedHash: string | null = null;
+  private _conflictedHash: string | null = null;
   private _stopped = false;
 
   constructor(store: DocumentStore, fetchFn: typeof fetch = globalThis.fetch.bind(globalThis)) {
@@ -27,6 +35,7 @@ export class SyncService {
     this._docId = docId;
     this._stopped = false;
     this._retryCount = 0;
+    this._conflictedHash = null;
   }
 
   stop(): void {
@@ -54,6 +63,13 @@ export class SyncService {
     this._listeners.add(cb);
     return () => {
       this._listeners.delete(cb);
+    };
+  }
+
+  onRevisionUpdate(cb: (revision: number) => void): () => void {
+    this._revisionListeners.add(cb);
+    return () => {
+      this._revisionListeners.delete(cb);
     };
   }
 
@@ -97,6 +113,14 @@ export class SyncService {
       return;
     }
 
+    // If this exact content was already rejected as stale by the server, don't
+    // keep retrying it — it would just get rejected again. Wait for the next
+    // user keystroke to produce fresh content (with a fresh baseRevision via
+    // the high-water mark advanced by onRevisionUpdate listeners).
+    if (entry.contentHash === this._conflictedHash) {
+      return;
+    }
+
     this._setStatus('saving');
 
     try {
@@ -107,6 +131,7 @@ export class SyncService {
           html: entry.html,
           text: entry.text,
           contentHash: entry.contentHash,
+          baseRevision: entry.serverRevision,
           trigger,
         }),
       });
@@ -115,9 +140,32 @@ export class SyncService {
         const body = await response.json();
         await this._store.markSynced(this._docId, body.revision, Date.now());
         this._lastSyncedHash = entry.contentHash;
+        this._conflictedHash = null;
         this._retryCount = 0;
+        if (typeof body.revision === 'number') {
+          this._emitRevision(body.revision);
+        }
         this._setStatus('synced');
         return;
+      }
+
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null);
+        if (body?.error === 'stale_base_revision') {
+          // The local IDB content is based on a stale view of the server.
+          // Mark this content as conflicted so we don't loop on it, advance
+          // the high-water mark from the server's response, and surface a
+          // conflict status to the UI. The next editor mutation will produce
+          // fresh content with the new baseRevision and resume normal sync.
+          this._conflictedHash = entry.contentHash;
+          await this._store.markFailed(this._docId, 'stale_base_revision');
+          if (typeof body.currentRevision === 'number') {
+            this._emitRevision(body.currentRevision);
+          }
+          this._retryCount = 0;
+          this._setStatus('conflict');
+          return;
+        }
       }
 
       if (response.status === 401 || response.status === 403) {
@@ -134,6 +182,16 @@ export class SyncService {
       await this._store.markFailed(this._docId!, message);
       this._setStatus('offline');
       this._scheduleRetry();
+    }
+  }
+
+  private _emitRevision(revision: number): void {
+    for (const cb of this._revisionListeners) {
+      try {
+        cb(revision);
+      } catch {
+        // Listener errors are non-fatal
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { contentHash as computeContentHash } from '~/utils/content-hash';
 import { prisma } from '~/utils/db.server';
 
 const REVISION_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -12,11 +13,12 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const profile = await requireProfile(request, userId);
 
   const body = await request.json();
-  const { html, text, contentHash, trigger } = body as {
+  const { html, text, contentHash, trigger, baseRevision } = body as {
     html: string;
     text: string;
     contentHash: string;
     trigger?: string;
+    baseRevision?: number;
   };
 
   const [user, document] = await Promise.all([
@@ -54,10 +56,72 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       documentId: document.id,
       htmlHash: contentHash,
       textHash: contentHash,
+      baseRevision: baseRevision ?? null,
       html,
       text,
     },
   });
+
+  // Concurrency check: if the client supplied a baseRevision, it must match the
+  // current document revision. This prevents stale sync-service writes (e.g. from
+  // a backgrounded tab or an editor whose in-memory state regressed) from
+  // clobbering newer content. Clients that don't send baseRevision are still
+  // accepted for backward compatibility with older deployed builds.
+  if (typeof baseRevision === 'number' && baseRevision !== document.revision) {
+    // Before declaring a real conflict, check whether the client's content
+    // already matches what's on the server. This catches the very common
+    // "metadata-only stale" case: e.g. the editor just successfully wrote
+    // the same content via the PUT path, which advanced the server revision
+    // but didn't update IndexedDB's serverRevision. The client's next
+    // sync-service POST then carries a stale baseRevision but identical
+    // content. Treat that as a no-op success so the client can advance its
+    // watermark without ever surfacing a fake conflict to the student.
+    const currentHash = await computeContentHash(
+      document.html ?? '',
+      document.text ?? ''
+    );
+    if (contentHash === currentHash) {
+      await prisma.documentWriteJournal.update({
+        where: { id: journal.id },
+        data: {
+          status: 'accepted',
+          resultingRevision: document.revision,
+          metadata: { noChange: true, reason: 'content_already_in_sync' },
+        },
+      });
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          revision: document.revision,
+          savedAt: document.updatedAt.toISOString(),
+          noChange: true,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    await prisma.documentWriteJournal.update({
+      where: { id: journal.id },
+      data: {
+        status: 'rejected',
+        failureReason: 'stale_base_revision',
+      },
+    });
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: 'stale_base_revision',
+        currentRevision: document.revision,
+      }),
+      {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
 
   const updated = await prisma.document.update({
     where: { id: document.id },
@@ -89,8 +153,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     await prisma.documentRevision.create({
       data: {
         documentId: document.id,
-        html: document.html ?? '',
-        text: document.text ?? '',
+        // Snapshot the NEW content we just wrote, not the pre-update doc state.
+        // The previous code captured the stale `document.html`/`document.text`
+        // read before the update, so revision history showed the wrong content.
+        html,
+        text,
         trigger: resolvedTrigger ?? (!lastRevision ? 'session-start' : 'auto'),
       },
     });

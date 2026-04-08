@@ -436,7 +436,14 @@ export const Editor = ({
       text: editor.getText().replace(/\u00A0/g, ' '),
     });
 
-    currentRevisionRef.current = initialRevision;
+    // Don't regress the revision watermark on effect re-runs (e.g. when the
+    // loader provides a stale initialRevision after a revalidation). The ref
+    // tracks the highest server revision the client has confirmed, and is
+    // also bumped by the sync-service onRevisionUpdate listener below.
+    currentRevisionRef.current = Math.max(
+      currentRevisionRef.current,
+      initialRevision
+    );
     clientSeqRef.current = 0;
 
     const save = async (options?: { source?: string }) => {
@@ -542,15 +549,21 @@ export const Editor = ({
       editor.on('update', saveDebounced);
       editor.on('blur', saveOnBlur);
     } else {
-      // Local-first: write to IndexedDB on every update, sync via SyncService
-      editor.on('update', async ({ editor: e }) => {
-        const html = e.getHTML();
-        const text = e.getText();
-        const hash = await contentHash(html, text);
+      // Local-first: write to IndexedDB on every update, sync via SyncService.
+      // CRITICAL: use getContentSnapshot() so the text representation matches
+      // the PUT save path exactly. The PUT path strips non-breaking spaces
+      // (\u00A0 → ' ') before computing the server-side content; if the IDB
+      // write used the raw `editor.getText()` instead, sync-service would later
+      // POST a contentHash that doesn't match the server's hash and the 409
+      // path would surface a fake "Out of sync" — common after page refresh
+      // because recoverPendingSave() does setContent + saveNow back-to-back.
+      editor.on('update', async () => {
+        const content = getContentSnapshot();
+        const hash = await contentHash(content.html, content.text);
         await documentStore.put({
           docId,
-          html,
-          text,
+          html: content.html,
+          text: content.text,
           updatedAt: Date.now(),
           serverRevision: currentRevisionRef.current,
           syncStatus: 'pending',
@@ -618,6 +631,20 @@ export const Editor = ({
       ? syncService.onStatusChange(onSyncStatusChange)
       : undefined;
 
+    // Advance the editor's revision watermark whenever sync-service learns of
+    // a new server revision (either via a successful save or a 409 response
+    // carrying currentRevision). Without this, currentRevisionRef stays stuck
+    // at initialRevision while the server marches forward via sync-service
+    // POSTs, causing legitimate editor PUT saves to be rejected as
+    // stale_base_revision and (more importantly) leaving stale baseRevision
+    // values in IndexedDB that the next sync-service push would carry.
+    const unsubRevision = syncService.onRevisionUpdate((revision) => {
+      currentRevisionRef.current = Math.max(
+        currentRevisionRef.current,
+        revision
+      );
+    });
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         void syncService.forceSave({ trigger: 'session-end' });
@@ -632,6 +659,7 @@ export const Editor = ({
       void syncService.forceSave({ trigger: 'session-end' });
       syncService.stop();
       unsub?.();
+      unsubRevision();
     };
   }, [docId]);
 

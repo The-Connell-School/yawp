@@ -50,5 +50,12 @@ export function SaveStatusIndicator({ status, onLoginClick }: Props) {
           Save error · retrying...
         </span>
       );
+    case 'conflict':
+      return (
+        <span className="flex items-center gap-1 text-xs text-destructive">
+          <AlertCircle className="h-3 w-3" />
+          Out of sync · keep typing to retry
+        </span>
+      );
   }
 }
