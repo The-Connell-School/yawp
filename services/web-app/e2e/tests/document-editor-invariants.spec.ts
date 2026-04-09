@@ -1,12 +1,10 @@
 import { test, expect } from '../test-setup';
+import type { Page } from '@playwright/test';
 
 const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
 const SAVE_SHORTCUT = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
 
-async function openEditor(
-  page: Parameters<Parameters<typeof test>[1]>[0]['page'],
-  documentId: string
-) {
+async function openEditor(page: Page, documentId: string) {
   await page.goto(`/app/documents/${documentId}`);
   await page.waitForLoadState('networkidle');
   const editor = page.locator(EDITOR_SELECTOR).first();
