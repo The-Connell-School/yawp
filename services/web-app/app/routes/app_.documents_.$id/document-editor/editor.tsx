@@ -8,7 +8,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
 import { Bar } from './editor-bar';
-import { ErrorBoundary } from '../editor/error-boundry';
+import { ErrorBoundary } from './error-boundry';
 import { Comment, CommentExtension } from './extensions/comment';
 import { LineHeight } from './extensions/line-height';
 import { TabIndent } from './extensions/tab-indent';

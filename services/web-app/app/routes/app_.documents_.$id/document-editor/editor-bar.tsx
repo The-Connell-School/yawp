@@ -12,7 +12,7 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
-import { type Command, commands, COMMAND_STYLE } from '../editor/commands';
+import { type Command, commands, COMMAND_STYLE } from './commands';
 import camelCase from 'lodash/camelCase';
 
 const DROPDOWN_WIDTH = 32;

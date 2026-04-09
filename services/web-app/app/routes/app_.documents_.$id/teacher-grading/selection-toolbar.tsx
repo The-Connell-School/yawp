@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { GradingSelectionToolbar } from '../editor/grading-selection-toolbar';
+import { GradingSelectionToolbar } from './grading-selection-toolbar';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 
 type Props = {
