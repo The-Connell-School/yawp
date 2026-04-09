@@ -42,7 +42,7 @@ import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
-import { DocumentVersions } from './_components/document-versions';
+import { DocumentHistory } from './document-history/document-history';
 import {
   DocumentStatusBadge,
   getDocumentStatusLabel,
@@ -758,7 +758,7 @@ export default function Route() {
               <div className="flex items-center gap-2">
                 <SaveStatusIndicator status={syncStatus} />
                 <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} defaultMode="revisions" />
+                <DocumentHistory documentId={data.doc.id} />
               </div>
             ) : null}
             {isViewingAsTeacher && isSubmitted && (
