@@ -260,18 +260,19 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const now = new Date();
   const twentySecondsAgo = new Date(now.getTime() - 20_000);
 
-  const lastVersion = await prisma.documentVersion.findFirst({
+  const lastVersion = await prisma.documentRevision.findFirst({
     where: { documentId: params.id },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
 
   if (!lastVersion || lastVersion.createdAt < twentySecondsAgo) {
-    await prisma.documentVersion.create({
+    await prisma.documentRevision.create({
       data: {
         documentId: params.id,
         text: document.text ?? '',
         html: document.html ?? '',
+        trigger: 'auto-save',
       },
     });
   }

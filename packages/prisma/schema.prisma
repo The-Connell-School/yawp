@@ -163,7 +163,6 @@ model Document {
   assignment                  Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
-  versions                    DocumentVersion[]
   snapshots                   DocumentSnapshot[]
   writeJournals               DocumentWriteJournal[]
   grades                      Grade[]
@@ -196,15 +195,6 @@ model DocumentCommentResponse {
   profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
-model DocumentVersion {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  text       String
-  html       String
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-}
-
 model DocumentSnapshot {
   id                 String     @id @default(cuid())
   createdAt          DateTime   @default(now()) @db.Timestamptz(6)
@@ -212,6 +202,7 @@ model DocumentSnapshot {
   archivedAt         DateTime?  @db.Timestamptz(6)
   text               String
   html               String
+  title              String?
   documentId         String
   document           Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   submittedDocuments Document[] @relation("DocumentSubmission")

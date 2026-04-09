@@ -221,7 +221,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      versions: { orderBy: { createdAt: 'desc' } },
+      revisions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
       studentCourseModuleSessions: {
         orderBy: { studentCourseModule: { position: 'desc' } },
@@ -316,11 +316,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   if (shouldSaveVersion) {
-    const latestVersion = doc.versions[0];
-    if (doc.html && doc.text && latestVersion?.html !== doc.html) {
-      prisma.documentVersion
+    const latestRevision = doc.revisions[0];
+    if (doc.html && doc.text && latestRevision?.html !== doc.html) {
+      prisma.documentRevision
         .create({
-          data: { documentId: doc.id, html: doc.html, text: doc.text },
+          data: {
+            documentId: doc.id,
+            html: doc.html,
+            text: doc.text,
+            trigger: 'loader-save',
+          },
         })
         .catch(() => {});
     }

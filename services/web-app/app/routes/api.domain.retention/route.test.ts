@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  documentVersion: {
+  documentRevision: {
     deleteMany: mock(),
   },
   documentSnapshot: {
@@ -19,10 +19,10 @@ const { loader } = await import('./route');
 describe('api.domain.retention', () => {
   beforeEach(() => {
     process.env.INTERNAL_COMMAND_TOKEN = 'retention-token';
-    prisma.documentVersion.deleteMany.mockReset();
+    prisma.documentRevision.deleteMany.mockReset();
     prisma.documentSnapshot.deleteMany.mockReset();
     prisma.documentWriteJournal.deleteMany.mockReset();
-    prisma.documentVersion.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.documentRevision.deleteMany.mockResolvedValue({ count: 0 });
     prisma.documentSnapshot.deleteMany.mockResolvedValue({ count: 0 });
     prisma.documentWriteJournal.deleteMany.mockResolvedValue({ count: 0 });
   });
@@ -35,13 +35,13 @@ describe('api.domain.retention', () => {
     const response = (await loader({ request } as any)) as Response;
 
     expect(response.status).toBe(401);
-    expect(prisma.documentVersion.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.documentRevision.deleteMany).not.toHaveBeenCalled();
     expect(prisma.documentSnapshot.deleteMany).not.toHaveBeenCalled();
     expect(prisma.documentWriteJournal.deleteMany).not.toHaveBeenCalled();
   });
 
   test('cleans up versions without deleting snapshots', async () => {
-    prisma.documentVersion.deleteMany.mockResolvedValue({ count: 9 });
+    prisma.documentRevision.deleteMany.mockResolvedValue({ count: 9 });
     prisma.documentWriteJournal.deleteMany.mockResolvedValue({ count: 2 });
 
     const startedAt = Date.now();
@@ -57,7 +57,7 @@ describe('api.domain.retention', () => {
       data: { deletedVersions: number; deletedSnapshots: number };
     };
 
-    expect(prisma.documentVersion.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prisma.documentRevision.deleteMany).toHaveBeenCalledTimes(1);
     expect(prisma.documentWriteJournal.deleteMany).toHaveBeenCalledTimes(1);
     expect(prisma.documentSnapshot.deleteMany).not.toHaveBeenCalled();
 

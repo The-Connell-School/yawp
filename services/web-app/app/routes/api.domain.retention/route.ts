@@ -46,7 +46,7 @@ export async function loader({ request }: ActionFunctionArgs) {
     now.getTime() - documentWriteJournalRetentionDays * oneDay
   );
 
-  const versionsResult = await prisma.documentVersion.deleteMany({
+  const versionsResult = await prisma.documentRevision.deleteMany({
     where: { createdAt: { lt: cutoffVersions } },
   });
   const documentWriteJournalsResult = await prisma.documentWriteJournal.deleteMany({
