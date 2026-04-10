@@ -298,33 +298,49 @@ test.describe.serial('Document Editor E2E Tests', () => {
     }
   });
 
-  test.skip('posts paste-alert when pasting large text not copied from editor', async ({
+  test('posts paste-alert when pasting large text not copied from editor', async ({
     page,
     signIn,
     e2eContext,
     helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    const prisma = createE2EPrismaClient();
+    try {
+      await signIn('jdoe@brock.software', 'johndoe');
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
-    const editor = helpers.getEditor();
-    const longText = 'x'.repeat(201);
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+      const editor = helpers.getEditor();
+      const longText = 'x'.repeat(201);
 
-    await page.evaluate(async (text) => {
-      await navigator.clipboard.writeText(text);
-    }, longText);
+      // Clear any prior paste alerts for this document
+      await prisma.pasteAlert.deleteMany({ where: { documentId: e2eContext.editedDocumentId } });
 
-    await editor.click();
+      await page.evaluate(async (text) => {
+        await navigator.clipboard.writeText(text);
+      }, longText);
 
-    const pasteAlertPromise = page.waitForRequest(
-      (req) =>
-        req.url().includes('/api/paste-alert') && req.method() === 'POST',
-      { timeout: 15000 }
-    );
+      await editor.click();
 
-    await page.keyboard.press(PASTE_SHORTCUT);
-    await pasteAlertPromise;
+      // Wait for the paste-alert POST to complete
+      const pasteAlertResponse = page.waitForResponse(
+        (res) => res.url().includes('/api/paste-alert') && res.request().method() === 'POST',
+        { timeout: 15000 }
+      );
+
+      await page.keyboard.press(PASTE_SHORTCUT);
+      await pasteAlertResponse;
+
+      // Verify a PasteAlert record was created in the database
+      const alert = await prisma.pasteAlert.findFirst({
+        where: { documentId: e2eContext.editedDocumentId },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(alert).not.toBeNull();
+      expect(alert!.textLength).toBe(201);
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('does not post paste-alert when pasting large text copied from same editor', async ({

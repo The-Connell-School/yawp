@@ -15,6 +15,7 @@ import { TabIndent } from './extensions/tab-indent';
 import { SourceTracker } from './extensions/source-tracker';
 import { usePmTripwire } from './use-pm-tripwire';
 import { useEditorSync, type EditorBridge } from './use-editor-sync';
+import { usePasteAlert } from './use-paste-alert';
 import type { SyncStatus } from '~/utils/sync-service';
 
 const extensions = [
@@ -77,6 +78,9 @@ export function Editor({
 
   // Install the runtime tripwire (catches unauthorized PM mutations)
   usePmTripwire(editor);
+
+  // Detect large pastes from external sources
+  usePasteAlert(editor, docId);
 
   // Wire up PM ↔ IDB ↔ server persistence + 5-min revision timer
   useEditorSync(editor, {
