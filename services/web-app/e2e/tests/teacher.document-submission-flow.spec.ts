@@ -1,15 +1,13 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  ensureDocumentUnsubmitted,
-  setDocumentSubmissionForSchool,
-} from '../db-helpers';
+import { ensureDocumentUnsubmitted } from '../db-helpers';
 
 test.describe.serial('Teacher submitting document for student', () => {
   test('teacher can submit unsubmitted student document', async ({
     page,
     e2eContext,
     signIn,
+    helpers,
   }) => {
     const prisma = createE2EPrismaClient();
     try {
@@ -17,15 +15,9 @@ test.describe.serial('Teacher submitting document for student', () => {
         prisma,
         documentId: e2eContext.editedDocumentId,
       });
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: true,
-      });
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/documents/${e2eContext.editedDocumentId}`);
-      await page.waitForLoadState('networkidle');
+      await helpers.openDocument(e2eContext.editedDocumentId);
 
       await expect(page.getByTestId('document-submit-button')).toBeVisible({
         timeout: 10000,
