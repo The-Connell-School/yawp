@@ -141,7 +141,7 @@ function applyReviewHighlights(
 }
 
 type Props = {
-  editorRoot: HTMLElement | null;
+  contentRoot: HTMLElement | null;
   highlights: GradeHighlight[];
   activeGradeCommentId: string | null;
   onGradeCommentSelect: (id: string) => void;
@@ -149,7 +149,7 @@ type Props = {
 };
 
 export function GradeHighlightsOverlay({
-  editorRoot,
+  contentRoot,
   highlights,
   activeGradeCommentId,
   onGradeCommentSelect,
@@ -157,37 +157,37 @@ export function GradeHighlightsOverlay({
 }: Props) {
   // Apply review highlights
   useEffect(() => {
-    if (!editorRoot) return;
-    clearReviewMarks(editorRoot);
-    applyReviewHighlights(editorRoot, highlights);
-  }, [editorRoot, highlights]);
+    if (!contentRoot) return;
+    clearReviewMarks(contentRoot);
+    applyReviewHighlights(contentRoot, highlights);
+  }, [contentRoot, highlights]);
 
   // Toggle .focused class on active grade comment
   useEffect(() => {
-    if (!editorRoot) return;
-    editorRoot.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach((el) => {
+    if (!contentRoot) return;
+    contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach((el) => {
       el.classList.remove('focused');
     });
     if (!activeGradeCommentId) return;
-    editorRoot
+    contentRoot
       .querySelectorAll<HTMLElement>(
         `[data-grade-comment-id="${activeGradeCommentId}"]`
       )
       .forEach((el) => el.classList.add('focused'));
-  }, [editorRoot, activeGradeCommentId]);
+  }, [contentRoot, activeGradeCommentId]);
 
   // Scroll active grade comment into view
   useEffect(() => {
-    if (!editorRoot || !activeGradeCommentId) return;
-    const first = editorRoot.querySelector<HTMLElement>(
+    if (!contentRoot || !activeGradeCommentId) return;
+    const first = contentRoot.querySelector<HTMLElement>(
       `[data-grade-comment-id="${activeGradeCommentId}"]`
     );
     first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [editorRoot, activeGradeCommentId]);
+  }, [contentRoot, activeGradeCommentId]);
 
   // Click handler for grade comment marks
   useEffect(() => {
-    if (!editorRoot) return;
+    if (!contentRoot) return;
 
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -200,16 +200,16 @@ export function GradeHighlightsOverlay({
       onGradeCommentSelect(id);
     };
 
-    editorRoot.addEventListener('click', onClick);
-    return () => editorRoot.removeEventListener('click', onClick);
-  }, [editorRoot, onGradeCommentSelect]);
+    contentRoot.addEventListener('click', onClick);
+    return () => contentRoot.removeEventListener('click', onClick);
+  }, [contentRoot, onGradeCommentSelect]);
 
   // Grade hover handlers
   useEffect(() => {
-    if (!editorRoot) return;
+    if (!contentRoot) return;
 
     const setGradeHover = (id: string, hovered: boolean) => {
-      editorRoot
+      contentRoot
         .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
         .forEach((el) => {
           el.classList.toggle('hovered', hovered);
@@ -252,20 +252,20 @@ export function GradeHighlightsOverlay({
       setGradeHover(id, false);
     };
 
-    editorRoot.addEventListener('mouseover', onMouseOver);
-    editorRoot.addEventListener('mouseout', onMouseOut);
+    contentRoot.addEventListener('mouseover', onMouseOver);
+    contentRoot.addEventListener('mouseout', onMouseOut);
     return () => {
-      editorRoot.removeEventListener('mouseover', onMouseOver);
-      editorRoot.removeEventListener('mouseout', onMouseOut);
-      editorRoot
+      contentRoot.removeEventListener('mouseover', onMouseOver);
+      contentRoot.removeEventListener('mouseout', onMouseOut);
+      contentRoot
         .querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
         .forEach((el) => el.classList.remove('hovered'));
     };
-  }, [editorRoot]);
+  }, [contentRoot]);
 
   // Grammar issue hover handler
   useEffect(() => {
-    if (!editorRoot) return;
+    if (!contentRoot) return;
 
     const onMouseOver = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -287,13 +287,13 @@ export function GradeHighlightsOverlay({
       onGrammarIssueHover(null, null);
     };
 
-    editorRoot.addEventListener('mouseover', onMouseOver);
-    editorRoot.addEventListener('mouseout', onMouseOut);
+    contentRoot.addEventListener('mouseover', onMouseOver);
+    contentRoot.addEventListener('mouseout', onMouseOut);
     return () => {
-      editorRoot.removeEventListener('mouseover', onMouseOver);
-      editorRoot.removeEventListener('mouseout', onMouseOut);
+      contentRoot.removeEventListener('mouseover', onMouseOver);
+      contentRoot.removeEventListener('mouseout', onMouseOut);
     };
-  }, [editorRoot, onGrammarIssueHover]);
+  }, [contentRoot, onGrammarIssueHover]);
 
   return null; // overlay is pure DOM mutation, no JSX
 }
