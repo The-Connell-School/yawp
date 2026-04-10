@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link, useSearchParams } from 'react-router';
+import { useLoaderData, Link } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
@@ -187,9 +187,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function SubmissionRoute() {
   const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
     useLoaderData<typeof loader>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Derive grade mode from search params for instant toggle (loader also checks this)
-  const isGradeMode = isTeacher && (loaderGradeMode || searchParams.get('edit') === '1');
+  // Local toggle state — initialized from loader, toggled by the edit/view pill
+  const [isEditing, setIsEditing] = useState(loaderGradeMode);
+  const isGradeMode = isTeacher && isEditing;
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback(
@@ -332,7 +332,7 @@ export default function SubmissionRoute() {
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div className="no-scrollbar hidden overflow-y-auto border-r md:block md:w-[380px] md:min-w-[380px]">
+        <div className="no-scrollbar shrink-0 overflow-y-auto border-r" style={{ width: 380 }}>
           {isTeacher ? (
             <>
               <div className="flex items-center justify-between border-b px-4 py-2">
@@ -342,11 +342,7 @@ export default function SubmissionRoute() {
                     size="sm"
                     variant={isGradeMode ? 'secondary' : 'ghost'}
                     className="rounded-full px-3 text-xs"
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.set('edit', '1');
-                      setSearchParams(params, { replace: true });
-                    }}
+                    onClick={() => setIsEditing(true)}
                   >
                     Edit
                   </Button>
@@ -354,11 +350,7 @@ export default function SubmissionRoute() {
                     size="sm"
                     variant={!isGradeMode ? 'secondary' : 'ghost'}
                     className="rounded-full px-3 text-xs"
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.delete('edit');
-                      setSearchParams(params, { replace: true });
-                    }}
+                    onClick={() => setIsEditing(false)}
                   >
                     View
                   </Button>
@@ -441,7 +433,7 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div className="no-scrollbar hidden overflow-y-auto border-l md:block md:w-[320px] md:min-w-[320px]">
+        <div className="no-scrollbar shrink-0 overflow-y-auto border-l" style={{ width: 320 }}>
           <GradingCommentsSidebar
             submissionComments={submission.comments as any}
             submissionId={submission.id}
