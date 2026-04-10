@@ -18,6 +18,8 @@ import { findExcerptRange } from '~/utils/excerpt-position';
 import { EssayPanel } from './essay-panel';
 import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
+import { SelectionToolbar } from './teacher-grading/selection-toolbar';
+import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 
 // ── Loader ───────────────────────────────────────────────────────────
 
@@ -187,6 +189,14 @@ export default function SubmissionRoute() {
     useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const essayRef = useRef<HTMLDivElement>(null);
+  const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
+  const setEssayRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      (essayRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+      setEssayElement(el);
+    },
+    []
+  );
 
   // ── Grade display ──────────────────────────────────────────────────
   const gradeDisplay =
@@ -351,8 +361,48 @@ export default function SubmissionRoute() {
       <div className="flex grow overflow-hidden">
         {/* Left: Essay panel */}
         <div className="flex w-full flex-col overflow-hidden border-r md:h-full md:w-3/5">
-          <EssayPanel ref={essayRef} html={submission.html ?? ''} />
-          {/* SelectionToolbar + GradeHighlightsOverlay will be mounted here in Tasks 4-5 */}
+          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+          {isGradeMode && essayElement ? (
+            <>
+              <SelectionToolbar contentRoot={essayElement} />
+              <GradeHighlightsOverlay
+                contentRoot={essayElement}
+                highlights={[
+                  ...submission.comments.map((c) => ({
+                    id: c.id,
+                    excerpt: c.excerpt,
+                    occurrence: c.occurrence,
+                    dataAttr: 'data-grade-comment-id' as const,
+                    className: 'grade-comment-mark',
+                  })),
+                  ...visibleGrammarIssues.map((g) => ({
+                    id: g.id,
+                    excerpt: g.excerpt,
+                    occurrence: g.occurrence,
+                    dataAttr: 'data-grammar-issue-id' as const,
+                    className: 'grammar-issue-mark',
+                  })),
+                  ...(draftHighlight
+                    ? [
+                        {
+                          id: 'draft',
+                          excerpt: draftHighlight.excerpt,
+                          occurrence: draftHighlight.occurrence,
+                          dataAttr: 'data-grade-comment-id' as const,
+                          className: 'grade-comment-mark draft',
+                        },
+                      ]
+                    : []),
+                ]}
+                activeGradeCommentId={activeGradeCommentId}
+                onGradeCommentSelect={setActiveGradeCommentId}
+                onGrammarIssueHover={(id, rect) => {
+                  setTooltipIssueId(id);
+                  setTooltipRect(rect);
+                }}
+              />
+            </>
+          ) : null}
         </div>
 
         {/* Right panel */}
