@@ -185,9 +185,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const { submission, isOwner, isTeacher, isGradeMode } =
+  const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
     useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Derive grade mode from search params for instant toggle (loader also checks this)
+  const isGradeMode = isTeacher && (loaderGradeMode || searchParams.get('edit') === '1');
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback(
@@ -318,13 +320,6 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Teacher in view mode: show Edit Grade button */}
-          {isTeacher && !isGradeMode && submission.gradedAt ? (
-            <Button size="sm" variant="outline" asChild>
-              <Link to={editGradePath}>Edit Grade</Link>
-            </Button>
-          ) : null}
-
           {/* Student: Revise Essay link */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
@@ -336,101 +331,125 @@ export default function SubmissionRoute() {
 
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
-        {isGradeMode ? (
-          <>
-            {/* Left: Grading panel */}
-            <div className="hidden w-full overflow-y-auto border-r md:block md:w-1/4">
-              <TeacherGradingPanel
-                documentId={submission.documentId}
-                submissionId={submission.id}
-                existingGrade={{
-                  id: submission.id,
-                  score: submission.score,
-                  feedback: submission.feedback,
-                  rubricScores: submission.rubricScores,
-                  overallComment: submission.overallComment,
-                  numericPercentage: submission.numericPercentage,
-                  letterGrade: submission.letterGrade,
-                  releasedAt: submission.releasedAt,
-                }}
-                grammarIssues={grammarIssues}
-                persistedGrammarIssues={persistedGrammarIssues}
-                hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                onGrammarIssuesChange={handleGrammarIssuesChange}
-              />
-            </div>
-
-            {/* Center: Essay */}
-            <div className="flex w-full flex-col overflow-hidden md:h-full md:w-2/4">
-              <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
-              {essayElement ? (
-                <>
-                  <SelectionToolbar contentRoot={essayElement} />
-                  <GradeHighlightsOverlay
-                    contentRoot={essayElement}
-                    highlights={[
-                      ...submission.comments.map((c) => ({
-                        id: c.id,
-                        excerpt: c.excerpt,
-                        occurrence: c.occurrence,
-                        dataAttr: 'data-grade-comment-id' as const,
-                        className: 'grade-comment-mark',
-                      })),
-                      ...visibleGrammarIssues.map((g) => ({
-                        id: g.id,
-                        excerpt: g.excerpt,
-                        occurrence: g.occurrence,
-                        dataAttr: 'data-grammar-issue-id' as const,
-                        className: 'grammar-issue-mark',
-                      })),
-                      ...(draftHighlight
-                        ? [
-                            {
-                              id: 'draft',
-                              excerpt: draftHighlight.excerpt,
-                              occurrence: draftHighlight.occurrence,
-                              dataAttr: 'data-grade-comment-id' as const,
-                              className: 'grade-comment-mark draft',
-                            },
-                          ]
-                        : []),
-                    ]}
-                    activeGradeCommentId={activeGradeCommentId}
-                    onGradeCommentSelect={setActiveGradeCommentId}
-                    onGrammarIssueHover={(id, rect) => {
-                      setTooltipIssueId(id);
-                      setTooltipRect(rect);
+        {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
+        <div className="no-scrollbar hidden overflow-y-auto border-r md:block md:w-[340px] md:min-w-[340px]">
+          {isTeacher ? (
+            <>
+              <div className="flex items-center justify-between border-b px-4 py-2">
+                <span className="text-sm font-medium">Grading</span>
+                {isGradeMode ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.delete('edit');
+                      setSearchParams(params, { replace: true });
                     }}
-                  />
-                </>
-              ) : null}
-            </div>
+                  >
+                    View
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.set('edit', '1');
+                      setSearchParams(params, { replace: true });
+                    }}
+                  >
+                    Edit
+                  </Button>
+                )}
+              </div>
+              {isGradeMode ? (
+                <TeacherGradingPanel
+                  documentId={submission.documentId}
+                  submissionId={submission.id}
+                  existingGrade={{
+                    id: submission.id,
+                    score: submission.score,
+                    feedback: submission.feedback,
+                    rubricScores: submission.rubricScores,
+                    overallComment: submission.overallComment,
+                    numericPercentage: submission.numericPercentage,
+                    letterGrade: submission.letterGrade,
+                    releasedAt: submission.releasedAt,
+                  }}
+                  grammarIssues={grammarIssues}
+                  persistedGrammarIssues={persistedGrammarIssues}
+                  hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+                  onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                  onRemoveGrammarIssue={handleRemoveGrammarIssue}
+                  onGrammarIssuesChange={handleGrammarIssuesChange}
+                />
+              ) : (
+                <ViewPanel submission={submission} />
+              )}
+            </>
+          ) : (
+            <ViewPanel submission={submission} />
+          )}
+        </div>
 
-            {/* Right: Feedback comments */}
-            <div className="hidden w-full overflow-y-auto border-l md:block md:w-1/4">
-              <GradingCommentsSidebar
-                submissionComments={submission.comments as any}
-                submissionId={submission.id}
-                sourceText={submission.text ?? ''}
+        {/* Center: Essay */}
+        <div className="flex min-w-0 grow flex-col overflow-hidden md:h-full">
+          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+          {isGradeMode && essayElement ? (
+            <>
+              <SelectionToolbar contentRoot={essayElement} />
+              <GradeHighlightsOverlay
+                contentRoot={essayElement}
+                highlights={[
+                  ...submission.comments.map((c) => ({
+                    id: c.id,
+                    excerpt: c.excerpt,
+                    occurrence: c.occurrence,
+                    dataAttr: 'data-grade-comment-id' as const,
+                    className: 'grade-comment-mark',
+                  })),
+                  ...visibleGrammarIssues.map((g) => ({
+                    id: g.id,
+                    excerpt: g.excerpt,
+                    occurrence: g.occurrence,
+                    dataAttr: 'data-grammar-issue-id' as const,
+                    className: 'grammar-issue-mark',
+                  })),
+                  ...(draftHighlight
+                    ? [
+                        {
+                          id: 'draft',
+                          excerpt: draftHighlight.excerpt,
+                          occurrence: draftHighlight.occurrence,
+                          dataAttr: 'data-grade-comment-id' as const,
+                          className: 'grade-comment-mark draft',
+                        },
+                      ]
+                    : []),
+                ]}
                 activeGradeCommentId={activeGradeCommentId}
-                onSelectGradeComment={setActiveGradeCommentId}
-                onDraftHighlightChange={setDraftHighlight}
+                onGradeCommentSelect={setActiveGradeCommentId}
+                onGrammarIssueHover={(id, rect) => {
+                  setTooltipIssueId(id);
+                  setTooltipRect(rect);
+                }}
               />
-            </div>
-          </>
-        ) : (
-          <>
-            {/* View mode: Essay left, grade summary right */}
-            <div className="flex w-full flex-col overflow-hidden border-r md:h-full md:w-3/5">
-              <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
-            </div>
-            <div className="hidden w-full overflow-y-auto md:block md:w-2/5">
-              <ViewPanel submission={submission} />
-            </div>
-          </>
-        )}
+            </>
+          ) : null}
+        </div>
+
+        {/* Right: Feedback comments */}
+        <div className="no-scrollbar hidden overflow-y-auto border-l md:block md:w-[320px] md:min-w-[320px]">
+          <GradingCommentsSidebar
+            submissionComments={submission.comments as any}
+            submissionId={submission.id}
+            sourceText={submission.text ?? ''}
+            activeGradeCommentId={activeGradeCommentId}
+            onSelectGradeComment={setActiveGradeCommentId}
+            onDraftHighlightChange={setDraftHighlight}
+          />
+        </div>
       </div>
     </main>
   );
