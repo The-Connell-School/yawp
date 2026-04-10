@@ -332,27 +332,16 @@ export default function SubmissionRoute() {
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div className="no-scrollbar hidden overflow-y-auto border-r md:block md:w-[340px] md:min-w-[340px]">
+        <div className="no-scrollbar hidden overflow-y-auto border-r md:block md:w-[380px] md:min-w-[380px]">
           {isTeacher ? (
             <>
               <div className="flex items-center justify-between border-b px-4 py-2">
                 <span className="text-sm font-medium">Grading</span>
-                {isGradeMode ? (
+                <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1">
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.delete('edit');
-                      setSearchParams(params, { replace: true });
-                    }}
-                  >
-                    View
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="ghost"
+                    variant={isGradeMode ? 'secondary' : 'ghost'}
+                    className="rounded-full px-3 text-xs"
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
                       params.set('edit', '1');
@@ -361,7 +350,19 @@ export default function SubmissionRoute() {
                   >
                     Edit
                   </Button>
-                )}
+                  <Button
+                    size="sm"
+                    variant={!isGradeMode ? 'secondary' : 'ghost'}
+                    className="rounded-full px-3 text-xs"
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.delete('edit');
+                      setSearchParams(params, { replace: true });
+                    }}
+                  >
+                    View
+                  </Button>
+                </div>
               </div>
               {isGradeMode ? (
                 <TeacherGradingPanel
