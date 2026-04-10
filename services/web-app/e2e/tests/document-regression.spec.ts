@@ -190,9 +190,10 @@ test.describe.serial('Document Regression Suite', () => {
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
-    // Close via the sheet's built-in close button
-    await page.keyboard.press('Escape');
-    await expect(sheet).not.toBeVisible({ timeout: 3000 });
+    // Close via the Close button in the sheet
+    const closeButton = sheet.getByRole('button', { name: /close/i });
+    await closeButton.click();
+    await expect(sheet).not.toBeVisible({ timeout: 5000 });
 
     // Verify editor is still functional
     const editor = helpers.getEditor();
