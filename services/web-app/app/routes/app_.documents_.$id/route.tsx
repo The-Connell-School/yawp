@@ -53,8 +53,8 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
-import { TeacherGradingPanel } from './_components/teacher-grading-panel';
-import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
+import { TeacherGradingPanel } from '../app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel';
+import { GradingCommentsSidebar } from '../app_.submissions_.$submissionId/teacher-grading/grading-comments-sidebar';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
