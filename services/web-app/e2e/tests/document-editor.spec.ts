@@ -45,23 +45,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    let saveRequestCount = 0;
-
-    // Intercept document save APIs to track save operations but allow real saves
-    await page.route('**/api/model/document/**', async (route) => {
-      if (route.request().method() === 'PUT') {
-        saveRequestCount++;
-      }
-      await route.continue();
-    });
-    await page.route('**/api/document/*/save', async (route) => {
-      if (route.request().method() === 'POST') {
-        saveRequestCount++;
-      }
-      await route.continue();
-    });
-
-    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
     // Type some content
@@ -71,13 +55,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to complete (SyncService uses a 2s debounce)
-    await helpers.waitForSaved();
-
-    // Check that a save request was made
-    expect(saveRequestCount).toBeGreaterThan(0);
-
-    // Verify content persisted by reloading the page
+    // Wait for save to complete, then verify persistence via reload
+    await page.waitForResponse(/\/api\/document\/.*\/save/, { timeout: 15000 });
     await helpers.verifyPersistsOnReload(testText);
   });
 
@@ -89,7 +68,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
     // Simulate pasting content by inserting text directly
@@ -113,7 +92,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
     const editor = helpers.getEditor();
 
     // Rapid typing simulation
