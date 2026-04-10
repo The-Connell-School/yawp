@@ -7,13 +7,13 @@ import { redirectWithToast } from '~/utils/toast.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
 const POST = z.object({
-  gradeIds: z.preprocess(
+  submissionIds: z.preprocess(
     (value) => {
       if (Array.isArray(value)) return value;
       if (typeof value === 'string') return [value];
       return value;
     },
-    z.array(z.string()).min(1, 'At least one grade is required')
+    z.array(z.string()).min(1, 'At least one submission is required')
   ),
 });
 
@@ -29,10 +29,10 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  // Verify all grades exist and are eligible to be released.
-  const grades = await (prisma as any).grade.findMany({
+  // Verify all submissions exist and are eligible to be released.
+  const submissions = await prisma.submission.findMany({
     where: {
-      id: { in: data.gradeIds },
+      id: { in: data.submissionIds },
       ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
       releasedAt: null,
     },
@@ -50,15 +50,15 @@ export async function action({ request }: ActionFunctionArgs) {
     },
   });
 
-  if (grades.length === 0) {
+  if (submissions.length === 0) {
     return dataResponse(
-      { success: false, message: 'No unreleased grades found.' },
+      { success: false, message: 'No unreleased submissions found.' },
       { status: 404 }
     );
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    grades.map((grade: any) => grade.document.class?.schoolId)
+    submissions.map((s) => s.document.class?.schoolId)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
@@ -69,10 +69,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const now = new Date();
 
-  // Release all grades
-  await prisma.grade.updateMany({
+  // Release all submissions
+  await prisma.submission.updateMany({
     where: {
-      id: { in: grades.map((g: any) => g.id) },
+      id: { in: submissions.map((s) => s.id) },
     },
     data: {
       releasedAt: now,
@@ -81,13 +81,13 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const message =
-    grades.length === 1
+    submissions.length === 1
       ? 'Grade released to student.'
-      : `${grades.length} grades released to students.`;
+      : `${submissions.length} grades released to students.`;
 
   return dataResponse({
     success: true,
     message,
-    releasedCount: grades.length,
+    releasedCount: submissions.length,
   });
 }

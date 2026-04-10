@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  grade: {
+  submission: {
     findMany: mock(),
     updateMany: mock(),
   },
@@ -10,7 +10,6 @@ const prisma = {
 const isDocumentSubmissionEnabledForSchools = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
-const buildTeacherClassWhere = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -20,7 +19,6 @@ mock.module('~/utils/feature-flags.server', () => ({
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
-  buildTeacherClassWhere,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -30,8 +28,8 @@ const { action } = await import('./route');
 
 describe('api.domain.release-grades', () => {
   beforeEach(() => {
-    prisma.grade.findMany.mockReset();
-    prisma.grade.updateMany.mockReset();
+    prisma.submission.findMany.mockReset();
+    prisma.submission.updateMany.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
@@ -44,13 +42,13 @@ describe('api.domain.release-grades', () => {
     });
     canManageGrades.mockReturnValue(true);
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
-    prisma.grade.updateMany.mockResolvedValue({ count: 1 });
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  test('checks school flags from grade.document when releasing', async () => {
-    prisma.grade.findMany.mockResolvedValue([
+  test('checks school flags from submission.document when releasing', async () => {
+    prisma.submission.findMany.mockResolvedValue([
       {
-        id: 'grade-1',
+        id: 'sub-1',
         document: {
           class: {
             schoolId: 'school-1',
@@ -60,7 +58,7 @@ describe('api.domain.release-grades', () => {
     ]);
 
     const form = new FormData();
-    form.append('gradeIds', 'grade-1');
+    form.append('submissionIds', 'sub-1');
 
     const request = new Request('https://example.com/api/domain/release-grades', {
       method: 'POST',
@@ -70,6 +68,38 @@ describe('api.domain.release-grades', () => {
     await action({ request } as any);
 
     expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith(['school-1']);
-    expect(prisma.grade.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns 404 when no unreleased submissions found', async () => {
+    prisma.submission.findMany.mockResolvedValue([]);
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-nonexistent');
+
+    const request = new Request('https://example.com/api/domain/release-grades', {
+      method: 'POST',
+      body: form,
+    });
+
+    const response = await action({ request } as any);
+    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    expect(payload.init?.status).toBe(404);
+  });
+
+  test('rejects non-teachers', async () => {
+    canManageGrades.mockReturnValue(false);
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+
+    const request = new Request('https://example.com/api/domain/release-grades', {
+      method: 'POST',
+      body: form,
+    });
+
+    const response = await action({ request } as any);
+    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    expect(payload.init?.status).toBe(403);
   });
 });
