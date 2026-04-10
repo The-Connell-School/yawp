@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { E2EContext } from './seed-e2e';
+import { TestHelpers } from './test-helpers';
 
 type TestFixtures = {
   signIn: (email: string, password: string) => Promise<void>;
   e2eContext: E2EContext;
+  helpers: TestHelpers;
 };
 
 export const test = base.extend<TestFixtures>({
@@ -48,7 +50,6 @@ export const test = base.extend<TestFixtures>({
         (url) => url.pathname.startsWith('/app') || url.pathname === '/enter-code',
         { timeout: 15000 }
       );
-
       if (new URL(page.url()).pathname === '/enter-code') {
         await page.locator('input[name="code"]').fill(e2eContext.classCode);
         await page.getByRole('button', { name: /continue/i }).click();
@@ -56,6 +57,9 @@ export const test = base.extend<TestFixtures>({
       }
     };
     await use(signInFn);
+  },
+  helpers: async ({ page }, use) => {
+    await use(new TestHelpers(page));
   },
 });
 
