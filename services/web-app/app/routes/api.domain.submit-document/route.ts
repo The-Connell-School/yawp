@@ -123,25 +123,20 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
 
   try {
     const finalDocument = await prisma.$transaction(async (tx) => {
-      const snapshot = await tx.documentSnapshot.create({
+      await tx.submission.create({
         data: {
           documentId: document.id,
+          title: document.title ?? '',
           html,
           text,
           submittedAt: now,
         },
       });
 
-      await tx.documentComment.updateMany({
-        where: { documentId: document.id, archivedAt: null },
-        data: { archivedAt: now },
-      });
-
       return tx.document.update({
         where: { id: document.id },
         data: {
           submittedAt: now,
-          submittedSnapshotId: snapshot.id,
         },
       });
     });
