@@ -2,11 +2,9 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { rubricKeys } from '~/domain/grading/rubric';
 
 const prisma = {
-  documentSnapshot: {
+  submission: {
     findFirst: mock(),
-  },
-  document: {
-    findFirst: mock(),
+    update: mock(),
   },
 };
 
@@ -66,10 +64,25 @@ function buildOverallCommentJson() {
   });
 }
 
+function mockSubmission(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sub-1',
+    text: 'Frozen AI essay text',
+    html: '<p>Frozen AI essay text</p>',
+    gradedAt: null,
+    document: {
+      id: 'doc-1',
+      class: { schoolId: 'school-1' },
+      profile: { user: { name: 'Jordan Student' } },
+    },
+    ...overrides,
+  };
+}
+
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
-    prisma.documentSnapshot.findFirst.mockReset();
-    prisma.document.findFirst.mockReset();
+    prisma.submission.findFirst.mockReset();
+    prisma.submission.update.mockReset();
     getLLMCompletion.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
     isDocumentSubmissionEnabledForSchool.mockReset();
@@ -88,6 +101,7 @@ describe('api.domain.grade-essay-ai', () => {
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
     isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
+    prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
 
     getLLMCompletion
       .mockResolvedValueOnce(buildRubricResponseJson())
@@ -104,21 +118,11 @@ describe('api.domain.grade-essay-ai', () => {
       );
   });
 
-  test('returns AI suggestions without persisting a grade', async () => {
-    prisma.documentSnapshot.findFirst.mockResolvedValue({
-      id: 'snapshot-1',
-      documentId: 'doc-1',
-      text: 'Frozen AI essay text',
-      html: '<p>Frozen AI essay text</p>',
-      document: {
-        id: 'doc-1',
-        class: { schoolId: 'school-1' },
-        profile: { user: { name: 'Jordan Student' } },
-      },
-    });
+  test('returns AI suggestions and persists to submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
 
     const form = new FormData();
-    form.append('snapshotId', 'snapshot-1');
+    form.append('submissionId', 'sub-1');
 
     const request = new Request(
       'https://example.com/api/domain/grade-essay-ai',
@@ -133,28 +137,18 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(payload.success).toBe(true);
     expect(payload.message).toBe('Grading Assistant suggestions generated.');
-    expect(payload.grade).toBeUndefined();
     expect(payload.overallComment).toBe(
       'Jordan, this draft has clear progress and focus.'
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
   test('uses the updated rubric instructions in the grading prompt', async () => {
-    prisma.documentSnapshot.findFirst.mockResolvedValue({
-      id: 'snapshot-2',
-      documentId: 'doc-2',
-      text: 'Frozen AI essay text',
-      html: '<p>Frozen AI essay text</p>',
-      document: {
-        id: 'doc-2',
-        class: { schoolId: 'school-1' },
-        profile: { user: { name: 'Jordan Student' } },
-      },
-    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-2' }));
 
     const form = new FormData();
-    form.append('snapshotId', 'snapshot-2');
+    form.append('submissionId', 'sub-2');
 
     await action({
       request: new Request('https://example.com/api/domain/grade-essay-ai', {
@@ -202,20 +196,10 @@ describe('api.domain.grade-essay-ai', () => {
         })
       );
 
-    prisma.documentSnapshot.findFirst.mockResolvedValue({
-      id: 'snapshot-3',
-      documentId: 'doc-3',
-      text: 'Frozen AI essay text',
-      html: '<p>Frozen AI essay text</p>',
-      document: {
-        id: 'doc-3',
-        class: { schoolId: 'school-1' },
-        profile: { user: { name: 'Jordan Student' } },
-      },
-    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-3' }));
 
     const form = new FormData();
-    form.append('snapshotId', 'snapshot-3');
+    form.append('submissionId', 'sub-3');
 
     const response = await action({
       request: new Request('https://example.com/api/domain/grade-essay-ai', {
@@ -247,20 +231,10 @@ describe('api.domain.grade-essay-ai', () => {
         })
       );
 
-    prisma.documentSnapshot.findFirst.mockResolvedValue({
-      id: 'snapshot-4',
-      documentId: 'doc-4',
-      text: 'Frozen AI essay text',
-      html: '<p>Frozen AI essay text</p>',
-      document: {
-        id: 'doc-4',
-        class: { schoolId: 'school-1' },
-        profile: { user: { name: 'Jordan Student' } },
-      },
-    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-4' }));
 
     const form = new FormData();
-    form.append('snapshotId', 'snapshot-4');
+    form.append('submissionId', 'sub-4');
 
     const response = await action({
       request: new Request('https://example.com/api/domain/grade-essay-ai', {
@@ -284,20 +258,10 @@ describe('api.domain.grade-essay-ai', () => {
       .mockResolvedValueOnce(JSON.stringify([]))
       .mockResolvedValueOnce(JSON.stringify([]));
 
-    prisma.documentSnapshot.findFirst.mockResolvedValue({
-      id: 'snapshot-5',
-      documentId: 'doc-5',
-      text: 'Frozen AI essay text',
-      html: '<p>Frozen AI essay text</p>',
-      document: {
-        id: 'doc-5',
-        class: { schoolId: 'school-1' },
-        profile: { user: { name: 'Jordan Student' } },
-      },
-    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-5' }));
 
     const form = new FormData();
-    form.append('snapshotId', 'snapshot-5');
+    form.append('submissionId', 'sub-5');
 
     const response = (await action({
       request: new Request('https://example.com/api/domain/grade-essay-ai', {
