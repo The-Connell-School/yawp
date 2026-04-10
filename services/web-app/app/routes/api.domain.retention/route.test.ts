@@ -4,9 +4,6 @@ const prisma = {
   documentRevision: {
     deleteMany: mock(),
   },
-  documentSnapshot: {
-    deleteMany: mock(),
-  },
   documentWriteJournal: {
     deleteMany: mock(),
   },
@@ -20,10 +17,8 @@ describe('api.domain.retention', () => {
   beforeEach(() => {
     process.env.INTERNAL_COMMAND_TOKEN = 'retention-token';
     prisma.documentRevision.deleteMany.mockReset();
-    prisma.documentSnapshot.deleteMany.mockReset();
     prisma.documentWriteJournal.deleteMany.mockReset();
     prisma.documentRevision.deleteMany.mockResolvedValue({ count: 0 });
-    prisma.documentSnapshot.deleteMany.mockResolvedValue({ count: 0 });
     prisma.documentWriteJournal.deleteMany.mockResolvedValue({ count: 0 });
   });
 
@@ -36,11 +31,10 @@ describe('api.domain.retention', () => {
 
     expect(response.status).toBe(401);
     expect(prisma.documentRevision.deleteMany).not.toHaveBeenCalled();
-    expect(prisma.documentSnapshot.deleteMany).not.toHaveBeenCalled();
     expect(prisma.documentWriteJournal.deleteMany).not.toHaveBeenCalled();
   });
 
-  test('cleans up versions without deleting snapshots', async () => {
+  test('cleans up versions and write journals', async () => {
     prisma.documentRevision.deleteMany.mockResolvedValue({ count: 9 });
     prisma.documentWriteJournal.deleteMany.mockResolvedValue({ count: 2 });
 
@@ -59,7 +53,6 @@ describe('api.domain.retention', () => {
 
     expect(prisma.documentRevision.deleteMany).toHaveBeenCalledTimes(1);
     expect(prisma.documentWriteJournal.deleteMany).toHaveBeenCalledTimes(1);
-    expect(prisma.documentSnapshot.deleteMany).not.toHaveBeenCalled();
 
     const journalCutoff =
       prisma.documentWriteJournal.deleteMany.mock.calls[0]?.[0]?.where?.createdAt

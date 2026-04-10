@@ -13,7 +13,7 @@ const prisma = {
     findFirst: mock(),
     create: mock(),
   },
-  documentSnapshot: {
+  submission: {
     findFirst: mock(),
     create: mock(),
     update: mock(),
@@ -44,9 +44,9 @@ describe('api.model.document.$id', () => {
     prisma.document.update.mockReset();
     prisma.documentRevision.findFirst.mockReset();
     prisma.documentRevision.create.mockReset();
-    prisma.documentSnapshot.findFirst.mockReset();
-    prisma.documentSnapshot.create.mockReset();
-    prisma.documentSnapshot.update.mockReset();
+    prisma.submission.findFirst.mockReset();
+    prisma.submission.create.mockReset();
+    prisma.submission.update.mockReset();
     prisma.documentWriteJournal.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();

@@ -59,7 +59,7 @@ describe('api.domain.submit-document', () => {
       html: '<p>Draft</p>',
       text: 'Draft',
       title: 'Essay',
-      submittedAt: null,
+      submissions: [],
       revision: 4,
       class: {
         schoolId: 'school-1',
@@ -79,7 +79,6 @@ describe('api.domain.submit-document', () => {
         document: {
           update: mock().mockResolvedValue({
             id: 'doc-1',
-            submittedAt: new Date('2026-03-17T12:00:00.000Z'),
             revision: 4,
           }),
         },

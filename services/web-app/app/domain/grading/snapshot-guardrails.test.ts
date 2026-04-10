@@ -22,24 +22,27 @@ function listFilesRecursively(dir: string): string[] {
   return files;
 }
 
-describe('snapshot guardrails', () => {
-  test('grade schema decouples from hard snapshot FK', () => {
+describe('submission guardrails', () => {
+  test('submission schema links to document with Restrict delete', () => {
     const schema = fs.readFileSync(schemaPath, 'utf8');
 
-    expect(schema).toMatch(/documentId\s+String/);
+    // Submission should reference Document via documentId
+    expect(schema).toMatch(/model Submission \{/);
     expect(schema).toMatch(
       /document\s+Document\s+@relation\(fields:\s*\[documentId\],\s*references:\s*\[id\],\s*onDelete:\s*Restrict\)/
     );
-    expect(schema).toMatch(/snapshotId\s+String\?/);
-    expect(schema).toMatch(
-      /snapshot\s+DocumentSnapshot\?\s+@relation\(fields:\s*\[snapshotId\],\s*references:\s*\[id\],\s*onDelete:\s*SetNull\)/
-    );
-    expect(schema).not.toMatch(
-      /snapshot\s+DocumentSnapshot\s+@relation\(fields:\s*\[snapshotId\],\s*references:\s*\[id\],\s*onDelete:\s*Cascade\)/
-    );
   });
 
-  test('app routes do not hard-delete document snapshots', () => {
+  test('old Grade/DocumentSnapshot models are removed from schema', () => {
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+
+    expect(schema).not.toMatch(/model Grade \{/);
+    expect(schema).not.toMatch(/model DocumentSnapshot \{/);
+    expect(schema).not.toMatch(/model GradeComment \{/);
+    expect(schema).not.toMatch(/model GradeCommentResponse \{/);
+  });
+
+  test('app routes do not reference deleted models', () => {
     const files = listFilesRecursively(routesPath).filter(
       (file) => file.endsWith('.ts') || file.endsWith('.tsx')
     );
@@ -47,7 +50,11 @@ describe('snapshot guardrails', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = fs.readFileSync(file, 'utf8');
-      if (source.includes('documentSnapshot.deleteMany(')) {
+      if (
+        source.includes('prisma.documentSnapshot.') ||
+        source.includes('prisma.grade.') ||
+        source.includes('prisma.gradeComment.')
+      ) {
         offenders.push(path.relative(workspaceRoot, file));
       }
     }
