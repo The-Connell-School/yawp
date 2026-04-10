@@ -140,7 +140,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
-  const requestedSnapshotId = url.searchParams.get('snapshotId');
   const isReviseMode = url.searchParams.get('revise') === '1';
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -181,8 +180,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      submittedAt: true,
-      submittedSnapshotId: true,
       class: {
         select: {
           schoolId: true,
@@ -198,26 +195,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           dueDate: true,
         },
       },
-      submittedSnapshot: {
+      submissions: {
+        orderBy: { submittedAt: 'desc' },
+        take: 1,
         select: {
           id: true,
-          html: true,
+          title: true,
           text: true,
-          grades: {
+          html: true,
+          submittedAt: true,
+          score: true,
+          feedback: true,
+          rubricScores: true,
+          overallScore: true,
+          overallComment: true,
+          numericPercentage: true,
+          letterGrade: true,
+          grammarIssues: true,
+          releasedAt: true,
+          gradedById: true,
+          gradedAt: true,
+          comments: {
+            orderBy: { createdAt: 'desc' },
             select: {
               id: true,
-              score: true,
-              feedback: true,
-              overallScore: true,
-              overallComment: true,
-              numericPercentage: true,
-              letterGrade: true,
-              grammarIssues: true,
-              rubricScores: true,
-              releasedAt: true,
               createdAt: true,
+              content: true,
+              excerpt: true,
+              occurrence: true,
+              profileId: true,
             },
-            take: 1,
           },
         },
       },
@@ -273,46 +280,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isViewingAsTeacher = profile.id !== doc.profile.id;
 
-  const selectedSnapshot =
-    requestedSnapshotId && isViewingAsTeacher
-      ? await prisma.documentSnapshot.findFirst({
-          where: {
-            id: requestedSnapshotId,
-            documentId: doc.id,
-          },
-          select: {
-            id: true,
-            html: true,
-            text: true,
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                feedback: true,
-                overallScore: true,
-                overallComment: true,
-                numericPercentage: true,
-                letterGrade: true,
-                grammarIssues: true,
-                rubricScores: true,
-                releasedAt: true,
-                createdAt: true,
-              },
-              take: 1,
-            },
-          },
-        })
-      : null;
-  const activeSnapshot = selectedSnapshot ?? doc.submittedSnapshot;
+  const latestSubmission = doc.submissions[0] ?? null;
 
-  const latestGrade = doc.submittedSnapshot?.grades?.[0];
   if (
     !isViewingAsTeacher &&
-    latestGrade?.id &&
-    latestGrade.releasedAt &&
+    latestSubmission?.id &&
+    latestSubmission.releasedAt &&
     !isReviseMode
   ) {
-    return redirect(`/app/graded/${latestGrade.id}`);
+    return redirect(`/app/submissions/${latestSubmission.id}`);
   }
 
   if (shouldSaveVersion) {
@@ -354,31 +330,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
   ]);
 
-  const gradeId = activeSnapshot?.grades?.[0]?.id;
-  const unsortedGradeComments =
-    gradeId != null
-      ? await prisma.gradeComment.findMany({
-          where: { gradeId },
+  const unsortedSubmissionComments =
+    latestSubmission != null
+      ? await prisma.submissionComment.findMany({
+          where: { submissionId: latestSubmission.id },
           include: {
             profile: {
               include: { user: { select: { name: true, email: true } } },
-            },
-            responses: {
-              include: {
-                profile: {
-                  include: { user: { select: { name: true, email: true } } },
-                },
-              },
-              orderBy: { createdAt: 'asc' },
             },
           },
           orderBy: { createdAt: 'asc' },
         })
       : [];
 
-  const gradeComments = sortByDocumentLocation({
-    items: unsortedGradeComments,
-    sourceText: activeSnapshot?.text ?? '',
+  const submissionComments = sortByDocumentLocation({
+    items: unsortedSubmissionComments,
+    sourceText: latestSubmission?.text ?? '',
     getExcerpt: (comment) => comment.excerpt,
     getOccurrence: (comment) => comment.occurrence,
   });
@@ -393,14 +360,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...doc,
       comments: sortedComments,
     },
-    activeSnapshot,
+    latestSubmission,
     currentCms,
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
-    gradeComments,
+    submissionComments,
   });
 }
 
@@ -427,12 +394,13 @@ export default function Route() {
   const tab = searchParams.get('tab') ?? 'tutor';
   const leftPanel = searchParams.get('left') ?? 'tutor';
   const isReviseMode = searchParams.get('revise') === '1';
-  const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
+  const latestSubmission = data.latestSubmission;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitted = localSubmittedAt !== null || data.doc.submittedAt !== null;
-  const grade = activeSnapshot?.grades?.[0];
+  const isSubmitted = localSubmittedAt !== null || latestSubmission !== null;
+  // The submission IS the grade now — grading fields live on the Submission model
+  const grade = latestSubmission;
   const documentStatusLabel = getDocumentStatusLabel({
-    submittedAt: localSubmittedAt ?? data.doc.submittedAt,
+    submittedAt: localSubmittedAt ?? latestSubmission?.submittedAt ?? null,
     grade: grade ?? null,
   });
   const isGradeReleased =
@@ -442,13 +410,13 @@ export default function Route() {
   const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
   const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
   const isTeacherSnapshotView =
-    isViewingAsTeacher && Boolean(activeSnapshot?.id);
+    isViewingAsTeacher && Boolean(latestSubmission?.id);
   const editorServerHtml =
-    (isTeacherSnapshotView && activeSnapshot?.html
-      ? activeSnapshot.html
+    (isTeacherSnapshotView && latestSubmission?.html
+      ? latestSubmission.html
       : data.doc.html) ?? '';
   const editorServerText =
-    (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '';
+    (isTeacherSnapshotView ? latestSubmission?.text : data.doc.text) ?? '';
 
   // Exit target is computed once on mount (session-storage read is idempotent)
   const [exitTarget] = useState<string>(
@@ -502,9 +470,9 @@ export default function Route() {
   const persistedGrammarIssues = useMemo(
     () =>
       parseGrammarIssuesPayload(grade?.grammarIssues, {
-        sourceText: activeSnapshot?.text ?? '',
+        sourceText: latestSubmission?.text ?? '',
       }),
-    [activeSnapshot?.text, grade?.id, grade?.grammarIssues]
+    [latestSubmission?.text, grade?.id, grade?.grammarIssues]
   );
   const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
     persistedGrammarIssues
@@ -590,7 +558,7 @@ export default function Route() {
   const studentCanViewReleasedGrade =
     !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
   const studentGradeViewPath =
-    studentCanViewReleasedGrade && grade?.id ? `/app/graded/${grade.id}` : null;
+    studentCanViewReleasedGrade && grade?.id ? `/app/submissions/${grade.id}` : null;
   const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
     explicitExitTarget
       ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
@@ -677,14 +645,14 @@ export default function Route() {
           {!isViewingAsTeacher && (
             <div className="flex items-center gap-2">
               <DocumentStatusBadge
-                submittedAt={localSubmittedAt ?? data.doc.submittedAt}
+                submittedAt={localSubmittedAt ?? latestSubmission?.submittedAt ?? null}
                 grade={isGradeReleased ? (grade ?? null) : null}
               />
               {isSubmitted ? (
                 <span className="text-xs text-muted-foreground">
                   {isGradeReleased && grade?.releasedAt
                     ? new Date(grade.releasedAt).toLocaleDateString()
-                    : new Date((localSubmittedAt ?? data.doc.submittedAt)!).toLocaleDateString()}
+                    : new Date((localSubmittedAt ?? latestSubmission?.submittedAt)!).toLocaleDateString()}
                 </span>
               ) : null}
             </div>
@@ -748,7 +716,7 @@ export default function Route() {
                 {grade ? (
                   <>
                     <Button size="sm" variant="outline" asChild>
-                      <Link to={`/app/graded/${grade.id}`}>
+                      <Link to={`/app/submissions/${grade.id}`}>
                         Open Graded View
                       </Link>
                     </Button>
@@ -844,7 +812,7 @@ export default function Route() {
                     asChild
                     className="bg-white dark:bg-background"
                   >
-                    <Link to={`/app/graded/${grade.id}`}>Open Graded View</Link>
+                    <Link to={`/app/submissions/${grade.id}`}>Open Graded View</Link>
                   </Button>
                 </div>
               </div>
@@ -874,7 +842,7 @@ export default function Route() {
               leftPanel === 'grading' ? (
               <TeacherGradingPanel
                 documentId={data.doc.id}
-                snapshotId={activeSnapshot?.id ?? null}
+                submissionId={latestSubmission?.id ?? null}
                 existingGrade={grade ?? null}
                 grammarIssues={grammarIssues}
                 persistedGrammarIssues={persistedGrammarIssues}
@@ -918,10 +886,9 @@ export default function Route() {
             )}
             {isMobile && tab !== 'comments' ? null : isTeacherGradingTabOpen ? (
               <GradingCommentsSidebar
-                gradeComments={data.gradeComments}
-                gradeId={grade?.id ?? null}
-                snapshotId={activeSnapshot?.id ?? null}
-                sourceText={activeSnapshot?.text ?? ''}
+                submissionComments={data.submissionComments}
+                submissionId={latestSubmission?.id ?? null}
+                sourceText={latestSubmission?.text ?? ''}
                 activeGradeCommentId={activeGradeCommentId}
                 onSelectGradeComment={setActiveGradeCommentId}
                 onDraftHighlightChange={setDraftHighlight}
