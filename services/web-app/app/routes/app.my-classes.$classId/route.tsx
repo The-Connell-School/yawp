@@ -979,7 +979,7 @@ export default function ClassDetailRoute() {
                       {data.isDocumentSubmissionEnabled ? (
                         <Button asChild size="sm">
                           <Link
-                            to={`/app/documents/${submission.document.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                            to={`/app/submissions/${submission.id}`}
                           >
                             Grade
                           </Link>
@@ -1073,7 +1073,7 @@ export default function ClassDetailRoute() {
                         {data.isDocumentSubmissionEnabled ? (
                           <Button asChild size="sm">
                             <Link
-                              to={`/app/documents/${submission.document.id}?left=grading&tab=editor&exitTo=${encodedClassDetailExitTo}`}
+                              to={`/app/submissions/${submission.id}`}
                             >
                               Edit Grade
                             </Link>
