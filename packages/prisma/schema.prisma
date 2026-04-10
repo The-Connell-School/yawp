@@ -168,6 +168,7 @@ model Document {
   grades                      Grade[]
   pasteAlerts                 PasteAlert[]
   revisions                   DocumentRevision[]
+  submissions                 Submission[]
 
   @@index([assignmentId])
 }
@@ -344,6 +345,8 @@ model Profile {
   gradesGiven              Grade[]
   gradeComments            GradeComment[]
   gradeCommentResponses    GradeCommentResponse[]
+  submissionsGraded        Submission[]              @relation("SubmissionGradedBy")
+  submissionComments       SubmissionComment[]       @relation("SubmissionCommentProfile")
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
@@ -547,6 +550,59 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+model Submission {
+  id                String              @id @default(cuid())
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime            @default(now()) @db.Timestamptz(6)
+  title             String
+  text              String
+  html              String
+  submittedAt       DateTime            @db.Timestamptz(6)
+  score             String?
+  feedback          String?
+  rubricScores      Json?
+  overallScore      Int?
+  overallComment    String?
+  numericPercentage Int?
+  letterGrade       String?
+  grammarIssues     Json?
+  promptConfig      Json?
+  aiMeta            Json?
+  gradedAt          DateTime?           @db.Timestamptz(6)
+  gradedById        String?
+  gradedBy          Profile?            @relation("SubmissionGradedBy", fields: [gradedById], references: [id], onDelete: SetNull)
+  releasedAt        DateTime?           @db.Timestamptz(6)
+  documentId        String
+  document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  comments          SubmissionComment[]
+
+  @@index([documentId, submittedAt(sort: Desc)])
+  @@index([gradedById])
+  @@index([releasedAt])
+}
+
+model SubmissionComment {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  content      String
+  excerpt      String?
+  occurrence   Int        @default(1)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile    @relation("SubmissionCommentProfile", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt(sort: Desc)])
+  @@index([profileId])
+}
+
+model LegacyGradeRedirect {
+  gradeId      String   @id
+  submissionId String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
 }
 
 model LlmLog {
