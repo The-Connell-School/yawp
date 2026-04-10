@@ -298,24 +298,22 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByText('Grade comment from teacher E2E flow.')
       ).toBeVisible({ timeout: 10000 });
 
-      const gradeBeforeSnapshotMutation = (await (
-        prisma as any
-      ).grade.findUnique({
-        where: { snapshotId },
-        select: { id: true, essayText: true },
-      })) as { id: string; essayText: string | null } | null;
-      expect(gradeBeforeSnapshotMutation?.id).toBeTruthy();
-      expect(gradeBeforeSnapshotMutation?.essayText).toContain(
+      const submissionBeforeMutation = await prisma.submission.findUnique({
+        where: { id: snapshotId },
+        select: { id: true, text: true },
+      });
+      expect(submissionBeforeMutation?.id).toBeTruthy();
+      expect(submissionBeforeMutation?.text).toContain(
         'This are a practice essay with grammar mistake.'
       );
 
-      const mutatedSnapshotText =
-        'SNAPSHOT MUTATION SHOULD NOT APPEAR IN GRADED VIEW';
-      await prisma.documentSnapshot.update({
+      const mutatedSubmissionText =
+        'SUBMISSION MUTATION SHOULD NOT APPEAR IN GRADED VIEW';
+      await prisma.submission.update({
         where: { id: snapshotId },
         data: {
-          text: mutatedSnapshotText,
-          html: `<p>${mutatedSnapshotText}</p>`,
+          text: mutatedSubmissionText,
+          html: `<p>${mutatedSubmissionText}</p>`,
         },
       });
 
@@ -337,13 +335,13 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByRole('cell', { name: /E2E Doc/i }).first()
       ).toBeVisible({ timeout: 15000 });
 
-      await page.goto(`/app/graded/${gradeBeforeSnapshotMutation!.id}`);
+      await page.goto(`/app/graded/${submissionBeforeMutation!.id}`);
       await page.waitForLoadState('networkidle');
       const gradedEssay = page.locator('.prose').first();
       await expect(gradedEssay).toContainText(
         'This are a practice essay with grammar mistake.'
       );
-      await expect(gradedEssay).not.toContainText(mutatedSnapshotText);
+      await expect(gradedEssay).not.toContainText(mutatedSubmissionText);
       expect(aiRequests).toBe(1);
     } finally {
       await prisma.$disconnect();

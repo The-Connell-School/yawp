@@ -225,7 +225,7 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
-  // 3. Submitted document — with snapshot linked
+  // 3. Submitted document — with submission
   const submittedDocText =
     'The importance of reading cannot be overstated. Reading expands our vocabulary and improves comprehension skills.';
   const submittedDocHtml = `<p>${submittedDocText}</p>`;
@@ -237,13 +237,12 @@ export async function seedE2E(): Promise<E2EContext> {
       text: submittedDocText,
       html: submittedDocHtml,
       revision: 3,
-      submittedAt,
       profileId: profile.id,
       classId: seededClass.id,
     },
     select: { id: true },
   });
-  const submittedSnapshot = await prisma.documentSnapshot.create({
+  await prisma.submission.create({
     data: {
       documentId: submittedDoc.id,
       html: submittedDocHtml,
@@ -251,14 +250,9 @@ export async function seedE2E(): Promise<E2EContext> {
       title: submittedDocTitle,
       submittedAt,
     },
-    select: { id: true },
-  });
-  await prisma.document.update({
-    where: { id: submittedDoc.id },
-    data: { submittedSnapshotId: submittedSnapshot.id },
   });
 
-  // 4. Graded document — with snapshot, grade, and grade comments
+  // 4. Graded document — with submission (graded + released) and comments
   const gradedDocText =
     'Education is the foundation of society. Through learning, students develop critical thinking skills that serve them throughout life.';
   const gradedDocHtml = `<p>${gradedDocText}</p>`;
@@ -270,37 +264,24 @@ export async function seedE2E(): Promise<E2EContext> {
       text: gradedDocText,
       html: gradedDocHtml,
       revision: 4,
-      submittedAt: gradedSubmittedAt,
       profileId: profile.id,
       classId: seededClass.id,
     },
     select: { id: true },
   });
-  const gradedSnapshot = await prisma.documentSnapshot.create({
+  const gradedSubmission = await prisma.submission.create({
     data: {
       documentId: gradedDoc.id,
       html: gradedDocHtml,
       text: gradedDocText,
       title: gradedDocTitle,
       submittedAt: gradedSubmittedAt,
-    },
-    select: { id: true },
-  });
-  await prisma.document.update({
-    where: { id: gradedDoc.id },
-    data: { submittedSnapshotId: gradedSnapshot.id },
-  });
-  const grade = await prisma.grade.create({
-    data: {
-      documentId: gradedDoc.id,
-      snapshotId: gradedSnapshot.id,
       gradedById: seededTeacherProfile.id,
+      gradedAt: new Date(),
       numericPercentage: 77,
       letterGrade: 'C+',
       overallScore: 4,
       overallComment: 'Good effort with room for improvement.',
-      essayText: gradedDocText,
-      essayHtml: gradedDocHtml,
       rubricScores: {
         thesis_and_content: 5,
         organization_and_structure: 1,
@@ -312,18 +293,18 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
-  await prisma.gradeComment.create({
+  await prisma.submissionComment.create({
     data: {
-      gradeId: grade.id,
+      submissionId: gradedSubmission.id,
       profileId: seededTeacherProfile.id,
       content: 'Strong thesis statement in the opening sentence.',
       excerpt: 'Education is the foundation of society.',
       occurrence: 1,
     },
   });
-  await prisma.gradeComment.create({
+  await prisma.submissionComment.create({
     data: {
-      gradeId: grade.id,
+      submissionId: gradedSubmission.id,
       profileId: seededTeacherProfile.id,
       content: 'Consider adding more specific examples to support your claims.',
       excerpt: 'students develop critical thinking skills',
@@ -386,8 +367,8 @@ export async function seedE2E(): Promise<E2EContext> {
     editedDocumentId: editedDoc.id,
     submittedDocumentId: submittedDoc.id,
     gradedDocumentId: gradedDoc.id,
-    snapshotId: gradedSnapshot.id,
-    gradeId: grade.id,
+    snapshotId: gradedSubmission.id,
+    gradeId: gradedSubmission.id,
   };
 }
 

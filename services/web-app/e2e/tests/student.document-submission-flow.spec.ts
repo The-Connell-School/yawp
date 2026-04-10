@@ -173,9 +173,9 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
 
       const submitted = await prisma.document.findUnique({
         where: { id: documentId },
-        select: { submittedAt: true },
+        select: { submissions: { take: 1, select: { id: true } } },
       });
-      expect(submitted?.submittedAt).not.toBeNull();
+      expect(submitted?.submissions.length).toBeGreaterThan(0);
       expect(tutorRequests).toBe(1);
     } finally {
       await prisma.$disconnect();

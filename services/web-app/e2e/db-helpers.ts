@@ -115,8 +115,12 @@ export async function ensureDocumentSubmitted(params: {
       id: true,
       html: true,
       text: true,
-      submittedAt: true,
-      submittedSnapshotId: true,
+      title: true,
+      submissions: {
+        take: 1,
+        orderBy: { submittedAt: 'desc' },
+        select: { id: true },
+      },
     },
   });
 
@@ -124,8 +128,8 @@ export async function ensureDocumentSubmitted(params: {
     throw new Error(`Document not found: ${documentId}`);
   }
 
-  if (document.submittedSnapshotId && document.submittedAt) {
-    return document.submittedSnapshotId;
+  if (document.submissions.length > 0) {
+    return document.submissions[0].id;
   }
 
   if (!document.html || !document.text) {
@@ -133,9 +137,10 @@ export async function ensureDocumentSubmitted(params: {
   }
 
   const now = new Date();
-  const snapshot = await prisma.documentSnapshot.create({
+  const submission = await prisma.submission.create({
     data: {
       documentId: document.id,
+      title: document.title ?? '',
       html: document.html,
       text: document.text,
       submittedAt: now,
@@ -143,20 +148,12 @@ export async function ensureDocumentSubmitted(params: {
     select: { id: true },
   });
 
-  await prisma.document.update({
-    where: { id: document.id },
-    data: {
-      submittedAt: now,
-      submittedSnapshotId: snapshot.id,
-    },
-  });
-
   await prisma.documentComment.updateMany({
     where: { documentId: document.id, archivedAt: null },
     data: { archivedAt: now },
   });
 
-  return snapshot.id;
+  return submission.id;
 }
 
 export async function ensureDocumentUnsubmitted(params: {
@@ -164,9 +161,9 @@ export async function ensureDocumentUnsubmitted(params: {
   documentId: string;
 }) {
   const { prisma, documentId } = params;
-  await prisma.document.update({
-    where: { id: documentId },
-    data: { submittedAt: null, submittedSnapshotId: null },
+  // Delete all submissions to "unsubmit" the document
+  await prisma.submission.deleteMany({
+    where: { documentId },
   });
 }
 

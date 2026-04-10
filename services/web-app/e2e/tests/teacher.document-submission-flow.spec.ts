@@ -33,9 +33,9 @@ test.describe.serial('Teacher submitting document for student', () => {
 
       const doc = await prisma.document.findUnique({
         where: { id: e2eContext.editedDocumentId },
-        select: { submittedAt: true },
+        select: { submissions: { take: 1, select: { id: true } } },
       });
-      expect(doc?.submittedAt).not.toBeNull();
+      expect(doc?.submissions.length).toBeGreaterThan(0);
     } finally {
       await prisma.$disconnect();
     }
