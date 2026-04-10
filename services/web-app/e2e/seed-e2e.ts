@@ -52,7 +52,10 @@ export type E2EContext = {
   freshDocumentId: string;
   editedDocumentId: string;
   submittedDocumentId: string;
+  /** Submission ID for the submitted document (use for grading flow tests) */
+  submittedSubmissionId: string;
   gradedDocumentId: string;
+  /** Submission ID for the graded document (alias: gradeId) */
   snapshotId: string;
   gradeId: string;
 };
@@ -242,7 +245,7 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
-  await prisma.submission.create({
+  const submittedSubmission = await prisma.submission.create({
     data: {
       documentId: submittedDoc.id,
       html: submittedDocHtml,
@@ -250,6 +253,7 @@ export async function seedE2E(): Promise<E2EContext> {
       title: submittedDocTitle,
       submittedAt,
     },
+    select: { id: true },
   });
 
   // 4. Graded document — with submission (graded + released) and comments
@@ -366,6 +370,7 @@ export async function seedE2E(): Promise<E2EContext> {
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,
     submittedDocumentId: submittedDoc.id,
+    submittedSubmissionId: submittedSubmission.id,
     gradedDocumentId: gradedDoc.id,
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
