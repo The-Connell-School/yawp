@@ -3,14 +3,14 @@ import { GradingSelectionToolbar } from './grading-selection-toolbar';
 import { getSelectionInfo } from '../_components/grading-selection-utils';
 
 type Props = {
-  editorRoot: HTMLElement | null;
+  contentRoot: HTMLElement | null;
 };
 
-export function SelectionToolbar({ editorRoot }: Props) {
+export function SelectionToolbar({ contentRoot }: Props) {
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
-    if (!editorRoot) return;
+    if (!contentRoot) return;
 
     const updateSelection = () => {
       const sel = window.getSelection();
@@ -19,7 +19,7 @@ export function SelectionToolbar({ editorRoot }: Props) {
         return;
       }
       const range = sel.getRangeAt(0);
-      if (!editorRoot.contains(range.commonAncestorContainer)) {
+      if (!contentRoot.contains(range.commonAncestorContainer)) {
         setRect(null);
         return;
       }
@@ -34,16 +34,16 @@ export function SelectionToolbar({ editorRoot }: Props) {
     const onSelectionChange = () => requestAnimationFrame(updateSelection);
     document.addEventListener('selectionchange', onSelectionChange);
     return () => document.removeEventListener('selectionchange', onSelectionChange);
-  }, [editorRoot]);
+  }, [contentRoot]);
 
   const handleCommentRequest = useCallback(() => {
-    if (!editorRoot) return;
-    const info = getSelectionInfo(editorRoot);
+    if (!contentRoot) return;
+    const info = getSelectionInfo(contentRoot);
     if (!info) return;
     window.dispatchEvent(new CustomEvent('grading-comment-request', { detail: info }));
     window.getSelection()?.removeAllRanges();
     setRect(null);
-  }, [editorRoot]);
+  }, [contentRoot]);
 
   if (!rect) return null;
   return <GradingSelectionToolbar rect={rect} onCommentClick={handleCommentRequest} />;
