@@ -14,21 +14,13 @@ async function openVerifyPage(page: Page, verifySearch: string) {
 }
 
 async function fillCodeInputWithRetry(page: Page, code: string) {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const input = page.getByRole('textbox', { name: /code/i }).first();
-    try {
-      await expect(input).toBeVisible({ timeout: 5000 });
-      await input.click();
-      await input.fill(code);
-      await expect(input).toHaveValue(code, { timeout: 3000 });
-      return;
-    } catch (error) {
-      lastError = error;
-      await page.waitForTimeout(200);
-    }
-  }
-  throw lastError;
+  const input = page.getByRole('textbox', { name: /code/i }).first();
+  await expect(async () => {
+    await expect(input).toBeVisible({ timeout: 5000 });
+    await input.click();
+    await input.fill(code);
+    await expect(input).toHaveValue(code, { timeout: 3000 });
+  }).toPass({ timeout: 15000 });
 }
 
 async function verifyStudentSignupCodeWithRetry(args: {
@@ -81,7 +73,8 @@ async function verifyStudentSignupCodeWithRetry(args: {
       if (!stillOnVerify || attempt === attempts - 1) {
         break;
       }
-      await page.waitForTimeout(500);
+      // Wait until the page is no longer mid-navigation before retrying
+      await page.waitForLoadState('domcontentloaded');
     }
   }
 
@@ -106,19 +99,17 @@ test.describe('Authentication - student sign up', () => {
       await page.getByRole('button', { name: /submit/i }).click();
 
       // Assert: invitation exists (poll to avoid race with server redirect)
-      let invitation: Awaited<
-        ReturnType<typeof prisma.invitation.findUnique>
-      > | null = null;
-      for (let i = 0; i < 20; i++) {
-        invitation = await prisma.invitation.findUnique({
-          where: {
-            target_type: { target: studentEmail, type: 'onboard-student' },
-          },
-        });
-        if (invitation) break;
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      if (!invitation) throw new Error('Invitation not created in time');
+      await expect
+        .poll(
+          () =>
+            prisma.invitation.findUnique({
+              where: {
+                target_type: { target: studentEmail, type: 'onboard-student' },
+              },
+            }),
+          { timeout: 5000, message: 'Invitation not created in time' },
+        )
+        .not.toBeNull();
 
       // Act 2: verify invitation code with a retry path for timing-sensitive OTP boundaries.
       await verifyStudentSignupCodeWithRetry({
