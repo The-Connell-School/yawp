@@ -420,6 +420,7 @@ export default function Route() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [showOldComments, setShowOldComments] = useState(false);
+  const [localSubmittedAt, setLocalSubmittedAt] = useState<string | null>(null);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -428,10 +429,10 @@ export default function Route() {
   const isReviseMode = searchParams.get('revise') === '1';
   const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitted = data.doc.submittedAt !== null;
+  const isSubmitted = localSubmittedAt !== null || data.doc.submittedAt !== null;
   const grade = activeSnapshot?.grades?.[0];
   const documentStatusLabel = getDocumentStatusLabel({
-    submittedAt: data.doc.submittedAt,
+    submittedAt: localSubmittedAt ?? data.doc.submittedAt,
     grade: grade ?? null,
   });
   const isGradeReleased =
@@ -471,10 +472,7 @@ export default function Route() {
     editorBridgeRef,
     onSubmitted: () => {
       setIsFinalizeDialogOpen(false);
-      // Reload the page to reflect the new submission status
-      navigate(window.location.pathname + window.location.search, {
-        replace: true,
-      });
+      setLocalSubmittedAt(new Date().toISOString());
     },
   });
 
@@ -679,14 +677,14 @@ export default function Route() {
           {!isViewingAsTeacher && (
             <div className="flex items-center gap-2">
               <DocumentStatusBadge
-                submittedAt={data.doc.submittedAt}
+                submittedAt={localSubmittedAt ?? data.doc.submittedAt}
                 grade={isGradeReleased ? (grade ?? null) : null}
               />
               {isSubmitted ? (
                 <span className="text-xs text-muted-foreground">
                   {isGradeReleased && grade?.releasedAt
                     ? new Date(grade.releasedAt).toLocaleDateString()
-                    : new Date(data.doc.submittedAt!).toLocaleDateString()}
+                    : new Date((localSubmittedAt ?? data.doc.submittedAt)!).toLocaleDateString()}
                 </span>
               ) : null}
             </div>
