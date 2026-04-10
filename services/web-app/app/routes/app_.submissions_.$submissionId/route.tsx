@@ -220,9 +220,6 @@ export default function SubmissionRoute() {
       : ('secondary' as const);
 
   // ── Grade mode state ───────────────────────────────────────────────
-  const [rightPanel, setRightPanel] = useState<'grading' | 'comments'>(
-    'grading'
-  );
   const [activeGradeCommentId, setActiveGradeCommentId] = useState<
     string | null
   >(null);
@@ -328,26 +325,6 @@ export default function SubmissionRoute() {
             </Button>
           ) : null}
 
-          {/* Teacher in grade mode: toggle right panel */}
-          {isGradeMode ? (
-            <div className="hidden items-center gap-1 rounded-full border bg-muted/40 p-1 md:flex">
-              <Button
-                size="sm"
-                variant={rightPanel === 'grading' ? 'secondary' : 'ghost'}
-                onClick={() => setRightPanel('grading')}
-              >
-                Grading
-              </Button>
-              <Button
-                size="sm"
-                variant={rightPanel === 'comments' ? 'secondary' : 'ghost'}
-                onClick={() => setRightPanel('comments')}
-              >
-                Comments
-              </Button>
-            </div>
-          ) : null}
-
           {/* Student: Revise Essay link */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
@@ -359,56 +336,10 @@ export default function SubmissionRoute() {
 
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
-        {/* Left: Essay panel */}
-        <div className="flex w-full flex-col overflow-hidden border-r md:h-full md:w-3/5">
-          <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
-          {isGradeMode && essayElement ? (
-            <>
-              <SelectionToolbar contentRoot={essayElement} />
-              <GradeHighlightsOverlay
-                contentRoot={essayElement}
-                highlights={[
-                  ...submission.comments.map((c) => ({
-                    id: c.id,
-                    excerpt: c.excerpt,
-                    occurrence: c.occurrence,
-                    dataAttr: 'data-grade-comment-id' as const,
-                    className: 'grade-comment-mark',
-                  })),
-                  ...visibleGrammarIssues.map((g) => ({
-                    id: g.id,
-                    excerpt: g.excerpt,
-                    occurrence: g.occurrence,
-                    dataAttr: 'data-grammar-issue-id' as const,
-                    className: 'grammar-issue-mark',
-                  })),
-                  ...(draftHighlight
-                    ? [
-                        {
-                          id: 'draft',
-                          excerpt: draftHighlight.excerpt,
-                          occurrence: draftHighlight.occurrence,
-                          dataAttr: 'data-grade-comment-id' as const,
-                          className: 'grade-comment-mark draft',
-                        },
-                      ]
-                    : []),
-                ]}
-                activeGradeCommentId={activeGradeCommentId}
-                onGradeCommentSelect={setActiveGradeCommentId}
-                onGrammarIssueHover={(id, rect) => {
-                  setTooltipIssueId(id);
-                  setTooltipRect(rect);
-                }}
-              />
-            </>
-          ) : null}
-        </div>
-
-        {/* Right panel */}
-        <div className="hidden w-full overflow-y-auto md:block md:w-2/5">
-          {isGradeMode ? (
-            rightPanel === 'grading' ? (
+        {isGradeMode ? (
+          <>
+            {/* Left: Grading panel */}
+            <div className="hidden w-full overflow-y-auto border-r md:block md:w-1/4">
               <TeacherGradingPanel
                 documentId={submission.documentId}
                 submissionId={submission.id}
@@ -429,7 +360,56 @@ export default function SubmissionRoute() {
                 onRemoveGrammarIssue={handleRemoveGrammarIssue}
                 onGrammarIssuesChange={handleGrammarIssuesChange}
               />
-            ) : (
+            </div>
+
+            {/* Center: Essay */}
+            <div className="flex w-full flex-col overflow-hidden md:h-full md:w-2/4">
+              <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+              {essayElement ? (
+                <>
+                  <SelectionToolbar contentRoot={essayElement} />
+                  <GradeHighlightsOverlay
+                    contentRoot={essayElement}
+                    highlights={[
+                      ...submission.comments.map((c) => ({
+                        id: c.id,
+                        excerpt: c.excerpt,
+                        occurrence: c.occurrence,
+                        dataAttr: 'data-grade-comment-id' as const,
+                        className: 'grade-comment-mark',
+                      })),
+                      ...visibleGrammarIssues.map((g) => ({
+                        id: g.id,
+                        excerpt: g.excerpt,
+                        occurrence: g.occurrence,
+                        dataAttr: 'data-grammar-issue-id' as const,
+                        className: 'grammar-issue-mark',
+                      })),
+                      ...(draftHighlight
+                        ? [
+                            {
+                              id: 'draft',
+                              excerpt: draftHighlight.excerpt,
+                              occurrence: draftHighlight.occurrence,
+                              dataAttr: 'data-grade-comment-id' as const,
+                              className: 'grade-comment-mark draft',
+                            },
+                          ]
+                        : []),
+                    ]}
+                    activeGradeCommentId={activeGradeCommentId}
+                    onGradeCommentSelect={setActiveGradeCommentId}
+                    onGrammarIssueHover={(id, rect) => {
+                      setTooltipIssueId(id);
+                      setTooltipRect(rect);
+                    }}
+                  />
+                </>
+              ) : null}
+            </div>
+
+            {/* Right: Feedback comments */}
+            <div className="hidden w-full overflow-y-auto border-l md:block md:w-1/4">
               <GradingCommentsSidebar
                 submissionComments={submission.comments as any}
                 submissionId={submission.id}
@@ -438,11 +418,19 @@ export default function SubmissionRoute() {
                 onSelectGradeComment={setActiveGradeCommentId}
                 onDraftHighlightChange={setDraftHighlight}
               />
-            )
-          ) : (
-            <ViewPanel submission={submission} />
-          )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* View mode: Essay left, grade summary right */}
+            <div className="flex w-full flex-col overflow-hidden border-r md:h-full md:w-3/5">
+              <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
+            </div>
+            <div className="hidden w-full overflow-y-auto md:block md:w-2/5">
+              <ViewPanel submission={submission} />
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
