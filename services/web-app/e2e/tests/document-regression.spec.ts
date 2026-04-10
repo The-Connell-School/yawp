@@ -221,7 +221,7 @@ test.describe.serial('Document Regression Suite', () => {
 
     // If there are version entries, click the first one
     const versionButton = sheet.locator('button').filter({ hasText: /\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}:\d{2}/ }).first();
-    if (await versionButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await versionButton.count() > 0) {
       await versionButton.click();
       // Preview panel should show content
       const previewPanel = sheet.locator('.font-times').first();
