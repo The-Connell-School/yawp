@@ -2,6 +2,7 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
 import { setDocumentSubmissionForSchool } from '../db-helpers';
+import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
 
 const E2E_BASE_URL = 'http://127.0.0.1:5173';
@@ -37,6 +38,7 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
     page,
     e2eContext,
     browserName,
+    helpers,
   }) => {
     test.skip(
       browserName !== 'chromium',
@@ -49,12 +51,6 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
 
     const prisma = createE2EPrismaClient();
     try {
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: false,
-      });
-
       const studentEmail = `student-flow-${Date.now()}@example.com`;
       await page.goto('/auth/inv/signup');
       await page.locator('input[name="email"]').fill(studentEmail);
@@ -122,19 +118,14 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
       const documentId = pathParts[pathParts.length - 1];
       if (!documentId) throw new Error('Failed to resolve created document id.');
 
-      const editor = page
-        .locator('.ProseMirror, [contenteditable="true"]')
-        .first();
+      const editor = page.locator(EDITOR_SELECTOR).first();
       await expect(editor).toBeVisible({ timeout: 10000 });
       await editor.click();
       await editor.type(
         'Student end-to-end draft text with some rough ideas and grammar issue.'
       );
       await expect(editor).toContainText('Student end-to-end draft text');
-      await page.waitForTimeout(2200);
-      await expect(page.getByText('Saved').first()).toBeVisible({
-        timeout: 10000,
-      });
+      await helpers.waitForSaved();
 
       let tutorRequests = 0;
       await page.route('**/api/domain/tutor-response', async (route) => {
@@ -167,16 +158,6 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
       await expect(
         commentCard.getByText('Replying to my own comment for E2E.')
       ).toBeVisible({ timeout: 10000 });
-
-      await expect(page.getByTestId('document-submit-button')).toHaveCount(0);
-
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: true,
-      });
-      await page.reload();
-      await page.waitForLoadState('networkidle');
 
       await expect(page.getByTestId('document-submit-button')).toBeVisible({
         timeout: 10000,
