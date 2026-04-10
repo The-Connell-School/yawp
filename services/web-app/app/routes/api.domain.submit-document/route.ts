@@ -55,12 +55,15 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       html: true,
       text: true,
       title: true,
-      submittedAt: true,
       revision: true,
       class: {
         select: {
           schoolId: true,
         },
+      },
+      submissions: {
+        take: 1,
+        select: { id: true },
       },
     },
   });
@@ -72,7 +75,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  if (document.submittedAt) {
+  if (document.submissions.length > 0) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Resubmitting is temporarily disabled.',
       type: 'error',
@@ -136,7 +139,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       return tx.document.update({
         where: { id: document.id },
         data: {
-          submittedAt: now,
+          updatedAt: now,
         },
       });
     });

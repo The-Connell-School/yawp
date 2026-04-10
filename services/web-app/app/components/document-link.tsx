@@ -16,17 +16,14 @@ type Props = {
   exitTo: string;
   doc: Document & {
     studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
-    submittedAt?: Date | string | null;
-    submittedSnapshot?: {
-      grades: {
-        id?: string | null;
-        score: string | null;
-        overallScore: number | null;
-        numericPercentage?: number | null;
-        letterGrade?: string | null;
-        releasedAt: Date | string | null;
-      }[];
-    } | null;
+    submissions?: {
+      id: string;
+      score: string | null;
+      overallScore: number | null;
+      numericPercentage?: number | null;
+      letterGrade?: string | null;
+      releasedAt: Date | string | null;
+    }[];
   };
   isArchived?: boolean;
   isStudentView?: boolean;
@@ -40,20 +37,20 @@ export const DocumentLink = ({
 }: Props) => {
   const archiveFetcher = useFetcher();
   const encodedExitTo = encodeURIComponent(exitTo);
-  const grade = doc.submittedSnapshot?.grades?.[0];
-  const isSubmitted = !!doc.submittedAt;
+  const latestSubmission = doc.submissions?.[0];
+  const isSubmitted = !!latestSubmission;
   const isGradeReleased =
-    grade?.releasedAt !== null && grade?.releasedAt !== undefined;
+    latestSubmission?.releasedAt !== null && latestSubmission?.releasedAt !== undefined;
   const gradeDisplay =
-    formatGrade(grade?.numericPercentage ?? null, grade?.letterGrade ?? null) ||
-    grade?.score ||
-    (grade?.overallScore ? `${grade.overallScore}/5` : null);
+    formatGrade(latestSubmission?.numericPercentage ?? null, latestSubmission?.letterGrade ?? null) ||
+    latestSubmission?.score ||
+    (latestSubmission?.overallScore ? `${latestSubmission.overallScore}/5` : null);
   const showReleasedGradeBadge = isGradeReleased && gradeDisplay;
   const showSubmittedBadge =
     isStudentView && isSubmitted && !showReleasedGradeBadge;
   const targetPath =
-    isStudentView && isGradeReleased && grade?.id
-      ? `/app/graded/${grade.id}`
+    isStudentView && isGradeReleased && latestSubmission?.id
+      ? `/app/submissions/${latestSubmission.id}`
       : `/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`;
 
   return (

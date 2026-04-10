@@ -105,6 +105,24 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Look up the submission — either by submissionId directly or by finding
   // the latest submission for the given documentId.
+  const submissionSelect = {
+    id: true,
+    text: true,
+    html: true,
+    gradedAt: true,
+    document: {
+      select: {
+        id: true,
+        class: { select: { schoolId: true } },
+        profile: {
+          select: {
+            user: { select: { name: true } },
+          },
+        },
+      },
+    },
+  } as const;
+
   const submission = data.submissionId
     ? await prisma.submission.findFirst({
         where: {
@@ -114,51 +132,18 @@ export async function action({ request }: ActionFunctionArgs) {
             ...teacherClassWhere,
           },
         },
-        select: {
-          id: true,
-          text: true,
-          html: true,
-          gradedAt: true,
-          document: {
-            select: {
-              id: true,
-              class: { select: { schoolId: true } },
-              profile: {
-                select: {
-                  user: { select: { name: true } },
-                },
-              },
-            },
-          },
-        },
+        select: submissionSelect,
       })
     : await prisma.submission.findFirst({
         where: {
           documentId: data.documentId,
           document: {
             deletedAt: null,
-            submittedAt: { not: null },
             ...teacherClassWhere,
           },
         },
         orderBy: { submittedAt: 'desc' },
-        select: {
-          id: true,
-          text: true,
-          html: true,
-          gradedAt: true,
-          document: {
-            select: {
-              id: true,
-              class: { select: { schoolId: true } },
-              profile: {
-                select: {
-                  user: { select: { name: true } },
-                },
-              },
-            },
-          },
-        },
+        select: submissionSelect,
       });
 
   if (!submission?.id) {
