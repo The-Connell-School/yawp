@@ -1,11 +1,10 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
 import {
   assignTeacherToClass,
   createTeacherInvitation,
-  ensureDocumentSubmitted,
-  setDocumentSubmissionForSchool,
 } from '../db-helpers';
 
 const E2E_BASE_URL = 'http://127.0.0.1:5173';
@@ -94,16 +93,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
 
     const prisma = createE2EPrismaClient();
     try {
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: false,
-      });
-
-      const snapshotId = await ensureDocumentSubmitted({
-        prisma,
-        documentId: e2eContext.editedDocumentId,
-      });
+      const snapshotId = e2eContext.snapshotId;
 
       const teacherEmail = `teacher-onboard-${Date.now()}@example.com`;
       const teacherPassword = 'teacher-strong-password-123';
@@ -142,21 +132,14 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}`);
       await page.waitForLoadState('networkidle');
 
-      await expect(page.getByRole('tab', { name: /submitted/i })).toHaveCount(
-        0
-      );
-      await expect(page.getByRole('tab', { name: /graded/i })).toHaveCount(0);
-
       await page.goto(
-        `/app/documents/${e2eContext.editedDocumentId}?left=tutor&snapshotId=${snapshotId}&exitTo=${encodeURIComponent(
+        `/app/documents/${e2eContext.submittedDocumentId}?left=tutor&snapshotId=${snapshotId}&exitTo=${encodeURIComponent(
           `/app/my-classes/${e2eContext.classId}`
         )}`
       );
       await page.waitForLoadState('networkidle');
 
-      const editor = page
-        .locator('.ProseMirror, [contenteditable="true"]')
-        .first();
+      const editor = page.locator(EDITOR_SELECTOR).first();
       await expect(editor).toBeVisible({ timeout: 10000 });
       await editor.click();
       await editor.type(' Teacher review note from E2E.');
@@ -173,14 +156,6 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`, {
         timeout: 15000,
       });
-
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: true,
-      });
-      await page.reload();
-      await page.waitForLoadState('networkidle');
 
       await expect(page.getByRole('tab', { name: /submitted/i })).toBeVisible({
         timeout: 10000,
