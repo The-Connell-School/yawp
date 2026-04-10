@@ -39,6 +39,25 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  await prisma.submissionComment.delete({ where: { id: params.id } });
+  if (request.method === 'DELETE') {
+    await prisma.submissionComment.delete({ where: { id: params.id } });
+    return dataResponse({ success: true }, { status: 200 });
+  }
+
+  // POST — update comment content
+  const formData = await request.formData();
+  const content = formData.get('content')?.toString()?.trim();
+  if (!content) {
+    return dataResponse(
+      { success: false, message: 'Content is required.' },
+      { status: 400 }
+    );
+  }
+
+  await prisma.submissionComment.update({
+    where: { id: params.id },
+    data: { content },
+  });
+
   return dataResponse({ success: true }, { status: 200 });
 }
