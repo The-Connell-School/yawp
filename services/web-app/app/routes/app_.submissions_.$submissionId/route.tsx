@@ -1,30 +1,46 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link } from 'react-router';
+import { useLoaderData, Link, useSearchParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import {
-  SubmissionCommentCard,
-} from '~/components/submission-comment-card';
+import { SubmissionCommentCard } from '~/components/submission-comment-card';
 import { requireUserId, requireProfile } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
+import {
+  type GrammarIssue,
+  parseGrammarIssuesPayload,
+} from '~/domain/grading/grammarIssues';
 import { findExcerptRange } from '~/utils/excerpt-position';
+import { EssayPanel } from './essay-panel';
+import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
+import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
+
+// ── Loader ───────────────────────────────────────────────────────────
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.submissionId, 'No submission id found');
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const url = new URL(request.url);
+  const editParam = url.searchParams.get('edit') === '1';
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
 
   const submission = await prisma.submission.findFirst({
     where: {
       id: params.submissionId,
-      // Only the document owner or a teacher of that student's class can view
       document: {
         OR: [
+          // Owner of the document
           { profile: { id: profile.id } },
+          // Teacher of the student's class
           {
             profile: {
               studentProfile: {
@@ -38,6 +54,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               },
             },
           },
+          // Admin override
+          ...(user?.isAdmin ? [{}] : []),
         ],
       },
     },
@@ -54,8 +72,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       overallComment: true,
       numericPercentage: true,
       letterGrade: true,
+      grammarIssues: true,
+      promptConfig: true,
+      aiMeta: true,
       releasedAt: true,
       gradedAt: true,
+      gradedById: true,
       documentId: true,
       document: {
         select: {
@@ -88,14 +110,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  // Students can only see their own released submissions
+  // Determine if viewer is the owner (student) or a teacher
   const isOwner = submission.document.profile.id === profile.id;
+
+  // Teacher detection: profile has a teacherProfile linked to student's class
+  const isTeacher = !isOwner
+    ? !!(await prisma.teacherProfile.findFirst({
+        where: {
+          profileId: profile.id,
+          classes: {
+            some: {
+              students: {
+                some: {
+                  profileId: submission.document.profile.id,
+                },
+              },
+            },
+          },
+        },
+        select: { id: true },
+      }))
+    : false;
+
+  const isAdmin = user?.isAdmin ?? false;
+
+  // Students can only see their own released submissions
   if (isOwner && !submission.releasedAt) {
     return redirectWithToast(`/app/documents/${submission.documentId}`, {
       description: 'Grade has not been released yet.',
       type: 'error',
     });
   }
+
+  // Grade mode: teacher AND (not yet graded OR editing)
+  const isGradeMode =
+    (isTeacher || isAdmin) && (!submission.gradedAt || editParam);
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -126,12 +175,254 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       comments: sortedComments,
     },
     isOwner,
+    isTeacher: isTeacher || isAdmin,
+    isGradeMode,
   };
 }
 
-export default function SubmissionRoute() {
-  const { submission, isOwner } = useLoaderData<typeof loader>();
+// ── Component ────────────────────────────────────────────────────────
 
+export default function SubmissionRoute() {
+  const { submission, isOwner, isTeacher, isGradeMode } =
+    useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const essayRef = useRef<HTMLDivElement>(null);
+
+  // ── Grade display ──────────────────────────────────────────────────
+  const gradeDisplay =
+    formatGrade(
+      submission.numericPercentage ?? null,
+      submission.letterGrade ?? null
+    ) ||
+    submission.score ||
+    (submission.overallScore ? `${submission.overallScore}/5` : null);
+
+  // ── Status badge ───────────────────────────────────────────────────
+  const statusLabel = submission.gradedAt
+    ? 'Graded'
+    : submission.submittedAt
+      ? 'Submitted'
+      : 'Draft';
+  const statusVariant = submission.gradedAt
+    ? ('success' as const)
+    : submission.submittedAt
+      ? ('info-outlined' as const)
+      : ('secondary' as const);
+
+  // ── Grade mode state ───────────────────────────────────────────────
+  const [rightPanel, setRightPanel] = useState<'grading' | 'comments'>(
+    'grading'
+  );
+  const [activeGradeCommentId, setActiveGradeCommentId] = useState<
+    string | null
+  >(null);
+  const [draftHighlight, setDraftHighlight] = useState<{
+    excerpt: string;
+    occurrence: number;
+  } | null>(null);
+  const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
+  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+
+  const persistedGrammarIssues = useMemo(
+    () =>
+      parseGrammarIssuesPayload(submission.grammarIssues, {
+        sourceText: submission.text ?? '',
+      }),
+    [submission.text, submission.id, submission.grammarIssues]
+  );
+  const [grammarIssues, setGrammarIssues] =
+    useState<GrammarIssue[]>(persistedGrammarIssues);
+  const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
+    []
+  );
+
+  // Resync grammar issues when persisted value changes
+  const lastPersistedRef = useRef(persistedGrammarIssues);
+  if (lastPersistedRef.current !== persistedGrammarIssues) {
+    lastPersistedRef.current = persistedGrammarIssues;
+    setGrammarIssues(persistedGrammarIssues);
+    setHiddenGrammarIssueIds([]);
+  }
+
+  const visibleGrammarIssues = useMemo(
+    () =>
+      grammarIssues.filter(
+        (issue) => !hiddenGrammarIssueIds.includes(issue.id)
+      ),
+    [grammarIssues, hiddenGrammarIssueIds]
+  );
+
+  const tooltipPos = useMemo(() => {
+    if (!tooltipRect) return null;
+    return {
+      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
+      left: Math.min(window.innerWidth - 16, tooltipRect.left),
+    };
+  }, [tooltipRect]);
+
+  const toggleGrammarIssueVisibility = useCallback((id: string) => {
+    setHiddenGrammarIssueIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((currentId) => currentId !== id)
+        : [...prev, id]
+    );
+  }, []);
+
+  const handleGrammarIssuesChange = useCallback((issues: GrammarIssue[]) => {
+    setGrammarIssues(issues);
+    setHiddenGrammarIssueIds([]);
+  }, []);
+
+  const handleRemoveGrammarIssue = useCallback((id: string) => {
+    setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
+    setHiddenGrammarIssueIds((prev) =>
+      prev.filter((currentId) => currentId !== id)
+    );
+  }, []);
+
+  // ── Paths ──────────────────────────────────────────────────────────
+  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
+  const editGradePath = `/app/submissions/${submission.id}?edit=1`;
+
+  return (
+    <main className="flex h-screen flex-col">
+      {/* ── Nav ─────────────────────────────────────────────────────── */}
+      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
+        <Button variant="secondary" size="sm" asChild>
+          <Link to="/app">
+            <ArrowLeft className="h-4" />
+            Back
+          </Link>
+        </Button>
+
+        <p className="text-sm font-semibold">
+          {submission.title || submission.document.title || 'Untitled'}
+        </p>
+
+        <Badge variant={statusVariant}>{statusLabel}</Badge>
+
+        {gradeDisplay ? (
+          <Badge
+            variant="secondary"
+            className="border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
+          >
+            {gradeDisplay}
+          </Badge>
+        ) : null}
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Teacher in view mode: show Edit Grade button */}
+          {isTeacher && !isGradeMode && submission.gradedAt ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link to={editGradePath}>Edit Grade</Link>
+            </Button>
+          ) : null}
+
+          {/* Teacher in grade mode: toggle right panel */}
+          {isGradeMode ? (
+            <div className="hidden items-center gap-1 rounded-full border bg-muted/40 p-1 md:flex">
+              <Button
+                size="sm"
+                variant={rightPanel === 'grading' ? 'secondary' : 'ghost'}
+                onClick={() => setRightPanel('grading')}
+              >
+                Grading
+              </Button>
+              <Button
+                size="sm"
+                variant={rightPanel === 'comments' ? 'secondary' : 'ghost'}
+                onClick={() => setRightPanel('comments')}
+              >
+                Comments
+              </Button>
+            </div>
+          ) : null}
+
+          {/* Student: Revise Essay link */}
+          {isOwner ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link to={revisePath}>Revise Essay</Link>
+            </Button>
+          ) : null}
+        </div>
+      </nav>
+
+      {/* ── Body ────────────────────────────────────────────────────── */}
+      <div className="flex grow overflow-hidden">
+        {/* Left: Essay panel */}
+        <div className="flex w-full flex-col overflow-hidden border-r md:h-full md:w-3/5">
+          <EssayPanel ref={essayRef} html={submission.html ?? ''} />
+          {/* SelectionToolbar + GradeHighlightsOverlay will be mounted here in Tasks 4-5 */}
+        </div>
+
+        {/* Right panel */}
+        <div className="hidden w-full overflow-y-auto md:block md:w-2/5">
+          {isGradeMode ? (
+            rightPanel === 'grading' ? (
+              <TeacherGradingPanel
+                documentId={submission.documentId}
+                submissionId={submission.id}
+                existingGrade={{
+                  id: submission.id,
+                  score: submission.score,
+                  feedback: submission.feedback,
+                  rubricScores: submission.rubricScores,
+                  overallComment: submission.overallComment,
+                  numericPercentage: submission.numericPercentage,
+                  letterGrade: submission.letterGrade,
+                  releasedAt: submission.releasedAt,
+                }}
+                grammarIssues={grammarIssues}
+                persistedGrammarIssues={persistedGrammarIssues}
+                hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+                onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                onRemoveGrammarIssue={handleRemoveGrammarIssue}
+                onGrammarIssuesChange={handleGrammarIssuesChange}
+              />
+            ) : (
+              <GradingCommentsSidebar
+                submissionComments={submission.comments as any}
+                submissionId={submission.id}
+                sourceText={submission.text ?? ''}
+                activeGradeCommentId={activeGradeCommentId}
+                onSelectGradeComment={setActiveGradeCommentId}
+                onDraftHighlightChange={setDraftHighlight}
+              />
+            )
+          ) : (
+            <ViewPanel submission={submission} />
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── View Panel (read-only grade summary + comments) ──────────────────
+
+function ViewPanel({
+  submission,
+}: {
+  submission: {
+    numericPercentage: number | null;
+    letterGrade: string | null;
+    score: string | null;
+    overallScore: number | null;
+    overallComment: string | null;
+    feedback: string | null;
+    rubricScores: unknown;
+    comments: Array<{
+      id: string;
+      content: string;
+      excerpt: string | null;
+      occurrence: number | null;
+      createdAt: Date | string;
+      profile: {
+        user: { name: string | null; email: string };
+      };
+    }>;
+  };
+}) {
   const gradeDisplay =
     formatGrade(
       submission.numericPercentage ?? null,
@@ -145,129 +436,74 @@ export default function SubmissionRoute() {
     { score?: number; comment?: string }
   > | null;
 
-  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
-
   return (
-    <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
-      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
-        <Button variant="secondary" size="sm" asChild>
-          <Link to="/app">
-            <ArrowLeft className="h-4" />
-            Back
-          </Link>
-        </Button>
-        <p className="text-sm font-semibold">
-          {submission.title || submission.document.title || 'Untitled'}
-        </p>
-        {gradeDisplay ? (
-          <Badge
-            variant="secondary"
-            className="border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
-          >
-            {gradeDisplay}
-          </Badge>
-        ) : null}
-        <div className="ml-auto flex items-center gap-2">
-          {isOwner ? (
-            <Button size="sm" variant="outline" asChild>
-              <Link to={revisePath}>Revise Essay</Link>
-            </Button>
-          ) : null}
-        </div>
-      </nav>
-
-      {/* Grade summary banner */}
+    <div className="flex h-full flex-col">
+      {/* Grade summary */}
       {gradeDisplay || submission.overallComment || submission.feedback ? (
-        <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 px-3 py-3 dark:bg-green-950/20">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant="success">Grade Released</Badge>
-              {gradeDisplay ? (
-                <span className="text-sm font-medium">{gradeDisplay}</span>
-              ) : null}
-            </div>
-            {(submission.overallComment || submission.feedback) && (
-              <div className="flex-1 sm:mx-4">
-                <p className="text-sm text-muted-foreground">
-                  {submission.overallComment || submission.feedback}
-                </p>
-              </div>
-            )}
+        <div className="border-b bg-green-50 p-4 dark:bg-green-950/20">
+          <div className="flex items-center gap-2">
+            <Badge variant="success">Grade Released</Badge>
+            {gradeDisplay ? (
+              <span className="text-sm font-medium">{gradeDisplay}</span>
+            ) : null}
+          </div>
+          {(submission.overallComment || submission.feedback) && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {submission.overallComment || submission.feedback}
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {/* Rubric scores */}
+      {rubricScores && Object.keys(rubricScores).length > 0 ? (
+        <div className="border-b p-4">
+          <h3 className="mb-2 text-sm font-semibold">Rubric</h3>
+          <div className="space-y-2">
+            {Object.entries(rubricScores).map(([key, value]) => {
+              if (!value || typeof value !== 'object') return null;
+              const label = key
+                .replace(/_/g, ' ')
+                .replace(/\b\w/g, (c) => c.toUpperCase());
+              return (
+                <div key={key} className="text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">{label}</span>
+                    <span className="text-muted-foreground">
+                      {value.score ? `${value.score}/5` : '\u2014'}
+                    </span>
+                  </div>
+                  {value.comment ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {value.comment}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
-      <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
-        {/* Essay content */}
-        <div className="flex-1 overflow-y-auto border-r">
-          <div className="mx-auto max-w-3xl p-6">
-            {submission.html ? (
-              <div
-                className="prose prose-sm max-w-none font-times"
-                dangerouslySetInnerHTML={{ __html: submission.html }}
+      {/* Comments */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <h3 className="mb-2 text-sm font-semibold">Feedback Comments</h3>
+        {submission.comments.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground">
+            No comments yet.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {submission.comments.map((comment) => (
+              <SubmissionCommentCard
+                key={comment.id}
+                comment={comment}
+                readOnly
               />
-            ) : (
-              <p className="whitespace-pre-wrap text-sm">
-                {submission.text}
-              </p>
-            )}
+            ))}
           </div>
-        </div>
-
-        {/* Comments sidebar */}
-        <div className="hidden w-80 flex-col overflow-y-auto md:flex">
-          <div className="border-b p-3">
-            <h2 className="text-sm font-semibold">Feedback Comments</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3">
-            {submission.comments.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                No comments yet.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {submission.comments.map((comment) => (
-                  <SubmissionCommentCard
-                    key={comment.id}
-                    comment={comment}
-                    readOnly
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Rubric scores */}
-          {rubricScores && Object.keys(rubricScores).length > 0 ? (
-            <div className="border-t p-3">
-              <h3 className="mb-2 text-sm font-semibold">Rubric</h3>
-              <div className="space-y-2">
-                {Object.entries(rubricScores).map(([key, value]) => {
-                  if (!value || typeof value !== 'object') return null;
-                  const label = key
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, (c) => c.toUpperCase());
-                  return (
-                    <div key={key} className="text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{label}</span>
-                        <span className="text-muted-foreground">
-                          {value.score ? `${value.score}/5` : '—'}
-                        </span>
-                      </div>
-                      {value.comment ? (
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {value.comment}
-                        </p>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </div>
+        )}
       </div>
-    </main>
+    </div>
   );
 }
