@@ -15,7 +15,7 @@ test.describe.serial('Teacher submitting document for student', () => {
     try {
       await ensureDocumentUnsubmitted({
         prisma,
-        documentId: e2eContext.documentId,
+        documentId: e2eContext.editedDocumentId,
       });
       await setDocumentSubmissionForSchool({
         prisma,
@@ -24,7 +24,7 @@ test.describe.serial('Teacher submitting document for student', () => {
       });
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/documents/${e2eContext.documentId}`);
+      await page.goto(`/app/documents/${e2eContext.editedDocumentId}`);
       await page.waitForLoadState('networkidle');
 
       await expect(page.getByTestId('document-submit-button')).toBeVisible({
@@ -40,7 +40,7 @@ test.describe.serial('Teacher submitting document for student', () => {
       await expect(page.getByTestId('document-submit-button')).toHaveCount(0);
 
       const doc = await prisma.document.findUnique({
-        where: { id: e2eContext.documentId },
+        where: { id: e2eContext.editedDocumentId },
         select: { submittedAt: true },
       });
       expect(doc?.submittedAt).not.toBeNull();

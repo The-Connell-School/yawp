@@ -49,7 +49,7 @@ test.describe.serial('Document local backup bucket history', () => {
   }) => {
     test.setTimeout(120_000);
     await signIn('jdoe@brock.software', 'johndoe');
-    await page.goto(`/app/documents/${e2eContext.documentId}`);
+    await page.goto(`/app/documents/${e2eContext.editedDocumentId}`);
     await page.waitForLoadState('networkidle');
     await page.evaluate(() => {
       const backupPrefix = 'yawp:doc-backup:v1:';
@@ -62,7 +62,7 @@ test.describe.serial('Document local backup bucket history', () => {
     });
 
     for (let i = 1; i <= 5; i++) {
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
       await editor.click({ clickCount: 3 });
       await page.keyboard.press('Backspace');
       await page.keyboard.insertText(`Bucket ${i} unique snapshot`);
@@ -72,7 +72,7 @@ test.describe.serial('Document local backup bucket history', () => {
       await page.waitForLoadState('networkidle');
     }
 
-    await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await page.getByRole('button', { name: /restore local/i }).click();
     await expect(
       page.getByRole('heading', { name: /restore local backup/i })

@@ -102,7 +102,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
 
       const snapshotId = await ensureDocumentSubmitted({
         prisma,
-        documentId: e2eContext.documentId,
+        documentId: e2eContext.editedDocumentId,
       });
 
       const teacherEmail = `teacher-onboard-${Date.now()}@example.com`;
@@ -148,7 +148,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(page.getByRole('tab', { name: /graded/i })).toHaveCount(0);
 
       await page.goto(
-        `/app/documents/${e2eContext.documentId}?left=tutor&snapshotId=${snapshotId}&exitTo=${encodeURIComponent(
+        `/app/documents/${e2eContext.editedDocumentId}?left=tutor&snapshotId=${snapshotId}&exitTo=${encodeURIComponent(
           `/app/my-classes/${e2eContext.classId}`
         )}`
       );

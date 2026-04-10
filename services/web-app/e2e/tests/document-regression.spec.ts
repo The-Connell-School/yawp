@@ -35,7 +35,7 @@ test.describe.serial('Document Regression Suite', () => {
     signIn,
     e2eContext,
   }) => {
-    documentId = e2eContext.documentId;
+    documentId = e2eContext.editedDocumentId;
     await signIn('jdoe@brock.software', 'johndoe');
     const editor = await openEditor(page, documentId);
     await expect(editor).toBeVisible();
@@ -47,7 +47,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     const text = uniqueText('regression-type');
@@ -65,7 +65,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     const text = uniqueText('regression-reload');
@@ -90,7 +90,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     const text = uniqueText('regression-navigate');
@@ -105,7 +105,7 @@ test.describe.serial('Document Regression Suite', () => {
     await page.waitForLoadState('networkidle');
 
     // Navigate back
-    const editorBack = await openEditor(page, e2eContext.documentId);
+    const editorBack = await openEditor(page, e2eContext.editedDocumentId);
     await expect(editorBack).toContainText(text);
   });
 
@@ -115,7 +115,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Type several distinct phrases rapidly
@@ -153,7 +153,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     const text = uniqueText('regression-cmds');
@@ -172,7 +172,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await openEditor(page, e2eContext.editedDocumentId);
 
     // Click the history icon
     const historyIcon = page.locator('svg.lucide-history').first();
@@ -197,7 +197,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await openEditor(page, e2eContext.editedDocumentId);
 
     const historyIcon = page.locator('svg.lucide-history').first();
     await historyIcon.click();
@@ -220,7 +220,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await openEditor(page, e2eContext.editedDocumentId);
 
     const historyIcon = page.locator('svg.lucide-history').first();
     await historyIcon.click();
@@ -244,7 +244,7 @@ test.describe.serial('Document Regression Suite', () => {
     await signIn('jdoe@brock.software', 'johndoe');
 
     // First type something to ensure there's at least one autosave
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
     await editor.pressSequentially(uniqueText('history-preview'), { delay: 30 });
     await waitForSaveIndicator(page);
@@ -277,7 +277,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await openEditor(page, e2eContext.editedDocumentId);
 
     const historyIcon = page.locator('svg.lucide-history').first();
     await historyIcon.click();
@@ -300,7 +300,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
 
     // Open and close history
     const historyIcon = page.locator('svg.lucide-history').first();
@@ -327,7 +327,7 @@ test.describe.serial('Document Regression Suite', () => {
     e2eContext,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Initially should show "Saved"

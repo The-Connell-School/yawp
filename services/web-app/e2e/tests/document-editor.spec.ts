@@ -67,7 +67,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Navigate to a seeded document and allow one retry for transient route errors.
     const editorContainer = await openDocumentEditorWithRetry(
       page,
-      e2eContext.documentId
+      e2eContext.editedDocumentId
     );
 
     // Check that basic page structure is present
@@ -98,7 +98,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
 
     // Click on the editor to focus it
     await editor.click();
@@ -126,7 +126,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: testText,
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -138,7 +138,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Simulate pasting content
@@ -154,7 +154,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: pasteContent,
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -185,7 +185,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       }
     });
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Add content to trigger version creation
@@ -207,7 +207,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Rapid typing simulation
@@ -230,7 +230,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: words,
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -242,7 +242,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await editor.click();
 
     let firstSaveRoute: Parameters<Parameters<typeof page.route>[1]>[0] | null = null;
@@ -277,7 +277,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: 'newest',
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -289,7 +289,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     await editor.click();
     const appendedText = ' Content that should survive a title edit.';
     await editor.type(appendedText);
@@ -305,7 +305,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: appendedText,
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -318,7 +318,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
       await editor.click();
       await editor.type('Baseline text before session expiry.');
       await page.waitForTimeout(2200);
@@ -352,7 +352,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
       await expect(editor).toBeVisible({ timeout: 10000 });
 
       await invalidateUserSessions({
@@ -386,7 +386,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      await openDocumentEditorWithRetry(page, e2eContext.documentId);
+      await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
 
       let tutorRequests = 0;
       await page.route('**/api/domain/tutor-response', async (route) => {
@@ -421,7 +421,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     const longText = 'x'.repeat(201);
 
     await page.evaluate(async (text) => {
@@ -448,7 +448,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.documentId);
+    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
     const longText = 'y'.repeat(201);
 
     await editor.click();

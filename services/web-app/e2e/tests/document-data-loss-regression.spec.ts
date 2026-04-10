@@ -30,7 +30,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Type unique content — do NOT wait for save debounce before interacting with tutor
@@ -82,7 +82,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
     const helpers = new TestHelpers(page);
     await helpers.verifySavedData({
       expectedTexts: text,
-      documentId: e2eContext.documentId,
+      documentId: e2eContext.editedDocumentId,
       courseId: e2eContext.studentCourseId,
     });
   });
@@ -94,7 +94,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     const text = uniqueText('visibility-change');
@@ -141,7 +141,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Type several distinct phrases rapidly (minimal delay to stress the debounce)

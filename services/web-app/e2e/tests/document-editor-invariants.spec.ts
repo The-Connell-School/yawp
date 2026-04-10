@@ -20,7 +20,7 @@ test.describe('Document editor invariants', () => {
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.documentId);
+    const editor = await openEditor(page, e2eContext.editedDocumentId);
     await editor.click();
 
     // Type unique marker content
