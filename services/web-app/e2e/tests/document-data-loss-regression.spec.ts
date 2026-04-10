@@ -1,22 +1,5 @@
 import { test, expect } from '../test-setup';
-import { TestHelpers } from '../test-helpers';
-import type { Page } from '@playwright/test';
-
-const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
-
-async function openEditor(page: Page, documentId: string) {
-  await page.goto(`/app/documents/${documentId}`);
-  await page.waitForLoadState('networkidle');
-  const editor = page.locator(EDITOR_SELECTOR).first();
-  await expect(editor).toBeVisible({ timeout: 15000 });
-  return editor;
-}
-
-async function waitForSaveIndicator(page: Page) {
-  await expect(
-    page.locator('text=Saved').first()
-  ).toBeVisible({ timeout: 10000 });
-}
+import { EDITOR_SELECTOR } from '../test-helpers';
 
 function uniqueText(prefix: string) {
   return `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -25,12 +8,14 @@ function uniqueText(prefix: string) {
 test.describe.serial('Data Loss Regression Tests', () => {
   test('content survives tutor interaction during unsaved edits', async ({
     page,
+    helpers,
     signIn,
     e2eContext,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    const editor = helpers.getEditor();
     await editor.click();
 
     // Type unique content — do NOT wait for save debounce before interacting with tutor
@@ -40,18 +25,14 @@ test.describe.serial('Data Loss Regression Tests', () => {
 
     // Attempt tutor interaction immediately (before save settles).
     // The tutor UI requires specific course module state, so be defensive.
-    const tutorOpenButton = page.getByTestId('tutor-chat-open');
-    const tutorVisible = await tutorOpenButton.isVisible({ timeout: 3000 }).catch(() => false);
-
-    if (tutorVisible) {
-      const tutorDisabled = await tutorOpenButton.isDisabled();
+    const tutorButton = page.getByTestId('tutor-chat-open');
+    if (await tutorButton.count() > 0) {
+      const tutorDisabled = await tutorButton.isDisabled();
       if (!tutorDisabled) {
-        await tutorOpenButton.click();
+        await tutorButton.click();
 
         const tutorInput = page.getByTestId('tutor-chat-input');
-        const inputVisible = await tutorInput.isVisible({ timeout: 3000 }).catch(() => false);
-
-        if (inputVisible) {
+        if (await tutorInput.count() > 0) {
           // Route tutor requests to track them but allow them through
           let tutorRequests = 0;
           await page.route('**/api/domain/tutor-response', async (route) => {
@@ -79,22 +60,20 @@ test.describe.serial('Data Loss Regression Tests', () => {
     await expect(editor).toContainText(text);
 
     // Wait for save to settle, then verify persistence
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: text,
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
+    await helpers.waitForSaved();
+    await helpers.verifyPersistsOnReload(text);
   });
 
   test('content survives page visibility change (forceSave)', async ({
     page,
+    helpers,
     signIn,
     e2eContext,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    const editor = helpers.getEditor();
     await editor.click();
 
     const text = uniqueText('visibility-change');
@@ -112,8 +91,8 @@ test.describe.serial('Data Loss Regression Tests', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    // Give force save time to flush
-    await page.waitForTimeout(3000);
+    // Wait for force save to flush to the server
+    await page.waitForResponse('**/api/document/*/save');
 
     // Restore visibility so subsequent checks work
     await page.evaluate(() => {
@@ -126,22 +105,19 @@ test.describe.serial('Data Loss Regression Tests', () => {
     });
 
     // Verify content persisted by reloading
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-
-    const editorAfterReload = page.locator(EDITOR_SELECTOR).first();
-    await expect(editorAfterReload).toBeVisible({ timeout: 15000 });
-    await expect(editorAfterReload).toContainText(text);
+    await helpers.verifyPersistsOnReload(text);
   });
 
   test('rapid edits followed by submission preserves all content', async ({
     page,
+    helpers,
     signIn,
     e2eContext,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
 
-    const editor = await openEditor(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    const editor = helpers.getEditor();
     await editor.click();
 
     // Type several distinct phrases rapidly (minimal delay to stress the debounce)
@@ -161,40 +137,36 @@ test.describe.serial('Data Loss Regression Tests', () => {
     }
 
     // If a submit button exists, click it to test the pre-submission flush
-    const submitButton = page.getByTestId('document-submit-button');
-    const submitVisible = await submitButton.isVisible({ timeout: 2000 }).catch(() => false);
-
-    if (submitVisible) {
-      await submitButton.click();
+    const submitBtn = page.getByTestId('document-submit-button');
+    if (await submitBtn.count() > 0) {
+      await submitBtn.click();
 
       // Handle confirmation dialog if present
       const finalizeButton = page.getByTestId('document-finalize-submit');
-      const finalizeVisible = await finalizeButton.isVisible({ timeout: 3000 }).catch(() => false);
-      if (finalizeVisible) {
+      if (await finalizeButton.count() > 0) {
         await finalizeButton.click();
       }
 
-      // Wait for submission to complete
-      await page.waitForTimeout(3000);
+      // Wait for submission save to complete
+      await page.waitForResponse('**/api/document/*/save');
 
       // After submission, the content should still contain all phrases
       // (reload and verify on fresh page load)
       await page.reload();
       await page.waitForLoadState('networkidle');
+      await helpers.waitForEditorReady();
       const editorAfter = page.locator(EDITOR_SELECTOR).first();
-      await expect(editorAfter).toBeVisible({ timeout: 15000 });
       for (const phrase of phrases) {
         await expect(editorAfter).toContainText(phrase);
       }
     } else {
       // No submit button — fall back to verifying save persistence
-      await waitForSaveIndicator(page);
-      await page.waitForTimeout(2000);
+      await helpers.waitForSaved();
 
       await page.reload();
       await page.waitForLoadState('networkidle');
+      await helpers.waitForEditorReady();
       const editorAfter = page.locator(EDITOR_SELECTOR).first();
-      await expect(editorAfter).toBeVisible({ timeout: 15000 });
       for (const phrase of phrases) {
         await expect(editorAfter).toContainText(phrase);
       }
