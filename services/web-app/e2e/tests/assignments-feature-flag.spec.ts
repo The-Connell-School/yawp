@@ -15,26 +15,19 @@ test.describe.serial('Assignments org-level feature flag', () => {
       enabled: false,
     });
 
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(0);
   });
 
-  test('shows Assignments tab on student dashboard when flag is on', async ({
+  test('shows Assignments tab on student dashboard when flag is on (seeded default)', async ({
     page,
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    await setAssignmentsForOrganization({
-      prisma,
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
@@ -53,26 +46,19 @@ test.describe.serial('Assignments org-level feature flag', () => {
       enabled: false,
     });
 
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}`);
     await page.waitForLoadState('networkidle');
 
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(0);
   });
 
-  test('shows Assignments tab on teacher class page when flag is on', async ({
+  test('shows Assignments tab on teacher class page when flag is on (seeded default)', async ({
     page,
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    await setAssignmentsForOrganization({
-      prisma,
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}`);
     await page.waitForLoadState('networkidle');
 
