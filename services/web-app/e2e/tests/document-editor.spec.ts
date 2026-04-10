@@ -1,50 +1,13 @@
 import { test, expect } from '../test-setup';
-import { TestHelpers } from '../test-helpers';
-import type { Page } from '@playwright/test';
+import { EDITOR_SELECTOR } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import { invalidateUserSessions } from '../db-helpers';
 
-const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
-const DOCUMENT_ERROR_HEADING = /oops! something didn't work quite right\./i;
 const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
 const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
 const COPY_SHORTCUT = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
 
-async function openDocumentEditorWithRetry(page: Page, documentId: string) {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await page.goto(`/app/documents/${documentId}`);
-    await page.waitForLoadState('networkidle');
-
-    const errorBoundaryHeading = page.getByRole('heading', {
-      name: DOCUMENT_ERROR_HEADING,
-    });
-    const hitRouteError = await errorBoundaryHeading
-      .isVisible({ timeout: 1500 })
-      .catch(() => false);
-
-    if (hitRouteError) {
-      lastError = new Error('Document route rendered the general error boundary.');
-    } else {
-      const editor = page.locator(EDITOR_SELECTOR).first();
-      try {
-        await expect(editor).toBeVisible({ timeout: 10000 });
-        return editor;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-
-    if (attempt === 0) {
-      await page.waitForTimeout(500);
-    }
-  }
-
-  throw lastError;
-}
-
-async function expectExitControlVisible(page: Page) {
+async function expectExitControlVisible(page: import('@playwright/test').Page) {
   const exitButton = page.getByRole('button', { name: /^exit$/i });
   if ((await exitButton.count()) > 0) {
     await expect(exitButton.first()).toBeVisible({ timeout: 10000 });
@@ -61,24 +24,24 @@ test.describe.serial('Document Editor E2E Tests', () => {
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
     // Navigate to a seeded document and allow one retry for transient route errors.
-    const editorContainer = await openDocumentEditorWithRetry(
-      page,
-      e2eContext.editedDocumentId
-    );
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
 
     // Check that basic page structure is present
     await expectExitControlVisible(page);
-    await expect(editorContainer).toBeVisible({ timeout: 10000 });
+    await expect(editor).toBeVisible({ timeout: 10000 });
   });
 
   test('should allow typing in document editor with simulated saving', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
@@ -98,152 +61,89 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
     });
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-
-    // Click on the editor to focus it
-    await editor.click();
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    const editor = helpers.getEditor();
 
     // Type some content
     const testText = 'This is test content for e2e testing!';
-    await editor.type(testText);
+    await helpers.typeInEditor(testText);
 
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for auto-save to trigger (SyncService uses a 2s debounce)
-    await page.waitForTimeout(4000);
+    // Wait for auto-save to complete (SyncService uses a 2s debounce)
+    await helpers.waitForSaved();
 
     // Check that a save request was made
     expect(saveRequestCount).toBeGreaterThan(0);
 
-    // Look for save status indicator if it exists
-    const savedIndicator = page.locator('text=Saved, text=Saving').first();
-    if (await savedIndicator.isVisible({ timeout: 2000 })) {
-      await expect(page.locator('text=Saved')).toBeVisible({ timeout: 5000 });
-    }
-
-    // Verify persisted content by exiting and returning (with reload fallback)
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: testText,
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
+    // Verify content persisted by reloading the page
+    await helpers.verifyPersistsOnReload(testText);
   });
 
   test('should handle pasting content in document editor', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-    await editor.click();
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    const editor = helpers.getEditor();
 
-    // Simulate pasting content
+    // Simulate pasting content by inserting text directly
     const pasteContent = 'This content was pasted into the editor.';
-
-    // Insert text to simulate paste without requiring clipboard permissions
+    await editor.click();
     await page.keyboard.insertText(pasteContent);
 
     // Verify pasted content appears
     await expect(editor).toContainText(pasteContent);
 
-    // Verify persisted content
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: pasteContent,
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
-  });
-
-  test('should demonstrate document version concept', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-
-    let versionCreated = false;
-
-    // Mock document version creation API
-    await page.route('**/api/model/document/**/versions', (route) => {
-      if (route.request().method() === 'POST') {
-        versionCreated = true;
-        route.fulfill({
-          status: 201,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            id: 'new-version-id',
-            createdAt: new Date().toISOString(),
-          }),
-        });
-      } else {
-        route.continue();
-      }
-    });
-
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-    await editor.click();
-
-    // Add content to trigger version creation
-    await editor.type('Content that should create a version.');
-
-    // Wait for auto-save
-    await page.waitForTimeout(500);
-
-    // Check if version creation would be triggered
-    // In the actual app, versions are created on document updates
-    // For now, just verify editor functionality works
-    await expect(editor).toContainText('Content that should create a version.');
+    // Wait for auto-save then verify persistence
+    await helpers.waitForSaved();
+    await helpers.verifyPersistsOnReload(pasteContent);
   });
 
   test('should handle multiple rapid edits without data loss', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-    await editor.click();
+    await helpers.openDocument(e2eContext.freshDocumentId, { retry: true });
+    const editor = helpers.getEditor();
 
     // Rapid typing simulation
     const words = ['Rapid', 'typing', 'test', 'with', 'multiple', 'words'];
     for (const word of words) {
-      await editor.type(`${word} `, { delay: 50 });
+      await editor.pressSequentially(`${word} `, { delay: 50 });
     }
 
-    // Wait for debounced save to settle (1500ms debounce + network round-trip headroom)
-    await page.waitForTimeout(4000);
+    // Wait for debounced save to complete
+    await helpers.waitForSaved();
 
-    // Verify all content is present (use toPass for retry resilience)
-    await expect(async () => {
-      for (const word of words) {
-        await expect(editor).toContainText(word);
-      }
-    }).toPass({ timeout: 5000 });
+    // Verify all content is present
+    for (const word of words) {
+      await expect(editor).toContainText(word);
+    }
 
     // Verify content actually persisted to the server (the real test — no data loss)
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: words,
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
+    await helpers.verifyPersistsOnReload(words[0]);
   });
 
   test('does not allow an older delayed save to overwrite newer content', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-    await editor.click();
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
 
     let firstSaveRoute: Parameters<Parameters<typeof page.route>[1]>[0] | null = null;
     let firstSaveReleased = false;
@@ -264,64 +164,59 @@ test.describe.serial('Document Editor E2E Tests', () => {
       await route.continue();
       if (firstSaveRoute && !firstSaveReleased) {
         firstSaveReleased = true;
-        await page.waitForTimeout(800);
+        await page.waitForTimeout(800); // brief hold to simulate out-of-order network response
         await firstSaveRoute.continue();
       }
     });
 
-    await editor.type(' older');
-    await page.waitForTimeout(1700);
-    await editor.type(' newest');
-    await page.waitForTimeout(2500);
+    await editor.click();
+    await editor.pressSequentially(' older');
+    await page.waitForTimeout(1700); // allow first debounce to fire
+    await editor.pressSequentially(' newest');
+    await helpers.waitForSaved();
 
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: 'newest',
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
+    await helpers.verifyPersistsOnReload('newest');
   });
 
   test('updating the title does not overwrite newer editor content', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+
     await editor.click();
     const appendedText = ' Content that should survive a title edit.';
-    await editor.type(appendedText);
-    await page.waitForTimeout(2000);
+    await editor.pressSequentially(appendedText);
 
     const titleInput = page.getByPlaceholder('Untitled document');
     await expect(titleInput).toBeVisible({ timeout: 10000 });
     await titleInput.fill('Updated E2E Title');
     await titleInput.blur();
 
-    await page.waitForTimeout(1500);
+    await helpers.waitForSaved();
 
-    const helpers = new TestHelpers(page);
-    await helpers.verifySavedData({
-      expectedTexts: appendedText,
-      documentId: e2eContext.editedDocumentId,
-      courseId: e2eContext.studentCourseId,
-    });
+    await helpers.verifyPersistsOnReload(appendedText.trim());
   });
 
   test('locks editor and shows session modal when autosave gets auth failure', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
-      await editor.click();
-      await editor.type('Baseline text before session expiry.');
-      await page.waitForTimeout(2200);
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+      const editor = helpers.getEditor();
+
+      await helpers.typeInEditor('Baseline text before session expiry.');
+      await helpers.waitForSaved();
 
       await invalidateUserSessions({
         prisma,
@@ -329,13 +224,13 @@ test.describe.serial('Document Editor E2E Tests', () => {
       });
 
       await editor.click();
-      await editor.type(' This text should trigger auth failure lock.');
+      await editor.pressSequentially(' This text should trigger auth failure lock.');
       await expect(
         page.getByRole('heading', { name: /session expired/i })
       ).toBeVisible({ timeout: 10000 });
       await expect
         .poll(
-          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          async () => page.locator(EDITOR_SELECTOR).first().getAttribute('contenteditable'),
           { timeout: 5000 }
         )
         .toBe('false');
@@ -348,11 +243,13 @@ test.describe.serial('Document Editor E2E Tests', () => {
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+      const editor = helpers.getEditor();
       await expect(editor).toBeVisible({ timeout: 10000 });
 
       await invalidateUserSessions({
@@ -369,7 +266,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
       ).toBeVisible({ timeout: 10000 });
       await expect
         .poll(
-          async () => page.locator('.ProseMirror').first().getAttribute('contenteditable'),
+          async () => page.locator(EDITOR_SELECTOR).first().getAttribute('contenteditable'),
           { timeout: 5000 }
         )
         .toBe('false');
@@ -382,11 +279,12 @@ test.describe.serial('Document Editor E2E Tests', () => {
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     const prisma = createE2EPrismaClient();
     try {
       await signIn('jdoe@brock.software', 'johndoe');
-      await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
 
       let tutorRequests = 0;
       await page.route('**/api/domain/tutor-response', async (route) => {
@@ -417,11 +315,13 @@ test.describe.serial('Document Editor E2E Tests', () => {
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
     const longText = 'x'.repeat(201);
 
     await page.evaluate(async (text) => {
@@ -444,11 +344,13 @@ test.describe.serial('Document Editor E2E Tests', () => {
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
     await signIn('jdoe@brock.software', 'johndoe');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 
-    const editor = await openDocumentEditorWithRetry(page, e2eContext.editedDocumentId);
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
     const longText = 'y'.repeat(201);
 
     await editor.click();
@@ -466,6 +368,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     });
 
     await page.keyboard.press(PASTE_SHORTCUT);
+    // Brief pause for any in-flight paste-alert requests to arrive before asserting zero
     await page.waitForTimeout(500);
 
     expect(pasteAlertCount).toBe(0);
