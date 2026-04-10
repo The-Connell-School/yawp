@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 
-type GradeWithDocument = {
+type SubmissionWithDocument = {
   id: string;
   score: string | null;
   feedback: string | null;
@@ -35,7 +35,7 @@ type GradeWithDocument = {
 };
 
 type ReleaseGradesSheetProps = {
-  grades: GradeWithDocument[];
+  grades: SubmissionWithDocument[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
@@ -53,7 +53,7 @@ export function ReleaseGradesSheet({
   const handleRelease = () => {
     const formData = new FormData();
     grades.forEach((grade) => {
-      formData.append('gradeIds', grade.id);
+      formData.append('submissionIds', grade.id);
     });
 
     fetcher.submit(formData, {
