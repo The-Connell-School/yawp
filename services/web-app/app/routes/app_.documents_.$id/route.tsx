@@ -12,8 +12,8 @@ import {
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Loader2, AlertCircle, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -36,7 +36,6 @@ import {
   isDocumentSubmissionEnabledForSchool,
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
-import { findExcerptRange } from '~/utils/excerpt-position';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -47,14 +46,6 @@ import {
   DocumentStatusBadge,
   getDocumentStatusLabel,
 } from '~/components/document-status-badge';
-import { cn } from '~/utils/misc';
-import { formatGrade } from '~/domain/grading/gradeMath';
-import {
-  type GrammarIssue,
-  parseGrammarIssuesPayload,
-} from '~/domain/grading/grammarIssues';
-import { TeacherGradingPanel } from '../app_.submissions_.$submissionId/teacher-grading/teacher-grading-panel';
-import { GradingCommentsSidebar } from '../app_.submissions_.$submissionId/teacher-grading/grading-comments-sidebar';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -66,35 +57,6 @@ import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
 import { useCommentsState } from './hooks/use-comments-state';
 import { useTutorState } from './hooks/use-tutor-state';
 import { useDocumentSubmit } from './hooks/use-document-submit';
-
-function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
-  items: T[];
-  sourceText: string;
-  getExcerpt: (item: T) => string | null | undefined;
-  getOccurrence?: (item: T) => number | null | undefined;
-}) {
-  return [...args.items].sort((a, b) => {
-    const aRange = findExcerptRange(
-      args.sourceText,
-      args.getExcerpt(a),
-      args.getOccurrence?.(a) ?? 1
-    );
-    const bRange = findExcerptRange(
-      args.sourceText,
-      args.getExcerpt(b),
-      args.getOccurrence?.(b) ?? 1
-    );
-
-    if (aRange && bRange) {
-      if (aRange.start !== bRange.start) return aRange.start - bRange.start;
-      return aRange.end - bRange.end;
-    }
-    if (aRange) return -1;
-    if (bRange) return 1;
-
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
-}
 
 function sortDocumentCommentsByMarkupOrder<
   T extends { id: string; createdAt: Date | string },
@@ -282,6 +244,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const latestSubmission = doc.submissions[0] ?? null;
 
+  // Teachers viewing submitted documents should go to the submissions route
+  if (isViewingAsTeacher && latestSubmission) {
+    const exitTo = url.searchParams.get('exitTo');
+    return redirect(
+      `/app/submissions/${latestSubmission.id}${exitTo ? `?exitTo=${encodeURIComponent(exitTo)}` : ''}`
+    );
+  }
+
   if (
     !isViewingAsTeacher &&
     latestSubmission?.id &&
@@ -330,26 +300,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
   ]);
 
-  const unsortedSubmissionComments =
-    latestSubmission != null
-      ? await prisma.submissionComment.findMany({
-          where: { submissionId: latestSubmission.id },
-          include: {
-            profile: {
-              include: { user: { select: { name: true, email: true } } },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [];
-
-  const submissionComments = sortByDocumentLocation({
-    items: unsortedSubmissionComments,
-    sourceText: latestSubmission?.text ?? '',
-    getExcerpt: (comment) => comment.excerpt,
-    getOccurrence: (comment) => comment.occurrence,
-  });
-
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
     doc.html
@@ -367,7 +317,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
-    submissionComments,
   });
 }
 
@@ -392,7 +341,6 @@ export default function Route() {
   const [searchParams, setSearchParams] = useSearchParams();
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
-  const leftPanel = searchParams.get('left') ?? 'tutor';
   const isReviseMode = searchParams.get('revise') === '1';
   const latestSubmission = data.latestSubmission;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
@@ -405,18 +353,9 @@ export default function Route() {
   });
   const isGradeReleased =
     grade?.releasedAt !== null && grade?.releasedAt !== undefined;
-  const canUseGradingPanel =
-    data.isDocumentSubmissionEnabled && isViewingAsTeacher && isSubmitted;
-  const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
-  const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
-  const isTeacherSnapshotView =
-    isViewingAsTeacher && Boolean(latestSubmission?.id);
-  const editorServerHtml =
-    (isTeacherSnapshotView && latestSubmission?.html
-      ? latestSubmission.html
-      : data.doc.html) ?? '';
-  const editorServerText =
-    (isTeacherSnapshotView ? latestSubmission?.text : data.doc.text) ?? '';
+  const isDocumentEditable = !isViewingAsTeacher;
+  const editorServerHtml = data.doc.html ?? '';
+  const editorServerText = data.doc.text ?? '';
 
   // Exit target is computed once on mount (session-storage read is idempotent)
   const [exitTarget] = useState<string>(
@@ -447,103 +386,6 @@ export default function Route() {
   const isEditorEditable =
     isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
 
-  // ── Teacher-grading UI state (Phase 3 will extract these) ──────────
-  const gradeDisplay =
-    (grade
-      ? formatGrade(
-          grade.numericPercentage ?? null,
-          grade.letterGrade ?? null
-        ) ||
-        grade.score ||
-        (grade.overallScore ? `${grade.overallScore}/5` : null)
-      : null) ?? null;
-  const [activeGradeCommentId, setActiveGradeCommentId] = useState<
-    string | null
-  >(null);
-  const [draftHighlight, setDraftHighlight] = useState<{
-    excerpt: string;
-    occurrence: number;
-  } | null>(null);
-  const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
-  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
-  const closeTooltipTimer = useRef<number | null>(null);
-  const persistedGrammarIssues = useMemo(
-    () =>
-      parseGrammarIssuesPayload(grade?.grammarIssues, {
-        sourceText: latestSubmission?.text ?? '',
-      }),
-    [latestSubmission?.text, grade?.id, grade?.grammarIssues]
-  );
-  const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
-    persistedGrammarIssues
-  );
-  const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
-    []
-  );
-
-  // Derived-state pattern: resync grammar issues in render when the
-  // persisted-from-loader value changes (no useEffect needed).
-  const lastPersistedRef = useRef(persistedGrammarIssues);
-  if (lastPersistedRef.current !== persistedGrammarIssues) {
-    lastPersistedRef.current = persistedGrammarIssues;
-    setGrammarIssues(persistedGrammarIssues);
-    setHiddenGrammarIssueIds([]);
-  }
-
-  // Derived value (no state needed for tooltip position)
-  const tooltipPos = useMemo(() => {
-    if (!tooltipRect) return null;
-    return {
-      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
-      left: Math.min(window.innerWidth - 16, tooltipRect.left),
-    };
-  }, [tooltipRect]);
-
-  const visibleGrammarIssues = useMemo(
-    () =>
-      grammarIssues.filter(
-        (issue) => !hiddenGrammarIssueIds.includes(issue.id)
-      ),
-    [grammarIssues, hiddenGrammarIssueIds]
-  );
-  const toggleGrammarIssueVisibility = useCallback((id: string) => {
-    setHiddenGrammarIssueIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((currentId) => currentId !== id)
-        : [...prev, id]
-    );
-  }, []);
-  const handleGrammarIssuesChange = useCallback((issues: GrammarIssue[]) => {
-    setGrammarIssues(issues);
-    setHiddenGrammarIssueIds([]);
-  }, []);
-  const handleRemoveGrammarIssue = useCallback((id: string) => {
-    setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
-    setHiddenGrammarIssueIds((prev) =>
-      prev.filter((currentId) => currentId !== id)
-    );
-  }, []);
-  const activeGrammarIssue = useMemo(() => {
-    if (!tooltipIssueId) return null;
-    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
-  }, [grammarIssues, tooltipIssueId]);
-
-  // Outside-click handler for active grade comment (teacher grading view).
-  // This effect will move into grade-highlights-overlay in Phase 3.
-  useEffect(() => {
-    if (!isTeacherGradingTabOpen || !activeGradeCommentId) return;
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      const clickedInHighlight = target.closest('[data-grade-comment-id]');
-      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
-      if (clickedInHighlight || clickedInCommentCard) return;
-      setActiveGradeCommentId(null);
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [activeGradeCommentId, isTeacherGradingTabOpen]);
-
   // ── Derived UI data ────────────────────────────────────────────────
   const allComments = commentsState.comments as any[];
   const activeComments = allComments.filter((c) => !c.archivedAt);
@@ -572,12 +414,6 @@ export default function Route() {
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', value);
-    setSearchParams(params, { replace: true });
-  };
-
-  const changeLeftPanel = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('left', value);
     setSearchParams(params, { replace: true });
   };
 
@@ -694,9 +530,7 @@ export default function Route() {
                     'Submit'
                   )}
                 </Button>
-                {!isTeacherGradingTabOpen ? (
-                  <div className="h-[20px] border-r" />
-                ) : null}
+                <div className="h-[20px] border-r" />
               </>
             )}
             {isSubmitted && archivedComments.length > 0 && (
@@ -711,54 +545,11 @@ export default function Route() {
                 <div className="h-[20px] border-r" />
               </>
             )}
-            {isViewingAsTeacher && isSubmitted && (
-              <>
-                {grade ? (
-                  <>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link to={`/app/submissions/${grade.id}`}>
-                        Open Graded View
-                      </Link>
-                    </Button>
-                    <div className="h-[20px] border-r" />
-                  </>
-                ) : null}
-              </>
-            )}
-            {!isTeacherGradingTabOpen ? (
-              <div className="flex items-center gap-2">
-                <SaveStatusIndicator status={syncStatus} />
-                <div className="h-[20px] border-r" />
-                <DocumentHistory documentId={data.doc.id} />
-              </div>
-            ) : null}
-            {isViewingAsTeacher && isSubmitted && (
-              <>
-                {isTeacherGradingTabOpen ? null : (
-                  <div className="h-[20px] border-r" />
-                )}
-                <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
-                  <Button
-                    size="sm"
-                    variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
-                    data-testid="document-leftpanel-tutor"
-                    onClick={() => changeLeftPanel('tutor')}
-                  >
-                    Tutor
-                  </Button>
-                  {canUseGradingPanel ? (
-                    <Button
-                      size="sm"
-                      variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
-                      data-testid="document-leftpanel-grading"
-                      onClick={() => changeLeftPanel('grading')}
-                    >
-                      Grading
-                    </Button>
-                  ) : null}
-                </div>
-              </>
-            )}
+            <div className="flex items-center gap-2">
+              <SaveStatusIndicator status={syncStatus} />
+              <div className="h-[20px] border-r" />
+              <DocumentHistory documentId={data.doc.id} />
+            </div>
           </div>
         </nav>
         {data.assignmentsEnabled && data.doc.assignment ? (
@@ -784,19 +575,13 @@ export default function Route() {
           </div>
         ) : null}
         {grade &&
-          !isTeacherGradingTabOpen &&
-          ((!isViewingAsTeacher && isGradeReleased) || isViewingAsTeacher) && (
+          !isViewingAsTeacher &&
+          isGradeReleased && (
             <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 dark:bg-green-950/20 px-3 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
-                  <Badge variant={isGradeReleased ? 'success' : 'secondary'}>
-                    {isGradeReleased
-                      ? 'Grade Released'
-                      : 'Graded (Not Released)'}
-                  </Badge>
-                  <span className="text-sm font-medium">
-                    {gradeDisplay || 'Graded'}
-                  </span>
+                  <Badge variant="success">Grade Released</Badge>
+                  <span className="text-sm font-medium">Graded</span>
                 </div>
                 {(grade.feedback || grade.overallComment) && (
                   <div className="flex-1 sm:mx-4">
@@ -812,7 +597,9 @@ export default function Route() {
                     asChild
                     className="bg-white dark:bg-background"
                   >
-                    <Link to={`/app/submissions/${grade.id}`}>Open Graded View</Link>
+                    <Link to={`/app/submissions/${grade.id}`}>
+                      Open Graded View
+                    </Link>
                   </Button>
                 </div>
               </div>
@@ -832,26 +619,8 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div
-            className={cn(
-              'mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden',
-              isTeacherGradingTabOpen && 'draft-comments-hidden'
-            )}
-          >
-            {isMobile && tab !== 'tutor' ? null : canUseGradingPanel &&
-              leftPanel === 'grading' ? (
-              <TeacherGradingPanel
-                documentId={data.doc.id}
-                submissionId={latestSubmission?.id ?? null}
-                existingGrade={grade ?? null}
-                grammarIssues={grammarIssues}
-                persistedGrammarIssues={persistedGrammarIssues}
-                hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                onGrammarIssuesChange={handleGrammarIssuesChange}
-              />
-            ) : (
+          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+            {isMobile && tab !== 'tutor' ? null : (
               <Tutor
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
@@ -884,16 +653,7 @@ export default function Route() {
                 }
               />
             )}
-            {isMobile && tab !== 'comments' ? null : isTeacherGradingTabOpen ? (
-              <GradingCommentsSidebar
-                submissionComments={data.submissionComments}
-                submissionId={latestSubmission?.id ?? null}
-                sourceText={latestSubmission?.text ?? ''}
-                activeGradeCommentId={activeGradeCommentId}
-                onSelectGradeComment={setActiveGradeCommentId}
-                onDraftHighlightChange={setDraftHighlight}
-              />
-            ) : (
+            {isMobile && tab !== 'comments' ? null : (
               <Comments
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
@@ -984,54 +744,6 @@ export default function Route() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
-        <div
-          className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"
-          style={{
-            top: tooltipPos.top,
-            left: tooltipPos.left,
-            transform: 'translateY(0)',
-          }}
-          onMouseEnter={() => {
-            if (closeTooltipTimer.current) {
-              window.clearTimeout(closeTooltipTimer.current);
-            }
-          }}
-          onMouseLeave={() => {
-            setTooltipIssueId(null);
-            setTooltipRect(null);
-          }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-xs font-medium text-muted-foreground">
-                {activeGrammarIssue.kind === 'style' ? 'Style' : 'Grammar'}
-                {activeGrammarIssue.ruleNumber
-                  ? ` • Rule ${activeGrammarIssue.ruleNumber}`
-                  : ''}
-              </div>
-              {activeGrammarIssue.rule ? (
-                <div className="text-sm font-medium">
-                  {activeGrammarIssue.rule}
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-muted"
-              onClick={() => {
-                setTooltipIssueId(null);
-                setTooltipRect(null);
-              }}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            {activeGrammarIssue.message}
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }
