@@ -347,19 +347,23 @@ export function TeacherGradingPanel({
               )}
             </Button>
           </ConfirmationDialog>
-          {statusLabel ? (
-            <span
-              data-testid="grading-auto-save-status"
-              className={cn(
-                'text-xs font-medium',
-                autoSaveStatus === 'saving' && 'text-muted-foreground',
-                autoSaveStatus === 'saved' && 'text-green-600',
-                autoSaveStatus === 'error' && 'text-red-600'
-              )}
-            >
-              {statusLabel}
-            </span>
-          ) : null}
+          <span className="text-xs text-muted-foreground">
+            {statusLabel ? (
+              <span
+                data-testid="grading-auto-save-status"
+                className={cn(
+                  'font-medium',
+                  autoSaveStatus === 'saving' && 'text-muted-foreground',
+                  autoSaveStatus === 'saved' && 'text-green-600',
+                  autoSaveStatus === 'error' && 'text-red-600'
+                )}
+              >
+                {statusLabel}
+              </span>
+            ) : (
+              'All changes save automatically'
+            )}
+          </span>
         </div>
       </div>
 
