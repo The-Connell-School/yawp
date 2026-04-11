@@ -204,112 +204,69 @@ export function GradeHighlightsOverlay({
     return () => contentRoot.removeEventListener('click', onClick);
   }, [contentRoot, onGradeCommentSelect]);
 
-  // Grade hover handlers
+  // Grade comment hover handlers — attach directly to each mark span
   useEffect(() => {
     if (!contentRoot) return;
 
-    const setGradeHover = (id: string, hovered: boolean) => {
-      contentRoot
-        .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
-        .forEach((el) => {
-          el.classList.toggle('hovered', hovered);
-        });
-    };
+    const marks = contentRoot.querySelectorAll<HTMLElement>('[data-grade-comment-id]');
+    const controllers: Array<() => void> = [];
 
-    const onMouseOver = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const mark = target?.closest(
-        '[data-grade-comment-id]'
-      ) as HTMLElement | null;
-      if (!mark) return;
+    marks.forEach((mark) => {
       const id = mark.getAttribute('data-grade-comment-id');
       if (!id) return;
 
-      const relatedTarget = event.relatedTarget as HTMLElement | null;
-      const relatedMark = relatedTarget?.closest(
-        '[data-grade-comment-id]'
-      ) as HTMLElement | null;
-      if (relatedMark?.getAttribute('data-grade-comment-id') === id) return;
+      const onEnter = () => {
+        contentRoot
+          .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+          .forEach((el) => el.classList.add('hovered'));
+      };
+      const onLeave = () => {
+        contentRoot
+          .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+          .forEach((el) => el.classList.remove('hovered'));
+      };
 
-      setGradeHover(id, true);
-    };
+      mark.addEventListener('mouseenter', onEnter);
+      mark.addEventListener('mouseleave', onLeave);
+      controllers.push(() => {
+        mark.removeEventListener('mouseenter', onEnter);
+        mark.removeEventListener('mouseleave', onLeave);
+      });
+    });
 
-    const onMouseOut = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const mark = target?.closest(
-        '[data-grade-comment-id]'
-      ) as HTMLElement | null;
-      if (!mark) return;
-      const id = mark.getAttribute('data-grade-comment-id');
-      if (!id) return;
-
-      const relatedTarget = event.relatedTarget as HTMLElement | null;
-      const relatedMark = relatedTarget?.closest(
-        '[data-grade-comment-id]'
-      ) as HTMLElement | null;
-      if (relatedMark?.getAttribute('data-grade-comment-id') === id) return;
-
-      setGradeHover(id, false);
-    };
-
-    contentRoot.addEventListener('mouseover', onMouseOver);
-    contentRoot.addEventListener('mouseout', onMouseOut);
     return () => {
-      contentRoot.removeEventListener('mouseover', onMouseOver);
-      contentRoot.removeEventListener('mouseout', onMouseOut);
+      controllers.forEach((cleanup) => cleanup());
       contentRoot
         .querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
         .forEach((el) => el.classList.remove('hovered'));
     };
-  }, [contentRoot]);
+  }, [contentRoot, highlights]);
 
-  // Grammar issue hover handler — use mouseover/mouseout with relatedTarget
-  // checks to avoid flicker when cursor moves between child nodes within
-  // the same grammar mark span.
+  // Grammar issue hover handler — attach mouseenter/mouseleave directly
+  // to each grammar mark span so the tooltip shows only while hovering.
   useEffect(() => {
     if (!contentRoot) return;
 
-    const onMouseOver = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const mark = target?.closest(
-        '[data-grammar-issue-id]'
-      ) as HTMLElement | null;
-      if (!mark) return;
+    const marks = contentRoot.querySelectorAll<HTMLElement>('[data-grammar-issue-id]');
+    const controllers: Array<() => void> = [];
+
+    marks.forEach((mark) => {
       const id = mark.getAttribute('data-grammar-issue-id');
       if (!id) return;
 
-      // Skip if we're moving within the same mark
-      const related = event.relatedTarget as HTMLElement | null;
-      const relatedMark = related?.closest('[data-grammar-issue-id]') as HTMLElement | null;
-      if (relatedMark?.getAttribute('data-grammar-issue-id') === id) return;
+      const onEnter = () => onGrammarIssueHover(id, mark.getBoundingClientRect());
+      const onLeave = () => onGrammarIssueHover(null, null);
 
-      onGrammarIssueHover(id, mark.getBoundingClientRect());
-    };
+      mark.addEventListener('mouseenter', onEnter);
+      mark.addEventListener('mouseleave', onLeave);
+      controllers.push(() => {
+        mark.removeEventListener('mouseenter', onEnter);
+        mark.removeEventListener('mouseleave', onLeave);
+      });
+    });
 
-    const onMouseOut = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const mark = target?.closest(
-        '[data-grammar-issue-id]'
-      ) as HTMLElement | null;
-      if (!mark) return;
-      const id = mark.getAttribute('data-grammar-issue-id');
-      if (!id) return;
-
-      // Skip if we're moving to another element within the same mark
-      const related = event.relatedTarget as HTMLElement | null;
-      const relatedMark = related?.closest('[data-grammar-issue-id]') as HTMLElement | null;
-      if (relatedMark?.getAttribute('data-grammar-issue-id') === id) return;
-
-      onGrammarIssueHover(null, null);
-    };
-
-    contentRoot.addEventListener('mouseover', onMouseOver);
-    contentRoot.addEventListener('mouseout', onMouseOut);
-    return () => {
-      contentRoot.removeEventListener('mouseover', onMouseOver);
-      contentRoot.removeEventListener('mouseout', onMouseOut);
-    };
-  }, [contentRoot, onGrammarIssueHover]);
+    return () => controllers.forEach((cleanup) => cleanup());
+  }, [contentRoot, highlights, onGrammarIssueHover]);
 
   return null; // overlay is pure DOM mutation, no JSX
 }
