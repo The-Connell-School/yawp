@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link } from 'react-router';
+import { useLoaderData, Link, useSearchParams, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
@@ -14,6 +14,10 @@ import {
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
 import { findExcerptRange } from '~/utils/excerpt-position';
+import {
+  readLastNonDocumentRoute,
+  sanitizeExitTarget,
+} from '~/utils/document-exit';
 import { EssayPanel } from './essay-panel';
 import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
@@ -192,9 +196,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function SubmissionRoute() {
   const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
     useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   // Local toggle state — initialized from loader, toggled by the edit/view pill
   const [isEditing, setIsEditing] = useState(loaderGradeMode);
   const isGradeMode = isTeacher && isEditing;
+
+  // Exit target — same pattern as documents route
+  const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
+  const [exitTarget] = useState<string>(
+    () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
+  );
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
   const setEssayRef = useCallback(
@@ -302,11 +314,9 @@ export default function SubmissionRoute() {
     <main className="flex h-screen flex-col bg-white">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
       <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
-        <Button variant="secondary" size="sm" asChild>
-          <Link to="/app">
-            <ArrowLeft className="h-4" />
-            Back
-          </Link>
+        <Button variant="secondary" size="sm" onClick={() => navigate(exitTarget)}>
+          <ArrowLeft className="h-4" />
+          Exit
         </Button>
 
         <p className="text-sm font-semibold">
