@@ -10,17 +10,7 @@ import {
 import { useEffect, useRef } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '~/components/ui/dialog';
 import { Tooltip } from '~/components/ui/tooltip';
-import { useAsyncFetcherSubmit } from '~/hooks/useAsyncFetcher.ts';
-import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
@@ -68,10 +58,6 @@ export const Tutor = ({
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
     true
-  );
-  const [showResetConfirmation, setShowResetConfirmation] = useLocalStorage(
-    `doc-${docId}-reset-confirmation`,
-    false
   );
   const tutorResponseFetcher = useFetcher<{ error?: string }>();
   const incrementInstructionFetcher = useFetcher();
@@ -131,11 +117,6 @@ export const Tutor = ({
           content: optimisticContent,
         } as any)
       : null;
-
-  const user = useUser();
-  const userIsAdmin = user.isAdmin;
-  const userIsTeacher = user.selectedProfile?.teacherProfile !== null;
-  const { submit, isLoading } = useAsyncFetcherSubmit();
 
   const respond = async (response: string) => {
     if (isSessionLocked) return;
@@ -208,31 +189,6 @@ export const Tutor = ({
     next.delete('spa');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-
-  const handleReset = () => {
-    if (isSessionLocked) return;
-    setShowResetConfirmation(true);
-  };
-
-  const confirmReset = async () => {
-    if (isSessionLocked) return;
-    await submit(
-      { cmsId: cms.id },
-      {
-        method: 'POST',
-        action: '/api/domain/delete-subsequent-cms',
-      }
-    );
-    setShowResetConfirmation(false);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('cmsIdx');
-        return next;
-      },
-      { replace: true }
-    );
-  };
 
   return (
     <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
@@ -380,19 +336,9 @@ export const Tutor = ({
               : undefined
           )}
         >
-          <div className="mb-4 text-center text-sm text-muted-foreground">
-            This step has been completed. Click next to continue <br />
-            or
-            <Button
-              disabled={isSessionLocked}
-              variant="link"
-              onClick={handleReset}
-              className="h-4 pl-1 pr-0"
-            >
-              reset back to this point
-            </Button>
-            .
-          </div>
+          <p className="mb-4 text-center text-sm text-muted-foreground">
+            This step has been completed. Click next to continue.
+          </p>
           <Button
             disabled={isSessionLocked}
             onClick={() => navigateToCmsIdx(nextCmsIdx)}
@@ -456,35 +402,6 @@ export const Tutor = ({
           }
         />
       )}
-      <Dialog
-        open={showResetConfirmation}
-        onOpenChange={setShowResetConfirmation}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Reset</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. It will permanently remove all
-              progress in later steps. Are you sure you want to continue?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="secondary"
-              onClick={() => setShowResetConfirmation(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmReset}
-              isLoading={isLoading}
-            >
-              Reset Progress
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
