@@ -476,12 +476,11 @@ function ViewPanel({
   };
 }) {
   const rawRubric = (submission.rubricScores ?? {}) as Record<string, number | { score: number; comment?: string }>;
-  const rubricScores = Object.fromEntries(
-    Object.entries(rawRubric).map(([key, val]) => [
-      key,
-      typeof val === 'object' && val !== null ? (val as { score: number }).score : val,
-    ])
-  ) as Record<string, number>;
+  const rubricEntries = Object.entries(rawRubric).map(([key, val]) => {
+    const score = typeof val === 'object' && val !== null ? (val as { score: number }).score : (val as number);
+    const comment = typeof val === 'object' && val !== null ? (val as { comment?: string }).comment : undefined;
+    return { key, score, comment };
+  });
   const hasGrade = submission.numericPercentage != null;
 
   return (
@@ -501,14 +500,19 @@ function ViewPanel({
               <p className="mt-1 text-sm whitespace-pre-wrap">{submission.overallComment}</p>
             </div>
           ) : null}
-          {Object.keys(rubricScores).length > 0 ? (
+          {rubricEntries.length > 0 ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
-              <div className="mt-1 space-y-2">
-                {Object.entries(rubricScores).map(([key, score]) => (
-                  <div key={key} className="flex items-center justify-between text-sm">
-                    <span>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                    <span className="font-medium">{score}/5</span>
+              <div className="mt-2 space-y-3">
+                {rubricEntries.map(({ key, score, comment }) => (
+                  <div key={key} className="border-b pb-2 last:border-0">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                      <span className="text-muted-foreground">{score}/5</span>
+                    </div>
+                    {comment ? (
+                      <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
