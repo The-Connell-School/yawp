@@ -465,7 +465,13 @@ function ViewPanel({
     rubricScores: unknown;
   };
 }) {
-  const rubricScores = (submission.rubricScores ?? {}) as Record<string, number>;
+  const rawRubric = (submission.rubricScores ?? {}) as Record<string, number | { score: number; comment?: string }>;
+  const rubricScores = Object.fromEntries(
+    Object.entries(rawRubric).map(([key, val]) => [
+      key,
+      typeof val === 'object' && val !== null ? (val as { score: number }).score : val,
+    ])
+  ) as Record<string, number>;
   const hasGrade = submission.numericPercentage != null;
 
   return (
