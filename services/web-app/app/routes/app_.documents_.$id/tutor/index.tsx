@@ -11,7 +11,6 @@ import { useEffect, useRef } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
-import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
@@ -118,10 +117,6 @@ export const Tutor = ({
           content: optimisticContent,
         } as any)
       : null;
-
-  const user = useUser();
-  const userIsAdmin = user.isAdmin;
-  const userIsTeacher = user.selectedProfile?.teacherProfile !== null;
 
   const respond = async (response: string) => {
     if (isSessionLocked) return;
