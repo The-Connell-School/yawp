@@ -155,118 +155,87 @@ export function GradeHighlightsOverlay({
   onGradeCommentSelect,
   onGrammarIssueHover,
 }: Props) {
-  // Apply review highlights
   useEffect(() => {
     if (!contentRoot) return;
+
+    // 1. Clear and rebuild marks
     clearReviewMarks(contentRoot);
     applyReviewHighlights(contentRoot, highlights);
-  }, [contentRoot, highlights]);
 
-  // Toggle .focused class on active grade comment
-  useEffect(() => {
-    if (!contentRoot) return;
-    contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach((el) => {
+    // 2. Apply focused class
+    contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach(el => {
       el.classList.remove('focused');
     });
-    if (!activeGradeCommentId) return;
-    contentRoot
-      .querySelectorAll<HTMLElement>(
+    if (activeGradeCommentId) {
+      contentRoot.querySelectorAll<HTMLElement>(
         `[data-grade-comment-id="${activeGradeCommentId}"]`
-      )
-      .forEach((el) => el.classList.add('focused'));
-  }, [contentRoot, activeGradeCommentId]);
+      ).forEach(el => el.classList.add('focused'));
+    }
 
-  // Scroll active grade comment into view
-  useEffect(() => {
-    if (!contentRoot || !activeGradeCommentId) return;
-    const first = contentRoot.querySelector<HTMLElement>(
-      `[data-grade-comment-id="${activeGradeCommentId}"]`
-    );
-    first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [contentRoot, activeGradeCommentId]);
+    // 3. Scroll active into view
+    if (activeGradeCommentId) {
+      const first = contentRoot.querySelector<HTMLElement>(
+        `[data-grade-comment-id="${activeGradeCommentId}"]`
+      );
+      first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 
-  // Click handler for grade comment marks
-  useEffect(() => {
-    if (!contentRoot) return;
-
+    // 4. Click handler for grade comments
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      const mark = target?.closest(
-        '[data-grade-comment-id]'
-      ) as HTMLElement | null;
+      const mark = target?.closest('[data-grade-comment-id]') as HTMLElement | null;
       if (!mark) return;
       const id = mark.getAttribute('data-grade-comment-id');
-      if (!id) return;
-      onGradeCommentSelect(id);
+      if (id) onGradeCommentSelect(id);
     };
-
     contentRoot.addEventListener('click', onClick);
-    return () => contentRoot.removeEventListener('click', onClick);
-  }, [contentRoot, onGradeCommentSelect]);
 
-  // Grade comment hover handlers — attach directly to each mark span
-  useEffect(() => {
-    if (!contentRoot) return;
+    // 5. Hover handlers for grade comments
+    const commentMarks = contentRoot.querySelectorAll<HTMLElement>('[data-grade-comment-id]');
+    const cleanups: Array<() => void> = [];
 
-    const marks = contentRoot.querySelectorAll<HTMLElement>('[data-grade-comment-id]');
-    const controllers: Array<() => void> = [];
-
-    marks.forEach((mark) => {
+    commentMarks.forEach(mark => {
       const id = mark.getAttribute('data-grade-comment-id');
       if (!id) return;
-
       const onEnter = () => {
-        contentRoot
-          .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
-          .forEach((el) => el.classList.add('hovered'));
+        contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+          .forEach(el => el.classList.add('hovered'));
       };
       const onLeave = () => {
-        contentRoot
-          .querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
-          .forEach((el) => el.classList.remove('hovered'));
+        contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${id}"]`)
+          .forEach(el => el.classList.remove('hovered'));
       };
-
       mark.addEventListener('mouseenter', onEnter);
       mark.addEventListener('mouseleave', onLeave);
-      controllers.push(() => {
+      cleanups.push(() => {
+        mark.removeEventListener('mouseenter', onEnter);
+        mark.removeEventListener('mouseleave', onLeave);
+      });
+    });
+
+    // 6. Hover handlers for grammar issues
+    const grammarMarks = contentRoot.querySelectorAll<HTMLElement>('[data-grammar-issue-id]');
+    grammarMarks.forEach(mark => {
+      const id = mark.getAttribute('data-grammar-issue-id');
+      if (!id) return;
+      const onEnter = () => onGrammarIssueHover(id, mark.getBoundingClientRect());
+      const onLeave = () => onGrammarIssueHover(null, null);
+      mark.addEventListener('mouseenter', onEnter);
+      mark.addEventListener('mouseleave', onLeave);
+      cleanups.push(() => {
         mark.removeEventListener('mouseenter', onEnter);
         mark.removeEventListener('mouseleave', onLeave);
       });
     });
 
     return () => {
-      controllers.forEach((cleanup) => cleanup());
-      contentRoot
-        .querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
-        .forEach((el) => el.classList.remove('hovered'));
+      contentRoot.removeEventListener('click', onClick);
+      cleanups.forEach(fn => fn());
+      // Clear visual states
+      contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
+        .forEach(el => el.classList.remove('hovered'));
     };
-  }, [contentRoot, highlights]);
-
-  // Grammar issue hover handler — attach mouseenter/mouseleave directly
-  // to each grammar mark span so the tooltip shows only while hovering.
-  useEffect(() => {
-    if (!contentRoot) return;
-
-    const marks = contentRoot.querySelectorAll<HTMLElement>('[data-grammar-issue-id]');
-    const controllers: Array<() => void> = [];
-
-    marks.forEach((mark) => {
-      const id = mark.getAttribute('data-grammar-issue-id');
-      if (!id) return;
-
-      const onEnter = () => onGrammarIssueHover(id, mark.getBoundingClientRect());
-      const onLeave = () => onGrammarIssueHover(null, null);
-
-      mark.addEventListener('mouseenter', onEnter);
-      mark.addEventListener('mouseleave', onLeave);
-      controllers.push(() => {
-        mark.removeEventListener('mouseenter', onEnter);
-        mark.removeEventListener('mouseleave', onLeave);
-      });
-    });
-
-    return () => controllers.forEach((cleanup) => cleanup());
-  }, [contentRoot, highlights, onGrammarIssueHover]);
+  }, [contentRoot, highlights, activeGradeCommentId, onGradeCommentSelect, onGrammarIssueHover]);
 
   return null; // overlay is pure DOM mutation, no JSX
 }
