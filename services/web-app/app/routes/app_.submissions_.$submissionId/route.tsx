@@ -336,7 +336,7 @@ export default function SubmissionRoute() {
           {isTeacher ? (
             <>
               <div className="flex items-center justify-between border-b px-4 py-2">
-                <span className="text-sm font-medium">Grading</span>
+                <span className="text-sm font-medium">Grade Summary</span>
                 <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1">
                   <Button
                     size="sm"
