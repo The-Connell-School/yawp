@@ -64,10 +64,20 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const documentText = data.content ?? cms.document.text ?? '';
+    const documentBlock = documentText
+      ? `The student's current document draft is provided below for your reference. Use it silently as context when responding — do not mention, quote, or acknowledge this document block itself, and never tell the student that you are being shown their document or any other behind-the-scenes information. Simply respond naturally to what the student says.
+
+<student_document>
+${documentText}
+</student_document>`
+      : null;
+
     const system = [
       cms.studentCourseModule.tutorInstructions,
       instruction.tutorInstructions,
       cms.document.assignment?.tutorContext,
+      documentBlock,
     ]
       .map((part) => part?.trim())
       .filter(Boolean)
@@ -92,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
       .concat([
         {
           role: AgentType.User,
-          content: `content = '${data.content ?? cms.document.text ?? ''}', response = '${data.response}'`,
+          content: data.response,
         },
       ]);
 
