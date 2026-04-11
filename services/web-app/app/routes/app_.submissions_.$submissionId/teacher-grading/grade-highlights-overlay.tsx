@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { findExcerptRange } from '~/utils/excerpt-position';
 
 export type GradeHighlight = {
@@ -132,7 +132,6 @@ function applyReviewHighlights(
       try {
         segmentRange.surroundContents(wrapper);
       } catch {
-        // Fallback when the browser rejects surroundContents due to stale boundaries.
         wrapper.appendChild(segmentRange.extractContents());
         segmentRange.insertNode(wrapper);
       }
@@ -155,108 +154,129 @@ export function GradeHighlightsOverlay({
   onGradeCommentSelect,
   onGrammarIssueHover,
 }: Props) {
+  // Store callbacks in refs so the mousemove effect never re-runs
+  // due to callback identity changes.
+  const commentSelectRef = useRef(onGradeCommentSelect);
+  commentSelectRef.current = onGradeCommentSelect;
+  const grammarHoverRef = useRef(onGrammarIssueHover);
+  grammarHoverRef.current = onGrammarIssueHover;
+
+  // ── Effect 1: Build/rebuild DOM marks when highlights change ──────
+  // This is the ONLY effect that touches the DOM structure.
   useEffect(() => {
     if (!contentRoot) return;
-
-    // 1. Clear and rebuild marks
     clearReviewMarks(contentRoot);
     applyReviewHighlights(contentRoot, highlights);
+    return () => {
+      if (contentRoot) clearReviewMarks(contentRoot);
+    };
+  }, [contentRoot, highlights]);
 
-    // 2. Apply focused class
-    contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark').forEach(el => {
-      el.classList.remove('focused');
-    });
+  // ── Effect 2: Apply focused class based on activeGradeCommentId ───
+  // Does NOT rebuild marks — only toggles a CSS class.
+  useEffect(() => {
+    if (!contentRoot) return;
+    contentRoot
+      .querySelectorAll<HTMLElement>('.grade-comment-mark')
+      .forEach((el) => el.classList.remove('focused'));
     if (activeGradeCommentId) {
-      contentRoot.querySelectorAll<HTMLElement>(
-        `[data-grade-comment-id="${activeGradeCommentId}"]`
-      ).forEach(el => el.classList.add('focused'));
-    }
-
-    // 3. Scroll active into view
-    if (activeGradeCommentId) {
+      contentRoot
+        .querySelectorAll<HTMLElement>(
+          `[data-grade-comment-id="${activeGradeCommentId}"]`
+        )
+        .forEach((el) => el.classList.add('focused'));
+      // Scroll into view
       const first = contentRoot.querySelector<HTMLElement>(
         `[data-grade-comment-id="${activeGradeCommentId}"]`
       );
       first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  }, [contentRoot, activeGradeCommentId, highlights]);
 
-    // 4. Click handler for grade comments
+  // ── Effect 3: Click + hover listeners on the contentRoot ──────────
+  // Attached ONCE to the contentRoot. Uses event delegation so it
+  // works regardless of whether marks have been rebuilt. Never re-runs
+  // due to callback changes (uses refs).
+  useEffect(() => {
+    if (!contentRoot) return;
+
+    let hoveredCommentId: string | null = null;
+    let hoveredGrammarId: string | null = null;
+
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
-      const mark = target?.closest('[data-grade-comment-id]') as HTMLElement | null;
+      const mark = target?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
       if (!mark) return;
       const id = mark.getAttribute('data-grade-comment-id');
-      if (id) onGradeCommentSelect(id);
-    };
-    contentRoot.addEventListener('click', onClick);
-
-    // 5+6. Single mousemove listener for all hover states.
-    // This avoids per-element listeners that go stale when marks are rebuilt.
-    // 5+6. Hover tracking via mousemove with elementFromPoint.
-    // Uses elementFromPoint instead of event.target to reliably find
-    // the mark element even when hovering over child text nodes.
-    // A small clear-delay prevents flicker on text node boundaries.
-    let currentHoveredCommentId: string | null = null;
-    let currentHoveredGrammarId: string | null = null;
-    let grammarClearTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const findMark = (x: number, y: number, attr: string): HTMLElement | null => {
-      const el = document.elementFromPoint(x, y);
-      if (!el) return null;
-      return el.closest(`[${attr}]`) as HTMLElement | null;
+      if (id) commentSelectRef.current(id);
     };
 
     const onMouseMove = (event: MouseEvent) => {
-      // --- Grade comment hover ---
-      const commentMark = findMark(event.clientX, event.clientY, 'data-grade-comment-id');
-      const commentId = commentMark?.getAttribute('data-grade-comment-id') ?? null;
+      const target = event.target as HTMLElement | null;
 
-      if (commentId !== currentHoveredCommentId) {
-        if (currentHoveredCommentId) {
-          contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${currentHoveredCommentId}"]`)
-            .forEach(el => el.classList.remove('hovered'));
+      // Comment hover
+      const commentMark = target?.closest(
+        '[data-grade-comment-id]'
+      ) as HTMLElement | null;
+      const commentId =
+        commentMark?.getAttribute('data-grade-comment-id') ?? null;
+
+      if (commentId !== hoveredCommentId) {
+        if (hoveredCommentId) {
+          contentRoot
+            .querySelectorAll<HTMLElement>(
+              `[data-grade-comment-id="${hoveredCommentId}"]`
+            )
+            .forEach((el) => el.classList.remove('hovered'));
         }
         if (commentId) {
-          contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${commentId}"]`)
-            .forEach(el => el.classList.add('hovered'));
+          contentRoot
+            .querySelectorAll<HTMLElement>(
+              `[data-grade-comment-id="${commentId}"]`
+            )
+            .forEach((el) => el.classList.add('hovered'));
         }
-        currentHoveredCommentId = commentId;
+        hoveredCommentId = commentId;
       }
 
-      // --- Grammar issue hover ---
-      const grammarMark = findMark(event.clientX, event.clientY, 'data-grammar-issue-id');
-      const grammarId = grammarMark?.getAttribute('data-grammar-issue-id') ?? null;
+      // Grammar hover
+      const grammarMark = target?.closest(
+        '[data-grammar-issue-id]'
+      ) as HTMLElement | null;
+      const grammarId =
+        grammarMark?.getAttribute('data-grammar-issue-id') ?? null;
 
-      if (grammarId !== currentHoveredGrammarId) {
-        // Cancel any pending clear
-        if (grammarClearTimer) { clearTimeout(grammarClearTimer); grammarClearTimer = null; }
-
+      if (grammarId !== hoveredGrammarId) {
         if (grammarId && grammarMark) {
-          onGrammarIssueHover(grammarId, grammarMark.getBoundingClientRect());
-          currentHoveredGrammarId = grammarId;
+          grammarHoverRef.current(
+            grammarId,
+            grammarMark.getBoundingClientRect()
+          );
         } else {
-          // Small delay before clearing — avoids flicker when crossing
-          // text node boundaries within the same mark
-          grammarClearTimer = setTimeout(() => {
-            onGrammarIssueHover(null, null);
-            currentHoveredGrammarId = null;
-            grammarClearTimer = null;
-          }, 50);
+          grammarHoverRef.current(null, null);
         }
+        hoveredGrammarId = grammarId;
       }
     };
 
     const onMouseLeave = () => {
-      if (currentHoveredCommentId) {
-        contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${currentHoveredCommentId}"]`)
-          .forEach(el => el.classList.remove('hovered'));
-        currentHoveredCommentId = null;
+      if (hoveredCommentId) {
+        contentRoot
+          .querySelectorAll<HTMLElement>(
+            `[data-grade-comment-id="${hoveredCommentId}"]`
+          )
+          .forEach((el) => el.classList.remove('hovered'));
+        hoveredCommentId = null;
       }
-      if (grammarClearTimer) { clearTimeout(grammarClearTimer); grammarClearTimer = null; }
-      onGrammarIssueHover(null, null);
-      currentHoveredGrammarId = null;
+      if (hoveredGrammarId) {
+        grammarHoverRef.current(null, null);
+        hoveredGrammarId = null;
+      }
     };
 
+    contentRoot.addEventListener('click', onClick);
     contentRoot.addEventListener('mousemove', onMouseMove);
     contentRoot.addEventListener('mouseleave', onMouseLeave);
 
@@ -264,12 +284,8 @@ export function GradeHighlightsOverlay({
       contentRoot.removeEventListener('click', onClick);
       contentRoot.removeEventListener('mousemove', onMouseMove);
       contentRoot.removeEventListener('mouseleave', onMouseLeave);
-      if (grammarClearTimer) clearTimeout(grammarClearTimer);
-      contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
-        .forEach(el => el.classList.remove('hovered'));
-      onGrammarIssueHover(null, null);
     };
-  }, [contentRoot, highlights, activeGradeCommentId, onGradeCommentSelect, onGrammarIssueHover]);
+  }, [contentRoot]); // Only depends on contentRoot — never re-runs for callback changes
 
-  return null; // overlay is pure DOM mutation, no JSX
+  return null;
 }

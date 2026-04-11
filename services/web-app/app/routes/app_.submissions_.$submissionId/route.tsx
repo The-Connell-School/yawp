@@ -324,6 +324,32 @@ export default function SubmissionRoute() {
     return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
   }, [grammarIssues, tooltipIssueId]);
 
+  const essayHighlights = useMemo(() => [
+    ...comments.map((c) => ({
+      id: c.id,
+      excerpt: c.excerpt,
+      occurrence: c.occurrence,
+      dataAttr: 'data-grade-comment-id' as const,
+      className: 'grade-comment-mark',
+    })),
+    ...visibleGrammarIssues.map((g) => ({
+      id: g.id,
+      excerpt: g.excerpt,
+      occurrence: g.occurrence,
+      dataAttr: 'data-grammar-issue-id' as const,
+      className: 'grammar-issue-mark',
+    })),
+    ...(draftHighlight
+      ? [{
+          id: 'draft',
+          excerpt: draftHighlight.excerpt,
+          occurrence: draftHighlight.occurrence,
+          dataAttr: 'data-grade-comment-id' as const,
+          className: 'grade-comment-mark draft',
+        }]
+      : []),
+  ], [comments, visibleGrammarIssues, draftHighlight]);
+
   const handleGrammarIssueHover = useCallback(
     (id: string | null, rect: DOMRect | null) => {
       setTooltipIssueId(id);
@@ -467,33 +493,7 @@ export default function SubmissionRoute() {
               <SelectionToolbar contentRoot={essayElement} />
               <GradeHighlightsOverlay
                 contentRoot={essayElement}
-                highlights={[
-                  ...comments.map((c) => ({
-                    id: c.id,
-                    excerpt: c.excerpt,
-                    occurrence: c.occurrence,
-                    dataAttr: 'data-grade-comment-id' as const,
-                    className: 'grade-comment-mark',
-                  })),
-                  ...visibleGrammarIssues.map((g) => ({
-                    id: g.id,
-                    excerpt: g.excerpt,
-                    occurrence: g.occurrence,
-                    dataAttr: 'data-grammar-issue-id' as const,
-                    className: 'grammar-issue-mark',
-                  })),
-                  ...(draftHighlight
-                    ? [
-                        {
-                          id: 'draft',
-                          excerpt: draftHighlight.excerpt,
-                          occurrence: draftHighlight.occurrence,
-                          dataAttr: 'data-grade-comment-id' as const,
-                          className: 'grade-comment-mark draft',
-                        },
-                      ]
-                    : []),
-                ]}
+                highlights={essayHighlights}
                 activeGradeCommentId={activeGradeCommentId}
                 onGradeCommentSelect={setActiveGradeCommentId}
                 onGrammarIssueHover={handleGrammarIssueHover}
