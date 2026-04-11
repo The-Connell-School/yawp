@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
+import { buildTutorSystemPrompt } from './build-system-prompt';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -64,14 +65,12 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const system = [
-      cms.studentCourseModule.tutorInstructions,
-      instruction.tutorInstructions,
-      cms.document.assignment?.tutorContext,
-    ]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join('\n\n');
+    const system = buildTutorSystemPrompt({
+      tutorInstructions: cms.studentCourseModule.tutorInstructions,
+      instructionTutorInstructions: instruction.tutorInstructions,
+      assignmentTutorContext: cms.document.assignment?.tutorContext,
+      documentText: data.content ?? cms.document.text,
+    });
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
@@ -92,7 +91,7 @@ export async function action({ request }: ActionFunctionArgs) {
       .concat([
         {
           role: AgentType.User,
-          content: `content = '${data.content ?? cms.document.text ?? ''}', response = '${data.response}'`,
+          content: data.response,
         },
       ]);
 
