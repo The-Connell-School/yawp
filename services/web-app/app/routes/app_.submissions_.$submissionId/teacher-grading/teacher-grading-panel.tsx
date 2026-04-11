@@ -333,7 +333,7 @@ export function TeacherGradingPanel({
           >
             <Button
               size="sm"
-              variant="secondary"
+              variant="default"
               data-testid="grading-assistant-generate"
               disabled={isBusy}
             >
