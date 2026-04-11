@@ -250,3 +250,16 @@ code {
   margin: 0;
   background-color: inherit;
 }
+.grade-comment-mark.draft {
+  background-color: #93c5fd44;
+  border-bottom: 2px dotted #3b82f6;
+}
+.grammar-issue-mark {
+  background-color: #fca5a530;
+  border-bottom: 2px wavy #ef4444;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.grammar-issue-mark:hover {
+  background-color: #fca5a560;
+}

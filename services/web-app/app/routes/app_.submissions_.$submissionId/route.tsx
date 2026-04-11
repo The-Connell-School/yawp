@@ -366,10 +366,10 @@ export default function SubmissionRoute() {
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div className="no-scrollbar shrink-0 overflow-y-auto border-r" style={{ width: 380 }}>
+        <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r" style={{ width: 380 }}>
           {isTeacher ? (
             <>
-              <div className="flex items-center justify-between border-b px-4 py-2">
+              <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
                 <span className="text-sm font-medium">Grade Summary</span>
                 <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1">
                   <Button
@@ -398,33 +398,37 @@ export default function SubmissionRoute() {
                   </Button>
                 </div>
               </div>
-              {isGradeMode ? (
-                <TeacherGradingPanel
-                  documentId={submission.documentId}
-                  submissionId={submission.id}
-                  existingGrade={{
-                    id: submission.id,
-                    score: submission.score,
-                    feedback: submission.feedback,
-                    rubricScores: submission.rubricScores,
-                    overallComment: submission.overallComment,
-                    numericPercentage: submission.numericPercentage,
-                    letterGrade: submission.letterGrade,
-                    releasedAt: submission.releasedAt,
-                  }}
-                  grammarIssues={grammarIssues}
-                  persistedGrammarIssues={persistedGrammarIssues}
-                  hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                  onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                  onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                  onGrammarIssuesChange={handleGrammarIssuesChange}
-                />
-              ) : (
-                <ViewPanel submission={submission} />
-              )}
+              <div className="no-scrollbar grow overflow-y-auto">
+                {isGradeMode ? (
+                  <TeacherGradingPanel
+                    documentId={submission.documentId}
+                    submissionId={submission.id}
+                    existingGrade={{
+                      id: submission.id,
+                      score: submission.score,
+                      feedback: submission.feedback,
+                      rubricScores: submission.rubricScores,
+                      overallComment: submission.overallComment,
+                      numericPercentage: submission.numericPercentage,
+                      letterGrade: submission.letterGrade,
+                      releasedAt: submission.releasedAt,
+                    }}
+                    grammarIssues={grammarIssues}
+                    persistedGrammarIssues={persistedGrammarIssues}
+                    hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+                    onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                    onRemoveGrammarIssue={handleRemoveGrammarIssue}
+                    onGrammarIssuesChange={handleGrammarIssuesChange}
+                  />
+                ) : (
+                  <ViewPanel submission={submission} />
+                )}
+              </div>
             </>
           ) : (
-            <ViewPanel submission={submission} />
+            <div className="no-scrollbar grow overflow-y-auto">
+              <ViewPanel submission={submission} />
+            </div>
           )}
         </div>
 
