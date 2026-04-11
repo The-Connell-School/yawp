@@ -257,8 +257,7 @@ code {
 .grammar-issue-mark {
   background-color: #d8b4fe30;
   border-bottom: 2px wavy #a855f7;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+  cursor: help;
 }
 .grammar-issue-mark:hover {
   background-color: #d8b4fe60;
