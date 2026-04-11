@@ -5,6 +5,12 @@ import { ArrowLeft } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 import { requireUserId, requireProfile } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -527,19 +533,25 @@ function ViewPanel({
           {rubricEntries.length > 0 ? (
             <div>
               <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
-              <div className="mt-2 space-y-3">
+              <Accordion type="multiple" className="mt-2">
                 {rubricEntries.map(({ key, score, comment }) => (
-                  <div key={key} className="border-b pb-2 last:border-0">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                      <span className="text-muted-foreground">{score}/5</span>
-                    </div>
-                    {comment ? (
-                      <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
-                    ) : null}
-                  </div>
+                  <AccordionItem key={key} value={key} className="border-b last:border-0">
+                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                      <div className="flex w-full items-center justify-between pr-2">
+                        <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                        <span className="text-muted-foreground">{score}/5</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      {comment ? (
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">No feedback for this category</p>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
                 ))}
-              </div>
+              </Accordion>
             </div>
           ) : null}
         </>
