@@ -106,13 +106,28 @@ export const Tutor = ({
   };
 
   const optimistic = tutorResponseFetcher.formData;
-  const optimisticMessage = optimistic
-    ? ({
-        agent: 'user',
-        createdAt: new Date(),
-        content: optimistic.get('response'),
-      } as any)
-    : null;
+  const optimisticContent = optimistic?.get('response');
+
+  // Hide the optimistic bubble once the matching real message has
+  // arrived in cms.messages. Without this, we render it alongside the
+  // tutor's reply during the brief revalidation window between "loader
+  // has returned new data" and "fetcher returns to idle" — and because
+  // createdAt is freshly minted on every render, the optimistic bubble
+  // sorts AFTER the tutor bubble instead of where the student put it.
+  const realMessageExists =
+    typeof optimisticContent === 'string' &&
+    cms.messages.some(
+      (m) => m.agent === 'user' && m.content === optimisticContent
+    );
+
+  const optimisticMessage =
+    optimistic && !realMessageExists
+      ? ({
+          agent: 'user',
+          createdAt: new Date(),
+          content: optimisticContent,
+        } as any)
+      : null;
 
   const user = useUser();
   const userIsAdmin = user.isAdmin;
