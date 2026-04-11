@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
+import { buildTutorSystemPrompt } from './build-system-prompt';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -64,24 +65,12 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const documentText = data.content ?? cms.document.text ?? '';
-    const documentBlock = documentText
-      ? `The student's current document draft is provided below for your reference. Use it silently as context when responding — do not mention, quote, or acknowledge this document block itself, and never tell the student that you are being shown their document or any other behind-the-scenes information. Simply respond naturally to what the student says.
-
-<student_document>
-${documentText}
-</student_document>`
-      : null;
-
-    const system = [
-      cms.studentCourseModule.tutorInstructions,
-      instruction.tutorInstructions,
-      cms.document.assignment?.tutorContext,
-      documentBlock,
-    ]
-      .map((part) => part?.trim())
-      .filter(Boolean)
-      .join('\n\n');
+    const system = buildTutorSystemPrompt({
+      tutorInstructions: cms.studentCourseModule.tutorInstructions,
+      instructionTutorInstructions: instruction.tutorInstructions,
+      assignmentTutorContext: cms.document.assignment?.tutorContext,
+      documentText: data.content ?? cms.document.text,
+    });
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
