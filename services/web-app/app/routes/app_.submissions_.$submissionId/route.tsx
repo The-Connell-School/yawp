@@ -453,7 +453,7 @@ export default function SubmissionRoute() {
   );
 }
 
-// ── View Panel (read-only grade summary + comments) ──────────────────
+// ── View Panel (read-only grade fields for student / view mode) ───────
 
 function ViewPanel({
   submission,
@@ -461,104 +461,47 @@ function ViewPanel({
   submission: {
     numericPercentage: number | null;
     letterGrade: string | null;
-    score: string | null;
-    overallScore: number | null;
     overallComment: string | null;
-    feedback: string | null;
     rubricScores: unknown;
-    comments: Array<{
-      id: string;
-      content: string;
-      excerpt: string | null;
-      occurrence: number | null;
-      createdAt: Date | string;
-      profile: {
-        user: { name: string | null; email: string };
-      };
-    }>;
   };
 }) {
-  const gradeDisplay =
-    formatGrade(
-      submission.numericPercentage ?? null,
-      submission.letterGrade ?? null
-    ) ||
-    submission.score ||
-    (submission.overallScore ? `${submission.overallScore}/5` : null);
-
-  const rubricScores = submission.rubricScores as Record<
-    string,
-    { score?: number; comment?: string }
-  > | null;
+  const rubricScores = (submission.rubricScores ?? {}) as Record<string, number>;
+  const hasGrade = submission.numericPercentage != null;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Grade summary */}
-      {gradeDisplay || submission.overallComment || submission.feedback ? (
-        <div className="border-b bg-green-50 p-4 dark:bg-green-950/20">
-          <div className="flex items-center gap-2">
-            <Badge variant="success">Grade Released</Badge>
-            {gradeDisplay ? (
-              <span className="text-sm font-medium">{gradeDisplay}</span>
-            ) : null}
-          </div>
-          {(submission.overallComment || submission.feedback) && (
-            <p className="mt-2 text-sm text-muted-foreground">
-              {submission.overallComment || submission.feedback}
+    <div className="p-4 space-y-4">
+      {hasGrade ? (
+        <>
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Overall Grade</h3>
+            <p className="text-2xl font-semibold">
+              {submission.numericPercentage}%
+              {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
             </p>
-          )}
-        </div>
-      ) : null}
-
-      {/* Rubric scores */}
-      {rubricScores && Object.keys(rubricScores).length > 0 ? (
-        <div className="border-b p-4">
-          <h3 className="mb-2 text-sm font-semibold">Rubric</h3>
-          <div className="space-y-2">
-            {Object.entries(rubricScores).map(([key, value]) => {
-              if (!value || typeof value !== 'object') return null;
-              const label = key
-                .replace(/_/g, ' ')
-                .replace(/\b\w/g, (c) => c.toUpperCase());
-              return (
-                <div key={key} className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{label}</span>
-                    <span className="text-muted-foreground">
-                      {value.score ? `${value.score}/5` : '\u2014'}
-                    </span>
+          </div>
+          {submission.overallComment ? (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Overall Feedback</h3>
+              <p className="mt-1 text-sm whitespace-pre-wrap">{submission.overallComment}</p>
+            </div>
+          ) : null}
+          {Object.keys(rubricScores).length > 0 ? (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
+              <div className="mt-1 space-y-2">
+                {Object.entries(rubricScores).map(([key, score]) => (
+                  <div key={key} className="flex items-center justify-between text-sm">
+                    <span>{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                    <span className="font-medium">{score}/5</span>
                   </div>
-                  {value.comment ? (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {value.comment}
-                    </p>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Comments */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <h3 className="mb-2 text-sm font-semibold">Feedback Comments</h3>
-        {submission.comments.length === 0 ? (
-          <p className="text-center text-sm text-muted-foreground">
-            No comments yet.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {submission.comments.map((comment) => (
-              <SubmissionCommentCard
-                key={comment.id}
-                comment={comment}
-                readOnly
-              />
-            ))}
-          </div>
-        )}
-      </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">Not yet graded</p>
+      )}
     </div>
   );
 }
