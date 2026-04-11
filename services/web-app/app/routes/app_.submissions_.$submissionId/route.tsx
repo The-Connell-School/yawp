@@ -2,7 +2,7 @@ import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, Link, useSearchParams, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -261,6 +261,20 @@ export default function SubmissionRoute() {
   const [activeGradeCommentId, setActiveGradeCommentId] = useState<
     string | null
   >(null);
+
+  // Clear active comment when clicking outside a highlight or comment card
+  useEffect(() => {
+    if (!activeGradeCommentId) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-grade-comment-id]')) return;
+      if (target.closest('[data-grade-comment-card]')) return;
+      setActiveGradeCommentId(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [activeGradeCommentId]);
   const [draftHighlight, setDraftHighlight] = useState<{
     excerpt: string;
     occurrence: number;
@@ -304,6 +318,11 @@ export default function SubmissionRoute() {
       left: Math.min(window.innerWidth - 16, tooltipRect.left),
     };
   }, [tooltipRect]);
+
+  const activeGrammarIssue = useMemo(() => {
+    if (!tooltipIssueId) return null;
+    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
+  }, [grammarIssues, tooltipIssueId]);
 
   const toggleGrammarIssueVisibility = useCallback((id: string) => {
     setHiddenGrammarIssueIds((prev) =>
@@ -493,6 +512,22 @@ export default function SubmissionRoute() {
           />
         </div>
       </div>
+
+      {/* Grammar issue tooltip — shown on hover over purple-highlighted text */}
+      {activeGrammarIssue && tooltipPos ? (
+        <div
+          className="pointer-events-none fixed z-50 max-w-sm rounded-lg border bg-white p-3 shadow-lg"
+          style={{ top: tooltipPos.top, left: tooltipPos.left }}
+        >
+          <p className="text-xs font-medium text-purple-700">
+            {activeGrammarIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
+          </p>
+          <p className="mt-1 text-sm">{activeGrammarIssue.message}</p>
+          {activeGrammarIssue.rule ? (
+            <p className="mt-1 text-xs text-muted-foreground">Rule: {activeGrammarIssue.rule}</p>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }
