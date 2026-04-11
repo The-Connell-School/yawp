@@ -196,11 +196,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function SubmissionRoute() {
   const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
     useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  // Local toggle state — initialized from loader, toggled by the edit/view pill
-  const [isEditing, setIsEditing] = useState(loaderGradeMode);
-  const isGradeMode = isTeacher && isEditing;
+  // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
+  const isGradeMode = isTeacher && (loaderGradeMode || searchParams.get('edit') === '1');
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -371,7 +370,11 @@ export default function SubmissionRoute() {
                     size="sm"
                     variant={isGradeMode ? 'secondary' : 'ghost'}
                     className="rounded-full px-3 text-xs"
-                    onClick={() => setIsEditing(true)}
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.set('edit', '1');
+                      setSearchParams(params, { replace: true });
+                    }}
                   >
                     Edit
                   </Button>
@@ -379,7 +382,11 @@ export default function SubmissionRoute() {
                     size="sm"
                     variant={!isGradeMode ? 'secondary' : 'ghost'}
                     className="rounded-full px-3 text-xs"
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.delete('edit');
+                      setSearchParams(params, { replace: true });
+                    }}
                   >
                     View
                   </Button>
@@ -418,7 +425,7 @@ export default function SubmissionRoute() {
         {/* Center: Essay */}
         <div className="flex min-w-0 grow flex-col overflow-hidden md:h-full">
           <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
-          {isGradeMode && essayElement ? (
+          {isTeacher && essayElement ? (
             <>
               <SelectionToolbar contentRoot={essayElement} />
               <GradeHighlightsOverlay
