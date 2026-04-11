@@ -5,7 +5,6 @@ import { ArrowLeft } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
-import { SubmissionCommentCard } from '~/components/submission-comment-card';
 import { requireUserId, requireProfile } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -20,6 +19,12 @@ import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
+
+// ── Revalidation ─────────────────────────────────────────────────────
+
+export function shouldRevalidate() {
+  return false;
+}
 
 // ── Loader ───────────────────────────────────────────────────────────
 
