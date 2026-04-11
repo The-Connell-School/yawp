@@ -192,14 +192,23 @@ export function GradeHighlightsOverlay({
 
     // 5+6. Single mousemove listener for all hover states.
     // This avoids per-element listeners that go stale when marks are rebuilt.
+    // 5+6. Hover tracking via mousemove with elementFromPoint.
+    // Uses elementFromPoint instead of event.target to reliably find
+    // the mark element even when hovering over child text nodes.
+    // A small clear-delay prevents flicker on text node boundaries.
     let currentHoveredCommentId: string | null = null;
     let currentHoveredGrammarId: string | null = null;
+    let grammarClearTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const findMark = (x: number, y: number, attr: string): HTMLElement | null => {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      return el.closest(`[${attr}]`) as HTMLElement | null;
+    };
 
     const onMouseMove = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-
       // --- Grade comment hover ---
-      const commentMark = target?.closest('[data-grade-comment-id]') as HTMLElement | null;
+      const commentMark = findMark(event.clientX, event.clientY, 'data-grade-comment-id');
       const commentId = commentMark?.getAttribute('data-grade-comment-id') ?? null;
 
       if (commentId !== currentHoveredCommentId) {
@@ -215,30 +224,37 @@ export function GradeHighlightsOverlay({
       }
 
       // --- Grammar issue hover ---
-      const grammarMark = target?.closest('[data-grammar-issue-id]') as HTMLElement | null;
+      const grammarMark = findMark(event.clientX, event.clientY, 'data-grammar-issue-id');
       const grammarId = grammarMark?.getAttribute('data-grammar-issue-id') ?? null;
 
       if (grammarId !== currentHoveredGrammarId) {
+        // Cancel any pending clear
+        if (grammarClearTimer) { clearTimeout(grammarClearTimer); grammarClearTimer = null; }
+
         if (grammarId && grammarMark) {
           onGrammarIssueHover(grammarId, grammarMark.getBoundingClientRect());
+          currentHoveredGrammarId = grammarId;
         } else {
-          onGrammarIssueHover(null, null);
+          // Small delay before clearing — avoids flicker when crossing
+          // text node boundaries within the same mark
+          grammarClearTimer = setTimeout(() => {
+            onGrammarIssueHover(null, null);
+            currentHoveredGrammarId = null;
+            grammarClearTimer = null;
+          }, 50);
         }
-        currentHoveredGrammarId = grammarId;
       }
     };
 
-    // Clear grammar tooltip when mouse leaves the content area entirely
     const onMouseLeave = () => {
       if (currentHoveredCommentId) {
         contentRoot.querySelectorAll<HTMLElement>(`[data-grade-comment-id="${currentHoveredCommentId}"]`)
           .forEach(el => el.classList.remove('hovered'));
         currentHoveredCommentId = null;
       }
-      if (currentHoveredGrammarId) {
-        onGrammarIssueHover(null, null);
-        currentHoveredGrammarId = null;
-      }
+      if (grammarClearTimer) { clearTimeout(grammarClearTimer); grammarClearTimer = null; }
+      onGrammarIssueHover(null, null);
+      currentHoveredGrammarId = null;
     };
 
     contentRoot.addEventListener('mousemove', onMouseMove);
@@ -248,6 +264,7 @@ export function GradeHighlightsOverlay({
       contentRoot.removeEventListener('click', onClick);
       contentRoot.removeEventListener('mousemove', onMouseMove);
       contentRoot.removeEventListener('mouseleave', onMouseLeave);
+      if (grammarClearTimer) clearTimeout(grammarClearTimer);
       contentRoot.querySelectorAll<HTMLElement>('.grade-comment-mark.hovered')
         .forEach(el => el.classList.remove('hovered'));
       onGrammarIssueHover(null, null);
