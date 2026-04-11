@@ -315,7 +315,7 @@ export function TeacherGradingPanel({
           : null;
 
   return (
-    <div className="flex h-full w-full flex-col border-r bg-muted/30 md:w-3/5">
+    <div className="flex h-full w-full flex-col bg-muted/30">
       <div className="border-b bg-white p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold">Grading</div>

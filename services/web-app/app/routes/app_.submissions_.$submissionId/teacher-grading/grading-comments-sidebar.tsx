@@ -217,7 +217,7 @@ export function GradingCommentsSidebar({
     : submissionComments;
 
   return (
-    <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll md:w-3/5">
+    <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="border-b p-2">
           <h2 className="text-sm font-semibold">Grade comments</h2>
