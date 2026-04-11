@@ -263,7 +263,9 @@ export function GradeHighlightsOverlay({
     };
   }, [contentRoot]);
 
-  // Grammar issue hover handler
+  // Grammar issue hover handler — use mouseover/mouseout with relatedTarget
+  // checks to avoid flicker when cursor moves between child nodes within
+  // the same grammar mark span.
   useEffect(() => {
     if (!contentRoot) return;
 
@@ -275,6 +277,12 @@ export function GradeHighlightsOverlay({
       if (!mark) return;
       const id = mark.getAttribute('data-grammar-issue-id');
       if (!id) return;
+
+      // Skip if we're moving within the same mark
+      const related = event.relatedTarget as HTMLElement | null;
+      const relatedMark = related?.closest('[data-grammar-issue-id]') as HTMLElement | null;
+      if (relatedMark?.getAttribute('data-grammar-issue-id') === id) return;
+
       onGrammarIssueHover(id, mark.getBoundingClientRect());
     };
 
@@ -284,6 +292,14 @@ export function GradeHighlightsOverlay({
         '[data-grammar-issue-id]'
       ) as HTMLElement | null;
       if (!mark) return;
+      const id = mark.getAttribute('data-grammar-issue-id');
+      if (!id) return;
+
+      // Skip if we're moving to another element within the same mark
+      const related = event.relatedTarget as HTMLElement | null;
+      const relatedMark = related?.closest('[data-grammar-issue-id]') as HTMLElement | null;
+      if (relatedMark?.getAttribute('data-grammar-issue-id') === id) return;
+
       onGrammarIssueHover(null, null);
     };
 

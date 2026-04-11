@@ -324,6 +324,14 @@ export default function SubmissionRoute() {
     return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
   }, [grammarIssues, tooltipIssueId]);
 
+  const handleGrammarIssueHover = useCallback(
+    (id: string | null, rect: DOMRect | null) => {
+      setTooltipIssueId(id);
+      setTooltipRect(rect);
+    },
+    []
+  );
+
   const toggleGrammarIssueVisibility = useCallback((id: string) => {
     setHiddenGrammarIssueIds((prev) =>
       prev.includes(id)
@@ -488,10 +496,7 @@ export default function SubmissionRoute() {
                 ]}
                 activeGradeCommentId={activeGradeCommentId}
                 onGradeCommentSelect={setActiveGradeCommentId}
-                onGrammarIssueHover={(id, rect) => {
-                  setTooltipIssueId(id);
-                  setTooltipRect(rect);
-                }}
+                onGrammarIssueHover={handleGrammarIssueHover}
               />
             </>
           ) : null}
