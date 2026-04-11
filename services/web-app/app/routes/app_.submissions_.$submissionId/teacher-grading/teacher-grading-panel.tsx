@@ -327,7 +327,7 @@ export function TeacherGradingPanel({
           <ConfirmationDialog
             title="Replace Existing Grading Feedback?"
             description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
-            confirmText="Replace with Grading Assistant Suggestions"
+            confirmText="Replace"
             cancelText="Go Back"
             onConfirm={generateAiSuggestions}
           >
