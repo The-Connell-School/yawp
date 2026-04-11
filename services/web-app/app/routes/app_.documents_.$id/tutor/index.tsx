@@ -24,6 +24,7 @@ import { useUser } from '~/hooks/useUser';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
+import { shouldSuppressOptimisticBubble } from './optimistic-bubble';
 import { ResponseBar } from './response-bar';
 
 type Props = {
@@ -106,13 +107,30 @@ export const Tutor = ({
   };
 
   const optimistic = tutorResponseFetcher.formData;
-  const optimisticMessage = optimistic
-    ? ({
-        agent: 'user',
-        createdAt: new Date(),
-        content: optimistic.get('response'),
-      } as any)
-    : null;
+  const optimisticContent = optimistic?.get('response');
+
+  // During the revalidation window (fetcher.state === 'loading'),
+  // formData is still set but cms.messages has already been refreshed
+  // to include the real user + tutor messages. Rendering the
+  // optimistic bubble in that window puts a stale copy of the
+  // student's message below the tutor's reply, because createdAt is
+  // re-minted on every render and sorts to the bottom. Suppress it
+  // only in that window, so double-sends during 'submitting' still
+  // render their own optimistic bubble.
+  const suppressOptimistic = shouldSuppressOptimisticBubble({
+    fetcherState: tutorResponseFetcher.state,
+    optimisticContent,
+    messages: cms.messages,
+  });
+
+  const optimisticMessage =
+    optimistic && !suppressOptimistic
+      ? ({
+          agent: 'user',
+          createdAt: new Date(),
+          content: optimisticContent,
+        } as any)
+      : null;
 
   const user = useUser();
   const userIsAdmin = user.isAdmin;
