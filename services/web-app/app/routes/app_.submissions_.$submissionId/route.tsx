@@ -238,6 +238,20 @@ export default function SubmissionRoute() {
       ? ('info-outlined' as const)
       : ('secondary' as const);
 
+  // ── Local comments state (optimistic, no revalidation) ─────────────
+  const [comments, setComments] = useState(submission.comments);
+  const handleCommentCreated = useCallback((comment: any) => {
+    setComments((prev) => [...prev, comment]);
+  }, []);
+  const handleCommentDeleted = useCallback((commentId: string) => {
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  }, []);
+  const handleCommentUpdated = useCallback((commentId: string, content: string) => {
+    setComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, content } : c))
+    );
+  }, []);
+
   // ── Grade mode state ───────────────────────────────────────────────
   const [activeGradeCommentId, setActiveGradeCommentId] = useState<
     string | null
@@ -410,7 +424,7 @@ export default function SubmissionRoute() {
               <GradeHighlightsOverlay
                 contentRoot={essayElement}
                 highlights={[
-                  ...submission.comments.map((c) => ({
+                  ...comments.map((c) => ({
                     id: c.id,
                     excerpt: c.excerpt,
                     occurrence: c.occurrence,
@@ -450,12 +464,15 @@ export default function SubmissionRoute() {
         {/* Right: Feedback comments */}
         <div className="no-scrollbar shrink-0 overflow-y-auto border-l" style={{ width: 320 }}>
           <GradingCommentsSidebar
-            submissionComments={submission.comments as any}
+            submissionComments={comments as any}
             submissionId={submission.id}
             sourceText={submission.text ?? ''}
             activeGradeCommentId={activeGradeCommentId}
             onSelectGradeComment={setActiveGradeCommentId}
             onDraftHighlightChange={setDraftHighlight}
+            onCommentCreated={handleCommentCreated}
+            onCommentDeleted={handleCommentDeleted}
+            onCommentUpdated={handleCommentUpdated}
           />
         </div>
       </div>

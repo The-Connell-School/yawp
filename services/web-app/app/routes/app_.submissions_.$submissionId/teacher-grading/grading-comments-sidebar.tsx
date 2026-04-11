@@ -34,6 +34,9 @@ type Props = {
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
   onDraftHighlightChange?: (highlight: { excerpt: string; occurrence: number } | null) => void;
+  onCommentCreated?: (comment: SubmissionComment) => void;
+  onCommentDeleted?: (commentId: string) => void;
+  onCommentUpdated?: (commentId: string, content: string) => void;
 };
 
 function sortByDocumentLocation<T extends { createdAt: Date | string }>(
@@ -72,6 +75,9 @@ export function GradingCommentsSidebar({
   activeGradeCommentId = null,
   onSelectGradeComment,
   onDraftHighlightChange,
+  onCommentCreated,
+  onCommentDeleted,
+  onCommentUpdated,
 }: Props) {
   const [draftComment, setDraftComment] = useState<DraftComment | null>(null);
   const [draftContent, setDraftContent] = useState('');
@@ -141,11 +147,14 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (createFetcher.data?.success && createFetcher.state === 'idle') {
+      const created = (createFetcher.data as any).comment;
+      if (created && onCommentCreated) {
+        onCommentCreated(created);
+      }
       setDraftComment(null);
       setDraftContent('');
-      window.location.reload();
     }
-  }, [createFetcher.data, createFetcher.state]);
+  }, [createFetcher.data, createFetcher.state, onCommentCreated]);
 
   const cancelDraft = () => {
     setDraftComment(null);
@@ -181,17 +190,22 @@ export function GradingCommentsSidebar({
 
   useEffect(() => {
     if (deleteFetcher.data?.success && deleteFetcher.state === 'idle') {
-      window.location.reload();
+      const deletedId = (deleteFetcher.data as any).commentId;
+      if (deletedId && onCommentDeleted) {
+        onCommentDeleted(deletedId);
+      }
     }
-  }, [deleteFetcher.data, deleteFetcher.state]);
+  }, [deleteFetcher.data, deleteFetcher.state, onCommentDeleted]);
 
   useEffect(() => {
     if (updateFetcher.data?.success && updateFetcher.state === 'idle') {
+      if (editingCommentId && onCommentUpdated) {
+        onCommentUpdated(editingCommentId, editCommentContent);
+      }
       setEditingCommentId(null);
       setEditCommentContent('');
-      window.location.reload();
     }
-  }, [updateFetcher.data, updateFetcher.state]);
+  }, [updateFetcher.data, updateFetcher.state, editingCommentId, editCommentContent, onCommentUpdated]);
 
   useEffect(() => {
     if (!activeGradeCommentId || activeGradeCommentId === 'draft') return;

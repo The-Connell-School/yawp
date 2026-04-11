@@ -41,7 +41,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (request.method === 'DELETE') {
     await prisma.submissionComment.delete({ where: { id: params.id } });
-    return dataResponse({ success: true }, { status: 200 });
+    return dataResponse({ success: true, commentId: params.id }, { status: 200 });
   }
 
   // POST — update comment content
