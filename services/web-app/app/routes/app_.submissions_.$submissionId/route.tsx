@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link, useSearchParams, useNavigate } from 'react-router';
+import { useLoaderData, Link, useSearchParams, useNavigate, useFetcher } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
@@ -398,6 +398,35 @@ export default function SubmissionRoute() {
     );
   }, []);
 
+  // ── Release grade ──────────────────────────────────────────────────
+  const releaseFetcher = useFetcher<{ success?: boolean }>();
+  const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const isReleased = localReleasedAt !== null || submission.releasedAt !== null;
+  const isGraded = submission.gradedAt !== null;
+  const canRelease = isTeacher && isGraded && !isReleased;
+  const isReleasing = releaseFetcher.state !== 'idle';
+
+  const lastHandledReleaseRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (
+      releaseFetcher.data?.success &&
+      releaseFetcher.state === 'idle' &&
+      releaseFetcher.data !== lastHandledReleaseRef.current
+    ) {
+      lastHandledReleaseRef.current = releaseFetcher.data;
+      setLocalReleasedAt(new Date().toISOString());
+    }
+  }, [releaseFetcher.data, releaseFetcher.state]);
+
+  const handleReleaseGrade = useCallback(() => {
+    const formData = new FormData();
+    formData.append('submissionIds', submission.id);
+    releaseFetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/release-grades',
+    });
+  }, [submission.id, releaseFetcher]);
+
   // ── Paths ──────────────────────────────────────────────────────────
   const revisePath = `/app/documents/${submission.documentId}?revise=1`;
   const editGradePath = `/app/submissions/${submission.id}?edit=1`;
@@ -439,6 +468,20 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Teacher: Release grade to student */}
+          {canRelease ? (
+            <Button
+              size="sm"
+              variant="default"
+              onClick={handleReleaseGrade}
+              disabled={isReleasing}
+            >
+              {isReleasing ? 'Releasing...' : 'Release Grade'}
+            </Button>
+          ) : null}
+          {isTeacher && isReleased ? (
+            <Badge variant="success" className="shrink-0">Released</Badge>
+          ) : null}
           {/* Student: Revise Essay link */}
           {isOwner ? (
             <Button size="sm" variant="outline" asChild>
