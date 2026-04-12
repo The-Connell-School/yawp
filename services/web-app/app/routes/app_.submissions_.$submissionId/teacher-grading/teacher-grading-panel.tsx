@@ -29,7 +29,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 
@@ -316,14 +316,37 @@ export function TeacherGradingPanel({
 
   return (
     <div className="flex h-full w-full flex-col bg-muted/30">
-      <div className="border-b bg-white p-3">
+      <div className="border-b bg-white p-3 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-sm font-semibold">Grading</div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-flex h-1.5 w-1.5 rounded-full',
+                autoSaveStatus === 'saving' && 'bg-muted-foreground animate-pulse',
+                autoSaveStatus === 'saved' && 'bg-green-500',
+                autoSaveStatus === 'error' && 'bg-red-500',
+                autoSaveStatus === 'idle' && 'bg-muted-foreground/30'
+              )}
+            />
+            <span
+              data-testid="grading-auto-save-status"
+              className={cn(
+                'text-xs',
+                autoSaveStatus === 'saving' && 'text-muted-foreground',
+                autoSaveStatus === 'saved' && 'text-green-600',
+                autoSaveStatus === 'error' && 'text-red-600',
+                autoSaveStatus === 'idle' && 'text-muted-foreground/60'
+              )}
+            >
+              {statusLabel ?? 'Autosave on'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
           <Badge variant="secondary" className={gradeBadgeClassName}>
             {gradeDisplay}
           </Badge>
-        </div>
-        <div className="mt-2">
           <ConfirmationDialog
             title="Replace Existing Grading Feedback?"
             description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
@@ -336,41 +359,20 @@ export function TeacherGradingPanel({
               variant="default"
               data-testid="grading-assistant-generate"
               disabled={isBusy}
-              className="w-full"
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Grading...
                 </>
               ) : (
-                'Grading Assistant Suggestions'
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Suggestions
+                </>
               )}
             </Button>
           </ConfirmationDialog>
-        </div>
-        <div className="mt-2 flex items-center gap-1.5">
-          <span
-            className={cn(
-              'inline-flex h-1.5 w-1.5 rounded-full',
-              autoSaveStatus === 'saving' && 'bg-muted-foreground animate-pulse',
-              autoSaveStatus === 'saved' && 'bg-green-500',
-              autoSaveStatus === 'error' && 'bg-red-500',
-              autoSaveStatus === 'idle' && 'bg-muted-foreground/30'
-            )}
-          />
-          <span
-            data-testid="grading-auto-save-status"
-            className={cn(
-              'text-xs',
-              autoSaveStatus === 'saving' && 'text-muted-foreground',
-              autoSaveStatus === 'saved' && 'text-green-600',
-              autoSaveStatus === 'error' && 'text-red-600',
-              autoSaveStatus === 'idle' && 'text-muted-foreground/60'
-            )}
-          >
-            {statusLabel ?? 'Autosave on'}
-          </span>
         </div>
       </div>
 
