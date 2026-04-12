@@ -334,9 +334,9 @@ export const Tutor = ({
               ? undefined
               : 'border-t-0'
           }
-          buttons={[]}
+          buttons={instruction.buttons ?? []}
           respond={respond}
-          showChatButton
+          showChatButton={!!instruction.showChatButton}
           showNextButton={false}
           disabled={isSessionLocked}
         />
