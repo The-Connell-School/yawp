@@ -205,7 +205,10 @@ export default function SubmissionRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
-  const isGradeMode = isTeacher && (loaderGradeMode || searchParams.get('edit') === '1');
+  // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
+  // When no param, fall back to loader default (ungraded = grade mode).
+  const editParam = searchParams.get('edit');
+  const isGradeMode = isTeacher && (editParam !== null ? editParam === '1' : loaderGradeMode);
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -460,7 +463,7 @@ export default function SubmissionRoute() {
                     className="rounded-full px-3 text-xs"
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
-                      params.delete('edit');
+                      params.set('edit', '0');
                       setSearchParams(params, { replace: true });
                     }}
                   >
