@@ -387,11 +387,8 @@ export const Tutor = ({
           showNextButton={!!instruction.showNextButton}
           disabled={isSessionLocked}
           advanceInstruction={
-            isLastCmInstruction
-              ? (label?: string) => {
-                  incrementInstruction(label);
-                  advanceToNextCourseModule();
-                }
+            isLastCmInstruction && nextCmId
+              ? () => advanceToNextCourseModule()
               : incrementInstruction
           }
         />
