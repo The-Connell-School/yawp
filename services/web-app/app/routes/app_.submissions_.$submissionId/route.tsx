@@ -11,6 +11,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '~/components/ui/accordion';
+import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireUserId, requireProfile } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -470,14 +471,21 @@ export default function SubmissionRoute() {
         <div className="ml-auto flex items-center gap-2">
           {/* Teacher: Release grade to student */}
           {canRelease ? (
-            <Button
-              size="sm"
-              variant="default"
-              onClick={handleReleaseGrade}
-              disabled={isReleasing}
+            <ConfirmationDialog
+              title="Release Grade?"
+              description="This will make the grade and all feedback visible to the student. This action cannot be undone."
+              confirmText="Release"
+              cancelText="Cancel"
+              onConfirm={handleReleaseGrade}
             >
-              {isReleasing ? 'Releasing...' : 'Release Grade'}
-            </Button>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={isReleasing}
+              >
+                {isReleasing ? 'Releasing...' : 'Release Grade'}
+              </Button>
+            </ConfirmationDialog>
           ) : null}
           {isTeacher && isReleased ? (
             <Badge variant="success" className="shrink-0">Released</Badge>
