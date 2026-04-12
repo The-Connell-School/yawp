@@ -240,14 +240,12 @@ export function GradingCommentsSidebar({
     }
   }, [activeGradeCommentId, draftComment]);
 
-  const combinedItems = draftComment
-    ? sortByDocumentLocation(
-        [...submissionComments, draftComment],
-        sourceText,
-        (c) => ('excerpt' in c ? c.excerpt : null),
-        (c) => ('occurrence' in c ? c.occurrence : 1)
-      )
-    : submissionComments;
+  const combinedItems = sortByDocumentLocation(
+    draftComment ? [...submissionComments, draftComment] : [...submissionComments],
+    sourceText,
+    (c) => ('excerpt' in c ? c.excerpt : null),
+    (c) => ('occurrence' in c ? c.occurrence : 1)
+  );
 
   return (
     <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
