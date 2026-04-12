@@ -432,9 +432,9 @@ export default function SubmissionRoute() {
   const editGradePath = `/app/submissions/${submission.id}?edit=1`;
 
   return (
-    <main className="flex h-screen flex-col">
+    <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-3 border-b bg-white px-3 py-2">
+      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-3 border-b px-3 py-2">
         <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => navigate(exitTarget)}>
           <ArrowLeft className="h-4 w-4" />
           Back
