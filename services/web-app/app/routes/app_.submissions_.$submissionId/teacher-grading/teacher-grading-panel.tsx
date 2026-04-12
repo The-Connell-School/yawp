@@ -29,7 +29,7 @@ import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
 } from '~/domain/grading/grammarIssues';
-import { Check, Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 
@@ -366,10 +366,7 @@ export function TeacherGradingPanel({
                   Grading...
                 </>
               ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Suggestions
-                </>
+                'Grading Assistant Suggestions'
               )}
             </Button>
           </ConfirmationDialog>
