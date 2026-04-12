@@ -540,7 +540,7 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div className="no-scrollbar shrink-0 overflow-hidden border-l" style={{ width: 320 }}>
+        <div className="no-scrollbar shrink-0 overflow-y-auto border-l" style={{ width: 320 }}>
           <GradingCommentsSidebar
             submissionComments={comments as any}
             submissionId={submission.id}
@@ -610,41 +610,39 @@ function ViewPanel({
   const hasGrade = submission.numericPercentage != null;
 
   return (
-    <div className="p-4 space-y-5">
+    <div className="p-4 space-y-4">
       {hasGrade ? (
         <>
-          <div className="rounded-lg border bg-muted/30 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overall Grade</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums">
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground">Overall Grade</h3>
+            <p className="text-2xl font-semibold">
               {submission.numericPercentage}%
+              {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
             </p>
-            {submission.letterGrade ? (
-              <p className="text-sm font-medium text-muted-foreground">{submission.letterGrade}</p>
-            ) : null}
           </div>
           {submission.overallComment ? (
             <div>
-              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overall Feedback</h3>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{submission.overallComment}</p>
+              <h3 className="text-sm font-medium text-muted-foreground">Overall Feedback</h3>
+              <p className="mt-1 text-sm whitespace-pre-wrap">{submission.overallComment}</p>
             </div>
           ) : null}
           {rubricEntries.length > 0 ? (
             <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubric Breakdown</h3>
-              <Accordion type="multiple" className="rounded-lg border">
+              <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
+              <Accordion type="multiple" className="mt-2">
                 {rubricEntries.map(({ key, score, comment }) => (
-                  <AccordionItem key={key} value={key} className="border-b px-1 last:border-0">
-                    <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
+                  <AccordionItem key={key} value={key} className="border-b last:border-0">
+                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
                       <div className="flex w-full items-center justify-between pr-2">
                         <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                        <span className="text-xs font-semibold tabular-nums text-muted-foreground">{score}/5</span>
+                        <span className="text-muted-foreground">{score}/5</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent className="pb-3 pt-0">
+                    <AccordionContent>
                       {comment ? (
-                        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{comment}</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
                       ) : (
-                        <p className="text-sm italic text-muted-foreground/60">No feedback for this category.</p>
+                        <p className="text-xs text-muted-foreground italic">No feedback for this category</p>
                       )}
                     </AccordionContent>
                   </AccordionItem>

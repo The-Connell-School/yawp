@@ -315,9 +315,15 @@ export function TeacherGradingPanel({
           : null;
 
   return (
-    <div className="flex h-full w-full flex-col bg-muted/20">
-      <div className="border-b bg-white px-4 py-3 space-y-3">
+    <div className="flex h-full w-full flex-col bg-muted/30">
+      <div className="border-b bg-white p-3">
         <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold">Grading</div>
+          <Badge variant="secondary" className={gradeBadgeClassName}>
+            {gradeDisplay}
+          </Badge>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
           <ConfirmationDialog
             title="Replace Existing Grading Feedback?"
             description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
@@ -327,53 +333,51 @@ export function TeacherGradingPanel({
           >
             <Button
               size="sm"
-              variant="outline"
-              className="h-8 flex-1 text-xs font-medium"
+              variant="default"
               data-testid="grading-assistant-generate"
               disabled={isBusy}
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  Generating suggestions…
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Grading...
                 </>
               ) : (
-                'AI Grading Suggestions'
+                'Grading Assistant Suggestions'
               )}
             </Button>
           </ConfirmationDialog>
-          <Badge variant="secondary" className={cn(gradeBadgeClassName, 'shrink-0 tabular-nums')}>
-            {gradeDisplay}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              'inline-flex h-1.5 w-1.5 rounded-full',
-              autoSaveStatus === 'saving' && 'bg-muted-foreground animate-pulse',
-              autoSaveStatus === 'saved' && 'bg-green-500',
-              autoSaveStatus === 'error' && 'bg-red-500',
-              autoSaveStatus === 'idle' && 'bg-muted-foreground/30'
-            )}
-          />
-          <span
-            data-testid="grading-auto-save-status"
-            className={cn(
-              'text-xs',
-              autoSaveStatus === 'saving' && 'text-muted-foreground',
-              autoSaveStatus === 'saved' && 'text-green-600',
-              autoSaveStatus === 'error' && 'text-red-600',
-              autoSaveStatus === 'idle' && 'text-muted-foreground/60'
-            )}
-          >
-            {statusLabel ?? 'Autosave on'}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                'inline-flex h-1.5 w-1.5 rounded-full',
+                autoSaveStatus === 'saving' && 'bg-muted-foreground animate-pulse',
+                autoSaveStatus === 'saved' && 'bg-green-500',
+                autoSaveStatus === 'error' && 'bg-red-500',
+                autoSaveStatus === 'idle' && 'bg-muted-foreground/30'
+              )}
+            />
+            <span
+              data-testid="grading-auto-save-status"
+              className={cn(
+                'text-xs',
+                autoSaveStatus === 'saving' && 'text-muted-foreground',
+                autoSaveStatus === 'saved' && 'text-green-600',
+                autoSaveStatus === 'error' && 'text-red-600',
+                autoSaveStatus === 'idle' && 'text-muted-foreground/60'
+              )}
+            >
+              {statusLabel ?? 'Autosave on'}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto p-4 space-y-5">
-        <div className="space-y-1.5">
-          <Label htmlFor="pct" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overall Percentage</Label>
+      <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
+        <div className="rounded-lg bg-white/70 p-2 space-y-2">
+          <div className="flex items-center gap-2">
+            <Label htmlFor="pct">Overall Percentage</Label>
+          </div>
           <div className="flex gap-2">
             <Input
               id="pct"
@@ -388,7 +392,6 @@ export function TeacherGradingPanel({
                 setHasManualPercentOverride(true);
               }}
               onBlur={() => saveAll()}
-              className="tabular-nums"
             />
             <Button
               type="button"
@@ -400,7 +403,7 @@ export function TeacherGradingPanel({
                 isGenerating
               }
               className={cn(
-                'shrink-0 min-w-[110px] transition-all',
+                'min-w-[120px] transition-all',
                 recalcUiState !== 'idle' &&
                   'border-muted-foreground/30 bg-muted/50 text-muted-foreground'
               )}
@@ -408,7 +411,7 @@ export function TeacherGradingPanel({
               {recalcUiState === 'loading' ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : recalcUiState === 'done' ? (
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-muted-foreground" />
               ) : (
                 'Recalculate'
               )}
@@ -416,8 +419,8 @@ export function TeacherGradingPanel({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="overall-comment" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overall Feedback</Label>
+        <div className="space-y-2">
+          <Label htmlFor="overall-comment">Overall Feedback</Label>
           <Textarea
             id="overall-comment"
             data-testid="grading-overall-comment"
@@ -426,13 +429,13 @@ export function TeacherGradingPanel({
             onChange={(e) => setOverallComment(e.target.value)}
             onBlur={() => saveAll()}
             rows={4}
-            placeholder="Write overall feedback for the student…"
+            placeholder="Write overall feedback..."
           />
         </div>
 
-        <div className="space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubric</div>
-          <Accordion type="multiple" className="w-full rounded-lg border bg-white">
+        <div className="space-y-3">
+          <div className="text-sm font-medium">Rubric</div>
+          <Accordion type="multiple" className="w-full rounded-lg bg-white">
             {rubricCategories.map((item) => {
               const current = rubricScores[item.key] || {
                 score: 0,
@@ -450,21 +453,18 @@ export function TeacherGradingPanel({
                 <AccordionItem
                   key={item.key}
                   value={item.key}
-                  className="px-1 last:border-b-0"
+                  className="last:border-b-0"
                 >
                   <AccordionTrigger className="py-3 hover:no-underline">
                     <div className="flex w-full items-center justify-between gap-3 pr-2">
                       <div className="text-sm font-medium">{item.label}</div>
-                      <span className={cn(
-                        'text-xs font-semibold tabular-nums',
-                        current.score > 0 ? 'text-foreground' : 'text-muted-foreground'
-                      )}>
+                      <span className="text-xs font-medium text-muted-foreground">
                         {scoreLabel}
                       </span>
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-3 pb-4">
-                    <div className="text-xs leading-relaxed text-muted-foreground">
+                  <AccordionContent className="space-y-2 pb-3">
+                    <div className="text-xs text-muted-foreground">
                       {item.description}
                     </div>
                     <Select
@@ -520,14 +520,15 @@ export function TeacherGradingPanel({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs text-muted-foreground">
-                            {shownGrammarCount} of {grammarIssues.length} issue{grammarIssues.length !== 1 ? 's' : ''} visible
+                            AI grammar issues shown: {shownGrammarCount}/
+                            {grammarIssues.length}
                           </p>
                           {grammarIssues.length > 0 ? (
                             <Button
                               type="button"
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-2 text-xs"
+                              className="h-7 px-2 text-xs"
                               disabled={isGenerating}
                               onClick={() => {
                                 const shouldShowAll =
@@ -551,8 +552,9 @@ export function TeacherGradingPanel({
                           ) : null}
                         </div>
                         {grammarIssues.length === 0 ? (
-                          <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                            No issues found yet. Use AI Grading Suggestions to detect grammar and style errors.
+                          <p className="text-xs text-muted-foreground">
+                            No grammar/syntax issues yet. Generate suggestions
+                            from Grading Assistant to populate this list.
                           </p>
                         ) : (
                           <div className="space-y-2">
@@ -564,26 +566,23 @@ export function TeacherGradingPanel({
                               return (
                                 <div
                                   key={issue.id}
-                                  className={cn(
-                                    'rounded-md border bg-white p-2.5 transition-opacity',
-                                    isHidden && 'opacity-50'
-                                  )}
+                                  className="rounded-md border bg-white p-2"
                                 >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <p className="text-xs font-semibold text-purple-700">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-medium text-muted-foreground">
                                       {issue.kind === 'style'
                                         ? 'Style'
                                         : 'Grammar'}
                                       {issue.ruleNumber
-                                        ? ` · Rule ${issue.ruleNumber}`
+                                        ? ` • Rule ${issue.ruleNumber}`
                                         : ''}
                                     </p>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-2">
                                       <Button
                                         type="button"
                                         size="sm"
-                                        variant="ghost"
-                                        className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
                                         disabled={isGenerating}
                                         onClick={() =>
                                           onToggleGrammarIssue(issue.id)
@@ -594,8 +593,8 @@ export function TeacherGradingPanel({
                                       <Button
                                         type="button"
                                         size="sm"
-                                        variant="ghost"
-                                        className="h-6 px-1.5 text-xs text-muted-foreground hover:text-destructive"
+                                        variant="outline"
+                                        className="h-7 px-2 text-xs"
                                         disabled={isGenerating}
                                         onClick={() =>
                                           onRemoveGrammarIssue(issue.id)
@@ -605,10 +604,10 @@ export function TeacherGradingPanel({
                                       </Button>
                                     </div>
                                   </div>
-                                  <p className="mt-1 text-xs italic text-muted-foreground">
+                                  <p className="mt-1 text-sm italic">
                                     "{formatExcerpt(issue.excerpt)}"
                                   </p>
-                                  <p className="mt-1 text-xs leading-relaxed text-foreground/80">
+                                  <p className="mt-1 text-xs text-muted-foreground">
                                     {issue.message}
                                   </p>
                                 </div>
