@@ -328,24 +328,18 @@ export const Tutor = ({
         </div>
       )}
       {cmsIdx !== 0 ? (
-        <div
-          className={cn(
-            'flex flex-col items-center justify-center p-4',
+        <ResponseBar
+          className={
             messagesExpanded && !cms.studentCourseModule.isSelfGuided
-              ? 'border-t'
-              : undefined
-          )}
-        >
-          <p className="mb-4 text-center text-sm text-muted-foreground">
-            This step has been completed. Click next to continue.
-          </p>
-          <Button
-            disabled={isSessionLocked}
-            onClick={() => navigateToCmsIdx(nextCmsIdx)}
-          >
-            Next <ArrowRightIcon size={18} className="ml-2" />
-          </Button>
-        </div>
+              ? undefined
+              : 'border-t-0'
+          }
+          buttons={[]}
+          respond={respond}
+          showChatButton
+          showNextButton={false}
+          disabled={isSessionLocked}
+        />
       ) : finishedCms && nextCmId ? (
         <div
           className={cn(
