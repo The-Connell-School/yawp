@@ -281,6 +281,8 @@ export default function SubmissionRoute() {
   } | null>(null);
   const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+  const tooltipHoveredRef = useRef(false);
+  const tooltipClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persistedGrammarIssues = useMemo(
     () =>
@@ -352,8 +354,23 @@ export default function SubmissionRoute() {
 
   const handleGrammarIssueHover = useCallback(
     (id: string | null, rect: DOMRect | null) => {
-      setTooltipIssueId(id);
-      setTooltipRect(rect);
+      if (tooltipClearTimerRef.current) {
+        clearTimeout(tooltipClearTimerRef.current);
+        tooltipClearTimerRef.current = null;
+      }
+      if (id) {
+        setTooltipIssueId(id);
+        setTooltipRect(rect);
+      } else {
+        // Delay clear so cursor can move from mark to tooltip
+        tooltipClearTimerRef.current = setTimeout(() => {
+          if (!tooltipHoveredRef.current) {
+            setTooltipIssueId(null);
+            setTooltipRect(null);
+          }
+          tooltipClearTimerRef.current = null;
+        }, 100);
+      }
     },
     []
   );
@@ -521,15 +538,27 @@ export default function SubmissionRoute() {
       {/* Grammar issue tooltip — shown on hover over purple-highlighted text */}
       {activeGrammarIssue && tooltipPos ? (
         <div
-          className="pointer-events-none fixed z-50 max-w-sm rounded-lg border bg-white p-3 shadow-lg"
+          className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 shadow-lg"
           style={{ top: tooltipPos.top, left: tooltipPos.left }}
+          onMouseEnter={() => {
+            tooltipHoveredRef.current = true;
+            if (tooltipClearTimerRef.current) {
+              clearTimeout(tooltipClearTimerRef.current);
+              tooltipClearTimerRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            tooltipHoveredRef.current = false;
+            setTooltipIssueId(null);
+            setTooltipRect(null);
+          }}
         >
           <p className="text-xs font-medium text-purple-700">
             {activeGrammarIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
           </p>
-          <p className="mt-1 text-sm">{activeGrammarIssue.message}</p>
+          <p className="mt-1 text-sm select-text">{activeGrammarIssue.message}</p>
           {activeGrammarIssue.rule ? (
-            <p className="mt-1 text-xs text-muted-foreground">Rule: {activeGrammarIssue.rule}</p>
+            <p className="mt-1 text-xs text-muted-foreground select-text">Rule: {activeGrammarIssue.rule}</p>
           ) : null}
         </div>
       ) : null}
