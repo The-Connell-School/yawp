@@ -248,22 +248,22 @@ export function GradingCommentsSidebar({
   );
 
   return (
-    <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center border-b px-4 py-2.5">
+        <h2 className="text-sm font-semibold">Comments</h2>
+      </div>
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="border-b p-2">
-          <h2 className="text-sm font-semibold">Grade comments</h2>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
+        <div className="no-scrollbar flex-1 overflow-y-auto p-3">
           {combinedItems.length === 0 ? (
-            <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
-              <MessageSquarePlus className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
-              <p className="text-sm font-medium text-muted-foreground">No feedback yet</p>
-              <p className="text-xs leading-relaxed text-muted-foreground/70">
-                Select text in the essay, then click the Comment button to add your first note.
+            <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
+              <MessageSquarePlus className="h-8 w-8 text-muted-foreground/30" strokeWidth={1.5} />
+              <p className="text-sm font-medium text-muted-foreground">No comments yet</p>
+              <p className="text-xs leading-relaxed text-muted-foreground/60 max-w-[180px]">
+                Highlight text in the essay, then click "Comment" to leave feedback.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {combinedItems.map((c) => {
                 if (isDraftComment(c)) {
                   return (
@@ -274,21 +274,27 @@ export function GradingCommentsSidebar({
                       commentRefs.current['draft'] = el;
                     }}
                     onClick={() => onSelectGradeComment?.('draft')}
-                    className="w-full rounded-lg border-2 border-dashed border-yellow-400 bg-yellow-50/50 p-3 dark:border-yellow-600 dark:bg-yellow-950/20"
+                    className="w-full rounded-lg border border-yellow-300 bg-yellow-50/60 p-3 shadow-sm dark:border-yellow-600 dark:bg-yellow-950/20"
                   >
+                    {c.excerpt ? (
+                      <p className="mb-2 truncate text-xs italic text-muted-foreground border-l-2 border-yellow-400 pl-2">
+                        "{c.excerpt.length > 80 ? `${c.excerpt.slice(0, 80)}…` : c.excerpt}"
+                      </p>
+                    ) : null}
                     <Textarea
                       ref={draftTextareaRef}
                       value={draftContent}
                       onChange={(e) => setDraftContent(e.target.value)}
                       onFocus={() => onSelectGradeComment?.('draft')}
-                      placeholder="Write your comment..."
+                      placeholder="Write your comment…"
                       rows={3}
-                      className="mt-2 resize-none"
+                      className="resize-none bg-white/80 text-sm"
                       onClick={(e) => e.stopPropagation()}
                     />
                     <div className="mt-2 flex gap-2">
                       <Button
                         size="sm"
+                        className="h-7 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           submitDraftComment();
@@ -297,11 +303,12 @@ export function GradingCommentsSidebar({
                           !draftContent.trim() || createFetcher.state !== 'idle'
                         }
                       >
-                        {createFetcher.state !== 'idle' ? 'Saving...' : 'Save'}
+                        {createFetcher.state !== 'idle' ? 'Saving…' : 'Save'}
                       </Button>
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
+                        className="h-7 text-xs"
                         onClick={(e) => {
                           e.stopPropagation();
                           cancelDraft();
@@ -342,3 +349,4 @@ export function GradingCommentsSidebar({
     </div>
   );
 }
+

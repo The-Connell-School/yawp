@@ -405,22 +405,34 @@ export default function SubmissionRoute() {
   return (
     <main className="flex h-screen flex-col bg-white">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
-        <Button variant="secondary" size="sm" onClick={() => navigate(exitTarget)}>
-          <ArrowLeft className="h-4" />
-          Exit
+      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-3 border-b bg-white px-3 py-2">
+        <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => navigate(exitTarget)}>
+          <ArrowLeft className="h-4 w-4" />
+          Back
         </Button>
 
-        <p className="text-sm font-semibold">
-          {submission.title || submission.document.title || 'Untitled'}
-        </p>
+        <div className="h-4 w-px bg-border shrink-0" />
 
-        <Badge variant={statusVariant}>{statusLabel}</Badge>
+        <div className="flex min-w-0 items-center gap-2">
+          {isTeacher && submission.document.profile.user.name ? (
+            <span className="shrink-0 text-sm text-muted-foreground">
+              {submission.document.profile.user.name}
+            </span>
+          ) : null}
+          {isTeacher && submission.document.profile.user.name ? (
+            <span className="text-muted-foreground/40 shrink-0">·</span>
+          ) : null}
+          <p className="truncate text-sm font-semibold">
+            {submission.title || submission.document.title || 'Untitled'}
+          </p>
+        </div>
+
+        <Badge variant={statusVariant} className="shrink-0">{statusLabel}</Badge>
 
         {gradeDisplay ? (
           <Badge
             variant="secondary"
-            className="border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
+            className="shrink-0 border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
           >
             {gradeDisplay}
           </Badge>
@@ -442,13 +454,13 @@ export default function SubmissionRoute() {
         <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r" style={{ width: 380 }}>
           {isTeacher ? (
             <>
-              <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
-                <span className="text-sm font-medium">Grade Summary</span>
-                <div className="flex items-center gap-1 rounded-full border bg-muted/40 p-1">
+              <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+                <span className="text-sm font-semibold">Grade Summary</span>
+                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
                   <Button
                     size="sm"
                     variant={isGradeMode ? 'secondary' : 'ghost'}
-                    className="rounded-full px-3 text-xs"
+                    className="h-7 rounded-full px-3 text-xs"
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
                       params.set('edit', '1');
@@ -460,7 +472,7 @@ export default function SubmissionRoute() {
                   <Button
                     size="sm"
                     variant={!isGradeMode ? 'secondary' : 'ghost'}
-                    className="rounded-full px-3 text-xs"
+                    className="h-7 rounded-full px-3 text-xs"
                     onClick={() => {
                       const params = new URLSearchParams(searchParams);
                       params.set('edit', '0');
@@ -499,9 +511,14 @@ export default function SubmissionRoute() {
               </div>
             </>
           ) : (
-            <div className="no-scrollbar grow overflow-y-auto">
-              <ViewPanel submission={submission} />
-            </div>
+            <>
+              <div className="flex shrink-0 items-center border-b px-4 py-2.5">
+                <span className="text-sm font-semibold">Grade Summary</span>
+              </div>
+              <div className="no-scrollbar grow overflow-y-auto">
+                <ViewPanel submission={submission} />
+              </div>
+            </>
           )}
         </div>
 
@@ -523,7 +540,7 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div className="no-scrollbar shrink-0 overflow-y-auto border-l" style={{ width: 320 }}>
+        <div className="no-scrollbar shrink-0 overflow-hidden border-l" style={{ width: 320 }}>
           <GradingCommentsSidebar
             submissionComments={comments as any}
             submissionId={submission.id}
@@ -541,7 +558,7 @@ export default function SubmissionRoute() {
       {/* Grammar issue tooltip — shown on hover over purple-highlighted text */}
       {activeGrammarIssue && tooltipPos ? (
         <div
-          className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 shadow-lg"
+          className="fixed z-50 max-w-xs rounded-lg border border-purple-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
           style={{ top: tooltipPos.top, left: tooltipPos.left }}
           onMouseEnter={() => {
             tooltipHoveredRef.current = true;
@@ -556,12 +573,15 @@ export default function SubmissionRoute() {
             setTooltipRect(null);
           }}
         >
-          <p className="text-xs font-medium text-purple-700">
-            {activeGrammarIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
-          </p>
-          <p className="mt-1 text-sm select-text">{activeGrammarIssue.message}</p>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
+            <p className="text-xs font-semibold text-purple-700">
+              {activeGrammarIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
+            </p>
+          </div>
+          <p className="mt-1.5 text-sm leading-snug select-text">{activeGrammarIssue.message}</p>
           {activeGrammarIssue.rule ? (
-            <p className="mt-1 text-xs text-muted-foreground select-text">Rule: {activeGrammarIssue.rule}</p>
+            <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">Rule: {activeGrammarIssue.rule}</p>
           ) : null}
         </div>
       ) : null}
@@ -590,39 +610,41 @@ function ViewPanel({
   const hasGrade = submission.numericPercentage != null;
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-4 space-y-5">
       {hasGrade ? (
         <>
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Overall Grade</h3>
-            <p className="text-2xl font-semibold">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Overall Grade</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums">
               {submission.numericPercentage}%
-              {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
             </p>
+            {submission.letterGrade ? (
+              <p className="text-sm font-medium text-muted-foreground">{submission.letterGrade}</p>
+            ) : null}
           </div>
           {submission.overallComment ? (
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Overall Feedback</h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">{submission.overallComment}</p>
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Overall Feedback</h3>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">{submission.overallComment}</p>
             </div>
           ) : null}
           {rubricEntries.length > 0 ? (
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
-              <Accordion type="multiple" className="mt-2">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rubric Breakdown</h3>
+              <Accordion type="multiple" className="rounded-lg border">
                 {rubricEntries.map(({ key, score, comment }) => (
-                  <AccordionItem key={key} value={key} className="border-b last:border-0">
-                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                  <AccordionItem key={key} value={key} className="border-b px-1 last:border-0">
+                    <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                       <div className="flex w-full items-center justify-between pr-2">
                         <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                        <span className="text-muted-foreground">{score}/5</span>
+                        <span className="text-xs font-semibold tabular-nums text-muted-foreground">{score}/5</span>
                       </div>
                     </AccordionTrigger>
-                    <AccordionContent>
+                    <AccordionContent className="pb-3 pt-0">
                       {comment ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{comment}</p>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic">No feedback for this category</p>
+                        <p className="text-sm italic text-muted-foreground/60">No feedback for this category.</p>
                       )}
                     </AccordionContent>
                   </AccordionItem>
@@ -632,7 +654,12 @@ function ViewPanel({
           ) : null}
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">Not yet graded</p>
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <p className="text-sm font-medium text-muted-foreground">Not yet graded</p>
+          <p className="text-xs text-muted-foreground/60 leading-relaxed max-w-[200px]">
+            Your grade will appear here once the teacher has reviewed your submission.
+          </p>
+        </div>
       )}
     </div>
   );
