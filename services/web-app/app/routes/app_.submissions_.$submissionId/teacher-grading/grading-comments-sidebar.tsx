@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
+import { MessageSquarePlus } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import {
@@ -256,12 +257,13 @@ export function GradingCommentsSidebar({
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {combinedItems.length === 0 ? (
-            <p
-              className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground"
-              title="Select text in the document, then click Comment in the toolbar"
-            >
-              Select text and click Comment to add feedback.
-            </p>
+            <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
+              <MessageSquarePlus className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
+              <p className="text-sm font-medium text-muted-foreground">No feedback yet</p>
+              <p className="text-xs leading-relaxed text-muted-foreground/70">
+                Select text in the essay, then click the Comment button to add your first note.
+              </p>
+            </div>
           ) : (
             <div className="space-y-3">
               {combinedItems.map((c) => {
