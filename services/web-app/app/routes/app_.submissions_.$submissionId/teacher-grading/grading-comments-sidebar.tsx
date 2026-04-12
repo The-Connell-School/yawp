@@ -145,8 +145,14 @@ export function GradingCommentsSidebar({
     });
   };
 
+  const lastHandledCreateRef = useRef<unknown>(null);
   useEffect(() => {
-    if (createFetcher.data?.success && createFetcher.state === 'idle') {
+    if (
+      createFetcher.data?.success &&
+      createFetcher.state === 'idle' &&
+      createFetcher.data !== lastHandledCreateRef.current
+    ) {
+      lastHandledCreateRef.current = createFetcher.data;
       const created = (createFetcher.data as any).comment;
       if (created && onCommentCreated) {
         onCommentCreated(created);
@@ -188,8 +194,14 @@ export function GradingCommentsSidebar({
     });
   };
 
+  const lastHandledDeleteRef = useRef<unknown>(null);
   useEffect(() => {
-    if (deleteFetcher.data?.success && deleteFetcher.state === 'idle') {
+    if (
+      deleteFetcher.data?.success &&
+      deleteFetcher.state === 'idle' &&
+      deleteFetcher.data !== lastHandledDeleteRef.current
+    ) {
+      lastHandledDeleteRef.current = deleteFetcher.data;
       const deletedId = (deleteFetcher.data as any).commentId;
       if (deletedId && onCommentDeleted) {
         onCommentDeleted(deletedId);
@@ -197,8 +209,14 @@ export function GradingCommentsSidebar({
     }
   }, [deleteFetcher.data, deleteFetcher.state, onCommentDeleted]);
 
+  const lastHandledUpdateRef = useRef<unknown>(null);
   useEffect(() => {
-    if (updateFetcher.data?.success && updateFetcher.state === 'idle') {
+    if (
+      updateFetcher.data?.success &&
+      updateFetcher.state === 'idle' &&
+      updateFetcher.data !== lastHandledUpdateRef.current
+    ) {
+      lastHandledUpdateRef.current = updateFetcher.data;
       if (editingCommentId && onCommentUpdated) {
         onCommentUpdated(editingCommentId, editCommentContent);
       }
