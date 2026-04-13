@@ -128,9 +128,6 @@ jobs:
           PSQL_URL="$(node -e "const u=new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
           echo "::add-mask::$PSQL_URL"
 
-          # Drop and recreate schema to force a fresh production dump restore
-          psql "$PSQL_URL" -c "DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA IF NOT EXISTS ${SCHEMA};"
-
           EXISTING_TABLES="$(psql "$PSQL_URL" -tAc "SELECT COUNT(*)::text FROM pg_tables WHERE schemaname = '${SCHEMA}'")"
           EXISTING_TABLES="${EXISTING_TABLES// /}"
           if [[ "${EXISTING_TABLES:-0}" -gt 0 ]]; then
