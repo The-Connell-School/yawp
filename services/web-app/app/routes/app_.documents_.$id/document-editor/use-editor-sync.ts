@@ -155,8 +155,31 @@ export function useEditorSync(
     };
 
     editor.on('update', handler);
+
+    // Signal to E2E tests that the sync handler is wired up.
+    // We use requestAnimationFrame to ensure ProseMirror's own DOM
+    // event listeners have been fully installed before tests type.
+    const dom = editor.view.dom as HTMLElement;
+    dom.dataset.saveCount = '0';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        dom.dataset.syncReady = 'true';
+      });
+    });
+
+    // Expose save count via DOM for E2E tests to poll
+    const unsubSaveCount = syncServiceRef.current?.onStatusChange((status) => {
+      if (status === 'synced') {
+        const count = parseInt(dom.dataset.saveCount ?? '0', 10);
+        dom.dataset.saveCount = String(count + 1);
+      }
+    });
+
     return () => {
       editor.off('update', handler);
+      delete dom.dataset.syncReady;
+      delete dom.dataset.saveCount;
+      unsubSaveCount?.();
     };
   }, [editor, docId, getSnapshot]);
 

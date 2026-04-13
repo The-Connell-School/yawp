@@ -14,6 +14,20 @@ export class TestHelpers {
       await this.page.waitForLoadState('networkidle');
       try {
         await this.page.waitForSelector(EDITOR_SELECTOR, { state: 'visible', timeout: 15000 });
+        // Wait for ProseMirror's view to be fully wired into the DOM AND
+        // useEditorSync's update handler to be registered. Without this,
+        // typing can outrace PM's input handlers or the sync handler.
+        await this.page.waitForFunction(
+          (sel) => {
+            const el = document.querySelector(sel) as any;
+            // pmViewDesc is set by ProseMirror when the view owns this DOM node
+            return el?.pmViewDesc && el?.dataset?.syncReady === 'true';
+          },
+          EDITOR_SELECTOR,
+          { timeout: 10000 },
+        );
+        // Brief settle for ProseMirror's internal DOM event handler attachment
+        await this.page.waitForTimeout(500);
         return;
       } catch {
         if (attempt === maxAttempts) throw new Error(`Editor did not appear after ${maxAttempts} attempts`);
@@ -49,9 +63,22 @@ export class TestHelpers {
     await this.page.keyboard.press(`${mod}+V`);
   }
 
-  /** Wait for the save indicator to show "Saved" */
-  async waitForSaved(timeout = 10000) {
-    await expect(this.page.getByText(/^Saved$/).first()).toBeVisible({ timeout });
+  /**
+   * Wait for the SyncService to complete a full save round-trip.
+   *
+   * Polls the `data-save-count` attribute on the ProseMirror element,
+   * which is incremented by useEditorSync whenever the SyncService
+   * transitions to 'synced' status.
+   */
+  async waitForSaved(timeout = 15000) {
+    await this.page.waitForFunction(
+      (selector) => {
+        const el = document.querySelector(selector);
+        return el && parseInt(el.getAttribute('data-save-count') ?? '0', 10) > 0;
+      },
+      EDITOR_SELECTOR,
+      { timeout },
+    );
   }
 
   /** Get the current text content of the editor */

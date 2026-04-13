@@ -55,8 +55,8 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Verify the text appears in the editor
     await expect(editor).toContainText(testText);
 
-    // Wait for save to complete, then verify persistence via reload
-    await page.waitForResponse(/\/api\/document\/.*\/save/, { timeout: 15000 });
+    // Wait for save round-trip (SyncService debounce fires ~2s after last keystroke)
+    await helpers.waitForSaved();
     await helpers.verifyPersistsOnReload(testText);
   });
 

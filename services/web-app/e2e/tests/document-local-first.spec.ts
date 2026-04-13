@@ -11,8 +11,8 @@ test.describe('Local-first document persistence', () => {
 
     await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Verify the SaveStatusIndicator is present (shows "Saved")
-    await helpers.waitForSaved();
+    // Verify the SaveStatusIndicator shows initial "Saved" state
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 5000 });
 
     // Verify the DocumentHistory icon is present (second history icon)
     const historyIcons = page.locator('svg.lucide-history');

@@ -76,6 +76,12 @@ export function Editor({
     editor.setEditable(isEditable);
   }, [editor, isEditable]);
 
+  // Expose editor for E2E test helpers (flush domObserver after typing)
+  useEffect(() => {
+    if (editor) (window as any).__yawpEditor = editor;
+    return () => { delete (window as any).__yawpEditor; };
+  }, [editor]);
+
   // Install the runtime tripwire (catches unauthorized PM mutations)
   usePmTripwire(editor);
 

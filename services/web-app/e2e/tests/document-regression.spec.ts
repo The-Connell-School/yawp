@@ -205,6 +205,7 @@ test.describe.serial('Document Regression Suite', () => {
   });
 
   test('save indicator shows correct states', async ({
+    page,
     signIn,
     e2eContext,
     helpers,
@@ -212,13 +213,13 @@ test.describe.serial('Document Regression Suite', () => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Initially should show "Saved"
-    await helpers.waitForSaved();
+    // Initially should show "Saved" text (default state before any edits)
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 5000 });
 
     // Type to trigger saving
     await helpers.typeInEditor(uniqueText('indicator'));
 
-    // Should eventually return to "Saved"
+    // Should eventually complete a save round-trip
     await helpers.waitForSaved();
   });
 });

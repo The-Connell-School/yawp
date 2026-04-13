@@ -80,6 +80,12 @@ test.describe.serial('Data Loss Regression Tests', () => {
     await editor.pressSequentially(text, { delay: 30 });
     await expect(editor).toContainText(text);
 
+    // Set up save listener BEFORE triggering visibility change
+    const savePromise = page.waitForResponse(
+      (res) => /\/api\/document\/.*\/save/.test(res.url()),
+      { timeout: 15000 },
+    );
+
     // Dispatch visibilitychange event to simulate tab going hidden.
     // This triggers the SyncService forceSave path.
     await page.evaluate(() => {
@@ -92,7 +98,7 @@ test.describe.serial('Data Loss Regression Tests', () => {
     });
 
     // Wait for force save to flush to the server
-    await page.waitForResponse('**/api/document/*/save');
+    await savePromise;
 
     // Restore visibility so subsequent checks work
     await page.evaluate(() => {

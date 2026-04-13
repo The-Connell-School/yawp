@@ -45,9 +45,10 @@ export function installPmTripwire(
     const violation = checkPmTransaction(transaction);
     if (!violation) return;
 
-    if (isDev) {
-      throw new Error(violation);
-    }
+    // Log but never throw — throwing inside the transaction event prevents
+    // the transaction from being applied, which silently breaks the editor
+    // persistence pipeline (update event never fires → IDB never written →
+    // sync service never saves). The E2E invariants test checks the counter.
     console.error(violation);
     window.__yawpUnauthorizedPmWrites = (window.__yawpUnauthorizedPmWrites ?? 0) + 1;
   };

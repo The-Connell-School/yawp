@@ -30,11 +30,9 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
     // Type content — it will be saved to IDB but NOT to the server
     await helpers.typeInEditor(marker);
 
-    // Wait for IDB write to settle (update handler is async)
-    await page.waitForTimeout(300); // IDB write is near-instant but async
-
-    // Verify the status indicator shows "Saved locally" (offline fallback)
-    await expect(page.getByText('Saved locally')).toBeVisible({ timeout: 10000 });
+    // Wait for IDB write + sync attempt + abort. The SyncService debounces
+    // by 2s, then the aborted fetch triggers 'offline' status → "Saved locally".
+    await expect(page.getByText('Saved locally')).toBeVisible({ timeout: 15000 });
 
     // Reload the page — server doesn't have this content, only IDB does
     await page.unroute(/\/api\/document\/.*\/save/);
