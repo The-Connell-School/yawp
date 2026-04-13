@@ -122,11 +122,15 @@ export async function getLLMCompletion(params: Params) {
           continue;
         }
 
+        // If we hit the round limit and the model still wants tools, bail
+        if (message.stop_reason === 'tool_use') {
+          throw new Error('Tool-use loop exceeded maximum rounds');
+        }
+
         // Extract final text response
+        const textBlock = message.content.find((b) => b.type === 'text');
         const responseText =
-          message.content.find((b) => b.type === 'text')?.type === 'text'
-            ? (message.content.find((b) => b.type === 'text') as any).text
-            : '';
+          textBlock && 'text' in textBlock ? (textBlock as any).text : '';
 
         const durationMs = Date.now() - startTime;
         await logLlmCall({
@@ -145,8 +149,8 @@ export async function getLLMCompletion(params: Params) {
         return responseText;
       }
 
-      // If we exhausted rounds without a final text response, return whatever we have
-      throw new Error('Tool-use loop exceeded maximum rounds');
+      // Unreachable — loop always returns or throws — but satisfies TS
+      throw new Error('Tool-use loop ended unexpectedly');
     } catch (err) {
       const durationMs = Date.now() - startTime;
       await logLlmCall({
