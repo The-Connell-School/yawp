@@ -231,6 +231,16 @@ export async function seedE2E(): Promise<E2EContext> {
   const submittedDocTitle = 'E2E Document workspace title';
   const submittedSubmissionTitle = 'E2E Essay submission title';
   const submittedAt = new Date();
+  // Create an assignment so the document appears in the teacher's class view
+  const seededAssignment = await prisma.assignment.create({
+    data: {
+      classId: seededClass.id,
+      assignmentTypeId: assignmentType.id,
+      title: 'E2E Class Assignment',
+      prompt: 'E2E prompt for class assignment.',
+    },
+    select: { id: true },
+  });
   const submittedDoc = await prisma.document.create({
     data: {
       title: submittedDocTitle,
@@ -239,6 +249,7 @@ export async function seedE2E(): Promise<E2EContext> {
       revision: 3,
       profileId: profile.id,
       assignmentTypeId: assignmentType.id,
+      assignmentId: seededAssignment.id,
     },
     select: { id: true },
   });
