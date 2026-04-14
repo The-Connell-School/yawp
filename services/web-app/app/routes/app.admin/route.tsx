@@ -23,8 +23,8 @@ const tabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Student Courses',
-    to: '/app/admin/student-courses',
+    label: 'Assignment Types',
+    to: '/app/admin/assignment-types',
     icon: <Book size={16} className="opacity-75 mr-1" />,
   },
   {

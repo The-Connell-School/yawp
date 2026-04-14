@@ -55,10 +55,10 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const course = await prisma.studentCourse.findUnique({
+  const course = await prisma.assignmentType.findUnique({
     where: { id: params.id },
     include: {
-      studentCourseModules: {
+      assignmentModules: {
         where: { deletedAt: null },
         include: {
           instructions: {
@@ -84,11 +84,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteCourse') {
-    await prisma.studentCourse.delete({
+    await prisma.assignmentType.delete({
       where: { id: params.id },
     });
 
-    return redirect('/app/admin/student-courses');
+    return redirect('/app/admin/assignment-types');
   }
 
   if (intent === 'updateCourse') {
@@ -103,26 +103,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.studentCourseImage.deleteMany({
-          where: { studentCourseId: params.id },
+        await tx.assignmentTypeImage.deleteMany({
+          where: { assignmentTypeId: params.id },
         });
       } else if (imageFile && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await tx.studentCourseImage.deleteMany({
-          where: { studentCourseId: params.id },
+        await tx.assignmentTypeImage.deleteMany({
+          where: { assignmentTypeId: params.id },
         });
-        await tx.studentCourseImage.create({
+        await tx.assignmentTypeImage.create({
           data: {
             contentType: imageFile.type,
             blob: buffer,
-            studentCourseId: params.id!,
+            assignmentTypeId: params.id!,
           },
         });
       }
 
-      await tx.studentCourse.update({
+      await tx.assignmentType.update({
         where: { id: params.id },
         data: {
           title,
@@ -144,18 +144,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.studentCourseModule.count({
-      where: { studentCourseId: params.id, deletedAt: null },
+    const moduleCount = await prisma.assignmentModule.count({
+      where: { assignmentTypeId: params.id, deletedAt: null },
     });
 
-    await prisma.studentCourseModule.create({
+    await prisma.assignmentModule.create({
       data: {
         title,
         description: description || null,
         isSelfGuided,
         tutorInstructions: tutorInstructions || null,
         position: moduleCount,
-        studentCourseId: params.id!,
+        assignmentTypeId: params.id!,
       },
     });
 
@@ -167,7 +167,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await Promise.all(
       moduleIds.map((moduleId: string, index: number) =>
-        prisma.studentCourseModule.update({
+        prisma.assignmentModule.update({
           where: { id: moduleId },
           data: { position: index },
         })
@@ -180,7 +180,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return dataResponse({ status: 'error' });
 }
 
-export default function CourseRoute() {
+export default function AssignmentTypeRoute() {
   const { course } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
@@ -190,10 +190,10 @@ export default function CourseRoute() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // --- Drag and drop state for modules ---
-  const [modules, setModules] = React.useState(course.studentCourseModules);
+  const [modules, setModules] = React.useState(course.assignmentModules);
   React.useEffect(() => {
-    setModules(course.studentCourseModules);
-  }, [course.studentCourseModules]);
+    setModules(course.assignmentModules);
+  }, [course.assignmentModules]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -301,9 +301,9 @@ export default function CourseRoute() {
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to="/app/admin/student-courses">
+          <Link to="/app/admin/assignment-types">
             <ChevronLeft size={18} />
-            All courses
+            All assignment types
           </Link>
         </Button>
         <div className="flex items-center gap-2">
@@ -311,12 +311,12 @@ export default function CourseRoute() {
             <SheetTrigger asChild>
               <Button variant="outline">
                 <Settings className="mr-2 h-4 w-4" />
-                Edit Course
+                Edit Assignment Type
               </Button>
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>Edit Course</SheetTitle>
+                <SheetTitle>Edit Assignment Type</SheetTitle>
               </SheetHeader>
               <fetcher.Form
                 method="post"
@@ -416,9 +416,9 @@ export default function CourseRoute() {
           </Sheet>
           <ConfirmationDialog
             variant="destructive"
-            title="Delete Course"
-            description={`Are you sure you want to delete "${course.title}"? This action cannot be undone and will permanently remove the course and all its modules.`}
-            confirmText="Delete Course"
+            title="Delete Assignment Type"
+            description={`Are you sure you want to delete "${course.title}"? This action cannot be undone and will permanently remove the assignment type and all its modules.`}
+            confirmText="Delete Assignment Type"
             cancelText="Cancel"
             onConfirm={() => {
               fetcher.submit({ intent: 'deleteCourse' }, { method: 'post' });
@@ -436,7 +436,7 @@ export default function CourseRoute() {
 
       <Card className="bg-muted">
         <CardHeader>
-          <CardTitle>Course Details</CardTitle>
+          <CardTitle>Assignment Type Details</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-4">
@@ -468,7 +468,7 @@ export default function CourseRoute() {
 
       <Card className="bg-muted">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Course Modules</CardTitle>
+          <CardTitle>Assignment Modules</CardTitle>
           <Sheet open={isModuleSheetOpen} onOpenChange={setIsModuleSheetOpen}>
             <SheetTrigger asChild>
               <Button>

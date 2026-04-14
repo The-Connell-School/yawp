@@ -29,9 +29,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
   const [courses] = await Promise.all([
-    prisma.studentCourse.findMany({
+    prisma.assignmentType.findMany({
       include: {
-        studentCourseModules: {
+        assignmentModules: {
           where: { deletedAt: null },
           include: {
             instructions: true,
@@ -61,8 +61,8 @@ export async function action({ request }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const count = await prisma.studentCourse.count();
-    const course = await prisma.studentCourse.create({
+    const count = await prisma.assignmentType.count();
+    const course = await prisma.assignmentType.create({
       data: {
         title,
         description: description || null,
@@ -70,13 +70,13 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return redirect(`/app/admin/student-courses/${course.id}`);
+    return redirect(`/app/admin/assignment-types/${course.id}`);
   }
 
   return dataResponse({ status: 'error' });
 }
 
-export default function CoursesRoute() {
+export default function AssignmentTypesRoute() {
   const { courses } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
@@ -96,12 +96,12 @@ export default function CoursesRoute() {
             <SheetTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Course
+                Create Assignment Type
               </Button>
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>Create Course</SheetTitle>
+                <SheetTitle>Create Assignment Type</SheetTitle>
               </SheetHeader>
               <fetcher.Form method="post" className="mt-4 space-y-4">
                 <input type="hidden" name="intent" value="create" />
@@ -118,7 +118,7 @@ export default function CoursesRoute() {
                   className="w-full"
                   disabled={fetcher.state !== 'idle'}
                 >
-                  {fetcher.state === 'idle' ? 'Create Course' : 'Creating...'}
+                  {fetcher.state === 'idle' ? 'Create Assignment Type' : 'Creating...'}
                 </Button>
               </fetcher.Form>
             </SheetContent>
@@ -135,9 +135,9 @@ export default function CoursesRoute() {
             </div>
           ) : courses.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <span className="text-lg font-bold">No courses found</span>
+              <span className="text-lg font-bold">No assignment types found</span>
               <span className="text-sm text-muted-foreground">
-                Create your first course to get started
+                Create your first assignment type to get started
               </span>
             </div>
           ) : (
@@ -147,7 +147,7 @@ export default function CoursesRoute() {
                   key={course.id}
                   className="bg-muted cursor-pointer transition-shadow hover:shadow-lg"
                   onClick={() =>
-                    navigate(`/app/admin/student-courses/${course.id}`)
+                    navigate(`/app/admin/assignment-types/${course.id}`)
                   }
                 >
                   <div className="aspect-video w-full overflow-hidden rounded-t-lg">
@@ -171,7 +171,7 @@ export default function CoursesRoute() {
                       {course.description || 'No description'}
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{course.studentCourseModules.length} modules</span>
+                      <span>{course.assignmentModules.length} modules</span>
                     </div>
                   </CardContent>
                 </Card>

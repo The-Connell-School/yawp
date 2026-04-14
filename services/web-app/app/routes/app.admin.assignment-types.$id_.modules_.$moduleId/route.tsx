@@ -89,11 +89,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
   const [course, module] = await Promise.all([
-    prisma.studentCourse.findUnique({
+    prisma.assignmentType.findUnique({
       where: { id: params.id },
       select: { id: true, title: true },
     }),
-    prisma.studentCourseModule.findFirst({
+    prisma.assignmentModule.findFirst({
       where: { id: params.moduleId, deletedAt: null },
       include: {
         instructions: {
@@ -124,7 +124,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, moduleSchema);
     if (error) return validationError(error);
 
-    await prisma.studentCourseModule.update({
+    await prisma.assignmentModule.update({
       where: { id: params.moduleId },
       data: {
         title: data.title,
@@ -138,23 +138,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (intent === 'deleteModule') {
-    await prisma.studentCourseModule.update({
+    await prisma.assignmentModule.update({
       where: { id: params.moduleId },
       data: { deletedAt: new Date() },
     });
 
-    return redirect(`/app/admin/student-courses/${params.id}`);
+    return redirect(`/app/admin/assignment-types/${params.id}`);
   }
 
   if (intent === 'createInstruction') {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
-    const instructionCount = await prisma.studentCourseModuleInstruction.count({
-      where: { studentCourseModuleId: params.moduleId },
+    const instructionCount = await prisma.assignmentModuleInstruction.count({
+      where: { assignmentModuleId: params.moduleId },
     });
 
-    await prisma.studentCourseModuleInstruction.create({
+    await prisma.assignmentModuleInstruction.create({
       data: {
         title: data.title,
         prompt: data.prompt,
@@ -162,7 +162,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         showChatButton: data.showChatButton === 'on',
         showNextButton: data.showNextButton === 'on',
         position: instructionCount,
-        studentCourseModuleId: params.moduleId!,
+        assignmentModuleId: params.moduleId!,
         buttons: {
           create: data.buttons.map((button, index) => ({
             label: button.label,
@@ -185,7 +185,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(formData, instructionSchema);
     if (error) return validationError(error);
 
-    await prisma.studentCourseModuleInstruction.update({
+    await prisma.assignmentModuleInstruction.update({
       where: { id: instructionId },
       data: {
         title: data.title,
@@ -195,7 +195,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         showNextButton: data.showNextButton === 'on',
         buttons: {
           deleteMany: {
-            studentCourseModuleInstructionId: instructionId,
+            assignmentModuleInstructionId: instructionId,
           },
           create: data.buttons.map((button, index) => ({
             label: button.label,
@@ -216,7 +216,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Instruction ID is required', { status: 400 });
     }
 
-    await prisma.studentCourseModuleInstruction.delete({
+    await prisma.assignmentModuleInstruction.delete({
       where: { id: instructionId },
     });
 
@@ -230,7 +230,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await Promise.all(
       instructionIds.map((instructionId: string, index: number) =>
-        prisma.studentCourseModuleInstruction.update({
+        prisma.assignmentModuleInstruction.update({
           where: { id: instructionId },
           data: { position: index },
         })
@@ -243,7 +243,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return dataResponse({ status: 'error' });
 }
 
-export default function ModuleRoute() {
+export default function AssignmentModuleRoute() {
   const { course, module } = useLoaderData<typeof loader>();
   const moduleFetcher = useFetcher();
   const instructionFetcher = useFetcher();
@@ -266,7 +266,7 @@ export default function ModuleRoute() {
     handleSubmit: (_data, formData) => {
       moduleFetcher.submit(formData, {
         method: 'post',
-        action: `/app/admin/student-courses/${course.id}/modules/${module.id}`,
+        action: `/app/admin/assignment-types/${course.id}/modules/${module.id}`,
       });
     },
   });
@@ -302,7 +302,7 @@ export default function ModuleRoute() {
     handleSubmit: (_data, formData) => {
       instructionFetcher.submit(formData, {
         method: 'post',
-        action: `/app/admin/student-courses/${course.id}/modules/${module.id}`,
+        action: `/app/admin/assignment-types/${course.id}/modules/${module.id}`,
       });
     },
   });
@@ -477,7 +477,7 @@ export default function ModuleRoute() {
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to={`/app/admin/student-courses/${course.id}`}>
+          <Link to={`/app/admin/assignment-types/${course.id}`}>
             <ChevronLeft size={18} />
             Back to {course.title}
           </Link>
