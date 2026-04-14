@@ -116,12 +116,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: classId,
       teachers: { some: { id: profile.teacherProfile.id } },
     },
-    select: {
-      id: true,
-      allowedStudentCourses: {
-        select: { studentCourseId: true },
-      },
-    },
+    select: { id: true },
   });
 
   if (!classAccess) {
@@ -130,6 +125,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
       { status: 404 }
     );
   }
+
+  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
+    where: {
+      OR: [
+        { ownerOrgId: null, ownerTeacherId: null },
+        { ownerOrgId: profile.organization.id },
+        { ownerTeacherId: profile.id },
+      ],
+    },
+    select: { id: true },
+  });
+  const allowedAssignmentTypeIds = new Set(
+    allowedAssignmentTypes.map((type) => type.id)
+  );
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
@@ -199,7 +208,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'create-assignment' || intent === 'update-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
-    const studentCourseId = formData.get('studentCourseId')?.toString();
+    const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
@@ -211,21 +220,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
-    if (!studentCourseId) {
+    if (!assignmentTypeId) {
       return dataResponse(
-        { success: false, message: 'Student course is required.' },
+        { success: false, message: 'Assignment type is required.' },
         { status: 400 }
       );
     }
-    if (
-      !classAccess.allowedStudentCourses.some(
-        (course) => course.studentCourseId === studentCourseId
-      )
-    ) {
+    if (!allowedAssignmentTypeIds.has(assignmentTypeId)) {
       return dataResponse(
         {
           success: false,
-          message: 'Selected course is not available for this class.',
+          message: 'Selected assignment type is not available.',
         },
         { status: 400 }
       );
@@ -247,7 +252,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.assignment.create({
         data: {
           classId,
-          studentCourseId,
+          assignmentTypeId,
           title,
           prompt,
           tutorContext,
@@ -283,7 +288,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await prisma.assignment.update({
       where: { id: assignment.id },
       data: {
-        studentCourseId,
+        assignmentTypeId,
         title,
         prompt,
         tutorContext,
@@ -322,20 +327,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       period: true,
       title: true,
       school: { select: { id: true, name: true, organizationId: true } },
-      allowedStudentCourses: {
-        select: {
-          studentCourseId: true,
-          studentCourse: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-        orderBy: {
-          studentCourse: { position: 'asc' },
-        },
-      },
       students: {
         select: {
           id: true,
@@ -349,6 +340,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
+    where: {
+      OR: [
+        { ownerOrgId: null, ownerTeacherId: null },
+        { ownerOrgId: profile.organization.id },
+        { ownerTeacherId: profile.id },
+      ],
+    },
+    select: { id: true, title: true },
+    orderBy: { position: 'asc' },
+  });
+
   const profiles = await prisma.profile.findMany({
     where: {
       studentProfile: {
@@ -359,7 +362,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       user: { select: { name: true, email: true } },
       documents: {
-        where: { classId },
+        where: { assignment: { classId } },
         select: {
           id: true,
           title: true,
@@ -367,7 +370,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           updatedAt: true,
           html: true,
           text: true,
-          studentCourseModuleSessions: studentModuleSessionListSelect,
+          assignmentModuleSessions: studentModuleSessionListSelect,
           _count: {
             select: {
               pasteAlerts: true,
@@ -381,7 +384,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get recent paste alerts for this class
   const pasteAlerts = await prisma.pasteAlert.findMany({
     where: {
-      document: { classId },
+      document: { assignment: { classId } },
     },
     select: {
       id: true,
@@ -423,7 +426,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await prisma.submission.findMany({
         where: {
           document: {
-            classId,
+            assignment: { classId },
             deletedAt: null,
           },
         },
@@ -465,7 +468,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourseModuleSessions: studentModuleSessionSingleSelect,
+              assignmentModuleSessions: studentModuleSessionSingleSelect,
             },
           },
         },
@@ -478,7 +481,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
     where: {
-      classId,
+      assignment: { classId },
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
@@ -504,7 +507,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      studentCourseModuleSessions: studentModuleSessionSingleSelect,
+      assignmentModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
       updatedAt: 'desc',
@@ -520,8 +523,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
-          studentCourseId: true,
-          studentCourse: {
+          assignmentTypeId: true,
+          assignmentType: {
             select: {
               id: true,
               title: true,
@@ -541,6 +544,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     klass,
+    allowedAssignmentTypes,
     profiles,
     pasteAlerts,
     submissions,
@@ -913,8 +917,8 @@ export default function ClassDetailRoute() {
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                      .title || '—'}
+                    {doc.assignmentModuleSessions[0]?.assignmentModule.title ||
+                      '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(new Date(doc.updatedAt))}
@@ -965,8 +969,8 @@ export default function ClassDetailRoute() {
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {submission.document.studentCourseModuleSessions[0]
-                      ?.studentCourseModule.title || '—'}
+                    {submission.document.assignmentModuleSessions[0]
+                      ?.assignmentModule.title || '—'}
                   </TableCell>
                   <TableCell>
                     <StudentArchiveCell archivedAt={submission.archivedAt} />
@@ -1147,7 +1151,7 @@ export default function ClassDetailRoute() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
-                <TableHead>Course</TableHead>
+                <TableHead>Assignment Type</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Prompt</TableHead>
                 <TableHead>Docs</TableHead>
@@ -1160,7 +1164,7 @@ export default function ClassDetailRoute() {
                   <TableCell className="font-medium">
                     {assignment.title || 'Untitled Assignment'}
                   </TableCell>
-                  <TableCell>{assignment.studentCourse.title}</TableCell>
+                  <TableCell>{assignment.assignmentType.title}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
                   </TableCell>
@@ -1646,12 +1650,7 @@ export default function ClassDetailRoute() {
       {assignmentsEnabled && (
         <AssignmentSheet
           classId={data.klass.id}
-          allowedStudentCourses={data.klass.allowedStudentCourses.map(
-            (course) => ({
-              id: course.studentCourse.id,
-              title: course.studentCourse.title,
-            })
-          )}
+          allowedAssignmentTypes={data.allowedAssignmentTypes}
           open={isAssignmentSheetOpen}
           onOpenChange={(open) => {
             setIsAssignmentSheetOpen(open);

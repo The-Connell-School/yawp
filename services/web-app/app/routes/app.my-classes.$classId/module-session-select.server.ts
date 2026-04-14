@@ -1,14 +1,14 @@
 const moduleTitleSelection = {
-  studentCourseModule: { select: { title: true } },
+  assignmentModule: { select: { title: true } },
 } as const;
 
 export const studentModuleSessionSingleSelect = {
   select: moduleTitleSelection,
-  orderBy: { studentCourseModule: { position: 'desc' } },
+  orderBy: { assignmentModule: { position: 'desc' } },
   take: 1,
 } as const;
 
 export const studentModuleSessionListSelect = {
   select: moduleTitleSelection,
-  orderBy: { studentCourseModule: { position: 'desc' } },
+  orderBy: { assignmentModule: { position: 'desc' } },
 } as const;

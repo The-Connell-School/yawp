@@ -15,9 +15,6 @@ const prisma = {
     findMany: mock(),
     update: mock(),
   },
-  classStudentCourse: {
-    deleteMany: mock(),
-  },
   school: {
     findFirst: mock(),
   },
@@ -40,7 +37,6 @@ describe('app.organization.classes action', () => {
     requireProfile.mockClear();
     prisma.class.findMany.mockReset();
     prisma.class.update.mockReset();
-    prisma.classStudentCourse.deleteMany.mockReset();
     prisma.school.findFirst.mockReset();
     prisma.teacherProfile.findMany.mockReset();
     prisma.studentProfile.findMany.mockReset();
@@ -57,7 +53,6 @@ describe('app.organization.classes action', () => {
         await fn(prisma as unknown as typeof prisma);
       }
     );
-    prisma.classStudentCourse.deleteMany.mockResolvedValue({ count: 0 });
     prisma.class.update.mockResolvedValue({ id: 'c1' });
   });
 
