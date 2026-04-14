@@ -42,13 +42,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentCounts = await prisma.teacherProfile.findUnique({
     where: { id: profile.teacherProfile.id },
-    select: { _count: { select: { assignedTeacherCourses: true } } },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
-    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
 
-  const [teacherCourse, currentModule] = await Promise.all([
-    prisma.teacherCourse.findFirst({
+  const [teacherTraining, currentModule] = await Promise.all([
+    prisma.teacherTraining.findFirst({
       where: {
         id: params.id,
         ...(hasAssignedCourses
@@ -58,13 +58,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: {
         id: true,
         title: true,
-        teacherCourseModules: {
+        teacherTrainingModules: {
           select: {
             id: true,
             title: true,
             position: true,
             videoDuration: true,
-            teacherCourseModuleSessions: {
+            teacherTrainingModuleSessions: {
               where: {
                 teacherProfileId: profile.teacherProfile.id,
               },
@@ -78,8 +78,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    prisma.teacherCourseModule.findFirst({
-      where: { id: params.moduleId, teacherCourseId: params.id },
+    prisma.teacherTrainingModule.findFirst({
+      where: { id: params.moduleId, teacherTrainingId: params.id },
       include: {
         resources: {
           select: {
@@ -88,7 +88,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             contentType: true,
           },
         },
-        teacherCourseModuleSessions: {
+        teacherTrainingModuleSessions: {
           where: {
             teacherProfileId: profile.teacherProfile.id,
           },
@@ -101,7 +101,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
   ]);
 
-  if (!teacherCourse) {
+  if (!teacherTraining) {
     throw new Response('Teacher course not found', { status: 404 });
   }
 
@@ -118,7 +118,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   return dataResponse({
-    teacherCourse,
+    teacherTraining,
     currentModule: currentModule
       ? {
           ...currentModule,
@@ -126,7 +126,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : currentModule,
     teacherProfileId: profile.teacherProfile.id,
-    currentSession: currentModule.teacherCourseModuleSessions[0] || null,
+    currentSession: currentModule.teacherTrainingModuleSessions[0] || null,
   });
 }
 
@@ -142,12 +142,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const assignmentCounts = await prisma.teacherProfile.findUnique({
     where: { id: profile.teacherProfile.id },
-    select: { _count: { select: { assignedTeacherCourses: true } } },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
-    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
 
-  const courseAccess = await prisma.teacherCourse.findFirst({
+  const courseAccess = await prisma.teacherTraining.findFirst({
     where: {
       id: params.id,
       ...(hasAssignedCourses
@@ -162,31 +162,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'updateProgress') {
     const videoTimestamp = Number(formData.get('videoTimestamp'));
-    const module = await prisma.teacherCourseModule.findFirst({
-      where: { id: params.moduleId!, teacherCourseId: params.id },
+    const module = await prisma.teacherTrainingModule.findFirst({
+      where: { id: params.moduleId!, teacherTrainingId: params.id },
       select: { id: true, videoDuration: true },
     });
     if (!module) {
       throw new Response('Module not found', { status: 404 });
     }
-    const session = await prisma.teacherCourseModuleSession.findUnique({
+    const session = await prisma.teacherTrainingModuleSession.findUnique({
       where: {
-        teacherCourseModuleId_teacherProfileId: {
-          teacherCourseModuleId: params.moduleId!,
+        teacherTrainingModuleId_teacherProfileId: {
+          teacherTrainingModuleId: params.moduleId!,
           teacherProfileId: profile.teacherProfile.id,
         },
       },
     });
     if (!session) {
-      await prisma.teacherCourseModuleSession.create({
+      await prisma.teacherTrainingModuleSession.create({
         data: {
-          teacherCourseModuleId: params.moduleId!,
+          teacherTrainingModuleId: params.moduleId!,
           teacherProfileId: profile.teacherProfile.id,
           videoTimestamp,
         },
       });
     } else {
-      await prisma.teacherCourseModuleSession.update({
+      await prisma.teacherTrainingModuleSession.update({
         where: { id: session.id },
         data: {
           videoTimestamp: Math.min(
@@ -209,31 +209,31 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Module ID required', { status: 400 });
     }
 
-    const module = await prisma.teacherCourseModule.findFirst({
-      where: { id: moduleId, teacherCourseId: params.id },
+    const module = await prisma.teacherTrainingModule.findFirst({
+      where: { id: moduleId, teacherTrainingId: params.id },
       select: { id: true },
     });
     if (!module) {
       throw new Response('Module not found', { status: 404 });
     }
 
-    await prisma.teacherCourseModuleSession.upsert({
+    await prisma.teacherTrainingModuleSession.upsert({
       where: {
-        teacherCourseModuleId_teacherProfileId: {
-          teacherCourseModuleId: moduleId,
+        teacherTrainingModuleId_teacherProfileId: {
+          teacherTrainingModuleId: moduleId,
           teacherProfileId: profile.teacherProfile.id,
         },
       },
       update: { videoTimestamp: 0, updatedAt: new Date() },
       create: {
-        teacherCourseModuleId: moduleId,
+        teacherTrainingModuleId: moduleId,
         teacherProfileId: profile.teacherProfile.id,
         videoTimestamp: 0,
         updatedAt: new Date(),
       },
     });
 
-    return redirect(`/app/teacher-courses/${params.id}/modules/${moduleId}`);
+    return redirect(`/app/teacher-trainings/${params.id}/modules/${moduleId}`);
   }
 
   return dataResponse({ success: false });
@@ -251,20 +251,20 @@ function formatTime(seconds: number): string {
   }
 }
 
-export default function TeacherCourseModuleRoute() {
-  const { teacherCourse, currentModule, currentSession } =
+export default function TeacherTrainingModuleRoute() {
+  const { teacherTraining, currentModule, currentSession } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
-  const currentModuleIndex = teacherCourse.teacherCourseModules.findIndex(
+  const currentModuleIndex = teacherTraining.teacherTrainingModules.findIndex(
     (m) => m.id === currentModule.id
   );
   const nextModuleId =
-    teacherCourse.teacherCourseModules[currentModuleIndex + 1]?.id;
+    teacherTraining.teacherTrainingModules[currentModuleIndex + 1]?.id;
 
   const downloadResource = (resourceId: string, fileName: string) => {
     const link = document.createElement('a');
-    link.href = `/api/teacher-course-module-resource/${resourceId}`;
+    link.href = `/api/teacher-training-module-resource/${resourceId}`;
     link.download = fileName;
     document.body.appendChild(link);
     link.click();
@@ -283,7 +283,7 @@ export default function TeacherCourseModuleRoute() {
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <Button variant="outline" asChild>
-              <Link to={`/app/teacher-courses/${teacherCourse.id}`}>
+              <Link to={`/app/teacher-trainings/${teacherTraining.id}`}>
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Back to Course
               </Link>
@@ -291,7 +291,7 @@ export default function TeacherCourseModuleRoute() {
 
             <div className="text-sm text-muted-foreground">
               Module {currentModuleIndex + 1} of{' '}
-              {teacherCourse.teacherCourseModules.length}
+              {teacherTraining.teacherTrainingModules.length}
             </div>
           </div>
         </div>
@@ -308,7 +308,7 @@ export default function TeacherCourseModuleRoute() {
                       videoLink={currentModule.videoLink}
                       moduleId={currentModule.id}
                       videoDuration={currentModule.videoDuration}
-                      teacherCourseId={teacherCourse.id}
+                      teacherTrainingId={teacherTraining.id}
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
                       onUpdateProgress={(currentTime) => {
@@ -319,7 +319,7 @@ export default function TeacherCourseModuleRoute() {
                           currentTime.toString()
                         );
                         fetch(
-                          `/app/teacher-courses/${teacherCourse.id}/modules/${currentModule.id}`,
+                          `/app/teacher-trainings/${teacherTraining.id}/modules/${currentModule.id}`,
                           {
                             method: 'POST',
                             body: formData,
@@ -418,12 +418,12 @@ export default function TeacherCourseModuleRoute() {
                 <CardTitle className="text-base">Course Modules</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 max-h-96 overflow-y-auto">
-                {teacherCourse.teacherCourseModules.map((module, index) => {
+                {teacherTraining.teacherTrainingModules.map((module, index) => {
                   const isCurrentModule = module.id === currentModule.id;
                   const moduleProgressPct =
-                    module.teacherCourseModuleSessions.length > 0
+                    module.teacherTrainingModuleSessions.length > 0
                       ? Math.ceil(
-                          ((module.teacherCourseModuleSessions[0]
+                          ((module.teacherTrainingModuleSessions[0]
                             .videoTimestamp || 0) /
                             (module.videoDuration || 0)) *
                             100
@@ -443,7 +443,7 @@ export default function TeacherCourseModuleRoute() {
                     >
                       <div className="flex items-center gap-3">
                         <Link
-                          to={`/app/teacher-courses/${teacherCourse.id}/modules/${module.id}`}
+                          to={`/app/teacher-trainings/${teacherTraining.id}/modules/${module.id}`}
                           className="flex-1 min-w-0"
                         >
                           <div className="flex items-start gap-3">
@@ -478,7 +478,7 @@ export default function TeacherCourseModuleRoute() {
                                     {formatTime(module.videoDuration)}
                                   </span>
                                 )}
-                                {module.teacherCourseModuleSessions.length >
+                                {module.teacherTrainingModuleSessions.length >
                                   0 && (
                                   <span
                                     className={cn(

@@ -61,18 +61,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     studentClassIds = studentClasses.map((klass) => klass.id);
   }
 
-  let teacherCourseWhere:
+  let teacherTrainingWhere:
     | { assignedTeachers: { some: { id: string } } }
     | undefined = undefined;
   if (profile.teacherProfile) {
     const assignmentCounts = await prisma.teacherProfile.findUnique({
       where: { id: profile.teacherProfile.id },
-      select: { _count: { select: { assignedTeacherCourses: true } } },
+      select: { _count: { select: { assignedTeacherTrainings: true } } },
     });
     const hasAssignedCourses =
-      (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+      (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
     if (hasAssignedCourses) {
-      teacherCourseWhere = {
+      teacherTrainingWhere = {
         assignedTeachers: { some: { id: profile.teacherProfile.id } },
       };
     }
@@ -83,7 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     documents,
     archivedDocuments,
     studentProfiles,
-    teacherCourses,
+    teacherTrainings,
     teacherClasses,
     teacherSchoolCount,
     assignments,
@@ -147,19 +147,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     // Fetch teacher courses if user has teacher profile
     profile?.teacherProfile
-      ? prisma.teacherCourse.findMany({
-          where: teacherCourseWhere,
+      ? prisma.teacherTraining.findMany({
+          where: teacherTrainingWhere,
           select: {
             image: { select: { id: true } },
             id: true,
             title: true,
             description: true,
-            teacherCourseModules: {
+            teacherTrainingModules: {
               select: {
                 id: true,
                 title: true,
                 videoDuration: true,
-                teacherCourseModuleSessions: {
+                teacherTrainingModuleSessions: {
                   where: {
                     teacherProfileId: profile.teacherProfile.id,
                   },
@@ -274,7 +274,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     documents,
     archivedDocuments,
     studentProfiles,
-    teacherCourses,
+    teacherTrainings,
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
@@ -351,14 +351,14 @@ export default function AppRoute() {
           </div>
           <div className="mt-8 flex flex-col">
             <p className="my-2 text-foreground/60">Teachers' Lounge</p>
-            {data.teacherCourses.length > 0 ? (
+            {data.teacherTrainings.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {data.teacherCourses.map((course) => {
+                {data.teacherTrainings.map((course) => {
                   // Calculate overall progress
-                  const totalModules = course.teacherCourseModules.length;
-                  const completedModules = course.teacherCourseModules.filter(
+                  const totalModules = course.teacherTrainingModules.length;
+                  const completedModules = course.teacherTrainingModules.filter(
                     (module) =>
-                      module.teacherCourseModuleSessions.some(
+                      module.teacherTrainingModuleSessions.some(
                         (session) =>
                           session.videoTimestamp === module.videoDuration
                       )
@@ -370,14 +370,14 @@ export default function AppRoute() {
 
                   return (
                     <Link
-                      to={`/app/teacher-courses/${course.id}`}
+                      to={`/app/teacher-trainings/${course.id}`}
                       key={course.id}
                       className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
                     >
                       <div className="aspect-video w-full overflow-hidden rounded-t-lg">
                         {course.image ? (
                           <img
-                            src={`/api/image/teacher-course/${course.image.id}`}
+                            src={`/api/image/teacher-training/${course.image.id}`}
                             alt=""
                             className="h-full w-full object-cover"
                           />
@@ -423,7 +423,7 @@ export default function AppRoute() {
               </div>
             ) : (
               <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                <p>No teacher courses available yet.</p>
+                <p>No teacher trainings available yet.</p>
                 <p className="text-sm mt-1">
                   Check back later for professional development opportunities.
                 </p>

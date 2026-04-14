@@ -75,13 +75,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
           user: true,
         },
       },
-      assignedTeacherCourses: {
+      assignedTeacherTrainings: {
         select: { id: true },
       },
       _count: {
         select: {
           classes: true,
-          assignedTeacherCourses: true,
+          assignedTeacherTrainings: true,
         },
       },
     },
@@ -94,12 +94,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  const teacherCourses = await prisma.teacherCourse.findMany({
+  const teacherTrainings = await prisma.teacherTraining.findMany({
     select: { id: true, title: true },
     orderBy: { position: 'asc' },
   });
 
-  return dataResponse({ teachers, teacherCourses, q });
+  return dataResponse({ teachers, teacherTrainings, q });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -114,8 +114,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'Teacher ID is required' }, { status: 400 });
     }
 
-    const teacherCourseIds = formData
-      .getAll('teacherCourseIds')
+    const teacherTrainingIds = formData
+      .getAll('teacherTrainingIds')
       .map((v) => v.toString())
       .filter(Boolean);
 
@@ -134,15 +134,15 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    if (teacherCourseIds.length > 0) {
-      const courses = await prisma.teacherCourse.findMany({
-        where: { id: { in: teacherCourseIds } },
+    if (teacherTrainingIds.length > 0) {
+      const courses = await prisma.teacherTraining.findMany({
+        where: { id: { in: teacherTrainingIds } },
         select: { id: true },
       });
 
-      if (courses.length !== teacherCourseIds.length) {
+      if (courses.length !== teacherTrainingIds.length) {
         return dataResponse(
-          { error: 'One or more teacher courses are invalid' },
+          { error: 'One or more teacher trainings are invalid' },
           { status: 400 }
         );
       }
@@ -151,8 +151,8 @@ export async function action({ request }: ActionFunctionArgs) {
     await prisma.teacherProfile.update({
       where: { id: teacherId },
       data: {
-        assignedTeacherCourses: {
-          set: teacherCourseIds.map((id) => ({ id })),
+        assignedTeacherTrainings: {
+          set: teacherTrainingIds.map((id) => ({ id })),
         },
       },
     });
@@ -327,7 +327,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationTeachersRoute() {
-  const { teachers, teacherCourses, q } = useLoaderData<typeof loader>();
+  const { teachers, teacherTrainings, q } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -423,7 +423,7 @@ export default function OrganizationTeachersRoute() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Classes</TableHead>
-                      <TableHead>Teacher Courses</TableHead>
+                      <TableHead>Teacher Trainings</TableHead>
                       <TableHead className="pr-4">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -443,7 +443,7 @@ export default function OrganizationTeachersRoute() {
                         <TableCell>
                           {teacher._count.classes}
                         </TableCell>
-                        <TableCell>{teacher._count.assignedTeacherCourses}</TableCell>
+                        <TableCell>{teacher._count.assignedTeacherTrainings}</TableCell>
                         <TableCell className="pr-4">
                           <Button
                             size="sm"
@@ -473,7 +473,7 @@ export default function OrganizationTeachersRoute() {
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         editingTeacher={editingTeacher}
-        teacherCourses={teacherCourses}
+        teacherTrainings={teacherTrainings}
       />
 
       {/* Invite Teacher Sheet */}
@@ -526,23 +526,23 @@ function TeacherSheet({
   open,
   onOpenChange,
   editingTeacher,
-  teacherCourses,
+  teacherTrainings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingTeacher: any | null;
-  teacherCourses: { id: string; title: string }[];
+  teacherTrainings: { id: string; title: string }[];
 }) {
   const fetcherKey = editingTeacher ? `edit-${editingTeacher.id}` : 'none';
   const fetcher = useFetcher({ key: fetcherKey });
-  const [selectedTeacherCourses, setSelectedTeacherCourses] = useState<
+  const [selectedTeacherTrainings, setSelectedTeacherTrainings] = useState<
     string[]
   >([]);
 
   useEffect(() => {
     if (!editingTeacher) return;
-    setSelectedTeacherCourses(
-      editingTeacher.assignedTeacherCourses?.map((c: any) => c.id) || []
+    setSelectedTeacherTrainings(
+      editingTeacher.assignedTeacherTrainings?.map((c: any) => c.id) || []
     );
   }, [editingTeacher, open]);
 
@@ -553,8 +553,8 @@ function TeacherSheet({
     const formData = new FormData();
     formData.append('intent', 'edit-teacher');
     formData.append('teacherId', editingTeacher.id);
-    selectedTeacherCourses.forEach((teacherCourseId) => {
-      formData.append('teacherCourseIds', teacherCourseId);
+    selectedTeacherTrainings.forEach((teacherTrainingId) => {
+      formData.append('teacherTrainingIds', teacherTrainingId);
     });
     fetcher.submit(formData, { method: 'POST' });
   };
@@ -573,7 +573,7 @@ function TeacherSheet({
         <SheetHeader>
           <SheetTitle>Edit Teacher</SheetTitle>
           <SheetDescription>
-            Manage teacher course assignments for this teacher
+            Manage teacher training assignments for this teacher
           </SheetDescription>
         </SheetHeader>
 
@@ -599,31 +599,31 @@ function TeacherSheet({
           </div>
 
           <div className="space-y-2">
-            <Label>Teacher Courses</Label>
+            <Label>Teacher Trainings</Label>
             <div className="rounded-md border border-input bg-background">
               <div className="max-h-[300px] overflow-y-auto p-3 space-y-2">
-                {teacherCourses.length === 0 ? (
+                {teacherTrainings.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No teacher courses available
+                    No teacher trainings available
                   </p>
                 ) : (
-                  teacherCourses.map((course) => (
+                  teacherTrainings.map((course) => (
                     <div
                       key={course.id}
                       className="flex items-center space-x-2"
                     >
                       <Checkbox
-                        id={`teacher-course-${course.id}`}
-                        checked={selectedTeacherCourses.includes(course.id)}
+                        id={`teacher-training-${course.id}`}
+                        checked={selectedTeacherTrainings.includes(course.id)}
                         onCheckedChange={(checked) => {
                           if (checked) {
-                            setSelectedTeacherCourses([
-                              ...selectedTeacherCourses,
+                            setSelectedTeacherTrainings([
+                              ...selectedTeacherTrainings,
                               course.id,
                             ]);
                           } else {
-                            setSelectedTeacherCourses(
-                              selectedTeacherCourses.filter(
+                            setSelectedTeacherTrainings(
+                              selectedTeacherTrainings.filter(
                                 (id) => id !== course.id
                               )
                             );
@@ -631,7 +631,7 @@ function TeacherSheet({
                         }}
                       />
                       <Label
-                        htmlFor={`teacher-course-${course.id}`}
+                        htmlFor={`teacher-training-${course.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
                         {course.title}
@@ -642,9 +642,9 @@ function TeacherSheet({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              {selectedTeacherCourses.length > 0
-                ? `${selectedTeacherCourses.length} course${selectedTeacherCourses.length !== 1 ? 's' : ''} selected`
-                : 'No courses selected (teacher will see all courses)'}
+              {selectedTeacherTrainings.length > 0
+                ? `${selectedTeacherTrainings.length} training${selectedTeacherTrainings.length !== 1 ? 's' : ''} selected`
+                : 'No trainings selected (teacher will see all trainings)'}
             </p>
           </div>
 

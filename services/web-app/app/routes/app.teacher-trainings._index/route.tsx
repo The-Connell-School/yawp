@@ -19,17 +19,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const assignmentCounts = await prisma.teacherProfile.findUnique({
     where: { id: profile.teacherProfile.id },
-    select: { _count: { select: { assignedTeacherCourses: true } } },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
-    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
 
-  const teacherCourses = await prisma.teacherCourse.findMany({
+  const teacherTrainings = await prisma.teacherTraining.findMany({
     where: hasAssignedCourses
       ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
       : undefined,
     include: {
-      teacherCourseModules: {
+      teacherTrainingModules: {
         include: {
           resources: {
             select: {
@@ -50,11 +50,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: { createdAt: 'desc' },
   });
 
-  return dataResponse({ teacherCourses });
+  return dataResponse({ teacherTrainings });
 }
 
-export default function TeacherCoursesRoute() {
-  const { teacherCourses } = useLoaderData<typeof loader>();
+export default function TeacherTrainingsRoute() {
+  const { teacherTrainings } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   return (
@@ -72,7 +72,7 @@ export default function TeacherCoursesRoute() {
       <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
         <div className="flex flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
-            {teacherCourses.length === 0 ? (
+            {teacherTrainings.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted py-6">
                 <span className="text-lg font-bold">No courses found</span>
                 <span className="text-sm text-muted-foreground">
@@ -81,18 +81,18 @@ export default function TeacherCoursesRoute() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {teacherCourses.map((course) => (
+                {teacherTrainings.map((course) => (
                   <Card
                     key={course.id}
                     className="bg-muted cursor-pointer transition-shadow hover:shadow-lg"
                     onClick={() =>
-                      navigate(`/app/teacher-courses/${course.id}`)
+                      navigate(`/app/teacher-trainings/${course.id}`)
                     }
                   >
                     <div className="aspect-video w-full overflow-hidden rounded-t-lg">
                       {course.image ? (
                         <img
-                          src={`/api/image/teacher-course/${course.image.id}`}
+                          src={`/api/image/teacher-training/${course.image.id}`}
                           alt={course.title}
                           className="h-full w-full object-cover"
                         />
@@ -111,7 +111,7 @@ export default function TeacherCoursesRoute() {
                       </p>
                       <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
                         <span>
-                          {course.teacherCourseModules.length} modules
+                          {course.teacherTrainingModules.length} modules
                         </span>
                         <span>{course.resources.length} resources</span>
                       </div>

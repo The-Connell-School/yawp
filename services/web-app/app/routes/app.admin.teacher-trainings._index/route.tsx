@@ -28,10 +28,10 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [teacherCourses, stats] = await Promise.all([
-    prisma.teacherCourse.findMany({
+  const [teacherTrainings, stats] = await Promise.all([
+    prisma.teacherTraining.findMany({
       include: {
-        teacherCourseModules: {
+        teacherTrainingModules: {
           include: {
             resources: {
               select: {
@@ -62,14 +62,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         COUNT(DISTINCT tc.id)::int as total_courses,
         COUNT(DISTINCT tcm.id)::int as total_modules,
         COUNT(DISTINCT tcr.id)::int as total_resources
-      FROM "TeacherCourse" tc
-      LEFT JOIN "TeacherCourseModule" tcm ON tcm."teacherCourseId" = tc.id
-      LEFT JOIN "TeacherCourseResource" tcr ON tcr."teacherCourseId" = tc.id
+      FROM "TeacherTraining" tc
+      LEFT JOIN "TeacherTrainingModule" tcm ON tcm."teacherTrainingId" = tc.id
+      LEFT JOIN "TeacherTrainingResource" tcr ON tcr."teacherTrainingId" = tc.id
     `,
   ]);
 
   return dataResponse({
-    teacherCourses,
+    teacherTrainings,
     stats: stats[0],
   });
 }
@@ -87,8 +87,8 @@ export async function action({ request }: ActionFunctionArgs) {
       throw new Response('Title is required', { status: 400 });
     }
 
-    const count = await prisma.teacherCourse.count();
-    const teacherCourse = await prisma.teacherCourse.create({
+    const count = await prisma.teacherTraining.count();
+    const teacherTraining = await prisma.teacherTraining.create({
       data: {
         title,
         description: description || null,
@@ -96,14 +96,14 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return redirect(`/app/admin/teacher-courses/${teacherCourse.id}`);
+    return redirect(`/app/admin/teacher-trainings/${teacherTraining.id}`);
   }
 
   return dataResponse({ status: 'error' });
 }
 
-export default function TeacherCoursesRoute() {
-  const { teacherCourses, stats } = useLoaderData<typeof loader>();
+export default function TeacherTrainingsRoute() {
+  const { teacherTrainings, stats } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -122,12 +122,12 @@ export default function TeacherCoursesRoute() {
             <SheetTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Create Teacher Course
+                Create Teacher Training
               </Button>
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>Create Teacher Course</SheetTitle>
+                <SheetTitle>Create Teacher Training</SheetTitle>
               </SheetHeader>
               <fetcher.Form method="post" className="mt-4 space-y-4">
                 <input type="hidden" name="intent" value="create" />
@@ -145,7 +145,7 @@ export default function TeacherCoursesRoute() {
                   disabled={fetcher.state !== 'idle'}
                 >
                   {fetcher.state === 'idle'
-                    ? 'Create Teacher Course'
+                    ? 'Create Teacher Training'
                     : 'Creating...'}
                 </Button>
               </fetcher.Form>
@@ -161,29 +161,29 @@ export default function TeacherCoursesRoute() {
                 Loading...
               </span>
             </div>
-          ) : teacherCourses.length === 0 ? (
+          ) : teacherTrainings.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted py-6">
               <span className="text-lg font-bold">
-                No teacher courses found
+                No teacher trainings found
               </span>
               <span className="text-sm text-muted-foreground">
-                Create your first teacher course to get started
+                Create your first teacher training to get started
               </span>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {teacherCourses.map((course) => (
+              {teacherTrainings.map((course) => (
                 <Card
                   key={course.id}
                   className="bg-muted cursor-pointer transition-shadow hover:shadow-lg"
                   onClick={() =>
-                    navigate(`/app/admin/teacher-courses/${course.id}`)
+                    navigate(`/app/admin/teacher-trainings/${course.id}`)
                   }
                 >
                   <div className="aspect-video w-full overflow-hidden rounded-t-lg">
                     {course.image ? (
                       <img
-                        src={`/api/image/teacher-course/${course.image.id}`}
+                        src={`/api/image/teacher-training/${course.image.id}`}
                         alt={course.title}
                         className="h-full w-full object-cover"
                       />
@@ -201,7 +201,7 @@ export default function TeacherCoursesRoute() {
                       {course.description || 'No description'}
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                      <span>{course.teacherCourseModules.length} modules</span>
+                      <span>{course.teacherTrainingModules.length} modules</span>
                       <span>{course.resources.length} resources</span>
                     </div>
                   </CardContent>

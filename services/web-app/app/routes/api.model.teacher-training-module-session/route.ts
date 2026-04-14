@@ -3,17 +3,17 @@ import { prisma } from '~/utils/db.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const json = await request.json();
-  const { teacherCourseModuleId, teacherProfileId } = json;
+  const { teacherTrainingModuleId, teacherProfileId } = json;
 
-  if (!teacherCourseModuleId || !teacherProfileId) {
+  if (!teacherTrainingModuleId || !teacherProfileId) {
     throw new Response('Invalid data', { status: 400 });
   }
 
   // Find existing session or create new one
-  const existingSession = await prisma.teacherCourseModuleSession.findUnique({
+  const existingSession = await prisma.teacherTrainingModuleSession.findUnique({
     where: {
-      teacherCourseModuleId_teacherProfileId: {
-        teacherCourseModuleId,
+      teacherTrainingModuleId_teacherProfileId: {
+        teacherTrainingModuleId,
         teacherProfileId,
       },
     },
@@ -23,9 +23,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ session: existingSession });
   }
 
-  const session = await prisma.teacherCourseModuleSession.create({
+  const session = await prisma.teacherTrainingModuleSession.create({
     data: {
-      teacherCourseModuleId,
+      teacherTrainingModuleId,
       teacherProfileId,
       videoTimestamp: 0,
     },

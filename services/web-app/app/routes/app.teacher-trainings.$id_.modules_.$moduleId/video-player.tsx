@@ -12,7 +12,7 @@ export default function VideoPlayer({
   nextModuleId,
   initialCurrentTime,
   onUpdateProgress,
-  teacherCourseId,
+  teacherTrainingId,
 }: {
   videoLink: string;
   moduleId: string;
@@ -20,7 +20,7 @@ export default function VideoPlayer({
   nextModuleId: string;
   initialCurrentTime: number;
   onUpdateProgress: (currentTime: number) => void;
-  teacherCourseId: string;
+  teacherTrainingId: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoEnded, setVideoEnded] = useState(false);
@@ -120,10 +120,10 @@ export default function VideoPlayer({
             <RotateCcw className="mr-2 h-4 w-4" />
             Replay
           </Button>
-          {teacherCourseId && nextModuleId ? (
+          {teacherTrainingId && nextModuleId ? (
             <Button asChild>
               <Link
-                to={`/app/teacher-courses/${teacherCourseId}/modules/${nextModuleId}`}
+                to={`/app/teacher-trainings/${teacherTrainingId}/modules/${nextModuleId}`}
               >
                 Next
               </Link>

@@ -23,12 +23,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentCounts = await prisma.teacherProfile.findUnique({
     where: { id: profile.teacherProfile.id },
-    select: { _count: { select: { assignedTeacherCourses: true } } },
+    select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
-    (assignmentCounts?._count.assignedTeacherCourses ?? 0) > 0;
+    (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
 
-  const teacherCourse = await prisma.teacherCourse.findFirst({
+  const teacherTraining = await prisma.teacherTraining.findFirst({
     where: {
       id: params.id,
       ...(hasAssignedCourses
@@ -37,7 +37,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     include: {
       image: { select: { id: true } },
-      teacherCourseModules: {
+      teacherTrainingModules: {
         include: {
           resources: {
             select: {
@@ -46,7 +46,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               contentType: true,
             },
           },
-          teacherCourseModuleSessions: {
+          teacherTrainingModuleSessions: {
             where: {
               teacherProfileId: profile.teacherProfile.id,
             },
@@ -61,11 +61,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  if (!teacherCourse) {
-    throw new Response('Teacher course not found', { status: 404 });
+  if (!teacherTraining) {
+    throw new Response('Teacher training not found', { status: 404 });
   }
 
-  return dataResponse({ teacherCourse });
+  return dataResponse({ teacherTraining });
 }
 
 function formatDuration(seconds: number | null): string {
@@ -82,12 +82,12 @@ function formatDuration(seconds: number | null): string {
   }
 }
 
-export default function TeacherCourseRoute() {
-  const { teacherCourse } = useLoaderData<typeof loader>();
+export default function TeacherTrainingRoute() {
+  const { teacherTraining } = useLoaderData<typeof loader>();
 
-  const totalModules = teacherCourse.teacherCourseModules.length;
-  const completedModules = teacherCourse.teacherCourseModules.filter((mod) =>
-    mod.teacherCourseModuleSessions.some(
+  const totalModules = teacherTraining.teacherTrainingModules.length;
+  const completedModules = teacherTraining.teacherTrainingModules.filter((mod) =>
+    mod.teacherTrainingModuleSessions.some(
       (session) => session.videoTimestamp === mod.videoDuration
     )
   ).length;
@@ -96,15 +96,15 @@ export default function TeacherCourseRoute() {
     totalModules > 0 ? (completedModules / totalModules) * 100 : 0
   );
 
-  const totalCourseDuration = teacherCourse.teacherCourseModules.reduce(
+  const totalCourseDuration = teacherTraining.teacherTrainingModules.reduce(
     (sum, module) => sum + (module.videoDuration || 0),
     0
   );
 
   const nextAction = useMemo(() => {
-    const inProgressModule = teacherCourse.teacherCourseModules.find(
+    const inProgressModule = teacherTraining.teacherTrainingModules.find(
       (module) => {
-        const session = module.teacherCourseModuleSessions[0];
+        const session = module.teacherTrainingModuleSessions[0];
         if (!session) return true;
         return session.videoTimestamp !== (module.videoDuration ?? 0);
       }
@@ -114,14 +114,14 @@ export default function TeacherCourseRoute() {
       return {
         module: inProgressModule,
         type: 'continue' as const,
-        session: inProgressModule.teacherCourseModuleSessions[0],
+        session: inProgressModule.teacherTrainingModuleSessions[0],
       };
     }
 
-    const nextModule = teacherCourse.teacherCourseModules.find(
+    const nextModule = teacherTraining.teacherTrainingModules.find(
       (module) =>
-        !module.teacherCourseModuleSessions.length ||
-        module.teacherCourseModuleSessions.some(
+        !module.teacherTrainingModuleSessions.length ||
+        module.teacherTrainingModuleSessions.some(
           (session) => session.videoTimestamp !== (module.videoDuration ?? 0)
         )
     );
@@ -152,10 +152,10 @@ export default function TeacherCourseRoute() {
             {/* Course Image */}
             <div className="w-full lg:w-80 xl:w-96">
               <div className="aspect-video h-full w-full overflow-hidden rounded-lg border">
-                {teacherCourse.image ? (
+                {teacherTraining.image ? (
                   <img
-                    src={`/api/image/teacher-course/${teacherCourse.image.id}`}
-                    alt={teacherCourse.title}
+                    src={`/api/image/teacher-training/${teacherTraining.image.id}`}
+                    alt={teacherTraining.title}
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -171,12 +171,12 @@ export default function TeacherCourseRoute() {
               <div className="flex justify-between gap-3">
                 <div>
                   <h1 className="text-3xl font-bold text-foreground">
-                    {teacherCourse.title}
+                    {teacherTraining.title}
                   </h1>
 
-                  {teacherCourse.description && (
+                  {teacherTraining.description && (
                     <p className="mt-2 text-muted-foreground">
-                      {teacherCourse.description}
+                      {teacherTraining.description}
                     </p>
                   )}
                 </div>
@@ -224,7 +224,7 @@ export default function TeacherCourseRoute() {
                 <div className="mt-6">
                   <Button asChild className="w-full" size="lg">
                     <Link
-                      to={`/app/teacher-courses/${teacherCourse.id}/modules/${nextAction.module.id}`}
+                      to={`/app/teacher-trainings/${teacherTraining.id}/modules/${nextAction.module.id}`}
                     >
                       <Play className="mr-2 h-5 w-5" />
                       {nextAction.type === 'continue' && nextAction.session
@@ -244,8 +244,8 @@ export default function TeacherCourseRoute() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Modules List */}
           <div className="lg:col-span-2 space-y-2">
-            {teacherCourse.teacherCourseModules.map((module, index) => {
-              const session = module.teacherCourseModuleSessions[0];
+            {teacherTraining.teacherTrainingModules.map((module, index) => {
+              const session = module.teacherTrainingModuleSessions[0];
               const progressPct = Math.ceil(
                 ((session?.videoTimestamp || 0) / (module.videoDuration || 0)) *
                   100
@@ -254,7 +254,7 @@ export default function TeacherCourseRoute() {
               return (
                 <Link
                   key={module.id}
-                  to={`/app/teacher-courses/${teacherCourse.id}/modules/${module.id}`}
+                  to={`/app/teacher-trainings/${teacherTraining.id}/modules/${module.id}`}
                   className="group block"
                 >
                   <div className="flex bg-muted shadow-sm items-center gap-4 rounded-lg border p-4 transition-all hover:bg-muted/50 hover:shadow-sm">

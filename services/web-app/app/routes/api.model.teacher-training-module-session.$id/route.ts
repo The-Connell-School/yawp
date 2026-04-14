@@ -12,7 +12,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     throw new Response('Invalid data', { status: 400 });
   }
 
-  const session = await prisma.teacherCourseModuleSession.update({
+  const session = await prisma.teacherTrainingModuleSession.update({
     where: { id: params.id },
     data: {
       videoTimestamp,

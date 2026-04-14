@@ -31,8 +31,8 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [teacherCourseModule, teacherCourse] = await Promise.all([
-    prisma.teacherCourseModule.findUnique({
+  const [teacherTrainingModule, teacherTraining] = await Promise.all([
+    prisma.teacherTrainingModule.findUnique({
       where: { id: params.moduleId },
       include: {
         resources: {
@@ -44,25 +44,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
           orderBy: { createdAt: 'desc' },
         },
-        teacherCourse: {
+        teacherTraining: {
           select: { id: true, title: true },
         },
       },
     }),
-    prisma.teacherCourse.findUnique({
+    prisma.teacherTraining.findUnique({
       where: { id: params.id },
       select: { id: true, title: true },
     }),
   ]);
 
-  if (!teacherCourseModule || !teacherCourse) {
+  if (!teacherTrainingModule || !teacherTraining) {
     throw new Response('Not Found', { status: 404 });
   }
 
   // Transform resources to include byteLength instead of blob
   const transformedModule = {
-    ...teacherCourseModule,
-    resources: teacherCourseModule.resources.map((resource) => ({
+    ...teacherTrainingModule,
+    resources: teacherTrainingModule.resources.map((resource) => ({
       id: resource.id,
       name: resource.name,
       contentType: resource.contentType,
@@ -71,8 +71,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   };
 
   return dataResponse({
-    teacherCourseModule: transformedModule,
-    teacherCourse,
+    teacherTrainingModule: transformedModule,
+    teacherTraining,
   });
 }
 
@@ -83,11 +83,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteModule') {
-    await prisma.teacherCourseModule.delete({
+    await prisma.teacherTrainingModule.delete({
       where: { id: params.moduleId },
     });
 
-    return redirect(`/app/admin/teacher-courses/${params.id}`);
+    return redirect(`/app/admin/teacher-trainings/${params.id}`);
   }
 
   if (intent === 'updateModule') {
@@ -110,7 +110,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ? Math.floor(Number(videoDurationStr))
       : null;
 
-    await prisma.teacherCourseModule.update({
+    await prisma.teacherTrainingModule.update({
       where: { id: params.moduleId },
       data: {
         title,
@@ -136,12 +136,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
-          await prisma.teacherCourseModuleResource.create({
+          await prisma.teacherTrainingModuleResource.create({
             data: {
               name: file.name,
               contentType: file.type,
               blob: buffer,
-              teacherCourseModuleId: params.moduleId!,
+              teacherTrainingModuleId: params.moduleId!,
             },
           });
         }
@@ -158,7 +158,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Resource ID is required', { status: 400 });
     }
 
-    await prisma.teacherCourseModuleResource.delete({
+    await prisma.teacherTrainingModuleResource.delete({
       where: { id: resourceId },
     });
 
@@ -168,8 +168,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return dataResponse({ status: 'error' });
 }
 
-export default function TeacherCourseModuleRoute() {
-  const { teacherCourseModule, teacherCourse } = useLoaderData<typeof loader>();
+export default function TeacherTrainingModuleRoute() {
+  const { teacherTrainingModule, teacherTraining } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [isResourceSheetOpen, setIsResourceSheetOpen] = React.useState(false);
@@ -209,8 +209,8 @@ export default function TeacherCourseModuleRoute() {
         // Perform multipart upload, then set hidden input value
         const { key } = await uploadFile({
           file,
-          teacherCourseId: teacherCourse.id,
-          moduleId: teacherCourseModule.id,
+          teacherTrainingId: teacherTraining.id,
+          moduleId: teacherTrainingModule.id,
         });
         const hidden = document.getElementById(
           'videoS3Key'
@@ -267,9 +267,9 @@ export default function TeacherCourseModuleRoute() {
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to={`/app/admin/teacher-courses/${teacherCourse.id}`}>
+          <Link to={`/app/admin/teacher-trainings/${teacherTraining.id}`}>
             <ChevronLeft size={18} />
-            Back to {teacherCourse.title}
+            Back to {teacherTraining.title}
           </Link>
         </Button>
         <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ export default function TeacherCourseModuleRoute() {
               }}
             >
               <SheetHeader>
-                <SheetTitle>Edit Teacher Course Module</SheetTitle>
+                <SheetTitle>Edit Teacher Training Module</SheetTitle>
               </SheetHeader>
               <fetcher.Form method="post" className="mt-4 space-y-4">
                 <input type="hidden" name="intent" value="updateModule" />
@@ -308,7 +308,7 @@ export default function TeacherCourseModuleRoute() {
                   <Input
                     id="title"
                     name="title"
-                    defaultValue={teacherCourseModule.title}
+                    defaultValue={teacherTrainingModule.title}
                     required
                   />
                 </div>
@@ -317,7 +317,7 @@ export default function TeacherCourseModuleRoute() {
                   <Textarea
                     id="description"
                     name="description"
-                    defaultValue={teacherCourseModule.description || ''}
+                    defaultValue={teacherTrainingModule.description || ''}
                     rows={3}
                   />
                 </div>
@@ -371,7 +371,7 @@ export default function TeacherCourseModuleRoute() {
           <ConfirmationDialog
             variant="destructive"
             title="Delete Module"
-            description={`Are you sure you want to delete "${teacherCourseModule.title}"? This action cannot be undone and will permanently remove the module and all its resources.`}
+            description={`Are you sure you want to delete "${teacherTrainingModule.title}"? This action cannot be undone and will permanently remove the module and all its resources.`}
             confirmText="Delete Module"
             cancelText="Cancel"
             onConfirm={() => {
@@ -399,7 +399,7 @@ export default function TeacherCourseModuleRoute() {
                 Title
               </dt>
               <dd className="text-base font-medium">
-                {teacherCourseModule.title}
+                {teacherTrainingModule.title}
               </dd>
             </div>
             <div>
@@ -407,7 +407,7 @@ export default function TeacherCourseModuleRoute() {
                 Created At
               </dt>
               <dd className="text-base">
-                {new Date(teacherCourseModule.createdAt).toLocaleDateString()}
+                {new Date(teacherTrainingModule.createdAt).toLocaleDateString()}
               </dd>
             </div>
             <div>
@@ -415,16 +415,16 @@ export default function TeacherCourseModuleRoute() {
                 Description
               </dt>
               <dd className="text-base">
-                {teacherCourseModule.description || 'No description'}
+                {teacherTrainingModule.description || 'No description'}
               </dd>
             </div>
-            {teacherCourseModule.videoDuration && (
+            {teacherTrainingModule.videoDuration && (
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">
                   Video Duration
                 </dt>
                 <dd className="text-base">
-                  {formatDuration(teacherCourseModule.videoDuration)}
+                  {formatDuration(teacherTrainingModule.videoDuration)}
                 </dd>
               </div>
             )}
@@ -432,7 +432,7 @@ export default function TeacherCourseModuleRoute() {
         </CardContent>
       </Card>
 
-      {teacherCourseModule.videoS3Key && (
+      {teacherTrainingModule.videoS3Key && (
         <Card className="bg-muted">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -444,12 +444,12 @@ export default function TeacherCourseModuleRoute() {
             <div className="space-y-4">
               <div className="flex items-center justify-between text-sm text-muted-foreground">
                 <span>
-                  Video format: {teacherCourseModule.videoS3Key || 'Unknown'}
+                  Video format: {teacherTrainingModule.videoS3Key || 'Unknown'}
                 </span>
-                {teacherCourseModule.videoDuration && (
+                {teacherTrainingModule.videoDuration && (
                   <span>
                     Duration:{' '}
-                    {formatDuration(teacherCourseModule.videoDuration)}
+                    {formatDuration(teacherTrainingModule.videoDuration)}
                   </span>
                 )}
               </div>
@@ -512,13 +512,13 @@ export default function TeacherCourseModuleRoute() {
           </Sheet>
         </CardHeader>
         <CardContent>
-          {teacherCourseModule.resources.length === 0 ? (
+          {teacherTrainingModule.resources.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
               No resources yet. Upload files to get started.
             </div>
           ) : (
             <div className="space-y-3">
-              {teacherCourseModule.resources.map((resource) => (
+              {teacherTrainingModule.resources.map((resource) => (
                 <div
                   key={resource.id}
                   className="flex items-center justify-between p-3 border rounded-lg bg-background"
@@ -536,7 +536,7 @@ export default function TeacherCourseModuleRoute() {
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" asChild>
                       <a
-                        href={`/api/teacher-course-module-resource/${resource.id}`}
+                        href={`/api/teacher-training-module-resource/${resource.id}`}
                         download
                       >
                         Download

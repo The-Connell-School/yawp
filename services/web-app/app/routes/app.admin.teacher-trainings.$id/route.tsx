@@ -57,10 +57,10 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const teacherCourse = await prisma.teacherCourse.findUnique({
+  const teacherTraining = await prisma.teacherTraining.findUnique({
     where: { id: params.id },
     include: {
-      teacherCourseModules: {
+      teacherTrainingModules: {
         include: {
           resources: {
             select: {
@@ -80,14 +80,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  if (!teacherCourse) {
+  if (!teacherTraining) {
     throw new Response('Not Found', { status: 404 });
   }
 
   // Transform resources to include byteLength instead of blob
   const transformedCourse = {
-    ...teacherCourse,
-    teacherCourseModules: teacherCourse.teacherCourseModules.map((module) => ({
+    ...teacherTraining,
+    teacherTrainingModules: teacherTraining.teacherTrainingModules.map((module) => ({
       ...module,
       resources: module.resources.map((resource) => ({
         id: resource.id,
@@ -98,7 +98,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     })),
   };
 
-  return dataResponse({ teacherCourse: transformedCourse });
+  return dataResponse({ teacherTraining: transformedCourse });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -108,11 +108,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteCourse') {
-    await prisma.teacherCourse.delete({
+    await prisma.teacherTraining.delete({
       where: { id: params.id },
     });
 
-    return redirect('/app/admin/teacher-courses');
+    return redirect('/app/admin/teacher-trainings');
   }
 
   if (intent === 'updateCourse') {
@@ -127,26 +127,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
-        await tx.teacherCourseImage.deleteMany({
-          where: { teacherCourseId: params.id },
+        await tx.teacherTrainingImage.deleteMany({
+          where: { teacherTrainingId: params.id },
         });
       } else if (imageFile && imageFile.size > 0) {
         const arrayBuffer = await imageFile.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await tx.teacherCourseImage.deleteMany({
-          where: { teacherCourseId: params.id },
+        await tx.teacherTrainingImage.deleteMany({
+          where: { teacherTrainingId: params.id },
         });
-        await tx.teacherCourseImage.create({
+        await tx.teacherTrainingImage.create({
           data: {
             contentType: imageFile.type,
             blob: buffer,
-            teacherCourseId: params.id!,
+            teacherTrainingId: params.id!,
           },
         });
       }
 
-      await tx.teacherCourse.update({
+      await tx.teacherTraining.update({
         where: { id: params.id },
         data: {
           title,
@@ -172,8 +172,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Video file is required', { status: 400 });
     }
 
-    const moduleCount = await prisma.teacherCourseModule.count({
-      where: { teacherCourseId: params.id },
+    const moduleCount = await prisma.teacherTrainingModule.count({
+      where: { teacherTrainingId: params.id },
     });
 
     let finalVideoLink = null;
@@ -188,14 +188,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       throw new Response('Missing videoS3Key', { status: 400 });
     }
 
-    await prisma.teacherCourseModule.create({
+    await prisma.teacherTrainingModule.create({
       data: {
         title,
         description: description || null,
         videoS3Key,
         videoDuration,
         position: moduleCount,
-        teacherCourseId: params.id!,
+        teacherTrainingId: params.id!,
       },
     });
 
@@ -207,7 +207,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await Promise.all(
       moduleIds.map((moduleId: string, index: number) =>
-        prisma.teacherCourseModule.update({
+        prisma.teacherTrainingModule.update({
           where: { id: moduleId },
           data: { position: index },
         })
@@ -231,12 +231,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
           const arrayBuffer = await file.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
 
-          await prisma.teacherCourseModuleResource.create({
+          await prisma.teacherTrainingModuleResource.create({
             data: {
               name: file.name,
               contentType: file.type,
               blob: buffer,
-              teacherCourseModuleId: moduleId,
+              teacherTrainingModuleId: moduleId,
             },
           });
         }
@@ -249,8 +249,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return dataResponse({ status: 'error' });
 }
 
-export default function TeacherCourseRoute() {
-  const { teacherCourse } = useLoaderData<typeof loader>();
+export default function TeacherTrainingRoute() {
+  const { teacherTraining } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
@@ -270,11 +270,11 @@ export default function TeacherCourseRoute() {
 
   // --- Drag and drop state for modules ---
   const [modules, setModules] = React.useState(
-    teacherCourse.teacherCourseModules
+    teacherTraining.teacherTrainingModules
   );
   React.useEffect(() => {
-    setModules(teacherCourse.teacherCourseModules);
-  }, [teacherCourse.teacherCourseModules]);
+    setModules(teacherTraining.teacherTrainingModules);
+  }, [teacherTraining.teacherTrainingModules]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -431,7 +431,7 @@ export default function TeacherCourseRoute() {
         // Perform multipart upload, then set hidden input value
         const { key } = await uploadFile({
           file,
-          teacherCourseId: teacherCourse.id,
+          teacherTrainingId: teacherTraining.id,
           moduleId: 'new',
         });
         const hidden = document.getElementById(
@@ -467,9 +467,9 @@ export default function TeacherCourseRoute() {
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to="/app/admin/teacher-courses">
+          <Link to="/app/admin/teacher-trainings">
             <ChevronLeft size={18} />
-            All teacher courses
+            All teacher trainings
           </Link>
         </Button>
         <div className="flex items-center gap-2">
@@ -491,7 +491,7 @@ export default function TeacherCourseRoute() {
             </SheetTrigger>
             <SheetContent>
               <SheetHeader>
-                <SheetTitle>Edit Teacher Course</SheetTitle>
+                <SheetTitle>Edit Teacher Training</SheetTitle>
               </SheetHeader>
               <fetcher.Form
                 method="post"
@@ -502,12 +502,12 @@ export default function TeacherCourseRoute() {
                 <div className="space-y-2">
                   <Label>Course Image</Label>
                   <div className="flex flex-col items-center gap-4">
-                    {previewUrl || (teacherCourse.image && !hasRemovedImage) ? (
+                    {previewUrl || (teacherTraining.image && !hasRemovedImage) ? (
                       <div className="relative w-full">
                         <img
                           src={
                             previewUrl ||
-                            `/api/image/teacher-course/${teacherCourse.image?.id}`
+                            `/api/image/teacher-training/${teacherTraining.image?.id}`
                           }
                           alt=""
                           className="h-48 w-full rounded-lg object-cover"
@@ -521,7 +521,7 @@ export default function TeacherCourseRoute() {
                         >
                           <TrashIcon className="h-4 w-4" />
                         </Button>
-                        {teacherCourse.image && !previewUrl && (
+                        {teacherTraining.image && !previewUrl && (
                           <input
                             type="hidden"
                             name="deleteImage"
@@ -550,7 +550,7 @@ export default function TeacherCourseRoute() {
                       className="hidden"
                       onChange={handleImageChange}
                     />
-                    {!previewUrl && !teacherCourse.image && (
+                    {!previewUrl && !teacherTraining.image && (
                       <Button
                         type="button"
                         variant="outline"
@@ -566,7 +566,7 @@ export default function TeacherCourseRoute() {
                   <Input
                     id="title"
                     name="title"
-                    defaultValue={teacherCourse.title}
+                    defaultValue={teacherTraining.title}
                     required
                   />
                 </div>
@@ -575,7 +575,7 @@ export default function TeacherCourseRoute() {
                   <Textarea
                     id="description"
                     name="description"
-                    defaultValue={teacherCourse.description || ''}
+                    defaultValue={teacherTraining.description || ''}
                     rows={3}
                   />
                 </div>
@@ -595,8 +595,8 @@ export default function TeacherCourseRoute() {
           </Sheet>
           <ConfirmationDialog
             variant="destructive"
-            title="Delete Teacher Course"
-            description={`Are you sure you want to delete "${teacherCourse.title}"? This action cannot be undone and will permanently remove the course and all its modules.`}
+            title="Delete Teacher Training"
+            description={`Are you sure you want to delete "${teacherTraining.title}"? This action cannot be undone and will permanently remove the course and all its modules.`}
             confirmText="Delete Course"
             cancelText="Cancel"
             onConfirm={() => {
@@ -623,14 +623,14 @@ export default function TeacherCourseRoute() {
               <dt className="text-sm font-medium text-muted-foreground">
                 Title
               </dt>
-              <dd className="text-base font-medium">{teacherCourse.title}</dd>
+              <dd className="text-base font-medium">{teacherTraining.title}</dd>
             </div>
             <div>
               <dt className="text-sm font-medium text-muted-foreground">
                 Created At
               </dt>
               <dd className="text-base">
-                {new Date(teacherCourse.createdAt).toLocaleDateString()}
+                {new Date(teacherTraining.createdAt).toLocaleDateString()}
               </dd>
             </div>
             <div>
@@ -638,7 +638,7 @@ export default function TeacherCourseRoute() {
                 Description
               </dt>
               <dd className="text-base">
-                {teacherCourse.description || 'No description'}
+                {teacherTraining.description || 'No description'}
               </dd>
             </div>
           </dl>
