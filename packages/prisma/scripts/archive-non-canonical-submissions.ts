@@ -1,23 +1,24 @@
 /**
- * Archive Submission rows that are not the canonical "real" submit for a document.
+ * Delete Submission rows that are not the canonical "real" submit (or are version-only snapshots).
+ * `SubmissionComment` rows cascade; `LegacyGradeRedirect` is removed first (no FK to Submission).
  *
  * Modes (`DERIVE_CANONICAL_FROM`):
  * - `submitted_snapshot_id` (default): SOURCE_DATABASE_URL must be a pre-consolidate DB with
  *   `Document.submittedSnapshotId`. TARGET_DATABASE_URL = current DB.
- * - `snapshot_submitted_at`: SOURCE has `DocumentSnapshot` (pre-consolidate). Archive each target
+ * - `snapshot_submitted_at`: SOURCE has `DocumentSnapshot` (pre-consolidate). Delete each target
  *   `Submission` whose id is a snapshot with `submittedAt IS NULL` (version-only rows per
  *   `20260222000000_track_submission_snapshots`); keep snapshots that were backfilled as submits/grades.
  * - `latest_submitted_at`: no source dump — for each document with 2+ active submissions,
- *   treat the latest by `submittedAt` (then `id`) as canonical; archive the rest (subject to KEEP_GRADED).
+ *   treat the latest by `submittedAt` (then `id`) as canonical; delete the rest (subject to KEEP_GRADED).
  *   Use when production no longer has `submittedSnapshotId` (heuristic, not identical to old pointer).
  *
  * - TARGET_DATABASE_URL: defaults to DATABASE_URL if unset.
- * - Without YAWP_CONFIRM=yes: runs updates inside a transaction and ROLLBACKs.
+ * - Without YAWP_CONFIRM=yes: runs deletes inside a transaction and ROLLBACKs.
  * - With YAWP_CONFIRM=yes: COMMITs.
  * - YAWP_DRY_RUN=1: same as preview (rollback).
  *
  * Optional: ARCHIVE_WHEN_NO_CANONICAL=yes — only for `submitted_snapshot_id` mode: for documents whose
- * old submittedSnapshotId was NULL, archive all submissions (respects KEEP_GRADED). Ignored for
+ * old submittedSnapshotId was NULL, delete all submissions (respects KEEP_GRADED). Ignored for
  * `snapshot_submitted_at`.
  *
  * Run:
@@ -107,6 +108,17 @@ function gradeSignalsSql(alias: string): string {
   `;
 }
 
+/** `LegacyGradeRedirect` has no FK; remove before deleting submissions. */
+async function deleteLegacyRedirectsForSubmissionIds(
+  client: pg.PoolClient,
+  ids: string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  await client.query(`DELETE FROM "LegacyGradeRedirect" WHERE "submissionId" = ANY($1::text[])`, [
+    ids,
+  ]);
+}
+
 async function main() {
   const targetUrl = requireEnv('TARGET_DATABASE_URL or DATABASE_URL', TARGET_URL);
 
@@ -127,7 +139,6 @@ async function main() {
   const sourcePool = sourceUrl ? new pg.Pool({ connectionString: sourceUrl }) : null;
   const targetPool = new pg.Pool({ connectionString: targetUrl });
 
-  const now = new Date();
   const willCommit = CONFIRM && !DRY_RUN;
 
   try {
@@ -148,29 +159,28 @@ async function main() {
 
       const targetClient = await targetPool.connect();
       try {
-        let archived = 0;
+        let deleted = 0;
         await targetClient.query('BEGIN');
         try {
           const chunkSize = 500;
-          const updateSql = KEEP_GRADED
+          const deleteSql = KEEP_GRADED
             ? `
-            UPDATE "Submission" s
-            SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-            WHERE s.id = ANY($2::text[])
+            DELETE FROM "Submission" s
+            WHERE s.id = ANY($1::text[])
               AND s."archivedAt" IS NULL
               AND NOT (${gradeSignalsSql('s')})
             `
             : `
-            UPDATE "Submission" s
-            SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-            WHERE s.id = ANY($2::text[])
+            DELETE FROM "Submission" s
+            WHERE s.id = ANY($1::text[])
               AND s."archivedAt" IS NULL
             `;
           for (let i = 0; i < versionOnlyIds.length; i += chunkSize) {
             const chunk = versionOnlyIds.slice(i, i + chunkSize);
             if (chunk.length === 0) continue;
-            const res = await targetClient.query(updateSql, [now, chunk]);
-            archived += res.rowCount ?? 0;
+            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
+            const res = await targetClient.query(deleteSql, [chunk]);
+            deleted += res.rowCount ?? 0;
           }
 
           if (willCommit) {
@@ -189,7 +199,7 @@ async function main() {
           throw err;
         }
 
-        console.log(`Archived (version-only snapshots): ${archived} submission rows`);
+        console.log(`Deleted (version-only snapshots): ${deleted} submission rows`);
         console.log(`KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`);
       } finally {
         targetClient.release();
@@ -255,8 +265,8 @@ async function main() {
 
     const targetClient = await targetPool.connect();
     try {
-      let archivedCanonical = 0;
-      let archivedNoCanonical = 0;
+      let deletedCanonical = 0;
+      let deletedNoCanonical = 0;
 
       await targetClient.query('BEGIN');
       try {
@@ -287,51 +297,63 @@ async function main() {
           );
         }
 
-        const canonicalUpdateSql = KEEP_GRADED
+        const doomedCanonicalSql = KEEP_GRADED
           ? `
-          UPDATE "Submission" s
-          SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-          FROM _archive_canonical_submission m
-          WHERE s."documentId" = m.document_id
-            AND s.id <> m.canonical_id
+          SELECT s.id FROM "Submission" s
+          INNER JOIN _archive_canonical_submission m ON s."documentId" = m.document_id
+          WHERE s.id <> m.canonical_id
             AND s."archivedAt" IS NULL
             AND NOT (${gradeSignalsSql('s')})
           `
           : `
-          UPDATE "Submission" s
-          SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-          FROM _archive_canonical_submission m
-          WHERE s."documentId" = m.document_id
-            AND s.id <> m.canonical_id
+          SELECT s.id FROM "Submission" s
+          INNER JOIN _archive_canonical_submission m ON s."documentId" = m.document_id
+          WHERE s.id <> m.canonical_id
             AND s."archivedAt" IS NULL
           `;
 
-        const canonicalRes = await targetClient.query(canonicalUpdateSql, [now]);
-        archivedCanonical = canonicalRes.rowCount ?? 0;
+        const doomedRows = await targetClient.query<{ id: string }>(doomedCanonicalSql);
+        const doomedIds = doomedRows.rows.map((r) => r.id);
+        for (let i = 0; i < doomedIds.length; i += chunkSize) {
+          const chunk = doomedIds.slice(i, i + chunkSize);
+          if (chunk.length === 0) continue;
+          await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
+          const delRes = await targetClient.query(
+            `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
+            [chunk],
+          );
+          deletedCanonical += delRes.rowCount ?? 0;
+        }
 
         if (useSource && ARCHIVE_WHEN_NO_CANONICAL && withoutCanonical.length > 0) {
           const ids = withoutCanonical.map((d) => d.id);
-          const res = await targetClient.query(
-            KEEP_GRADED
-              ? `
-          UPDATE "Submission" s
-          SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-          WHERE s."documentId" = ANY($2::text[])
-            AND s."archivedAt" IS NULL
-            AND NOT (${gradeSignalsSql('s')})
-          `
-              : `
-          UPDATE "Submission" s
-          SET "archivedAt" = $1::timestamptz, "updatedAt" = $1::timestamptz
-          WHERE s."documentId" = ANY($2::text[])
-            AND s."archivedAt" IS NULL
-          `,
-            [now, ids],
-          );
-          archivedNoCanonical = res.rowCount ?? 0;
+          const doomedNcSql = KEEP_GRADED
+            ? `
+            SELECT s.id FROM "Submission" s
+            WHERE s."documentId" = ANY($1::text[])
+              AND s."archivedAt" IS NULL
+              AND NOT (${gradeSignalsSql('s')})
+            `
+            : `
+            SELECT s.id FROM "Submission" s
+            WHERE s."documentId" = ANY($1::text[])
+              AND s."archivedAt" IS NULL
+            `;
+          const doomedNc = await targetClient.query<{ id: string }>(doomedNcSql, [ids]);
+          const doomedNcIds = doomedNc.rows.map((r) => r.id);
+          for (let i = 0; i < doomedNcIds.length; i += chunkSize) {
+            const chunk = doomedNcIds.slice(i, i + chunkSize);
+            if (chunk.length === 0) continue;
+            await deleteLegacyRedirectsForSubmissionIds(targetClient, chunk);
+            const delRes = await targetClient.query(
+              `DELETE FROM "Submission" WHERE id = ANY($1::text[])`,
+              [chunk],
+            );
+            deletedNoCanonical += delRes.rowCount ?? 0;
+          }
         } else if (useSource && withoutCanonical.length > 0) {
           console.log(
-            `\nINFO: ${withoutCanonical.length} documents had NULL submittedSnapshotId in source — skipped (set ARCHIVE_WHEN_NO_CANONICAL=yes to archive their submissions).`,
+            `\nINFO: ${withoutCanonical.length} documents had NULL submittedSnapshotId in source — skipped (set ARCHIVE_WHEN_NO_CANONICAL=yes to delete their submissions).`,
           );
         }
 
@@ -351,9 +373,9 @@ async function main() {
         throw err;
       }
 
-      console.log(`Archived (canonical path): ${archivedCanonical} submission rows`);
-      console.log(`Archived (no-canonical path): ${archivedNoCanonical} submission rows`);
-      console.log(`Total rows updated in transaction: ${archivedCanonical + archivedNoCanonical}`);
+      console.log(`Deleted (canonical path): ${deletedCanonical} submission rows`);
+      console.log(`Deleted (no-canonical path): ${deletedNoCanonical} submission rows`);
+      console.log(`Total rows deleted in transaction: ${deletedCanonical + deletedNoCanonical}`);
       console.log(`KEEP_GRADED=${KEEP_GRADED} DERIVE_CANONICAL_FROM=${DERIVE_MODE}`);
     } finally {
       targetClient.release();
