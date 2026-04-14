@@ -363,7 +363,7 @@ export const Tutor = ({
           respond={respond}
           showChatButton={!!instruction.showChatButton}
           showNextButton={false}
-          disabled={isSessionLocked}
+          disabled={isSessionLocked || isTutorResponding}
         />
       ) : finishedCms && nextCmId ? (
         <div
@@ -410,7 +410,7 @@ export const Tutor = ({
           respond={respond}
           showChatButton={!!instruction.showChatButton}
           showNextButton={!!instruction.showNextButton}
-          disabled={isSessionLocked}
+          disabled={isSessionLocked || isTutorResponding}
           advanceInstruction={
             isLastCmInstruction && nextCmId
               ? () => advanceToNextCourseModule()
