@@ -32,8 +32,10 @@ export async function action({ request }: ActionFunctionArgs) {
         ...(actor.isAdmin
           ? {}
           : {
-              class: {
-                teachers: { some: { profileId: actor.profileId } },
+              assignment: {
+                class: {
+                  teachers: { some: { profileId: actor.profileId } },
+                },
               },
             }),
       },

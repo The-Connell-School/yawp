@@ -69,8 +69,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       const submissions = await prisma.submission.findMany({
         where: {
           document: {
-            classId: klass.id,
             deletedAt: null,
+            assignment: {
+              classId: klass.id,
+            },
           },
         },
         select: {

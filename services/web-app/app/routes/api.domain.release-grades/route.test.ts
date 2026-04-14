@@ -10,15 +10,18 @@ const prisma = {
 const isDocumentSubmissionEnabledForSchools = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
+const buildTeacherClassWhere = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/feature-flags.server', () => ({
+  isDocumentSubmissionEnabledForSchool: mock(),
   isDocumentSubmissionEnabledForSchools,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
+  buildTeacherClassWhere,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -50,8 +53,10 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          class: {
-            schoolId: 'school-1',
+          assignment: {
+            class: {
+              schoolId: 'school-1',
+            },
           },
         },
       },

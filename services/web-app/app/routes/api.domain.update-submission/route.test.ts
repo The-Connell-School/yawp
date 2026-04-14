@@ -6,11 +6,13 @@ const prisma = {
 
 const getGradingActor = mock();
 const canManageGrades = mock();
+const buildTeacherClassWhere = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
+  buildTeacherClassWhere,
 }));
 
 const { action } = await import('./route');
@@ -73,7 +75,7 @@ describe('api.domain.update-submission', () => {
     prisma.submission.update.mockResolvedValue({ id: 'sub-1', score: '90% A' });
 
     await action({
-      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
+      request: makeRequest({ submissionId: 'sub-1', score: '90% A', markAsGraded: true }),
     } as any);
 
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];

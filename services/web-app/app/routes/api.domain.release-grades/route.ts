@@ -40,9 +40,13 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       document: {
         select: {
-          class: {
+          assignment: {
             select: {
-              schoolId: true,
+              class: {
+                select: {
+                  schoolId: true,
+                },
+              },
             },
           },
         },
@@ -58,7 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    submissions.map((s) => s.document.class?.schoolId)
+    submissions.map((s) => s.document.assignment?.class?.schoolId)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
