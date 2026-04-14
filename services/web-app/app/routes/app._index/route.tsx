@@ -49,8 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Determine which class IDs this student belongs to (for assignment fetching).
-  // Note: ClassStudentCourse whitelist is gone — AssignmentType visibility is
-  // owner-scoped (system / org / teacher) instead.
+  // Note: AssignmentType visibility is owner-scoped (system / org / teacher).
   let studentClassIds: string[] = [];
   if (profile.studentProfile) {
     const studentClasses = await prisma.class.findMany({

@@ -4,7 +4,7 @@ import { prisma } from '~/utils/db.server.ts';
 
 export async function loader({ params }: LoaderFunctionArgs) {
   invariantResponse(params.id, 'id is required', { status: 400 });
-  const image = await prisma.studentCourseImage.findUnique({
+  const image = await prisma.assignmentTypeImage.findUnique({
     where: { id: params.id },
     select: { contentType: true, blob: true },
   });
