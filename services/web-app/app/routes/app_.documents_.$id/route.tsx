@@ -16,6 +16,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { Tooltip } from '~/components/ui/tooltip';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import {
@@ -52,12 +53,16 @@ import {
   sanitizeExitTarget,
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
+import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
 import { useCommentsState } from './hooks/use-comments-state';
 import { useTutorState } from './hooks/use-tutor-state';
 import { useDocumentSubmit } from './hooks/use-document-submit';
+
+const SUBMIT_EMPTY_TOOLTIP =
+  "You can't submit an empty document. Add text first.";
 
 function sortDocumentCommentsByMarkupOrder<
   T extends { id: string; createdAt: Date | string },
@@ -218,8 +223,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const isViewingAsTeacher = profile.id !== doc.profile.id;
-
   const submissions = doc.submissions;
 
   if (shouldSaveVersion) {
@@ -311,6 +314,8 @@ export default function Route() {
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
+  // Owner or class teacher (loader); api.model.document allows both to persist edits.
+  const isDocumentEditable = true;
 
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
@@ -327,7 +332,6 @@ export default function Route() {
     submittedAt: latestSubmission?.submittedAt ?? null,
     grade: gradedCount > 0 ? { releasedAt: latestSubmission?.releasedAt } : null,
   });
-  const isDocumentEditable = !isViewingAsTeacher;
   const editorServerHtml = data.doc.html ?? '';
   const editorServerText = data.doc.text ?? '';
 
@@ -338,6 +342,14 @@ export default function Route() {
 
   // Editor bridge handle — stable ref populated by DocumentEditor.onBridgeReady
   const editorBridgeRef = useRef<EditorBridge | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const getLiveDocumentTitle = useCallback(() => {
+    if (titleInputRef.current) {
+      return titleInputRef.current.value;
+    }
+    return data.doc.title ?? '';
+  }, [data.doc.title]);
 
   // ── Extracted hooks ────────────────────────────────────────────────
   const auth = useAuthHeartbeat({
@@ -361,6 +373,13 @@ export default function Route() {
     },
   });
 
+  const [editorSubmittable, setEditorSubmittable] = useState(() =>
+    isDocumentSubmittableContent(editorServerHtml, editorServerText)
+  );
+  const handleSubmittableContentChange = useCallback((submittable: boolean) => {
+    setEditorSubmittable(submittable);
+  }, []);
+
   const isEditorEditable =
     isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
 
@@ -373,12 +392,10 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
   const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
-  // Submit button is always enabled — the editor has content by the
-  // time the user can click it. (Old polling logic deleted with Task 17.)
-  const hasEditorContent = true;
+  const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
+  const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
 
   const tutorHasPreviousCms = useMemo(() => {
     const liveCmsId = tutor.cms?.id ?? data.currentCms.id;
@@ -420,20 +437,21 @@ export default function Route() {
               <ArrowLeft className="h-4" />
               Exit
             </Button>
-            {isViewingAsTeacher ? (
-              <p className="text-xs font-semibold text-foreground md:text-md">
-                {teacherHeaderTitle}
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {studentName}
-                </span>
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {documentStatusLabel}
-                </span>
-              </p>
-            ) : (
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 md:flex-row md:items-center md:gap-4">
+              {isViewingAsTeacher ? (
+                <p className="shrink-0 text-xs font-semibold text-foreground md:text-sm">
+                  <span className="font-medium text-muted-foreground">
+                    {studentName}
+                  </span>
+                  <span className="px-2 text-muted-foreground">&bull;</span>
+                  <span className="font-medium text-muted-foreground">
+                    {documentStatusLabel}
+                  </span>
+                </p>
+              ) : null}
               <Input
+                ref={titleInputRef}
+                data-testid="document-title-input"
                 size="sm"
                 className="rounded-lg border border-transparent font-bold transition hover:border-border"
                 defaultValue={data.doc.title}
@@ -452,9 +470,9 @@ export default function Route() {
                     : undefined
                 }
               />
-            )}
+            </div>
           </div>
-          {!isViewingAsTeacher && submissions.length > 0 && (
+          {submissions.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
@@ -505,25 +523,43 @@ export default function Route() {
           <div className="ml-auto flex items-center gap-4">
             {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isSubmitting}
-                  data-testid="document-submit-button"
-                  onClick={() => {
-                    setSubmissionTitle(data.doc.title || '');
-                    setIsFinalizeDialogOpen(true);
-                  }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit'
-                  )}
-                </Button>
+                {cannotSubmitEmpty && !isSubmitting ? (
+                  <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                    <span
+                      className="inline-flex"
+                      data-testid="document-submit-empty-trigger"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled
+                        data-testid="document-submit-button"
+                      >
+                        Submit
+                      </Button>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={submitActionDisabled}
+                    data-testid="document-submit-button"
+                    onClick={() => {
+                      setSubmissionTitle(getLiveDocumentTitle());
+                      setIsFinalizeDialogOpen(true);
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit'
+                    )}
+                  </Button>
+                )}
               </>
             )}
             {isSubmitted && archivedComments.length > 0 && (
@@ -603,6 +639,7 @@ export default function Route() {
                   editorBridgeRef.current = b;
                 }}
                 onSyncStatusChange={setSyncStatus}
+                onSubmittableContentChange={handleSubmittableContentChange}
                 onCommentCreated={(c) =>
                   commentsState.addComment(c as any)
                 }
@@ -695,23 +732,38 @@ export default function Route() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="default"
-                data-testid="document-finalize-submit"
-                onClick={() => {
-                  void submit.submitNow(submissionTitle || data.doc.title || '');
-                }}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  `Submit Version ${versionNumber}`
-                )}
-              </Button>
+              {cannotSubmitEmpty && !isSubmitting ? (
+                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                  <span
+                    className="inline-flex"
+                    data-testid="document-finalize-submit-empty-trigger"
+                  >
+                    <Button variant="default" data-testid="document-finalize-submit" disabled>
+                      {`Submit Version ${versionNumber}`}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="default"
+                  data-testid="document-finalize-submit"
+                  onClick={() => {
+                    const resolved =
+                      submissionTitle.trim() || getLiveDocumentTitle().trim();
+                    void submit.submitNow(resolved);
+                  }}
+                  disabled={submitActionDisabled}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    `Submit Version ${versionNumber}`
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

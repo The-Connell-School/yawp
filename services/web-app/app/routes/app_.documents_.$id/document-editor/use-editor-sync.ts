@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/core';
 import { documentStore } from '~/utils/document-store';
 import { SyncService, type SyncStatus } from '~/utils/sync-service';
 import { contentHash } from '~/utils/content-hash';
+import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 
 export const REVISION_INTERVAL_MS = 5 * 60 * 1000;
 
@@ -52,6 +53,8 @@ type UseEditorSyncOptions = {
   initialRevision?: number;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
+  /** Fires when TipTap content changes; aligns with server submit rules (non-empty html + text). */
+  onSubmittableContentChange?: (submittable: boolean) => void;
 };
 
 /**
@@ -66,6 +69,7 @@ export function useEditorSync(
     initialRevision = 0,
     onBridgeReady,
     onSyncStatusChange,
+    onSubmittableContentChange,
   }: UseEditorSyncOptions
 ) {
   const versionRef = useRef(0);
@@ -189,6 +193,20 @@ export function useEditorSync(
       unsubSaveCount?.();
     };
   }, [editor, docId, getSnapshot]);
+
+  // Keep parent in sync for submit affordances (disabled + tooltip when empty)
+  useEffect(() => {
+    if (!editor || !onSubmittableContentChange) return;
+    const emit = () => {
+      const { html, text } = getSnapshot();
+      onSubmittableContentChange(isDocumentSubmittableContent(html, text));
+    };
+    emit();
+    editor.on('update', emit);
+    return () => {
+      editor.off('update', emit);
+    };
+  }, [editor, getSnapshot, onSubmittableContentChange]);
 
   // Expose bridge upward (no setContent — that's the architectural property)
   useEffect(() => {

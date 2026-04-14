@@ -158,16 +158,18 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         timeout: 15000,
       });
 
-      // Teacher clicks Grade from the class page — now navigates to submissions route
+      // Teacher clicks View from the class page — submissions route with edit=1
       await expect(page.getByRole('tab', { name: /submitted/i })).toBeVisible({
         timeout: 10000,
       });
       await page.getByRole('tab', { name: /submitted/i }).click();
       await page
-        .getByRole('link', { name: /^grade$/i })
+        .getByRole('link', { name: /^view$/i })
         .first()
         .click();
-      await page.waitForURL('**/app/submissions/**', { timeout: 15000 });
+      await page.waitForURL(/\/app\/submissions\/[^/]+\?edit=1/, {
+        timeout: 15000,
+      });
       await page.waitForLoadState('networkidle');
 
       for (const key of RUBRIC_KEYS) {

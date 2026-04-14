@@ -33,6 +33,8 @@
     "infra:production:init": "bun export-env && bun run --cwd infra terraform init -backend-config=envs/backends/production.backend",
     "infra:production:plan": "bun export-env && bun run --cwd infra terraform plan -var-file=envs/variables/production.tfvars",
     "infra:production:apply": "bun export-env && bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars",
-    "github:preview-config": "bash scripts/github-preview-config.sh"
+    "github:preview-config": "bash scripts/github-preview-config.sh",
+    "db:restore-local-from-s3": "bash scripts/restore-local-from-s3.sh",
+    "db:sync-local-from-production": "bash scripts/sync-production-db-to-local.sh"
   }
 }

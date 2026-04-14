@@ -21,25 +21,46 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     baseRevision?: number;
   };
 
-  const [user, document] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { isAdmin: true },
-    }),
-    prisma.document.findUniqueOrThrow({
-      where: { id: params.id },
-      select: {
-        id: true,
-        profileId: true,
-        html: true,
-        text: true,
-        revision: true,
-        updatedAt: true,
-      },
-    }),
-  ]);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
 
-  if (!user.isAdmin && document.profileId !== profile.id) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...(user.isAdmin
+        ? {}
+        : {
+            OR: [
+              { profileId: profile.id },
+              {
+                profile: {
+                  studentProfile: {
+                    classes: {
+                      some: {
+                        teachers: {
+                          some: { profileId: profile.id },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
+    },
+    select: {
+      id: true,
+      profileId: true,
+      html: true,
+      text: true,
+      revision: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!document) {
     return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },

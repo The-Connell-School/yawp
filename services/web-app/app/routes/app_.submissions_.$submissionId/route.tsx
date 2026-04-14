@@ -1,7 +1,14 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
-import { useLoaderData, Link, useSearchParams, useNavigate, useFetcher } from 'react-router';
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  useLoaderData,
+  Link,
+  useSearchParams,
+  useNavigate,
+  useFetcher,
+  useLocation,
+} from 'react-router';
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -197,13 +204,20 @@ export default function SubmissionRoute() {
     useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
   // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
   // When no param, fall back to loader default (ungraded = grade mode).
   const editParam = searchParams.get('edit');
   const isGradeMode = isTeacher && (editParam !== null ? editParam === '1' : loaderGradeMode);
+
+  const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
+  const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+
+  const effectiveGradedAt = localGradedAt ?? submission.gradedAt;
+  const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
   // Students viewing a submission whose grade hasn't been released yet
-  const isPending = isOwner && !submission.releasedAt;
+  const isPending = isOwner && !effectiveReleasedAt;
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -229,17 +243,29 @@ export default function SubmissionRoute() {
     submission.score ||
     (submission.overallScore ? `${submission.overallScore}/5` : null);
 
-  // ── Status badge ───────────────────────────────────────────────────
-  const statusLabel = submission.gradedAt
-    ? 'Graded'
-    : submission.submittedAt
-      ? 'Submitted'
-      : 'Draft';
-  const statusVariant = submission.gradedAt
-    ? ('success' as const)
-    : submission.submittedAt
-      ? ('info-outlined' as const)
-      : ('secondary' as const);
+  // ── Status badge (reflects optimistic save / release) ─────────────
+  const statusLabel = isOwner
+    ? effectiveReleasedAt
+      ? 'Graded'
+      : submission.submittedAt
+        ? 'Submitted'
+        : 'Draft'
+    : effectiveGradedAt
+      ? 'Graded'
+      : submission.submittedAt
+        ? 'Submitted'
+        : 'Draft';
+  const statusVariant = isOwner
+    ? effectiveReleasedAt
+      ? ('success' as const)
+      : submission.submittedAt
+        ? ('info-outlined' as const)
+        : ('secondary' as const)
+    : effectiveGradedAt
+      ? ('success' as const)
+      : submission.submittedAt
+        ? ('info-outlined' as const)
+        : ('secondary' as const);
 
   // ── Local comments state (optimistic, no revalidation) ─────────────
   const [comments, setComments] = useState(submission.comments);
@@ -295,6 +321,9 @@ export default function SubmissionRoute() {
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
+  /** Student-only: hide purple AI grammar marks in the essay (teacher feedback marks stay). */
+  const [studentGrammarHighlightsVisible, setStudentGrammarHighlightsVisible] =
+    useState(true);
 
   // Resync grammar issues when persisted value changes
   const lastPersistedRef = useRef(persistedGrammarIssues);
@@ -327,21 +356,31 @@ export default function SubmissionRoute() {
       .filter((issue): issue is GrammarIssue => issue != null);
   }, [grammarIssues, tooltipIssueIds]);
 
+  const showGrammarMarksInEssay =
+    isPending ||
+    !isOwner ||
+    isTeacher ||
+    studentGrammarHighlightsVisible;
+
   const essayHighlights = useMemo(() => [
-    ...comments.map((c) => ({
-      id: c.id,
-      excerpt: c.excerpt,
-      occurrence: c.occurrence,
-      dataAttr: 'data-grade-comment-id' as const,
-      className: 'grade-comment-mark',
-    })),
-    ...(isPending ? [] : visibleGrammarIssues.map((g) => ({
-      id: g.id,
-      excerpt: g.excerpt,
-      occurrence: g.occurrence,
-      dataAttr: 'data-grammar-issue-id' as const,
-      className: 'grammar-issue-mark',
-    }))),
+    ...(isPending
+      ? []
+      : comments.map((c) => ({
+          id: c.id,
+          excerpt: c.excerpt,
+          occurrence: c.occurrence,
+          dataAttr: 'data-grade-comment-id' as const,
+          className: 'grade-comment-mark',
+        }))),
+    ...(isPending || !showGrammarMarksInEssay
+      ? []
+      : visibleGrammarIssues.map((g) => ({
+          id: g.id,
+          excerpt: g.excerpt,
+          occurrence: g.occurrence,
+          dataAttr: 'data-grammar-issue-id' as const,
+          className: 'grammar-issue-mark',
+        }))),
     ...(draftHighlight
       ? [{
           id: 'draft',
@@ -351,7 +390,19 @@ export default function SubmissionRoute() {
           className: 'grade-comment-mark draft',
         }]
       : []),
-  ], [comments, visibleGrammarIssues, draftHighlight, isPending]);
+  ], [
+    comments,
+    visibleGrammarIssues,
+    draftHighlight,
+    isPending,
+    showGrammarMarksInEssay,
+  ]);
+
+  useEffect(() => {
+    if (studentGrammarHighlightsVisible || !isOwner) return;
+    setTooltipIssueIds([]);
+    setTooltipRect(null);
+  }, [studentGrammarHighlightsVisible, isOwner]);
 
   const handleGrammarIssueHover = useCallback(
     (ids: string[], rect: DOMRect | null) => {
@@ -399,11 +450,9 @@ export default function SubmissionRoute() {
 
   // ── Save / Release grade ────────────────────────────────────────────
   const releaseFetcher = useFetcher<{ success?: boolean }>();
-  const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
-  const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
   const [isSavingGrade, setIsSavingGrade] = useState(false);
-  const isReleased = localReleasedAt !== null || submission.releasedAt !== null;
-  const isGraded = localGradedAt !== null || submission.gradedAt !== null;
+  const isReleased = !!effectiveReleasedAt;
+  const isGraded = !!effectiveGradedAt;
   const canSaveGrade = isTeacher && isGradeMode && !isGraded;
   const canRelease = isTeacher && isGraded && !isReleased;
   const isReleasing = releaseFetcher.state !== 'idle';
@@ -448,6 +497,10 @@ export default function SubmissionRoute() {
   // ── Paths ──────────────────────────────────────────────────────────
   const revisePath = `/app/documents/${submission.documentId}?revise=1`;
   const editGradePath = `/app/submissions/${submission.id}?edit=1`;
+  const viewDocumentHref = useMemo(() => {
+    const returnUrl = `${location.pathname}${location.search}${location.hash}`;
+    return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
+  }, [location.pathname, location.search, location.hash, submission.documentId]);
 
   return (
     <main className="flex h-screen flex-col bg-background">
@@ -486,6 +539,18 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          {isTeacher ? (
+            <Button size="sm" variant="outline" asChild>
+              <Link
+                to={viewDocumentHref}
+                data-testid="submission-view-document"
+                className="gap-1.5"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                View document
+              </Link>
+            </Button>
+          ) : null}
           {/* Teacher: Save Grade → Release Grade flow */}
           {canSaveGrade ? (
             <Button
@@ -516,6 +581,22 @@ export default function SubmissionRoute() {
           ) : null}
           {isTeacher && isReleased ? (
             <Badge variant="success" className="shrink-0">Released</Badge>
+          ) : null}
+          {isOwner && !isPending && persistedGrammarIssues.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-pressed={studentGrammarHighlightsVisible}
+              data-testid="toggle-grammar-highlights"
+              onClick={() =>
+                setStudentGrammarHighlightsVisible((v) => !v)
+              }
+            >
+              {studentGrammarHighlightsVisible
+                ? 'Hide grammar highlights'
+                : 'Show grammar highlights'}
+            </Button>
           ) : null}
           {/* Student: Revise Essay link */}
           {isOwner ? (

@@ -36,6 +36,10 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
       const res = await fetch('/api/domain/submit-document', {
         method: 'POST',
         body: formData,
+        // Default fetch follows redirects; redirectWithToast (302) becomes a 200 HTML
+        // response from the redirect target — res.ok is true, JSON parse fails, and we
+        // must not treat that as success.
+        redirect: 'manual',
       });
 
       if (!res.ok) {
@@ -45,8 +49,23 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
       }
 
       const body = await res.json().catch(() => ({}));
+
+      const submission = (body as { submission?: { id: string; title: string; submittedAt: Date | string } })
+        .submission;
+      if (!submission?.id) {
+        toast.error('Submission failed: invalid server response.');
+        return;
+      }
+
       toast.success('Submitted!');
-      onSubmitted?.(body.submission ?? { id: `temp-${Date.now()}`, title: title ?? '', submittedAt: new Date().toISOString() });
+      onSubmitted?.({
+        id: submission.id,
+        title: submission.title,
+        submittedAt:
+          typeof submission.submittedAt === 'string'
+            ? submission.submittedAt
+            : submission.submittedAt.toISOString(),
+      });
     } catch (err) {
       toast.error('Submission failed: ' + (err instanceof Error ? err.message : 'unknown'));
     } finally {

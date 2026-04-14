@@ -54,10 +54,13 @@ export function SubmissionCommentCard({
       ref={cardRef}
       onClick={onClick}
       className={cn(
-        'group w-full rounded-lg border p-3 text-left transition-all duration-100',
-        readOnly ? 'bg-white' : 'bg-muted/30 hover:border-yellow-300 hover:bg-white',
-        onClick && 'cursor-pointer',
-        isActive && 'border-yellow-300 bg-white shadow-sm'
+        'group w-full rounded-lg border p-3 text-left transition-[box-shadow,background-color,border-color] duration-200',
+        isActive
+          ? 'comment-card-focused'
+          : readOnly
+            ? 'bg-white'
+            : 'bg-muted/30 hover:border-yellow-300 hover:bg-white',
+        onClick && 'cursor-pointer'
       )}
     >
       <div className="flex items-start justify-between gap-2">

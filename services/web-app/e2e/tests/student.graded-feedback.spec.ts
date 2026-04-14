@@ -11,6 +11,10 @@ test.describe.serial('Student reads teacher feedback on a released grade', () =>
     await page.waitForLoadState('networkidle');
 
     await expect(
+      page.locator('nav').getByText('Graded', { exact: true })
+    ).toBeVisible();
+
+    await expect(
       page.getByRole('heading', { name: /overall grade/i })
     ).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('paragraph').filter({ hasText: /^77%\s*\(C\+\)$/ })).toBeVisible();
@@ -38,5 +42,14 @@ test.describe.serial('Student reads teacher feedback on a released grade', () =>
     await expect(
       page.getByText('Education is the foundation of society.')
     ).toBeVisible();
+
+    await expect(page.locator('.grammar-issue-mark')).toHaveCount(1);
+
+    await page.getByTestId('toggle-grammar-highlights').click();
+    await expect(page.locator('.grammar-issue-mark')).toHaveCount(0);
+    await expect(page.locator('.grade-comment-mark')).not.toHaveCount(0);
+
+    await page.getByTestId('toggle-grammar-highlights').click();
+    await expect(page.locator('.grammar-issue-mark')).toHaveCount(1);
   });
 });

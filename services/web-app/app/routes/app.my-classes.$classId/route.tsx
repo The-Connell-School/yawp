@@ -428,6 +428,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         select: {
           id: true,
+          title: true,
           createdAt: true,
           submittedAt: true,
           documentId: true,
@@ -727,7 +728,7 @@ export default function ClassDetailRoute() {
         feedback: submission.feedback,
         document: {
           id: submission.document.id,
-          title: submission.document.title,
+          title: submission.title,
           profile: submission.document.profile,
         },
       };
@@ -952,7 +953,7 @@ export default function ClassDetailRoute() {
                     {submission.document.profile.user.name ||
                       submission.document.profile.user.email}
                   </TableCell>
-                  <TableCell>{submission.document.title}</TableCell>
+                  <TableCell>{submission.title}</TableCell>
                   {assignmentsEnabled && (
                     <TableCell className="text-muted-foreground">
                       {submission.document.assignment?.title || '—'}
@@ -968,28 +969,13 @@ export default function ClassDetailRoute() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/documents/${submission.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                      {data.isDocumentSubmissionEnabled ? (
-                        <Button asChild size="sm">
-                          <Link
-                            to={`/app/submissions/${submission.id}`}
-                          >
-                            Grade
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button size="sm" disabled>
-                          Grade
-                        </Button>
-                      )}
-                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                      >
+                        View
+                      </Link>
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1042,14 +1028,14 @@ export default function ClassDetailRoute() {
                         onCheckedChange={() =>
                           toggleGradedDocumentSelection(submission.id)
                         }
-                        aria-label={`Select graded ${submission.document.title}`}
+                        aria-label={`Select graded ${submission.title}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
                       {submission.document.profile.user.name ||
                         submission.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{submission.document.title}</TableCell>
+                    <TableCell>{submission.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
                         {submission.document.assignment?.title || '—'}
@@ -1062,28 +1048,13 @@ export default function ClassDetailRoute() {
                       {timeAgo(new Date(submission.gradedAt ?? submission.createdAt))}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${submission.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                          >
-                            View
-                          </Link>
-                        </Button>
-                        {data.isDocumentSubmissionEnabled ? (
-                          <Button asChild size="sm">
-                            <Link
-                              to={`/app/submissions/${submission.id}`}
-                            >
-                              Edit Grade
-                            </Link>
-                          </Button>
-                        ) : (
-                          <Button size="sm" disabled>
-                            Edit Grade
-                          </Button>
-                        )}
-                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -1123,7 +1094,7 @@ export default function ClassDetailRoute() {
                       {submission.document.profile.user.name ||
                         submission.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{submission.document.title}</TableCell>
+                    <TableCell>{submission.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
                         {submission.document.assignment?.title || '—'}
@@ -1136,15 +1107,13 @@ export default function ClassDetailRoute() {
                       {timeAgo(new Date(submission.releasedAt!))}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${submission.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                          >
-                            View
-                          </Link>
-                        </Button>
-                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

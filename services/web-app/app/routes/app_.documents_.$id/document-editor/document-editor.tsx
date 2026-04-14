@@ -13,6 +13,7 @@ type Props = {
   isEditable: boolean;
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
+  onSubmittableContentChange?: (submittable: boolean) => void;
   onCommentCreated?: (comment: { id: string }) => void;
 };
 
@@ -31,6 +32,7 @@ export function DocumentEditor({
   isEditable,
   onBridgeReady,
   onSyncStatusChange,
+  onSubmittableContentChange,
   onCommentCreated,
 }: Props) {
   const [hydrated, setHydrated] = useState<HydratedContent | null>(null);
@@ -77,6 +79,7 @@ export function DocumentEditor({
       isEditable={isEditable}
       onBridgeReady={onBridgeReady}
       onSyncStatusChange={onSyncStatusChange}
+      onSubmittableContentChange={onSubmittableContentChange}
       onCommentCreated={onCommentCreated}
     />
   );

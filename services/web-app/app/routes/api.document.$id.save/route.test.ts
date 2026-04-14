@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUniqueOrThrow: mock() },
-  document: { findUniqueOrThrow: mock(), update: mock() },
+  document: { findFirst: mock(), update: mock() },
   documentRevision: { findFirst: mock(), create: mock() },
   documentWriteJournal: { create: mock(), update: mock() },
 };
@@ -36,7 +36,7 @@ describe('api.document.$id.save', () => {
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
-    prisma.document.findUniqueOrThrow.mockResolvedValue({
+    prisma.document.findFirst.mockResolvedValue({
       id: 'doc-1',
       profileId: 'profile-1',
       html: '<p>old</p>',

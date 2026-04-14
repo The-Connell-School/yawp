@@ -58,6 +58,8 @@ export type E2EContext = {
   /** Submission ID for the graded document (alias: gradeId) */
   snapshotId: string;
   gradeId: string;
+  /** Graded but not released; has inline comment (student must not see highlights until release) */
+  unreleasedGradedSubmissionId: string;
 };
 
 export async function seedE2E(): Promise<E2EContext> {
@@ -232,7 +234,8 @@ export async function seedE2E(): Promise<E2EContext> {
   const submittedDocText =
     'The importance of reading cannot be overstated. Reading expands our vocabulary and improves comprehension skills.';
   const submittedDocHtml = `<p>${submittedDocText}</p>`;
-  const submittedDocTitle = 'Submitted Document';
+  const submittedDocTitle = 'E2E Document workspace title';
+  const submittedSubmissionTitle = 'E2E Essay submission title';
   const submittedAt = new Date();
   const submittedDoc = await prisma.document.create({
     data: {
@@ -250,10 +253,22 @@ export async function seedE2E(): Promise<E2EContext> {
       documentId: submittedDoc.id,
       html: submittedDocHtml,
       text: submittedDocText,
-      title: submittedDocTitle,
+      title: submittedSubmissionTitle,
       submittedAt,
     },
     select: { id: true },
+  });
+  const modulesByPosition = studentCourse.studentCourseModules.sort(
+    (a, b) => a.position - b.position
+  );
+  await prisma.studentCourseModuleSession.create({
+    data: {
+      studentCourseModuleId: modulesByPosition[1].id,
+      studentProfileId: studentProfile.id,
+      documentId: submittedDoc.id,
+      title: 'E2E Submitted Doc Session',
+      instructionsCompleted: 0,
+    },
   });
 
   // 4. Graded document — with submission (graded + released) and comments
@@ -294,6 +309,16 @@ export async function seedE2E(): Promise<E2EContext> {
         grammar_and_mechanics: 1,
       },
       releasedAt: new Date(),
+      grammarIssues: {
+        issues: [
+          {
+            id: 'e2e-graded-grammar-1',
+            excerpt: 'Through learning',
+            kind: 'style',
+            message: 'E2E grammar highlight for student toggle.',
+          },
+        ],
+      },
     },
     select: { id: true },
   });
@@ -312,6 +337,46 @@ export async function seedE2E(): Promise<E2EContext> {
       profileId: seededTeacherProfile.id,
       content: 'Consider adding more specific examples to support your claims.',
       excerpt: 'students develop critical thinking skills',
+      occurrence: 1,
+    },
+  });
+
+  const unreleasedDocText =
+    'Pending release essay body. The first sentence matters for the excerpt.';
+  const unreleasedDocHtml = `<p>${unreleasedDocText}</p>`;
+  const unreleasedDocTitle = 'Unreleased graded';
+  const unreleasedDoc = await prisma.document.create({
+    data: {
+      title: unreleasedDocTitle,
+      text: unreleasedDocText,
+      html: unreleasedDocHtml,
+      revision: 1,
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+  const unreleasedGradedSubmission = await prisma.submission.create({
+    data: {
+      documentId: unreleasedDoc.id,
+      html: unreleasedDocHtml,
+      text: unreleasedDocText,
+      title: unreleasedDocTitle,
+      submittedAt: new Date(),
+      gradedById: seededTeacherProfile.id,
+      gradedAt: new Date(),
+      numericPercentage: 80,
+      letterGrade: 'B',
+      releasedAt: null,
+    },
+    select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: unreleasedGradedSubmission.id,
+      profileId: seededTeacherProfile.id,
+      content: 'Secret teacher note before release.',
+      excerpt: 'The first sentence matters',
       occurrence: 1,
     },
   });
@@ -339,12 +404,10 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
-  // 6. Link the edited doc to module session
+  // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.studentCourseModuleSession.create({
     data: {
-      studentCourseModuleId: studentCourse.studentCourseModules.sort(
-        (a, b) => a.position - b.position
-      )[0].id,
+      studentCourseModuleId: modulesByPosition[0].id,
       studentProfileId: studentProfile.id,
       documentId: editedDoc.id,
       title: 'E2E Doc Session',
@@ -374,6 +437,7 @@ export async function seedE2E(): Promise<E2EContext> {
     gradedDocumentId: gradedDoc.id,
     snapshotId: gradedSubmission.id,
     gradeId: gradedSubmission.id,
+    unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
   };
 }
 

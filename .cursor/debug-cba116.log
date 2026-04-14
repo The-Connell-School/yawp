@@ -1,0 +1,16 @@
+{"sessionId":"cba116","location":"use-document-submit:after-flush","message":"pre-submit flush","data":{"hadBridge":true,"htmlLen":7,"textLen":0},"timestamp":1776151722929,"hypothesisId":"H7"}
+{"sessionId":"cba116","timestamp":1776151722942,"location":"submit-document:entry","message":"parsed form","data":{"documentId":"cmnyaqdqm006dfp2gp5j1qdyy"},"hypothesisId":"H0"}
+{"sessionId":"cba116","timestamp":1776151722946,"location":"submit-document:after-find","message":"document row","data":{"found":true,"htmlLen":7,"textLen":0,"schoolId":null,"revision":15},"hypothesisId":"H1"}
+{"sessionId":"cba116","timestamp":1776151722947,"location":"submit-document:branch","message":"empty_content","data":{"hasHtml":true,"hasText":false},"hypothesisId":"H3"}
+{"sessionId":"cba116","location":"use-document-submit:after-flush","message":"pre-submit flush","data":{"hadBridge":true,"htmlLen":7,"textLen":0},"timestamp":1776151730438,"hypothesisId":"H7"}
+{"sessionId":"cba116","timestamp":1776151730448,"location":"submit-document:entry","message":"parsed form","data":{"documentId":"cmnyaqdqm006dfp2gp5j1qdyy"},"hypothesisId":"H0"}
+{"sessionId":"cba116","timestamp":1776151730455,"location":"submit-document:after-find","message":"document row","data":{"found":true,"htmlLen":7,"textLen":0,"schoolId":null,"revision":16},"hypothesisId":"H1"}
+{"sessionId":"cba116","timestamp":1776151730455,"location":"submit-document:branch","message":"empty_content","data":{"hasHtml":true,"hasText":false},"hypothesisId":"H3"}
+{"sessionId":"cba116","location":"use-document-submit:after-flush","message":"pre-submit flush","data":{"hadBridge":true,"htmlLen":7,"textLen":0},"timestamp":1776151735008,"hypothesisId":"H7"}
+{"sessionId":"cba116","timestamp":1776151735018,"location":"submit-document:entry","message":"parsed form","data":{"documentId":"cmnyaqdqm006dfp2gp5j1qdyy"},"hypothesisId":"H0"}
+{"sessionId":"cba116","timestamp":1776151735021,"location":"submit-document:after-find","message":"document row","data":{"found":true,"htmlLen":7,"textLen":0,"schoolId":null,"revision":17},"hypothesisId":"H1"}
+{"sessionId":"cba116","timestamp":1776151735021,"location":"submit-document:branch","message":"empty_content","data":{"hasHtml":true,"hasText":false},"hypothesisId":"H3"}
+{"sessionId":"cba116","location":"use-document-submit:after-flush","message":"pre-submit flush","data":{"hadBridge":true,"htmlLen":7,"textLen":0},"timestamp":1776151736189,"hypothesisId":"H7"}
+{"sessionId":"cba116","timestamp":1776151736197,"location":"submit-document:entry","message":"parsed form","data":{"documentId":"cmnyaqdqm006dfp2gp5j1qdyy"},"hypothesisId":"H0"}
+{"sessionId":"cba116","timestamp":1776151736199,"location":"submit-document:after-find","message":"document row","data":{"found":true,"htmlLen":7,"textLen":0,"schoolId":null,"revision":18},"hypothesisId":"H1"}
+{"sessionId":"cba116","timestamp":1776151736199,"location":"submit-document:branch","message":"empty_content","data":{"hasHtml":true,"hasText":false},"hypothesisId":"H3"}

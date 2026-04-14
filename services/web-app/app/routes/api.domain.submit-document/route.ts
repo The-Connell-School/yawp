@@ -4,6 +4,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 
@@ -75,7 +76,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  if (!document.html || !document.text) {
+  if (!isDocumentSubmittableContent(document.html ?? '', document.text ?? '')) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
       type: 'error',

@@ -37,6 +37,42 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(editor).toBeVisible({ timeout: 10000 });
   });
 
+  test('clicking editor pane padding focuses so typing works', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    // Left padding of scroll pane (inside p-5), not on ProseMirror text
+    await page.getByTestId('document-editor-scroll').click({ position: { x: 6, y: 320 } });
+    const editor = helpers.getEditor();
+    await expect(editor).toBeFocused();
+    await editor.pressSequentially('z', { delay: 30 });
+    await expect(editor).toContainText('z');
+  });
+
+  test('submit is disabled with tooltip when document is empty', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+    const editor = helpers.getEditor();
+    await editor.click();
+    await page.keyboard.press(SELECT_ALL_SHORTCUT);
+    await page.keyboard.press('Backspace');
+    const submitBtn = page.getByTestId('document-submit-button');
+    await expect(submitBtn).toBeDisabled({ timeout: 10000 });
+    await page.getByTestId('document-submit-empty-trigger').hover();
+    await expect(
+      page.getByText("You can't submit an empty document. Add text first.")
+    ).toBeVisible({ timeout: 5000 });
+  });
+
   test('should allow typing in document editor with simulated saving', async ({
     page,
     signIn,
@@ -375,5 +411,31 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await page.waitForTimeout(500);
 
     expect(pasteAlertCount).toBe(0);
+  });
+
+  test('submit dialog default title matches live nav title without reload', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    await signIn('jdoe@brock.software', 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+
+    const liveTitle = `E2E nav title ${Date.now()}`;
+    await page.getByTestId('document-title-input').fill(liveTitle);
+    await helpers.getEditor().click();
+
+    await page.waitForResponse(
+      (r) =>
+        r.url().includes(`/api/model/document/${e2eContext.editedDocumentId}`) &&
+        r.request().method() === 'POST',
+      { timeout: 15000 }
+    );
+
+    await page.getByTestId('document-submit-button').click();
+    await expect(
+      page.getByRole('textbox', { name: /^submission title$/i })
+    ).toHaveValue(liveTitle);
   });
 });
