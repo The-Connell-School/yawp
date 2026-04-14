@@ -17,6 +17,16 @@ interface Params {
   maxTokens?: number;
   model: string;
   metadata?: Record<string, unknown>;
+  tools?: Array<{
+    name: string;
+    description: string;
+    input_schema: Record<string, unknown>;
+  }>;
+  handleToolCall?: (
+    name: string,
+    input: Record<string, unknown>
+  ) => Promise<string>;
+  maxToolRounds?: number;
 }
 
 async function logLlmCall(data: {
@@ -58,47 +68,96 @@ export async function getLLMCompletion(params: Params) {
 
   if (params.model.includes('claude')) {
     const system = params.system?.replace(/\t/g, '');
-    const messages = params.messages.map(({ name: _, ...m }) => ({
+    // Build messages in the SDK's native format (content can be string or block array)
+    const messages: Array<{
+      role: 'user' | 'assistant';
+      content: string | Array<Record<string, unknown>>;
+    }> = params.messages.map(({ name: _, ...m }) => ({
       ...m,
       content: m.content.replace(/\t/g, ''),
     }));
 
+    const maxRounds = params.maxToolRounds ?? 3;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
     try {
-      const message = await anthropic.messages.create({
-        max_tokens: params.maxTokens ?? 1024,
-        model: params.model,
-        system,
-        messages,
-        temperature: params.temperature ?? 0.6,
-      });
+      for (let round = 0; round <= maxRounds; round++) {
+        const message = await anthropic.messages.create({
+          max_tokens: params.maxTokens ?? 1024,
+          model: params.model,
+          system,
+          messages: messages as any,
+          temperature: params.temperature ?? 0.6,
+          ...(params.tools?.length ? { tools: params.tools as any } : {}),
+        });
 
-      const durationMs = Date.now() - startTime;
-      const responseText =
-        message.content[0].type === 'text' ? message.content[0].text : '';
+        totalInputTokens += message.usage?.input_tokens ?? 0;
+        totalOutputTokens += message.usage?.output_tokens ?? 0;
 
-      await logLlmCall({
-        model: params.model,
-        provider: 'anthropic',
-        systemPrompt: system,
-        messages,
-        response: responseText,
-        inputTokens: message.usage?.input_tokens,
-        outputTokens: message.usage?.output_tokens,
-        totalTokens:
-          (message.usage?.input_tokens ?? 0) +
-          (message.usage?.output_tokens ?? 0),
-        durationMs,
-        metadata: params.metadata,
-      });
+        if (
+          message.stop_reason === 'tool_use' &&
+          params.handleToolCall &&
+          round < maxRounds
+        ) {
+          // Append the assistant's full response (contains tool_use blocks)
+          messages.push({ role: 'assistant', content: message.content as any });
 
-      return responseText;
+          // Process each tool call and build tool_result blocks
+          const toolResults: Array<Record<string, unknown>> = [];
+          for (const block of message.content) {
+            if (block.type === 'tool_use') {
+              const result = await params.handleToolCall(
+                block.name,
+                block.input as Record<string, unknown>
+              );
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: result,
+              });
+            }
+          }
+          messages.push({ role: 'user', content: toolResults });
+          continue;
+        }
+
+        // If we hit the round limit and the model still wants tools, bail
+        if (message.stop_reason === 'tool_use') {
+          throw new Error('Tool-use loop exceeded maximum rounds');
+        }
+
+        // Extract final text response
+        const textBlock = message.content.find((b) => b.type === 'text');
+        const responseText =
+          textBlock && 'text' in textBlock ? (textBlock as any).text : '';
+
+        const durationMs = Date.now() - startTime;
+        await logLlmCall({
+          model: params.model,
+          provider: 'anthropic',
+          systemPrompt: system,
+          messages: params.messages, // Log the original messages, not the tool-loop internal ones
+          response: responseText,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          totalTokens: totalInputTokens + totalOutputTokens,
+          durationMs,
+          metadata: params.metadata,
+        });
+
+        return responseText;
+      }
+
+      // Unreachable — loop always returns or throws — but satisfies TS
+      throw new Error('Tool-use loop ended unexpectedly');
     } catch (err) {
       const durationMs = Date.now() - startTime;
       await logLlmCall({
         model: params.model,
         provider: 'anthropic',
         systemPrompt: system,
-        messages,
+        messages: params.messages,
         error: err instanceof Error ? err.message : String(err),
         durationMs,
         metadata: params.metadata,

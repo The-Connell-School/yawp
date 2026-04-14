@@ -4,10 +4,11 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 
-const POST = z.object({ documentId: z.string() });
+const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
 function hashString(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -55,12 +56,15 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       html: true,
       text: true,
       title: true,
-      submittedAt: true,
       revision: true,
       class: {
         select: {
           schoolId: true,
         },
+      },
+      submissions: {
+        take: 1,
+        select: { id: true },
       },
     },
   });
@@ -72,14 +76,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  if (document.submittedAt) {
-    return redirectWithToast(`/app/documents/${data.documentId}`, {
-      description: 'Resubmitting is temporarily disabled.',
-      type: 'error',
-    });
-  }
-
-  if (!document.html || !document.text) {
+  if (!isDocumentSubmittableContent(document.html ?? '', document.text ?? '')) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
       type: 'error',
@@ -96,8 +93,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  const html = document.html;
-  const text = document.text;
+  const html = document.html ?? '';
+  const text = document.text ?? '';
   const now = new Date();
 
   const journal = await prisma.documentWriteJournal.create({
@@ -122,28 +119,26 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   });
 
   try {
-    const finalDocument = await prisma.$transaction(async (tx) => {
-      const snapshot = await tx.documentSnapshot.create({
+    const { submission: createdSubmission, document: finalDocument } = await prisma.$transaction(async (tx) => {
+      const submission = await tx.submission.create({
         data: {
           documentId: document.id,
+          title: data.title || (document.title ?? ''),
           html,
           text,
           submittedAt: now,
         },
+        select: { id: true, title: true, submittedAt: true },
       });
 
-      await tx.documentComment.updateMany({
-        where: { documentId: document.id, archivedAt: null },
-        data: { archivedAt: now },
-      });
-
-      return tx.document.update({
+      const doc = await tx.document.update({
         where: { id: document.id },
         data: {
-          submittedAt: now,
-          submittedSnapshotId: snapshot.id,
+          updatedAt: now,
         },
       });
+
+      return { submission, document: doc };
     });
 
     await prisma.documentWriteJournal.update({
@@ -157,6 +152,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     return dataResponse({
       success: true,
       document: finalDocument,
+      submission: createdSubmission,
       message: 'Essay submitted successfully!',
     });
   } catch (error) {

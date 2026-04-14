@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { prisma } from '~/utils/db.server';
 
-const DEFAULT_DOCUMENT_RETENTION_DAYS = 3;
+const DEFAULT_DOCUMENT_RETENTION_DAYS = 90;
 
 function assertInternalToken(request: Request) {
   const token =
@@ -46,7 +46,7 @@ export async function loader({ request }: ActionFunctionArgs) {
     now.getTime() - documentWriteJournalRetentionDays * oneDay
   );
 
-  const versionsResult = await prisma.documentVersion.deleteMany({
+  const versionsResult = await prisma.documentRevision.deleteMany({
     where: { createdAt: { lt: cutoffVersions } },
   });
   const documentWriteJournalsResult = await prisma.documentWriteJournal.deleteMany({

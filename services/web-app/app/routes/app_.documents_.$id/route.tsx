@@ -1,22 +1,31 @@
 import { invariant } from '@epic-web/invariant';
 import {
   type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
   data as dataResponse,
-  redirect,
 } from 'react-router';
 import {
   useFetcher,
   useLoaderData,
   useNavigate,
+  useRevalidator,
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Check, Loader2, AlertCircle, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  FileText,
+  ExternalLink,
+  Archive,
+  ArchiveRestore,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { Tooltip } from '~/components/ui/tooltip';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import {
@@ -27,6 +36,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
@@ -36,65 +50,32 @@ import {
   isDocumentSubmissionEnabledForSchool,
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
-import { findExcerptRange } from '~/utils/excerpt-position';
-import {
-  setPendingSave,
-  getPendingSave,
-  clearPendingSave,
-} from '~/utils/pending-document-save';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { Editor, type EditorBridge } from './editor/index';
-import { Tutor } from './tutor';
-import { DocumentVersions } from './_components/document-versions';
-import {
-  DocumentStatusBadge,
-  getDocumentStatusLabel,
-} from '~/components/document-status-badge';
-import { cn } from '~/utils/misc';
-import { formatGrade } from '~/domain/grading/gradeMath';
-import {
-  type GrammarIssue,
-  parseGrammarIssuesPayload,
-} from '~/domain/grading/grammarIssues';
-import { TeacherGradingPanel } from './_components/teacher-grading-panel';
-import { GradingCommentsSidebar } from './_components/grading-comments-sidebar';
+import { DocumentEditor } from './document-editor/document-editor';
+import type { EditorBridge } from './document-editor/use-editor-sync';
+import { Tutor } from './tutor/tutor';
+import { DocumentHistory } from './document-history/document-history';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
+import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import type { SyncStatus } from '~/utils/sync-service';
-import { SaveStatusIndicator } from '~/components/save-status-indicator';
 
-function sortByDocumentLocation<T extends { createdAt: Date | string }>(args: {
-  items: T[];
-  sourceText: string;
-  getExcerpt: (item: T) => string | null | undefined;
-  getOccurrence?: (item: T) => number | null | undefined;
-}) {
-  return [...args.items].sort((a, b) => {
-    const aRange = findExcerptRange(
-      args.sourceText,
-      args.getExcerpt(a),
-      args.getOccurrence?.(a) ?? 1
-    );
-    const bRange = findExcerptRange(
-      args.sourceText,
-      args.getExcerpt(b),
-      args.getOccurrence?.(b) ?? 1
-    );
+import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
+import { useCommentsState } from './hooks/use-comments-state';
+import { useTutorState } from './hooks/use-tutor-state';
+import { useDocumentSubmit } from './hooks/use-document-submit';
+import {
+  displaySubmissionTitle,
+  partitionSubmissionsByArchive,
+  versionLabelForActiveSubmission,
+} from '~/utils/submission-versions';
 
-    if (aRange && bRange) {
-      if (aRange.start !== bRange.start) return aRange.start - bRange.start;
-      return aRange.end - bRange.end;
-    }
-    if (aRange) return -1;
-    if (bRange) return 1;
-
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
-}
+const SUBMIT_EMPTY_TOOLTIP =
+  "You can't submit an empty document. Add text first.";
 
 function sortDocumentCommentsByMarkupOrder<
   T extends { id: string; createdAt: Date | string },
@@ -140,8 +121,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
-  const requestedSnapshotId = url.searchParams.get('snapshotId');
-  const isReviseMode = url.searchParams.get('revise') === '1';
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -176,12 +156,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       createdAt: true,
+      updatedAt: true,
       revision: true,
       title: true,
       html: true,
       text: true,
-      submittedAt: true,
-      submittedSnapshotId: true,
       class: {
         select: {
           schoolId: true,
@@ -197,30 +176,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           dueDate: true,
         },
       },
-      submittedSnapshot: {
+      submissions: {
+        orderBy: { submittedAt: 'desc' },
         select: {
           id: true,
-          html: true,
-          text: true,
-          grades: {
-            select: {
-              id: true,
-              score: true,
-              feedback: true,
-              overallScore: true,
-              overallComment: true,
-              numericPercentage: true,
-              letterGrade: true,
-              grammarIssues: true,
-              rubricScores: true,
-              releasedAt: true,
-              createdAt: true,
-            },
-            take: 1,
-          },
+          title: true,
+          submittedAt: true,
+          gradedAt: true,
+          releasedAt: true,
+          archivedAt: true,
         },
       },
-      versions: { orderBy: { createdAt: 'desc' } },
+      revisions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
       studentCourseModuleSessions: {
         orderBy: { studentCourseModule: { position: 'desc' } },
@@ -246,7 +213,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             },
           },
           messages: {
-            orderBy: { createdAt: 'asc' },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           },
         },
       },
@@ -270,56 +237,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const isViewingAsTeacher = profile.id !== doc.profile.id;
-
-  const selectedSnapshot =
-    requestedSnapshotId && isViewingAsTeacher
-      ? await prisma.documentSnapshot.findFirst({
-          where: {
-            id: requestedSnapshotId,
-            documentId: doc.id,
-          },
-          select: {
-            id: true,
-            html: true,
-            text: true,
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                feedback: true,
-                overallScore: true,
-                overallComment: true,
-                numericPercentage: true,
-                letterGrade: true,
-                grammarIssues: true,
-                rubricScores: true,
-                releasedAt: true,
-                createdAt: true,
-              },
-              take: 1,
-            },
-          },
-        })
-      : null;
-  const activeSnapshot = selectedSnapshot ?? doc.submittedSnapshot;
-
-  const latestGrade = doc.submittedSnapshot?.grades?.[0];
-  if (
-    !isViewingAsTeacher &&
-    latestGrade?.id &&
-    latestGrade.releasedAt &&
-    !isReviseMode
-  ) {
-    return redirect(`/app/graded/${latestGrade.id}`);
-  }
+  const submissions = doc.submissions;
 
   if (shouldSaveVersion) {
-    const latestVersion = doc.versions[0];
-    if (doc.html && doc.text && latestVersion?.html !== doc.html) {
-      prisma.documentVersion
+    const latestRevision = doc.revisions[0];
+    if (doc.html && doc.text && latestRevision?.html !== doc.html) {
+      prisma.documentRevision
         .create({
-          data: { documentId: doc.id, html: doc.html, text: doc.text },
+          data: {
+            documentId: doc.id,
+            html: doc.html,
+            text: doc.text,
+            trigger: 'loader-save',
+          },
         })
         .catch(() => {});
     }
@@ -348,35 +278,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
   ]);
 
-  const gradeId = activeSnapshot?.grades?.[0]?.id;
-  const unsortedGradeComments =
-    gradeId != null
-      ? await prisma.gradeComment.findMany({
-          where: { gradeId },
-          include: {
-            profile: {
-              include: { user: { select: { name: true, email: true } } },
-            },
-            responses: {
-              include: {
-                profile: {
-                  include: { user: { select: { name: true, email: true } } },
-                },
-              },
-              orderBy: { createdAt: 'asc' },
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        })
-      : [];
-
-  const gradeComments = sortByDocumentLocation({
-    items: unsortedGradeComments,
-    sourceText: activeSnapshot?.text ?? '',
-    getExcerpt: (comment) => comment.excerpt,
-    getOccurrence: (comment) => comment.occurrence,
-  });
-
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
     doc.html
@@ -387,201 +288,158 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...doc,
       comments: sortedComments,
     },
-    activeSnapshot,
+    submissions,
     currentCms,
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
-    gradeComments,
   });
 }
 
+export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  // Revalidate when the module session index changes (navigating between modules).
+  const currentCmsIdx = args.currentUrl.searchParams.get('cmsIdx');
+  const nextCmsIdx = args.nextUrl.searchParams.get('cmsIdx');
+  if (currentCmsIdx !== nextCmsIdx) return true;
+
+  // Otherwise, never revalidate. The editor owns document state client-side.
+  // Server state flows through explicit fetch() calls + local React state.
+  return false;
+}
+
+type SubmissionRow = {
+  id: string;
+  title: string;
+  submittedAt: string | Date;
+  gradedAt: string | null;
+  releasedAt: string | null;
+  archivedAt: string | Date | null;
+};
 
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
-  const submitFetcher = useFetcher();
+  const submissionArchiveFetcher = useFetcher();
+  const revalidator = useRevalidator();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
-  const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [hasSaveError, setHasSaveError] = useState(false);
+  const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
-  const [hasEditorContent, setHasEditorContent] = useState(
-    !!(data.doc.html && data.doc.text)
-  );
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
-  const [exitTarget, setExitTarget] = useState('/app');
+  const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
-  const leftPanel = searchParams.get('left') ?? 'tutor';
-  const isReviseMode = searchParams.get('revise') === '1';
-  const activeSnapshot = data.activeSnapshot ?? data.doc.submittedSnapshot;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitting = submitFetcher.state !== 'idle';
-  const isSubmitted = data.doc.submittedAt !== null;
-  const grade = activeSnapshot?.grades?.[0];
-  const documentStatusLabel = getDocumentStatusLabel({
-    submittedAt: data.doc.submittedAt,
-    grade: grade ?? null,
-  });
-  const isGradeReleased =
-    grade?.releasedAt !== null && grade?.releasedAt !== undefined;
-  const canUseGradingPanel =
-    data.isDocumentSubmissionEnabled && isViewingAsTeacher && isSubmitted;
-  const isTeacherGradingTabOpen = canUseGradingPanel && leftPanel === 'grading';
-  const isDocumentEditable = !isViewingAsTeacher || !isTeacherGradingTabOpen;
-  const isTeacherSnapshotView =
-    isViewingAsTeacher && Boolean(activeSnapshot?.id);
-  const editorHtml =
-    isTeacherSnapshotView && activeSnapshot?.html
-      ? activeSnapshot.html
-      : data.doc.html;
-  const initialEditorContent = useMemo(
-    () => ({
-      html: editorHtml ?? '',
-      text:
-        (isTeacherSnapshotView ? activeSnapshot?.text : data.doc.text) ?? '',
-    }),
-    [activeSnapshot?.text, data.doc.text, editorHtml, isTeacherSnapshotView]
+  // Owner or class teacher (loader); api.model.document allows both to persist edits.
+  const isDocumentEditable = true;
+
+  // Merge server + optimistic submissions
+  const submissions = useMemo(() => {
+    const serverSubs = (data.submissions ?? []) as SubmissionRow[];
+    const serverIds = new Set(serverSubs.map((s) => s.id));
+    const newLocal = localSubmissions.filter((s) => !serverIds.has(s.id));
+    return [...newLocal, ...serverSubs];
+  }, [data.submissions, localSubmissions]);
+
+  const { active: activeSubmissions, archived: archivedSubmissions } =
+    useMemo(
+      () => partitionSubmissionsByArchive(submissions),
+      [submissions]
+    );
+
+  const studentList = isViewingAsTeacher ? submissions : activeSubmissions;
+  const submissionCountForBadge = isViewingAsTeacher
+    ? submissions.length
+    : activeSubmissions.length;
+
+  const isSubmitted = activeSubmissions.length > 0;
+  const hasAnySubmissionRecord = submissions.length > 0;
+  const gradedCount = activeSubmissions.filter((s) => s.releasedAt).length;
+  const versionNumber = activeSubmissions.length + 1;
+  const editorServerHtml = data.doc.html ?? '';
+  const editorServerText = data.doc.text ?? '';
+
+  // Exit target is computed once on mount (session-storage read is idempotent)
+  const [exitTarget] = useState<string>(
+    () => explicitExitTarget ?? readLastNonDocumentRoute() ?? '/app'
   );
-  const editorSessionId = useMemo(() => crypto.randomUUID(), [data.doc.id]);
-  const loginReturnStorageKey = useMemo(
-    () => `yawp:audit:login-return:${data.doc.id}`,
-    [data.doc.id]
-  );
-  const latestEditorContentRef = useRef(initialEditorContent);
+
+  // Editor bridge handle — stable ref populated by DocumentEditor.onBridgeReady
   const editorBridgeRef = useRef<EditorBridge | null>(null);
-  const [isSessionLocked, setIsSessionLocked] = useState(false);
-  const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] =
-    useState(false);
-  const isEditorLocked =
-    isSessionLocked || (isDocumentEditable && !isInitialAuthCheckComplete);
-  const gradeDisplay =
-    (grade
-      ? formatGrade(
-          grade.numericPercentage ?? null,
-          grade.letterGrade ?? null
-        ) ||
-        grade.score ||
-        (grade.overallScore ? `${grade.overallScore}/5` : null)
-      : null) ?? null;
-  const [activeGradeCommentId, setActiveGradeCommentId] = useState<
-    string | null
-  >(null);
-  const [draftHighlight, setDraftHighlight] = useState<{
-    excerpt: string;
-    occurrence: number;
-  } | null>(null);
-  const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
-  const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
-  const [tooltipPos, setTooltipPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-  const closeTooltipTimer = useRef<number | null>(null);
-  const persistedGrammarIssues = useMemo(
-    () =>
-      parseGrammarIssuesPayload(grade?.grammarIssues, {
-        sourceText: activeSnapshot?.text ?? '',
-      }),
-    [activeSnapshot?.text, grade?.id, grade?.grammarIssues]
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  const getLiveDocumentTitle = useCallback(() => {
+    if (titleInputRef.current) {
+      return titleInputRef.current.value;
+    }
+    return data.doc.title ?? '';
+  }, [data.doc.title]);
+
+  // ── Extracted hooks ────────────────────────────────────────────────
+  const auth = useAuthHeartbeat({
+    documentId: data.doc.id,
+    isEditable: isDocumentEditable,
+  });
+  const tutor = useTutorState(data.currentCms as any, cmsIdx);
+  const commentsState = useCommentsState(
+    (data.doc.comments as any[]) ?? []
   );
-  const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
-    persistedGrammarIssues
+  const submit = useDocumentSubmit({
+    documentId: data.doc.id,
+    editorBridgeRef,
+    onSubmitted: (newSubmission) => {
+      setIsFinalizeDialogOpen(false);
+      setSubmissionTitle('');
+      setLocalSubmissions((prev) => [
+        {
+          ...newSubmission,
+          gradedAt: null,
+          releasedAt: null,
+          archivedAt: null,
+        },
+        ...prev,
+      ]);
+    },
+  });
+
+  const [editorSubmittable, setEditorSubmittable] = useState(() =>
+    isDocumentSubmittableContent(editorServerHtml, editorServerText)
   );
-  const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
-    []
-  );
-  const allComments = (data.doc.comments as any[]) ?? [];
+  const handleSubmittableContentChange = useCallback((submittable: boolean) => {
+    setEditorSubmittable(submittable);
+  }, []);
+
+  const isEditorEditable =
+    isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
+
+  // ── Derived UI data ────────────────────────────────────────────────
+  const allComments = commentsState.comments as any[];
   const activeComments = allComments.filter((c) => !c.archivedAt);
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
-  const visibleComments = isSubmitted
+  const visibleComments = hasAnySubmissionRecord
     ? showOldComments
       ? allComments
       : activeComments
     : activeComments;
-  const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
   const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
-  const studentCanViewReleasedGrade =
-    !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
-  const studentGradeViewPath =
-    studentCanViewReleasedGrade && grade?.id ? `/app/graded/${grade.id}` : null;
-  const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
-    explicitExitTarget
-      ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
-      : ''
-  }`;
-  const saveFailureCountRef = useRef(0);
-  const visibleGrammarIssues = useMemo(
-    () =>
-      grammarIssues.filter(
-        (issue) => !hiddenGrammarIssueIds.includes(issue.id)
-      ),
-    [grammarIssues, hiddenGrammarIssueIds]
-  );
-  const toggleGrammarIssueVisibility = useCallback((id: string) => {
-    setHiddenGrammarIssueIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((currentId) => currentId !== id)
-        : [...prev, id]
-    );
-  }, []);
-  const handleGrammarIssuesChange = useCallback((issues: GrammarIssue[]) => {
-    setGrammarIssues(issues);
-    setHiddenGrammarIssueIds([]);
-  }, []);
-  const handleRemoveGrammarIssue = useCallback((id: string) => {
-    setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
-    setHiddenGrammarIssueIds((prev) =>
-      prev.filter((currentId) => currentId !== id)
-    );
-  }, []);
-  const editorGradeHighlights = useMemo(() => {
-    if (!isTeacherGradingTabOpen) return undefined;
+  const cannotSubmitEmpty = !editorSubmittable;
+  const isSubmitting = submit.isSubmitting;
+  const submitActionDisabled = isSubmitting || cannotSubmitEmpty;
 
-    const commentHighlights = (data.gradeComments as any[]).map((comment) => ({
-      id: comment.id,
-      excerpt: comment.excerpt,
-      occurrence: comment.occurrence,
-      dataAttr: 'data-grade-comment-id' as const,
-      className: 'grade-comment-mark' as const,
-    }));
-    const grammarHighlights = visibleGrammarIssues.map((issue) => ({
-      id: issue.id,
-      excerpt: issue.excerpt,
-      occurrence: issue.occurrence ?? 1,
-      dataAttr: 'data-grammar-issue-id' as const,
-      className: 'grammar-issue' as const,
-    }));
-    const draftHighlightEntry = draftHighlight
-      ? [
-          {
-            id: 'draft',
-            excerpt: draftHighlight.excerpt,
-            occurrence: draftHighlight.occurrence,
-            dataAttr: 'data-grade-comment-id' as const,
-            className:
-              activeGradeCommentId === 'draft'
-                ? 'grade-comment-mark focused'
-                : 'grade-comment-mark',
-          },
-        ]
-      : [];
-
-    return [...commentHighlights, ...draftHighlightEntry, ...grammarHighlights];
-  }, [
-    activeGradeCommentId,
-    data.gradeComments,
-    draftHighlight,
-    isTeacherGradingTabOpen,
-    visibleGrammarIssues,
-  ]);
+  const tutorHasPreviousCms = useMemo(() => {
+    const liveCmsId = tutor.cms?.id ?? data.currentCms.id;
+    return (
+      data.hasPreviousCms || liveCmsId !== data.currentCms.id
+    );
+  }, [data.hasPreviousCms, data.currentCms.id, tutor.cms?.id]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -589,345 +447,31 @@ export default function Route() {
     setSearchParams(params, { replace: true });
   };
 
-  const changeLeftPanel = (value: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('left', value);
-    setSearchParams(params, { replace: true });
-  };
-
-  const lockSession = useCallback(() => {
-    setIsSessionLocked(true);
-  }, []);
+  const handleTutorBeforeRespond = useCallback(async () => {
+    if (auth.isLocked) return false;
+    await editorBridgeRef.current?.saveNow({ source: 'tutor-pre-respond' });
+    const isValidSession = await auth.checkAuthSession();
+    return isValidSession && !auth.isLocked;
+  }, [auth]);
 
   const handleLoginRedirect = useCallback(() => {
-    const content =
-      editorBridgeRef.current?.getContent() ?? latestEditorContentRef.current;
-    setPendingSave(data.doc.id, content);
-    sessionStorage.setItem(loginReturnStorageKey, '1');
     const redirectTo = encodeURIComponent(
       window.location.pathname + window.location.search
     );
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
-  }, [
-    data.doc.id,
-    editorSessionId,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  const checkAuthSession = useCallback(async () => {
-    try {
-      const response = await fetch('/api/auth/check', {
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          lockSession();
-          return false;
-        }
-        return true;
-      }
-
-      const data = (await response.json()) as { valid?: boolean };
-      if (!data?.valid) {
-        lockSession();
-        return false;
-      }
-
-      return true;
-    } catch {
-      // Ignore transient network failures.
-      return true;
-    }
-  }, [lockSession]);
-
-  const handleRemoteSaveFailure = useCallback(
-    (args: {
-      content: { html: string; text: string };
-      reason: 'auth' | 'network' | 'server';
-    }) => {
-      setPendingSave(data.doc.id, args.content);
-      saveFailureCountRef.current += 1;
-      if (saveFailureCountRef.current >= 2) {
-        setHasSaveError(true);
-      }
-      if (args.reason === 'auth') {
-        lockSession();
-      }
-    },
-    [data.doc.id, lockSession]
-  );
-
-  const handleRemoteSaveSuccess = useCallback(
-    (_args: { content: { html: string; text: string }; revision: number }) => {
-      clearPendingSave(data.doc.id);
-      saveFailureCountRef.current = 0;
-      setHasSaveError(false);
-    },
-    [data.doc.id]
-  );
-
-  const handleTutorBeforeRespond = useCallback(async () => {
-    if (isSessionLocked) return false;
-
-    await editorBridgeRef.current?.saveNow();
-
-    const isValidSession = await checkAuthSession();
-    return isValidSession && !isSessionLocked;
-  }, [checkAuthSession, isSessionLocked]);
-
-  const handleEditorContentSnapshot = useCallback(
-    (content: { html: string; text: string }) => {
-      latestEditorContentRef.current = content;
-    },
-    []
-  );
-
-  const recoverPendingSave = useCallback(
-    (bridge: EditorBridge, source: string) => {
-      const pending = getPendingSave(data.doc.id);
-      if (!pending) return false;
-
-      bridge.setContent(pending.html);
-      latestEditorContentRef.current = { html: pending.html, text: pending.text };
-      toast.info('Recovered unsaved changes');
-      void bridge.saveNow({ source: 'editor-recovery' });
-      return true;
-    },
-    [data.doc.id, editorSessionId, user.id, user.selectedProfile?.id]
-  );
-
-  const handleEditorBridgeReady = useCallback(
-    (bridge: EditorBridge | null) => {
-      editorBridgeRef.current = bridge;
-      if (!bridge || !isDocumentEditable || !isInitialAuthCheckComplete) return;
-      recoverPendingSave(bridge, 'bridge-ready');
-    },
-    [
-      isDocumentEditable,
-      isInitialAuthCheckComplete,
-      recoverPendingSave,
-    ]
-  );
-
-  useEffect(() => {
-    setGrammarIssues(persistedGrammarIssues);
-  }, [persistedGrammarIssues]);
-
-  useEffect(() => {
-    latestEditorContentRef.current = initialEditorContent;
-  }, [initialEditorContent]);
-
-  useEffect(() => {
-    setIsSessionLocked(false);
-  }, [data.doc.id]);
-
-
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || isSessionLocked) return;
-    if (!sessionStorage.getItem(loginReturnStorageKey)) return;
-    sessionStorage.removeItem(loginReturnStorageKey);
-  }, [
-    data.doc.id,
-    editorSessionId,
-    isInitialAuthCheckComplete,
-    isSessionLocked,
-    loginReturnStorageKey,
-    user.id,
-    user.selectedProfile?.id,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!isDocumentEditable) {
-      setIsInitialAuthCheckComplete(true);
-      return;
-    }
-
-    setIsInitialAuthCheckComplete(false);
-
-    const runInitialCheck = async () => {
-      await checkAuthSession();
-      if (!cancelled) {
-        setIsInitialAuthCheckComplete(true);
-      }
-    };
-
-    const onFocus = () => {
-      if (document.visibilityState !== 'visible') return;
-      void checkAuthSession();
-    };
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return;
-      void checkAuthSession();
-    };
-
-    void runInitialCheck();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [checkAuthSession, data.doc.id, isDocumentEditable]);
-
-  // Flush pending save on page unload / visibility hidden
-  useEffect(() => {
-    if (!isDocumentEditable) return;
-
-    const flushPendingSave = () => {
-      const content =
-        editorBridgeRef.current?.getContent() ??
-        latestEditorContentRef.current;
-      setPendingSave(data.doc.id, content);
-    };
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') flushPendingSave();
-    };
-
-    window.addEventListener('pagehide', flushPendingSave);
-    window.addEventListener('beforeunload', flushPendingSave);
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      window.removeEventListener('pagehide', flushPendingSave);
-      window.removeEventListener('beforeunload', flushPendingSave);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [isDocumentEditable, data.doc.id]);
-
-  // Recover pending save on load
-  useEffect(() => {
-    if (!isInitialAuthCheckComplete || !isDocumentEditable) return;
-
-    if (!editorBridgeRef.current) return;
-    recoverPendingSave(editorBridgeRef.current, 'load');
-  }, [
-    isInitialAuthCheckComplete,
-    isDocumentEditable,
-    recoverPendingSave,
-  ]);
-
-  // Periodic auth heartbeat
-  useEffect(() => {
-    if (!isDocumentEditable) return;
-
-    const interval = setInterval(() => {
-      void checkAuthSession();
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [isDocumentEditable, checkAuthSession]);
-
-  useEffect(() => {
-    setHiddenGrammarIssueIds((prev) =>
-      prev.filter((id) => grammarIssues.some((issue) => issue.id === id))
-    );
-  }, [grammarIssues]);
-
-  useEffect(() => {
-    if (!tooltipIssueId) return;
-    if (visibleGrammarIssues.some((issue) => issue.id === tooltipIssueId))
-      return;
-    setTooltipIssueId(null);
-    setTooltipRect(null);
-  }, [tooltipIssueId, visibleGrammarIssues]);
-
-  useEffect(() => {
-    if (!isTeacherGradingTabOpen || !activeGradeCommentId) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      const clickedInHighlight = target.closest('[data-grade-comment-id]');
-      const clickedInCommentCard = target.closest('[data-grade-comment-card]');
-      if (clickedInHighlight || clickedInCommentCard) return;
-      setActiveGradeCommentId(null);
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, [activeGradeCommentId, isTeacherGradingTabOpen]);
-
-  const activeGrammarIssue = useMemo(() => {
-    if (!tooltipIssueId) return null;
-    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
-  }, [grammarIssues, tooltipIssueId]);
-
-  useEffect(() => {
-    if (!tooltipRect) {
-      setTooltipPos(null);
-      return;
-    }
-    setTooltipPos({
-      top: Math.min(window.innerHeight - 16, tooltipRect.bottom + 10),
-      left: Math.min(window.innerWidth - 16, tooltipRect.left),
-    });
-  }, [tooltipRect]);
-
-  useEffect(() => {
-    if (data.shouldSaveVersion) {
-      const { pathname, search } = window.location;
-      const searchParams = new URLSearchParams(search);
-      searchParams.delete('ssv');
-      navigate(`${pathname}?${searchParams}`, { replace: true });
-    }
-  }, [data.shouldSaveVersion, navigate]);
-
-  useEffect(() => {
-    if (submitFetcher.state === 'idle' && submitFetcher.data) {
-      if (submitFetcher.data.success) {
-        toast.success(
-          submitFetcher.data.message || 'Essay submitted successfully!'
-        );
-        setIsFinalizeDialogOpen(false);
-        // Reload the page to reflect the new submission status
-        navigate(window.location.pathname + window.location.search, {
-          replace: true,
-        });
-      }
-    }
-  }, [submitFetcher.state, submitFetcher.data, navigate]);
-
-  useEffect(() => {
-    if (explicitExitTarget) {
-      setExitTarget(explicitExitTarget);
-      return;
-    }
-
-    setExitTarget(readLastNonDocumentRoute() ?? '/app');
-  }, [explicitExitTarget]);
-
-  useEffect(() => {
-    const handleEditorReady = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const getContent = customEvent.detail?.getContent;
-      if (!getContent) return;
-
-      // Check content immediately
-      const content = getContent();
-      setHasEditorContent(!!(content?.html && content?.text));
-
-      // Set up interval to check content
-      const interval = setInterval(() => {
-        const currentContent = getContent();
-        setHasEditorContent(!!(currentContent?.html && currentContent?.text));
-      }, 500);
-
-      return () => clearInterval(interval);
-    };
-
-    window.addEventListener('editor-ready', handleEditorReady);
-    return () => window.removeEventListener('editor-ready', handleEditorReady);
   }, []);
+
+  useEffect(() => {
+    if (submissionArchiveFetcher.state !== 'idle') return;
+    const body = submissionArchiveFetcher.data as { success?: boolean } | undefined;
+    if (body?.success) {
+      revalidator.revalidate();
+    }
+  }, [
+    submissionArchiveFetcher.state,
+    submissionArchiveFetcher.data,
+    revalidator,
+  ]);
 
   return (
     <>
@@ -942,20 +486,10 @@ export default function Route() {
               <ArrowLeft className="h-4" />
               Exit
             </Button>
-            {isViewingAsTeacher ? (
-              <p className="text-xs font-semibold text-foreground md:text-md">
-                {teacherHeaderTitle}
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {studentName}
-                </span>
-                <span className="px-2 text-muted-foreground">&bull;</span>
-                <span className="font-medium text-muted-foreground">
-                  {documentStatusLabel}
-                </span>
-              </p>
-            ) : (
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 md:flex-row md:items-center md:gap-4">
               <Input
+                ref={titleInputRef}
+                data-testid="document-title-input"
                 size="sm"
                 className="rounded-lg border border-transparent font-bold transition hover:border-border"
                 defaultValue={data.doc.title}
@@ -974,125 +508,178 @@ export default function Route() {
                     : undefined
                 }
               />
-            )}
-          </div>
-          {!isViewingAsTeacher && (
-            <div className="flex items-center gap-2">
-              <DocumentStatusBadge
-                submittedAt={data.doc.submittedAt}
-                grade={isGradeReleased ? (grade ?? null) : null}
-              />
-              {isSubmitted ? (
-                <span className="text-xs text-muted-foreground">
-                  {isGradeReleased && grade?.releasedAt
-                    ? new Date(grade.releasedAt).toLocaleDateString()
-                    : new Date(data.doc.submittedAt!).toLocaleDateString()}
-                </span>
-              ) : null}
             </div>
-          )}
-          <div className="ml-auto flex items-center gap-4">
-            {studentGradeViewPath ? (
-              <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
-                <Button
-                  size="sm"
-                  variant={isReviseMode ? 'ghost' : 'secondary'}
-                  asChild
-                >
-                  <Link to={studentGradeViewPath}>View Grade</Link>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={isReviseMode ? 'secondary' : 'ghost'}
-                  asChild
-                >
-                  <Link to={studentRevisePath}>Revise Essay</Link>
-                </Button>
-              </div>
-            ) : null}
-            {data.isDocumentSubmissionEnabled && !isSubmitted && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={isSubmitting || !hasEditorContent}
-                  data-testid="document-submit-button"
-                  onClick={() => setIsFinalizeDialogOpen(true)}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit'
+          </div>
+          {hasAnySubmissionRecord && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  Submissions ({submissionCountForBadge})
+                  {gradedCount > 0 && (
+                    <Badge variant="success" className="ml-1 text-[10px] px-1.5 py-0">
+                      {gradedCount} graded
+                    </Badge>
                   )}
                 </Button>
-                {!isTeacherGradingTabOpen ? (
-                  <div className="h-[20px] border-r" />
-                ) : null}
-              </>
-            )}
-            {isSubmitted && archivedComments.length > 0 && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowOldComments((v) => !v)}
-                >
-                  {showOldComments ? 'Hide old comments' : 'Show old comments'}
-                </Button>
-                <div className="h-[20px] border-r" />
-              </>
-            )}
-            {isViewingAsTeacher && isSubmitted && (
-              <>
-                {grade ? (
-                  <>
-                    <Button size="sm" variant="outline" asChild>
-                      <Link to={`/app/graded/${grade.id}`}>
-                        Open Graded View
-                      </Link>
-                    </Button>
-                    <div className="h-[20px] border-r" />
-                  </>
-                ) : null}
-              </>
-            )}
-            {!isTeacherGradingTabOpen ? (
-              <div className="flex items-center gap-2">
-                <SaveStatusIndicator status={syncStatus} />
-                <div className="h-[20px] border-r" />
-                <DocumentVersions documentId={data.doc.id} defaultMode="revisions" />
-              </div>
-            ) : null}
-            {isViewingAsTeacher && isSubmitted && (
-              <>
-                {isTeacherGradingTabOpen ? null : (
-                  <div className="h-[20px] border-r" />
-                )}
-                <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
-                  <Button
-                    size="sm"
-                    variant={leftPanel === 'tutor' ? 'secondary' : 'ghost'}
-                    data-testid="document-leftpanel-tutor"
-                    onClick={() => changeLeftPanel('tutor')}
-                  >
-                    Tutor
-                  </Button>
-                  {canUseGradingPanel ? (
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-0">
+                <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+                  <p className="text-sm font-semibold">Submissions</p>
+                  {!isViewingAsTeacher && archivedSubmissions.length > 0 ? (
                     <Button
-                      size="sm"
-                      variant={leftPanel === 'grading' ? 'secondary' : 'ghost'}
-                      data-testid="document-leftpanel-grading"
-                      onClick={() => changeLeftPanel('grading')}
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      aria-label="View archived submissions"
+                      onClick={() => setArchiveDialogOpen(true)}
                     >
-                      Grading
+                      <Archive className="h-4 w-4" />
                     </Button>
                   ) : null}
                 </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {studentList.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                      No active submissions.
+                    </p>
+                  ) : (
+                    studentList.map((s) => {
+                      const isArchived = s.archivedAt != null;
+                      const v = !isArchived
+                        ? versionLabelForActiveSubmission(
+                            activeSubmissions,
+                            s.id
+                          )
+                        : null;
+                      const label = displaySubmissionTitle(
+                        s.title,
+                        v,
+                        'Untitled submission'
+                      );
+                      const isGraded = s.releasedAt != null;
+                      return (
+                        <div
+                          key={s.id}
+                          className="flex items-stretch gap-1 border-b last:border-0"
+                        >
+                          <Link
+                            to={`/app/submissions/${s.id}`}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-muted/50"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{label}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(s.submittedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              {isArchived ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Archived
+                                </Badge>
+                              ) : null}
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </div>
+                          </Link>
+                          {!isViewingAsTeacher && !isArchived ? (
+                            <div className="flex items-center pr-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-muted-foreground"
+                                aria-label="Archive submission"
+                                disabled={
+                                  submissionArchiveFetcher.state !== 'idle'
+                                }
+                                onClick={() => {
+                                  const fd = new FormData();
+                                  fd.set('intent', 'archive');
+                                  submissionArchiveFetcher.submit(fd, {
+                                    method: 'POST',
+                                    action: `/api/model/submission/${s.id}`,
+                                  });
+                                }}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+          {isViewingAsTeacher ? (
+            <p
+              className="shrink-0 text-xs font-medium text-muted-foreground md:text-sm"
+              data-testid="document-teacher-student-name"
+            >
+              {studentName}
+            </p>
+          ) : null}
+          <div className="ml-auto flex items-center gap-4">
+            {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
+              <>
+                {cannotSubmitEmpty && !isSubmitting ? (
+                  <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                    <span
+                      className="inline-flex"
+                      data-testid="document-submit-empty-trigger"
+                    >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled
+                        data-testid="document-submit-button"
+                      >
+                        Submit
+                      </Button>
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={submitActionDisabled}
+                    data-testid="document-submit-button"
+                    onClick={() => {
+                      setSubmissionTitle(getLiveDocumentTitle());
+                      setIsFinalizeDialogOpen(true);
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit'
+                    )}
+                  </Button>
+                )}
               </>
             )}
+            {hasAnySubmissionRecord && archivedComments.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowOldComments((v) => !v)}
+              >
+                {showOldComments ? 'Hide old comments' : 'Show old comments'}
+              </Button>
+            )}
+            <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
         {data.assignmentsEnabled && data.doc.assignment ? (
@@ -1117,41 +704,6 @@ export default function Route() {
             </div>
           </div>
         ) : null}
-        {grade &&
-          !isTeacherGradingTabOpen &&
-          ((!isViewingAsTeacher && isGradeReleased) || isViewingAsTeacher) && (
-            <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 dark:bg-green-950/20 px-3 py-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant={isGradeReleased ? 'success' : 'secondary'}>
-                    {isGradeReleased
-                      ? 'Grade Released'
-                      : 'Graded (Not Released)'}
-                  </Badge>
-                  <span className="text-sm font-medium">
-                    {gradeDisplay || 'Graded'}
-                  </span>
-                </div>
-                {(grade.feedback || grade.overallComment) && (
-                  <div className="flex-1 sm:mx-4">
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {grade.overallComment || grade.feedback}
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    asChild
-                    className="bg-white dark:bg-background"
-                  >
-                    <Link to={`/app/graded/${grade.id}`}>Open Graded View</Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">
@@ -1166,98 +718,42 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div
-            className={cn(
-              'mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden',
-              isTeacherGradingTabOpen && 'draft-comments-hidden'
-            )}
-          >
-            {isMobile && tab !== 'tutor' ? null : canUseGradingPanel &&
-              leftPanel === 'grading' ? (
-              <TeacherGradingPanel
-                documentId={data.doc.id}
-                snapshotId={activeSnapshot?.id ?? null}
-                existingGrade={grade ?? null}
-                grammarIssues={grammarIssues}
-                persistedGrammarIssues={persistedGrammarIssues}
-                hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                onGrammarIssuesChange={handleGrammarIssuesChange}
-              />
-            ) : (
+          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+            {isMobile && tab !== 'tutor' ? null : (
               <Tutor
                 docId={data.doc.id}
-                cms={data.currentCms}
+                cms={(tutor.cms ?? data.currentCms) as any}
                 nextCmId={data.nextCmId}
-                hasPreviousCms={data.hasPreviousCms}
-                isSessionLocked={isSessionLocked}
+                hasPreviousCms={tutorHasPreviousCms}
+                isSessionLocked={auth.isLocked}
                 beforeRespond={handleTutorBeforeRespond}
+                onCmsUpdate={tutor.updateCms}
                 getCurrentDocumentText={() =>
                   editorBridgeRef.current?.getContent().text ??
-                  latestEditorContentRef.current.text ??
                   data.doc.text ??
                   ''
                 }
               />
             )}
             {isMobile && tab !== 'editor' ? null : (
-              <Editor
+              <DocumentEditor
                 docId={data.doc.id}
-                docHtml={editorHtml}
+                serverHtml={editorServerHtml}
+                serverText={editorServerText}
+                serverUpdatedAt={data.doc.updatedAt}
                 initialRevision={data.doc.revision}
-                editorSessionId={editorSessionId}
-                saveSnapshotId={
-                  isTeacherSnapshotView ? activeSnapshot?.id : null
-                }
-                setIsSaving={setIsSaving}
-                isEditable={isDocumentEditable && !isEditorLocked}
-                onContentSnapshot={handleEditorContentSnapshot}
-                onEditorBridgeReady={handleEditorBridgeReady}
-                onRemoteSaveSuccess={handleRemoteSaveSuccess}
-                onRemoteSaveFailure={handleRemoteSaveFailure}
+                isEditable={isEditorEditable}
+                onBridgeReady={(b) => {
+                  editorBridgeRef.current = b;
+                }}
                 onSyncStatusChange={setSyncStatus}
-                gradeHighlights={editorGradeHighlights}
-                activeGradeCommentId={
-                  isTeacherGradingTabOpen ? activeGradeCommentId : null
-                }
-                onGradeCommentSelect={
-                  isTeacherGradingTabOpen
-                    ? (id) => setActiveGradeCommentId(id)
-                    : undefined
-                }
-                onGrammarIssueHover={
-                  isTeacherGradingTabOpen
-                    ? (id, rect) => {
-                        if (id && rect) {
-                          if (closeTooltipTimer.current) {
-                            window.clearTimeout(closeTooltipTimer.current);
-                          }
-                          setTooltipIssueId(id);
-                          setTooltipRect(rect);
-                          return;
-                        }
-
-                        closeTooltipTimer.current = window.setTimeout(() => {
-                          setTooltipIssueId(null);
-                          setTooltipRect(null);
-                        }, 120);
-                      }
-                    : undefined
+                onSubmittableContentChange={handleSubmittableContentChange}
+                onCommentCreated={(c) =>
+                  commentsState.addComment(c as any)
                 }
               />
             )}
-            {isMobile && tab !== 'comments' ? null : isTeacherGradingTabOpen ? (
-              <GradingCommentsSidebar
-                gradeComments={data.gradeComments}
-                gradeId={grade?.id ?? null}
-                snapshotId={activeSnapshot?.id ?? null}
-                sourceText={activeSnapshot?.text ?? ''}
-                activeGradeCommentId={activeGradeCommentId}
-                onSelectGradeComment={setActiveGradeCommentId}
-                onDraftHighlightChange={setDraftHighlight}
-              />
-            ) : (
+            {isMobile && tab !== 'comments' ? null : (
               <Comments
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
@@ -1266,7 +762,7 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
-      {data.isDocumentSubmissionEnabled && !isSubmitted && (
+      {data.isDocumentSubmissionEnabled && (
         <Dialog
           open={isFinalizeDialogOpen}
           onOpenChange={setIsFinalizeDialogOpen}
@@ -1275,24 +771,72 @@ export default function Route() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Submit Essay
+                Submit Version {versionNumber}
               </DialogTitle>
-              <DialogDescription className="space-y-3 pt-2">
-                <p>Before you submit, please note the following:</p>
-                <ul className="list-disc space-y-2 pl-5 text-sm">
-                  <li>
-                    Submitting creates a snapshot of your essay for your teacher
-                    to grade.
-                  </li>
-                  <li>
-                    You can keep editing after you submit, but changes won’t be
-                    reflected in what your teacher sees.
-                  </li>
-                  <li>You can only submit once right now.</li>
-                </ul>
-                <p className="pt-2 font-medium">
-                  Are you sure you want to submit this essay?
-                </p>
+              <DialogDescription asChild>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <label htmlFor="submission-title" className="text-sm font-medium text-foreground">
+                      Submission Title
+                    </label>
+                    <Input
+                      id="submission-title"
+                      value={submissionTitle}
+                      onChange={(e) => setSubmissionTitle(e.target.value)}
+                      placeholder="Enter a title for this submission"
+                    />
+                  </div>
+                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                    <li>
+                      Submitting creates a snapshot of your essay for your teacher
+                      to grade.
+                    </li>
+                    <li>
+                      You can keep editing and submit again after this.
+                    </li>
+                  </ul>
+                  {activeSubmissions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Previous submissions
+                      </p>
+                      <div className="max-h-32 overflow-y-auto rounded-md border">
+                        {activeSubmissions.map((s) => {
+                          const v = versionLabelForActiveSubmission(
+                            activeSubmissions,
+                            s.id
+                          );
+                          const isGraded = s.releasedAt != null;
+                          const label = displaySubmissionTitle(
+                            s.title,
+                            v,
+                            'Untitled submission'
+                          );
+                          return (
+                            <a
+                              key={s.id}
+                              href={`/app/submissions/${s.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate">{label}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </div>
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="shrink-0 text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -1303,34 +847,102 @@ export default function Route() {
               >
                 Cancel
               </Button>
-              <Button
-                variant="default"
-                data-testid="document-finalize-submit"
-                onClick={() => {
-                  submitFetcher.submit(
-                    { documentId: data.doc.id },
-                    {
-                      method: 'POST',
-                      action: '/api/domain/submit-document',
-                    }
-                  );
-                }}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Finalizing...
-                  </>
-                ) : (
-                  'Finalize Document'
-                )}
-              </Button>
+              {cannotSubmitEmpty && !isSubmitting ? (
+                <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
+                  <span
+                    className="inline-flex"
+                    data-testid="document-finalize-submit-empty-trigger"
+                  >
+                    <Button variant="default" data-testid="document-finalize-submit" disabled>
+                      {`Submit Version ${versionNumber}`}
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : (
+                <Button
+                  variant="default"
+                  data-testid="document-finalize-submit"
+                  onClick={() => {
+                    const resolved =
+                      submissionTitle.trim() || getLiveDocumentTitle().trim();
+                    void submit.submitNow(resolved);
+                  }}
+                  disabled={submitActionDisabled}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    `Submit Version ${versionNumber}`
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
-      <Dialog open={isSessionLocked} onOpenChange={() => {}}>
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Archived submissions</DialogTitle>
+            <DialogDescription>
+              Hidden from your main list. Your teacher can still view and grade
+              them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {archivedSubmissions.map((s) => {
+              const isGraded = s.releasedAt != null;
+              return (
+                <div
+                  key={s.id}
+                  className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <Link
+                    to={`/app/submissions/${s.id}`}
+                    className="min-w-0 flex-1 basis-[min(100%,12rem)] font-medium hover:underline"
+                    onClick={() => setArchiveDialogOpen(false)}
+                  >
+                    <span className="block truncate">
+                      {s.title?.trim() || 'Untitled submission'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(s.submittedAt).toLocaleDateString()}
+                    </span>
+                  </Link>
+                  <Badge
+                    variant={isGraded ? 'success' : 'secondary'}
+                    className="shrink-0 text-[10px]"
+                  >
+                    {isGraded ? 'Graded' : 'Submitted'}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                    disabled={submissionArchiveFetcher.state !== 'idle'}
+                    onClick={() => {
+                      const fd = new FormData();
+                      fd.set('intent', 'unarchive');
+                      submissionArchiveFetcher.submit(fd, {
+                        method: 'POST',
+                        action: `/api/model/submission/${s.id}`,
+                      });
+                    }}
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    Restore
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={auth.isLocked} onOpenChange={() => {}}>
         <DialogContent
           className="sm:max-w-md"
           onPointerDownOutside={(event) => event.preventDefault()}
@@ -1354,54 +966,6 @@ export default function Route() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {isTeacherGradingTabOpen && activeGrammarIssue && tooltipPos ? (
-        <div
-          className="fixed z-50 max-w-sm rounded-lg border bg-white p-3 text-sm shadow"
-          style={{
-            top: tooltipPos.top,
-            left: tooltipPos.left,
-            transform: 'translateY(0)',
-          }}
-          onMouseEnter={() => {
-            if (closeTooltipTimer.current) {
-              window.clearTimeout(closeTooltipTimer.current);
-            }
-          }}
-          onMouseLeave={() => {
-            setTooltipIssueId(null);
-            setTooltipRect(null);
-          }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-xs font-medium text-muted-foreground">
-                {activeGrammarIssue.kind === 'style' ? 'Style' : 'Grammar'}
-                {activeGrammarIssue.ruleNumber
-                  ? ` • Rule ${activeGrammarIssue.ruleNumber}`
-                  : ''}
-              </div>
-              {activeGrammarIssue.rule ? (
-                <div className="text-sm font-medium">
-                  {activeGrammarIssue.rule}
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-muted"
-              onClick={() => {
-                setTooltipIssueId(null);
-                setTooltipRect(null);
-              }}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            {activeGrammarIssue.message}
-          </div>
-        </div>
-      ) : null}
     </>
   );
 }

@@ -7,7 +7,6 @@ import { Client } from 'pg';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
 const E2E_DB_NAME = 'yop_e2e';
-const DUMP_S3_URI = 's3://yawp-production-database-exports/Mar03260636.dump';
 
 function run(
   cmd: string,
@@ -176,24 +175,6 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
   }
 }
 
-function downloadDump(e2eDir: string) {
-  const dataDir = path.join(e2eDir, '.data');
-  const dumpPath = path.join(dataDir, 'production.dump');
-  if (fs.existsSync(dumpPath)) {
-    console.log('Using cached dump at', dumpPath);
-    return dumpPath;
-  }
-  fs.mkdirSync(dataDir, { recursive: true });
-  console.log('Downloading production dump from S3...');
-  run(`aws s3 cp ${DUMP_S3_URI} ${shellEscape(dumpPath)} --profile yawp`);
-  return dumpPath;
-}
-
-function restoreDump(dumpPath: string, databaseUrl: string) {
-  console.log('Restoring production dump...');
-  run(`psql -f ${shellEscape(dumpPath)} ${shellEscape(databaseUrl)}`, { stdio: 'pipe' });
-}
-
 export async function prepareE2E() {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -205,45 +186,20 @@ export async function prepareE2E() {
   // 1. Prepare Postgres connection
   const { databaseUrl, startedContainer } = await prepareConnection(e2eDir);
 
-  // 2. Drop and recreate database for clean restore
+  // 2. Drop and recreate database for clean state
   await resetDatabase(databaseUrl);
   writeE2EEnv(e2eDir, databaseUrl);
 
   const env = { ...process.env, DATABASE_URL: databaseUrl };
-  let usedProductionDump = false;
 
-  // 3. Try production dump approach (requires AWS credentials)
-  try {
-    const dumpPath = downloadDump(e2eDir);
-    restoreDump(dumpPath, databaseUrl);
-    usedProductionDump = true;
-  } catch (err) {
-    console.warn('⚠️  Production dump not available, falling back to synthetic seed');
-    console.warn('   ', err instanceof Error ? err.message : err);
-  }
-
-  // 4. Run migrations
+  // 3. Generate Prisma client + run migrations from production schema
   run('bun prisma generate', { cwd: prismaDir, env });
   run('bun prisma migrate deploy', { cwd: prismaDir, env });
 
-  if (usedProductionDump) {
-    // 5a. Overlay test users on production data and capture context
-    const ctxOutput = execSync(
-      'bun run packages/prisma/scripts/seed-overlay.ts',
-      { cwd: rootDir, env: { ...env }, stdio: 'pipe' }
-    ).toString();
-
-    const jsonMatch = ctxOutput.match(/\{[\s\S]*\}$/m);
-    if (!jsonMatch) {
-      throw new Error('seed-overlay did not produce valid JSON context');
-    }
-    fs.writeFileSync(ctxPath, jsonMatch[0]);
-  } else {
-    // 5b. Fall back to synthetic seed
-    const { seedE2E } = await import('./seed-e2e');
-    const context = await seedE2E();
-    fs.writeFileSync(ctxPath, JSON.stringify(context, null, 2));
-  }
+  // 4. Seed deterministic test data
+  const { seedE2E } = await import('./seed-e2e');
+  const context = await seedE2E();
+  fs.writeFileSync(ctxPath, JSON.stringify(context, null, 2));
 
   // eslint-disable-next-line no-console
   console.log('E2E prepare complete', {

@@ -36,20 +36,30 @@ async function cleanupDb(prismaClient: E2EPrismaClient) {
 
 export type E2EContext = {
   organizationId: string;
+  schoolId: string;
+  classId: string;
+  classCode: string;
   userId: string;
   userEmail: string;
   adminUserId: string;
   adminEmail: string;
   profileId: string;
-  studentCourseId: string;
-  documentId: string;
-  // Added for signup flow
-  classId: string;
-  classCode: string;
-  schoolId: string;
+  teacherUserId: string;
   teacherProfileId: string;
   teacherName: string;
   teacherEmail: string;
+  studentCourseId: string;
+  freshDocumentId: string;
+  editedDocumentId: string;
+  submittedDocumentId: string;
+  /** Submission ID for the submitted document (use for grading flow tests) */
+  submittedSubmissionId: string;
+  gradedDocumentId: string;
+  /** Submission ID for the graded document (alias: gradeId) */
+  snapshotId: string;
+  gradeId: string;
+  /** Graded but not released; has inline comment (student must not see highlights until release) */
+  unreleasedGradedSubmissionId: string;
 };
 
 export async function seedE2E(): Promise<E2EContext> {
@@ -90,6 +100,7 @@ export async function seedE2E(): Promise<E2EContext> {
   });
   const seededTeacherProfileId = seededTeacher.profiles[0].teacherProfile
     ?.id as string;
+  const seededTeacherProfile = seededTeacher.profiles[0];
   await prisma.teacherProfile.update({
     where: { id: seededTeacherProfileId },
     data: { schools: { connect: { id: school.id } } },
@@ -168,50 +179,265 @@ export async function seedE2E(): Promise<E2EContext> {
       studentCourseModules: { select: { id: true, position: true } },
     },
   });
-  // Seed a starter document for the profile
-  const document = await prisma.document.create({
-    data: {
-      title: 'E2E Doc',
-      text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
-      html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
-      profileId: profile.id,
-      classId: seededClass.id,
-    },
-    select: { id: true },
-  });
   await prisma.classStudentCourse.create({
     data: {
       classId: seededClass.id,
       studentCourseId: studentCourse.id,
     },
   });
-  // Link the document to the first module via a session
+
+  // 1. Fresh document — minimal content, no revisions
+  const freshDoc = await prisma.document.create({
+    data: {
+      title: 'Fresh Document',
+      text: '',
+      html: '<p></p>',
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+
+  // 2. Edited document — with 2 revisions
+  const editedDocText =
+    'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.';
+  const editedDocHtml = `<p>${editedDocText}</p>`;
+  const editedDoc = await prisma.document.create({
+    data: {
+      title: 'Edited Document',
+      text: editedDocText,
+      html: editedDocHtml,
+      revision: 2,
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+  await prisma.documentRevision.create({
+    data: {
+      documentId: editedDoc.id,
+      html: '<p></p>',
+      text: '',
+      trigger: 'session-start',
+    },
+  });
+  await prisma.documentRevision.create({
+    data: {
+      documentId: editedDoc.id,
+      html: editedDocHtml,
+      text: editedDocText,
+      trigger: 'auto',
+    },
+  });
+
+  // 3. Submitted document — with submission
+  const submittedDocText =
+    'The importance of reading cannot be overstated. Reading expands our vocabulary and improves comprehension skills.';
+  const submittedDocHtml = `<p>${submittedDocText}</p>`;
+  const submittedDocTitle = 'E2E Document workspace title';
+  const submittedSubmissionTitle = 'E2E Essay submission title';
+  const submittedAt = new Date();
+  const submittedDoc = await prisma.document.create({
+    data: {
+      title: submittedDocTitle,
+      text: submittedDocText,
+      html: submittedDocHtml,
+      revision: 3,
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+  const submittedSubmission = await prisma.submission.create({
+    data: {
+      documentId: submittedDoc.id,
+      html: submittedDocHtml,
+      text: submittedDocText,
+      title: submittedSubmissionTitle,
+      submittedAt,
+    },
+    select: { id: true },
+  });
+  const modulesByPosition = studentCourse.studentCourseModules.sort(
+    (a, b) => a.position - b.position
+  );
   await prisma.studentCourseModuleSession.create({
     data: {
-      studentCourseModuleId: studentCourse.studentCourseModules.sort(
-        (a, b) => a.position - b.position
-      )[0].id,
+      studentCourseModuleId: modulesByPosition[1].id,
       studentProfileId: studentProfile.id,
-      documentId: document.id,
+      documentId: submittedDoc.id,
+      title: 'E2E Submitted Doc Session',
+      instructionsCompleted: 0,
+    },
+  });
+
+  // 4. Graded document — with submission (graded + released) and comments
+  const gradedDocText =
+    'Education is the foundation of society. Through learning, students develop critical thinking skills that serve them throughout life.';
+  const gradedDocHtml = `<p>${gradedDocText}</p>`;
+  const gradedDocTitle = 'Graded Document';
+  const gradedSubmittedAt = new Date();
+  const gradedDoc = await prisma.document.create({
+    data: {
+      title: gradedDocTitle,
+      text: gradedDocText,
+      html: gradedDocHtml,
+      revision: 4,
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+  const gradedSubmission = await prisma.submission.create({
+    data: {
+      documentId: gradedDoc.id,
+      html: gradedDocHtml,
+      text: gradedDocText,
+      title: gradedDocTitle,
+      submittedAt: gradedSubmittedAt,
+      gradedById: seededTeacherProfile.id,
+      gradedAt: new Date(),
+      numericPercentage: 77,
+      letterGrade: 'C+',
+      overallScore: 4,
+      overallComment: 'Good effort with room for improvement.',
+      rubricScores: {
+        thesis_and_content: 5,
+        organization_and_structure: 1,
+        evidence_and_support: 5,
+        voice_and_style: 1,
+        grammar_and_mechanics: 1,
+      },
+      releasedAt: new Date(),
+      grammarIssues: {
+        issues: [
+          {
+            id: 'e2e-graded-grammar-1',
+            excerpt: 'Through learning',
+            kind: 'style',
+            message: 'E2E grammar highlight for student toggle.',
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: gradedSubmission.id,
+      profileId: seededTeacherProfile.id,
+      content: 'Strong thesis statement in the opening sentence.',
+      excerpt: 'Education is the foundation of society.',
+      occurrence: 1,
+    },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: gradedSubmission.id,
+      profileId: seededTeacherProfile.id,
+      content: 'Consider adding more specific examples to support your claims.',
+      excerpt: 'students develop critical thinking skills',
+      occurrence: 1,
+    },
+  });
+
+  const unreleasedDocText =
+    'Pending release essay body. The first sentence matters for the excerpt.';
+  const unreleasedDocHtml = `<p>${unreleasedDocText}</p>`;
+  const unreleasedDocTitle = 'Unreleased graded';
+  const unreleasedDoc = await prisma.document.create({
+    data: {
+      title: unreleasedDocTitle,
+      text: unreleasedDocText,
+      html: unreleasedDocHtml,
+      revision: 1,
+      profileId: profile.id,
+      classId: seededClass.id,
+    },
+    select: { id: true },
+  });
+  const unreleasedGradedSubmission = await prisma.submission.create({
+    data: {
+      documentId: unreleasedDoc.id,
+      html: unreleasedDocHtml,
+      text: unreleasedDocText,
+      title: unreleasedDocTitle,
+      submittedAt: new Date(),
+      gradedById: seededTeacherProfile.id,
+      gradedAt: new Date(),
+      numericPercentage: 80,
+      letterGrade: 'B',
+      releasedAt: null,
+    },
+    select: { id: true },
+  });
+  await prisma.submissionComment.create({
+    data: {
+      submissionId: unreleasedGradedSubmission.id,
+      profileId: seededTeacherProfile.id,
+      content: 'Secret teacher note before release.',
+      excerpt: 'The first sentence matters',
+      occurrence: 1,
+    },
+  });
+
+  // 5. Feature flag settings
+  await prisma.setting.create({
+    data: {
+      name: 'document_submission_enabled',
+      value: 'true',
+      valueType: 'boolean',
+    },
+  });
+  await prisma.setting.create({
+    data: {
+      name: 'document_submission_enabled_school_ids',
+      value: school.id,
+      valueType: 'string',
+    },
+  });
+  await prisma.setting.create({
+    data: {
+      name: 'assignments_enabled_org_ids',
+      value: org.id,
+      valueType: 'string',
+    },
+  });
+
+  // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
+  await prisma.studentCourseModuleSession.create({
+    data: {
+      studentCourseModuleId: modulesByPosition[0].id,
+      studentProfileId: studentProfile.id,
+      documentId: editedDoc.id,
       title: 'E2E Doc Session',
       instructionsCompleted: 0,
     },
   });
+
   return {
     organizationId: org.id,
+    schoolId: school.id,
+    classId: seededClass.id,
+    classCode,
     userId: user.id,
     userEmail: user.email,
     adminUserId: adminUser.id,
     adminEmail: adminUser.email,
     profileId: profile.id,
-    studentCourseId: studentCourse.id,
-    documentId: document.id,
-    classId: seededClass.id,
-    classCode,
-    schoolId: school.id,
+    teacherUserId: seededTeacher.id,
     teacherProfileId: seededTeacherProfileId,
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
+    studentCourseId: studentCourse.id,
+    freshDocumentId: freshDoc.id,
+    editedDocumentId: editedDoc.id,
+    submittedDocumentId: submittedDoc.id,
+    submittedSubmissionId: submittedSubmission.id,
+    gradedDocumentId: gradedDoc.id,
+    snapshotId: gradedSubmission.id,
+    gradeId: gradedSubmission.id,
+    unreleasedGradedSubmissionId: unreleasedGradedSubmission.id,
   };
 }
 

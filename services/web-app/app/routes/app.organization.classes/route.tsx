@@ -30,6 +30,7 @@ import {
   Check,
   Archive,
   Files,
+  SquarePen,
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { cn } from '~/utils/misc';
@@ -438,6 +439,133 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
+  if (intent === 'bulk-edit-classes') {
+    const classIds = formData.getAll('classIds') as string[];
+    const schoolId = (formData.get('schoolId') as string)?.trim() || '';
+    const schoolYear = (formData.get('schoolYear') as string)?.trim() || '';
+    const applyTeachers = formData.get('applyTeachers') === 'on';
+    const applyStudentCourses = formData.get('applyStudentCourses') === 'on';
+    const teacherIds = formData.getAll('teacherIds') as string[];
+    const studentCourseIds = formData.getAll('studentCourseIds') as string[];
+
+    if (!classIds.length) {
+      return dataResponse({ error: 'No classes selected' }, { status: 400 });
+    }
+
+    const orgClasses = await prisma.class.findMany({
+      where: {
+        id: { in: classIds },
+        school: { organizationId: profile.organization.id },
+      },
+    });
+
+    if (orgClasses.length !== classIds.length) {
+      return dataResponse(
+        { error: 'Some classes do not belong to your organization' },
+        { status: 400 }
+      );
+    }
+
+    const hasAnyChange =
+      Boolean(schoolId) ||
+      Boolean(schoolYear) ||
+      applyTeachers ||
+      applyStudentCourses;
+
+    if (!hasAnyChange) {
+      return dataResponse(
+        { error: 'Change at least one field to apply' },
+        { status: 400 }
+      );
+    }
+
+    if (schoolYear && !/^\d{4}-\d{4}$/.test(schoolYear)) {
+      return dataResponse(
+        { error: 'School year must be in format YYYY-YYYY' },
+        { status: 400 }
+      );
+    }
+
+    if (schoolId) {
+      const school = await prisma.school.findFirst({
+        where: { id: schoolId, organizationId: profile.organization.id },
+      });
+      if (!school) {
+        return dataResponse({ error: 'Invalid school' }, { status: 400 });
+      }
+    }
+
+    if (applyTeachers && teacherIds.length > 0) {
+      const teachersOk = await prisma.teacherProfile.findMany({
+        where: {
+          id: { in: teacherIds },
+          profile: { organizationId: profile.organization.id },
+        },
+      });
+      if (teachersOk.length !== teacherIds.length) {
+        return dataResponse(
+          { error: 'Invalid teacher selection' },
+          { status: 400 }
+        );
+      }
+    }
+
+    try {
+      for (const classId of classIds) {
+        await prisma.$transaction(async (tx) => {
+          if (applyStudentCourses) {
+            await tx.classStudentCourse.deleteMany({ where: { classId } });
+          }
+
+          const data: {
+            school?: { connect: { id: string } };
+            schoolYear?: string;
+            teachers?: { set: { id: string }[] };
+            allowedStudentCourses?: {
+              create: { studentCourseId: string }[];
+            };
+          } = {};
+
+          if (schoolId) {
+            data.school = { connect: { id: schoolId } };
+          }
+          if (schoolYear) {
+            data.schoolYear = schoolYear;
+          }
+          if (applyTeachers) {
+            data.teachers = { set: teacherIds.map((id) => ({ id })) };
+          }
+          if (applyStudentCourses) {
+            data.allowedStudentCourses = {
+              create: studentCourseIds.map((studentCourseId) => ({
+                studentCourseId,
+              })),
+            };
+          }
+
+          await tx.class.update({
+            where: { id: classId },
+            data,
+          });
+        });
+      }
+
+      return dataResponse({ success: true });
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'P2002') {
+        return dataResponse(
+          {
+            error:
+              'Could not apply changes (e.g. class code may conflict in the target school).',
+          },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
   if (intent === 'delete-classes') {
     const classIds = formData.getAll('classIds') as string[];
 
@@ -529,8 +657,15 @@ function CopyCodeButton({ code }: { code: string }) {
 }
 
 export default function OrganizationClassesRoute() {
-  const { classes, totalCount, schools, teachers, studentCourses, table, q } =
-    useLoaderData<typeof loader>();
+  const {
+    classes,
+    totalCount,
+    schools,
+    teachers,
+    studentCourses,
+    table,
+    q,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -550,6 +685,7 @@ export default function OrganizationClassesRoute() {
   const [duplicatingClass, setDuplicatingClass] = useState<
     (typeof classes)[0] | null
   >(null);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
 
   const handleEdit = (cls: (typeof classes)[0]) => {
     setEditingClass(cls);
@@ -585,6 +721,15 @@ export default function OrganizationClassesRoute() {
           <div className="flex gap-2">
             {selected.length > 0 && (
               <>
+                <Tooltip text={`Bulk edit ${selected.length}`}>
+                  <Button
+                    size="icon-sm"
+                    variant="outline"
+                    onClick={() => setBulkEditOpen(true)}
+                  >
+                    <SquarePen className="h-4 w-4" />
+                  </Button>
+                </Tooltip>
                 {selected.length === 1 && (
                   <Tooltip text="Duplicate">
                     <Button
@@ -852,6 +997,15 @@ export default function OrganizationClassesRoute() {
         onOpenChange={setSheetOpen}
         editingClass={editingClass}
         duplicatingClass={duplicatingClass}
+        schools={schools}
+        teachers={teachers}
+        studentCourses={studentCourses}
+      />
+      <BulkEditClassSheet
+        open={bulkEditOpen}
+        onOpenChange={setBulkEditOpen}
+        onApplied={() => setSelected([])}
+        selectedClassIds={selected}
         schools={schools}
         teachers={teachers}
         studentCourses={studentCourses}
@@ -1180,6 +1334,291 @@ function ClassSheet({
                 : editingClass
                   ? 'Update Class'
                   : 'Create Class'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+const BULK_SCHOOL_UNCHANGED = '__unchanged__';
+
+function BulkEditClassSheet({
+  open,
+  onOpenChange,
+  onApplied,
+  selectedClassIds,
+  schools,
+  teachers,
+  studentCourses,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onApplied: () => void;
+  selectedClassIds: string[];
+  schools: { id: string; name: string }[];
+  teachers: {
+    id: string;
+    profile: { user: { name: string | null; email: string } };
+  }[];
+  studentCourses: { id: string; title: string }[];
+}) {
+  const fetcher = useFetcher({
+    key: `bulk-edit-${[...selectedClassIds].sort().join(',')}`,
+  });
+  const [schoolId, setSchoolId] = useState('');
+  const [schoolYear, setSchoolYear] = useState('');
+  const [applyTeachers, setApplyTeachers] = useState(false);
+  const [applyStudentCourses, setApplyStudentCourses] = useState(false);
+  const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [selectedStudentCourses, setSelectedStudentCourses] = useState<string[]>(
+    []
+  );
+  const [pendingSubmit, setPendingSubmit] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSchoolId('');
+      setSchoolYear('');
+      setApplyTeachers(false);
+      setApplyStudentCourses(false);
+      setSelectedTeachers([]);
+      setSelectedStudentCourses([]);
+      setPendingSubmit(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (open && selectedClassIds.length === 0) {
+      onOpenChange(false);
+    }
+  }, [open, selectedClassIds.length, onOpenChange]);
+
+  useEffect(() => {
+    if (fetcher.state !== 'idle' || !pendingSubmit) return;
+    if (fetcher.data && 'error' in fetcher.data && fetcher.data.error) {
+      setPendingSubmit(false);
+      return;
+    }
+    if (fetcher.data && !('error' in fetcher.data && fetcher.data.error)) {
+      setPendingSubmit(false);
+      onOpenChange(false);
+      onApplied();
+    }
+  }, [
+    fetcher.state,
+    fetcher.data,
+    pendingSubmit,
+    onOpenChange,
+    onApplied,
+  ]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('intent', 'bulk-edit-classes');
+    selectedClassIds.forEach((id) => formData.append('classIds', id));
+    if (schoolId) {
+      formData.append('schoolId', schoolId);
+    }
+    const sy = schoolYear.trim();
+    if (sy) {
+      formData.append('schoolYear', sy);
+    }
+    if (applyTeachers) {
+      formData.append('applyTeachers', 'on');
+    }
+    if (applyStudentCourses) {
+      formData.append('applyStudentCourses', 'on');
+    }
+    selectedTeachers.forEach((id) => formData.append('teacherIds', id));
+    selectedStudentCourses.forEach((id) =>
+      formData.append('studentCourseIds', id)
+    );
+    setPendingSubmit(true);
+    fetcher.submit(formData, { method: 'POST' });
+  };
+
+  const n = selectedClassIds.length;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>Bulk edit classes</SheetTitle>
+          <SheetDescription>
+            Only filled fields apply to all {n} selected class
+            {n === 1 ? '' : 'es'}. Leave fields empty to leave them unchanged.
+          </SheetDescription>
+        </SheetHeader>
+
+        {fetcher.data && 'error' in fetcher.data && fetcher.data.error ? (
+          <div className="mt-4 p-3 rounded-md bg-destructive/10 border border-destructive text-destructive text-sm">
+            {String(fetcher.data.error)}
+          </div>
+        ) : null}
+
+        <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+          <div className="space-y-2">
+            <Label className="text-base">Student</Label>
+            <p className="text-sm text-muted-foreground">Courses</p>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="bulk-apply-courses"
+                checked={applyStudentCourses}
+                onCheckedChange={(c) => setApplyStudentCourses(c === true)}
+              />
+              <Label htmlFor="bulk-apply-courses" className="font-normal">
+                Replace courses on all selected classes
+              </Label>
+            </div>
+            <div className="rounded-md border border-input bg-background">
+              <div className="max-h-[160px] overflow-y-auto p-3 space-y-2">
+                {studentCourses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No student courses available
+                  </p>
+                ) : (
+                  studentCourses.map((course) => (
+                    <div
+                      key={course.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`bulk-course-${course.id}`}
+                        disabled={!applyStudentCourses}
+                        checked={selectedStudentCourses.includes(course.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStudentCourses([
+                              ...selectedStudentCourses,
+                              course.id,
+                            ]);
+                          } else {
+                            setSelectedStudentCourses(
+                              selectedStudentCourses.filter(
+                                (id) => id !== course.id
+                              )
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`bulk-course-${course.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {course.title}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-base">Teachers</Label>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="bulk-apply-teachers"
+                checked={applyTeachers}
+                onCheckedChange={(c) => setApplyTeachers(c === true)}
+              />
+              <Label htmlFor="bulk-apply-teachers" className="font-normal">
+                Replace teachers on all selected classes
+              </Label>
+            </div>
+            <div className="rounded-md border border-input bg-background">
+              <div className="max-h-[160px] overflow-y-auto p-3 space-y-2">
+                {teachers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No teachers available
+                  </p>
+                ) : (
+                  teachers.map((teacher) => (
+                    <div
+                      key={teacher.id}
+                      className="flex items-center space-x-2"
+                    >
+                      <Checkbox
+                        id={`bulk-teacher-${teacher.id}`}
+                        disabled={!applyTeachers}
+                        checked={selectedTeachers.includes(teacher.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedTeachers([
+                              ...selectedTeachers,
+                              teacher.id,
+                            ]);
+                          } else {
+                            setSelectedTeachers(
+                              selectedTeachers.filter((id) => id !== teacher.id)
+                            );
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`bulk-teacher-${teacher.id}`}
+                        className="text-sm font-normal cursor-pointer flex-1"
+                      >
+                        {teacher.profile.user.name ||
+                          teacher.profile.user.email}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-schoolYear">School year</Label>
+            <Input
+              id="bulk-schoolYear"
+              placeholder="Leave unchanged"
+              value={schoolYear}
+              onChange={(e) => setSchoolYear(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Format YYYY-YYYY when set
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-schoolId">In school</Label>
+            <Select
+              value={schoolId || BULK_SCHOOL_UNCHANGED}
+              onValueChange={(v) =>
+                setSchoolId(v === BULK_SCHOOL_UNCHANGED ? '' : v)
+              }
+            >
+              <SelectTrigger id="bulk-schoolId">
+                <SelectValue placeholder="Leave unchanged" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={BULK_SCHOOL_UNCHANGED}>
+                  Leave unchanged
+                </SelectItem>
+                {schools.map((school) => (
+                  <SelectItem key={school.id} value={school.id}>
+                    {school.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <Button type="submit" disabled={fetcher.state !== 'idle'}>
+              {fetcher.state !== 'idle' ? 'Applying…' : 'Apply to all'}
             </Button>
             <Button
               type="button"

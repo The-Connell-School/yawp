@@ -1,7 +1,7 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
 const DB_NAME = 'yawp-documents';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'documents';
 
 export interface DocumentStoreEntry {
@@ -14,6 +14,8 @@ export interface DocumentStoreEntry {
   lastSyncedAt: number | null;
   lastSyncError: string | null;
   contentHash: string;
+  /** Monotonically increasing; prevents stale overwrites */
+  localVersion: number;
 }
 
 export class DocumentStore {
@@ -30,9 +32,22 @@ export class DocumentStore {
     }
     if (!this._dbPromise) {
       this._dbPromise = openDB(DB_NAME, DB_VERSION, {
-        upgrade(db) {
-          if (!db.objectStoreNames.contains(STORE_NAME)) {
+        upgrade(db, oldVersion, _newVersion, transaction) {
+          if (oldVersion < 1) {
             db.createObjectStore(STORE_NAME, { keyPath: 'docId' });
+          }
+          if (oldVersion < 2) {
+            // Migration: backfill localVersion on existing records
+            const store = transaction.objectStore(STORE_NAME);
+            store.openCursor().then(function migrate(cursor): Promise<void> | void {
+              if (!cursor) return;
+              const value = cursor.value;
+              if (value.localVersion === undefined) {
+                value.localVersion = 0;
+                cursor.update(value);
+              }
+              return cursor.continue().then(migrate);
+            });
           }
         },
       });
@@ -47,7 +62,39 @@ export class DocumentStore {
     return this._memoryStore;
   }
 
+  /**
+   * Version-gated write. Silently rejects if the existing entry has a
+   * localVersion >= the incoming entry's localVersion, preventing stale
+   * data from overwriting fresher content.
+   */
   async put(entry: DocumentStoreEntry): Promise<void> {
+    if (this._useMemory()) {
+      const existing = this._mem().get(entry.docId);
+      if (existing && existing.localVersion >= entry.localVersion) return;
+      this._mem().set(entry.docId, { ...entry });
+      return;
+    }
+    // Note: This version gate is safe for single-tab sequential writes (our use case).
+    // IDB readwrite transactions do not provide true serializable isolation — concurrent
+    // transactions from the same JS context can interleave. If multi-tab or worker
+    // scenarios are needed, add a promise-based transaction queue.
+    const db = await this._getDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const existing = await store.get(entry.docId);
+    if (existing && existing.localVersion >= entry.localVersion) {
+      tx.abort();
+      return;
+    }
+    await store.put(entry);
+    await tx.done;
+  }
+
+  /**
+   * Bypass version gating — for internal updates that don't change content
+   * (e.g. markSynced, markFailed).
+   */
+  private async _rawPut(entry: DocumentStoreEntry): Promise<void> {
     if (this._useMemory()) {
       this._mem().set(entry.docId, { ...entry });
       return;
@@ -72,7 +119,7 @@ export class DocumentStore {
   ): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
-    await this.put({
+    await this._rawPut({
       ...entry,
       syncStatus: 'synced',
       serverRevision,
@@ -81,13 +128,14 @@ export class DocumentStore {
     });
   }
 
-  async markFailed(docId: string, error: string): Promise<void> {
+  async markFailed(docId: string, error: string, serverRevision?: number): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
-    await this.put({
+    await this._rawPut({
       ...entry,
       syncStatus: 'failed',
       lastSyncError: error,
+      ...(serverRevision !== undefined ? { serverRevision } : {}),
     });
   }
 

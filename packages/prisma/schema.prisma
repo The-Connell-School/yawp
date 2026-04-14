@@ -152,9 +152,6 @@ model Document {
   title                       String                       @default("Untitled")
   text                        String?
   html                        String?
-  submittedAt                 DateTime?                    @db.Timestamptz(6)
-  submittedSnapshotId         String?
-  submittedSnapshot           DocumentSnapshot?            @relation("DocumentSubmission", fields: [submittedSnapshotId], references: [id], onDelete: SetNull)
   profile                     Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId                   String
   classId                     String?
@@ -163,12 +160,10 @@ model Document {
   assignment                  Assignment?                  @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   studentCourseModuleSessions StudentCourseModuleSession[]
   comments                    DocumentComment[]
-  versions                    DocumentVersion[]
-  snapshots                   DocumentSnapshot[]
   writeJournals               DocumentWriteJournal[]
-  grades                      Grade[]
   pasteAlerts                 PasteAlert[]
   revisions                   DocumentRevision[]
+  submissions                 Submission[]
 
   @@index([assignmentId])
 }
@@ -194,31 +189,6 @@ model DocumentCommentResponse {
   documentComment DocumentComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
   profileId       String
   profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
-}
-
-model DocumentVersion {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  text       String
-  html       String
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-}
-
-model DocumentSnapshot {
-  id                 String     @id @default(cuid())
-  createdAt          DateTime   @default(now()) @db.Timestamptz(6)
-  submittedAt        DateTime?  @db.Timestamptz(6)
-  archivedAt         DateTime?  @db.Timestamptz(6)
-  text               String
-  html               String
-  documentId         String
-  document           Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  submittedDocuments Document[] @relation("DocumentSubmission")
-  grades             Grade[]
-
-  @@index([documentId, createdAt(sort: Desc)])
-  @@index([submittedAt, archivedAt])
 }
 
 model DocumentRevision {
@@ -265,67 +235,6 @@ model DocumentWriteJournal {
   @@index([editorSessionId, clientSeq(sort: Desc)])
 }
 
-model Grade {
-  id                String           @id @default(cuid())
-  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime         @default(now()) @db.Timestamptz(6)
-  score             String? // Flexible: can be letter grade, number, or text
-  feedback          String? // Teacher's written feedback
-  rubricScores      Json?
-  overallScore      Int?
-  overallComment    String?
-  numericPercentage Int?
-  letterGrade       String?
-  grammarIssues     Json?
-  promptConfig      Json?
-  aiMeta            Json?
-  essayText         String?
-  essayHtml         String?
-  releasedAt        DateTime?        @db.Timestamptz(6) // When released to student (null = not released)
-  documentId        String
-  document          Document         @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  snapshotId        String?          @unique // Legacy link to source submission snapshot
-  snapshot          DocumentSnapshot? @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
-  gradedById        String
-  gradedBy          Profile          @relation(fields: [gradedById], references: [id], onDelete: Cascade)
-  comments          GradeComment[]
-
-  @@index([documentId])
-  @@index([snapshotId])
-  @@index([gradedById])
-  @@index([releasedAt])
-}
-
-model GradeComment {
-  id         String                 @id @default(cuid())
-  createdAt  DateTime               @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime               @default(now()) @db.Timestamptz(6)
-  content    String
-  excerpt    String?
-  occurrence Int                    @default(1)
-  gradeId    String
-  grade      Grade                  @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  profileId  String
-  profile    Profile                @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  responses  GradeCommentResponse[]
-
-  @@index([gradeId, createdAt(sort: Desc)])
-  @@index([profileId])
-}
-
-model GradeCommentResponse {
-  id           String       @id @default(cuid())
-  createdAt    DateTime     @default(now()) @db.Timestamptz(6)
-  content      String
-  commentId    String
-  gradeComment GradeComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  profileId    String
-  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
-  @@index([commentId])
-  @@index([profileId])
-}
-
 model Organization {
   id                String       @id @default(cuid())
   createdAt         DateTime     @default(now()) @db.Timestamptz(6)
@@ -350,9 +259,8 @@ model Profile {
   documentComments         DocumentComment[]
   documentCommentResponses DocumentCommentResponse[]
   pasteAlerts              PasteAlert[]
-  gradesGiven              Grade[]
-  gradeComments            GradeComment[]
-  gradeCommentResponses    GradeCommentResponse[]
+  submissionsGraded        Submission[]              @relation("SubmissionGradedBy")
+  submissionComments       SubmissionComment[]       @relation("SubmissionCommentProfile")
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   isOwner                  Boolean                   @default(false)
@@ -556,6 +464,62 @@ model PasteAlert {
 
   @@index([documentId, createdAt(sort: Desc)])
   @@index([profileId, createdAt(sort: Desc)])
+}
+
+model Submission {
+  id                String              @id @default(cuid())
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime            @default(now()) @db.Timestamptz(6)
+  title             String
+  text              String
+  html              String
+  submittedAt       DateTime            @db.Timestamptz(6)
+  score             String?
+  feedback          String?
+  rubricScores      Json?
+  overallScore      Int?
+  overallComment    String?
+  numericPercentage Int?
+  letterGrade       String?
+  grammarIssues     Json?
+  promptConfig      Json?
+  aiMeta            Json?
+  gradedAt          DateTime?           @db.Timestamptz(6)
+  gradedById        String?
+  gradedBy          Profile?            @relation("SubmissionGradedBy", fields: [gradedById], references: [id], onDelete: SetNull)
+  releasedAt        DateTime?           @db.Timestamptz(6)
+  /// When set, hidden from the student's active submission list (teachers unaffected).
+  archivedAt        DateTime?           @db.Timestamptz(6)
+  documentId        String
+  document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  comments          SubmissionComment[]
+
+  @@index([documentId, submittedAt(sort: Desc)])
+  @@index([documentId, archivedAt])
+  @@index([gradedById])
+  @@index([releasedAt])
+}
+
+model SubmissionComment {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  content      String
+  excerpt      String?
+  occurrence   Int        @default(1)
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile    @relation("SubmissionCommentProfile", fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt(sort: Desc)])
+  @@index([profileId])
+}
+
+model LegacyGradeRedirect {
+  gradeId      String   @id
+  submissionId String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
 }
 
 model LlmLog {

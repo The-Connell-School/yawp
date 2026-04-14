@@ -54,10 +54,13 @@ export function GradeCommentCard({
       ref={cardRef}
       onClick={onClick}
       className={cn(
-        'w-full rounded-lg border p-3 text-left transition-shadow duration-100',
-        readOnly ? 'bg-white' : 'bg-muted/40 hover:border-yellow-300',
-        onClick && 'cursor-pointer',
-        isActive && 'ring-2 ring-yellow-300'
+        'w-full rounded-lg border p-3 text-left transition-[box-shadow,background-color,border-color] duration-200',
+        isActive
+          ? 'comment-card-focused'
+          : readOnly
+            ? 'bg-white'
+            : 'bg-muted/40 hover:border-yellow-300',
+        onClick && 'cursor-pointer'
       )}
     >
       <div className="flex items-start justify-between gap-2">

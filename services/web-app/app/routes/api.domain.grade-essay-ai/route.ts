@@ -31,7 +31,7 @@ import {
 
 const POST = z.object({
   documentId: z.string().optional(),
-  snapshotId: z.string().optional(),
+  submissionId: z.string().optional(),
 });
 
 const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
@@ -86,9 +86,9 @@ const AiOverallCommentSchema = z.object({
 export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
-  if (!data.documentId && !data.snapshotId) {
+  if (!data.documentId && !data.submissionId) {
     return dataResponse(
-      { success: false, message: 'A document or snapshot is required.' },
+      { success: false, message: 'A document or submission is required.' },
       { status: 400 }
     );
   }
@@ -103,98 +103,66 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const teacherClassWhere = buildTeacherClassWhere(actor);
 
-  const submittedSnapshot = data.snapshotId
-    ? await prisma.documentSnapshot.findFirst({
-        where: {
-          id: data.snapshotId,
-          submittedAt: { not: null },
-          archivedAt: null,
-          document: {
-            deletedAt: null,
-            ...teacherClassWhere,
-          },
-        },
-        select: {
-          id: true,
-          text: true,
-          html: true,
-          document: {
-            select: {
-              id: true,
-              class: { select: { schoolId: true } },
-              profile: {
-                select: {
-                  user: { select: { name: true } },
-                },
-              },
-            },
-          },
-        },
-      })
-    : await prisma.document
-        .findFirst({
-          where: {
-            id: data.documentId,
-            submittedAt: { not: null },
-            submittedSnapshotId: { not: null },
-            submittedSnapshot: {
-              is: {
-                submittedAt: { not: null },
-                archivedAt: null,
-              },
-            },
-            deletedAt: null,
-            ...teacherClassWhere,
-          },
+  // Look up the submission — either by submissionId directly or by finding
+  // the latest submission for the given documentId.
+  const submissionSelect = {
+    id: true,
+    text: true,
+    html: true,
+    gradedAt: true,
+    document: {
+      select: {
+        id: true,
+        class: { select: { schoolId: true } },
+        profile: {
           select: {
-            submittedSnapshot: {
-              select: {
-                id: true,
-                text: true,
-                html: true,
-              },
-            },
-            class: { select: { schoolId: true } },
-            profile: {
-              select: {
-                user: { select: { name: true } },
-              },
-            },
-            id: true,
+            user: { select: { name: true } },
           },
-        })
-        .then((doc) =>
-          doc?.submittedSnapshot
-            ? {
-                id: doc.submittedSnapshot.id,
-                text: doc.submittedSnapshot.text,
-                html: doc.submittedSnapshot.html,
-                document: {
-                  id: doc.id,
-                  class: doc.class,
-                  profile: doc.profile,
-                },
-              }
-            : null
-        );
+        },
+      },
+    },
+  } as const;
 
-  if (!submittedSnapshot?.id) {
-    console.warn('grade-essay-ai snapshot not found', {
-      snapshotId: data.snapshotId ?? null,
+  const submission = data.submissionId
+    ? await prisma.submission.findFirst({
+        where: {
+          id: data.submissionId,
+          document: {
+            deletedAt: null,
+            ...teacherClassWhere,
+          },
+        },
+        select: submissionSelect,
+      })
+    : await prisma.submission.findFirst({
+        where: {
+          documentId: data.documentId,
+          document: {
+            deletedAt: null,
+            ...teacherClassWhere,
+          },
+        },
+        orderBy: { submittedAt: 'desc' },
+        select: submissionSelect,
+      });
+
+  if (!submission?.id) {
+    console.warn('grade-essay-ai submission not found', {
+      submissionId: data.submissionId ?? null,
       documentId: data.documentId ?? null,
       profileId: actor.profileId,
       isAdmin: actor.isAdmin,
     });
     return dataResponse(
-      { success: false, message: 'Submitted essay snapshot not found.' },
+      { success: false, message: 'Submitted essay not found.' },
       { status: 404 }
     );
   }
 
-  if (!submittedSnapshot.text?.trim()) {
-    console.warn('grade-essay-ai snapshot text missing', {
-      snapshotId: submittedSnapshot.id,
-      documentId: submittedSnapshot.document.id,
+  if (!submission.text?.trim()) {
+    console.warn('grade-essay-ai submission text missing', {
+      submissionId: submission.id,
+      documentId: submission.document.id,
     });
     return dataResponse(
       { success: false, message: 'Submitted essay text not found.' },
@@ -203,7 +171,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    submittedSnapshot.document.class?.schoolId
+    submission.document.class?.schoolId
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
@@ -220,12 +188,12 @@ export async function action({ request }: ActionFunctionArgs) {
     .join('\n');
 
   const studentFirstName = firstNameFromFullName(
-    submittedSnapshot.document.profile?.user?.name
+    submission.document.profile?.user?.name
   );
 
   const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${gradingAssistantScoreScaleInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submittedSnapshot.text}`;
+  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submission.text}`;
 
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   let responseText = '';
@@ -250,7 +218,7 @@ export async function action({ request }: ActionFunctionArgs) {
       messages: [
         {
           role: 'user',
-          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submittedSnapshot.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
+          content: `Student first name: ${studentFirstName}\n\nEssay:\n${submission.text}\n\nRubric category feedback:\n${JSON.stringify(categories)}`,
         },
       ],
       maxTokens: 300,
@@ -374,7 +342,7 @@ export async function action({ request }: ActionFunctionArgs) {
     try {
       const parsedGrammarJson = parseFirstJsonValue(responseText);
       const parsedFromJson = parseGrammarIssuesPayload(parsedGrammarJson, {
-        sourceText: submittedSnapshot.text,
+        sourceText: submission.text,
       });
       if (parsedFromJson.length > 0) return parsedFromJson;
     } catch {
@@ -384,7 +352,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return parseGrammarIssuesPayload(
       extractJsonObjectCandidates(responseText),
       {
-        sourceText: submittedSnapshot.text,
+        sourceText: submission.text,
       }
     );
   };
@@ -408,7 +376,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
-    const grammarUserPrompt = `Essay:\n${submittedSnapshot.text}\n\nReturn up to 15 issues.`;
+    const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
 
     let grammarResponseText = await getLLMCompletion({
       model,
@@ -432,7 +400,7 @@ export async function action({ request }: ActionFunctionArgs) {
         messages: [
           {
             role: 'user',
-            content: `Essay:\n${submittedSnapshot.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+            content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
           },
         ],
         maxTokens: 1600,
@@ -451,6 +419,29 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch {
     grammarIssues = null;
   }
+
+  // Write AI grading results directly to the Submission
+  const now = new Date();
+  await prisma.submission.update({
+    where: { id: submission.id },
+    data: {
+      rubricScores: rubricScores as Prisma.InputJsonValue,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      ...(grammarIssues !== null ? { grammarIssues } : {}),
+      aiMeta: {
+        model,
+        gradedAt: now.toISOString(),
+      } satisfies Prisma.InputJsonValue,
+      ...(!submission.gradedAt
+        ? { gradedAt: now, gradedById: actor.profileId }
+        : {}),
+      updatedAt: now,
+    },
+  });
 
   return dataResponse({
     success: true,

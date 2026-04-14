@@ -8,16 +8,10 @@ import {
 } from '~/components/grade-comment-card';
 import { findExcerptRange } from '~/utils/excerpt-position';
 
-type GradeComment = CardGradeComment & {
+type SubmissionComment = CardGradeComment & {
   excerpt: string | null;
   occurrence?: number | null;
   createdAt: Date | string;
-  responses: {
-    id: string;
-    content: string;
-    createdAt: Date | string;
-    profile: { user: { name: string | null; email: string } };
-  }[];
 };
 
 type DraftComment = {
@@ -28,15 +22,14 @@ type DraftComment = {
 };
 
 function isDraftComment(
-  c: GradeComment | DraftComment
+  c: SubmissionComment | DraftComment
 ): c is DraftComment {
   return c.id === 'draft';
 }
 
 type Props = {
-  gradeComments: GradeComment[];
-  gradeId: string | null;
-  snapshotId: string | null;
+  submissionComments: SubmissionComment[];
+  submissionId: string | null;
   sourceText: string;
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
@@ -73,9 +66,8 @@ function sortByDocumentLocation<T extends { createdAt: Date | string }>(
 }
 
 export function GradingCommentsSidebar({
-  gradeComments,
-  gradeId,
-  snapshotId,
+  submissionComments,
+  submissionId,
   sourceText,
   activeGradeCommentId = null,
   onSelectGradeComment,
@@ -129,14 +121,13 @@ export function GradingCommentsSidebar({
   const submitDraftComment = () => {
     if (
       !draftContent.trim() ||
-      (!gradeId && !snapshotId) ||
+      !submissionId ||
       !draftComment?.excerpt
     )
       return;
 
     const form = new FormData();
-    if (gradeId) form.append('gradeId', gradeId);
-    if (!gradeId && snapshotId) form.append('snapshotId', snapshotId);
+    form.append('submissionId', submissionId);
     form.append('content', draftContent.trim());
     if (draftComment?.excerpt) {
       form.append('excerpt', draftComment.excerpt);
@@ -144,7 +135,7 @@ export function GradingCommentsSidebar({
     }
     createFetcher.submit(form, {
       method: 'POST',
-      action: '/api/model/grade-comment',
+      action: '/api/model/submission-comment',
     });
   };
 
@@ -164,7 +155,7 @@ export function GradingCommentsSidebar({
   const deleteComment = (commentId: string) => {
     deleteFetcher.submit(null, {
       method: 'DELETE',
-      action: `/api/model/grade-comment/${commentId}`,
+      action: `/api/model/submission-comment/${commentId}`,
     });
   };
 
@@ -184,7 +175,7 @@ export function GradingCommentsSidebar({
     form.append('content', editCommentContent.trim());
     updateFetcher.submit(form, {
       method: 'POST',
-      action: `/api/model/grade-comment/${editingCommentId}`,
+      action: `/api/model/submission-comment/${editingCommentId}`,
     });
   };
 
@@ -218,12 +209,12 @@ export function GradingCommentsSidebar({
 
   const combinedItems = draftComment
     ? sortByDocumentLocation(
-        [...gradeComments, draftComment],
+        [...submissionComments, draftComment],
         sourceText,
         (c) => ('excerpt' in c ? c.excerpt : null),
         (c) => ('occurrence' in c ? c.occurrence : 1)
       )
-    : gradeComments;
+    : submissionComments;
 
   return (
     <div className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll md:w-3/5">

@@ -13,7 +13,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const profile = await requireProfile(request, userId);
 
   const body = await request.json();
-  const { html, text, contentHash, trigger, baseRevision } = body as {
+  const { html, text, contentHash: clientContentHash, trigger, baseRevision } = body as {
     html: string;
     text: string;
     contentHash: string;
@@ -21,25 +21,46 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     baseRevision?: number;
   };
 
-  const [user, document] = await Promise.all([
-    prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      select: { isAdmin: true },
-    }),
-    prisma.document.findUniqueOrThrow({
-      where: { id: params.id },
-      select: {
-        id: true,
-        profileId: true,
-        html: true,
-        text: true,
-        revision: true,
-        updatedAt: true,
-      },
-    }),
-  ]);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { isAdmin: true },
+  });
 
-  if (!user.isAdmin && document.profileId !== profile.id) {
+  const document = await prisma.document.findFirst({
+    where: {
+      id: params.id,
+      ...(user.isAdmin
+        ? {}
+        : {
+            OR: [
+              { profileId: profile.id },
+              {
+                profile: {
+                  studentProfile: {
+                    classes: {
+                      some: {
+                        teachers: {
+                          some: { profileId: profile.id },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          }),
+    },
+    select: {
+      id: true,
+      profileId: true,
+      html: true,
+      text: true,
+      revision: true,
+      updatedAt: true,
+    },
+  });
+
+  if (!document) {
     return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
@@ -54,8 +75,8 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       userId,
       profileId: profile.id,
       documentId: document.id,
-      htmlHash: contentHash,
-      textHash: contentHash,
+      htmlHash: clientContentHash,
+      textHash: clientContentHash,
       baseRevision: baseRevision ?? null,
       html,
       text,
@@ -80,7 +101,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       document.html ?? '',
       document.text ?? ''
     );
-    if (contentHash === currentHash) {
+    if (clientContentHash === currentHash) {
       await prisma.documentWriteJournal.update({
         where: { id: journal.id },
         data: {
@@ -138,16 +159,32 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   const lastRevision = await prisma.documentRevision.findFirst({
     where: { documentId: document.id },
     orderBy: { createdAt: 'desc' },
-    select: { createdAt: true },
+    select: { createdAt: true, html: true, text: true },
   });
 
+  const EXPLICIT_TRIGGERS = new Set([
+    'session-start',
+    'session-end',
+    'submit',
+    'manual',
+    'pre-submit-flush',
+    'periodic',
+  ]);
+
   const now = new Date();
-  const shouldCreateRevision =
-    resolvedTrigger === 'session-start' ||
-    resolvedTrigger === 'session-end' ||
-    resolvedTrigger === 'submit' ||
-    !lastRevision ||
-    now.getTime() - lastRevision.createdAt.getTime() > REVISION_INTERVAL_MS;
+  let shouldCreateRevision: boolean;
+  if (!lastRevision) {
+    shouldCreateRevision = true; // first revision always
+  } else if (EXPLICIT_TRIGGERS.has(resolvedTrigger ?? '')) {
+    // Hash dedup: skip creating an identical revision back-to-back
+    const previousHash = await computeContentHash(lastRevision.html, lastRevision.text);
+    const currentHash = await computeContentHash(html, text);
+    shouldCreateRevision = previousHash !== currentHash;
+  } else {
+    // Time-based fallback for non-explicit triggers (e.g., 'auto', null)
+    shouldCreateRevision =
+      now.getTime() - lastRevision.createdAt.getTime() > REVISION_INTERVAL_MS;
+  }
 
   if (shouldCreateRevision) {
     await prisma.documentRevision.create({

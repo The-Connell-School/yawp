@@ -7,18 +7,12 @@ const prisma = {
   document: {
     findFirst: mock(),
   },
-  documentSnapshot: {
+  submission: {
     create: mock(),
-  },
-  documentComment: {
-    updateMany: mock(),
   },
   documentWriteJournal: {
     create: mock(),
     update: mock(),
-  },
-  documentRevision: {
-    create: mock(),
   },
   $transaction: mock(),
 };
@@ -49,11 +43,9 @@ describe('api.domain.submit-document', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
     prisma.document.findFirst.mockReset();
-    prisma.documentSnapshot.create.mockReset();
-    prisma.documentComment.updateMany.mockReset();
+    prisma.submission.create.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
-    prisma.documentRevision.create.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
@@ -67,7 +59,7 @@ describe('api.domain.submit-document', () => {
       html: '<p>Draft</p>',
       text: 'Draft',
       title: 'Essay',
-      submittedAt: null,
+      submissions: [],
       revision: 4,
       class: {
         schoolId: 'school-1',
@@ -81,17 +73,12 @@ describe('api.domain.submit-document', () => {
     });
     prisma.$transaction.mockImplementation(async (callback: any) => {
       const tx = {
-        documentSnapshot: {
-          create: mock().mockResolvedValue({ id: 'snapshot-1' }),
-        },
-        documentComment: {
-          updateMany: mock().mockResolvedValue({ count: 2 }),
+        submission: {
+          create: mock().mockResolvedValue({ id: 'sub-1' }),
         },
         document: {
           update: mock().mockResolvedValue({
             id: 'doc-1',
-            submittedAt: new Date('2026-03-17T12:00:00.000Z'),
-            submittedSnapshotId: 'snapshot-1',
             revision: 4,
           }),
         },
@@ -99,6 +86,24 @@ describe('api.domain.submit-document', () => {
 
       return callback(tx);
     });
+  });
+
+  test('creates a submission and updates the document', async () => {
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      data: {
+        success: boolean;
+      };
+    };
+
+    expect(response.data.success).toBe(true);
   });
 
   test('records a document submit journal entry with the full document payload', async () => {

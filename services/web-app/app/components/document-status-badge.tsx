@@ -13,22 +13,19 @@ type Props = {
 export function getDocumentStatusLabel({
   submittedAt,
   grade,
-}: Props): 'Draft' | 'Submitted' | 'Returned' | 'Graded' {
+}: Props): 'Draft' | 'Submitted' | 'Graded' {
   const isSubmitted = submittedAt !== null && submittedAt !== undefined;
   const hasGrade = grade !== null && grade !== undefined;
-  const isReleased =
-    grade?.releasedAt !== null && grade?.releasedAt !== undefined;
 
   if (!isSubmitted) return 'Draft';
   if (!hasGrade) return 'Submitted';
-  if (isReleased) return 'Returned';
   return 'Graded';
 }
 
 export function DocumentStatusBadge({ submittedAt, grade }: Props) {
   const label = getDocumentStatusLabel({ submittedAt, grade });
 
-  if (label === 'Returned') {
+  if (label === 'Graded') {
     return (
       <Badge variant="success" className="text-xs">
         {label}

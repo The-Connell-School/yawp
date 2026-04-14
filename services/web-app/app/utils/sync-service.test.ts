@@ -40,6 +40,7 @@ describe('SyncService', () => {
       lastSyncedAt: null,
       lastSyncError: null,
       contentHash: 'abc',
+      localVersion: 1,
     });
 
     const statusChanges: SyncStatus[] = [];
@@ -63,6 +64,7 @@ describe('SyncService', () => {
       lastSyncedAt: Date.now(),
       lastSyncError: null,
       contentHash: 'abc',
+      localVersion: 1,
     });
 
     service.start('doc-1');
@@ -87,6 +89,7 @@ describe('SyncService', () => {
       lastSyncedAt: null,
       lastSyncError: null,
       contentHash: 'abc',
+      localVersion: 1,
     });
 
     const statusChanges: SyncStatus[] = [];
@@ -112,6 +115,7 @@ describe('SyncService', () => {
       lastSyncedAt: null,
       lastSyncError: null,
       contentHash: 'abc',
+      localVersion: 1,
     });
 
     const statusChanges: SyncStatus[] = [];
@@ -138,6 +142,7 @@ describe('SyncService', () => {
       lastSyncedAt: null,
       lastSyncError: null,
       contentHash: 'new-hash',
+      localVersion: 1,
     });
 
     await service.forceSave();

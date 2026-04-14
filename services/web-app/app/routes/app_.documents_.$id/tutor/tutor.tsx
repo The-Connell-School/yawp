@@ -1,0 +1,430 @@
+import { useNavigate, useSearchParams } from 'react-router';
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  MessageSquareOff,
+  MessageSquareText,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocalStorage } from 'usehooks-ts';
+import { Button } from '~/components/ui/button';
+import { Tooltip } from '~/components/ui/tooltip';
+import { cn } from '~/utils/misc';
+import { timeAgo } from '~/utils/timeAgo/timeAgo';
+import { Loading } from './loading';
+import { ResponseBar } from './response-bar';
+import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
+
+type Props = {
+  docId: string;
+  nextCmId?: string;
+  hasPreviousCms?: boolean;
+  getCurrentDocumentText?: () => string | null;
+  beforeRespond?: () => Promise<boolean>;
+  isSessionLocked?: boolean;
+  onCmsUpdate?: (cms: any) => void;
+  cms: {
+    studentCourseModule: {
+      studentCourse: {
+        studentCourseModules: { id: string; position: number }[];
+      } | null;
+      instructions: {
+        buttons: { id: string; label: string; action: string }[];
+        id: string;
+        title: string;
+        prompt: string;
+        showChatButton: boolean | null;
+        showNextButton: boolean | null;
+      }[];
+      title: string;
+      isSelfGuided: boolean;
+    };
+    messages: { id: string; agent: string; content: string; createdAt: Date }[];
+    id: string;
+    instructionsCompleted: number;
+  };
+};
+
+export const Tutor = ({
+  cms,
+  nextCmId,
+  docId,
+  hasPreviousCms,
+  getCurrentDocumentText,
+  beforeRespond,
+  isSessionLocked = false,
+  onCmsUpdate,
+}: Props) => {
+  const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
+    `doc-${docId}-tutor-messages-expanded`,
+    true
+  );
+  const [isTutorResponding, setIsTutorResponding] = useState(false);
+  const [tutorError, setTutorError] = useState<string | null>(null);
+  const [optimisticMessage, setOptimisticMessage] = useState<{
+    agent: string;
+    createdAt: Date;
+    content: string;
+  } | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
+
+  const finishedCms =
+    cms.instructionsCompleted === cms.studentCourseModule.instructions.length;
+  const isLastCmInstruction =
+    cms.instructionsCompleted ===
+    cms.studentCourseModule.instructions.length - 1;
+
+  const instruction =
+    cms.studentCourseModule.instructions[cms.instructionsCompleted] ?? {};
+
+  const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
+  const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
+  const isCurrentCms = cmsIdx === 0;
+
+  const navigateToCmsIdx = (nextIdx: number | undefined) => {
+    const params = new URLSearchParams(searchParams);
+    if (nextIdx === undefined || nextIdx === 0) {
+      params.delete('cmsIdx');
+    } else {
+      params.set('cmsIdx', String(nextIdx));
+    }
+    const query = params.toString();
+    navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
+      replace: true,
+    });
+  };
+
+
+  const respond = useCallback(async (response: string) => {
+    if (isSessionLocked) return;
+    if (beforeRespond) {
+      const canProceed = await beforeRespond();
+      if (!canProceed) return;
+    }
+    setTutorError(null);
+    setOptimisticMessage({
+      agent: 'user',
+      createdAt: new Date(),
+      content: response,
+    });
+    setIsTutorResponding(true);
+    try {
+      const formData = new FormData();
+      formData.append('response', response);
+      formData.append('cmsId', cms.id);
+      formData.append('content', getCurrentDocumentText?.() ?? '');
+      const res = await fetch('/api/domain/tutor-response', {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        setTutorError(json.error ?? 'An error occurred.');
+        setOptimisticMessage(null);
+      } else {
+        setOptimisticMessage(null);
+        setIsTutorResponding(false);
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+        return;
+      }
+    } catch {
+      setTutorError('Failed to get a response from the tutor. Please try again.');
+      setOptimisticMessage(null);
+    } finally {
+      setIsTutorResponding(false);
+    }
+  }, [isSessionLocked, beforeRespond, cms.id, getCurrentDocumentText, onCmsUpdate]);
+
+  const incrementInstruction = useCallback(async (label?: string) => {
+    if (isSessionLocked) return;
+    const formData = new FormData();
+    formData.append('instructionsCompleted.increment', '1');
+    if (label) formData.append('incrementButtonText', label);
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, onCmsUpdate]);
+
+  const decrementInstruction = useCallback(async () => {
+    if (isSessionLocked) return;
+    const formData = new FormData();
+    formData.append('instructionsCompleted.decrement', '1');
+    try {
+      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, cms.id, onCmsUpdate]);
+
+  const advanceToNextCourseModule = useCallback(async () => {
+    if (isSessionLocked) return;
+    const formData = new FormData();
+    formData.append('studentCourseModuleId', nextCmId ?? '');
+    formData.append('documentId', docId);
+    try {
+      const res = await fetch('/api/model/course-module-session', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.cms) {
+          onCmsUpdate?.(json.cms);
+        }
+      }
+    } catch {
+      // Silently fail — user can retry
+    }
+  }, [isSessionLocked, nextCmId, docId, onCmsUpdate]);
+
+  const messages = useMemo(() => {
+    const base = cms.messages.filter((m) =>
+      ['user', 'assistant'].includes(m.agent)
+    );
+    base.sort(compareTutorMessagesByTimeThenId);
+    return optimisticMessage
+      ? base.concat([optimisticMessage as any])
+      : base;
+  }, [cms.messages, optimisticMessage]);
+
+  useEffect(() => {
+    messagesRef.current?.scrollTo({
+      top: messagesRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }, [messages.length]);
+
+
+  return (
+    <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
+          cms.studentCourseModule.isSelfGuided ? '' : 'border-b'
+        )}
+      >
+        <div className="flex h-[32px] w-full items-center gap-1">
+          <div className="flex flex-grow items-center gap-2">
+            <Tooltip text="Previous step" delayDuration={0}>
+              <Button
+                variant="secondary"
+                size="icon-sm"
+                disabled={prevCmsIdx === undefined}
+                onClick={() =>
+                  !isSessionLocked &&
+                  prevCmsIdx !== undefined &&
+                  navigateToCmsIdx(prevCmsIdx)
+                }
+              >
+                <ChevronLeftIcon size={20} />
+              </Button>
+            </Tooltip>
+            <p className="text-sm font-bold text-foreground/80">
+              {cms.studentCourseModule.title}
+            </p>
+            <Tooltip text="Next step" delayDuration={0}>
+              <Button
+                variant="secondary"
+                size="icon-sm"
+                disabled={nextCmsIdx === undefined}
+                onClick={() =>
+                  !isSessionLocked &&
+                  nextCmsIdx !== undefined &&
+                  navigateToCmsIdx(nextCmsIdx)
+                }
+              >
+                <ChevronRightIcon size={20} />
+              </Button>
+            </Tooltip>
+          </div>
+          {cms.studentCourseModule.isSelfGuided ? null : (
+            <Tooltip
+              text={messagesExpanded ? 'Hide messages' : 'Show messages'}
+              delayDuration={0}
+            >
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="min-w-8"
+                disabled={isSessionLocked}
+                onClick={() => setMessagesExpanded(!messagesExpanded)}
+              >
+                {messagesExpanded ? (
+                  <MessageSquareOff size={20} />
+                ) : (
+                  <MessageSquareText size={20} />
+                )}
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+      {cms.studentCourseModule.isSelfGuided ? (
+        <div className="flex items-center justify-center gap-4 p-4">
+          <p className="text-sm text-muted-foreground">
+            {isCurrentCms
+              ? 'This step is self-guided. You can proceed to the next step by clicking next.'
+              : 'This step is self-guided.'}
+          </p>
+          {isCurrentCms ? (
+            <Button
+              variant="outline"
+              className="w-fit"
+              disabled={isSessionLocked}
+              onClick={advanceToNextCourseModule}
+            >
+              Next <ArrowRightIcon size={18} className="ml-2" />
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'no-scrollbar flex grow flex-col gap-3 px-3 transition-all duration-300 md:h-full',
+            messagesExpanded
+              ? 'max-h-full overflow-scroll py-2'
+              : 'max-h-0 overflow-hidden'
+          )}
+          ref={messagesRef}
+          id="course-module-session-messages"
+        >
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn('w-auto max-w-[92%] rounded-xl px-3 py-2', {
+                'mr-auto rounded-bl-none bg-ring/20':
+                  message.agent === 'assistant',
+                'ml-auto rounded-br-none bg-stone-200':
+                  message.agent === 'user',
+              })}
+            >
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs font-bold">
+                  {message.agent === 'assistant' ? 'Tutor' : 'You'}
+                </p>
+                <p className="text-xs text-muted-foreground/80">
+                  {timeAgo(new Date(message.createdAt))}
+                </p>
+              </div>
+              <p
+                className="whitespace-pre-wrap"
+                data-tutor-message={
+                  message.agent === 'assistant' ? 'true' : undefined
+                }
+                dangerouslySetInnerHTML={{
+                  __html: message.content
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>'),
+                }}
+              />
+            </div>
+          ))}
+          {isTutorResponding && optimisticMessage ? (
+            <Loading />
+          ) : null}
+          {tutorError ? (
+            <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
+              {tutorError}
+            </p>
+          ) : null}
+        </div>
+      )}
+      {cmsIdx !== 0 ? (
+        <ResponseBar
+          className={
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+              ? undefined
+              : 'border-t-0'
+          }
+          buttons={instruction.buttons ?? []}
+          respond={respond}
+          showChatButton={!!instruction.showChatButton}
+          showNextButton={false}
+          disabled={isSessionLocked || isTutorResponding}
+        />
+      ) : finishedCms && nextCmId ? (
+        <div
+          className={cn(
+            'flex flex-col items-center gap-4 border-t p-2 px-4',
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+              ? 'border-t'
+              : undefined
+          )}
+        >
+          <p className="text-center text-sm text-muted-foreground">
+            This will take you to the next step of the writing process. Click
+            next again only if you are ready to move on, or click back to stay
+            on this step.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button onClick={decrementInstruction} variant="secondary">
+              <ArrowLeftIcon size={18} className="mr-2" /> Back
+            </Button>
+            <Button onClick={advanceToNextCourseModule}>
+              Next <ArrowRightIcon size={18} className="ml-2" />
+            </Button>
+          </div>
+        </div>
+      ) : finishedCms ? (
+        <p
+          className={cn(
+            'p-2 text-center text-sm text-muted-foreground',
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+              ? 'border-t'
+              : undefined
+          )}
+        >
+          You have completed all the modules in this course.
+        </p>
+      ) : (
+        <ResponseBar
+          className={
+            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+              ? undefined
+              : 'border-t-0'
+          }
+          buttons={instruction.buttons ?? []}
+          respond={respond}
+          showChatButton={!!instruction.showChatButton}
+          showNextButton={!!instruction.showNextButton}
+          disabled={isSessionLocked || isTutorResponding}
+          advanceInstruction={
+            isLastCmInstruction && nextCmId
+              ? () => advanceToNextCourseModule()
+              : incrementInstruction
+          }
+        />
+      )}
+    </div>
+  );
+};

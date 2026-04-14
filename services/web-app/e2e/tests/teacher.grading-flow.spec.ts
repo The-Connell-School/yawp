@@ -1,11 +1,10 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
 import {
   assignTeacherToClass,
   createTeacherInvitation,
-  ensureDocumentSubmitted,
-  setDocumentSubmissionForSchool,
 } from '../db-helpers';
 
 const E2E_BASE_URL = 'http://127.0.0.1:5173';
@@ -94,16 +93,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
 
     const prisma = createE2EPrismaClient();
     try {
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: false,
-      });
-
-      const snapshotId = await ensureDocumentSubmitted({
-        prisma,
-        documentId: e2eContext.documentId,
-      });
+      const submissionId = e2eContext.submittedSubmissionId;
 
       const teacherEmail = `teacher-onboard-${Date.now()}@example.com`;
       const teacherPassword = 'teacher-strong-password-123';
@@ -142,21 +132,15 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}`);
       await page.waitForLoadState('networkidle');
 
-      await expect(page.getByRole('tab', { name: /submitted/i })).toHaveCount(
-        0
-      );
-      await expect(page.getByRole('tab', { name: /graded/i })).toHaveCount(0);
-
+      // Teacher views submitted document in tutor mode via the document editor
       await page.goto(
-        `/app/documents/${e2eContext.documentId}?left=tutor&snapshotId=${snapshotId}&exitTo=${encodeURIComponent(
+        `/app/documents/${e2eContext.submittedDocumentId}?left=tutor&exitTo=${encodeURIComponent(
           `/app/my-classes/${e2eContext.classId}`
         )}`
       );
       await page.waitForLoadState('networkidle');
 
-      const editor = page
-        .locator('.ProseMirror, [contenteditable="true"]')
-        .first();
+      const editor = page.locator(EDITOR_SELECTOR).first();
       await expect(editor).toBeVisible({ timeout: 10000 });
       await editor.click();
       await editor.type(' Teacher review note from E2E.');
@@ -174,23 +158,18 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         timeout: 15000,
       });
 
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: true,
-      });
-      await page.reload();
-      await page.waitForLoadState('networkidle');
-
+      // Teacher clicks View from the class page — submissions route with edit=1
       await expect(page.getByRole('tab', { name: /submitted/i })).toBeVisible({
         timeout: 10000,
       });
       await page.getByRole('tab', { name: /submitted/i }).click();
       await page
-        .getByRole('link', { name: /^grade$/i })
+        .getByRole('link', { name: /^view$/i })
         .first()
         .click();
-      await page.waitForURL('**/app/documents/**', { timeout: 15000 });
+      await page.waitForURL(/\/app\/submissions\/[^/]+\?edit=1/, {
+        timeout: 15000,
+      });
       await page.waitForLoadState('networkidle');
 
       for (const key of RUBRIC_KEYS) {
@@ -220,10 +199,12 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page
         .getByTestId('grading-overall-comment')
         .fill('Manual overall teacher feedback before AI suggestions.');
-      await page.getByTestId('grading-save-grade').click();
-      await expect(page.getByTestId('grading-save-grade')).toBeDisabled({
-        timeout: 15000,
-      });
+      // Blur the field to trigger auto-save
+      await page.getByTestId('grading-overall-percentage').click();
+      await expect(page.getByTestId('grading-auto-save-status')).toContainText(
+        'Saved',
+        { timeout: 15000 }
+      );
 
       let aiRequests = 0;
       await page.route('**/api/domain/grade-essay-ai', async (route) => {
@@ -236,11 +217,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         'grading-assistant-generate'
       );
       await page.getByTestId('grading-assistant-generate').click();
-      await page
-        .getByRole('button', {
-          name: /replace with grading assistant suggestions/i,
-        })
-        .click();
+      await page.getByRole('button', { name: /^replace$/i }).click();
       await expect(gradingAssistantButton).toContainText('Grading');
       await expect(
         gradingAssistantButton.locator('svg.animate-spin')
@@ -266,9 +243,6 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await expect(page.getByTestId('grading-overall-comment')).not.toHaveValue(
         ''
       );
-      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
-        timeout: 15000,
-      });
 
       const grammarCounter = page.getByText(/AI grammar issues shown:/i);
       const beforeRemove = parseShownGrammarCounts(
@@ -278,19 +252,19 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         .getByRole('button', { name: /^remove$/i })
         .first()
         .click();
-      await expect(page.getByTestId('grading-save-grade')).toBeEnabled({
-        timeout: 15000,
-      });
       await expect
         .poll(async () => {
           const text = (await grammarCounter.textContent()) ?? '';
           return parseShownGrammarCounts(text).total;
         })
         .toBe(Math.max(0, beforeRemove.total - 1));
-      await page.getByTestId('grading-save-grade').click();
-      await expect(page.getByTestId('grading-save-grade')).toBeDisabled({
-        timeout: 15000,
-      });
+      // Blur a field to trigger auto-save after grammar issue removal
+      await page.getByTestId('grading-overall-comment').click();
+      await page.getByTestId('grading-overall-percentage').click();
+      await expect(page.getByTestId('grading-auto-save-status')).toContainText(
+        'Saved',
+        { timeout: 15000 }
+      );
       await page.reload();
       await page.waitForLoadState('networkidle');
       const afterReload = parseShownGrammarCounts(
@@ -299,10 +273,12 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       );
       expect(afterReload.total).toBe(Math.max(0, beforeRemove.total - 1));
 
+      // Select text in the essay panel (static HTML, not ProseMirror)
       await page.evaluate(() => {
-        const root = document.querySelector('.ProseMirror');
-        if (!root) return;
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        // The essay panel renders the submitted HTML in a plain div
+        const essayRoot = document.querySelector('[class*="no-scrollbar"]');
+        if (!essayRoot) return;
+        const walker = document.createTreeWalker(essayRoot, NodeFilter.SHOW_TEXT);
         const firstNode = walker.nextNode();
         if (!firstNode?.textContent) return;
         const end = Math.min(firstNode.textContent.length, 28);
@@ -312,8 +288,10 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         const selection = window.getSelection();
         selection?.removeAllRanges();
         selection?.addRange(range);
+        document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
       });
-      await page.getByRole('button', { name: /^comment$/i }).click();
+      // Wait for SelectionToolbar to appear, then click Comment
+      await page.getByRole('button', { name: /^comment$/i }).click({ timeout: 5000 });
       await page
         .locator('textarea[placeholder="Write your comment..."]')
         .fill('Grade comment from teacher E2E flow.');
@@ -323,31 +301,28 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByText('Grade comment from teacher E2E flow.')
       ).toBeVisible({ timeout: 10000 });
 
-      const gradeBeforeSnapshotMutation = (await (
-        prisma as any
-      ).grade.findUnique({
-        where: { snapshotId },
-        select: { id: true, essayText: true },
-      })) as { id: string; essayText: string | null } | null;
-      expect(gradeBeforeSnapshotMutation?.id).toBeTruthy();
-      expect(gradeBeforeSnapshotMutation?.essayText).toContain(
-        'This are a practice essay with grammar mistake.'
+      const submissionBeforeMutation = await prisma.submission.findUnique({
+        where: { id: submissionId },
+        select: { id: true, text: true },
+      });
+      expect(submissionBeforeMutation?.id).toBeTruthy();
+      expect(submissionBeforeMutation?.text).toContain(
+        'The importance of reading cannot be overstated.'
       );
 
-      const mutatedSnapshotText =
-        'SNAPSHOT MUTATION SHOULD NOT APPEAR IN GRADED VIEW';
-      await prisma.documentSnapshot.update({
-        where: { id: snapshotId },
+      const mutatedSubmissionText =
+        'SUBMISSION MUTATION SHOULD NOT APPEAR IN GRADED VIEW';
+      await prisma.submission.update({
+        where: { id: submissionId },
         data: {
-          text: mutatedSnapshotText,
-          html: `<p>${mutatedSnapshotText}</p>`,
+          text: mutatedSubmissionText,
+          html: `<p>${mutatedSubmissionText}</p>`,
         },
       });
 
-      await page.getByRole('button', { name: /exit/i }).click();
-      await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`, {
-        timeout: 15000,
-      });
+      // Navigate back to class page to verify graded status
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
 
       await page.getByRole('tab', { name: /graded/i }).click();
       await expect(page.getByTestId('class-release-grades-open')).toBeVisible({
@@ -362,13 +337,11 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         page.getByRole('cell', { name: /E2E Doc/i }).first()
       ).toBeVisible({ timeout: 15000 });
 
-      await page.goto(`/app/graded/${gradeBeforeSnapshotMutation!.id}`);
+      await page.goto(`/app/submissions/${submissionBeforeMutation!.id}`);
       await page.waitForLoadState('networkidle');
-      const gradedEssay = page.locator('.prose').first();
-      await expect(gradedEssay).toContainText(
-        'This are a practice essay with grammar mistake.'
-      );
-      await expect(gradedEssay).not.toContainText(mutatedSnapshotText);
+      // Verify the submission page shows the original snapshotted content, not the mutated text
+      await expect(page.getByText('The importance of reading cannot be overstated.')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(mutatedSubmissionText)).toHaveCount(0);
       expect(aiRequests).toBe(1);
     } finally {
       await prisma.$disconnect();

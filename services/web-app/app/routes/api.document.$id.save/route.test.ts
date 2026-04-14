@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   user: { findUniqueOrThrow: mock() },
-  document: { findUniqueOrThrow: mock(), update: mock() },
+  document: { findFirst: mock(), update: mock() },
   documentRevision: { findFirst: mock(), create: mock() },
   documentWriteJournal: { create: mock(), update: mock() },
 };
@@ -36,7 +36,7 @@ describe('api.document.$id.save', () => {
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
-    prisma.document.findUniqueOrThrow.mockResolvedValue({
+    prisma.document.findFirst.mockResolvedValue({
       id: 'doc-1',
       profileId: 'profile-1',
       html: '<p>old</p>',
@@ -122,5 +122,56 @@ describe('api.document.$id.save', () => {
 
     expect(prisma.documentWriteJournal.create).toHaveBeenCalledTimes(1);
     expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(1);
+  });
+
+  test('periodic trigger creates a revision when content has changed', async () => {
+    prisma.documentRevision.findFirst.mockResolvedValue({
+      createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 min ago — well under 30min interval
+      html: '<p>old</p>', // OLD content
+      text: 'old',
+    });
+
+    const res = await action({
+      request: makeRequest('doc-1', {
+        html: '<p>new content</p>', // DIFFERENT content
+        text: 'new content',
+        contentHash: 'abc',
+        trigger: 'periodic',
+      }),
+      params: { id: 'doc-1' },
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(prisma.documentRevision.create).toHaveBeenCalledTimes(1);
+    expect(prisma.documentRevision.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          html: '<p>new content</p>',
+          text: 'new content',
+          trigger: 'periodic',
+        }),
+      })
+    );
+  });
+
+  test('periodic trigger skips revision when content hash matches last revision', async () => {
+    prisma.documentRevision.findFirst.mockResolvedValue({
+      createdAt: new Date(Date.now() - 5 * 60 * 1000),
+      html: '<p>same</p>', // SAME content
+      text: 'same',
+    });
+
+    const res = await action({
+      request: makeRequest('doc-1', {
+        html: '<p>same</p>', // IDENTICAL content
+        text: 'same',
+        contentHash: 'abc',
+        trigger: 'periodic',
+      }),
+      params: { id: 'doc-1' },
+    } as any);
+
+    expect(res.status).toBe(200);
+    expect(prisma.documentRevision.create).not.toHaveBeenCalled();
   });
 });

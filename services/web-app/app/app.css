@@ -183,19 +183,24 @@ code {
 }
 .tiptap mark.focused {
   @apply bg-yellow-300;
+  box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.3);
 }
 .comment-mark {
   background-color: #fff30b38;
   border-bottom: 2px dotted #f9e055fc;
-  transition: background-color 0.2s ease;
-}
-.comment-mark.focused {
-  background-color: #f9e055fc;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 .comment-mark:hover,
-.comment-mark.focused,
 .comment-mark.ProseMirror-selectednode {
   background-color: #f9e055fc;
+}
+.comment-mark.focused {
+  animation: highlight-mark-active 0.45s ease-out forwards;
+  border-bottom: 2px solid #ca8a04;
+  box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.35);
 }
 
 /* Graded artifact highlights */
@@ -236,17 +241,93 @@ code {
   background-color: #fff30b38;
   border-bottom: 2px dotted #f9e055fc;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-.grade-comment-mark.focused {
-  background-color: #f9e055fc;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 .grade-comment-mark:hover,
 .grade-comment-mark.hovered {
   background-color: #f9e055fc;
 }
+.grade-comment-mark.focused {
+  animation: highlight-mark-active 0.45s ease-out forwards;
+  border-bottom: 2px solid #ca8a04;
+  box-shadow: 0 2px 6px -1px rgba(202, 138, 4, 0.35);
+}
 .grade-comment-mark > p {
   display: inline;
   margin: 0;
   background-color: inherit;
+}
+.grade-comment-mark.draft {
+  background-color: #93c5fd44;
+  border-bottom: 2px dotted #3b82f6;
+}
+.grammar-issue-mark {
+  background-color: #d8b4fe50;
+  border-bottom: 2px wavy #a855f7;
+  cursor: help;
+}
+.grammar-issue-mark:hover {
+  background-color: #d8b4fe80;
+}
+
+@keyframes highlight-mark-active {
+  0% {
+    background-color: #f9e055fc;
+    filter: brightness(1);
+  }
+  45% {
+    background-color: #fef08a;
+    filter: brightness(1.04);
+  }
+  100% {
+    background-color: #fde047;
+    filter: brightness(1);
+  }
+}
+
+/* Sidebar comment cards when linked to a highlight (grade + submission routes) */
+@keyframes comment-card-focus-in {
+  from {
+    opacity: 0.88;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.comment-card-focused {
+  animation: comment-card-focus-in 0.28s cubic-bezier(0.2, 0.85, 0.25, 1);
+  background-color: rgb(254 252 232);
+  border-color: rgb(253 224 71);
+  box-shadow:
+    0 4px 16px -4px rgba(251, 191, 36, 0.4),
+    0 0 0 1px rgba(251, 191, 36, 0.25);
+  position: relative;
+  z-index: 1;
+}
+
+.dark .comment-card-focused {
+  background-color: rgba(69, 26, 3, 0.4);
+  border-color: rgb(217 119 6);
+  box-shadow:
+    0 4px 16px -4px rgba(251, 191, 36, 0.12),
+    0 0 0 1px rgba(251, 191, 36, 0.22);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comment-card-focused,
+  .comment-mark.focused,
+  .grade-comment-mark.focused {
+    animation: none;
+  }
+  .comment-mark.focused,
+  .grade-comment-mark.focused {
+    background-color: #fde047;
+  }
 }

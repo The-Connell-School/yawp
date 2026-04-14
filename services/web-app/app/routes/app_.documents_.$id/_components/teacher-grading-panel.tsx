@@ -90,7 +90,7 @@ function formatExcerpt(excerpt: string, maxChars = 90) {
 
 export function TeacherGradingPanel({
   documentId,
-  snapshotId,
+  submissionId,
   existingGrade,
   grammarIssues,
   persistedGrammarIssues,
@@ -100,7 +100,7 @@ export function TeacherGradingPanel({
   onGrammarIssuesChange,
 }: {
   documentId: string;
-  snapshotId: string | null;
+  submissionId: string | null;
   existingGrade:
     | {
         id: string;
@@ -200,7 +200,7 @@ export function TeacherGradingPanel({
         grammarIssues: persistedGrammarIssues,
       })
     );
-  }, [existingGrade, persistedGrammarIssues, snapshotId]);
+  }, [existingGrade, persistedGrammarIssues, submissionId]);
 
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
@@ -260,37 +260,30 @@ export function TeacherGradingPanel({
 
   const save = () => {
     pendingSaveSignatureRef.current = currentSignature;
-    const form = new FormData();
     const percent =
       resolvedNumericPercentage === null ? null : resolvedNumericPercentage;
     const letter = percent === null ? null : letterFromPercent(percent);
 
-    form.append('feedback', overallComment);
-    form.append('overallComment', overallComment);
-    form.append('rubricScores', JSON.stringify(rubricScores));
-    form.append('grammarIssues', JSON.stringify(grammarIssues));
-    if (percent !== null) form.append('numericPercentage', percent.toString());
-    if (letter) form.append('letterGrade', letter);
-    if (percent !== null)
-      form.append('score', formatGrade(percent, letter) ?? '');
+    // The submission ID is either from the existing grade (which IS the
+    // submission) or from the submissionId prop.
+    const targetSubmissionId = existingGrade?.id ?? submissionId;
+    if (!targetSubmissionId) return;
 
-    if (existingGrade?.id) {
-      form.append('gradeId', existingGrade.id);
-      saveFetcher.submit(form, {
-        method: 'POST',
-        action: '/api/domain/update-grade',
-      });
-      return;
-    }
+    const payload: Record<string, unknown> = {
+      submissionId: targetSubmissionId,
+      feedback: overallComment,
+      overallComment,
+      rubricScores,
+      grammarIssues,
+    };
+    if (percent !== null) payload.numericPercentage = percent;
+    if (letter) payload.letterGrade = letter;
+    if (percent !== null) payload.score = formatGrade(percent, letter) ?? '';
 
-    if (snapshotId) {
-      form.append('snapshotIds', snapshotId);
-    } else {
-      form.append('documentIds', documentId);
-    }
-    saveFetcher.submit(form, {
+    saveFetcher.submit(JSON.stringify(payload), {
       method: 'POST',
-      action: '/api/domain/grade-essay',
+      action: '/api/domain/update-submission',
+      encType: 'application/json',
     });
   };
 
@@ -319,8 +312,8 @@ export function TeacherGradingPanel({
 
   const generateAiSuggestions = () => {
     const aiForm = new FormData();
-    if (snapshotId) {
-      aiForm.append('snapshotId', snapshotId);
+    if (submissionId) {
+      aiForm.append('submissionId', submissionId);
     } else {
       aiForm.append('documentId', documentId);
     }

@@ -1,5 +1,18 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
+const updatedCmsShape = {
+  id: 'cms-1',
+  instructionsCompleted: 1,
+  messages: [],
+  studentCourseModule: {
+    instructions: [
+      { id: 'i1', prompt: 'First step', buttons: [], position: 0 },
+      { id: 'i2', prompt: 'Second step', buttons: [], position: 1 },
+    ],
+    studentCourse: { studentCourseModules: [{ id: 'scm-1', position: 0 }] },
+  },
+};
+
 const prisma = {
   studentCourseModuleSession: {
     findUnique: mock(),
@@ -37,13 +50,16 @@ describe('api.model.course-module-session.$id', () => {
   });
 
   test('increment when already finished does not crash', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValue({
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce({
       ...baseCms,
       instructionsCompleted: 2,
       studentCourseModule: {
         instructions: baseCms.studentCourseModule.instructions,
       },
     });
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+      updatedCmsShape
+    );
     prisma.studentCourseModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 3,
@@ -67,11 +83,14 @@ describe('api.model.course-module-session.$id', () => {
   });
 
   test('increment with empty instructions does not crash', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValue({
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce({
       ...baseCms,
       instructionsCompleted: 0,
       studentCourseModule: { instructions: [] },
     });
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+      updatedCmsShape
+    );
     prisma.studentCourseModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 1,
@@ -95,7 +114,10 @@ describe('api.model.course-module-session.$id', () => {
   });
 
   test('normal increment creates user and assistant messages', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValue(baseCms);
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(baseCms);
+    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+      updatedCmsShape
+    );
     prisma.studentCourseModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 1,

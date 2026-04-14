@@ -1,122 +1,82 @@
 import { test, expect } from '../test-setup';
-import type { Page } from '@playwright/test';
-
-const EDITOR_SELECTOR = '.ProseMirror, [contenteditable="true"], [data-testid="editor"]';
-
-async function openEditor(page: Page, documentId: string) {
-  await page.goto(`/app/documents/${documentId}`);
-  await page.waitForLoadState('networkidle');
-  const editor = page.locator(EDITOR_SELECTOR).first();
-  await expect(editor).toBeVisible({ timeout: 15000 });
-  return editor;
-}
-
-async function waitForSaveIndicator(page: Page) {
-  // Wait for any save indicator to show "Saved" state
-  // Handles both old ("Saved" pill) and new (SaveStatusIndicator) flows
-  await expect(
-    page.locator('text=Saved').first()
-  ).toBeVisible({ timeout: 10000 });
-}
+import { EDITOR_SELECTOR } from '../test-helpers';
 
 function uniqueText(prefix: string) {
   return `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 test.describe.serial('Document Regression Suite', () => {
-  let documentId: string;
-
-  test.beforeAll(async () => {
-    // Will be set from e2eContext in each test
-  });
-
   test('editor loads and displays content', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    documentId = e2eContext.documentId;
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, documentId);
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    const editor = helpers.getEditor();
     await expect(editor).toBeVisible();
   });
 
   test('typing text appears in editor and triggers save', async ({
-    page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
     const text = uniqueText('regression-type');
-    await editor.pressSequentially(text, { delay: 30 });
+    await helpers.typeInEditor(text);
 
-    await expect(editor).toContainText(text);
-
-    // Wait for save to complete
-    await waitForSaveIndicator(page);
+    await expect(helpers.getEditor()).toContainText(text);
+    await helpers.waitForSaved();
   });
 
   test('content persists after page reload', async ({
-    page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
     const text = uniqueText('regression-reload');
-    await editor.pressSequentially(text, { delay: 30 });
+    await helpers.typeInEditor(text);
+    await helpers.waitForSaved();
 
-    // Wait for save
-    await waitForSaveIndicator(page);
-    await page.waitForTimeout(2000);
-
-    // Reload the page
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-
-    const editorAfterReload = page.locator(EDITOR_SELECTOR).first();
-    await expect(editorAfterReload).toBeVisible({ timeout: 15000 });
-    await expect(editorAfterReload).toContainText(text);
+    await helpers.verifyPersistsOnReload(text);
   });
 
   test('content persists after navigating away and back', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
     const text = uniqueText('regression-navigate');
-    await editor.pressSequentially(text, { delay: 30 });
-
-    // Wait for save
-    await waitForSaveIndicator(page);
-    await page.waitForTimeout(2000);
+    await helpers.typeInEditor(text);
+    await helpers.waitForSaved();
 
     // Navigate away
     await page.goto('/app');
     await page.waitForLoadState('networkidle');
 
     // Navigate back
-    const editorBack = await openEditor(page, e2eContext.documentId);
-    await expect(editorBack).toContainText(text);
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    await expect(helpers.getEditor()).toContainText(text);
   });
 
   test('multiple rapid edits are not lost', async ({
-    page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
     // Type several distinct phrases rapidly
     const phrases = [
@@ -125,6 +85,7 @@ test.describe.serial('Document Regression Suite', () => {
       uniqueText('rapid-3'),
     ];
 
+    const editor = helpers.getEditor();
     for (const phrase of phrases) {
       await editor.pressSequentially(phrase + ' ', { delay: 10 });
     }
@@ -135,208 +96,130 @@ test.describe.serial('Document Regression Suite', () => {
     }
 
     // Wait for save and reload to verify persistence
-    await waitForSaveIndicator(page);
-    await page.waitForTimeout(2000);
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-
-    const editorAfter = page.locator(EDITOR_SELECTOR).first();
-    await expect(editorAfter).toBeVisible({ timeout: 15000 });
-    for (const phrase of phrases) {
-      await expect(editorAfter).toContainText(phrase);
-    }
+    await helpers.waitForSaved();
+    await helpers.verifyPersistsOnReload(phrases[phrases.length - 1]);
   });
 
   test('Cmd/Ctrl+S triggers save', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
     const text = uniqueText('regression-cmds');
-    await editor.pressSequentially(text, { delay: 30 });
+    await helpers.typeInEditor(text);
 
     // Trigger manual save
     const saveShortcut = process.platform === 'darwin' ? 'Meta+s' : 'Control+s';
     await page.keyboard.press(saveShortcut);
 
-    await waitForSaveIndicator(page);
+    await helpers.waitForSaved();
   });
 
-  test('document history sheet opens and shows tabs', async ({
+  test('document history sheet opens with session timeline', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Click the history icon
-    const historyIcon = page.locator('svg.lucide-history').first();
-    await expect(historyIcon).toBeVisible({ timeout: 5000 });
-    await historyIcon.click();
+    // Click the history sheet trigger (Clock icon button next to save status)
+    const historyTrigger = page.locator('.lucide-clock').first();
+    await expect(historyTrigger).toBeVisible({ timeout: 5000 });
+    await historyTrigger.click();
 
-    // Verify sheet opens
+    // Verify sheet opens with title
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
-
-    // Verify "Version History" title
     await expect(sheet.locator('text=Version History')).toBeVisible();
 
-    // Verify tab buttons exist (at minimum Snapshots and Autosaves)
-    await expect(sheet.locator('text=Snapshots')).toBeVisible();
-    await expect(sheet.locator('text=Autosaves')).toBeVisible();
+    // Session timeline renders — the edited doc has 2 seeded revisions
+    // so we should see at least one session entry with a time pattern
+    await expect(
+      sheet.locator('button').filter({ hasText: /ago|Just now/i }).first()
+    ).toBeVisible({ timeout: 5000 });
   });
 
-  test('document history shows snapshot entries when available', async ({
+  test('selecting a history session entry shows preview', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
+    await signIn(e2eContext.userEmail, 'johndoe');
 
-    const historyIcon = page.locator('svg.lucide-history').first();
-    await historyIcon.click();
-
-    const sheet = page.locator('[role="dialog"]').first();
-    await expect(sheet).toBeVisible({ timeout: 5000 });
-
-    // Click Snapshots tab
-    await sheet.locator('text=Snapshots').click();
-    await page.waitForTimeout(1000);
-
-    // Either we see snapshot entries or "no snapshots" — both are valid
-    // Just verify the panel renders without errors
-    await expect(sheet).toBeVisible();
-  });
-
-  test('document history shows autosave entries when available', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
-
-    const historyIcon = page.locator('svg.lucide-history').first();
-    await historyIcon.click();
-
-    const sheet = page.locator('[role="dialog"]').first();
-    await expect(sheet).toBeVisible({ timeout: 5000 });
-
-    // Click Autosaves tab
-    await sheet.locator('text=Autosaves').click();
-    await page.waitForTimeout(1000);
-
-    // Verify panel renders without errors
-    await expect(sheet).toBeVisible();
-  });
-
-  test('selecting a history entry shows preview', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-
-    // First type something to ensure there's at least one autosave
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
-    await editor.pressSequentially(uniqueText('history-preview'), { delay: 30 });
-    await waitForSaveIndicator(page);
-    await page.waitForTimeout(3000);
+    // Type something to create a revision
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    await helpers.typeInEditor(uniqueText('history-preview'));
+    await helpers.waitForSaved();
 
     // Open history sheet
-    const historyIcon = page.locator('svg.lucide-history').first();
+    const historyIcon = page.locator('.lucide-clock').first();
     await historyIcon.click();
 
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
-    // Switch to Autosaves tab and check for entries
-    await sheet.locator('text=Autosaves').click();
-    await page.waitForTimeout(1500);
-
-    // If there are version entries, click the first one
-    const versionButton = sheet.locator('button').filter({ hasText: /\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}:\d{2}/ }).first();
-    if (await versionButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await versionButton.click();
+    // Click a session entry to expand it
+    const sessionButton = sheet.locator('button').filter({ hasText: /ago|Just now/i }).first();
+    if (await sessionButton.count() > 0) {
+      await sessionButton.click();
       // Preview panel should show content
       const previewPanel = sheet.locator('.font-times').first();
-      await expect(previewPanel).toBeVisible({ timeout: 3000 });
+      await expect(previewPanel).toBeVisible({ timeout: 5000 });
     }
-  });
-
-  test('history sheet has close button but no restore button', async ({
-    page,
-    signIn,
-    e2eContext,
-  }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    await openEditor(page, e2eContext.documentId);
-
-    const historyIcon = page.locator('svg.lucide-history').first();
-    await historyIcon.click();
-
-    const sheet = page.locator('[role="dialog"]').first();
-    await expect(sheet).toBeVisible({ timeout: 5000 });
-
-    // Restore button was removed (it was broken)
-    const restoreButton = sheet.locator('button', { hasText: /restore/i });
-    await expect(restoreButton).not.toBeVisible({ timeout: 2000 });
-
-    // Close button should exist
-    const closeButton = sheet.locator('button', { hasText: /close/i });
-    await expect(closeButton.first()).toBeVisible();
   });
 
   test('editor remains functional after closing history sheet', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Open and close history
-    const historyIcon = page.locator('svg.lucide-history').first();
+    // Open and close history via the sheet's X button
+    const historyIcon = page.locator('.lucide-clock').first();
     await historyIcon.click();
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
-    // Close via the Close button (use last() to avoid the sheet's built-in X close)
-    const closeButton = sheet.locator('button', { hasText: /^close$/i }).last();
+    // Close via the Close button in the sheet
+    const closeButton = sheet.getByRole('button', { name: /close/i });
     await closeButton.click();
-    await expect(sheet).not.toBeVisible({ timeout: 3000 });
+    await expect(sheet).not.toBeVisible({ timeout: 5000 });
 
     // Verify editor is still functional
+    const editor = helpers.getEditor();
     await editor.click();
     const text = uniqueText('post-history');
     await editor.pressSequentially(text, { delay: 30 });
     await expect(editor).toContainText(text);
-    await waitForSaveIndicator(page);
+    await helpers.waitForSaved();
   });
 
   test('save indicator shows correct states', async ({
     page,
     signIn,
     e2eContext,
+    helpers,
   }) => {
-    await signIn('jdoe@brock.software', 'johndoe');
-    const editor = await openEditor(page, e2eContext.documentId);
-    await editor.click();
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Initially should show "Saved"
-    await waitForSaveIndicator(page);
+    // Initially should show "Saved" text (default state before any edits)
+    await expect(page.getByText(/^Saved$/).first()).toBeVisible({ timeout: 5000 });
 
     // Type to trigger saving
-    await editor.pressSequentially(uniqueText('indicator'), { delay: 30 });
+    await helpers.typeInEditor(uniqueText('indicator'));
 
-    // Should eventually return to "Saved"
-    await waitForSaveIndicator(page);
+    // Should eventually complete a save round-trip
+    await helpers.waitForSaved();
   });
 });

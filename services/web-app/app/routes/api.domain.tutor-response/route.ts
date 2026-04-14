@@ -20,30 +20,29 @@ const errorResponse = (error: { message: string }) => {
   );
 };
 
+const READ_DOCUMENT_TOOL = {
+  name: 'read_student_document',
+  description:
+    "Returns the student's current document draft. Call this whenever you need to review, reference, or give feedback on the student's writing.",
+  input_schema: { type: 'object' as const, properties: {} },
+};
+
 export async function action({ request }: ActionFunctionArgs) {
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
     const cms = await prisma.studentCourseModuleSession.findUnique({
-      where: {
-        id: data.cmsId,
-      },
+      where: { id: data.cmsId },
       include: {
         studentCourseModule: {
-          include: {
-            instructions: { orderBy: { position: 'asc' } },
-          },
+          include: { instructions: { orderBy: { position: 'asc' } } },
         },
-        messages: true,
+        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         document: {
           select: {
             text: true,
-            assignment: {
-              select: {
-                tutorContext: true,
-              },
-            },
+            assignment: { select: { tutorContext: true } },
           },
         },
       },
@@ -69,8 +68,9 @@ export async function action({ request }: ActionFunctionArgs) {
       tutorInstructions: cms.studentCourseModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       assignmentTutorContext: cms.document.assignment?.tutorContext,
-      documentText: data.content ?? cms.document.text,
     });
+
+    const documentText = data.content ?? cms.document.text;
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
@@ -102,6 +102,13 @@ export async function action({ request }: ActionFunctionArgs) {
         messages,
         system,
         maxTokens: 500,
+        tools: [READ_DOCUMENT_TOOL],
+        handleToolCall: async (name) => {
+          if (name === 'read_student_document') {
+            return documentText ?? '';
+          }
+          return '';
+        },
       });
     } catch (error) {
       return errorResponse(error as any);
@@ -115,7 +122,7 @@ export async function action({ request }: ActionFunctionArgs) {
             {
               agent: AgentType.User,
               content: data.response,
-              context: data.content ?? cms.document.text,
+              context: documentText,
               instructionId: instruction.id,
             },
             {
@@ -128,7 +135,30 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    return dataResponse({});
+    const updatedCms = await prisma.studentCourseModuleSession.findUnique({
+      where: { id: cms.id },
+      include: {
+        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+        studentCourseModule: {
+          include: {
+            instructions: {
+              orderBy: { position: 'asc' },
+              include: { buttons: { orderBy: { position: 'asc' } } },
+            },
+            studentCourse: {
+              select: {
+                studentCourseModules: {
+                  select: { id: true, position: true },
+                  orderBy: { position: 'asc' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return dataResponse({ cms: updatedCms });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(error);

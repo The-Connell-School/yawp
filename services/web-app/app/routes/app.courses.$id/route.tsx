@@ -57,19 +57,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
         },
-        submittedSnapshot: {
+        submissions: {
+          where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
+          take: 1,
           select: {
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                overallScore: true,
-                numericPercentage: true,
-                letterGrade: true,
-                releasedAt: true,
-              },
-              take: 1,
-            },
+            id: true,
+            score: true,
+            overallScore: true,
+            numericPercentage: true,
+            letterGrade: true,
+            releasedAt: true,
           },
         },
       },
@@ -90,19 +88,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
           include: { studentCourseModule: true },
         },
-        submittedSnapshot: {
+        submissions: {
+          where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
+          take: 1,
           select: {
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                overallScore: true,
-                numericPercentage: true,
-                letterGrade: true,
-                releasedAt: true,
-              },
-              take: 1,
-            },
+            id: true,
+            score: true,
+            overallScore: true,
+            numericPercentage: true,
+            letterGrade: true,
+            releasedAt: true,
           },
         },
       },

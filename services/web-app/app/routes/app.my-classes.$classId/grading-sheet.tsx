@@ -30,27 +30,24 @@ import { rubricCategories as rubric } from '~/domain/grading/rubric';
 type Document = {
   id: string;
   title: string;
-  submittedSnapshotId: string | null;
   profile: {
     user: {
       name: string | null;
       email: string;
     };
   };
-  submittedSnapshot?: {
+  latestSubmission?: {
     id: string;
-    grades: {
-      id: string;
-      score: string | null;
-      feedback: string | null;
-      rubricScores?: unknown | null;
-      overallScore?: number | null;
-      overallComment?: string | null;
-      numericPercentage?: number | null;
-      letterGrade?: string | null;
-      aiMeta?: unknown | null;
-      releasedAt: Date | string | null;
-    }[];
+    score: string | null;
+    feedback: string | null;
+    rubricScores?: unknown | null;
+    overallScore?: number | null;
+    overallComment?: string | null;
+    numericPercentage?: number | null;
+    letterGrade?: string | null;
+    aiMeta?: unknown | null;
+    releasedAt: Date | string | null;
+    gradedAt?: Date | string | null;
   } | null;
 };
 
@@ -154,7 +151,7 @@ export function GradingSheet({
 
   const isMultiple = documents.length > 1;
   const existingGrade = !isMultiple
-    ? documents[0]?.submittedSnapshot?.grades?.[0]
+    ? documents[0]?.latestSubmission
     : null;
   const isEditing = !isMultiple && !!existingGrade;
 
@@ -260,47 +257,39 @@ export function GradingSheet({
     const normalizedScore =
       normalizedPercent === null ? null : formatGrade(normalizedPercent);
 
-    if (isEditing) {
-      // Update existing grade
-      formData.append('gradeId', existingGrade!.id);
-      if (normalizedScore) formData.append('score', normalizedScore);
-      formData.append('feedback', overallComment);
-      formData.append('rubricScores', JSON.stringify(rubricScores));
-      formData.append('overallComment', overallComment);
-      if (normalizedPercent !== null) {
-        formData.append('numericPercentage', normalizedPercent.toString());
-      }
-      if (normalizedLetter) {
-        formData.append('letterGrade', normalizedLetter);
-      }
+    // Build the JSON payload for update-submission
+    const payload: Record<string, unknown> = {
+      feedback: overallComment,
+      overallComment,
+      rubricScores,
+    };
+    if (normalizedScore) payload.score = normalizedScore;
+    if (normalizedPercent !== null) payload.numericPercentage = normalizedPercent;
+    if (normalizedLetter) payload.letterGrade = normalizedLetter;
+    if (!isEditing && releaseImmediately) {
+      payload.releasedAt = new Date().toISOString();
+    }
 
-      fetcher.submit(formData, {
+    if (isEditing) {
+      // Update existing submission grade
+      payload.submissionId = existingGrade!.id;
+      fetcher.submit(JSON.stringify(payload), {
         method: 'POST',
-        action: '/api/domain/update-grade',
+        action: '/api/domain/update-submission',
+        encType: 'application/json',
       });
     } else {
-      // Create new grade(s)
-      documents.forEach((doc) => {
-        formData.append('documentIds', doc.id);
-      });
-      if (normalizedScore) formData.append('score', normalizedScore);
-      formData.append('feedback', overallComment);
-      formData.append('rubricScores', JSON.stringify(rubricScores));
-      formData.append('overallComment', overallComment);
-      if (normalizedPercent !== null) {
-        formData.append('numericPercentage', normalizedPercent.toString());
+      // Grade each document's latest submission
+      for (const doc of documents) {
+        const submissionId = doc.latestSubmission?.id;
+        if (!submissionId) continue;
+        const docPayload = { ...payload, submissionId };
+        fetcher.submit(JSON.stringify(docPayload), {
+          method: 'POST',
+          action: '/api/domain/update-submission',
+          encType: 'application/json',
+        });
       }
-      if (normalizedLetter) {
-        formData.append('letterGrade', normalizedLetter);
-      }
-      if (releaseImmediately) {
-        formData.append('releaseImmediately', 'on');
-      }
-
-      fetcher.submit(formData, {
-        method: 'POST',
-        action: '/api/domain/grade-essay',
-      });
     }
   };
 

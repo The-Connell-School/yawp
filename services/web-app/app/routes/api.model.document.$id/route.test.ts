@@ -9,11 +9,11 @@ const prisma = {
     findUnique: mock(),
     update: mock(),
   },
-  documentVersion: {
+  documentRevision: {
     findFirst: mock(),
     create: mock(),
   },
-  documentSnapshot: {
+  submission: {
     findFirst: mock(),
     create: mock(),
     update: mock(),
@@ -42,11 +42,11 @@ describe('api.model.document.$id', () => {
     prisma.document.findUniqueOrThrow.mockReset();
     prisma.document.findUnique.mockReset();
     prisma.document.update.mockReset();
-    prisma.documentVersion.findFirst.mockReset();
-    prisma.documentVersion.create.mockReset();
-    prisma.documentSnapshot.findFirst.mockReset();
-    prisma.documentSnapshot.create.mockReset();
-    prisma.documentSnapshot.update.mockReset();
+    prisma.documentRevision.findFirst.mockReset();
+    prisma.documentRevision.create.mockReset();
+    prisma.submission.findFirst.mockReset();
+    prisma.submission.create.mockReset();
+    prisma.submission.update.mockReset();
     prisma.documentWriteJournal.findFirst.mockReset();
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
@@ -69,7 +69,7 @@ describe('api.model.document.$id', () => {
       html: '<p>New text</p>',
       revision: 5,
     });
-    prisma.documentVersion.findFirst.mockResolvedValue(null);
+    prisma.documentRevision.findFirst.mockResolvedValue(null);
     prisma.document.update.mockResolvedValue({
       id: 'doc-1',
       revision: 5,

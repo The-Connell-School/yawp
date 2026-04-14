@@ -191,11 +191,11 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   if (snapshotId) {
-    const snapshot = await prisma.documentSnapshot.findFirst({
+    // snapshotId now refers to a Submission id
+    const submission = await prisma.submission.findFirst({
       where: {
         id: snapshotId,
         documentId: document.id,
-        submittedAt: { not: null },
         ...(user.isAdmin
           ? {}
           : {
@@ -209,15 +209,15 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       select: { id: true },
     });
 
-    if (!snapshot) {
+    if (!submission) {
       return new Response(null, { status: 404 });
     }
 
-    const snapshotData: { html?: string; text?: string } = {};
-    if (data.html !== undefined) snapshotData.html = data.html;
-    if (data.text !== undefined) snapshotData.text = data.text;
+    const submissionData: { html?: string; text?: string } = {};
+    if (data.html !== undefined) submissionData.html = data.html;
+    if (data.text !== undefined) submissionData.text = data.text;
 
-    if (Object.keys(snapshotData).length === 0) {
+    if (Object.keys(submissionData).length === 0) {
       await prisma.documentWriteJournal.update({
         where: { id: journal.id },
         data: {
@@ -234,9 +234,9 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       );
     }
 
-    await prisma.documentSnapshot.update({
-      where: { id: snapshot.id },
-      data: snapshotData,
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: submissionData,
     });
 
     await prisma.documentWriteJournal.update({
@@ -260,18 +260,19 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   const now = new Date();
   const twentySecondsAgo = new Date(now.getTime() - 20_000);
 
-  const lastVersion = await prisma.documentVersion.findFirst({
+  const lastVersion = await prisma.documentRevision.findFirst({
     where: { documentId: params.id },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true },
   });
 
   if (!lastVersion || lastVersion.createdAt < twentySecondsAgo) {
-    await prisma.documentVersion.create({
+    await prisma.documentRevision.create({
       data: {
         documentId: params.id,
         text: document.text ?? '',
         html: document.html ?? '',
+        trigger: 'auto-save',
       },
     });
   }

@@ -120,19 +120,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
-        submittedSnapshot: {
+        submissions: {
+          where: { archivedAt: null },
           select: {
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                overallScore: true,
-                numericPercentage: true,
-                letterGrade: true,
-                releasedAt: true,
-              },
-              take: 1,
-            },
+            id: true,
+            title: true,
+            releasedAt: true,
           },
         },
       },
@@ -149,19 +142,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
-        submittedSnapshot: {
+        submissions: {
+          where: { archivedAt: null },
           select: {
-            grades: {
-              select: {
-                id: true,
-                score: true,
-                overallScore: true,
-                numericPercentage: true,
-                letterGrade: true,
-                releasedAt: true,
-              },
-              take: 1,
-            },
+            id: true,
+            title: true,
+            releasedAt: true,
           },
         },
       },

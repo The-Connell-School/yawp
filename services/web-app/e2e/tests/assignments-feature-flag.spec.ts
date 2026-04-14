@@ -3,6 +3,19 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { setAssignmentsForOrganization } from '../db-helpers';
 
 test.describe.serial('Assignments org-level feature flag', () => {
+  test.afterEach(async ({ e2eContext }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await setAssignmentsForOrganization({
+        prisma,
+        organizationId: e2eContext.organizationId,
+        enabled: true,
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('hides Assignments tab on student dashboard when flag is off', async ({
     page,
     e2eContext,
@@ -15,7 +28,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
       enabled: false,
     });
 
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
@@ -27,14 +40,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    await setAssignmentsForOrganization({
-      prisma,
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
-    await signIn('jdoe@brock.software', 'johndoe');
+    await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
@@ -53,7 +59,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
       enabled: false,
     });
 
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}`);
     await page.waitForLoadState('networkidle');
 
@@ -65,14 +71,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
     e2eContext,
     signIn,
   }) => {
-    const prisma = createE2EPrismaClient();
-    await setAssignmentsForOrganization({
-      prisma,
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
-    await signIn('teacher.e2e@yawp.test', 'teacher-e2e-password');
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto(`/app/my-classes/${e2eContext.classId}`);
     await page.waitForLoadState('networkidle');
 

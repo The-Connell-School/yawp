@@ -66,40 +66,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get document stats for each class
   const classStats = await Promise.all(
     classes.map(async (klass: (typeof classes)[number]) => {
-      const submissions = await prisma.documentSnapshot.findMany({
+      const submissions = await prisma.submission.findMany({
         where: {
-          submittedAt: { not: null },
-          archivedAt: null,
           document: {
             classId: klass.id,
             deletedAt: null,
           },
         },
         select: {
-          grades: {
-            select: {
-              score: true,
-              feedback: true,
-              rubricScores: true,
-              overallComment: true,
-              numericPercentage: true,
-              letterGrade: true,
-              releasedAt: true,
-            },
-            take: 1,
-          },
+          score: true,
+          feedback: true,
+          rubricScores: true,
+          overallComment: true,
+          numericPercentage: true,
+          letterGrade: true,
+          releasedAt: true,
+          gradedAt: true,
         },
       });
 
-      const ungradedCount = submissions.filter((snapshot) => {
-        const grade = snapshot.grades[0];
-        if (!grade) return true;
-        return !hasMeaningfulGrade(grade) && !grade.releasedAt;
+      const ungradedCount = submissions.filter((submission) => {
+        return !hasMeaningfulGrade(submission) && !submission.releasedAt;
       }).length;
 
-      const gradedUnreleasedCount = submissions.filter((snapshot) => {
-        const grade = snapshot.grades[0];
-        return !!grade && hasMeaningfulGrade(grade) && !grade.releasedAt;
+      const gradedUnreleasedCount = submissions.filter((submission) => {
+        return hasMeaningfulGrade(submission) && !submission.releasedAt;
       }).length;
 
       return {

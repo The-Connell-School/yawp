@@ -5,8 +5,7 @@ export type SyncStatus =
   | 'saving'
   | 'offline'
   | 'auth-expired'
-  | 'error'
-  | 'conflict';
+  | 'error';
 
 export class SyncService {
   private _store: DocumentStore;
@@ -19,7 +18,6 @@ export class SyncService {
   private _retryTimer: ReturnType<typeof setTimeout> | null = null;
   private _retryCount = 0;
   private _lastSyncedHash: string | null = null;
-  private _conflictedHash: string | null = null;
   private _stopped = false;
 
   constructor(store: DocumentStore, fetchFn: typeof fetch = globalThis.fetch.bind(globalThis)) {
@@ -35,7 +33,6 @@ export class SyncService {
     this._docId = docId;
     this._stopped = false;
     this._retryCount = 0;
-    this._conflictedHash = null;
   }
 
   stop(): void {
@@ -104,27 +101,20 @@ export class SyncService {
   }
 
   private async _sync(trigger?: string): Promise<void> {
-    if (this._stopped || !this._docId) return;
+    const docId = this._docId;
+    if (this._stopped || !docId) return;
 
-    const entry = await this._store.get(this._docId);
-    if (!entry) return;
+    const entry = await this._store.get(docId);
+    if (!entry || this._stopped || this._docId !== docId) return;
 
     if (entry.contentHash === this._lastSyncedHash && entry.syncStatus === 'synced') {
-      return;
-    }
-
-    // If this exact content was already rejected as stale by the server, don't
-    // keep retrying it — it would just get rejected again. Wait for the next
-    // user keystroke to produce fresh content (with a fresh baseRevision via
-    // the high-water mark advanced by onRevisionUpdate listeners).
-    if (entry.contentHash === this._conflictedHash) {
       return;
     }
 
     this._setStatus('saving');
 
     try {
-      const response = await this._fetch(`/api/document/${this._docId}/save`, {
+      const response = await this._fetch(`/api/document/${docId}/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,9 +128,8 @@ export class SyncService {
 
       if (response.ok) {
         const body = await response.json();
-        await this._store.markSynced(this._docId, body.revision, Date.now());
+        await this._store.markSynced(docId, body.revision, Date.now());
         this._lastSyncedHash = entry.contentHash;
-        this._conflictedHash = null;
         this._retryCount = 0;
         if (typeof body.revision === 'number') {
           this._emitRevision(body.revision);
@@ -152,34 +141,30 @@ export class SyncService {
       if (response.status === 409) {
         const body = await response.json().catch(() => null);
         if (body?.error === 'stale_base_revision') {
-          // The local IDB content is based on a stale view of the server.
-          // Mark this content as conflicted so we don't loop on it, advance
-          // the high-water mark from the server's response, and surface a
-          // conflict status to the UI. The next editor mutation will produce
-          // fresh content with the new baseRevision and resume normal sync.
-          this._conflictedHash = entry.contentHash;
-          await this._store.markFailed(this._docId, 'stale_base_revision');
+          // Advance the high-water mark so the next attempt uses the
+          // server's current revision, then retry with backoff.
           if (typeof body.currentRevision === 'number') {
             this._emitRevision(body.currentRevision);
           }
-          this._retryCount = 0;
-          this._setStatus('conflict');
+          await this._store.markFailed(docId, 'stale_base_revision', body.currentRevision);
+          this._setStatus('error');
+          this._scheduleRetry();
           return;
         }
       }
 
       if (response.status === 401 || response.status === 403) {
-        await this._store.markFailed(this._docId, 'auth');
+        await this._store.markFailed(docId, 'auth');
         this._setStatus('auth-expired');
         return;
       }
 
-      await this._store.markFailed(this._docId, `server:${response.status}`);
+      await this._store.markFailed(docId, `server:${response.status}`);
       this._setStatus('error');
       this._scheduleRetry();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown';
-      await this._store.markFailed(this._docId!, message);
+      await this._store.markFailed(docId, message);
       this._setStatus('offline');
       this._scheduleRetry();
     }

@@ -27,6 +27,7 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { StudentArchiveCell } from '~/components/student-archive-cell';
 import {
   Table,
   TableBody,
@@ -417,13 +418,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isAssignmentsEnabledForOrganization(klass.school?.organizationId),
   ]);
 
-  // Get all submission snapshots for this class (active + archived)
-  const submittedSnapshots = isDocumentSubmissionEnabled
-    ? await prisma.documentSnapshot.findMany({
+  // Get all submissions for this class
+  const submissions = isDocumentSubmissionEnabled
+    ? await prisma.submission.findMany({
         where: {
-          submittedAt: {
-            not: null,
-          },
           document: {
             classId,
             deletedAt: null,
@@ -431,15 +429,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         select: {
           id: true,
+          title: true,
           createdAt: true,
           submittedAt: true,
-          archivedAt: true,
           documentId: true,
+          score: true,
+          feedback: true,
+          rubricScores: true,
+          overallScore: true,
+          overallComment: true,
+          numericPercentage: true,
+          letterGrade: true,
+          aiMeta: true,
+          releasedAt: true,
+          gradedAt: true,
+          archivedAt: true,
           document: {
             select: {
               id: true,
               title: true,
-              submittedSnapshotId: true,
               assignment: {
                 select: {
                   id: true,
@@ -460,22 +468,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               studentCourseModuleSessions: studentModuleSessionSingleSelect,
             },
           },
-          grades: {
-            select: {
-              id: true,
-              score: true,
-              feedback: true,
-              rubricScores: true,
-              overallScore: true,
-              overallComment: true,
-              numericPercentage: true,
-              letterGrade: true,
-              aiMeta: true,
-              releasedAt: true,
-              createdAt: true,
-            },
-            take: 1,
-          },
         },
         orderBy: {
           submittedAt: 'desc',
@@ -487,9 +479,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const inProgressDocuments = await prisma.document.findMany({
     where: {
       classId,
-      submittedAt: null,
       deletedAt: null,
       archivedAt: null,
+      submissions: { none: {} },
     },
     select: {
       id: true,
@@ -551,7 +543,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     klass,
     profiles,
     pasteAlerts,
-    submittedSnapshots,
+    submissions,
     inProgressDocuments,
     assignments,
     assignmentsEnabled,
@@ -593,6 +585,7 @@ export default function ClassDetailRoute() {
       id: string;
       score: string | null;
       feedback: string | null;
+      archivedAt: Date | string | null;
       document: {
         id: string;
         title: string;
@@ -637,59 +630,57 @@ export default function ClassDetailRoute() {
     data.assignments.find((assignment) => assignment.id === editingAssignmentId) ??
     null;
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const hasMeaningfulGrade = (grade: {
+  const hasMeaningfulGrade = (submission: {
     score: string | null;
     feedback: string | null;
     rubricScores?: unknown | null;
     overallComment?: string | null;
     numericPercentage?: number | null;
     letterGrade?: string | null;
+    gradedAt?: Date | string | null;
   }) =>
     Boolean(
-      grade.score ||
-        grade.feedback ||
-        grade.overallComment ||
-        grade.letterGrade ||
-        grade.numericPercentage !== null ||
-        (grade.rubricScores &&
-          typeof grade.rubricScores === 'object' &&
-          Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+      submission.gradedAt ||
+        submission.score ||
+        submission.feedback ||
+        submission.overallComment ||
+        submission.letterGrade ||
+        submission.numericPercentage !== null ||
+        (submission.rubricScores &&
+          typeof submission.rubricScores === 'object' &&
+          Object.keys(submission.rubricScores as Record<string, unknown>).length > 0)
     );
 
   const students = data.klass.students;
-  const activeSubmittedSnapshots = useMemo(
-    () => data.submittedSnapshots.filter((snapshot) => !snapshot.archivedAt),
-    [data.submittedSnapshots]
+  const allSubmissions = useMemo(
+    () => data.submissions,
+    [data.submissions]
   );
   // Reset pagination when tab changes
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
   }, [activeTab]);
 
-  // Get ungraded submissions
+  // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
-    return activeSubmittedSnapshots.filter((snapshot) => {
-      const grade = snapshot.grades?.[0];
-      if (!grade) return true;
-      return !hasMeaningfulGrade(grade) && !grade.releasedAt;
+    return allSubmissions.filter((submission) => {
+      return !hasMeaningfulGrade(submission) && !submission.releasedAt;
     });
-  }, [activeSubmittedSnapshots]);
+  }, [allSubmissions]);
 
   // Get graded but unreleased submissions
   const gradedUnreleasedDocuments = useMemo(() => {
-    return activeSubmittedSnapshots.filter((snapshot) => {
-      const grade = snapshot.grades?.[0];
-      return !!grade && hasMeaningfulGrade(grade) && !grade.releasedAt;
+    return allSubmissions.filter((submission) => {
+      return hasMeaningfulGrade(submission) && !submission.releasedAt;
     });
-  }, [activeSubmittedSnapshots]);
+  }, [allSubmissions]);
 
   // Get released submissions
   const releasedDocuments = useMemo(() => {
-    return activeSubmittedSnapshots.filter((snapshot) => {
-      const grade = snapshot.grades?.[0];
-      return !!grade && hasMeaningfulGrade(grade) && !!grade.releasedAt;
+    return allSubmissions.filter((submission) => {
+      return hasMeaningfulGrade(submission) && !!submission.releasedAt;
     });
-  }, [activeSubmittedSnapshots]);
+  }, [allSubmissions]);
 
   const matchesSelectedAssignment = (assignmentId?: string | null) =>
     selectedAssignmentId === 'all' || assignmentId === selectedAssignmentId;
@@ -704,53 +695,52 @@ export default function ClassDetailRoute() {
 
   const filteredUngradedDocuments = useMemo(
     () =>
-      ungradedDocuments.filter((snapshot) =>
-        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      ungradedDocuments.filter((submission) =>
+        matchesSelectedAssignment(submission.document.assignment?.id)
       ),
     [ungradedDocuments, selectedAssignmentId]
   );
 
   const filteredGradedUnreleasedDocuments = useMemo(
     () =>
-      gradedUnreleasedDocuments.filter((snapshot) =>
-        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      gradedUnreleasedDocuments.filter((submission) =>
+        matchesSelectedAssignment(submission.document.assignment?.id)
       ),
     [gradedUnreleasedDocuments, selectedAssignmentId]
   );
 
   const filteredReleasedDocuments = useMemo(
     () =>
-      releasedDocuments.filter((snapshot) =>
-        matchesSelectedAssignment(snapshot.document.assignment?.id)
+      releasedDocuments.filter((submission) =>
+        matchesSelectedAssignment(submission.document.assignment?.id)
       ),
     [releasedDocuments, selectedAssignmentId]
   );
 
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
-    return filteredGradedUnreleasedDocuments.map((snapshot) => {
-      const grade = snapshot.grades[0];
+    return filteredGradedUnreleasedDocuments.map((submission) => {
       const gradeDisplay =
         formatGrade(
-          grade.numericPercentage ?? null,
-          grade.letterGrade ?? null
-        ) || grade.score;
+          submission.numericPercentage ?? null,
+          submission.letterGrade ?? null
+        ) || submission.score;
       return {
-        id: grade.id,
+        id: submission.id,
         score: gradeDisplay,
-        feedback: grade.feedback,
+        feedback: submission.feedback,
+        archivedAt: submission.archivedAt,
         document: {
-          id: snapshot.document.id,
-          title: snapshot.document.title,
-          profile: snapshot.document.profile,
+          id: submission.document.id,
+          title: submission.title,
+          profile: submission.document.profile,
         },
-        snapshotId: snapshot.id,
       };
     });
   }, [filteredGradedUnreleasedDocuments]);
 
   const unreleasedGradesBySubmissionId = useMemo(() => {
-    return new Map(unreleasedGrades.map((grade) => [grade.snapshotId, grade]));
+    return new Map(unreleasedGrades.map((grade) => [grade.id, grade]));
   }, [unreleasedGrades]);
 
   // Handle URL param for to-release action
@@ -785,21 +775,21 @@ export default function ClassDetailRoute() {
   };
 
   const toggleAllGradedDocuments = () => {
-    const snapshotIds = filteredGradedUnreleasedDocuments.map((d) => d.id);
-    if (snapshotIds.every((id) => selectedGradedDocuments.has(id))) {
+    const submissionIds = filteredGradedUnreleasedDocuments.map((d) => d.id);
+    if (submissionIds.every((id) => selectedGradedDocuments.has(id))) {
       const newSelection = new Set(selectedGradedDocuments);
-      snapshotIds.forEach((id) => newSelection.delete(id));
+      submissionIds.forEach((id) => newSelection.delete(id));
       setSelectedGradedDocuments(newSelection);
     } else {
       const newSelection = new Set(selectedGradedDocuments);
-      snapshotIds.forEach((id) => newSelection.add(id));
+      submissionIds.forEach((id) => newSelection.add(id));
       setSelectedGradedDocuments(newSelection);
     }
   };
 
   const selectedUnreleasedGrades = useMemo(() => {
     return Array.from(selectedGradedDocuments)
-      .map((snapshotId) => unreleasedGradesBySubmissionId.get(snapshotId))
+      .map((submissionId) => unreleasedGradesBySubmissionId.get(submissionId))
       .filter((grade): grade is (typeof unreleasedGrades)[number] => !!grade);
   }, [selectedGradedDocuments, unreleasedGradesBySubmissionId]);
 
@@ -956,55 +946,44 @@ export default function ClassDetailRoute() {
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Course Module</TableHead>
+                <TableHead>Student archive</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((snapshot) => (
-                <TableRow key={snapshot.id}>
+              {paginatedData.map((submission) => (
+                <TableRow key={submission.id}>
                   <TableCell className="font-medium">
-                    {snapshot.document.profile.user.name ||
-                      snapshot.document.profile.user.email}
+                    {submission.document.profile.user.name ||
+                      submission.document.profile.user.email}
                   </TableCell>
-                  <TableCell>{snapshot.document.title}</TableCell>
+                  <TableCell>{submission.title}</TableCell>
                   {assignmentsEnabled && (
                     <TableCell className="text-muted-foreground">
-                      {snapshot.document.assignment?.title || '—'}
+                      {submission.document.assignment?.title || '—'}
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {snapshot.document.studentCourseModuleSessions[0]
+                    {submission.document.studentCourseModuleSessions[0]
                       ?.studentCourseModule.title || '—'}
+                  </TableCell>
+                  <TableCell>
+                    <StudentArchiveCell archivedAt={submission.archivedAt} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(
-                      new Date(snapshot.submittedAt ?? snapshot.createdAt)
+                      new Date(submission.submittedAt ?? submission.createdAt)
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                      {data.isDocumentSubmissionEnabled ? (
-                        <Button asChild size="sm">
-                          <Link
-                            to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                          >
-                            Grade
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button size="sm" disabled>
-                          Grade
-                        </Button>
-                      )}
-                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <Link
+                        to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                      >
+                        View
+                      </Link>
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1035,71 +1014,59 @@ export default function ClassDetailRoute() {
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
+                <TableHead>Student archive</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Graded</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((snapshot) => {
-                const grade = snapshot.grades[0];
+              {paginatedData.map((submission) => {
                 const gradeDisplay =
                   formatGrade(
-                    grade.numericPercentage ?? null,
-                    grade.letterGrade ?? null
+                    submission.numericPercentage ?? null,
+                    submission.letterGrade ?? null
                   ) ||
-                  grade.score ||
+                  submission.score ||
                   '—';
                 return (
-                  <TableRow key={snapshot.id}>
+                  <TableRow key={submission.id}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedGradedDocuments.has(snapshot.id)}
+                        checked={selectedGradedDocuments.has(submission.id)}
                         onCheckedChange={() =>
-                          toggleGradedDocumentSelection(snapshot.id)
+                          toggleGradedDocumentSelection(submission.id)
                         }
-                        aria-label={`Select graded ${snapshot.document.title}`}
+                        aria-label={`Select graded ${submission.title}`}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
-                      {snapshot.document.profile.user.name ||
-                        snapshot.document.profile.user.email}
+                      {submission.document.profile.user.name ||
+                        submission.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell>{submission.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
-                        {snapshot.document.assignment?.title || '—'}
+                        {submission.document.assignment?.title || '—'}
                       </TableCell>
                     )}
+                    <TableCell>
+                      <StudentArchiveCell archivedAt={submission.archivedAt} />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(grade.createdAt))}
+                      {timeAgo(new Date(submission.gradedAt ?? submission.createdAt))}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                          >
-                            View
-                          </Link>
-                        </Button>
-                        {data.isDocumentSubmissionEnabled ? (
-                          <Button asChild size="sm">
-                            <Link
-                              to={`/app/documents/${snapshot.document.id}?left=grading&tab=editor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                            >
-                              Edit Grade
-                            </Link>
-                          </Button>
-                        ) : (
-                          <Button size="sm" disabled>
-                            Edit Grade
-                          </Button>
-                        )}
-                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -1119,49 +1086,50 @@ export default function ClassDetailRoute() {
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
+                <TableHead>Student archive</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Released</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((snapshot) => {
-                const grade = snapshot.grades[0];
+              {paginatedData.map((submission) => {
                 const gradeDisplay =
                   formatGrade(
-                    grade.numericPercentage ?? null,
-                    grade.letterGrade ?? null
+                    submission.numericPercentage ?? null,
+                    submission.letterGrade ?? null
                   ) ||
-                  grade.score ||
+                  submission.score ||
                   '—';
                 return (
-                  <TableRow key={snapshot.id}>
+                  <TableRow key={submission.id}>
                     <TableCell className="font-medium">
-                      {snapshot.document.profile.user.name ||
-                        snapshot.document.profile.user.email}
+                      {submission.document.profile.user.name ||
+                        submission.document.profile.user.email}
                     </TableCell>
-                    <TableCell>{snapshot.document.title}</TableCell>
+                    <TableCell>{submission.title}</TableCell>
                     {assignmentsEnabled && (
                       <TableCell className="text-muted-foreground">
-                        {snapshot.document.assignment?.title || '—'}
+                        {submission.document.assignment?.title || '—'}
                       </TableCell>
                     )}
+                    <TableCell>
+                      <StudentArchiveCell archivedAt={submission.archivedAt} />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(grade.releasedAt!))}
+                      {timeAgo(new Date(submission.releasedAt!))}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button asChild size="sm" variant="outline">
-                          <Link
-                            to={`/app/documents/${snapshot.document.id}?left=tutor&snapshotId=${snapshot.id}&exitTo=${encodedClassDetailExitTo}`}
-                          >
-                            View
-                          </Link>
-                        </Button>
-                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                        >
+                          View
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

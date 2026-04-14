@@ -13,9 +13,10 @@
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
+    "test": "bun test app/",
     "test:e2e": "bun run test:e2e:smoke",
     "test:e2e:prepare": "bun ./e2e/ensure-e2e-env.ts",
-    "test:e2e:smoke": "playwright test --project=chromium e2e/tests/auth.signin.spec.ts e2e/tests/auth.signup.student.spec.ts e2e/tests/document-editor.spec.ts e2e/tests/document-regression.spec.ts",
+    "test:e2e:smoke": "playwright test --project=chromium e2e/tests/auth.signin.spec.ts e2e/tests/auth.signup.student.spec.ts e2e/tests/document-editor.spec.ts e2e/tests/document-regression.spec.ts e2e/tests/document-editor-invariants.spec.ts e2e/tests/document-local-first-persistence.spec.ts",
     "test:e2e:full": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug"
@@ -111,6 +112,7 @@
     "zod-form-data": "^2.0.7"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.8.9",
     "@playwright/test": "^1.49.0",
     "@react-router/dev": "^7.3.0",
     "@types/bun": "^1.2.13",
