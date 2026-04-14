@@ -15,6 +15,7 @@
     "build": "tsc",
     "migrate-remote": "bun run scripts/migrate-remote.ts",
     "archive-non-canonical-submissions": "bun ./scripts/archive-non-canonical-submissions.ts",
+    "compare-grade-submission-parity": "bun ./scripts/compare-grade-submission-parity.ts",
     "test": "bun test scripts/*.test.ts"
   },
   "devDependencies": {
