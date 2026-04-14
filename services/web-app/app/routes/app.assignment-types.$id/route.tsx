@@ -19,9 +19,9 @@ import {
 import { Button } from '~/components/ui/button';
 import { useUser } from '~/hooks/useUser.js';
 import {
-  createStudentDocumentForCourse,
-  StudentDocumentCreationError,
-} from '~/domain/student-documents.server';
+  createDocumentForAssignmentType,
+  DocumentCreationError,
+} from '~/domain/documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -30,12 +30,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const [course, documents, archivedDocuments] = await Promise.all([
-    prisma.studentCourse.findUnique({
+  const [assignmentType, documents, archivedDocuments] = await Promise.all([
+    prisma.assignmentType.findUnique({
       where: { id: params.id },
       include: {
         image: true,
-        studentCourseModules: {
+        assignmentModules: {
           where: { deletedAt: null },
           orderBy: { position: 'asc' },
         },
@@ -47,15 +47,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         profileId: profile.id,
         deletedAt: null,
         archivedAt: null,
-        studentCourseModuleSessions: {
-          some: { studentCourseModule: { studentCourseId: params.id } },
+        assignmentModuleSessions: {
+          some: { assignmentModule: { assignmentTypeId: params.id } },
         },
       },
       include: {
-        studentCourseModuleSessions: {
+        assignmentModuleSessions: {
           take: 1,
-          orderBy: { studentCourseModule: { position: 'desc' } },
-          include: { studentCourseModule: true },
+          orderBy: { assignmentModule: { position: 'desc' } },
+          include: { assignmentModule: true },
         },
         submissions: {
           where: { archivedAt: null },
@@ -78,15 +78,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         profileId: profile.id,
         deletedAt: null,
         archivedAt: { not: null },
-        studentCourseModuleSessions: {
-          some: { studentCourseModule: { studentCourseId: params.id } },
+        assignmentModuleSessions: {
+          some: { assignmentModule: { assignmentTypeId: params.id } },
         },
       },
       include: {
-        studentCourseModuleSessions: {
+        assignmentModuleSessions: {
           take: 1,
-          orderBy: { studentCourseModule: { position: 'desc' } },
-          include: { studentCourseModule: true },
+          orderBy: { assignmentModule: { position: 'desc' } },
+          include: { assignmentModule: true },
         },
         submissions: {
           where: { archivedAt: null },
@@ -105,14 +105,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
   ]);
 
-  if (!course) {
+  if (!assignmentType) {
     return redirectWithToast('/app', {
       type: 'error',
-      description: 'Course not found',
+      description: 'Assignment type not found',
     });
   }
 
-  return dataResponse({ course, documents, archivedDocuments });
+  return dataResponse({ assignmentType, documents, archivedDocuments });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -120,14 +120,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   let documentId = '';
   try {
-    const created = await createStudentDocumentForCourse({
+    const created = await createDocumentForAssignmentType({
       profileId: profile.id,
-      studentCourseId: params.id!,
+      assignmentTypeId: params.id!,
     });
     documentId = created.documentId;
   } catch (creationError) {
-    if (creationError instanceof StudentDocumentCreationError) {
-      return redirectWithToast(`/app/courses/${params.id}`, {
+    if (creationError instanceof DocumentCreationError) {
+      return redirectWithToast(`/app/assignment-types/${params.id}`, {
         type: 'error',
         description: creationError.message,
       });
@@ -150,11 +150,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
-export default function AppCoursesIdRoute() {
+export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
   const isTeacher = !!user.selectedProfile?.teacherProfile;
-  const hasModules = data.course.studentCourseModules.length > 0;
+  const hasModules = data.assignmentType.assignmentModules.length > 0;
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
 
@@ -179,16 +179,18 @@ export default function AppCoursesIdRoute() {
           </Form>
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
-          {data.course.image ? (
+          {data.assignmentType.image ? (
             <img
-              src={`/api/image/course/${data.course.image.id}`}
-              alt={data.course.title}
+              src={`/api/image/course/${data.assignmentType.image.id}`}
+              alt={data.assignmentType.title}
               className="h-auto w-screen min-w-[170px] max-w-[250px] rounded-lg object-cover"
             />
           ) : null}
           <div className="flex flex-col gap-3">
-            <h1 className="text-3xl font-bold">{data.course.title}</h1>
-            <p className="text-sm sm:text-base">{data.course.description}</p>
+            <h1 className="text-3xl font-bold">{data.assignmentType.title}</h1>
+            <p className="text-sm sm:text-base">
+              {data.assignmentType.description}
+            </p>
           </div>
         </div>
         {hasModules ? (
@@ -196,7 +198,7 @@ export default function AppCoursesIdRoute() {
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
             <Accordion type="multiple" className="pb-6">
-              {data.course.studentCourseModules.map((cm) => (
+              {data.assignmentType.assignmentModules.map((cm) => (
                 <AccordionItem key={cm.id} value={cm.id}>
                   <AccordionTrigger className="py-2 text-base">
                     {cm.title}
@@ -216,7 +218,7 @@ export default function AppCoursesIdRoute() {
                 <DocumentLink
                   key={doc.id}
                   doc={doc}
-                  exitTo={`/app/courses/${data.course.id}`}
+                  exitTo={`/app/assignment-types/${data.assignmentType.id}`}
                   isStudentView
                 />
               ))}
@@ -234,7 +236,7 @@ export default function AppCoursesIdRoute() {
                           <DocumentLink
                             key={doc.id}
                             doc={doc}
-                            exitTo={`/app/courses/${data.course.id}`}
+                            exitTo={`/app/assignment-types/${data.assignmentType.id}`}
                             isArchived
                             isStudentView
                           />

@@ -26,9 +26,9 @@ type Props = {
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
   cms: {
-    studentCourseModule: {
-      studentCourse: {
-        studentCourseModules: { id: string; position: number }[];
+    assignmentModule: {
+      assignmentType: {
+        assignmentModules: { id: string; position: number }[];
       } | null;
       instructions: {
         buttons: { id: string; label: string; action: string }[];
@@ -74,13 +74,13 @@ export const Tutor = ({
   const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
 
   const finishedCms =
-    cms.instructionsCompleted === cms.studentCourseModule.instructions.length;
+    cms.instructionsCompleted === cms.assignmentModule.instructions.length;
   const isLastCmInstruction =
     cms.instructionsCompleted ===
-    cms.studentCourseModule.instructions.length - 1;
+    cms.assignmentModule.instructions.length - 1;
 
   const instruction =
-    cms.studentCourseModule.instructions[cms.instructionsCompleted] ?? {};
+    cms.assignmentModule.instructions[cms.instructionsCompleted] ?? {};
 
   const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
   const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
@@ -148,7 +148,7 @@ export const Tutor = ({
     formData.append('instructionsCompleted.increment', '1');
     if (label) formData.append('incrementButtonText', label);
     try {
-      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
+      const res = await fetch(`/api/model/assignment-module-session/${cms.id}`, {
         method: 'POST',
         body: formData,
       });
@@ -168,7 +168,7 @@ export const Tutor = ({
     const formData = new FormData();
     formData.append('instructionsCompleted.decrement', '1');
     try {
-      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
+      const res = await fetch(`/api/model/assignment-module-session/${cms.id}`, {
         method: 'POST',
         body: formData,
       });
@@ -186,10 +186,10 @@ export const Tutor = ({
   const advanceToNextCourseModule = useCallback(async () => {
     if (isSessionLocked) return;
     const formData = new FormData();
-    formData.append('studentCourseModuleId', nextCmId ?? '');
+    formData.append('assignmentModuleId', nextCmId ?? '');
     formData.append('documentId', docId);
     try {
-      const res = await fetch('/api/model/course-module-session', {
+      const res = await fetch('/api/model/assignment-module-session', {
         method: 'POST',
         body: formData,
       });
@@ -227,7 +227,7 @@ export const Tutor = ({
       <div
         className={cn(
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
-          cms.studentCourseModule.isSelfGuided ? '' : 'border-b'
+          cms.assignmentModule.isSelfGuided ? '' : 'border-b'
         )}
       >
         <div className="flex h-[32px] w-full items-center gap-1">
@@ -247,7 +247,7 @@ export const Tutor = ({
               </Button>
             </Tooltip>
             <p className="text-sm font-bold text-foreground/80">
-              {cms.studentCourseModule.title}
+              {cms.assignmentModule.title}
             </p>
             <Tooltip text="Next step" delayDuration={0}>
               <Button
@@ -264,7 +264,7 @@ export const Tutor = ({
               </Button>
             </Tooltip>
           </div>
-          {cms.studentCourseModule.isSelfGuided ? null : (
+          {cms.assignmentModule.isSelfGuided ? null : (
             <Tooltip
               text={messagesExpanded ? 'Hide messages' : 'Show messages'}
               delayDuration={0}
@@ -286,7 +286,7 @@ export const Tutor = ({
           )}
         </div>
       </div>
-      {cms.studentCourseModule.isSelfGuided ? (
+      {cms.assignmentModule.isSelfGuided ? (
         <div className="flex items-center justify-center gap-4 p-4">
           <p className="text-sm text-muted-foreground">
             {isCurrentCms
@@ -313,7 +313,7 @@ export const Tutor = ({
               : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
-          id="course-module-session-messages"
+          id="assignment-module-session-messages"
         >
           {messages.map((message) => (
             <div
@@ -362,7 +362,7 @@ export const Tutor = ({
       {cmsIdx !== 0 ? (
         <ResponseBar
           className={
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }
@@ -376,7 +376,7 @@ export const Tutor = ({
         <div
           className={cn(
             'flex flex-col items-center gap-4 border-t p-2 px-4',
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -399,7 +399,7 @@ export const Tutor = ({
         <p
           className={cn(
             'p-2 text-center text-sm text-muted-foreground',
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -409,7 +409,7 @@ export const Tutor = ({
       ) : (
         <ResponseBar
           className={
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }

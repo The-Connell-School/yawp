@@ -22,10 +22,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, validator);
   if (error) return validationError(error);
 
-  const cms = await prisma.studentCourseModuleSession.findUnique({
+  const cms = await prisma.assignmentModuleSession.findUnique({
     where: { id: params.id },
     include: {
-      studentCourseModule: {
+      assignmentModule: {
         include: {
           instructions: {
             include: { buttons: { orderBy: { position: 'asc' } } },
@@ -37,12 +37,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (!cms) {
     return dataResponse(
-      { error: 'No course module session found.' },
+      { error: 'No assignment module session found.' },
       { status: 404 }
     );
   }
 
-  const instructions = cms.studentCourseModule.instructions;
+  const instructions = cms.assignmentModule.instructions;
   const instructionsLength = instructions.length;
   const currentInstruction = instructions[cms.instructionsCompleted];
   const nextInstructionRecord = instructions[cms.instructionsCompleted + 1];
@@ -94,24 +94,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       : {}),
   };
 
-  await prisma.studentCourseModuleSession.update({
+  await prisma.assignmentModuleSession.update({
     where: { id: params.id },
     data: updateData,
   });
 
-  const updatedCms = await prisma.studentCourseModuleSession.findUnique({
+  const updatedCms = await prisma.assignmentModuleSession.findUnique({
     where: { id: params.id },
     include: {
       messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-      studentCourseModule: {
+      assignmentModule: {
         include: {
           instructions: {
             orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
           },
-          studentCourse: {
+          assignmentType: {
             select: {
-              studentCourseModules: {
+              assignmentModules: {
                 select: { id: true, position: true },
                 orderBy: { position: 'asc' },
               },

@@ -4,17 +4,17 @@ const updatedCmsShape = {
   id: 'cms-1',
   instructionsCompleted: 1,
   messages: [],
-  studentCourseModule: {
+  assignmentModule: {
     instructions: [
       { id: 'i1', prompt: 'First step', buttons: [], position: 0 },
       { id: 'i2', prompt: 'Second step', buttons: [], position: 1 },
     ],
-    studentCourse: { studentCourseModules: [{ id: 'scm-1', position: 0 }] },
+    assignmentType: { assignmentModules: [{ id: 'scm-1', position: 0 }] },
   },
 };
 
 const prisma = {
-  studentCourseModuleSession: {
+  assignmentModuleSession: {
     findUnique: mock(),
     update: mock(),
   },
@@ -32,7 +32,7 @@ const { action } = await import('./route');
 const baseCms = {
   id: 'cms-1',
   instructionsCompleted: 0,
-  studentCourseModule: {
+  assignmentModule: {
     instructions: [
       { id: 'i1', prompt: 'First step', buttons: [] },
       { id: 'i2', prompt: 'Second step', buttons: [] },
@@ -40,27 +40,27 @@ const baseCms = {
   },
 };
 
-describe('api.model.course-module-session.$id', () => {
+describe('api.model.assignment-module-session.$id', () => {
   beforeEach(() => {
-    prisma.studentCourseModuleSession.findUnique.mockReset();
-    prisma.studentCourseModuleSession.update.mockReset();
+    prisma.assignmentModuleSession.findUnique.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
     requireUserId.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
   });
 
   test('increment when already finished does not crash', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce({
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       ...baseCms,
       instructionsCompleted: 2,
-      studentCourseModule: {
-        instructions: baseCms.studentCourseModule.instructions,
+      assignmentModule: {
+        instructions: baseCms.assignmentModule.instructions,
       },
     });
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce(
       updatedCmsShape
     );
-    prisma.studentCourseModuleSession.update.mockResolvedValue({
+    prisma.assignmentModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 3,
     });
@@ -69,7 +69,7 @@ describe('api.model.course-module-session.$id', () => {
     form.append('instructionsCompleted.increment', '1');
 
     const request = new Request(
-      'https://example.com/api/model/course-module-session/cms-1',
+      'https://example.com/api/model/assignment-module-session/cms-1',
       { method: 'POST', body: form }
     );
 
@@ -78,20 +78,20 @@ describe('api.model.course-module-session.$id', () => {
       params: { id: 'cms-1' },
     } as any);
 
-    const updateCall = prisma.studentCourseModuleSession.update.mock.calls[0];
+    const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
     expect(updateCall[0].data.messages).toBeUndefined();
   });
 
   test('increment with empty instructions does not crash', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce({
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       ...baseCms,
       instructionsCompleted: 0,
-      studentCourseModule: { instructions: [] },
+      assignmentModule: { instructions: [] },
     });
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce(
       updatedCmsShape
     );
-    prisma.studentCourseModuleSession.update.mockResolvedValue({
+    prisma.assignmentModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 1,
     });
@@ -100,7 +100,7 @@ describe('api.model.course-module-session.$id', () => {
     form.append('instructionsCompleted.increment', '1');
 
     const request = new Request(
-      'https://example.com/api/model/course-module-session/cms-1',
+      'https://example.com/api/model/assignment-module-session/cms-1',
       { method: 'POST', body: form }
     );
 
@@ -109,16 +109,16 @@ describe('api.model.course-module-session.$id', () => {
       params: { id: 'cms-1' },
     } as any);
 
-    const updateCall = prisma.studentCourseModuleSession.update.mock.calls[0];
+    const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
     expect(updateCall[0].data.messages).toBeUndefined();
   });
 
   test('normal increment creates user and assistant messages', async () => {
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(baseCms);
-    prisma.studentCourseModuleSession.findUnique.mockResolvedValueOnce(
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce(baseCms);
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce(
       updatedCmsShape
     );
-    prisma.studentCourseModuleSession.update.mockResolvedValue({
+    prisma.assignmentModuleSession.update.mockResolvedValue({
       id: 'cms-1',
       instructionsCompleted: 1,
     });
@@ -127,7 +127,7 @@ describe('api.model.course-module-session.$id', () => {
     form.append('instructionsCompleted.increment', '1');
 
     const request = new Request(
-      'https://example.com/api/model/course-module-session/cms-1',
+      'https://example.com/api/model/assignment-module-session/cms-1',
       { method: 'POST', body: form }
     );
 
@@ -136,7 +136,7 @@ describe('api.model.course-module-session.$id', () => {
       params: { id: 'cms-1' },
     } as any);
 
-    const updateCall = prisma.studentCourseModuleSession.update.mock.calls[0];
+    const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
     expect(updateCall[0].data.messages).toBeDefined();
     expect(updateCall[0].data.messages.createMany.data).toHaveLength(2);
     expect(updateCall[0].data.messages.createMany.data[0].instructionId).toBe(

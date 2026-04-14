@@ -48,36 +48,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
-  // Determine which student courses to show
-  let allowedCourseIds: string[] | null = null;
+  // Determine which class IDs this student belongs to (for assignment fetching).
+  // Note: ClassStudentCourse whitelist is gone — AssignmentType visibility is
+  // owner-scoped (system / org / teacher) instead.
   let studentClassIds: string[] = [];
   if (profile.studentProfile) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.studentProfile.id } },
       },
-      include: {
-        allowedStudentCourses: {
-          select: {
-            studentCourseId: true,
-          },
-        },
-      },
+      select: { id: true },
     });
     studentClassIds = studentClasses.map((klass) => klass.id);
-
-    // Collect all allowed course IDs from all classes
-    const courseIdSet = new Set<string>();
-    studentClasses.forEach((cls) => {
-      cls.allowedStudentCourses.forEach((asc) => {
-        courseIdSet.add(asc.studentCourseId);
-      });
-    });
-
-    // If we found specific courses, use them; otherwise show all (fallback)
-    if (courseIdSet.size > 0) {
-      allowedCourseIds = Array.from(courseIdSet);
-    }
   }
 
   let teacherCourseWhere:
@@ -107,8 +89,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherSchoolCount,
     assignments,
   ] = await Promise.all([
-    prisma.studentCourse.findMany({
-      where: allowedCourseIds ? { id: { in: allowedCourseIds } } : undefined,
+    prisma.assignmentType.findMany({
+      where: {
+        OR: [
+          { ownerOrgId: null, ownerTeacherId: null }, // system-owned
+          { ownerOrgId: profile.organization.id },
+          { ownerTeacherId: profile.id },
+        ],
+      },
       select: { image: { select: { id: true } }, id: true, title: true },
       orderBy: { position: 'asc' },
     }),
@@ -116,9 +104,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       orderBy: { createdAt: 'desc' },
       where: { profileId: profile.id, deletedAt: null, archivedAt: null },
       include: {
-        studentCourseModuleSessions: {
-          include: { studentCourseModule: true },
-          orderBy: { studentCourseModule: { position: 'desc' } },
+        assignmentModuleSessions: {
+          include: { assignmentModule: true },
+          orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
           where: { archivedAt: null },
@@ -138,9 +126,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         archivedAt: { not: null },
       },
       include: {
-        studentCourseModuleSessions: {
-          include: { studentCourseModule: true },
-          orderBy: { studentCourseModule: { position: 'desc' } },
+        assignmentModuleSessions: {
+          include: { assignmentModule: true },
+          orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
           where: { archivedAt: null },
@@ -230,7 +218,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 title: true,
               },
             },
-            studentCourse: {
+            assignmentType: {
               select: {
                 id: true,
                 title: true,
@@ -448,7 +436,7 @@ export default function AppRoute() {
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {data.courses.map((course) => (
                 <Link
-                  to={`/app/courses/${course.id}`}
+                  to={`/app/assignment-types/${course.id}`}
                   key={course.id}
                   className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
                 >
@@ -566,7 +554,7 @@ export default function AppRoute() {
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {data.courses.map((course) => (
                   <Link
-                    to={`/app/courses/${course.id}`}
+                    to={`/app/assignment-types/${course.id}`}
                     key={course.id}
                     className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
                   >
@@ -611,7 +599,7 @@ export default function AppRoute() {
                             {assignment.title?.trim() || 'Untitled Assignment'}
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            {assignment.studentCourse.title}
+                            {assignment.assignmentType.title}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Grade {assignment.class.grade} • Period{' '}

@@ -5,7 +5,7 @@ import { requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const POST = z.object({
-  studentCourseModuleId: z.string(),
+  assignmentModuleId: z.string(),
   documentId: z.string(),
 });
 
@@ -14,21 +14,24 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  const [document, courseModule] = await Promise.all([
+  const [document, assignmentModule] = await Promise.all([
     prisma.document.findUnique({
       where: { id: data.documentId },
       select: {
         profile: { select: { studentProfile: { select: { id: true } } } },
       },
     }),
-    prisma.studentCourseModule.findUnique({
-      where: { id: data.studentCourseModuleId },
+    prisma.assignmentModule.findUnique({
+      where: { id: data.assignmentModuleId },
       include: { instructions: true },
     }),
   ]);
 
-  if (!courseModule) {
-    return dataResponse({ error: 'No course module found.' }, { status: 404 });
+  if (!assignmentModule) {
+    return dataResponse(
+      { error: 'No assignment module found.' },
+      { status: 404 }
+    );
   } else if (!document) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
@@ -40,12 +43,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const firstInstruction = courseModule.instructions[0];
-  const created = await prisma.studentCourseModuleSession.create({
+  const firstInstruction = assignmentModule.instructions[0];
+  const created = await prisma.assignmentModuleSession.create({
     data: {
       ...data,
       instructionsCompleted: 0,
-      studentCourseModuleId: courseModule.id,
+      assignmentModuleId: assignmentModule.id,
       studentProfileId: document.profile.studentProfile.id,
       ...(firstInstruction && {
         messages: {
@@ -61,19 +64,19 @@ export async function action({ request }: ActionFunctionArgs) {
     },
   });
 
-  const cms = await prisma.studentCourseModuleSession.findUnique({
+  const cms = await prisma.assignmentModuleSession.findUnique({
     where: { id: created.id },
     include: {
       messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-      studentCourseModule: {
+      assignmentModule: {
         include: {
           instructions: {
             orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
           },
-          studentCourse: {
+          assignmentType: {
             select: {
-              studentCourseModules: {
+              assignmentModules: {
                 select: { id: true, position: true },
                 orderBy: { position: 'asc' },
               },
