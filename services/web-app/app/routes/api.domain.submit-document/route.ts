@@ -93,8 +93,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  const html = document.html;
-  const text = document.text;
+  const html = document.html ?? '';
+  const text = document.text ?? '';
   const now = new Date();
 
   const journal = await prisma.documentWriteJournal.create({

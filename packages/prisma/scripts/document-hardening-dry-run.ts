@@ -44,17 +44,58 @@ async function main() {
   const issues: string[] = [];
   if (gradesWithSnapshot !== grades) {
     issues.push(
-      `WARNING: ${grades - gradesWithSnapshot} grades have no snapshotId -- they will not get redirects`
+      `INFO: ${grades - gradesWithSnapshot} grades have no snapshotId -- LegacyGradeRedirect rows only for snapshot-linked grades; decoupled grade comments map via submittedSnapshotId / latest submission in migration SQL`
     );
   }
 
-  // Check for orphaned grade comments (grade has no snapshot)
-  const orphanedComments = await prisma.gradeComment.count({
+  const decoupledComments = await prisma.gradeComment.count({
     where: { grade: { snapshotId: null } },
   });
-  if (orphanedComments > 0) {
+  if (decoupledComments > 0) {
+    console.log(
+      `\nINFO: ${decoupledComments} grade comments on decoupled grades -- migration maps these to SubmissionComment using Document.submittedSnapshotId (else latest Submission per document)`
+    );
+  }
+
+  const unmappableDecoupled = await prisma.$queryRaw<[{ count: bigint }]>`
+    SELECT COUNT(*)::bigint AS count
+    FROM "GradeComment" gc
+    INNER JOIN "Grade" g ON g.id = gc."gradeId"
+    WHERE g."snapshotId" IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "DocumentSnapshot" s
+      WHERE s."documentId" = g."documentId"
+      AND s."archivedAt" IS NULL
+    )
+  `;
+  const unmappableN = Number(unmappableDecoupled[0]?.count ?? 0n);
+  if (unmappableN > 0) {
     issues.push(
-      `WARNING: ${orphanedComments} grade comments reference grades without snapshots -- they will be lost`
+      `WARNING: ${unmappableN} grade comments on decoupled grades have no active DocumentSnapshot for that document -- no Submission row to attach to; these will still be lost`
+    );
+  }
+
+  const commentsOnArchivedSnapshotOnly = await prisma.$queryRaw<[{ count: bigint }]>`
+    SELECT COUNT(*)::bigint AS count
+    FROM "GradeComment" gc
+    INNER JOIN "Grade" g ON g.id = gc."gradeId"
+    WHERE g."snapshotId" IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "DocumentSnapshot" s
+      WHERE s.id = g."snapshotId"
+      AND s."archivedAt" IS NULL
+    )
+  `;
+  const archivedSnapN = Number(commentsOnArchivedSnapshotOnly[0]?.count ?? 0n);
+  if (archivedSnapN > 0) {
+    issues.push(
+      `WARNING: ${archivedSnapN} grade comments reference a grade whose snapshot is archived (no Submission row) -- still not migrated`
+    );
+  }
+
+  if (gradeCommentResponses > 0) {
+    issues.push(
+      `WARNING: ${gradeCommentResponses} GradeCommentResponse rows exist -- table is dropped in migration with no SubmissionCommentResponse model; thread replies are not migrated`
     );
   }
 

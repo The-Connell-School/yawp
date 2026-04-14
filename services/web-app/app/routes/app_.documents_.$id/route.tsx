@@ -8,11 +8,20 @@ import {
   useFetcher,
   useLoaderData,
   useNavigate,
+  useRevalidator,
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Loader2, AlertCircle, FileText, ExternalLink } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  FileText,
+  ExternalLink,
+  Archive,
+  ArchiveRestore,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -47,7 +56,6 @@ import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
-import { getDocumentStatusLabel } from '~/components/document-status-badge';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
@@ -60,6 +68,11 @@ import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
 import { useCommentsState } from './hooks/use-comments-state';
 import { useTutorState } from './hooks/use-tutor-state';
 import { useDocumentSubmit } from './hooks/use-document-submit';
+import {
+  displaySubmissionTitle,
+  partitionSubmissionsByArchive,
+  versionLabelForActiveSubmission,
+} from '~/utils/submission-versions';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -171,6 +184,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           submittedAt: true,
           gradedAt: true,
           releasedAt: true,
+          archivedAt: true,
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
@@ -295,19 +309,29 @@ export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
   return false;
 }
 
+type SubmissionRow = {
+  id: string;
+  title: string;
+  submittedAt: string | Date;
+  gradedAt: string | null;
+  releasedAt: string | null;
+  archivedAt: string | Date | null;
+};
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
   const fetcher = useFetcher();
+  const submissionArchiveFetcher = useFetcher();
+  const revalidator = useRevalidator();
   const navigate = useNavigate();
   const breakpoint = useBreakpoint();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
-  const [localSubmissions, setLocalSubmissions] = useState<
-    Array<{ id: string; title: string; submittedAt: string; gradedAt: string | null; releasedAt: string | null }>
-  >([]);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
@@ -319,19 +343,27 @@ export default function Route() {
 
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
-    const serverSubs = data.submissions ?? [];
-    const serverIds = new Set(serverSubs.map((s: any) => s.id));
+    const serverSubs = (data.submissions ?? []) as SubmissionRow[];
+    const serverIds = new Set(serverSubs.map((s) => s.id));
     const newLocal = localSubmissions.filter((s) => !serverIds.has(s.id));
     return [...newLocal, ...serverSubs];
   }, [data.submissions, localSubmissions]);
-  const latestSubmission = submissions[0] ?? null;
-  const isSubmitted = submissions.length > 0;
-  const gradedCount = submissions.filter((s: any) => s.releasedAt).length;
-  const versionNumber = submissions.length + 1;
-  const documentStatusLabel = getDocumentStatusLabel({
-    submittedAt: latestSubmission?.submittedAt ?? null,
-    grade: gradedCount > 0 ? { releasedAt: latestSubmission?.releasedAt } : null,
-  });
+
+  const { active: activeSubmissions, archived: archivedSubmissions } =
+    useMemo(
+      () => partitionSubmissionsByArchive(submissions),
+      [submissions]
+    );
+
+  const studentList = isViewingAsTeacher ? submissions : activeSubmissions;
+  const submissionCountForBadge = isViewingAsTeacher
+    ? submissions.length
+    : activeSubmissions.length;
+
+  const isSubmitted = activeSubmissions.length > 0;
+  const hasAnySubmissionRecord = submissions.length > 0;
+  const gradedCount = activeSubmissions.filter((s) => s.releasedAt).length;
+  const versionNumber = activeSubmissions.length + 1;
   const editorServerHtml = data.doc.html ?? '';
   const editorServerText = data.doc.text ?? '';
 
@@ -367,7 +399,12 @@ export default function Route() {
       setIsFinalizeDialogOpen(false);
       setSubmissionTitle('');
       setLocalSubmissions((prev) => [
-        { ...newSubmission, gradedAt: null, releasedAt: null },
+        {
+          ...newSubmission,
+          gradedAt: null,
+          releasedAt: null,
+          archivedAt: null,
+        },
         ...prev,
       ]);
     },
@@ -387,7 +424,7 @@ export default function Route() {
   const allComments = commentsState.comments as any[];
   const activeComments = allComments.filter((c) => !c.archivedAt);
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
-  const visibleComments = isSubmitted
+  const visibleComments = hasAnySubmissionRecord
     ? showOldComments
       ? allComments
       : activeComments
@@ -424,6 +461,18 @@ export default function Route() {
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
   }, []);
 
+  useEffect(() => {
+    if (submissionArchiveFetcher.state !== 'idle') return;
+    const body = submissionArchiveFetcher.data as { success?: boolean } | undefined;
+    if (body?.success) {
+      revalidator.revalidate();
+    }
+  }, [
+    submissionArchiveFetcher.state,
+    submissionArchiveFetcher.data,
+    revalidator,
+  ]);
+
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
@@ -438,17 +487,6 @@ export default function Route() {
               Exit
             </Button>
             <div className="flex min-w-0 flex-1 flex-col gap-1.5 md:flex-row md:items-center md:gap-4">
-              {isViewingAsTeacher ? (
-                <p className="shrink-0 text-xs font-semibold text-foreground md:text-sm">
-                  <span className="font-medium text-muted-foreground">
-                    {studentName}
-                  </span>
-                  <span className="px-2 text-muted-foreground">&bull;</span>
-                  <span className="font-medium text-muted-foreground">
-                    {documentStatusLabel}
-                  </span>
-                </p>
-              ) : null}
               <Input
                 ref={titleInputRef}
                 data-testid="document-title-input"
@@ -472,12 +510,12 @@ export default function Route() {
               />
             </div>
           </div>
-          {submissions.length > 0 && (
+          {hasAnySubmissionRecord && (
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <FileText className="h-3.5 w-3.5" />
-                  Submissions ({submissions.length})
+                  Submissions ({submissionCountForBadge})
                   {gradedCount > 0 && (
                     <Badge variant="success" className="ml-1 text-[10px] px-1.5 py-0">
                       {gradedCount} graded
@@ -486,40 +524,110 @@ export default function Route() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="start" className="w-80 p-0">
-                <div className="border-b px-3 py-2">
+                <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
                   <p className="text-sm font-semibold">Submissions</p>
+                  {!isViewingAsTeacher && archivedSubmissions.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      aria-label="View archived submissions"
+                      onClick={() => setArchiveDialogOpen(true)}
+                    >
+                      <Archive className="h-4 w-4" />
+                    </Button>
+                  ) : null}
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  {submissions.map((s: any, i: number) => {
-                    const version = submissions.length - i;
-                    const isGraded = s.releasedAt != null;
-                    return (
-                      <Link
-                        key={s.id}
-                        to={`/app/submissions/${s.id}`}
-                        className="flex items-center justify-between gap-2 border-b px-3 py-2.5 text-sm hover:bg-muted/50 last:border-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">
-                            {s.title || `Version ${version}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(s.submittedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={isGraded ? 'success' : 'secondary'}
-                          className="shrink-0 text-[10px]"
+                  {studentList.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-sm text-muted-foreground">
+                      No active submissions.
+                    </p>
+                  ) : (
+                    studentList.map((s) => {
+                      const isArchived = s.archivedAt != null;
+                      const v = !isArchived
+                        ? versionLabelForActiveSubmission(
+                            activeSubmissions,
+                            s.id
+                          )
+                        : null;
+                      const label = displaySubmissionTitle(
+                        s.title,
+                        v,
+                        'Untitled submission'
+                      );
+                      const isGraded = s.releasedAt != null;
+                      return (
+                        <div
+                          key={s.id}
+                          className="flex items-stretch gap-1 border-b last:border-0"
                         >
-                          {isGraded ? 'Graded' : 'Submitted'}
-                        </Badge>
-                      </Link>
-                    );
-                  })}
+                          <Link
+                            to={`/app/submissions/${s.id}`}
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2.5 text-sm hover:bg-muted/50"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">{label}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(s.submittedAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              {isArchived ? (
+                                <Badge variant="outline" className="text-[10px]">
+                                  Archived
+                                </Badge>
+                              ) : null}
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </div>
+                          </Link>
+                          {!isViewingAsTeacher && !isArchived ? (
+                            <div className="flex items-center pr-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 shrink-0 text-muted-foreground"
+                                aria-label="Archive submission"
+                                disabled={
+                                  submissionArchiveFetcher.state !== 'idle'
+                                }
+                                onClick={() => {
+                                  const fd = new FormData();
+                                  fd.set('intent', 'archive');
+                                  submissionArchiveFetcher.submit(fd, {
+                                    method: 'POST',
+                                    action: `/api/model/submission/${s.id}`,
+                                  });
+                                }}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
           )}
+          {isViewingAsTeacher ? (
+            <p
+              className="shrink-0 text-xs font-medium text-muted-foreground md:text-sm"
+              data-testid="document-teacher-student-name"
+            >
+              {studentName}
+            </p>
+          ) : null}
           <div className="ml-auto flex items-center gap-4">
             {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
               <>
@@ -562,7 +670,7 @@ export default function Route() {
                 )}
               </>
             )}
-            {isSubmitted && archivedComments.length > 0 && (
+            {hasAnySubmissionRecord && archivedComments.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
@@ -687,15 +795,23 @@ export default function Route() {
                       You can keep editing and submit again after this.
                     </li>
                   </ul>
-                  {submissions.length > 0 && (
+                  {activeSubmissions.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-foreground">
                         Previous submissions
                       </p>
                       <div className="max-h-32 overflow-y-auto rounded-md border">
-                        {submissions.map((s: any, i: number) => {
-                          const version = submissions.length - i;
+                        {activeSubmissions.map((s) => {
+                          const v = versionLabelForActiveSubmission(
+                            activeSubmissions,
+                            s.id
+                          );
                           const isGraded = s.releasedAt != null;
+                          const label = displaySubmissionTitle(
+                            s.title,
+                            v,
+                            'Untitled submission'
+                          );
                           return (
                             <a
                               key={s.id}
@@ -704,9 +820,8 @@ export default function Route() {
                               rel="noopener noreferrer"
                               className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
                             >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="shrink-0 text-xs text-muted-foreground">v{version}</span>
-                                <span className="truncate">{s.title || `Version ${version}`}</span>
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className="truncate">{label}</span>
                                 <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
                               </div>
                               <Badge
@@ -768,6 +883,65 @@ export default function Route() {
           </DialogContent>
         </Dialog>
       )}
+      <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Archived submissions</DialogTitle>
+            <DialogDescription>
+              Hidden from your main list. Your teacher can still view and grade
+              them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {archivedSubmissions.map((s) => {
+              const isGraded = s.releasedAt != null;
+              return (
+                <div
+                  key={s.id}
+                  className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <Link
+                    to={`/app/submissions/${s.id}`}
+                    className="min-w-0 flex-1 basis-[min(100%,12rem)] font-medium hover:underline"
+                    onClick={() => setArchiveDialogOpen(false)}
+                  >
+                    <span className="block truncate">
+                      {s.title?.trim() || 'Untitled submission'}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(s.submittedAt).toLocaleDateString()}
+                    </span>
+                  </Link>
+                  <Badge
+                    variant={isGraded ? 'success' : 'secondary'}
+                    className="shrink-0 text-[10px]"
+                  >
+                    {isGraded ? 'Graded' : 'Submitted'}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 gap-1"
+                    disabled={submissionArchiveFetcher.state !== 'idle'}
+                    onClick={() => {
+                      const fd = new FormData();
+                      fd.set('intent', 'unarchive');
+                      submissionArchiveFetcher.submit(fd, {
+                        method: 'POST',
+                        action: `/api/model/submission/${s.id}`,
+                      });
+                    }}
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    Restore
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={auth.isLocked} onOpenChange={() => {}}>
         <DialogContent
           className="sm:max-w-md"

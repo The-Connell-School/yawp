@@ -58,6 +58,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
         },
         submissions: {
+          where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
           take: 1,
           select: {
@@ -88,6 +89,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           include: { studentCourseModule: true },
         },
         submissions: {
+          where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
           take: 1,
           select: {

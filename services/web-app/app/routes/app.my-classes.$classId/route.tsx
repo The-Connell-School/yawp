@@ -27,6 +27,7 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { StudentArchiveCell } from '~/components/student-archive-cell';
 import {
   Table,
   TableBody,
@@ -442,6 +443,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           aiMeta: true,
           releasedAt: true,
           gradedAt: true,
+          archivedAt: true,
           document: {
             select: {
               id: true,
@@ -583,6 +585,7 @@ export default function ClassDetailRoute() {
       id: string;
       score: string | null;
       feedback: string | null;
+      archivedAt: Date | string | null;
       document: {
         id: string;
         title: string;
@@ -726,6 +729,7 @@ export default function ClassDetailRoute() {
         id: submission.id,
         score: gradeDisplay,
         feedback: submission.feedback,
+        archivedAt: submission.archivedAt,
         document: {
           id: submission.document.id,
           title: submission.title,
@@ -942,6 +946,7 @@ export default function ClassDetailRoute() {
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
                 <TableHead>Course Module</TableHead>
+                <TableHead>Student archive</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
@@ -962,6 +967,9 @@ export default function ClassDetailRoute() {
                   <TableCell className="text-muted-foreground">
                     {submission.document.studentCourseModuleSessions[0]
                       ?.studentCourseModule.title || '—'}
+                  </TableCell>
+                  <TableCell>
+                    <StudentArchiveCell archivedAt={submission.archivedAt} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(
@@ -1006,6 +1014,7 @@ export default function ClassDetailRoute() {
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
+                <TableHead>Student archive</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Graded</TableHead>
                 <TableHead>Action</TableHead>
@@ -1042,6 +1051,9 @@ export default function ClassDetailRoute() {
                       </TableCell>
                     )}
                     <TableCell>
+                      <StudentArchiveCell archivedAt={submission.archivedAt} />
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
@@ -1074,6 +1086,7 @@ export default function ClassDetailRoute() {
                 <TableHead>Student</TableHead>
                 <TableHead>Essay</TableHead>
                 {assignmentsEnabled && <TableHead>Assignment</TableHead>}
+                <TableHead>Student archive</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Released</TableHead>
                 <TableHead>Action</TableHead>
@@ -1100,6 +1113,9 @@ export default function ClassDetailRoute() {
                         {submission.document.assignment?.title || '—'}
                       </TableCell>
                     )}
+                    <TableCell>
+                      <StudentArchiveCell archivedAt={submission.archivedAt} />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>

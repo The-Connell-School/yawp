@@ -217,11 +217,7 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         'grading-assistant-generate'
       );
       await page.getByTestId('grading-assistant-generate').click();
-      await page
-        .getByRole('button', {
-          name: /replace with grading assistant suggestions/i,
-        })
-        .click();
+      await page.getByRole('button', { name: /^replace$/i }).click();
       await expect(gradingAssistantButton).toContainText('Grading');
       await expect(
         gradingAssistantButton.locator('svg.animate-spin')

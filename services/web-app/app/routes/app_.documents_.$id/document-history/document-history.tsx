@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -96,28 +97,9 @@ export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
         return [...prev, ...newEntries];
       });
       setNextCursor(fetcher.data.nextCursor);
-      // Auto-select first entry on initial load
-      if (allEntries.length === 0 && entries.length > 0) {
-        setSelectedEntry(entries[0]);
-      }
+      setSelectedEntry((sel) => sel ?? entries[0] ?? null);
     }
   }, [fetcher.data, fetcher.state]);
-
-  // Infinite scroll
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const handleScroll = () => {
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-      if (nearBottom && nextCursor && fetcher.state === 'idle') {
-        loadEntries(nextCursor);
-      }
-    };
-
-    el.addEventListener('scroll', handleScroll);
-    return () => el.removeEventListener('scroll', handleScroll);
-  }, [nextCursor, fetcher.state, loadEntries]);
 
   const handleCopy = useCallback(async () => {
     if (!selectedEntry) return;
@@ -154,8 +136,11 @@ export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
         </button>
       </SheetTrigger>
       <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-full md:max-w-[800px]">
-        <SheetHeader className="border-b px-6 py-4">
+        <SheetHeader className="border-b px-6 py-4 space-y-1">
           <SheetTitle className="text-base">Version History</SheetTitle>
+          <SheetDescription className="text-left text-xs">
+            Document versions are kept for 90 days.
+          </SheetDescription>
         </SheetHeader>
 
         <div className="flex grow flex-col overflow-hidden sm:flex-row gap-3 p-4">
@@ -202,6 +187,17 @@ export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
                     </button>
                   );
                 })}
+                {nextCursor && !isLoading && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-1 w-full shrink-0"
+                    onClick={() => loadEntries(nextCursor)}
+                  >
+                    Load more
+                  </Button>
+                )}
                 {isLoading && allEntries.length > 0 && (
                   <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

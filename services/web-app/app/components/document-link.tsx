@@ -18,6 +18,7 @@ type Props = {
     submissions?: {
       id: string;
       releasedAt: Date | string | null;
+      archivedAt?: Date | string | null;
     }[];
   };
   isArchived?: boolean;
@@ -33,8 +34,9 @@ export const DocumentLink = ({
   const archiveFetcher = useFetcher();
   const encodedExitTo = encodeURIComponent(exitTo);
   const submissions = doc.submissions ?? [];
-  const isSubmitted = submissions.length > 0;
-  const gradedSubmissions = submissions.filter(
+  const visibleSubmissions = submissions.filter((s) => !s.archivedAt);
+  const isSubmitted = visibleSubmissions.length > 0;
+  const gradedSubmissions = visibleSubmissions.filter(
     (s) => s.releasedAt !== null && s.releasedAt !== undefined
   );
   const showGradedBadge = isStudentView && gradedSubmissions.length > 0;

@@ -121,6 +121,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
         submissions: {
+          where: { archivedAt: null },
           select: {
             id: true,
             title: true,
@@ -142,6 +143,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
         submissions: {
+          where: { archivedAt: null },
           select: {
             id: true,
             title: true,

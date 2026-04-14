@@ -7,11 +7,13 @@ import {
   useNavigate,
   useFetcher,
   useLocation,
+  useRevalidator,
 } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
 import {
   Accordion,
   AccordionContent,
@@ -103,6 +105,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       releasedAt: true,
       gradedAt: true,
       gradedById: true,
+      archivedAt: true,
       documentId: true,
       document: {
         select: {
@@ -205,6 +208,8 @@ export default function SubmissionRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const revalidator = useRevalidator();
+  const titleFetcher = useFetcher();
   // Grade mode driven by ?edit=1 query param so refreshes keep the same tab
   // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
   // When no param, fall back to loader default (ungraded = grade mode).
@@ -213,11 +218,34 @@ export default function SubmissionRoute() {
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const [teacherGradeUi, setTeacherGradeUi] = useState<{
+    numericPercentage: number | null;
+    letterGrade: string | null;
+    score: string | null;
+    overallComment: string | null;
+    rubricScores: unknown;
+  } | null>(null);
+
+  useEffect(() => {
+    setTeacherGradeUi(null);
+  }, [submission.id]);
+
+  useEffect(() => {
+    if (titleFetcher.state !== 'idle') return;
+    const body = titleFetcher.data as { success?: boolean } | undefined;
+    if (body?.success) revalidator.revalidate();
+  }, [titleFetcher.state, titleFetcher.data, revalidator]);
 
   const effectiveGradedAt = localGradedAt ?? submission.gradedAt;
   const effectiveReleasedAt = localReleasedAt ?? submission.releasedAt;
   // Students viewing a submission whose grade hasn't been released yet
   const isPending = isOwner && !effectiveReleasedAt;
+
+  const canEditTitle = isOwner || isTeacher;
+  const submissionTitleDisplay =
+    submission.title.trim() ||
+    submission.document.title ||
+    '';
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -235,12 +263,13 @@ export default function SubmissionRoute() {
   );
 
   // ── Grade display ──────────────────────────────────────────────────
+  const effectiveNumericPct =
+    teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
+  const effectiveLetterGrade =
+    teacherGradeUi?.letterGrade ?? submission.letterGrade ?? null;
   const gradeDisplay =
-    formatGrade(
-      submission.numericPercentage ?? null,
-      submission.letterGrade ?? null
-    ) ||
-    submission.score ||
+    formatGrade(effectiveNumericPct, effectiveLetterGrade) ||
+    (teacherGradeUi?.score ?? submission.score) ||
     (submission.overallScore ? `${submission.overallScore}/5` : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
@@ -441,6 +470,60 @@ export default function SubmissionRoute() {
     setHiddenGrammarIssueIds([]);
   }, []);
 
+  const handleAiGradingComplete = useCallback(
+    (payload: {
+      numericPercentage: number | null;
+      letterGrade: string | null;
+      score: string | null;
+      overallComment: string | null;
+      rubricScores: unknown;
+    }) => {
+      setTeacherGradeUi(payload);
+      if (!submission.gradedAt) {
+        setLocalGradedAt(new Date().toISOString());
+      }
+    },
+    [submission.gradedAt],
+  );
+
+  const teacherExistingGrade = useMemo(
+    () => ({
+      id: submission.id,
+      score: teacherGradeUi?.score ?? submission.score,
+      feedback: submission.feedback,
+      rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
+      overallComment: teacherGradeUi?.overallComment ?? submission.overallComment,
+      numericPercentage:
+        teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
+      letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
+      releasedAt: submission.releasedAt,
+    }),
+    [
+      submission.id,
+      submission.feedback,
+      submission.releasedAt,
+      submission.score,
+      submission.rubricScores,
+      submission.overallComment,
+      submission.numericPercentage,
+      submission.letterGrade,
+      teacherGradeUi,
+    ],
+  );
+
+  const submissionForView = useMemo(
+    () => ({
+      ...submission,
+      numericPercentage:
+        teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
+      letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
+      score: teacherGradeUi?.score ?? submission.score,
+      overallComment: teacherGradeUi?.overallComment ?? submission.overallComment,
+      rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
+    }),
+    [submission, teacherGradeUi],
+  );
+
   const handleRemoveGrammarIssue = useCallback((id: string) => {
     setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
     setHiddenGrammarIssueIds((prev) =>
@@ -522,9 +605,36 @@ export default function SubmissionRoute() {
           {isTeacher && submission.document.profile.user.name ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
-          <p className="truncate text-sm font-semibold">
-            {submission.title || submission.document.title || 'Untitled'}
-          </p>
+          {canEditTitle ? (
+            <Input
+              key={`${submission.id}-${submission.title}`}
+              data-testid="submission-title-input"
+              size="sm"
+              className="min-w-0 max-w-md truncate rounded-lg border border-transparent text-sm font-semibold transition hover:border-border"
+              defaultValue={submissionTitleDisplay}
+              placeholder="Untitled"
+              disabled={titleFetcher.state !== 'idle'}
+              onBlur={(e) => {
+                const next = e.target.value.trim();
+                const prev =
+                  submission.title.trim() ||
+                  submission.document.title ||
+                  '';
+                if (next === prev) return;
+                titleFetcher.submit(
+                  { intent: 'updateTitle', title: e.target.value },
+                  {
+                    method: 'POST',
+                    action: `/api/model/submission/${submission.id}`,
+                  }
+                );
+              }}
+            />
+          ) : (
+            <p className="truncate text-sm font-semibold">
+              {submission.title || submission.document.title || 'Untitled'}
+            </p>
+          )}
         </div>
 
         <Badge variant={statusVariant} className="shrink-0">{statusLabel}</Badge>
@@ -607,6 +717,18 @@ export default function SubmissionRoute() {
         </div>
       </nav>
 
+      {isTeacher && submission.archivedAt ? (
+        <div
+          className="border-b border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
+          data-testid="teacher-submission-archived-banner"
+          role="status"
+        >
+          <span className="font-medium">Archived by student.</span>{' '}
+          They hid this version from their own list. You can still grade it—make
+          sure this is the submission you intend to score.
+        </div>
+      ) : null}
+
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
@@ -647,25 +769,16 @@ export default function SubmissionRoute() {
                   <TeacherGradingPanel
                     documentId={submission.documentId}
                     submissionId={submission.id}
-                    existingGrade={{
-                      id: submission.id,
-                      score: submission.score,
-                      feedback: submission.feedback,
-                      rubricScores: submission.rubricScores,
-                      overallComment: submission.overallComment,
-                      numericPercentage: submission.numericPercentage,
-                      letterGrade: submission.letterGrade,
-                      releasedAt: submission.releasedAt,
-                    }}
+                    existingGrade={teacherExistingGrade}
                     grammarIssues={grammarIssues}
-                    persistedGrammarIssues={persistedGrammarIssues}
                     hiddenGrammarIssueIds={hiddenGrammarIssueIds}
                     onToggleGrammarIssue={toggleGrammarIssueVisibility}
                     onRemoveGrammarIssue={handleRemoveGrammarIssue}
                     onGrammarIssuesChange={handleGrammarIssuesChange}
+                    onAiGradingComplete={handleAiGradingComplete}
                   />
                 ) : (
-                  <ViewPanel submission={submission} />
+                  <ViewPanel submission={submissionForView} />
                 )}
               </div>
             </>
@@ -678,7 +791,7 @@ export default function SubmissionRoute() {
                 {isPending ? (
                   <PendingViewPanel />
                 ) : (
-                  <ViewPanel submission={submission} />
+                  <ViewPanel submission={submissionForView} />
                 )}
               </div>
             </>

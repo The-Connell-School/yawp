@@ -27,4 +27,26 @@ test.describe.serial('Teacher submission → document → exit', () => {
     await page.getByRole('button', { name: /^exit$/i }).click();
     await expect(page).toHaveURL(submissionPageUrl);
   });
+
+  test('teacher can rename submission title in nav', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+
+    await page.goto(
+      `/app/submissions/${e2eContext.submittedSubmissionId}?edit=0`
+    );
+    await page.waitForLoadState('networkidle');
+
+    const input = page.getByTestId('submission-title-input');
+    await expect(input).toBeVisible();
+    await input.fill('E2E teacher title');
+    await input.blur();
+
+    await expect
+      .poll(async () => input.inputValue(), { timeout: 10000 })
+      .toBe('E2E teacher title');
+  });
 });

@@ -488,11 +488,14 @@ model Submission {
   gradedById        String?
   gradedBy          Profile?            @relation("SubmissionGradedBy", fields: [gradedById], references: [id], onDelete: SetNull)
   releasedAt        DateTime?           @db.Timestamptz(6)
+  /// When set, hidden from the student's active submission list (teachers unaffected).
+  archivedAt        DateTime?           @db.Timestamptz(6)
   documentId        String
   document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments          SubmissionComment[]
 
   @@index([documentId, submittedAt(sort: Desc)])
+  @@index([documentId, archivedAt])
   @@index([gradedById])
   @@index([releasedAt])
 }

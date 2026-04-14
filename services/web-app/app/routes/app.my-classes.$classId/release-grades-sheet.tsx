@@ -9,6 +9,7 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { StudentArchiveCell } from '~/components/student-archive-cell';
 import {
   Table,
   TableBody,
@@ -22,6 +23,7 @@ type SubmissionWithDocument = {
   id: string;
   score: string | null;
   feedback: string | null;
+  archivedAt: Date | string | null;
   document: {
     id: string;
     title: string;
@@ -100,6 +102,7 @@ export function ReleaseGradesSheet({
                 <TableRow>
                   <TableHead>Student</TableHead>
                   <TableHead>Essay</TableHead>
+                  <TableHead>Student archive</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Feedback Preview</TableHead>
                 </TableRow>
@@ -112,6 +115,9 @@ export function ReleaseGradesSheet({
                         grade.document.profile.user.email}
                     </TableCell>
                     <TableCell>{grade.document.title}</TableCell>
+                    <TableCell>
+                      <StudentArchiveCell archivedAt={grade.archivedAt} />
+                    </TableCell>
                     <TableCell>
                       {grade.score ? (
                         <Badge variant="secondary">{grade.score}</Badge>

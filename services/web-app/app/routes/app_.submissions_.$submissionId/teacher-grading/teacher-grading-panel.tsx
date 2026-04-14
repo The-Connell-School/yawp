@@ -32,6 +32,7 @@ import {
 import { Check, Loader2 } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
+import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
 
 type RubricScore = {
   score: number;
@@ -93,11 +94,11 @@ export function TeacherGradingPanel({
   submissionId,
   existingGrade,
   grammarIssues,
-  persistedGrammarIssues,
   hiddenGrammarIssueIds,
   onToggleGrammarIssue,
   onRemoveGrammarIssue,
   onGrammarIssuesChange,
+  onAiGradingComplete,
 }: {
   documentId: string;
   submissionId: string | null;
@@ -115,11 +116,17 @@ export function TeacherGradingPanel({
     | null
     | undefined;
   grammarIssues: GrammarIssue[];
-  persistedGrammarIssues: GrammarIssue[];
   hiddenGrammarIssueIds: string[];
   onToggleGrammarIssue: (id: string) => void;
   onRemoveGrammarIssue: (id: string) => void;
   onGrammarIssuesChange: (issues: GrammarIssue[]) => void;
+  onAiGradingComplete?: (payload: {
+    numericPercentage: number | null;
+    letterGrade: string | null;
+    score: string | null;
+    overallComment: string | null;
+    rubricScores: unknown;
+  }) => void;
 }) {
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
@@ -171,6 +178,20 @@ export function TeacherGradingPanel({
   const isGenerating = aiFetcher.state !== 'idle';
   const isBusy = isGenerating || autoSaveStatus === 'saving';
 
+  const hasDraftToReplace = useMemo(
+    () =>
+      hasGradingDraftToReplace(
+        rubricScores,
+        overallComment,
+        numericPercentage,
+        grammarIssues.length
+      ),
+    [rubricScores, overallComment, numericPercentage, grammarIssues.length]
+  );
+
+  const onAiGradingCompleteRef = useRef(onAiGradingComplete);
+  onAiGradingCompleteRef.current = onAiGradingComplete;
+
   useEffect(() => {
     let initialOverallComment = '';
     let initialNumericPercentage = '';
@@ -192,7 +213,7 @@ export function TeacherGradingPanel({
     setOverallComment(initialOverallComment);
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
-  }, [existingGrade, persistedGrammarIssues, submissionId]);
+  }, [existingGrade, submissionId]);
 
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
@@ -201,23 +222,27 @@ export function TeacherGradingPanel({
   }, [computedNumericPercentage, hasManualPercentOverride]);
 
   useEffect(() => {
-    if (aiFetcher.data?.success && aiFetcher.state === 'idle') {
-      const aiRubricScores = normalizeRubricScores(aiFetcher.data.rubricScores);
+    if (!aiFetcher.data?.success || aiFetcher.state !== 'idle') return;
 
-      if (aiFetcher.data.rubricScores) {
-        setRubricScores(aiRubricScores);
-      }
-      if (typeof aiFetcher.data.overallComment === 'string') {
-        setOverallComment(aiFetcher.data.overallComment);
-      }
-      if (typeof aiFetcher.data.numericPercentage === 'number') {
-        setNumericPercentage(aiFetcher.data.numericPercentage.toString());
-        setHasManualPercentOverride(false);
-      }
-      onGrammarIssuesChange(
-        parseGrammarIssuesPayload(aiFetcher.data.grammarIssues)
-      );
+    const d = aiFetcher.data;
+    setRubricScores(normalizeRubricScores(d.rubricScores));
+    if (typeof d.overallComment === 'string') {
+      setOverallComment(d.overallComment);
     }
+    if (typeof d.numericPercentage === 'number') {
+      setNumericPercentage(d.numericPercentage.toString());
+      setHasManualPercentOverride(false);
+    }
+    onGrammarIssuesChange(parseGrammarIssuesPayload(d.grammarIssues));
+    onAiGradingCompleteRef.current?.({
+      numericPercentage:
+        typeof d.numericPercentage === 'number' ? d.numericPercentage : null,
+      letterGrade: typeof d.letterGrade === 'string' ? d.letterGrade : null,
+      score: typeof d.score === 'string' ? d.score : null,
+      overallComment:
+        typeof d.overallComment === 'string' ? d.overallComment : null,
+      rubricScores: d.rubricScores ?? null,
+    });
   }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
 
   useEffect(() => {
@@ -348,18 +373,37 @@ export function TeacherGradingPanel({
           <Badge variant="secondary" className={gradeBadgeClassName}>
             {gradeDisplay}
           </Badge>
-          <ConfirmationDialog
-            title="Replace Existing Grading Feedback?"
-            description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
-            confirmText="Replace"
-            cancelText="Go Back"
-            onConfirm={generateAiSuggestions}
-          >
+          {hasDraftToReplace ? (
+            <ConfirmationDialog
+              title="Replace Existing Grading Feedback?"
+              description="Grading Assistant suggestions will replace all current rubric comments, overall feedback, and grammar issue suggestions. Continue?"
+              confirmText="Replace"
+              cancelText="Go Back"
+              onConfirm={generateAiSuggestions}
+            >
+              <Button
+                size="sm"
+                variant="default"
+                data-testid="grading-assistant-generate"
+                disabled={isBusy}
+              >
+                {isGenerating ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Grading...
+                  </span>
+                ) : (
+                  'Grading Assistant Suggestions'
+                )}
+              </Button>
+            </ConfirmationDialog>
+          ) : (
             <Button
               size="sm"
               variant="default"
               data-testid="grading-assistant-generate"
               disabled={isBusy}
+              onClick={generateAiSuggestions}
             >
               {isGenerating ? (
                 <span className="flex items-center gap-2">
@@ -370,7 +414,7 @@ export function TeacherGradingPanel({
                 'Grading Assistant Suggestions'
               )}
             </Button>
-          </ConfirmationDialog>
+          )}
         </div>
       </div>
 

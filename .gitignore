@@ -210,3 +210,4 @@ scripts/production-sync.env
 .worktrees/
 .claude/worktrees/
 .superpowers/
+.cursor

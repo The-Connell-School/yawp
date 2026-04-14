@@ -53,15 +53,36 @@ export const LineHeight = Extension.create<LineHeightOptions>({
 				attributes: {
 					lineHeight: {
 						default: this.options.defaultHeight,
-						parseHTML: element =>
-							element.style.lineHeight || this.options.defaultHeight,
+						parseHTML: element => {
+							const raw = element.style.lineHeight?.trim() || ''
+							const heights = this.options.heights
+							if (heights.includes(raw as Options)) {
+								return raw as Options
+							}
+							const n = parseFloat(raw)
+							if (!Number.isFinite(n)) {
+								return this.options.defaultHeight
+							}
+							// Legacy HTML used `line-height: n*1.2+0.2`; map back to canonical preset.
+							const reversed = (n - 0.2) / 1.2
+							let best: Options = this.options.defaultHeight
+							let bestDist = Infinity
+							for (const h of heights) {
+								const d = Math.abs(parseFloat(h) - reversed)
+								if (d < bestDist) {
+									bestDist = d
+									best = h
+								}
+							}
+							return best
+						},
 						renderHTML: ({ lineHeight }) => {
 							if (lineHeight === this.options.defaultHeight) {
 								return {}
 							}
 
 							return {
-								style: `line-height: ${parseFloat(lineHeight) * 1.2 + 0.2}`,
+								style: `line-height: ${lineHeight}`,
 							}
 						},
 					},

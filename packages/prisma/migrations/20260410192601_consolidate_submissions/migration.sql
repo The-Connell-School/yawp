@@ -121,6 +121,36 @@ JOIN "Grade" g ON g.id = gc."gradeId"
 WHERE g."snapshotId" IS NOT NULL
   AND EXISTS (SELECT 1 FROM "Submission" sub WHERE sub.id = g."snapshotId");
 
+-- Backfill SubmissionComments from GradeComments on grades with snapshotId NULL (decoupled grades).
+-- Prefer Document.submittedSnapshotId when it still points at a row we materialized as Submission;
+-- otherwise use the latest Submission for that document by submittedAt.
+INSERT INTO "SubmissionComment" (
+  id, "createdAt", "updatedAt",
+  content, excerpt, occurrence,
+  "submissionId", "profileId"
+)
+SELECT
+  gc.id, gc."createdAt", gc."updatedAt",
+  gc.content, gc.excerpt, gc.occurrence,
+  sub.id,
+  gc."profileId"
+FROM "GradeComment" gc
+JOIN "Grade" g ON g.id = gc."gradeId"
+JOIN "Document" d ON d.id = g."documentId"
+JOIN LATERAL (
+  SELECT s.id
+  FROM "Submission" s
+  WHERE s."documentId" = g."documentId"
+  ORDER BY
+    CASE
+      WHEN d."submittedSnapshotId" IS NOT NULL AND s.id = d."submittedSnapshotId" THEN 0
+      ELSE 1
+    END,
+    s."submittedAt" DESC
+  LIMIT 1
+) sub ON true
+WHERE g."snapshotId" IS NULL;
+
 -- Build legacy redirect table
 INSERT INTO "LegacyGradeRedirect" ("gradeId", "submissionId")
 SELECT g.id, g."snapshotId"

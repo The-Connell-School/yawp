@@ -13,7 +13,8 @@
   "scripts": {
     "generate": "prisma generate",
     "build": "tsc",
-    "migrate-remote": "bun run scripts/migrate-remote.ts"
+    "migrate-remote": "bun run scripts/migrate-remote.ts",
+    "test": "bun test scripts/*.test.ts"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.3.0",

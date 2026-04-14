@@ -35,6 +35,7 @@
     "infra:production:apply": "bun export-env && bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars",
     "github:preview-config": "bash scripts/github-preview-config.sh",
     "db:restore-local-from-s3": "bash scripts/restore-local-from-s3.sh",
-    "db:sync-local-from-production": "bash scripts/sync-production-db-to-local.sh"
+    "db:sync-local-from-production": "bash scripts/sync-production-db-to-local.sh",
+    "db:practice-full-rollback": "bash scripts/practice-full-rollback.sh"
   }
 }
