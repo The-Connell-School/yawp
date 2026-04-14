@@ -208,3 +208,4 @@ services/web-app/e2e/.data/
 # Git worktrees
 .worktrees/
 .claude/worktrees/
+.superpowers/

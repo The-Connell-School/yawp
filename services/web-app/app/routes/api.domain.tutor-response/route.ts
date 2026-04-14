@@ -38,7 +38,7 @@ export async function action({ request }: ActionFunctionArgs) {
         studentCourseModule: {
           include: { instructions: { orderBy: { position: 'asc' } } },
         },
-        messages: true,
+        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         document: {
           select: {
             text: true,
@@ -138,7 +138,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const updatedCms = await prisma.studentCourseModuleSession.findUnique({
       where: { id: cms.id },
       include: {
-        messages: { orderBy: { createdAt: 'asc' } },
+        messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         studentCourseModule: {
           include: {
             instructions: {

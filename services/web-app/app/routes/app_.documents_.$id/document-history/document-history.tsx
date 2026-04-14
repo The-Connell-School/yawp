@@ -1,6 +1,7 @@
-import { ChevronDownIcon, ChevronRightIcon, HistoryIcon, Loader2Icon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Check, Clock, Copy, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
+import { toast } from 'sonner';
 import { Button } from '~/components/ui/button';
 import {
   Sheet,
@@ -9,272 +10,248 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '~/components/ui/sheet';
+import { Badge } from '~/components/ui/badge';
 import { cn } from '~/utils/misc';
+import { SaveStatusIndicator } from '~/components/save-status-indicator';
+import type { SyncStatus } from '~/utils/sync-service';
 
-type Revision = {
+type HistoryEntry = {
   id: string;
   createdAt: string;
-  trigger: string;
+  label: string;
   html: string;
   text: string;
+  source: 'revision' | 'journal';
 };
 
-type Session = {
-  id: string;
-  revisions: Revision[];
-  startTime: Date;
-  endTime: Date;
+type Props = {
+  documentId: string;
+  syncStatus: SyncStatus;
 };
 
-type Props = { documentId: string };
+const ITEMS_PER_PAGE = 10;
 
-const REVISIONS_PER_PAGE = 50;
-const SESSION_GAP_MS = 30 * 60 * 1000; // 30 minutes
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-function groupIntoSessions(revisions: Revision[]): Session[] {
-  if (revisions.length === 0) return [];
-
-  // Revisions come in desc order from API; work in chronological order for grouping
-  const sorted = [...revisions].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  );
-
-  const sessions: Session[] = [];
-  let current: Revision[] = [sorted[0]];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = new Date(sorted[i - 1].createdAt).getTime();
-    const curr = new Date(sorted[i].createdAt).getTime();
-
-    if (curr - prev > SESSION_GAP_MS) {
-      sessions.push(buildSession(current));
-      current = [sorted[i]];
-    } else {
-      current.push(sorted[i]);
-    }
-  }
-
-  sessions.push(buildSession(current));
-
-  // Return newest sessions first
-  return sessions.reverse();
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function buildSession(revisions: Revision[]): Session {
-  return {
-    id: revisions[0].id,
-    revisions: [...revisions].reverse(), // newest first within session
-    startTime: new Date(revisions[0].createdAt),
-    endTime: new Date(revisions[revisions.length - 1].createdAt),
-  };
-}
-
-function formatDate(date: Date): string {
+function formatFullDate(dateStr: string): string {
+  const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-  });
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
+    year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   });
 }
 
-function TriggerBadge({ trigger }: { trigger: string }) {
-  const isSubmit = trigger === 'submit';
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium leading-none',
-        isSubmit
-          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-          : 'bg-muted text-muted-foreground'
-      )}
-    >
-      {trigger}
-    </span>
-  );
-}
-
-export const DocumentHistory = ({ documentId }: Props) => {
+export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
   const [open, setOpen] = useState(false);
-  const [selectedRevision, setSelectedRevision] = useState<Revision | null>(null);
-  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
-  const [allRevisions, setAllRevisions] = useState<Revision[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const fetcher = useFetcher<{ revisions: Revision[] }>({ key: 'document-history' });
+  const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
+  const [allEntries, setAllEntries] = useState<HistoryEntry[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fetcher = useFetcher<{ entries: HistoryEntry[]; nextCursor: string | null }>({
+    key: 'document-history',
+  });
 
-  const loadRevisions = (pageNum: number) => {
-    fetcher.load(
-      `/api/document/${documentId}/revisions?page=${pageNum}&limit=${REVISIONS_PER_PAGE}`
-    );
-  };
+  const loadEntries = useCallback(
+    (before?: string) => {
+      const params = new URLSearchParams({ limit: String(ITEMS_PER_PAGE) });
+      if (before) params.set('before', before);
+      fetcher.load(`/api/document/${documentId}/revisions?${params}`);
+    },
+    [documentId, fetcher]
+  );
 
   useEffect(() => {
     if (open) {
-      setAllRevisions([]);
-      setPage(1);
-      setHasMore(true);
-      setSelectedRevision(null);
-      setExpandedSessions(new Set());
-      loadRevisions(1);
+      setAllEntries([]);
+      setNextCursor(null);
+      setSelectedEntry(null);
+      loadEntries();
     }
   }, [open]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === 'idle') {
-      const revisions = fetcher.data.revisions ?? [];
-      if (page === 1) {
-        setAllRevisions(revisions);
-        setSelectedRevision(revisions[0] ?? null);
-      } else {
-        setAllRevisions((prev) => [...prev, ...revisions]);
+      const entries = fetcher.data.entries ?? [];
+      setAllEntries((prev) => {
+        const existingIds = new Set(prev.map((e) => e.id));
+        const newEntries = entries.filter((e) => !existingIds.has(e.id));
+        return [...prev, ...newEntries];
+      });
+      setNextCursor(fetcher.data.nextCursor);
+      // Auto-select first entry on initial load
+      if (allEntries.length === 0 && entries.length > 0) {
+        setSelectedEntry(entries[0]);
       }
-      setHasMore(revisions.length === REVISIONS_PER_PAGE);
     }
-  }, [fetcher.data, fetcher.state, page]);
+  }, [fetcher.data, fetcher.state]);
 
-  const sessions = useMemo(() => groupIntoSessions(allRevisions), [allRevisions]);
-
-  // Auto-expand the most recent session
+  // Infinite scroll
   useEffect(() => {
-    if (sessions.length > 0 && expandedSessions.size === 0) {
-      setExpandedSessions(new Set([sessions[0].id]));
-    }
-  }, [sessions]);
+    const el = scrollRef.current;
+    if (!el) return;
 
-  const toggleSession = (sessionId: string) => {
-    setExpandedSessions((prev) => {
-      const next = new Set(prev);
-      if (next.has(sessionId)) {
-        next.delete(sessionId);
-      } else {
-        next.add(sessionId);
+    const handleScroll = () => {
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+      if (nearBottom && nextCursor && fetcher.state === 'idle') {
+        loadEntries(nextCursor);
       }
-      return next;
-    });
-  };
+    };
 
-  const handleLoadMore = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    loadRevisions(nextPage);
-  };
+    el.addEventListener('scroll', handleScroll);
+    return () => el.removeEventListener('scroll', handleScroll);
+  }, [nextCursor, fetcher.state, loadEntries]);
+
+  const handleCopy = useCallback(async () => {
+    if (!selectedEntry) return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([selectedEntry.html], { type: 'text/html' }),
+          'text/plain': new Blob([selectedEntry.text], { type: 'text/plain' }),
+        }),
+      ]);
+      setCopied(true);
+      toast.success('Copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      await navigator.clipboard.writeText(selectedEntry.text);
+      setCopied(true);
+      toast.success('Copied to clipboard');
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }, [selectedEntry]);
 
   const isLoading = fetcher.state === 'loading';
-  const isFirstSessionMostRecent = (index: number) => index === 0;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <HistoryIcon size={18} strokeWidth={1.5} className="cursor-pointer" />
+        <button
+          type="button"
+          className="flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs hover:bg-muted/70 transition"
+        >
+          <SaveStatusIndicator status={syncStatus} />
+          <div className="h-3.5 w-px bg-border mx-0.5" />
+          <Clock className="h-3 w-3 text-muted-foreground" />
+        </button>
       </SheetTrigger>
-      <SheetContent className="flex w-full flex-col overflow-hidden rounded-l-none transition sm:max-w-full md:max-w-[900px] md:rounded-l-lg">
-        <SheetHeader className="p-1">
-          <SheetTitle>Document History</SheetTitle>
+      <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-full md:max-w-[800px]">
+        <SheetHeader className="border-b px-6 py-4">
+          <SheetTitle className="text-base">Version History</SheetTitle>
         </SheetHeader>
-        <div className="flex grow flex-col overflow-hidden sm:flex-row">
-          {/* Left panel: session timeline */}
-          <div className="no-scrollbar mb-2 flex max-h-[300px] min-h-[200px] flex-col gap-0.5 overflow-y-auto p-1 sm:mb-0 sm:max-h-full sm:w-[320px] sm:min-w-[320px]">
-            {isLoading && allRevisions.length === 0 ? (
+
+        <div className="flex grow flex-col overflow-hidden sm:flex-row gap-3 p-4">
+          {/* Left: entry list */}
+          <div
+            ref={scrollRef}
+            className="no-scrollbar flex min-h-[180px] max-h-[280px] sm:max-h-full sm:w-[260px] sm:min-w-[260px] flex-col gap-0.5 overflow-y-auto px-1 py-1"
+          >
+            {isLoading && allEntries.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                <Loader2Icon size={16} className="mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Loading...
               </div>
-            ) : sessions.length === 0 ? (
+            ) : allEntries.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 No history yet
               </div>
             ) : (
               <>
-                {sessions.map((session, sessionIndex) => {
-                  const isExpanded = expandedSessions.has(session.id);
-                  const sessionLabel = isFirstSessionMostRecent(sessionIndex)
-                    ? `${formatDate(session.startTime)}, ${formatTime(session.startTime)} – current`
-                    : `${formatDate(session.startTime)}, ${formatTime(session.startTime)} – ${formatTime(session.endTime)}`;
-
+                {allEntries.map((entry) => {
+                  const isSelected = entry.id === selectedEntry?.id;
                   return (
-                    <div key={session.id} className="flex flex-col">
-                      <button
-                        onClick={() => toggleSession(session.id)}
-                        className="flex items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm font-medium hover:bg-muted/70"
-                      >
-                        {isExpanded ? (
-                          <ChevronDownIcon size={14} className="shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronRightIcon size={14} className="shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="truncate">{sessionLabel}</span>
-                        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                          {session.revisions.length}
-                        </span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="ml-3 border-l pl-2">
-                          {session.revisions.map((rev, revIndex) => {
-                            const isLast = revIndex === session.revisions.length - 1;
-                            const isSelected = rev.id === selectedRevision?.id;
-                            return (
-                              <button
-                                key={rev.id}
-                                onClick={() => setSelectedRevision(rev)}
-                                className={cn(
-                                  'flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs',
-                                  isSelected
-                                    ? 'bg-muted text-foreground'
-                                    : 'text-muted-foreground hover:bg-muted/70',
-                                  isLast ? 'mb-1' : ''
-                                )}
-                              >
-                                <TriggerBadge trigger={rev.trigger} />
-                                <span>{formatTime(new Date(rev.createdAt))}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                    <button
+                      key={entry.id}
+                      onClick={() => setSelectedEntry(entry)}
+                      className={cn(
+                        'flex items-center justify-between gap-2 rounded-lg px-3 py-3 text-left transition',
+                        isSelected
+                          ? 'bg-muted ring-1 ring-border'
+                          : 'hover:bg-muted/50'
                       )}
-                    </div>
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{entry.label}</p>
+                        <p className="text-xs text-muted-foreground" title={formatFullDate(entry.createdAt)}>
+                          {formatRelativeDate(entry.createdAt)}
+                        </p>
+                      </div>
+                      {entry.label === 'Submitted' && (
+                        <Badge variant="info-outlined" className="shrink-0 text-[10px]">
+                          Submitted
+                        </Badge>
+                      )}
+                    </button>
                   );
                 })}
-
-                {hasMore && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLoadMore}
-                    disabled={isLoading}
-                    className="mt-2"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2Icon size={14} className="mr-1.5 animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      'Load More'
-                    )}
-                  </Button>
+                {isLoading && allEntries.length > 0 && (
+                  <div className="flex items-center justify-center py-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Loading more...
+                  </div>
                 )}
               </>
             )}
           </div>
 
-          {/* Right panel: preview */}
-          <div className="no-scrollbar flex w-full grow flex-col overflow-y-auto rounded-lg bg-muted p-1">
-            {selectedRevision ? (
-              <div
-                dangerouslySetInnerHTML={{ __html: selectedRevision.html }}
-                className="p-3 font-times"
-              />
+          {/* Right: preview */}
+          <div className="flex grow flex-col overflow-hidden rounded-lg border bg-white">
+            {selectedEntry ? (
+              <>
+                <div className="flex items-center justify-between border-b px-4 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium">{selectedEntry.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFullDate(selectedEntry.createdAt)}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={handleCopy}
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="no-scrollbar grow overflow-y-auto p-5">
+                  <div
+                    dangerouslySetInnerHTML={{ __html: selectedEntry.html }}
+                    className="mx-auto max-w-[680px] font-times"
+                  />
+                </div>
+              </>
             ) : (
               <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                Select a revision to preview
+                Select a version to preview
               </div>
             )}
           </div>

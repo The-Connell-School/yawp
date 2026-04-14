@@ -32,6 +32,7 @@ type Props = {
   submissionComments: SubmissionComment[];
   submissionId: string | null;
   sourceText: string;
+  readOnly?: boolean;
   activeGradeCommentId?: string | null;
   onSelectGradeComment?: (id: string) => void;
   onDraftHighlightChange?: (highlight: { excerpt: string; occurrence: number } | null) => void;
@@ -73,6 +74,7 @@ export function GradingCommentsSidebar({
   submissionComments,
   submissionId,
   sourceText,
+  readOnly = false,
   activeGradeCommentId = null,
   onSelectGradeComment,
   onDraftHighlightChange,
@@ -94,7 +96,7 @@ export function GradingCommentsSidebar({
     const handler = (e: Event) => {
       const ev = e as CustomEvent;
       const { excerpt, occurrence } = ev.detail ?? {};
-      if (typeof excerpt === 'string' && typeof occurrence === 'number') {
+      if (!readOnly && typeof excerpt === 'string' && typeof occurrence === 'number') {
         setDraftComment({
           id: 'draft',
           excerpt,
@@ -258,9 +260,11 @@ export function GradingCommentsSidebar({
             <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-8 text-center">
               <MessageSquarePlus className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
               <p className="text-sm font-medium text-muted-foreground">No feedback yet</p>
-              <p className="text-xs leading-relaxed text-muted-foreground/70">
-                Select text in the essay, then click the Comment button to add your first note.
-              </p>
+              {!readOnly ? (
+                <p className="text-xs leading-relaxed text-muted-foreground/70">
+                  Select text in the essay, then click the Comment button to add your first note.
+                </p>
+              ) : null}
             </div>
           ) : (
             <div className="space-y-3">
@@ -318,6 +322,7 @@ export function GradingCommentsSidebar({
                   <SubmissionCommentCard
                     key={c.id}
                     comment={c}
+                    readOnly={readOnly}
                     isActive={activeGradeCommentId === c.id}
                     onClick={() => onSelectGradeComment?.(c.id)}
                     editingCommentId={editingCommentId}

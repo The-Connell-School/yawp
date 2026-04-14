@@ -133,10 +133,10 @@ export function Editor({
           />
         ) : null}
         <div className="no-scrollbar grow overflow-y-scroll p-5" key={`${docId}-editor`}>
-          <div className="mx-auto w-full max-w-[920px] font-times">
+          <div className="mx-auto w-full min-h-full max-w-[920px] font-times">
             <EditorContent
               editor={editor}
-              className="h-full pb-5 [&>div]:h-full [&>div]:outline-none"
+              className="h-full pb-5 [&>div]:h-full [&>div]:outline-none [&_.ProseMirror]:min-h-full"
             />
           </div>
         </div>

@@ -3,7 +3,6 @@ import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
   data as dataResponse,
-  redirect,
 } from 'react-router';
 import {
   useFetcher,
@@ -12,8 +11,8 @@ import {
   useSearchParams,
   Link,
 } from 'react-router';
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { ArrowLeft, Loader2, AlertCircle, FileText, ExternalLink } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -27,6 +26,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
@@ -42,17 +46,14 @@ import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
 import { DocumentHistory } from './document-history/document-history';
-import {
-  DocumentStatusBadge,
-  getDocumentStatusLabel,
-} from '~/components/document-status-badge';
+import { getDocumentStatusLabel } from '~/components/document-status-badge';
 import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
 import type { SyncStatus } from '~/utils/sync-service';
-import { SaveStatusIndicator } from '~/components/save-status-indicator';
+
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
 import { useCommentsState } from './hooks/use-comments-state';
 import { useTutorState } from './hooks/use-tutor-state';
@@ -102,7 +103,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
-  const isReviseMode = url.searchParams.get('revise') === '1';
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -159,35 +160,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       submissions: {
         orderBy: { submittedAt: 'desc' },
-        take: 1,
         select: {
           id: true,
           title: true,
-          text: true,
-          html: true,
           submittedAt: true,
-          score: true,
-          feedback: true,
-          rubricScores: true,
-          overallScore: true,
-          overallComment: true,
-          numericPercentage: true,
-          letterGrade: true,
-          grammarIssues: true,
-          releasedAt: true,
-          gradedById: true,
           gradedAt: true,
-          comments: {
-            orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              createdAt: true,
-              content: true,
-              excerpt: true,
-              occurrence: true,
-              profileId: true,
-            },
-          },
+          releasedAt: true,
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
@@ -216,7 +194,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             },
           },
           messages: {
-            orderBy: { createdAt: 'asc' },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           },
         },
       },
@@ -242,24 +220,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isViewingAsTeacher = profile.id !== doc.profile.id;
 
-  const latestSubmission = doc.submissions[0] ?? null;
-
-  // Teachers viewing submitted documents should go to the submissions route
-  if (isViewingAsTeacher && latestSubmission) {
-    const exitTo = url.searchParams.get('exitTo');
-    return redirect(
-      `/app/submissions/${latestSubmission.id}${exitTo ? `?exitTo=${encodeURIComponent(exitTo)}` : ''}`
-    );
-  }
-
-  if (
-    !isViewingAsTeacher &&
-    latestSubmission?.id &&
-    latestSubmission.releasedAt &&
-    !isReviseMode
-  ) {
-    return redirect(`/app/submissions/${latestSubmission.id}`);
-  }
+  const submissions = doc.submissions;
 
   if (shouldSaveVersion) {
     const latestRevision = doc.revisions[0];
@@ -310,7 +271,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...doc,
       comments: sortedComments,
     },
-    latestSubmission,
+    submissions,
     currentCms,
     nextCmId,
     shouldSaveVersion,
@@ -320,10 +281,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-export function shouldRevalidate(_args: ShouldRevalidateFunctionArgs) {
-  // Never revalidate the document page loader. The editor owns
-  // document state client-side. Server state flows through explicit
-  // fetch() calls + local React state, not loader revalidation.
+export function shouldRevalidate(args: ShouldRevalidateFunctionArgs) {
+  // Revalidate when the module session index changes (navigating between modules).
+  const currentCmsIdx = args.currentUrl.searchParams.get('cmsIdx');
+  const nextCmsIdx = args.nextUrl.searchParams.get('cmsIdx');
+  if (currentCmsIdx !== nextCmsIdx) return true;
+
+  // Otherwise, never revalidate. The editor owns document state client-side.
+  // Server state flows through explicit fetch() calls + local React state.
   return false;
 }
 
@@ -335,24 +300,33 @@ export default function Route() {
   const breakpoint = useBreakpoint();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
-  const [localSubmittedAt, setLocalSubmittedAt] = useState<string | null>(null);
+  const [localSubmissions, setLocalSubmissions] = useState<
+    Array<{ id: string; title: string; submittedAt: string; gradedAt: string | null; releasedAt: string | null }>
+  >([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
+  const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
-  const isReviseMode = searchParams.get('revise') === '1';
-  const latestSubmission = data.latestSubmission;
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
-  const isSubmitted = localSubmittedAt !== null || latestSubmission !== null;
-  // The submission IS the grade now — grading fields live on the Submission model
-  const grade = latestSubmission;
+
+  // Merge server + optimistic submissions
+  const submissions = useMemo(() => {
+    const serverSubs = data.submissions ?? [];
+    const serverIds = new Set(serverSubs.map((s: any) => s.id));
+    const newLocal = localSubmissions.filter((s) => !serverIds.has(s.id));
+    return [...newLocal, ...serverSubs];
+  }, [data.submissions, localSubmissions]);
+  const latestSubmission = submissions[0] ?? null;
+  const isSubmitted = submissions.length > 0;
+  const gradedCount = submissions.filter((s: any) => s.releasedAt).length;
+  const versionNumber = submissions.length + 1;
   const documentStatusLabel = getDocumentStatusLabel({
-    submittedAt: localSubmittedAt ?? latestSubmission?.submittedAt ?? null,
-    grade: grade ?? null,
+    submittedAt: latestSubmission?.submittedAt ?? null,
+    grade: gradedCount > 0 ? { releasedAt: latestSubmission?.releasedAt } : null,
   });
-  const isGradeReleased =
-    grade?.releasedAt !== null && grade?.releasedAt !== undefined;
   const isDocumentEditable = !isViewingAsTeacher;
   const editorServerHtml = data.doc.html ?? '';
   const editorServerText = data.doc.text ?? '';
@@ -370,16 +344,20 @@ export default function Route() {
     documentId: data.doc.id,
     isEditable: isDocumentEditable,
   });
-  const tutor = useTutorState(data.currentCms as any);
+  const tutor = useTutorState(data.currentCms as any, cmsIdx);
   const commentsState = useCommentsState(
     (data.doc.comments as any[]) ?? []
   );
   const submit = useDocumentSubmit({
     documentId: data.doc.id,
     editorBridgeRef,
-    onSubmitted: () => {
+    onSubmitted: (newSubmission) => {
       setIsFinalizeDialogOpen(false);
-      setLocalSubmittedAt(new Date().toISOString());
+      setSubmissionTitle('');
+      setLocalSubmissions((prev) => [
+        { ...newSubmission, gradedAt: null, releasedAt: null },
+        ...prev,
+      ]);
     },
   });
 
@@ -397,19 +375,17 @@ export default function Route() {
     : activeComments;
   const teacherHeaderTitle = data.doc.title?.trim() || 'Untitled document';
   const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
-  const studentCanViewReleasedGrade =
-    !isViewingAsTeacher && isGradeReleased && Boolean(grade?.id);
-  const studentGradeViewPath =
-    studentCanViewReleasedGrade && grade?.id ? `/app/submissions/${grade.id}` : null;
-  const studentRevisePath = `/app/documents/${data.doc.id}?revise=1${
-    explicitExitTarget
-      ? `&exitTo=${encodeURIComponent(explicitExitTarget)}`
-      : ''
-  }`;
   // Submit button is always enabled — the editor has content by the
   // time the user can click it. (Old polling logic deleted with Task 17.)
   const hasEditorContent = true;
   const isSubmitting = submit.isSubmitting;
+
+  const tutorHasPreviousCms = useMemo(() => {
+    const liveCmsId = tutor.cms?.id ?? data.currentCms.id;
+    return (
+      data.hasPreviousCms || liveCmsId !== data.currentCms.id
+    );
+  }, [data.hasPreviousCms, data.currentCms.id, tutor.cms?.id]);
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams);
@@ -478,48 +454,66 @@ export default function Route() {
               />
             )}
           </div>
-          {!isViewingAsTeacher && (
-            <div className="flex items-center gap-2">
-              <DocumentStatusBadge
-                submittedAt={localSubmittedAt ?? latestSubmission?.submittedAt ?? null}
-                grade={isGradeReleased ? (grade ?? null) : null}
-              />
-              {isSubmitted ? (
-                <span className="text-xs text-muted-foreground">
-                  {isGradeReleased && grade?.releasedAt
-                    ? new Date(grade.releasedAt).toLocaleDateString()
-                    : new Date((localSubmittedAt ?? latestSubmission?.submittedAt)!).toLocaleDateString()}
-                </span>
-              ) : null}
-            </div>
+          {!isViewingAsTeacher && submissions.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  Submissions ({submissions.length})
+                  {gradedCount > 0 && (
+                    <Badge variant="success" className="ml-1 text-[10px] px-1.5 py-0">
+                      {gradedCount} graded
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-80 p-0">
+                <div className="border-b px-3 py-2">
+                  <p className="text-sm font-semibold">Submissions</p>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {submissions.map((s: any, i: number) => {
+                    const version = submissions.length - i;
+                    const isGraded = s.releasedAt != null;
+                    return (
+                      <Link
+                        key={s.id}
+                        to={`/app/submissions/${s.id}`}
+                        className="flex items-center justify-between gap-2 border-b px-3 py-2.5 text-sm hover:bg-muted/50 last:border-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {s.title || `Version ${version}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(s.submittedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={isGraded ? 'success' : 'secondary'}
+                          className="shrink-0 text-[10px]"
+                        >
+                          {isGraded ? 'Graded' : 'Submitted'}
+                        </Badge>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
           <div className="ml-auto flex items-center gap-4">
-            {studentGradeViewPath ? (
-              <div className="hidden md:flex items-center gap-1 rounded-full border bg-muted/40 p-1">
-                <Button
-                  size="sm"
-                  variant={isReviseMode ? 'ghost' : 'secondary'}
-                  asChild
-                >
-                  <Link to={studentGradeViewPath}>View Grade</Link>
-                </Button>
-                <Button
-                  size="sm"
-                  variant={isReviseMode ? 'secondary' : 'ghost'}
-                  asChild
-                >
-                  <Link to={studentRevisePath}>Revise Essay</Link>
-                </Button>
-              </div>
-            ) : null}
-            {data.isDocumentSubmissionEnabled && !isSubmitted && (
+            {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
               <>
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={isSubmitting || !hasEditorContent}
+                  disabled={isSubmitting}
                   data-testid="document-submit-button"
-                  onClick={() => setIsFinalizeDialogOpen(true)}
+                  onClick={() => {
+                    setSubmissionTitle(data.doc.title || '');
+                    setIsFinalizeDialogOpen(true);
+                  }}
                 >
                   {isSubmitting ? (
                     <>
@@ -530,26 +524,18 @@ export default function Route() {
                     'Submit'
                   )}
                 </Button>
-                <div className="h-[20px] border-r" />
               </>
             )}
             {isSubmitted && archivedComments.length > 0 && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowOldComments((v) => !v)}
-                >
-                  {showOldComments ? 'Hide old comments' : 'Show old comments'}
-                </Button>
-                <div className="h-[20px] border-r" />
-              </>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowOldComments((v) => !v)}
+              >
+                {showOldComments ? 'Hide old comments' : 'Show old comments'}
+              </Button>
             )}
-            <div className="flex items-center gap-2">
-              <SaveStatusIndicator status={syncStatus} />
-              <div className="h-[20px] border-r" />
-              <DocumentHistory documentId={data.doc.id} />
-            </div>
+            <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
         {data.assignmentsEnabled && data.doc.assignment ? (
@@ -574,37 +560,6 @@ export default function Route() {
             </div>
           </div>
         ) : null}
-        {grade &&
-          !isViewingAsTeacher &&
-          isGradeReleased && (
-            <div className="mx-auto w-full max-w-screen-2xl border-b bg-green-50 dark:bg-green-950/20 px-3 py-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="success">Grade Released</Badge>
-                  <span className="text-sm font-medium">Graded</span>
-                </div>
-                {(grade.feedback || grade.overallComment) && (
-                  <div className="flex-1 sm:mx-4">
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {grade.overallComment || grade.feedback}
-                    </p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    asChild
-                    className="bg-white dark:bg-background"
-                  >
-                    <Link to={`/app/submissions/${grade.id}`}>
-                      Open Graded View
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">
@@ -625,7 +580,7 @@ export default function Route() {
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
                 nextCmId={data.nextCmId}
-                hasPreviousCms={data.hasPreviousCms}
+                hasPreviousCms={tutorHasPreviousCms}
                 isSessionLocked={auth.isLocked}
                 beforeRespond={handleTutorBeforeRespond}
                 onCmsUpdate={tutor.updateCms}
@@ -662,7 +617,7 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
-      {data.isDocumentSubmissionEnabled && !isSubmitted && (
+      {data.isDocumentSubmissionEnabled && (
         <Dialog
           open={isFinalizeDialogOpen}
           onOpenChange={setIsFinalizeDialogOpen}
@@ -671,24 +626,65 @@ export default function Route() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-yellow-600" />
-                Submit Essay
+                Submit Version {versionNumber}
               </DialogTitle>
-              <DialogDescription className="space-y-3 pt-2">
-                <p>Before you submit, please note the following:</p>
-                <ul className="list-disc space-y-2 pl-5 text-sm">
-                  <li>
-                    Submitting creates a snapshot of your essay for your teacher
-                    to grade.
-                  </li>
-                  <li>
-                    You can keep editing after you submit, but changes won’t be
-                    reflected in what your teacher sees.
-                  </li>
-                  <li>You can only submit once right now.</li>
-                </ul>
-                <p className="pt-2 font-medium">
-                  Are you sure you want to submit this essay?
-                </p>
+              <DialogDescription asChild>
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-2">
+                    <label htmlFor="submission-title" className="text-sm font-medium text-foreground">
+                      Submission Title
+                    </label>
+                    <Input
+                      id="submission-title"
+                      value={submissionTitle}
+                      onChange={(e) => setSubmissionTitle(e.target.value)}
+                      placeholder="Enter a title for this submission"
+                    />
+                  </div>
+                  <ul className="list-disc space-y-1.5 pl-5 text-sm">
+                    <li>
+                      Submitting creates a snapshot of your essay for your teacher
+                      to grade.
+                    </li>
+                    <li>
+                      You can keep editing and submit again after this.
+                    </li>
+                  </ul>
+                  {submissions.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        Previous submissions
+                      </p>
+                      <div className="max-h-32 overflow-y-auto rounded-md border">
+                        {submissions.map((s: any, i: number) => {
+                          const version = submissions.length - i;
+                          const isGraded = s.releasedAt != null;
+                          return (
+                            <a
+                              key={s.id}
+                              href={`/app/submissions/${s.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between gap-2 border-b px-3 py-2 text-sm hover:bg-muted/50 last:border-0"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="shrink-0 text-xs text-muted-foreground">v{version}</span>
+                                <span className="truncate">{s.title || `Version ${version}`}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              </div>
+                              <Badge
+                                variant={isGraded ? 'success' : 'secondary'}
+                                className="shrink-0 text-[10px]"
+                              >
+                                {isGraded ? 'Graded' : 'Submitted'}
+                              </Badge>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -703,17 +699,17 @@ export default function Route() {
                 variant="default"
                 data-testid="document-finalize-submit"
                 onClick={() => {
-                  void submit.submitNow();
+                  void submit.submitNow(submissionTitle || data.doc.title || '');
                 }}
                 disabled={isSubmitting}
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Finalizing...
+                    Submitting...
                   </>
                 ) : (
-                  'Finalize Document'
+                  `Submit Version ${versionNumber}`
                 )}
               </Button>
             </DialogFooter>

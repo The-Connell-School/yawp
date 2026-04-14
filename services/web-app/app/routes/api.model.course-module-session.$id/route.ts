@@ -102,7 +102,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const updatedCms = await prisma.studentCourseModuleSession.findUnique({
     where: { id: params.id },
     include: {
-      messages: { orderBy: { createdAt: 'asc' } },
+      messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
       studentCourseModule: {
         include: {
           instructions: {

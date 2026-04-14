@@ -3,6 +3,19 @@ import { createE2EPrismaClient } from '../prisma-client';
 import { setAssignmentsForOrganization } from '../db-helpers';
 
 test.describe.serial('Assignments org-level feature flag', () => {
+  test.afterEach(async ({ e2eContext }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await setAssignmentsForOrganization({
+        prisma,
+        organizationId: e2eContext.organizationId,
+        enabled: true,
+      });
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
   test('hides Assignments tab on student dashboard when flag is off', async ({
     page,
     e2eContext,
@@ -22,7 +35,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(0);
   });
 
-  test('shows Assignments tab on student dashboard when flag is on (seeded default)', async ({
+  test('shows Assignments tab on student dashboard when flag is on', async ({
     page,
     e2eContext,
     signIn,
@@ -53,7 +66,7 @@ test.describe.serial('Assignments org-level feature flag', () => {
     await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(0);
   });
 
-  test('shows Assignments tab on teacher class page when flag is on (seeded default)', async ({
+  test('shows Assignments tab on teacher class page when flag is on', async ({
     page,
     e2eContext,
     signIn,

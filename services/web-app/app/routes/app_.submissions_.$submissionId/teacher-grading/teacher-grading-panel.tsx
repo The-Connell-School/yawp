@@ -149,6 +149,7 @@ export function TeacherGradingPanel({
   }, [rubricScores]);
 
   const resolvedNumericPercentage = useMemo(() => {
+    if (numericPercentage === '') return null;
     const raw = Number(numericPercentage);
     if (!Number.isFinite(raw)) return null;
     const clamped = Math.max(0, Math.min(100, Math.round(raw)));
@@ -361,10 +362,10 @@ export function TeacherGradingPanel({
               disabled={isBusy}
             >
               {isGenerating ? (
-                <>
+                <span className="flex items-center gap-2">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   Grading...
-                </>
+                </span>
               ) : (
                 'Grading Assistant Suggestions'
               )}
@@ -374,7 +375,7 @@ export function TeacherGradingPanel({
       </div>
 
       <div className="no-scrollbar flex-1 overflow-y-auto p-3 space-y-4">
-        <div className="rounded-lg bg-white/70 p-2 space-y-2">
+        <div className="rounded-lg border p-2 space-y-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="pct">Overall Percentage</Label>
           </div>

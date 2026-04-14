@@ -255,10 +255,10 @@ code {
   border-bottom: 2px dotted #3b82f6;
 }
 .grammar-issue-mark {
-  background-color: #d8b4fe30;
+  background-color: #d8b4fe50;
   border-bottom: 2px wavy #a855f7;
   cursor: help;
 }
 .grammar-issue-mark:hover {
-  background-color: #d8b4fe60;
+  background-color: #d8b4fe80;
 }

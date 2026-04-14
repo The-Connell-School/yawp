@@ -85,18 +85,18 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
       { timeout: 15000 },
     );
 
-    // Open the history panel
-    const historyIcon = page.locator('.lucide-history').first();
-    await expect(historyIcon).toBeVisible({ timeout: 5000 });
-    await historyIcon.click();
+    // Open the history panel via the Clock icon trigger next to save status
+    const historyTrigger = page.locator('.lucide-clock').first();
+    await expect(historyTrigger).toBeVisible({ timeout: 5000 });
+    await historyTrigger.click();
 
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
-    await expect(sheet.locator('text=Document History')).toBeVisible();
+    await expect(sheet.locator('text=Version History')).toBeVisible();
 
     // Should see at least one session entry with a time range
     await expect(
-      sheet.locator('button').filter({ hasText: /\d{1,2}:\d{2}/ }).first()
+      sheet.locator('button').filter({ hasText: /ago|Just now/i }).first()
     ).toBeVisible({ timeout: 5000 });
   });
 });

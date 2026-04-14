@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Tooltip } from './ui/tooltip';
-import { formatGrade } from '~/domain/grading/gradeMath';
 
 type Props = {
   exitTo: string;
@@ -18,10 +17,6 @@ type Props = {
     studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
     submissions?: {
       id: string;
-      score: string | null;
-      overallScore: number | null;
-      numericPercentage?: number | null;
-      letterGrade?: string | null;
       releasedAt: Date | string | null;
     }[];
   };
@@ -37,21 +32,14 @@ export const DocumentLink = ({
 }: Props) => {
   const archiveFetcher = useFetcher();
   const encodedExitTo = encodeURIComponent(exitTo);
-  const latestSubmission = doc.submissions?.[0];
-  const isSubmitted = !!latestSubmission;
-  const isGradeReleased =
-    latestSubmission?.releasedAt !== null && latestSubmission?.releasedAt !== undefined;
-  const gradeDisplay =
-    formatGrade(latestSubmission?.numericPercentage ?? null, latestSubmission?.letterGrade ?? null) ||
-    latestSubmission?.score ||
-    (latestSubmission?.overallScore ? `${latestSubmission.overallScore}/5` : null);
-  const showReleasedGradeBadge = isGradeReleased && gradeDisplay;
-  const showSubmittedBadge =
-    isStudentView && isSubmitted && !showReleasedGradeBadge;
-  const targetPath =
-    isStudentView && isGradeReleased && latestSubmission?.id
-      ? `/app/submissions/${latestSubmission.id}`
-      : `/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`;
+  const submissions = doc.submissions ?? [];
+  const isSubmitted = submissions.length > 0;
+  const gradedSubmissions = submissions.filter(
+    (s) => s.releasedAt !== null && s.releasedAt !== undefined
+  );
+  const showGradedBadge = isStudentView && gradedSubmissions.length > 0;
+  const showSubmittedBadge = isStudentView && isSubmitted && !showGradedBadge;
+  const targetPath = `/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`;
 
   return (
     <Link
@@ -59,9 +47,9 @@ export const DocumentLink = ({
       to={targetPath}
       className="relative flex h-48 flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:border-primary/50"
     >
-      {showReleasedGradeBadge ? (
-        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-purple-600 bg-purple-50 px-2 py-0.5 text-xs text-purple-900 dark:bg-purple-950/80 dark:text-purple-100">
-          Grade {gradeDisplay}
+      {showGradedBadge ? (
+        <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-green-600 bg-green-50 px-2 py-0.5 text-xs text-green-900 dark:bg-green-950/80 dark:text-green-100">
+          {gradedSubmissions.length} graded
         </span>
       ) : showSubmittedBadge ? (
         <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-muted-foreground/30 bg-muted px-2 py-0.5 text-xs text-muted-foreground">

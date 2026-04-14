@@ -121,14 +121,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
         submissions: {
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
+            title: true,
             releasedAt: true,
           },
         },
@@ -147,14 +142,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { studentCourseModule: { position: 'desc' } },
         },
         submissions: {
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
+            title: true,
             releasedAt: true,
           },
         },

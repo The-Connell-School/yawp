@@ -128,20 +128,20 @@ test.describe.serial('Document Regression Suite', () => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Click the history icon
-    const historyIcon = page.locator('.lucide-history').first();
-    await expect(historyIcon).toBeVisible({ timeout: 5000 });
-    await historyIcon.click();
+    // Click the history sheet trigger (Clock icon button next to save status)
+    const historyTrigger = page.locator('.lucide-clock').first();
+    await expect(historyTrigger).toBeVisible({ timeout: 5000 });
+    await historyTrigger.click();
 
     // Verify sheet opens with title
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
-    await expect(sheet.locator('text=Document History')).toBeVisible();
+    await expect(sheet.locator('text=Version History')).toBeVisible();
 
     // Session timeline renders — the edited doc has 2 seeded revisions
     // so we should see at least one session entry with a time pattern
     await expect(
-      sheet.locator('button').filter({ hasText: /\d{1,2}:\d{2}/ }).first()
+      sheet.locator('button').filter({ hasText: /ago|Just now/i }).first()
     ).toBeVisible({ timeout: 5000 });
   });
 
@@ -159,14 +159,14 @@ test.describe.serial('Document Regression Suite', () => {
     await helpers.waitForSaved();
 
     // Open history sheet
-    const historyIcon = page.locator('.lucide-history').first();
+    const historyIcon = page.locator('.lucide-clock').first();
     await historyIcon.click();
 
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 
     // Click a session entry to expand it
-    const sessionButton = sheet.locator('button').filter({ hasText: /\d{1,2}:\d{2}/ }).first();
+    const sessionButton = sheet.locator('button').filter({ hasText: /ago|Just now/i }).first();
     if (await sessionButton.count() > 0) {
       await sessionButton.click();
       // Preview panel should show content
@@ -185,7 +185,7 @@ test.describe.serial('Document Regression Suite', () => {
     await helpers.openDocument(e2eContext.editedDocumentId);
 
     // Open and close history via the sheet's X button
-    const historyIcon = page.locator('.lucide-history').first();
+    const historyIcon = page.locator('.lucide-clock').first();
     await historyIcon.click();
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });

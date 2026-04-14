@@ -128,13 +128,14 @@ export class DocumentStore {
     });
   }
 
-  async markFailed(docId: string, error: string): Promise<void> {
+  async markFailed(docId: string, error: string, serverRevision?: number): Promise<void> {
     const entry = await this.get(docId);
     if (!entry) return;
     await this._rawPut({
       ...entry,
       syncStatus: 'failed',
       lastSyncError: error,
+      ...(serverRevision !== undefined ? { serverRevision } : {}),
     });
   }
 

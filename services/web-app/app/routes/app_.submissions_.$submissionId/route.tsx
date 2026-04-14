@@ -1,7 +1,7 @@
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs } from 'react-router';
 import { useLoaderData, Link, useSearchParams, useNavigate, useFetcher } from 'react-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -152,17 +152,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isAdmin = user?.isAdmin ?? false;
 
-  // Students can only see their own released submissions
-  if (isOwner && !submission.releasedAt) {
-    return redirectWithToast(`/app/documents/${submission.documentId}`, {
-      description: 'Grade has not been released yet.',
-      type: 'error',
-    });
-  }
-
-  // Grade mode: teacher AND (not yet graded OR editing)
+  // Grade mode: teacher AND (not yet released OR explicitly editing)
   const isGradeMode =
-    (isTeacher || isAdmin) && (!submission.gradedAt || editParam);
+    (isTeacher || isAdmin) && (!submission.releasedAt || editParam);
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -210,6 +202,8 @@ export default function SubmissionRoute() {
   // When no param, fall back to loader default (ungraded = grade mode).
   const editParam = searchParams.get('edit');
   const isGradeMode = isTeacher && (editParam !== null ? editParam === '1' : loaderGradeMode);
+  // Students viewing a submission whose grade hasn't been released yet
+  const isPending = isOwner && !submission.releasedAt;
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -283,8 +277,9 @@ export default function SubmissionRoute() {
     excerpt: string;
     occurrence: number;
   } | null>(null);
-  const [tooltipIssueId, setTooltipIssueId] = useState<string | null>(null);
+  const [tooltipIssueIds, setTooltipIssueIds] = useState<string[]>([]);
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
+  const [tooltipPage, setTooltipPage] = useState(0);
   const tooltipHoveredRef = useRef(false);
   const tooltipClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -325,10 +320,12 @@ export default function SubmissionRoute() {
     };
   }, [tooltipRect]);
 
-  const activeGrammarIssue = useMemo(() => {
-    if (!tooltipIssueId) return null;
-    return grammarIssues.find((issue) => issue.id === tooltipIssueId) ?? null;
-  }, [grammarIssues, tooltipIssueId]);
+  const activeGrammarIssues = useMemo(() => {
+    if (tooltipIssueIds.length === 0) return [];
+    return tooltipIssueIds
+      .map((id) => grammarIssues.find((issue) => issue.id === id))
+      .filter((issue): issue is GrammarIssue => issue != null);
+  }, [grammarIssues, tooltipIssueIds]);
 
   const essayHighlights = useMemo(() => [
     ...comments.map((c) => ({
@@ -338,13 +335,13 @@ export default function SubmissionRoute() {
       dataAttr: 'data-grade-comment-id' as const,
       className: 'grade-comment-mark',
     })),
-    ...visibleGrammarIssues.map((g) => ({
+    ...(isPending ? [] : visibleGrammarIssues.map((g) => ({
       id: g.id,
       excerpt: g.excerpt,
       occurrence: g.occurrence,
       dataAttr: 'data-grammar-issue-id' as const,
       className: 'grammar-issue-mark',
-    })),
+    }))),
     ...(draftHighlight
       ? [{
           id: 'draft',
@@ -354,22 +351,23 @@ export default function SubmissionRoute() {
           className: 'grade-comment-mark draft',
         }]
       : []),
-  ], [comments, visibleGrammarIssues, draftHighlight]);
+  ], [comments, visibleGrammarIssues, draftHighlight, isPending]);
 
   const handleGrammarIssueHover = useCallback(
-    (id: string | null, rect: DOMRect | null) => {
+    (ids: string[], rect: DOMRect | null) => {
       if (tooltipClearTimerRef.current) {
         clearTimeout(tooltipClearTimerRef.current);
         tooltipClearTimerRef.current = null;
       }
-      if (id) {
-        setTooltipIssueId(id);
+      if (ids.length > 0) {
+        setTooltipIssueIds(ids);
+        setTooltipPage(0);
         setTooltipRect(rect);
       } else {
         // Delay clear so cursor can move from mark to tooltip
         tooltipClearTimerRef.current = setTimeout(() => {
           if (!tooltipHoveredRef.current) {
-            setTooltipIssueId(null);
+            setTooltipIssueIds([]);
             setTooltipRect(null);
           }
           tooltipClearTimerRef.current = null;
@@ -399,11 +397,14 @@ export default function SubmissionRoute() {
     );
   }, []);
 
-  // ── Release grade ──────────────────────────────────────────────────
+  // ── Save / Release grade ────────────────────────────────────────────
   const releaseFetcher = useFetcher<{ success?: boolean }>();
+  const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
+  const [isSavingGrade, setIsSavingGrade] = useState(false);
   const isReleased = localReleasedAt !== null || submission.releasedAt !== null;
-  const isGraded = submission.gradedAt !== null;
+  const isGraded = localGradedAt !== null || submission.gradedAt !== null;
+  const canSaveGrade = isTeacher && isGradeMode && !isGraded;
   const canRelease = isTeacher && isGraded && !isReleased;
   const isReleasing = releaseFetcher.state !== 'idle';
 
@@ -418,6 +419,22 @@ export default function SubmissionRoute() {
       setLocalReleasedAt(new Date().toISOString());
     }
   }, [releaseFetcher.data, releaseFetcher.state]);
+
+  const handleSaveGrade = useCallback(async () => {
+    setIsSavingGrade(true);
+    try {
+      const res = await fetch('/api/domain/update-submission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissionId: submission.id, markAsGraded: true }),
+      });
+      if (res.ok) {
+        setLocalGradedAt(new Date().toISOString());
+      }
+    } finally {
+      setIsSavingGrade(false);
+    }
+  }, [submission.id]);
 
   const handleReleaseGrade = useCallback(() => {
     const formData = new FormData();
@@ -435,7 +452,7 @@ export default function SubmissionRoute() {
   return (
     <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
-      <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-3 border-b px-3 py-2">
+      <nav className="flex w-full items-center gap-3 border-b bg-white px-3 py-2">
         <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => navigate(exitTarget)}>
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -459,7 +476,7 @@ export default function SubmissionRoute() {
 
         <Badge variant={statusVariant} className="shrink-0">{statusLabel}</Badge>
 
-        {gradeDisplay ? (
+        {gradeDisplay && !isPending ? (
           <Badge
             variant="secondary"
             className="shrink-0 border-purple-300 bg-purple-100 text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200"
@@ -469,7 +486,17 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Teacher: Release grade to student */}
+          {/* Teacher: Save Grade → Release Grade flow */}
+          {canSaveGrade ? (
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isSavingGrade}
+              onClick={handleSaveGrade}
+            >
+              {isSavingGrade ? 'Saving...' : 'Save Grade'}
+            </Button>
+          ) : null}
           {canRelease ? (
             <ConfirmationDialog
               title="Release Grade?"
@@ -502,7 +529,7 @@ export default function SubmissionRoute() {
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r" style={{ width: 380 }}>
+        <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white" style={{ width: 380 }}>
           {isTeacher ? (
             <>
               <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
@@ -567,35 +594,40 @@ export default function SubmissionRoute() {
                 <span className="text-sm font-semibold">Grade Summary</span>
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
-                <ViewPanel submission={submission} />
+                {isPending ? (
+                  <PendingViewPanel />
+                ) : (
+                  <ViewPanel submission={submission} />
+                )}
               </div>
             </>
           )}
         </div>
 
         {/* Center: Essay */}
-        <div className="flex min-w-0 grow flex-col overflow-hidden md:h-full">
+        <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
           <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
           {isTeacher && essayElement ? (
-            <>
-              <SelectionToolbar contentRoot={essayElement} />
-              <GradeHighlightsOverlay
-                contentRoot={essayElement}
-                highlights={essayHighlights}
-                activeGradeCommentId={activeGradeCommentId}
-                onGradeCommentSelect={setActiveGradeCommentId}
-                onGrammarIssueHover={handleGrammarIssueHover}
-              />
-            </>
+            <SelectionToolbar contentRoot={essayElement} />
+          ) : null}
+          {essayElement ? (
+            <GradeHighlightsOverlay
+              contentRoot={essayElement}
+              highlights={essayHighlights}
+              activeGradeCommentId={activeGradeCommentId}
+              onGradeCommentSelect={setActiveGradeCommentId}
+              onGrammarIssueHover={handleGrammarIssueHover}
+            />
           ) : null}
         </div>
 
         {/* Right: Feedback comments */}
-        <div className="no-scrollbar shrink-0 overflow-y-auto border-l" style={{ width: 320 }}>
+        <div className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white" style={{ width: 320 }}>
           <GradingCommentsSidebar
-            submissionComments={comments as any}
+            submissionComments={isPending ? [] : (comments as any)}
             submissionId={submission.id}
             sourceText={submission.text ?? ''}
+            readOnly={!isTeacher}
             activeGradeCommentId={activeGradeCommentId}
             onSelectGradeComment={setActiveGradeCommentId}
             onDraftHighlightChange={setDraftHighlight}
@@ -607,36 +639,82 @@ export default function SubmissionRoute() {
       </div>
 
       {/* Grammar issue tooltip — shown on hover over purple-highlighted text */}
-      {activeGrammarIssue && tooltipPos ? (
-        <div
-          className="fixed z-50 max-w-xs rounded-lg border border-purple-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
-          style={{ top: tooltipPos.top, left: tooltipPos.left }}
-          onMouseEnter={() => {
-            tooltipHoveredRef.current = true;
-            if (tooltipClearTimerRef.current) {
-              clearTimeout(tooltipClearTimerRef.current);
-              tooltipClearTimerRef.current = null;
-            }
-          }}
-          onMouseLeave={() => {
-            tooltipHoveredRef.current = false;
-            setTooltipIssueId(null);
-            setTooltipRect(null);
-          }}
-        >
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
-            <p className="text-xs font-semibold text-purple-700">
-              {activeGrammarIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
-            </p>
+      {!isPending && activeGrammarIssues.length > 0 && tooltipPos ? (() => {
+        const currentIssue = activeGrammarIssues[tooltipPage] ?? activeGrammarIssues[0];
+        const hasMultiple = activeGrammarIssues.length > 1;
+        return (
+          <div
+            className="fixed z-50 max-w-xs rounded-lg border border-purple-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+            style={{ top: tooltipPos.top, left: tooltipPos.left }}
+            onMouseEnter={() => {
+              tooltipHoveredRef.current = true;
+              if (tooltipClearTimerRef.current) {
+                clearTimeout(tooltipClearTimerRef.current);
+                tooltipClearTimerRef.current = null;
+              }
+            }}
+            onMouseLeave={() => {
+              tooltipHoveredRef.current = false;
+              setTooltipIssueIds([]);
+              setTooltipRect(null);
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
+                <p className="text-xs font-semibold text-purple-700">
+                  {currentIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
+                </p>
+              </div>
+              {hasMultiple ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
+                    onClick={() => setTooltipPage((p) => (p - 1 + activeGrammarIssues.length) % activeGrammarIssues.length)}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="text-xs text-purple-500">{tooltipPage + 1}/{activeGrammarIssues.length}</span>
+                  <button
+                    type="button"
+                    className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
+                    onClick={() => setTooltipPage((p) => (p + 1) % activeGrammarIssues.length)}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+            <p className="mt-1.5 text-sm leading-snug select-text">{currentIssue.message}</p>
+            {currentIssue.rule ? (
+              <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">Rule: {currentIssue.rule}</p>
+            ) : null}
           </div>
-          <p className="mt-1.5 text-sm leading-snug select-text">{activeGrammarIssue.message}</p>
-          {activeGrammarIssue.rule ? (
-            <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">Rule: {activeGrammarIssue.rule}</p>
-          ) : null}
-        </div>
-      ) : null}
+        );
+      })() : null}
     </main>
+  );
+}
+
+// ── Pending View Panel (student, grade not yet released) ─────────────
+
+function PendingViewPanel() {
+  return (
+    <div className="p-4 space-y-4">
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground">Status</h3>
+        <p className="text-sm font-semibold mt-0.5">Submitted</p>
+      </div>
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground">Grade</h3>
+        <p className="mt-0.5 text-sm italic text-muted-foreground">Pending grade</p>
+      </div>
+      <div>
+        <h3 className="text-sm font-medium text-muted-foreground">Feedback</h3>
+        <p className="mt-0.5 text-sm italic text-muted-foreground">Pending feedback</p>
+      </div>
+    </div>
   );
 }
 

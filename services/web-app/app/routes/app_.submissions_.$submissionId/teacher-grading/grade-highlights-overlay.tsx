@@ -24,28 +24,18 @@ function getTextNodes(root: HTMLElement) {
   return nodes;
 }
 
-function resolveTextBoundary(root: HTMLElement, absoluteOffset: number) {
-  const textNodes = getTextNodes(root);
-  if (textNodes.length === 0) return null;
+const BLOCK_TAGS = new Set([
+  'P', 'DIV', 'LI', 'OL', 'UL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+  'BLOCKQUOTE', 'PRE', 'SECTION', 'ARTICLE',
+]);
 
-  const target = Math.max(0, absoluteOffset);
-  let cursor = 0;
-
-  for (const node of textNodes) {
-    const length = node.textContent?.length ?? 0;
-    const next = cursor + length;
-    if (target <= next) {
-      return {
-        node,
-        offset: Math.max(0, Math.min(length, target - cursor)),
-      };
-    }
-    cursor = next;
+function getClosestBlockParent(node: Node): Element | null {
+  let el = node.parentElement;
+  while (el) {
+    if (BLOCK_TAGS.has(el.tagName)) return el;
+    el = el.parentElement;
   }
-
-  const lastNode = textNodes[textNodes.length - 1];
-  const lastLength = lastNode.textContent?.length ?? 0;
-  return { node: lastNode, offset: lastLength };
+  return null;
 }
 
 function clearReviewMarks(root: HTMLElement) {
@@ -71,10 +61,20 @@ function applyReviewHighlights(
   const ranges: { start: number; end: number; id: string }[] = [];
   const highlightById = new Map(highlights.map((h) => [h.id, h]));
 
+  // Build block-aware global text with segment tracking
+  const segments: { node: Text; globalStart: number; length: number }[] = [];
   let global = '';
+  let lastBlockParent: Element | null = null;
+
   for (const node of textNodes) {
+    const blockParent = getClosestBlockParent(node);
+    if (global.length > 0 && blockParent && blockParent !== lastBlockParent) {
+      global += '\n';
+    }
     const text = node.textContent ?? '';
+    segments.push({ node, globalStart: global.length, length: text.length });
     global += text;
+    if (blockParent) lastBlockParent = blockParent;
   }
 
   for (const h of highlights) {
@@ -89,8 +89,33 @@ function applyReviewHighlights(
   ranges.sort((a, b) => b.start - a.start);
 
   for (const r of ranges) {
-    const startBoundary = resolveTextBoundary(root, r.start);
-    const endBoundary = resolveTextBoundary(root, r.end);
+    // Re-walk current text nodes each iteration (prior wraps may have split nodes)
+    const currentNodes = getTextNodes(root);
+
+    // Block-aware boundary resolution on CURRENT DOM state
+    const resolveInCurrent = (offset: number): { node: Text; offset: number } | null => {
+      if (currentNodes.length === 0) return null;
+      const target = Math.max(0, offset);
+      let cursor = 0;
+      let lastBlock: Element | null = null;
+
+      for (const node of currentNodes) {
+        const block = getClosestBlockParent(node);
+        if (cursor > 0 && block && block !== lastBlock) cursor += 1;
+        const len = node.textContent?.length ?? 0;
+        if (target <= cursor + len) {
+          return { node, offset: Math.min(len, target - cursor) };
+        }
+        cursor += len;
+        if (block) lastBlock = block;
+      }
+
+      const last = currentNodes[currentNodes.length - 1];
+      return { node: last, offset: last.textContent?.length ?? 0 };
+    };
+
+    const startBoundary = resolveInCurrent(r.start);
+    const endBoundary = resolveInCurrent(r.end);
     if (!startBoundary || !endBoundary) continue;
 
     if (
@@ -105,7 +130,6 @@ function applyReviewHighlights(
     const dataAttr = source.dataAttr ?? 'data-grade-comment-id';
     const className = source.className ?? 'grade-comment-mark';
 
-    const currentNodes = getTextNodes(root);
     const startIndex = currentNodes.indexOf(startBoundary.node);
     const endIndex = currentNodes.indexOf(endBoundary.node);
     if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) continue;
@@ -144,7 +168,7 @@ type Props = {
   highlights: GradeHighlight[];
   activeGradeCommentId: string | null;
   onGradeCommentSelect: (id: string) => void;
-  onGrammarIssueHover: (id: string | null, rect: DOMRect | null) => void;
+  onGrammarIssueHover: (ids: string[], rect: DOMRect | null) => void;
 };
 
 export function GradeHighlightsOverlay({
@@ -201,7 +225,7 @@ export function GradeHighlightsOverlay({
     if (!contentRoot) return;
 
     let hoveredCommentId: string | null = null;
-    let hoveredGrammarId: string | null = null;
+    let hoveredGrammarKey = '';
 
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
@@ -241,23 +265,29 @@ export function GradeHighlightsOverlay({
         hoveredCommentId = commentId;
       }
 
-      // Grammar hover
-      const grammarMark = target?.closest(
-        '[data-grammar-issue-id]'
-      ) as HTMLElement | null;
-      const grammarId =
-        grammarMark?.getAttribute('data-grammar-issue-id') ?? null;
+      // Grammar hover — collect ALL grammar issue IDs at this DOM position
+      const grammarIds: string[] = [];
+      let el: HTMLElement | null = target;
+      while (el && el !== contentRoot) {
+        const gid = el.getAttribute('data-grammar-issue-id');
+        if (gid && !grammarIds.includes(gid)) grammarIds.push(gid);
+        el = el.parentElement;
+      }
 
-      if (grammarId !== hoveredGrammarId) {
-        if (grammarId && grammarMark) {
+      const newGrammarKey = grammarIds.join(',');
+      if (newGrammarKey !== hoveredGrammarKey) {
+        if (grammarIds.length > 0) {
+          const innerMark = target?.closest(
+            '[data-grammar-issue-id]'
+          ) as HTMLElement | null;
           grammarHoverRef.current(
-            grammarId,
-            grammarMark.getBoundingClientRect()
+            grammarIds,
+            innerMark?.getBoundingClientRect() ?? null
           );
         } else {
-          grammarHoverRef.current(null, null);
+          grammarHoverRef.current([], null);
         }
-        hoveredGrammarId = grammarId;
+        hoveredGrammarKey = newGrammarKey;
       }
     };
 
@@ -270,9 +300,9 @@ export function GradeHighlightsOverlay({
           .forEach((el) => el.classList.remove('hovered'));
         hoveredCommentId = null;
       }
-      if (hoveredGrammarId) {
-        grammarHoverRef.current(null, null);
-        hoveredGrammarId = null;
+      if (hoveredGrammarKey) {
+        grammarHoverRef.current([], null);
+        hoveredGrammarKey = '';
       }
     };
 

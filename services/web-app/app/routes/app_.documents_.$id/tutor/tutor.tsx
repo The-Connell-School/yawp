@@ -7,7 +7,7 @@ import {
   MessageSquareOff,
   MessageSquareText,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Button } from '~/components/ui/button';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -15,6 +15,7 @@ import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
+import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
 
 type Props = {
   docId: string;
@@ -84,6 +85,7 @@ export const Tutor = ({
   const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
   const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
   const isCurrentCms = cmsIdx === 0;
+
   const navigateToCmsIdx = (nextIdx: number | undefined) => {
     const params = new URLSearchParams(searchParams);
     if (nextIdx === undefined || nextIdx === 0) {
@@ -202,10 +204,15 @@ export const Tutor = ({
     }
   }, [isSessionLocked, nextCmId, docId, onCmsUpdate]);
 
-  const messages = cms.messages
-    .filter((m) => ['user', 'assistant'].includes(m.agent))
-    .concat(optimisticMessage ? [optimisticMessage as any] : [])
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const messages = useMemo(() => {
+    const base = cms.messages.filter((m) =>
+      ['user', 'assistant'].includes(m.agent)
+    );
+    base.sort(compareTutorMessagesByTimeThenId);
+    return optimisticMessage
+      ? base.concat([optimisticMessage as any])
+      : base;
+  }, [cms.messages, optimisticMessage]);
 
   useEffect(() => {
     messagesRef.current?.scrollTo({

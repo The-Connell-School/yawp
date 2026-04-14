@@ -99,6 +99,12 @@ export function useEditorSync(
     // Subscribe to status changes
     const unsubStatus = onSyncStatusChange ? sync.onStatusChange(onSyncStatusChange) : undefined;
 
+    // Keep currentRevisionRef in sync when the server advances the revision
+    // (e.g. on 409 stale_base_revision recovery)
+    const unsubRevision = sync.onRevisionUpdate((rev) => {
+      currentRevisionRef.current = rev;
+    });
+
     // Set up the revision scheduler
     schedulerRef.current = createRevisionScheduler({
       intervalMs: REVISION_INTERVAL_MS,
@@ -127,6 +133,7 @@ export function useEditorSync(
       schedulerRef.current = null;
       syncServiceRef.current = null;
       unsubStatus?.();
+      unsubRevision();
     };
   }, [docId, onSyncStatusChange, getSnapshot]);
 

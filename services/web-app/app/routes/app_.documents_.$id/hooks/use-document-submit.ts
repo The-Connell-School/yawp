@@ -5,7 +5,7 @@ import type { EditorBridge } from '../document-editor/use-editor-sync';
 type Options = {
   documentId: string;
   editorBridgeRef: RefObject<EditorBridge | null>;
-  onSubmitted?: () => void;
+  onSubmitted?: (submission: { id: string; title: string; submittedAt: string }) => void;
 };
 
 /**
@@ -19,7 +19,7 @@ type Options = {
 export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: Options) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitNow = useCallback(async () => {
+  const submitNow = useCallback(async (title?: string) => {
     if (isSubmitting) return;
     setIsSubmitting(true);
 
@@ -32,6 +32,7 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
       // 2. POST submit
       const formData = new FormData();
       formData.append('documentId', documentId);
+      if (title) formData.append('title', title);
       const res = await fetch('/api/domain/submit-document', {
         method: 'POST',
         body: formData,
@@ -43,8 +44,9 @@ export function useDocumentSubmit({ documentId, editorBridgeRef, onSubmitted }: 
         return;
       }
 
+      const body = await res.json().catch(() => ({}));
       toast.success('Submitted!');
-      onSubmitted?.();
+      onSubmitted?.(body.submission ?? { id: `temp-${Date.now()}`, title: title ?? '', submittedAt: new Date().toISOString() });
     } catch (err) {
       toast.error('Submission failed: ' + (err instanceof Error ? err.message : 'unknown'));
     } finally {

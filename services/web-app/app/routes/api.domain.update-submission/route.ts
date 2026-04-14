@@ -75,8 +75,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
   }
 
-  // Set gradedAt and gradedById on first grading edit
-  if (!submission.gradedAt) {
+  // Explicitly mark as graded when requested
+  if (fields.markAsGraded && !submission.gradedAt) {
     data.gradedAt = new Date();
     data.gradedById = actor.profileId;
   }

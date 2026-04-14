@@ -7,7 +7,7 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
 
-const POST = z.object({ documentId: z.string() });
+const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
 function hashString(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -75,13 +75,6 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  if (document.submissions.length > 0) {
-    return redirectWithToast(`/app/documents/${data.documentId}`, {
-      description: 'Resubmitting is temporarily disabled.',
-      type: 'error',
-    });
-  }
-
   if (!document.html || !document.text) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
@@ -125,23 +118,26 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   });
 
   try {
-    const finalDocument = await prisma.$transaction(async (tx) => {
-      await tx.submission.create({
+    const { submission: createdSubmission, document: finalDocument } = await prisma.$transaction(async (tx) => {
+      const submission = await tx.submission.create({
         data: {
           documentId: document.id,
-          title: document.title ?? '',
+          title: data.title || (document.title ?? ''),
           html,
           text,
           submittedAt: now,
         },
+        select: { id: true, title: true, submittedAt: true },
       });
 
-      return tx.document.update({
+      const doc = await tx.document.update({
         where: { id: document.id },
         data: {
           updatedAt: now,
         },
       });
+
+      return { submission, document: doc };
     });
 
     await prisma.documentWriteJournal.update({
@@ -155,6 +151,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     return dataResponse({
       success: true,
       document: finalDocument,
+      submission: createdSubmission,
       message: 'Essay submitted successfully!',
     });
   } catch (error) {
