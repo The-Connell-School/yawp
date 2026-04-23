@@ -757,6 +757,8 @@ export default function Route() {
               <Comments
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
+                onCommentRemoved={commentsState.removeComment}
+                onResponseAdded={commentsState.addResponse}
               />
             )}
           </div>

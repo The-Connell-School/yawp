@@ -5,7 +5,7 @@ import {
   Profile,
 } from '@app/prisma';
 import { useFetcher } from 'react-router';
-import { useRef, type MouseEvent } from 'react';
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
@@ -22,20 +22,51 @@ export type Comment = DocumentComment & {
   })[];
 };
 
-type CommentProps = Comment & { readOnly?: boolean };
+type CommentProps = Comment & {
+  readOnly?: boolean;
+  onDelete?: (commentId: string) => void;
+  onResponseAdded?: (commentId: string, response: unknown) => void;
+};
 
-export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
+export const Comment = ({
+  readOnly = false,
+  onDelete,
+  onResponseAdded,
+  ...comment
+}: CommentProps) => {
   const {
     activeCommentId,
     setActiveCommentId,
     hoveredCommentId,
     setHoveredCommentId,
   } = useCommentsSelection();
+  const isFocused =
+    activeCommentId === comment.id || hoveredCommentId === comment.id;
   const deleteCommentFetcher = useFetcher();
   const createCommentResponseFetcher = useFetcher();
   const dc = useDoubleCheck();
   const user = useUser();
   const ref = useRef(null);
+  const lastHandledResponseRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    const data = createCommentResponseFetcher.data as
+      | { id?: string }
+      | undefined;
+    if (
+      createCommentResponseFetcher.state === 'idle' &&
+      data?.id &&
+      data !== lastHandledResponseRef.current
+    ) {
+      lastHandledResponseRef.current = data;
+      onResponseAdded?.(comment.id, data);
+    }
+  }, [
+    createCommentResponseFetcher.state,
+    createCommentResponseFetcher.data,
+    comment.id,
+    onResponseAdded,
+  ]);
 
   const isTeacherOfCommentUser =
     user.selectedProfile?.teacherProfile?.profileId === comment.profileId;
@@ -69,6 +100,8 @@ export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
       action: `/api/model/document-comment/${comment.id}`,
     });
 
+    onDelete?.(comment.id);
+
     const marks = document.querySelectorAll(
       `[data-comment-id="${comment.id}"]`
     );
@@ -92,66 +125,15 @@ export const Comment = ({ readOnly = false, ...comment }: CommentProps) => {
     <div
       className={
         `relative flex flex-col rounded-lg p-3 transition-all duration-200 ease-in-out ` +
-        (activeCommentId === comment.id || hoveredCommentId === comment.id
-          ? 'bg-ring/20 shadow-lg'
-          : 'bg-stone-200')
+        (isFocused ? 'bg-ring/20 shadow-lg' : 'bg-stone-200')
       }
       id={`comment-${comment.id}`}
-      onMouseEnter={() => {
-        setHoveredCommentId(comment.id);
-        const commentNode = document.getElementById(`comment-${comment.id}`);
-        if (commentNode) {
-          commentNode.classList.add('bg-ring/20', 'shadow-lg');
-          commentNode.classList.remove('bg-stone-200');
-        }
-        const marks = document.querySelectorAll<HTMLElement>(
-          `[data-comment-id="${comment.id}"]`
-        );
-        marks.forEach((m) => m.classList.add('focused'));
-      }}
-      onMouseLeave={() => {
-        setHoveredCommentId(null);
-        const commentNode = document.getElementById(`comment-${comment.id}`);
-        if (
-          commentNode &&
-          commentNode.getAttribute('data-comment-active') !== 'true'
-        ) {
-          commentNode.classList.remove('bg-ring/20', 'shadow-lg');
-          commentNode.classList.add('bg-stone-200');
-          const marks = document.querySelectorAll<HTMLElement>(
-            `[data-comment-id="${comment.id}"]`
-          );
-          marks.forEach((m) => m.classList.remove('focused'));
-        }
-      }}
-      onClick={() => {
+      data-comment-card={comment.id}
+      onMouseEnter={() => setHoveredCommentId(comment.id)}
+      onMouseLeave={() => setHoveredCommentId(null)}
+      onClick={(e) => {
+        e.stopPropagation();
         setActiveCommentId(comment.id);
-        const prevActive = document.querySelector(
-          '[data-comment-active="true"]'
-        ) as HTMLElement | null;
-        if (prevActive) {
-          prevActive.classList.remove('bg-ring/20', 'shadow-lg');
-          prevActive.classList.add('bg-stone-200');
-          prevActive.removeAttribute('data-comment-active');
-        }
-        document
-          .querySelectorAll<HTMLElement>('.comment-mark.focused')
-          .forEach((el) => el.classList.remove('focused'));
-
-        const commentNode = document.getElementById(`comment-${comment.id}`);
-        if (commentNode) {
-          commentNode.classList.add('bg-ring/20', 'shadow-lg');
-          commentNode.classList.remove('bg-stone-200');
-          commentNode.setAttribute('data-comment-active', 'true');
-        }
-        const marks = document.querySelectorAll<HTMLElement>(
-          `[data-comment-id="${comment.id}"]`
-        );
-        marks.forEach((m) => m.classList.add('focused'));
-        const first = marks.item(0);
-        if (first) {
-          first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
       }}
       ref={ref}
     >

@@ -8,7 +8,12 @@ import { cn } from '~/utils/misc';
 import { Comment, type Comment as CommentType } from './comment';
 import { useCommentsSelection } from './selection-context';
 
-type Props = { comments: CommentType[]; readOnly?: boolean };
+type Props = {
+  comments: CommentType[];
+  readOnly?: boolean;
+  onCommentRemoved?: (commentId: string) => void;
+  onResponseAdded?: (commentId: string, response: unknown) => void;
+};
 
 type ExtendedProps = Props & { className?: string };
 
@@ -16,6 +21,8 @@ export const Comments = ({
   comments,
   readOnly = false,
   className,
+  onCommentRemoved,
+  onResponseAdded,
 }: ExtendedProps) => {
   const user = useUser();
   const fetcher = useFetchers().find(
@@ -27,7 +34,28 @@ export const Comments = ({
     true
   );
 
-  useBlurComments(comments);
+  // Click outside any mark or comment card clears the active selection.
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-comment-id]')) return;
+      if (target.closest('[data-comment-card]')) return;
+      setActiveCommentId(null);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [setActiveCommentId]);
+
+  // Scroll the active comment card into view when selection changes.
+  useEffect(() => {
+    if (!activeCommentId) return;
+    const card = document.querySelector(
+      `[data-comment-card="${activeCommentId}"]`
+    );
+    card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [activeCommentId]);
+
   useFocusOptimisticComment(fetcher);
 
   const optimisticComment: CommentType | [] =
@@ -78,7 +106,13 @@ export const Comments = ({
         {comments.length > 0 ? (
           <>
             {comments.concat(optimisticComment).map((comment) => (
-              <Comment key={comment.id} {...comment} readOnly={readOnly} />
+              <Comment
+                key={comment.id}
+                {...comment}
+                readOnly={readOnly}
+                onDelete={onCommentRemoved}
+                onResponseAdded={onResponseAdded}
+              />
             ))}
           </>
         ) : (
@@ -89,39 +123,6 @@ export const Comments = ({
       </div>
     </div>
   );
-};
-
-const useBlurComments = (comments: CommentType[]) => {
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      comments.forEach((comment) => {
-        const commentElement = document.getElementById(`comment-${comment.id}`);
-        const commentMarks = document.querySelectorAll(
-          `[data-comment-id="${comment.id}"]`
-        );
-        const clickedElement = commentElement?.contains(event.target as Node);
-        const clickedMark = Array.from(commentMarks).some((el) =>
-          el.contains(event.target as Node)
-        );
-
-        if (clickedElement || clickedMark) {
-          return;
-        }
-
-        commentElement?.classList.remove('bg-primary/20', 'shadow-lg');
-        commentElement?.removeAttribute('data-comment-active');
-        commentMarks.forEach((el) =>
-          (el as HTMLElement).classList.remove('focused')
-        );
-      });
-    };
-
-    document.addEventListener('click', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [comments]);
 };
 
 const useFocusOptimisticComment = (fetcher: Fetcher | undefined) => {

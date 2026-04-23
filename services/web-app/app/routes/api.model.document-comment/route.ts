@@ -23,6 +23,14 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const creation = await prisma.documentComment.create({
     data: { ...data, profileId: profile.id },
+    include: {
+      profile: { include: { user: { select: { name: true } } } },
+      responses: {
+        include: {
+          profile: { include: { user: { select: { name: true } } } },
+        },
+      },
+    },
   });
   return dataResponse(creation, { status: 201 });
 }

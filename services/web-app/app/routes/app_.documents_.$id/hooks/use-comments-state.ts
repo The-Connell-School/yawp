@@ -31,6 +31,10 @@ export function useCommentsState(initialComments: DocComment[]) {
     setComments((prev) => [...prev, comment]);
   }, []);
 
+  const removeComment = useCallback((commentId: string) => {
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+  }, []);
+
   const addResponse = useCallback((commentId: string, response: any) => {
     setComments((prev) =>
       prev.map((c) =>
@@ -41,5 +45,5 @@ export function useCommentsState(initialComments: DocComment[]) {
     );
   }, []);
 
-  return { comments, addComment, addResponse };
+  return { comments, addComment, removeComment, addResponse };
 }
