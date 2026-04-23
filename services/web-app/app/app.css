@@ -210,6 +210,16 @@ code {
   pointer-events: none;
 }
 
+/* Submission essay: match document-editor rendering without TipTap */
+.submission-essay p:empty::before {
+  content: '\00a0';
+}
+.submission-essay .comment-mark {
+  background-color: transparent;
+  border-bottom: none;
+  pointer-events: none;
+}
+
 .grammar-issue {
   background-color: rgba(216, 180, 254, 0.28);
   border-bottom: 2px dotted rgba(192, 132, 252, 0.6);
