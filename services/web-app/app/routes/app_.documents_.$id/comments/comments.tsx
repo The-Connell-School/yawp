@@ -13,6 +13,7 @@ type Props = {
   readOnly?: boolean;
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
+  autoFocusReplyCommentId?: string | null;
 };
 
 type ExtendedProps = Props & { className?: string };
@@ -23,6 +24,7 @@ export const Comments = ({
   className,
   onCommentRemoved,
   onResponseAdded,
+  autoFocusReplyCommentId,
 }: ExtendedProps) => {
   const user = useUser();
   const fetcher = useFetchers().find(
@@ -112,6 +114,7 @@ export const Comments = ({
                 readOnly={readOnly}
                 onDelete={onCommentRemoved}
                 onResponseAdded={onResponseAdded}
+                autoFocusReply={autoFocusReplyCommentId === comment.id}
               />
             ))}
           </>

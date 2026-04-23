@@ -26,12 +26,14 @@ type CommentProps = Comment & {
   readOnly?: boolean;
   onDelete?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
+  autoFocusReply?: boolean;
 };
 
 export const Comment = ({
   readOnly = false,
   onDelete,
   onResponseAdded,
+  autoFocusReply = false,
   ...comment
 }: CommentProps) => {
   const {
@@ -192,6 +194,7 @@ export const Comment = ({
             textareaTestId={`comment-reply-input-${comment.id}`}
             sendButtonTestId={`comment-reply-send-${comment.id}`}
             className="mt-2 bg-muted"
+            autoFocus={autoFocusReply}
           />
         ) : null}
       </div>

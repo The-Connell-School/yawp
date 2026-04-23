@@ -16,6 +16,9 @@ export type DocComment = {
  */
 export function useCommentsState(initialComments: DocComment[]) {
   const [comments, setComments] = useState<DocComment[]>(initialComments);
+  const [pendingFocusCommentId, setPendingFocusCommentId] = useState<
+    string | null
+  >(null);
 
   // Resync if the loader-provided comments change wholesale
   // (typically happens on navigation to a different document)
@@ -29,6 +32,7 @@ export function useCommentsState(initialComments: DocComment[]) {
 
   const addComment = useCallback((comment: DocComment) => {
     setComments((prev) => [...prev, comment]);
+    setPendingFocusCommentId(comment.id);
   }, []);
 
   const removeComment = useCallback((commentId: string) => {
@@ -45,5 +49,11 @@ export function useCommentsState(initialComments: DocComment[]) {
     );
   }, []);
 
-  return { comments, addComment, removeComment, addResponse };
+  return {
+    comments,
+    addComment,
+    removeComment,
+    addResponse,
+    pendingFocusCommentId,
+  };
 }
