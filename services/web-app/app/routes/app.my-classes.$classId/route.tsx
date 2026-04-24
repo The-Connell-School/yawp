@@ -607,19 +607,14 @@ export default function ClassDetailRoute() {
 
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
   const validTabs: TabValue[] = [
-    'in-progress',
-    'to-grade',
-    'graded',
-    'released',
-    ...(assignmentsEnabled ? (['assignments'] as const) : []),
-    'paste-activity',
     'students',
+    ...(assignmentsEnabled ? (['assignments'] as const) : []),
   ];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
       ? requestedTab
-      : 'in-progress';
+      : 'students';
   const assignmentFilterParam = searchParams.get('assignmentId') ?? 'all';
   const selectedAssignmentId =
     assignmentFilterParam !== 'all' &&
@@ -1397,134 +1392,12 @@ export default function ClassDetailRoute() {
       </div>
 
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-6">
           <Button asChild variant="outline" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
-            {activeTab === 'assignments' ? (
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingAssignmentId(null);
-                  setIsAssignmentSheetOpen(true);
-                }}
-              >
-                + New Assignment
-              </Button>
-            ) : null}
-            {data.isDocumentSubmissionEnabled &&
-              activeTab === 'graded' &&
-              filteredGradedUnreleasedDocuments.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="default"
-                      data-testid="class-release-grades-open"
-                    >
-                      Release Grades
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-xl">
-                    <DropdownMenuItem
-                      onSelect={() => openReleaseSheetForMode('all')}
-                      className="rounded-lg"
-                    >
-                      All graded docs ({unreleasedGrades.length})
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => openReleaseSheetForMode('selected')}
-                      disabled={!canReleaseSelected}
-                      className="rounded-lg"
-                    >
-                      Only selected docs ({selectedUnreleasedGrades.length})
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-          </div>
-        </div>
-
-        {assignmentsEnabled &&
-        ['in-progress', 'to-grade', 'graded', 'released'].includes(
-          activeTab
-        ) ? (
-          <div className="mb-4 flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Assignment:</span>
-            <Select
-              value={selectedAssignmentId}
-              onValueChange={handleAssignmentFilterChange}
-            >
-              <SelectTrigger className="w-full sm:w-[320px]">
-                <SelectValue placeholder="All assignments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All assignments</SelectItem>
-                {data.assignments.map((assignment) => (
-                  <SelectItem key={assignment.id} value={assignment.id}>
-                    {assignment.title || 'Untitled Assignment'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-
-        {/* Summary Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-          <button
-            onClick={() => handleTabChange('students')}
-            className="flex flex-col items-center p-4 rounded-lg bg-muted/50 border hover:bg-muted transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <User className="w-4 h-4" />
-              <span className="text-xs font-medium">Students</span>
-            </div>
-            <span className="text-3xl font-bold">{students.length}</span>
-          </button>
-          <button
-            onClick={() => handleTabChange('in-progress')}
-            className="flex flex-col items-center p-4 rounded-lg bg-muted/50 border hover:bg-muted transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-1 text-muted-foreground mb-1">
-              <FileText className="w-4 h-4" />
-              <span className="text-xs font-medium">In Progress</span>
-            </div>
-            <span className="text-3xl font-bold">
-              {filteredInProgressDocuments.length}
-            </span>
-          </button>
-          {data.isDocumentSubmissionEnabled && (
-            <button
-              onClick={() => handleTabChange('to-grade')}
-              className="flex flex-col items-center p-4 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900 hover:bg-orange-100 dark:hover:bg-orange-950/30 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400 mb-1">
-                <ClipboardCheck className="w-4 h-4" />
-                <span className="text-xs font-medium">Submitted</span>
-              </div>
-              <span className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {filteredUngradedDocuments.length}
-              </span>
-            </button>
-          )}
-          {data.isDocumentSubmissionEnabled && (
-            <button
-              onClick={() => handleTabChange('graded')}
-              className="flex flex-col items-center p-4 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 hover:bg-blue-100 dark:hover:bg-blue-950/30 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-1 text-blue-600 dark:text-blue-400 mb-1">
-                <Send className="w-4 h-4" />
-                <span className="text-xs font-medium">To Release</span>
-              </div>
-              <span className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                {filteredGradedUnreleasedDocuments.length}
-              </span>
-            </button>
-          )}
         </div>
 
         {/* Tabs and Table */}
@@ -1535,63 +1408,17 @@ export default function ClassDetailRoute() {
         >
           <div>
             <div className="flex items-center justify-between">
-              <TabsList
-                className={`grid w-full h-auto ${
-                  data.isDocumentSubmissionEnabled
-                    ? assignmentsEnabled
-                      ? 'grid-cols-3 lg:grid-cols-7'
-                      : 'grid-cols-3 lg:grid-cols-6'
-                    : assignmentsEnabled
-                      ? 'grid-cols-3 lg:grid-cols-4'
-                      : 'grid-cols-3 lg:grid-cols-3'
-                }`}
-              >
+              <TabsList className="flex h-auto">
                 <TabsTrigger
-                  value="in-progress"
+                  value="students"
                   className="flex items-center gap-2 h-auto py-2"
                 >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">In Progress</span>
+                  <User className="w-4 h-4" />
+                  <span className="hidden sm:inline">Students</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {filteredInProgressDocuments.length}
+                    {students.length}
                   </span>
                 </TabsTrigger>
-                {data.isDocumentSubmissionEnabled && (
-                  <TabsTrigger
-                    value="to-grade"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <ClipboardCheck className="w-4 h-4" />
-                    <span className="hidden sm:inline">Submitted</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {filteredUngradedDocuments.length}
-                    </span>
-                  </TabsTrigger>
-                )}
-                {data.isDocumentSubmissionEnabled && (
-                  <TabsTrigger
-                    value="graded"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span className="hidden sm:inline">Graded</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {filteredGradedUnreleasedDocuments.length}
-                    </span>
-                  </TabsTrigger>
-                )}
-                {data.isDocumentSubmissionEnabled && (
-                  <TabsTrigger
-                    value="released"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <ClipboardCheck className="w-4 h-4" />
-                    <span className="hidden sm:inline">Released</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {filteredReleasedDocuments.length}
-                    </span>
-                  </TabsTrigger>
-                )}
                 {assignmentsEnabled && (
                   <TabsTrigger
                     value="assignments"
@@ -1604,27 +1431,18 @@ export default function ClassDetailRoute() {
                     </span>
                   </TabsTrigger>
                 )}
-                <TabsTrigger
-                  value="paste-activity"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <span className="hidden sm:inline">Paste Activity</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.pasteAlerts.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="students"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">Students</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {students.length}
-                  </span>
-                </TabsTrigger>
               </TabsList>
+              {assignmentsEnabled && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingAssignmentId(null);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                >
+                  + Create New Assignment
+                </Button>
+              )}
             </div>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>
