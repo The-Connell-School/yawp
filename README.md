@@ -1,3 +1,5 @@
+# yawp-2.0
+
 ### Setting Up Checklist
 
 - [ ] Configure the backend on s3 (replace vars, only 1 per app {not per env})
@@ -40,7 +42,7 @@ ssh -i ~/.ssh/yawp-{env}-bastion ec2-user@<bastion-public-ip>
 
 ### Connecting to an AWS database from a .ts script
 
-2. Open a tunnel to the db
+1. Open a tunnel to the db
 ```bash
 ssh -N -L 3306:<db_host>:5432 ec2-user@<bastion_server_host> -i ~/.ssh/<app_name>-<env>-bastion
 ```
