@@ -511,31 +511,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const assignments = assignmentsEnabled
-    ? await prisma.assignment.findMany({
-        where: { classId },
+  const assignments = await prisma.assignment.findMany({
+    where: { classId },
+    select: {
+      id: true,
+      title: true,
+      prompt: true,
+      tutorContext: true,
+      dueDate: true,
+      studentCourseId: true,
+      studentCourse: {
         select: {
           id: true,
           title: true,
-          prompt: true,
-          tutorContext: true,
-          dueDate: true,
-          studentCourseId: true,
-          studentCourse: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-          _count: {
-            select: {
-              documents: true,
-            },
-          },
         },
-        orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
-      })
-    : [];
+      },
+      _count: {
+        select: {
+          documents: true,
+        },
+      },
+    },
+    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+  });
 
   const submittedPapersFilter = await getSubmittedPapersFilter(request);
 
@@ -605,11 +603,8 @@ export default function ClassDetailRoute() {
     : classDetailPath;
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
-  const assignmentsEnabled = data.assignmentsEnabled ?? false;
-  const validTabs: TabValue[] = [
-    'students',
-    ...(assignmentsEnabled ? (['assignments'] as const) : []),
-  ];
+  const assignmentsEnabled = data.assignmentsEnabled ?? true;
+  const validTabs: TabValue[] = ['students', 'assignments'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1419,30 +1414,26 @@ export default function ClassDetailRoute() {
                     {students.length}
                   </span>
                 </TabsTrigger>
-                {assignmentsEnabled && (
-                  <TabsTrigger
-                    value="assignments"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="hidden sm:inline">Assignments</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {data.assignments.length}
-                    </span>
-                  </TabsTrigger>
-                )}
-              </TabsList>
-              {assignmentsEnabled && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditingAssignmentId(null);
-                    setIsAssignmentSheetOpen(true);
-                  }}
+                <TabsTrigger
+                  value="assignments"
+                  className="flex items-center gap-2 h-auto py-2"
                 >
-                  + Create New Assignment
-                </Button>
-              )}
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Assignments</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {data.assignments.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingAssignmentId(null);
+                  setIsAssignmentSheetOpen(true);
+                }}
+              >
+                + Create New Assignment
+              </Button>
             </div>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>
@@ -1461,23 +1452,21 @@ export default function ClassDetailRoute() {
         </Tabs>
       </div>
 
-      {assignmentsEnabled && (
-        <AssignmentSheet
-          classId={data.klass.id}
-          allowedStudentCourses={data.klass.allowedStudentCourses.map(
-            (course) => ({
-              id: course.studentCourse.id,
-              title: course.studentCourse.title,
-            })
-          )}
-          open={isAssignmentSheetOpen}
-          onOpenChange={(open) => {
-            setIsAssignmentSheetOpen(open);
-            if (!open) setEditingAssignmentId(null);
-          }}
-          editingAssignment={editingAssignment}
-        />
-      )}
+      <AssignmentSheet
+        classId={data.klass.id}
+        allowedStudentCourses={data.klass.allowedStudentCourses.map(
+          (course) => ({
+            id: course.studentCourse.id,
+            title: course.studentCourse.title,
+          })
+        )}
+        open={isAssignmentSheetOpen}
+        onOpenChange={(open) => {
+          setIsAssignmentSheetOpen(open);
+          if (!open) setEditingAssignmentId(null);
+        }}
+        editingAssignment={editingAssignment}
+      />
 
       <Sheet
         open={selectedPasteContent !== null}
