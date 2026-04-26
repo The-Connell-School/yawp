@@ -403,6 +403,13 @@ export async function seedE2E(): Promise<E2EContext> {
       valueType: 'string',
     },
   });
+  await prisma.setting.create({
+    data: {
+      name: 'side_by_side_revision_enabled',
+      value: 'true',
+      valueType: 'boolean',
+    },
+  });
 
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.studentCourseModuleSession.create({

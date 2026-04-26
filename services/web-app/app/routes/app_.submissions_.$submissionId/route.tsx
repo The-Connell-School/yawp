@@ -34,6 +34,7 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import { isSideBySideRevisionEnabled } from '~/utils/feature-flags.server';
 import { EssayPanel } from './essay-panel';
 import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
@@ -189,6 +190,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     );
   });
 
+  const sideBySideRevisionEnabled = await isSideBySideRevisionEnabled();
+
   return {
     submission: {
       ...submission,
@@ -197,13 +200,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner,
     isTeacher: isTeacher || isAdmin,
     isGradeMode,
+    sideBySideRevisionEnabled,
   };
 }
 
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
+  const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode, sideBySideRevisionEnabled } =
     useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -578,7 +582,9 @@ export default function SubmissionRoute() {
   }, [submission.id, releaseFetcher]);
 
   // ── Paths ──────────────────────────────────────────────────────────
-  const revisePath = `/app/documents/${submission.documentId}?revise=1`;
+  const revisePath = sideBySideRevisionEnabled
+    ? `/app/submissions/${submission.id}/revise`
+    : `/app/documents/${submission.documentId}?revise=1`;
   const editGradePath = `/app/submissions/${submission.id}?edit=1`;
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;

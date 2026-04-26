@@ -4,6 +4,7 @@ export const FEATURE_FLAGS = {
   DOCUMENT_SUBMISSION: 'document_submission_enabled',
   DOCUMENT_SUBMISSION_SCHOOL_IDS: 'document_submission_enabled_school_ids',
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
+  SIDE_BY_SIDE_REVISION: 'side_by_side_revision_enabled',
 } as const;
 
 export async function getFeatureFlag(name: string): Promise<boolean> {
@@ -72,6 +73,10 @@ export async function isDocumentSubmissionEnabledForSchools(
   if (distinctSchoolIds.length === 0) return false;
 
   return distinctSchoolIds.every((schoolId) => enabledSchoolIds.has(schoolId));
+}
+
+export async function isSideBySideRevisionEnabled(): Promise<boolean> {
+  return getFeatureFlag(FEATURE_FLAGS.SIDE_BY_SIDE_REVISION);
 }
 
 export async function isAssignmentsEnabledForOrganization(
