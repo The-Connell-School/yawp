@@ -604,7 +604,7 @@ export default function ClassDetailRoute() {
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
   const assignmentsEnabled = data.assignmentsEnabled ?? true;
-  const validTabs: TabValue[] = ['students', 'assignments', 'to-grade', 'released'];
+  const validTabs: TabValue[] = ['students', 'assignments'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1139,70 +1139,109 @@ export default function ClassDetailRoute() {
                 <TableHead>Title</TableHead>
                 <TableHead>Course</TableHead>
                 <TableHead>Due Date</TableHead>
-                <TableHead>Prompt</TableHead>
-                <TableHead>Docs</TableHead>
+                <TableHead>In Progress</TableHead>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Graded</TableHead>
+                <TableHead>Released</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((assignment) => (
-                <TableRow key={assignment.id}>
-                  <TableCell className="font-medium">
-                    {assignment.title || 'Untitled Assignment'}
-                  </TableCell>
-                  <TableCell>{assignment.studentCourse.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground max-w-[320px]">
-                    <p className="line-clamp-2">{assignment.prompt}</p>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{assignment._count.documents}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        type="button"
-                        onClick={() => {
-                          setEditingAssignmentId(assignment.id);
-                          setIsAssignmentSheetOpen(true);
-                        }}
-                      >
-                        Edit
-                      </Button>
-                      <Form
-                        method="post"
-                        onSubmit={(event) => {
-                          if (
-                            !window.confirm(
-                              'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
-                            )
-                          ) {
-                            event.preventDefault();
-                          }
-                        }}
-                      >
-                        <input
-                          type="hidden"
-                          name="intent"
-                          value="delete-assignment"
-                        />
-                        <input
-                          type="hidden"
-                          name="assignmentId"
-                          value={assignment.id}
-                        />
-                        <Button size="sm" variant="destructive" type="submit">
-                          Delete
+              {paginatedData.map((assignment) => {
+                const assignmentSubmissions = allSubmissions.filter(
+                  (s) => s.document.assignment?.id === assignment.id
+                );
+                const inProgressCount = data.inProgressDocuments.filter(
+                  (doc) => doc.assignment?.id === assignment.id
+                ).length;
+                const submittedCount = assignmentSubmissions.filter(
+                  (s) => !hasMeaningfulGrade(s) && !s.releasedAt
+                ).length;
+                const gradedCount = assignmentSubmissions.filter(
+                  (s) => hasMeaningfulGrade(s) && !s.releasedAt
+                ).length;
+                const releasedCount = assignmentSubmissions.filter(
+                  (s) => !!s.releasedAt
+                ).length;
+                return (
+                  <TableRow key={assignment.id}>
+                    <TableCell className="font-medium">
+                      {assignment.title || 'Untitled Assignment'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {assignment.studentCourse.title}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{inProgressCount}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {submittedCount > 0 ? (
+                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
+                          {submittedCount}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">{submittedCount}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {gradedCount > 0 ? (
+                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+                          {gradedCount}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">{gradedCount}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{releasedCount}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => {
+                            setEditingAssignmentId(assignment.id);
+                            setIsAssignmentSheetOpen(true);
+                          }}
+                        >
+                          Edit
                         </Button>
-                      </Form>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                        <Form
+                          method="post"
+                          onSubmit={(event) => {
+                            if (
+                              !window.confirm(
+                                'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
+                              )
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
+                        >
+                          <input
+                            type="hidden"
+                            name="intent"
+                            value="delete-assignment"
+                          />
+                          <input
+                            type="hidden"
+                            name="assignmentId"
+                            value={assignment.id}
+                          />
+                          <Button size="sm" variant="destructive" type="submit">
+                            Delete
+                          </Button>
+                        </Form>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -1422,26 +1461,6 @@ export default function ClassDetailRoute() {
                   <span className="hidden sm:inline">Assignments</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                     {data.assignments.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="to-grade"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <ClipboardCheck className="w-4 h-4" />
-                  <span className="hidden sm:inline">Submitted</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {filteredUngradedDocuments.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="released"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Released</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {filteredReleasedDocuments.length}
                   </span>
                 </TabsTrigger>
               </TabsList>
