@@ -34,6 +34,7 @@ import { DocumentEditor } from '../app_.documents_.$id/document-editor/document-
 import { useDocumentSubmit } from '../app_.documents_.$id/hooks/use-document-submit';
 import { useAuthHeartbeat } from '../app_.documents_.$id/hooks/use-auth-heartbeat';
 import type { EditorBridge } from '../app_.documents_.$id/document-editor/use-editor-sync';
+import { CommentsSelectionProvider } from '../app_.documents_.$id/comments/selection-context';
 
 // ── Loader ───────────────────────────────────────────────────────────
 
@@ -344,18 +345,20 @@ export default function RevisionRoute() {
             <span className="text-sm font-semibold">Your Revision</span>
           </div>
           <div className="relative min-h-0 grow">
-            <DocumentEditor
-              docId={doc.id}
-              serverHtml={doc.html ?? ''}
-              serverText={doc.text ?? ''}
-              serverUpdatedAt={doc.updatedAt}
-              initialRevision={doc.revision}
-              isEditable={isEditorEditable}
-              onBridgeReady={(bridge) => {
-                editorBridgeRef.current = bridge;
-              }}
-              onSubmittableContentChange={handleSubmittableContentChange}
-            />
+            <CommentsSelectionProvider>
+              <DocumentEditor
+                docId={doc.id}
+                serverHtml={doc.html ?? ''}
+                serverText={doc.text ?? ''}
+                serverUpdatedAt={doc.updatedAt}
+                initialRevision={doc.revision}
+                isEditable={isEditorEditable}
+                onBridgeReady={(bridge) => {
+                  editorBridgeRef.current = bridge;
+                }}
+                onSubmittableContentChange={handleSubmittableContentChange}
+              />
+            </CommentsSelectionProvider>
           </div>
         </div>
       </div>
