@@ -301,12 +301,23 @@ export default function RevisionRoute() {
           className="flex w-1/2 shrink-0 overflow-hidden border-r"
           data-testid="revision-feedback-panel"
         >
-          {/* Grade summary sidebar */}
-          <div className="no-scrollbar flex w-[200px] shrink-0 flex-col overflow-y-auto border-r bg-white">
+          {/* Stacked left column: Grade Summary + Grade Comments */}
+          <div className="no-scrollbar flex w-[240px] shrink-0 flex-col overflow-y-auto border-r bg-white">
             <div className="flex shrink-0 items-center border-b px-4 py-2.5">
               <span className="text-sm font-semibold">Grade Summary</span>
             </div>
             <GradeSummaryPanel submission={submission} />
+            <div className="flex shrink-0 items-center border-t border-b px-4 py-2.5">
+              <span className="text-sm font-semibold">Grade Comments</span>
+            </div>
+            <GradingCommentsSidebar
+              submissionComments={submission.comments as any}
+              submissionId={submission.id}
+              sourceText={submission.text ?? ''}
+              readOnly
+              activeGradeCommentId={activeGradeCommentId}
+              onSelectGradeComment={setActiveGradeCommentId}
+            />
           </div>
 
           {/* Essay + highlights */}
@@ -321,18 +332,6 @@ export default function RevisionRoute() {
                 onGrammarIssueHover={handleGrammarIssueHover}
               />
             ) : null}
-          </div>
-
-          {/* Comments sidebar (read-only) */}
-          <div className="no-scrollbar w-[200px] shrink-0 overflow-y-auto border-l bg-white">
-            <GradingCommentsSidebar
-              submissionComments={submission.comments as any}
-              submissionId={submission.id}
-              sourceText={submission.text ?? ''}
-              readOnly
-              activeGradeCommentId={activeGradeCommentId}
-              onSelectGradeComment={setActiveGradeCommentId}
-            />
           </div>
         </div>
 
