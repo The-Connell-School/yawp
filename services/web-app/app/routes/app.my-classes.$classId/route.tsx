@@ -604,7 +604,7 @@ export default function ClassDetailRoute() {
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
   const assignmentsEnabled = data.assignmentsEnabled ?? true;
-  const validTabs: TabValue[] = ['students', 'assignments'];
+  const validTabs: TabValue[] = ['students', 'assignments', 'to-grade', 'released'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1422,6 +1422,26 @@ export default function ClassDetailRoute() {
                   <span className="hidden sm:inline">Assignments</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                     {data.assignments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="to-grade"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <ClipboardCheck className="w-4 h-4" />
+                  <span className="hidden sm:inline">Submitted</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {filteredUngradedDocuments.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="released"
+                  className="flex items-center gap-2 h-auto py-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Released</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                    {filteredReleasedDocuments.length}
                   </span>
                 </TabsTrigger>
               </TabsList>
