@@ -63,7 +63,7 @@ These features from the original `app_.documents_.$id` editor were intentionally
 
 These features from the original editor were deliberately excluded from this view:
 
-- **Tutor sidebar** — the AI tutor/course module flow belongs to the original learning sequence, not the revision context. Adding it here would require a course module session, which may not exist for a revision.
+- **Tutor sidebar** — the AI tutor/course module flow belongs to the original learning sequence, not the revision context. At the revision stage, a student is responding to teacher feedback directly; re-engaging the tutor would require such a significant redesign of the flow that it starts to look more like a teacher-student interaction than a tutor-assisted one. This is intentionally left out for now, but we want to preserve the option to revisit it — there may be value in a future flow where students can rework their paper with the tutor as part of a structured revision cycle. That work is not scoped here.
 - **Student inline comments panel** — the right-side panel where students and teachers exchange threaded comments on the draft. Left out because the left panel already surfaces all teacher feedback; adding another comments layer would clutter the UI.
 - **Assignment prompt banner** — the amber box showing the assignment title and prompt. Omitted for now; could be useful context but adds vertical space and the submission title serves as a proxy.
 - **Previous submissions popover** — the button showing all past submission versions with grade/date. Left out to keep the nav uncluttered; the grade badge already surfaces the most recent result.
