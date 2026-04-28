@@ -4,12 +4,22 @@ import {
   useLoaderData,
   Link,
   useNavigate,
+  useFetcher,
   redirect,
 } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
+import { Input } from '~/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog';
 import {
   Accordion,
   AccordionContent,
@@ -35,6 +45,8 @@ import { useDocumentSubmit } from '../app_.documents_.$id/hooks/use-document-sub
 import { useAuthHeartbeat } from '../app_.documents_.$id/hooks/use-auth-heartbeat';
 import type { EditorBridge } from '../app_.documents_.$id/document-editor/use-editor-sync';
 import { CommentsSelectionProvider } from '../app_.documents_.$id/comments/selection-context';
+import { DocumentHistory } from '../app_.documents_.$id/document-history/document-history';
+import type { SyncStatus } from '~/utils/sync-service';
 
 // ── Loader ───────────────────────────────────────────────────────────
 
@@ -132,9 +144,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export default function RevisionRoute() {
   const { submission, doc } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const fetcher = useFetcher();
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // ── Editor state ──────────────────────────────────────────────────
   const editorBridgeRef = useRef<EditorBridge | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
   const [editorSubmittable, setEditorSubmittable] = useState(() =>
     isDocumentSubmittableContent(doc.html ?? '', doc.text ?? '')
   );
@@ -144,6 +159,13 @@ export default function RevisionRoute() {
 
   const auth = useAuthHeartbeat({ documentId: doc.id, isEditable: true });
   const isEditorEditable = !auth.isLocked && auth.isInitialCheckComplete;
+
+  const handleLoginRedirect = useCallback(() => {
+    const redirectTo = encodeURIComponent(
+      window.location.pathname + window.location.search
+    );
+    window.location.href = `/auth/login?redirectTo=${redirectTo}`;
+  }, []);
 
   const submit = useDocumentSubmit({
     documentId: doc.id,
@@ -270,7 +292,25 @@ export default function RevisionRoute() {
 
         <div className="h-4 w-px bg-border shrink-0" />
 
-        <p className="truncate text-sm font-semibold min-w-0">{submissionTitle}</p>
+        <Input
+          ref={titleInputRef}
+          data-testid="document-title-input"
+          size="sm"
+          className="min-w-0 max-w-[260px] rounded-lg border border-transparent font-bold transition hover:border-border"
+          defaultValue={doc.title}
+          placeholder="Untitled document"
+          onBlur={(e) =>
+            e.target.value !== doc.title
+              ? fetcher.submit(
+                  { title: e.target.value },
+                  {
+                    method: 'POST',
+                    action: `/api/model/document/${doc.id}?from=title-input`,
+                  }
+                )
+              : undefined
+          }
+        />
 
         {gradeDisplay ? (
           <Badge
@@ -282,6 +322,7 @@ export default function RevisionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
+          <DocumentHistory documentId={doc.id} syncStatus={syncStatus} />
           <Button
             size="sm"
             variant="default"
@@ -353,11 +394,38 @@ export default function RevisionRoute() {
                   editorBridgeRef.current = bridge;
                 }}
                 onSubmittableContentChange={handleSubmittableContentChange}
+                onSyncStatusChange={setSyncStatus}
               />
             </CommentsSelectionProvider>
           </div>
         </div>
       </div>
+
+      {/* Session expired dialog */}
+      <Dialog open={auth.isLocked} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-md"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Session Expired</DialogTitle>
+            <DialogDescription>
+              Your session expired while editing. Editing is now paused to
+              prevent data loss. Please log in again to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              data-testid="session-expired-login"
+              onClick={handleLoginRedirect}
+              className="w-full sm:w-auto"
+            >
+              Log In
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Grammar tooltip */}
       {activeGrammarIssues.length > 0 && tooltipPos ? (
