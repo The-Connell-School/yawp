@@ -392,6 +392,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          assignmentId: true,
         },
       },
       profile: {
@@ -1143,6 +1144,7 @@ export default function ClassDetailRoute() {
                 <TableHead>Submitted</TableHead>
                 <TableHead>Graded</TableHead>
                 <TableHead>Released</TableHead>
+                <TableHead>Copy &amp; Paste</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1162,6 +1164,9 @@ export default function ClassDetailRoute() {
                 ).length;
                 const releasedCount = assignmentSubmissions.filter(
                   (s) => !!s.releasedAt
+                ).length;
+                const pasteCount = data.pasteAlerts.filter(
+                  (a) => a.document.assignmentId === assignment.id
                 ).length;
                 return (
                   <TableRow key={assignment.id}>
@@ -1197,6 +1202,15 @@ export default function ClassDetailRoute() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{releasedCount}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {pasteCount > 0 ? (
+                        <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+                          {pasteCount}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">{pasteCount}</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
