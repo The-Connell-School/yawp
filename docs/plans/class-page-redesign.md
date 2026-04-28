@@ -14,7 +14,7 @@ Simplify the teacher class page from a busy 7-tab interface into something clean
 - Removed the summary stats cards (Students, In Progress, Submitted, To Release counts)
 - Removed the assignment filter dropdown
 - Defaults to the **Students** tab on load
-- **Assignments table** now shows per-assignment status breakdown: In Progress / Submitted / Graded / Released — color-coded so pending work stands out (orange = submitted, blue = graded but unreleased)
+- **Assignments table** now shows per-assignment status breakdown: In Progress / Submitted / Graded / Released / Copy & Paste — color-coded so pending work stands out (orange = submitted, blue = graded but unreleased, red = paste alerts)
 
 ## Open design questions
 
@@ -41,6 +41,31 @@ Still unresolved:
 **Paste Activity**
 - Per-student flag in the Students tab (e.g. a warning icon if paste activity detected)
 - Or a small "alerts" section somewhere — it's an academic integrity signal, not a workflow step, so it might deserve different treatment
+
+## Unresolved questions
+
+### What happens when you click an assignment title?
+Currently: nothing. The title is plain text with no interaction.
+
+Options:
+- **Drilldown page** — clicking the title navigates to a dedicated assignment page showing the prompt, all student docs, and their statuses. Most powerful long-term; most work to build.
+- **Side panel** — clicking opens a sheet/drawer with the same info without leaving the class page.
+- **Clickable status badges** — instead of the title, clicking "3 Submitted" filters to just those docs. Faster for the grading workflow.
+
+Leaning toward a drilldown page but not decided.
+
+### How do we organize assignments when there are multiple courses?
+Right now assignments are a flat list sorted by due date, with the course name as a column. Fine for a small number of assignments but will get messy with a full year across multiple courses.
+
+Options:
+- **Group by course** — section headers in the table dividing assignments by course. No extra clicks, scannable.
+- **Filter by course** — dropdown above the table to show one course at a time.
+- **Both** — grouped by default, filterable.
+
+Not decided. Need to see what it looks like with real volume.
+
+### Students tab
+Currently just shows roster + total document count. Could also show per-student submission status (e.g. how many submitted, any paste alerts). Low priority for now but worth revisiting once the assignments view is settled.
 
 ## Notes
 
