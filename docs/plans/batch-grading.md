@@ -17,6 +17,7 @@ Teachers can trigger AI grading for all ungraded submitted essays on a given ass
 
 ### Where it triggers
 - From an **assignment-level view** — teacher sees something like "23 submissions for Macbeth Essay" and clicks "Grade All"
+- **v1 scope: by class** — initial version will grade all ungraded submissions for a given assignment within a single class; cross-class batch grading is out of scope for now
 - Exact placement TBD pending work on the simplified teacher dashboard
 
 ### Processing model
