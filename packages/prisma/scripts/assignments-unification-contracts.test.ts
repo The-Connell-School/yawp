@@ -91,13 +91,18 @@ describe('C2 — Free Write usability', () => {
   });
 
   test('Free Write is reachable as an FK target', async () => {
-    // Verify the FK constraint allows new docs to point to Free Write.
-    // We don't insert (would need a profile fixture); we check the constraint exists.
+    // Verify the FK on Document.assignmentTypeId actually points at AssignmentType.
     const { rows } = await pool.query<{ exists: boolean }>(`
       SELECT EXISTS (
-        SELECT 1 FROM information_schema.referential_constraints rc
-        JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = rc.constraint_name
-        WHERE kcu.table_name = 'Document' AND kcu.column_name = 'assignmentTypeId'
+        SELECT 1
+        FROM information_schema.referential_constraints rc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = rc.constraint_name
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = rc.unique_constraint_name
+        WHERE kcu.table_name = 'Document'
+          AND kcu.column_name = 'assignmentTypeId'
+          AND ccu.table_name = 'AssignmentType'
       ) AS exists
     `);
     expect(rows[0].exists).toBe(true);
@@ -122,7 +127,7 @@ describe('C3 — Document → Class derivation paths', () => {
     expect(rows[0].classId).not.toBeNull();
   });
 
-  test('unassigned doc resolves class through student membership', async () => {
+  test('unassigned doc class-derivation query is well-formed against post-migration schema', async () => {
     if (!preflight || preflight.bucketSamples.pass7b.length === 0) {
       console.warn('Skipping: no pass-7b bucket sample available from preflight');
       return;
@@ -138,14 +143,18 @@ describe('C3 — Document → Class derivation paths', () => {
       [documentId],
     );
     // Many unassigned docs are personal writing — their author may not be in any class.
-    // The contract is: the path *exists*. We simply assert the query runs without error.
-    expect(rows[0].n).toBeGreaterThanOrEqual(0);
+    // The contract here is that the SQL query parses cleanly against the post-migration
+    // schema (FK names, junction-table column names). The actual class count is informational.
+    expect(rows.length).toBe(1);
   });
 });
 
 describe('C4 — Backfill correctness sample', () => {
   test('pass-7a sample: assignmentTypeId matches Assignment.assignmentTypeId', async () => {
-    if (!preflight) return;
+    if (!preflight) {
+      console.warn('Skipping C4 pass-7a sample — preflight state unavailable');
+      return;
+    }
     for (const { documentId, assignmentTypeId } of preflight.assignedDocParity.slice(0, 5)) {
       const { rows } = await pool.query<{ assignmentTypeId: string | null }>(
         `SELECT "assignmentTypeId" FROM "Document" WHERE id = $1`,
@@ -156,7 +165,10 @@ describe('C4 — Backfill correctness sample', () => {
   });
 
   test('pass-7b sample: assignmentTypeId matches earliest-session-derived type', async () => {
-    if (!preflight || preflight.bucketSamples.pass7b.length === 0) return;
+    if (!preflight || preflight.bucketSamples.pass7b.length === 0) {
+      console.warn('Skipping C4 pass-7b sample — preflight state unavailable or bucket empty');
+      return;
+    }
     for (const { documentId, assignmentTypeId } of preflight.bucketSamples.pass7b) {
       const { rows } = await pool.query<{ assignmentTypeId: string | null }>(
         `SELECT "assignmentTypeId" FROM "Document" WHERE id = $1`,
@@ -167,7 +179,10 @@ describe('C4 — Backfill correctness sample', () => {
   });
 
   test('pass-7c sample: assignmentTypeId is Free Write', async () => {
-    if (!preflight || preflight.bucketSamples.pass7c.length === 0) return;
+    if (!preflight || preflight.bucketSamples.pass7c.length === 0) {
+      console.warn('Skipping C4 pass-7c sample — preflight state unavailable or bucket empty');
+      return;
+    }
     for (const { documentId } of preflight.bucketSamples.pass7c) {
       const { rows } = await pool.query<{ assignmentTypeId: string | null }>(
         `SELECT "assignmentTypeId" FROM "Document" WHERE id = $1`,
