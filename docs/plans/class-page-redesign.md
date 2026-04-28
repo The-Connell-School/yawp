@@ -57,7 +57,9 @@ Leaning toward a drilldown page but not decided.
 ### How do we organize assignments when there are multiple courses?
 Right now assignments are a flat list sorted by due date, with the course name as a column. Fine for a small number of assignments but will get messy with a full year across multiple courses.
 
-Options:
+**Note:** This page is already scoped to a single class — so the teacher is already looking at a filtered slice of their work. That natural boundary might be enough and the multi-course complexity might be less of a problem than it first appears. Worth seeing how it feels with real usage before adding more organization.
+
+Options if it does become an issue:
 - **Group by course** — section headers in the table dividing assignments by course. No extra clicks, scannable.
 - **Filter by course** — dropdown above the table to show one course at a time.
 - **Both** — grouped by default, filterable.
