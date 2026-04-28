@@ -307,9 +307,6 @@ export default function RevisionRoute() {
               <span className="text-sm font-semibold">Grade Summary</span>
             </div>
             <GradeSummaryPanel submission={submission} />
-            <div className="flex shrink-0 items-center border-t border-b px-4 py-2.5">
-              <span className="text-sm font-semibold">Grade Comments</span>
-            </div>
             <GradingCommentsSidebar
               submissionComments={submission.comments as any}
               submissionId={submission.id}
