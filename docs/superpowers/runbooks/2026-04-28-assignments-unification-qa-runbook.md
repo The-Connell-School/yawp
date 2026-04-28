@@ -27,7 +27,7 @@ AWS_PROFILE=yawp aws s3 cp s3://yawp-preview-videos/production.dump /tmp/product
 
 ```bash
 cd packages/prisma
-DATABASE_URL="postgresql://localhost:5432/yawp" bun ./scripts/assignments-unification-preflight.ts
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/yawp" bun ./scripts/assignments-unification-preflight.ts
 ```
 
 Expected: `OK: pass-7b invariant holds` and `State written to /tmp/assignments-unification-preflight.json`. If it exits non-zero, do NOT proceed — investigate the conflict.
@@ -35,7 +35,7 @@ Expected: `OK: pass-7b invariant holds` and `State written to /tmp/assignments-u
 ### 1c. Apply the migration
 
 ```bash
-DATABASE_URL="postgresql://localhost:5432/yawp" bunx prisma migrate deploy
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/yawp" bunx prisma migrate deploy
 ```
 
 Expected: migration `20260414130000_unify_assignment_model` applied cleanly.
@@ -43,7 +43,7 @@ Expected: migration `20260414130000_unify_assignment_model` applied cleanly.
 ### 1d. Run postcheck
 
 ```bash
-DATABASE_URL="postgresql://localhost:5432/yawp" bun ./scripts/assignments-unification-postcheck.ts
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/yawp" bun ./scripts/assignments-unification-postcheck.ts
 ```
 
 Expected: `OK: all post-migration assertions passed.` Fix any failures and re-run from 1a (need clean pre-state).
@@ -51,7 +51,7 @@ Expected: `OK: all post-migration assertions passed.` Fix any failures and re-ru
 ### 1e. Run behavior contracts
 
 ```bash
-DATABASE_URL="postgresql://localhost:5432/yawp" bun test ./scripts/assignments-unification-contracts.test.ts
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/yawp" bun test ./scripts/assignments-unification-contracts.test.ts
 ```
 
 Expected: all tests pass.
@@ -112,20 +112,25 @@ PR_NUMBER=$(gh pr view --json number -q .number)
 BASE_URL=$(AWS_PROFILE=yawp aws secretsmanager get-secret-value \
   --region us-east-1 --secret-id yawp-preview/database-url \
   --query SecretString --output text)
-SCHEMA_URL="${BASE_URL}?sslmode=require&schema=pr_${PR_NUMBER}"
+# Defensive query-string assembly (mirrors the preview workflow):
+if [[ "$BASE_URL" != *sslmode=* ]]; then
+  if [[ "$BASE_URL" == *\?* ]]; then
+    BASE_URL="${BASE_URL}&sslmode=require"
+  else
+    BASE_URL="${BASE_URL}?sslmode=require"
+  fi
+fi
+SCHEMA_URL="${BASE_URL}&schema=pr_${PR_NUMBER}"
 
 cd packages/prisma
-DATABASE_URL="$SCHEMA_URL" PREFLIGHT_STATE_PATH=/tmp/preview-preflight.json \
-  bun ./scripts/assignments-unification-preflight.ts
-# (Note: preview env DB is *already migrated* by the time the workflow finishes,
-# so this captures the post-migration state — preflight will fail on missing
-# old-table queries. That's expected. Run postcheck instead:)
+# Note: preflight is NOT run against preview — the preview workflow has already
+# applied the migration by the time the deploy completes, so the old tables are
+# gone. Use the local preflight state file (captured against the same prod dump
+# baseline) when running contracts.
 
-DATABASE_URL="$SCHEMA_URL" \
+DATABASE_URL="$SCHEMA_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
   bun ./scripts/assignments-unification-postcheck.ts
 ```
-
-**Important caveat:** The preview workflow restores the prod dump and immediately runs `prisma migrate deploy`, so by the time you query, the migration is already applied. Preflight against preview will fail (the old tables are gone). For preview verification, only postcheck and contracts apply — and they run with the local preflight state file (which captured pre-migration data from the same prod dump).
 
 ```bash
 DATABASE_URL="$SCHEMA_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
@@ -198,9 +203,8 @@ After deploy completes, run postcheck against prod to confirm the migration appl
 
 ```bash
 PROD_URL=$(AWS_PROFILE=yawp aws secretsmanager get-secret-value \
-  --region us-east-1 --secret-id yawp-prod/database-url \
-  --query SecretString --output text 2>/dev/null || echo "MANUAL_FETCH_REQUIRED")
-# (Update the secret-id above to whatever the prod secret is named.)
+  --region us-east-1 --secret-id yawp-production-db-url \
+  --query SecretString --output text)
 
 DATABASE_URL="$PROD_URL" \
   bun ./packages/prisma/scripts/assignments-unification-postcheck.ts
