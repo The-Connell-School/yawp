@@ -47,11 +47,32 @@ To disable and fall back to the old flow:
 UPDATE "Setting" SET value = 'false' WHERE name = 'side_by_side_revision_enabled';
 ```
 
+## What we pulled in from the original document editor
+
+These features from the original `app_.documents_.$id` editor were intentionally included in the revision view:
+
+- **Formatting toolbar** — bold, italic, strikethrough, headings, alignment, lists, blockquote, horizontal rule, text color, line spacing, clear marks
+- **Autosave** — debounced saves to IndexedDB + server sync with revision timer (every 5 min of idle editing)
+- **Auth heartbeat** — background session validation that locks the editor if the session expires
+- **Submit button** — with submitting state, disabled-when-empty guard, and confirmation dialog
+- **Editable document title** — input in the nav bar that saves on blur via fetcher POST
+- **Version history** — the clock/saved-status button that opens the full version history sheet
+- **Session expired dialog** — non-dismissible modal that appears when the auth heartbeat detects an expired session, with a "Log In" button that preserves the current URL as a redirect target
+
+## What we left out (and why)
+
+These features from the original editor were deliberately excluded from this view:
+
+- **Tutor sidebar** — the AI tutor/course module flow belongs to the original learning sequence, not the revision context. Adding it here would require a course module session, which may not exist for a revision.
+- **Student inline comments panel** — the right-side panel where students and teachers exchange threaded comments on the draft. Left out because the left panel already surfaces all teacher feedback; adding another comments layer would clutter the UI.
+- **Assignment prompt banner** — the amber box showing the assignment title and prompt. Omitted for now; could be useful context but adds vertical space and the submission title serves as a proxy.
+- **Previous submissions popover** — the button showing all past submission versions with grade/date. Left out to keep the nav uncluttered; the grade badge already surfaces the most recent result.
+- **Archive dialog** — allows students to view/restore archived submissions. Not relevant in the revision flow.
+- **Mobile tab navigation** — the side-by-side layout is inherently a desktop UI, so the mobile tab switcher (Tutor / Editor / Comments) doesn't apply.
+
 ## Open questions
 
-1. **Redundant "Grade Comments" header** — the left column has a "Grade Comments" section header we added, but the `GradingCommentsSidebar` component renders its own "Grade comments" sub-header below it. One of them should be removed or the component needs a prop to suppress its internal header.
-
-2. **Rubric score ordering** — rubric items appear in DB insertion order rather than a meaningful order (e.g. by score, or by a fixed canonical order). Low priority for prototype but should be addressed before wider rollout.
+1. **Rubric score ordering** — rubric items appear in DB insertion order rather than a meaningful order (e.g. by score, or by a fixed canonical order). Low priority for prototype but should be addressed before wider rollout.
 
 3. **Feature flag not set in production/preview** — the flag only exists in the e2e seed. It needs to be inserted manually in any environment where you want to test the new flow with real data (see SQL above).
 
