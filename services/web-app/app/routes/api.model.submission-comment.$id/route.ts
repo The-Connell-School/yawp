@@ -19,6 +19,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       submission: {
         document: {
           deletedAt: null,
+          profileId: { not: profile.id },
           ...(isAdmin
             ? {}
             : {

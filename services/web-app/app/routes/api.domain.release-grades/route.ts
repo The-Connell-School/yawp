@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+import {
+  canManageGrades,
+  getGradingActor,
+} from '~/utils/grading-auth.server';
 
 const POST = z.object({
   submissionIds: z.preprocess(
@@ -33,6 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const submissions = await prisma.submission.findMany({
     where: {
       id: { in: data.submissionIds },
+      document: { profileId: { not: actor.profileId } },
       ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
       releasedAt: null,
     },

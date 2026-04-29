@@ -3,6 +3,7 @@ import { prisma } from '~/utils/db.server';
 import {
   canManageGrades,
   getGradingActor,
+  isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -40,13 +41,27 @@ export async function action({ request }: ActionFunctionArgs) {
             }),
       },
     },
-    select: { id: true, gradedAt: true, gradedById: true },
+    select: {
+      id: true,
+      gradedAt: true,
+      gradedById: true,
+      document: { select: { profileId: true } },
+    },
   });
 
   if (!submission) {
     return Response.json(
       { success: false, message: 'Submission not found.' },
       { status: 404 }
+    );
+  }
+
+  if (
+    isGradingOwnDocument(actor.profileId, submission.document.profileId)
+  ) {
+    return Response.json(
+      { success: false, message: 'You cannot grade your own submission.' },
+      { status: 403 }
     );
   }
 

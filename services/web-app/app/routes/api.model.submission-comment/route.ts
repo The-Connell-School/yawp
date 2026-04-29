@@ -39,6 +39,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: data.submissionId,
       document: {
         deletedAt: null,
+        profileId: { not: profile.id },
         ...(isAdmin
           ? {}
           : {

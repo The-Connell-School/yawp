@@ -14,6 +14,7 @@ const isDocumentSubmissionEnabledForSchool = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
+const isGradingOwnDocument = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -26,6 +27,7 @@ mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
   buildTeacherClassWhere,
+  isGradingOwnDocument,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -72,6 +74,7 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     gradedAt: null,
     document: {
       id: 'doc-1',
+      profileId: 'student-profile-1',
       class: { schoolId: 'school-1' },
       profile: { user: { name: 'Jordan Student' } },
     },
@@ -89,6 +92,7 @@ describe('api.domain.grade-essay-ai', () => {
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
+    isGradingOwnDocument.mockReset();
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
@@ -98,6 +102,9 @@ describe('api.domain.grade-essay-ai', () => {
     });
     canManageGrades.mockReturnValue(true);
     buildTeacherClassWhere.mockReturnValue({});
+    isGradingOwnDocument.mockImplementation(
+      (actorId: string, docProfileId: string) => actorId === docProfileId
+    );
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
     isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));

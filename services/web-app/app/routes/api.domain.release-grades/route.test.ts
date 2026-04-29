@@ -8,20 +8,23 @@ const prisma = {
 };
 
 const isDocumentSubmissionEnabledForSchools = mock();
+const isDocumentSubmissionEnabledForSchool = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
+const isGradingOwnDocument = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForSchool: mock(),
   isDocumentSubmissionEnabledForSchools,
+  isDocumentSubmissionEnabledForSchool,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
   buildTeacherClassWhere,
+  isGradingOwnDocument,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -34,8 +37,11 @@ describe('api.domain.release-grades', () => {
     prisma.submission.findMany.mockReset();
     prisma.submission.updateMany.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
+    isDocumentSubmissionEnabledForSchool.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
+    buildTeacherClassWhere.mockReset();
+    isGradingOwnDocument.mockReset();
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
@@ -44,7 +50,10 @@ describe('api.domain.release-grades', () => {
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
+    buildTeacherClassWhere.mockReturnValue({});
+    isGradingOwnDocument.mockReturnValue(false);
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
   });
 
@@ -53,10 +62,8 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          assignment: {
-            class: {
-              schoolId: 'school-1',
-            },
+          class: {
+            schoolId: 'school-1',
           },
         },
       },
