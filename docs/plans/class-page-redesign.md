@@ -15,6 +15,7 @@ Simplify the teacher class page from a busy 7-tab interface into something clean
 - Removed the assignment filter dropdown
 - Defaults to the **Students** tab on load
 - **Assignments table** now shows per-assignment status breakdown: In Progress / Submitted / Graded / Released / Copy & Paste — color-coded so pending work stands out (orange = submitted, blue = graded but unreleased, red = paste alerts)
+- **Student details panel** (opened from the Students tab) now shows categorized sections: Submitted, Graded, Released, and Drafts in progress — creating a second route to a student's work alongside the Assignments view
 
 ## Open design questions
 
@@ -67,7 +68,9 @@ Options if it does become an issue:
 Not decided. Need to see what it looks like with real volume.
 
 ### Students tab
-Currently just shows roster + total document count. Could also show per-student submission status (e.g. how many submitted, any paste alerts). Low priority for now but worth revisiting once the assignments view is settled.
+The student details panel now shows Submitted / Graded / Released / Drafts in progress. Two routes to the same work: by assignment (Assignments tab) or by student (Students tab → View Details).
+
+Still unresolved: whether to surface any status signals on the student *row* itself (e.g. a badge if they have ungraded submissions) rather than requiring the panel to be opened.
 
 ### Paste activity column — clicking does nothing
 The assignments table shows a paste alert count per assignment, and highlights red when non-zero. But clicking it does nothing yet. Also worth considering whether paste activity belongs in this workflow column at all — it's an academic integrity signal, not a step in the grading process, so it might deserve different treatment (e.g. a warning icon on the student row, a separate alerts view, or a notification).

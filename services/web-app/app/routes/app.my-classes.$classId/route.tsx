@@ -1340,10 +1340,23 @@ export default function ClassDetailRoute() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.map((s) => {
-                const studentDocs =
-                  data.profiles.find((p) => p.id === s.profile.id)?.documents ??
-                  [];
+            {paginatedData.map((s) => {
+                const studentProfileId = s.profile.id;
+                const studentSubmissions = allSubmissions.filter(
+                  (sub) => sub.document.profile.id === studentProfileId
+                );
+                const studentSubmitted = studentSubmissions.filter(
+                  (sub) => !hasMeaningfulGrade(sub) && !sub.releasedAt
+                );
+                const studentGraded = studentSubmissions.filter(
+                  (sub) => hasMeaningfulGrade(sub) && !sub.releasedAt
+                );
+                const studentReleased = studentSubmissions.filter(
+                  (sub) => !!sub.releasedAt
+                );
+                const studentDrafts = data.inProgressDocuments.filter(
+                  (doc) => doc.profile.id === studentProfileId
+                );
                 return (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">
@@ -1353,7 +1366,9 @@ export default function ClassDetailRoute() {
                       {s.profile.user.email}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{studentDocs.length}</Badge>
+                      <Badge variant="secondary">
+                        {studentDrafts.length + studentSubmissions.length}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Sheet>
@@ -1366,42 +1381,161 @@ export default function ClassDetailRoute() {
                             View Details
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-full sm:max-w-lg">
+                        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
                           <SheetHeader>
-                            <SheetTitle>Student Details</SheetTitle>
+                            <SheetTitle>
+                              {s.profile.user.name ?? 'Unnamed Student'}
+                            </SheetTitle>
+                            <p className="text-sm text-muted-foreground">
+                              {s.profile.user.email}
+                            </p>
                           </SheetHeader>
-                          <div className="mt-4 space-y-4">
+                          <div className="mt-6 space-y-6">
+
+                            {/* Submitted */}
                             <div>
-                              <div className="text-sm text-muted-foreground mb-1">
-                                Student
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium">Submitted</span>
+                                {studentSubmitted.length > 0 && (
+                                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
+                                    {studentSubmitted.length}
+                                  </Badge>
+                                )}
                               </div>
-                              <div className="font-medium">
-                                {s.profile.user.name ?? 'Unnamed Student'}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {s.profile.user.email}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground mb-1">
-                                Documents
-                              </div>
-                              {studentDocs.length === 0 ? (
-                                <div className="text-sm text-muted-foreground">
-                                  No documents yet.
-                                </div>
+                              {studentSubmitted.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None</p>
                               ) : (
-                                <div className="grid grid-cols-1 gap-2">
-                                  {studentDocs.map((doc) => (
-                                    <DocumentLink
-                                      key={doc.id}
-                                      doc={doc as any}
-                                      exitTo={classDetailExitTo}
-                                    />
+                                <div className="space-y-1">
+                                  {studentSubmitted.map((sub) => (
+                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                      <div className="min-w-0">
+                                        <Link
+                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          className="text-primary hover:underline truncate block"
+                                        >
+                                          {sub.title}
+                                        </Link>
+                                        {sub.document.assignment && (
+                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                        )}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{timeAgo(new Date(sub.submittedAt ?? sub.createdAt))}</span>
+                                    </div>
                                   ))}
                                 </div>
                               )}
                             </div>
+
+                            {/* Graded */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium">Graded</span>
+                                {studentGraded.length > 0 && (
+                                  <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
+                                    {studentGraded.length}
+                                  </Badge>
+                                )}
+                              </div>
+                              {studentGraded.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {studentGraded.map((sub) => (
+                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                      <div className="min-w-0">
+                                        <Link
+                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          className="text-primary hover:underline truncate block"
+                                        >
+                                          {sub.title}
+                                        </Link>
+                                        {sub.document.assignment && (
+                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                                        {(sub.letterGrade || sub.numericPercentage != null) && (
+                                          <Badge variant="secondary">
+                                            {formatGrade(sub.numericPercentage ?? null, sub.letterGrade ?? null)}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Released */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium">Released</span>
+                                {studentReleased.length > 0 && (
+                                  <Badge variant="secondary">{studentReleased.length}</Badge>
+                                )}
+                              </div>
+                              {studentReleased.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {studentReleased.map((sub) => (
+                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                      <div className="min-w-0">
+                                        <Link
+                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          className="text-primary hover:underline truncate block"
+                                        >
+                                          {sub.title}
+                                        </Link>
+                                        {sub.document.assignment && (
+                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                                        {(sub.letterGrade || sub.numericPercentage != null) && (
+                                          <Badge variant="secondary">
+                                            {formatGrade(sub.numericPercentage ?? null, sub.letterGrade ?? null)}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Drafts in progress */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-sm font-medium">Drafts in progress</span>
+                                {studentDrafts.length > 0 && (
+                                  <Badge variant="secondary">{studentDrafts.length}</Badge>
+                                )}
+                              </div>
+                              {studentDrafts.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">None</p>
+                              ) : (
+                                <div className="space-y-1">
+                                  {studentDrafts.map((doc) => (
+                                    <div key={doc.id} className="flex items-center justify-between text-sm">
+                                      <div className="min-w-0">
+                                        <Link
+                                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
+                                          className="text-primary hover:underline truncate block"
+                                        >
+                                          {doc.title}
+                                        </Link>
+                                        {doc.assignment && (
+                                          <span className="text-xs text-muted-foreground">{doc.assignment.title}</span>
+                                        )}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{timeAgo(new Date(doc.updatedAt))}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
                           </div>
                         </SheetContent>
                       </Sheet>
