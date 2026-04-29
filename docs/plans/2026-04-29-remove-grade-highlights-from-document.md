@@ -1,54 +1,51 @@
 # Remove Grade AI Highlights from Document
 
 **Date:** 2026-04-29  
-**Status:** Planning / Open Questions
+**Status:** Implemented — open questions remaining
 
 ## Background
 
-When a teacher grades a submission, the AI generates grammar issue highlights that appear as colored spans directly in the essay text. Currently, teachers can only manage these highlights (hide or remove) from the **grading side panel** (`teacher-grading-panel.tsx`). There is no way to interact with a highlight from within the document itself.
+When a teacher grades a submission, the AI generates grammar issue highlights that appear as colored spans directly in the essay text. Teachers could only manage these highlights (hide or remove) from the **grading side panel** (`teacher-grading-panel.tsx`). There was no way to interact with a highlight from within the document itself.
 
 The goal of this change is to let teachers act on a highlight directly where they see it — in the essay.
 
 ## What Exists Today
 
 - Grammar issue highlights render as `<span data-grammar-issue-id="...">` elements via `GradeHighlightsOverlay` (`grade-highlights-overlay.tsx`)
-- Click handling on those spans already exists in the overlay but only triggers focus/hover callbacks — it does not surface any action UI
+- The hover tooltip already displayed the grammar issue message and rule
 - Two actions already exist in the side panel:
   - **Hide** — removes the span from the document view but keeps the issue in state (`hiddenGrammarIssueIds` in `route.tsx:350`)
-  - **Remove** — permanently deletes the issue from `grammarIssues` state and persists the deletion (`route.tsx:529`)
-- A floating toolbar pattern already exists for text selection (`selection-toolbar.tsx`) and is the closest UX precedent
-
-## Agreed Direction
-
-**Floating tooltip on click.** When a teacher clicks a grammar issue highlight in the essay, a small popover appears near the span with action button(s). On action, the highlight is dismissed from the document.
-
-This is preferred over:
-- **Click-to-remove directly** — too easy to misfire, no confirmation
-- **Right-click context menu** — feels heavy and inconsistent with the rest of the UI
-
-## Implementation Sketch
-
-- Attach a click handler in `GradeHighlightsOverlay` for `[data-grammar-issue-id]` spans (the delegation pattern is already in place)
-- On click, calculate the span's bounding rect and render a positioned popover (similar to how `selection-toolbar.tsx` positions itself)
-- Popover calls the existing `onRemoveGrammarIssue` and/or `onToggleGrammarIssue` callbacks already wired in `route.tsx`
-- The popover should dismiss on outside click or Escape
+  - **Remove** — permanently deletes the issue from `grammarIssues` state (`route.tsx:529`)
+- A floating toolbar pattern already exists for text selection (`selection-toolbar.tsx`) and was the closest UX precedent
 
 ## Decisions Made
 
-- **Hide only** (not remove) — non-destructive, reversible via the side panel's Show button.
-- **Hide All** button also appears in the tooltip when more than one grammar issue is visible — lets teachers dismiss all AI marks in one action.
-- Actions are teacher-only (the `isTeacher` guard wraps both buttons).
+- **Floating tooltip on hover** (not click-to-remove or right-click context menu)
+- **Hide only** (not remove) — non-destructive, reversible via the side panel's Show button
+- **Tooltip shows the grammar message and rule** as context alongside the action buttons
+- **Hide** button hides the current issue; **Hide all** button appears when more than one grammar issue is visible and hides all of them at once
+- Actions are **teacher-only** (`isTeacher` guard wraps both buttons)
+- Scope is **grammar issues only** for now (yellow grade comment marks are out of scope)
+
+## What Was Built
+
+Added "Hide" and "Hide all" buttons to the existing grammar issue hover tooltip in `route.tsx` (lines 887–916):
+
+- **Hide** — calls `toggleGrammarIssueVisibility(currentIssue.id)` then dismisses the tooltip
+- **Hide all** — iterates `visibleGrammarIssues` and calls `toggleGrammarIssueVisibility` for each, then dismisses the tooltip
+- "Hide all" only renders when `visibleGrammarIssues.length > 1`
+- Both buttons use purple-tinted styling consistent with the grammar mark color
 
 ## Open Questions
 
-### 1. Should hide/remove from the document stay in sync with the side panel?
+### 1. Should "Hide all" be scoped to the hovered position or the whole document?
 
-If a teacher hides an issue via the side panel and then opens the document, should the highlight already be gone? (Yes, currently it is — `visibleGrammarIssues` filters hidden IDs.) But if they remove from the document tooltip, should the side panel card disappear immediately? This should be straightforward but needs to be confirmed as in-scope.
+Currently "Hide all" hides every visible grammar issue in the document, not just the ones stacked at the current cursor position. That feels right for a quick "dismiss everything" action, but worth confirming with teachers.
 
-### 3. Scope: grammar issues only, or also grade comment highlights?
+### 2. Should hidden state persist across page reloads?
 
-Grade comment highlights (yellow, `data-grade-comment-id`) also appear in the essay. Clicking them currently focuses the sidebar card. Should the same tooltip pattern eventually apply to those as well, or is this change grammar-issues-only?
+`hiddenGrammarIssueIds` is in-memory React state — refreshing brings all issues back. If teachers expect their hidden state to survive a reload, a persistence layer is needed (e.g. storing hidden IDs on the `Submission` record).
 
-### 4. Tooltip content beyond hide/remove?
+### 3. Should grade comment highlights (yellow) get the same treatment?
 
-Should the tooltip show the grammar issue's message/rule as a quick reference, or is it purely an action surface? Showing the message would reduce the need to scroll the side panel but adds complexity to the tooltip layout.
+Clicking a yellow grade comment mark currently just focuses the sidebar card. The infrastructure is the same, so adding a tooltip with actions would be straightforward — but it's out of scope for this change.
