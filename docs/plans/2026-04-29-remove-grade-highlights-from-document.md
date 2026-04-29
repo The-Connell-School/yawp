@@ -5,47 +5,48 @@
 
 ## Background
 
-When a teacher grades a submission, the AI generates grammar issue highlights that appear as colored spans directly in the essay text. Teachers could only manage these highlights (hide or remove) from the **grading side panel** (`teacher-grading-panel.tsx`). There was no way to interact with a highlight from within the document itself.
+When a teacher grades a submission, the AI generates grammar issue highlights that appear as colored spans directly in the essay text. Teachers could only manage these highlights from the **grading side panel** (`teacher-grading-panel.tsx`). There was no way to interact with a highlight from within the document itself.
 
-The goal of this change is to let teachers act on a highlight directly where they see it — in the essay.
+## What Exists Today (Unchanged)
 
-## What Exists Today
+- Grammar issue highlights render as `<span data-grammar-issue-id="...">` elements
+- The **Grammar/Syntax rubric section** in the side panel has a "Hide all / Show all" toggle — this is available to **both teachers and students** and is left untouched by this change
+- **Hide** (side panel, per-issue) — removes the span from view, reversible
+- **Remove** (side panel, per-issue, teacher grading mode only) — permanently deletes the issue from state
 
-- Grammar issue highlights render as `<span data-grammar-issue-id="...">` elements via `GradeHighlightsOverlay` (`grade-highlights-overlay.tsx`)
-- The hover tooltip already displayed the grammar issue message and rule
-- Two actions already exist in the side panel:
-  - **Hide** — removes the span from the document view but keeps the issue in state (`hiddenGrammarIssueIds` in `route.tsx:350`)
-  - **Remove** — permanently deletes the issue from `grammarIssues` state (`route.tsx:529`)
-- A floating toolbar pattern already exists for text selection (`selection-toolbar.tsx`) and was the closest UX precedent
+## Why These Actions Exist
+
+**Remove** is for cases where:
+- A teacher doesn't want a student to worry about a particular correction (e.g. a student far below grade level where any writing is a win)
+- A teacher disagrees with an AI correction (e.g. Oxford comma disagreements)
+- The AI flagged intentional syntax (e.g. a direct quote from a book)
+
+**Hide** is for cases where:
+- A teacher or student wants to temporarily mute highlights that are cluttering their view or workflow
 
 ## Decisions Made
 
 - **Floating tooltip on hover** (not click-to-remove or right-click context menu)
-- **Hide only** (not remove) — non-destructive, reversible via the side panel's Show button
-- **Tooltip shows the grammar message and rule** as context alongside the action buttons
-- **Hide** button hides the current issue; **Hide all** button appears when more than one grammar issue is visible and hides all of them at once
-- Actions are **teacher-only** (`isTeacher` guard wraps both buttons)
-- Scope is **grammar issues only** for now (yellow grade comment marks are out of scope)
+- **Tooltip is teacher + grading mode only** (`isGradeMode` guard) — students see the message/rule but no action buttons
+- **Tooltip shows**: "Hide comment" and "Remove comment" — no "Hide all" on the tooltip itself
+- The existing **"Hide all / Show all"** in the rubric panel is kept as-is for both teachers and students
+- Scope is **grammar issues only** — yellow grade comment marks are out of scope
 
 ## What Was Built
 
-Added "Hide" and "Hide all" buttons to the existing grammar issue hover tooltip in `route.tsx` (lines 887–916):
+Added "Hide comment" and "Remove comment" buttons to the existing grammar issue hover tooltip in `route.tsx` (lines 887–916):
 
-- **Hide** — calls `toggleGrammarIssueVisibility(currentIssue.id)` then dismisses the tooltip
-- **Hide all** — iterates `visibleGrammarIssues` and calls `toggleGrammarIssueVisibility` for each, then dismisses the tooltip
-- "Hide all" only renders when `visibleGrammarIssues.length > 1`
-- Both buttons use purple-tinted styling consistent with the grammar mark color
+- **Hide comment** — calls `toggleGrammarIssueVisibility(id)`, reversible via side panel
+- **Remove comment** — calls `handleRemoveGrammarIssue(id)`, permanently removes the issue
+- Both buttons dismiss the tooltip after acting
+- Buttons only render when `isGradeMode` (teacher in grading view, before grade is released)
 
 ## Open Questions
 
-### 1. Should "Hide all" be scoped to the hovered position or the whole document?
+### 1. Should hidden state persist across page reloads?
 
-Currently "Hide all" hides every visible grammar issue in the document, not just the ones stacked at the current cursor position. That feels right for a quick "dismiss everything" action, but worth confirming with teachers.
+`hiddenGrammarIssueIds` is in-memory React state — refreshing brings all hidden issues back. If teachers expect their hidden state to survive a reload, a persistence layer is needed (e.g. storing hidden IDs on the `Submission` record). Removed issues already persist (they're deleted from the JSON field).
 
-### 2. Should hidden state persist across page reloads?
+### 2. Should grade comment highlights (yellow) get the same treatment?
 
-`hiddenGrammarIssueIds` is in-memory React state — refreshing brings all issues back. If teachers expect their hidden state to survive a reload, a persistence layer is needed (e.g. storing hidden IDs on the `Submission` record).
-
-### 3. Should grade comment highlights (yellow) get the same treatment?
-
-Clicking a yellow grade comment mark currently just focuses the sidebar card. The infrastructure is the same, so adding a tooltip with actions would be straightforward — but it's out of scope for this change.
+Clicking a yellow grade comment mark currently just focuses the sidebar card. Adding tooltip actions there would follow the same pattern — out of scope for this change but straightforward to add later.
