@@ -75,5 +75,15 @@ Still unresolved: whether to surface any status signals on the student *row* its
 ### Paste activity column — clicking does nothing
 The assignments table shows a paste alert count per assignment, and highlights red when non-zero. But clicking it does nothing yet. Also worth considering whether paste activity belongs in this workflow column at all — it's an academic integrity signal, not a step in the grading process, so it might deserve different treatment (e.g. a warning icon on the student row, a separate alerts view, or a notification).
 
+## Screenshots
+
+Screenshots taken of the three major views in PR #101:
+
+1. **Students tab (default)** — Answers: does the 2-tab layout feel clean, and does the Create New Assignment button work as a persistent header element rather than its own tab? Result: yes — clean roster, button always visible regardless of active tab.
+
+2. **Assignments tab with status columns** — Answers: can collapsing In Progress / Submitted / Graded / Released / Paste Activity into inline row counts replace five separate tabs without losing signal? Result: yes — color-coded counts (orange = needs grading, blue = graded unreleased, red = paste alert) surface the important stuff at a glance.
+
+3. **Student details panel** — Answers: does a second route to student work through the roster (Students tab → View Details) add enough value to justify it? Result: yes — panel shows the student's work organized by state (Submitted, Graded, Released, Drafts in progress) and also surfaces active drafts that the Assignments tab doesn't show.
+
 ## Notes
 
