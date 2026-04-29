@@ -20,3 +20,12 @@ Add a print button to the student document page (`/app/documents/:id`) so users 
 3. Strip comment annotation spans (`[data-comment-id]`) using `DOMParser` in the browser.
 4. Open a new window with clean, styled HTML — title, student name, date as a header — then call `window.print()`.
 5. Button shows for both students and teachers.
+
+## Status
+
+Implemented on branch `claude/add-print-button-3JQnY`. Changes in `services/web-app/app/routes/app_.documents_.$id/route.tsx`.
+
+## Open Questions
+
+- Should it print the current draft only, or should it also be accessible from the submission view?
+- Current default is to always print the live draft including unsaved changes — is that the right behavior, or should submitting first be required?
