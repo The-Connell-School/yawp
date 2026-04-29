@@ -33,19 +33,15 @@ This is preferred over:
 - Popover calls the existing `onRemoveGrammarIssue` and/or `onToggleGrammarIssue` callbacks already wired in `route.tsx`
 - The popover should dismiss on outside click or Escape
 
+## Decisions Made
+
+- **Hide only** (not remove) — non-destructive, reversible via the side panel's Show button.
+- **Hide All** button also appears in the tooltip when more than one grammar issue is visible — lets teachers dismiss all AI marks in one action.
+- Actions are teacher-only (the `isTeacher` guard wraps both buttons).
+
 ## Open Questions
 
-### 1. Hide vs. Remove — which actions appear in the popover?
-
-This is the central open question. Options:
-
-- **Remove only** — simpler, one button, lower cognitive load. Risk: teachers may accidentally delete issues they wanted to keep.
-- **Hide only** — non-destructive, reversible. Risk: hidden issues accumulate silently and teachers may not realize the side panel still holds them.
-- **Both Hide and Remove** — full control, but two buttons adds friction and requires teachers to understand the distinction.
-
-A sub-question: is the **hide** concept even meaningful if the teacher is acting from the document? The act of dismissing something from view while it persists invisibly in the panel may be confusing in this context. Remove might be the cleaner semantic here.
-
-### 2. Should hide/remove from the document stay in sync with the side panel?
+### 1. Should hide/remove from the document stay in sync with the side panel?
 
 If a teacher hides an issue via the side panel and then opens the document, should the highlight already be gone? (Yes, currently it is — `visibleGrammarIssues` filters hidden IDs.) But if they remove from the document tooltip, should the side panel card disappear immediately? This should be straightforward but needs to be confirmed as in-scope.
 
