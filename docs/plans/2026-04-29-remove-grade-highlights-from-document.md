@@ -28,18 +28,18 @@ When a teacher grades a submission, the AI generates grammar issue highlights th
 
 - **Floating tooltip on hover** (not click-to-remove or right-click context menu)
 - **Tooltip is teacher + grading mode only** (`isGradeMode` guard) — students see the message/rule but no action buttons
-- **Tooltip shows**: "Hide comment" and "Remove comment" — no "Hide all" on the tooltip itself; Hide all belongs in the rubric panel only
+- **Tooltip shows**: "Remove comment" only — hiding a single comment in grading mode has no clear value since the student hasn't seen the doc yet, hidden state doesn't persist across reloads, and the "Hide all / Show all" in the rubric panel already covers the declutter use case
 - The existing **"Hide all / Show all"** in the rubric panel is kept as-is for both teachers and students
 - Scope is **grammar issues only** — yellow grade comment marks are out of scope
 
 ## What Was Built
 
-Added "Hide comment" and "Remove comment" buttons to the existing grammar issue hover tooltip in `route.tsx` (lines 887–916):
+Added a "Remove comment" button to the existing grammar issue hover tooltip in `route.tsx`:
 
-- **Hide comment** — calls `toggleGrammarIssueVisibility(id)`, reversible via side panel
-- **Remove comment** — calls `handleRemoveGrammarIssue(id)`, permanently removes the issue
-- Both buttons dismiss the tooltip after acting
-- Buttons only render when `isGradeMode` (teacher in grading view, before grade is released)
+- **Remove comment** — calls `handleRemoveGrammarIssue(id)`, permanently removes the issue from the submission
+- Dismisses the tooltip after acting
+- Only renders when `isGradeMode` (teacher in grading view, before grade is released)
+- Students hovering a grammar mark see the message and rule only — no action buttons
 
 ## Open Questions
 

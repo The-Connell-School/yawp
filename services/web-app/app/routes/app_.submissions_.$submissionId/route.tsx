@@ -885,21 +885,10 @@ export default function SubmissionRoute() {
               <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">Rule: {currentIssue.rule}</p>
             ) : null}
             {isGradeMode ? (
-              <div className="mt-2 flex items-center gap-1.5 border-t pt-2">
+              <div className="mt-2 border-t pt-2">
                 <button
                   type="button"
-                  className="flex-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
-                  onClick={() => {
-                    toggleGrammarIssueVisibility(currentIssue.id);
-                    setTooltipIssueIds([]);
-                    setTooltipRect(null);
-                  }}
-                >
-                  Hide comment
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
+                  className="w-full rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
                   onClick={() => {
                     handleRemoveGrammarIssue(currentIssue.id);
                     setTooltipIssueIds([]);
