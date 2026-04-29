@@ -22,28 +22,31 @@ Teachers can trigger AI grading for all ungraded submitted essays on a given ass
 
 ### Processing model
 - **Background processing** — job runs asynchronously, teacher doesn't have to wait
-- Teacher gets some indication of progress/completion (design TBD)
+- As each essay is graded it moves from "Submitted" to "Graded" — no separate notification needed; the teacher just sees the Graded tab fill up
 
 ### On partial failure
 - If individual essays fail to grade, they stay in **submitted/ungraded** state
-- Teacher can retry failed ones manually or via another "grade all" run
+- Teacher can retry failed ones manually or via another "grade all" run (which skips already-graded essays)
 - No partial states — an essay is either fully graded or untouched
 
 ### Post-grading flow
-- Grades land as **drafts** (graded but not released)
-- Teacher reviews AI-generated grades before releasing to students
-- This is the existing "Graded" tab → "Released" flow
+- Grades land in the existing **Graded** tab — this is the review surface
+- Teacher can edit any AI-generated grade freely (scores, comments, rubric) before releasing
+- Batch release works exactly as it does today — teacher selects essays and releases in bulk
 
 ---
 
 ## Open Questions
 
-- [ ] **Job status surface** — how does the teacher know the batch job is done? Options: polling indicator on the page, a notification, badge on the class view
-- [ ] **Re-grade option** — should teachers be able to re-run AI grading on already-graded essays? Probably not in v1.
 - [ ] **Assignment-level view** — does this live on the existing class page (filtered by assignment) or a new dedicated assignment page? Depends on simplified dashboard work.
 - [ ] **Concurrency limits** — how many parallel AI calls per batch job? Need to balance speed vs. rate limits and cost.
 - [ ] **Job persistence** — if the server restarts mid-job, do we resume or restart? Probably acceptable to just show failed essays as ungraded in v1.
-- [ ] **Teacher feedback during review** — in the review-before-release flow, can the teacher edit AI grades inline or only approve/reject?
+
+### Settled
+- **Job status** — no notification needed; essays appear in Graded tab as they complete
+- **Teacher review** — full edit access to AI grades before release; no approve/reject gating
+- **Batch release** — uses existing release flow as-is
+- **Re-grade** — not in v1; "Grade All" only touches ungraded essays
 
 ---
 
