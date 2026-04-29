@@ -1180,28 +1180,36 @@ export default function ClassDetailRoute() {
                       {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{inProgressCount}</Badge>
+                      <Link to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=in-progress`}>
+                        <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">{inProgressCount}</Badge>
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      {submittedCount > 0 ? (
-                        <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
-                          {submittedCount}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{submittedCount}</Badge>
-                      )}
+                      <Link to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=submitted`}>
+                        {submittedCount > 0 ? (
+                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer">
+                            {submittedCount}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">{submittedCount}</Badge>
+                        )}
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      {gradedCount > 0 ? (
-                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-                          {gradedCount}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{gradedCount}</Badge>
-                      )}
+                      <Link to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=graded`}>
+                        {gradedCount > 0 ? (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 cursor-pointer">
+                            {gradedCount}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">{gradedCount}</Badge>
+                        )}
+                      </Link>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{releasedCount}</Badge>
+                      <Link to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=released`}>
+                        <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80">{releasedCount}</Badge>
+                      </Link>
                     </TableCell>
                     <TableCell>
                       {pasteCount > 0 ? (
