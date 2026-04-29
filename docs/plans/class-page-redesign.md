@@ -18,6 +18,7 @@ Simplify the teacher class page from a busy 7-tab interface into something clean
 - **Student details panel** (opened from the Students tab) now shows categorized sections: Submitted, Graded, Released, and Drafts in progress — creating a second route to a student's work alongside the Assignments view
 - **Status badge drilldown** — each count badge in the Assignments table is now a clickable link that navigates to a filtered list of papers for that assignment at that status (In Progress / Submitted / Graded / Released)
 - **Batch AI grading** — the Submitted drilldown has per-row checkboxes, a Select All checkbox, and a "Grade with AI" button; selecting essays and clicking the button grades them sequentially in the browser with per-row status indicators; completed essays drop off the list automatically; already-graded essays are excluded from this view
+- **Batch grade release** — the Graded drilldown has the same checkbox pattern with a "Release Grades" button; selecting any combination and clicking sends all selected IDs in one request; released essays drop off the list and a prompt links to the Released tab to confirm
 
 ## Open design questions
 
@@ -84,7 +85,11 @@ Screenshots taken of the three major views in PR #101:
 
 5. **Submitted drilldown with batch AI grading** — Answers: where does the actual grading workflow live, and how does a teacher grade multiple essays at once without clicking into each one individually? Result: the Submitted view gives a focused list of only ungraded papers, with checkboxes and a "Grade with AI" button. Selecting all and clicking starts sequential AI grading in the background — each essay gets graded and drops off the list as it finishes.
 
-6. **Graded drilldown** — Answers: once essays are graded but not yet released, where does the teacher go to review them? Result: the Graded tab on the same assignment page shows a clean list with grade and timestamp. Each submission links to the full grading view. No batch actions needed here — review is one at a time.
+6. **Graded drilldown (original)** — Answers: once essays are graded but not yet released, where does the teacher go to review them? Result: the Graded tab shows a clean list with grade and timestamp; each submission links to the full grading view.
+
+7. **Graded drilldown with batch release (default state)** — Answers: should the teacher be able to release multiple grades at once from the same view, or is one-at-a-time enough? Result: yes — added the same checkbox + Select All + action button pattern. "Release Grades" is greyed out until at least one is selected.
+
+8. **Graded drilldown with batch release (selection active)** — Shows "Release Grades (1)" lit up with the row checked. Clicking sends all selected IDs to the release API in one POST; released essays drop off the list.
 
 ## Notes
 
