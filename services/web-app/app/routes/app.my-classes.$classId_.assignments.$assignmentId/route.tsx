@@ -162,6 +162,8 @@ export default function AssignmentSubmissionsRoute() {
     Record<string, GradingState>
   >({});
   const [isGrading, setIsGrading] = useState(false);
+  const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set());
+  const [isReleasing, setIsReleasing] = useState(false);
 
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
 
@@ -171,15 +173,22 @@ export default function AssignmentSubmissionsRoute() {
     [submissions, gradingProgress]
   );
 
+  // Graded submissions not yet released in this session
+  const visibleGraded = useMemo(
+    () => submissions.filter((s) => !releasedIds.has(s.id)),
+    [submissions, releasedIds]
+  );
+
+  const activeList = status === 'submitted' ? visibleSubmissions : visibleGraded;
+
   const allSelected =
-    visibleSubmissions.length > 0 &&
-    visibleSubmissions.every((s) => selected.has(s.id));
+    activeList.length > 0 && activeList.every((s) => selected.has(s.id));
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(visibleSubmissions.map((s) => s.id)));
+      setSelected(new Set(activeList.map((s) => s.id)));
     }
   };
 
@@ -223,7 +232,30 @@ export default function AssignmentSubmissionsRoute() {
     setIsGrading(false);
   }, [selected]);
 
+  const releaseGrades = useCallback(async () => {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+
+    setIsReleasing(true);
+    try {
+      const form = new FormData();
+      ids.forEach((id) => form.append('submissionIds', id));
+      const response = await fetch('/api/domain/release-grades', {
+        method: 'POST',
+        body: form,
+      });
+      if (response.ok) {
+        setReleasedIds((prev) => new Set([...prev, ...ids]));
+        setSelected(new Set());
+      }
+    } catch {
+      // stay in current state, teacher can retry
+    }
+    setIsReleasing(false);
+  }, [selected]);
+
   const handleStatusChange = (newStatus: StatusFilter) => {
+    setSelected(new Set());
     navigate(`?status=${newStatus}`);
   };
 
@@ -445,14 +477,110 @@ export default function AssignmentSubmissionsRoute() {
           </>
         )}
 
-        {/* Graded / Released tables */}
-        {(status === 'graded' || status === 'released') && (
+        {/* Graded table — with batch release */}
+        {status === 'graded' && (
+          <>
+            {/* Release toolbar */}
+            <div className="mb-3 flex items-center gap-3">
+              <Button
+                size="sm"
+                disabled={selected.size === 0 || isReleasing}
+                onClick={releaseGrades}
+              >
+                {isReleasing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Releasing…
+                  </>
+                ) : (
+                  `Release Grades${selected.size > 0 ? ` (${selected.size})` : ''}`
+                )}
+              </Button>
+              {selected.size > 0 && !isReleasing && (
+                <span className="text-sm text-muted-foreground">
+                  {selected.size} selected
+                </span>
+              )}
+            </div>
+
+            {visibleGraded.length === 0 &&
+            releasedIds.size > 0 ? (
+              <p className="py-8 text-center text-muted-foreground text-sm">
+                All grades released. Switch to{' '}
+                <button
+                  className="text-primary hover:underline"
+                  onClick={() => handleStatusChange('released')}
+                >
+                  Released
+                </button>{' '}
+                to confirm.
+              </p>
+            ) : visibleGraded.length === 0 ? (
+              <p className="py-8 text-center text-muted-foreground text-sm">
+                No graded submissions waiting to be released.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                      />
+                    </TableHead>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Submission</TableHead>
+                    <TableHead>Grade</TableHead>
+                    <TableHead>Graded</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleGraded.map((sub) => (
+                    <TableRow key={sub.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(sub.id)}
+                          onCheckedChange={() => toggleSelect(sub.id)}
+                          disabled={isReleasing}
+                          aria-label="Select submission"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {sub.document.profile.user.name ??
+                          sub.document.profile.user.email}
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                          className="text-primary hover:underline"
+                        >
+                          {sub.document.title || sub.title || 'Untitled'}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {sub.score ?? sub.letterGrade ?? (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {sub.gradedAt ? timeAgo(sub.gradedAt) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </>
+        )}
+
+        {/* Released table — read-only */}
+        {status === 'released' && (
           <>
             {submissions.length === 0 ? (
               <p className="py-8 text-center text-muted-foreground text-sm">
-                No{' '}
-                {status === 'graded' ? 'graded' : 'released'} submissions for
-                this assignment.
+                No released submissions for this assignment.
               </p>
             ) : (
               <Table>
@@ -461,9 +589,7 @@ export default function AssignmentSubmissionsRoute() {
                     <TableHead>Student</TableHead>
                     <TableHead>Submission</TableHead>
                     <TableHead>Grade</TableHead>
-                    <TableHead>
-                      {status === 'graded' ? 'Graded' : 'Released'}
-                    </TableHead>
+                    <TableHead>Released</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -487,13 +613,7 @@ export default function AssignmentSubmissionsRoute() {
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
-                        {status === 'graded'
-                          ? sub.gradedAt
-                            ? timeAgo(sub.gradedAt)
-                            : '—'
-                          : sub.releasedAt
-                            ? timeAgo(sub.releasedAt)
-                            : '—'}
+                        {sub.releasedAt ? timeAgo(sub.releasedAt) : '—'}
                       </TableCell>
                     </TableRow>
                   ))}
