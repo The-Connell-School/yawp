@@ -28,7 +28,7 @@ When a teacher grades a submission, the AI generates grammar issue highlights th
 
 - **Floating tooltip on hover** (not click-to-remove or right-click context menu)
 - **Tooltip is teacher + grading mode only** (`isGradeMode` guard) — students see the message/rule but no action buttons
-- **Tooltip shows**: "Hide comment" and "Remove comment" — no "Hide all" on the tooltip itself
+- **Tooltip shows**: "Hide comment" and "Remove comment" — no "Hide all" on the tooltip itself; Hide all belongs in the rubric panel only
 - The existing **"Hide all / Show all"** in the rubric panel is kept as-is for both teachers and students
 - Scope is **grammar issues only** — yellow grade comment marks are out of scope
 
