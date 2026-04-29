@@ -4,26 +4,19 @@
 
 Add a print button to the student document page (`/app/documents/:id`) so users can print their document.
 
+## Decisions
+
+- **What to print:** Current draft (including unsaved changes via live editor state). If the student is viewing a submitted version, print that.
+- **Format:** Open a clean HTML page in a new tab and trigger the browser print dialog (users can Save as PDF). No extra dependencies needed — cleaner than `window.print()` on the full page.
+- **Comments/annotations:** Not included. Strip `data-comment-id` spans from the HTML before printing.
+- **Who gets it:** Both students and teachers.
+
 ## Approach
 
-**Recommended: `window.print()` with CSS `@media print`**
+**New-window print (no dependencies)**
 
-- Add a print button to the existing nav bar (alongside title, sync status, submit button)
-- Button calls `window.print()`
-- Add `@media print` styles that hide everything except the editor column: nav bar, tutor panel, comments panel, editor toolbar
-- The editor content is already structured HTML from TipTap, so it renders cleanly
-- Include a clean print header: document title, student name, date
-
-**Alternative: Server-rendered PDF**
-
-- Generate a PDF server-side (e.g. Puppeteer)
-- Gives a downloadable file and consistent cross-browser output
-- Significantly more complex to implement
-
-The CSS approach is faster, works offline, and requires no new routes or server infrastructure. The tradeoff is that the browser print dialog varies across browsers/OS, which is usually acceptable.
-
-## Open Questions
-
-- Should it print the current draft, or only a submitted version?
-- Should comments/annotations be included in the print output?
-- Should teachers also have access to the print button, or just students?
+1. Add a Print button to the nav bar right side (alongside Submit, DocumentHistory).
+2. On click, get the live editor HTML via `editorBridgeRef.current?.getContent().html` (captures unsaved changes), falling back to `data.doc.html`.
+3. Strip comment annotation spans (`[data-comment-id]`) using `DOMParser` in the browser.
+4. Open a new window with clean, styled HTML — title, student name, date as a header — then call `window.print()`.
+5. Button shows for both students and teachers.
