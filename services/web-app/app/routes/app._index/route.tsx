@@ -282,7 +282,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Show all StudentCourses as assignment types (not filtered to class membership)
   const [assignmentTypes, coursesGlance] = profile.teacherProfile
     ? await Promise.all([
         prisma.studentCourse.findMany({
@@ -363,15 +362,22 @@ export default function AppRoute() {
 
   if (isTeacher) {
     return (
-      <div className="flex h-full flex-col overflow-auto">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h1 className="text-xl font-semibold">Dashboard</h1>
+      <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
+        <div className="flex w-full justify-between border-b bg-secondary">
+          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+            <div className="flex flex-col">
+              <h2>Welcome, {user.name}!</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
+                Your assignment types and class progress, all in one place.
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-8 p-6 max-w-4xl">
+        <div className="mx-auto w-full max-w-screen-lg px-3 py-6 pb-24 sm:px-5 flex flex-col gap-8">
           <AssignmentTypesList assignmentTypes={data.assignmentTypes} />
           <ClassesAtAGlance courses={data.coursesGlance} />
         </div>
-      </div>
+      </section>
     );
   }
 
