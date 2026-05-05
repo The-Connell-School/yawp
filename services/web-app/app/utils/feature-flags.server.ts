@@ -4,6 +4,8 @@ export const FEATURE_FLAGS = {
   DOCUMENT_SUBMISSION: 'document_submission_enabled',
   DOCUMENT_SUBMISSION_SCHOOL_IDS: 'document_submission_enabled_school_ids',
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
+  RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
+    'released_grades_organization_enabled_org_ids',
 } as const;
 
 export async function getFeatureFlag(name: string): Promise<boolean> {
@@ -79,6 +81,16 @@ export async function isAssignmentsEnabledForOrganization(
 ): Promise<boolean> {
   const enabledOrgIds = await getSettingIdList(
     FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS
+  );
+  if (enabledOrgIds === null || !organizationId) return false;
+  return enabledOrgIds.has(organizationId);
+}
+
+export async function isReleasedGradesOrganizationEnabledForOrganization(
+  organizationId: string | null | undefined
+): Promise<boolean> {
+  const enabledOrgIds = await getSettingIdList(
+    FEATURE_FLAGS.RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS
   );
   if (enabledOrgIds === null || !organizationId) return false;
   return enabledOrgIds.has(organizationId);
