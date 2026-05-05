@@ -30,6 +30,7 @@ export type AssignmentTypeRow = {
   courseCount: number;
   studentCount: number;
   isOrphan: boolean;
+  image?: { id: string } | null;
 };
 
 export type CourseGlanceRow = {
@@ -55,9 +56,9 @@ export type TrainingRow = {
 
 // Prototype mock data — replace with real DB queries once assignments-unification schema lands
 const MOCK_ASSIGNMENT_TYPES: AssignmentTypeRow[] = [
-  { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false },
-  { id: 'at2', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false },
-  { id: 'at3', name: 'Draft rubric', courseCount: 0, studentCount: 0, isOrphan: true },
+  { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false, image: null },
+  { id: 'at2', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false, image: null },
+  { id: 'at3', name: 'Draft rubric', courseCount: 0, studentCount: 0, isOrphan: true, image: null },
 ];
 
 const MOCK_COURSES_GLANCE: CourseGlanceRow[] = [
