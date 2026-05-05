@@ -73,12 +73,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       profile: { select: { user: { select: { name: true } } } },
     },
   });
-  const studentOptions: StudentOption[] = students
+  type StudentRow = {
+    id: string;
+    profile: { user: { name: string | null } } | null;
+  };
+  const studentOptions: StudentOption[] = (students as StudentRow[])
     .map((s) => ({
       id: s.id,
       name: s.profile?.user.name ?? '',
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a: StudentOption, b: StudentOption) =>
+      a.name.localeCompare(b.name)
+    );
 
   const className = klass.title ?? '';
 
