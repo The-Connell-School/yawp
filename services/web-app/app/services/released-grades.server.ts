@@ -77,6 +77,30 @@ function buildSubmissionWhere(classId: string, filters: PileFilters) {
 
 export { buildSubmissionWhere };
 
+// Internal row shapes returned by Prisma (typed loosely so the file compiles
+// without depending on generated Prisma payload types).
+type PileContentsRow = {
+  id: string;
+  releasedAt: Date;
+  numericPercentage: number | null;
+  document: {
+    profile: {
+      studentProfile: { id: string } | null;
+      user: { name: string | null };
+    };
+  };
+};
+
+type StudentPileContentsRow = {
+  id: string;
+  releasedAt: Date;
+  numericPercentage: number | null;
+  document: {
+    assignmentTypeId: string;
+    assignmentType: { title: string } | null;
+  };
+};
+
 /**
  * Aggregate released submissions in a class into one pile per AssignmentType.
  * Implementation note: `Submission` does not have a direct `assignmentTypeId`
@@ -100,14 +124,18 @@ export async function loadPiles(params: {
 
   if (submissions.length === 0) return [];
 
+  type PileRow = {
+    id: string;
+    releasedAt: Date;
+    document: { assignmentTypeId: string };
+  };
   const byType = new Map<
     string,
     { count: number; mostRecentReleasedAt: Date }
   >();
-  for (const s of submissions) {
-    const typeId = (s as { document: { assignmentTypeId: string } }).document
-      .assignmentTypeId;
-    const releasedAt = (s as { releasedAt: Date }).releasedAt;
+  for (const s of submissions as PileRow[]) {
+    const typeId = s.document.assignmentTypeId;
+    const releasedAt = s.releasedAt;
     const existing = byType.get(typeId);
     if (existing) {
       existing.count += 1;
@@ -122,7 +150,9 @@ export async function loadPiles(params: {
     where: { id: { in: ids } },
     select: { id: true, title: true },
   });
-  const titleById = new Map(types.map((t) => [t.id, t.title]));
+  const titleById = new Map<string, string>(
+    types.map((t: { id: string; title: string }) => [t.id, t.title])
+  );
 
   const piles: Pile[] = ids.map((id) => ({
     assignmentTypeId: id,
@@ -175,23 +205,14 @@ export async function loadPileContents(params: {
     skip: params.skip,
   });
 
-  return submissions.map((s) => {
-    const doc = (
-      s as {
-        document: {
-          profile: {
-            studentProfile: { id: string } | null;
-            user: { name: string | null };
-          };
-        };
-      }
-    ).document;
+  return (submissions as PileContentsRow[]).map((s) => {
+    const doc = s.document;
     return {
-      submissionId: s.id as string,
+      submissionId: s.id,
       studentProfileId: doc.profile.studentProfile?.id ?? '',
       studentName: doc.profile.user.name ?? '',
-      grade: (s as { numericPercentage: number | null }).numericPercentage,
-      releasedAt: (s as { releasedAt: Date }).releasedAt,
+      grade: s.numericPercentage,
+      releasedAt: s.releasedAt,
     };
   });
 }
@@ -220,20 +241,11 @@ export async function loadStudentPiles(params: {
   });
 
   const byStudent = new Map<string, StudentPile>();
-  for (const s of submissions) {
-    const profile = (
-      s as {
-        document: {
-          profile: {
-            studentProfile: { id: string } | null;
-            user: { name: string | null };
-          };
-        };
-      }
-    ).document.profile;
+  for (const s of submissions as PileContentsRow[]) {
+    const profile = s.document.profile;
     const sp = profile.studentProfile;
     if (!sp) continue;
-    const releasedAt = (s as { releasedAt: Date }).releasedAt;
+    const releasedAt = s.releasedAt;
     const existing = byStudent.get(sp.id);
     if (existing) {
       existing.count += 1;
@@ -284,21 +296,14 @@ export async function loadStudentPileContents(params: {
     orderBy: { releasedAt: 'desc' },
   });
 
-  return submissions.map((s) => {
-    const doc = (
-      s as {
-        document: {
-          assignmentTypeId: string;
-          assignmentType: { title: string } | null;
-        };
-      }
-    ).document;
+  return (submissions as StudentPileContentsRow[]).map((s) => {
+    const doc = s.document;
     return {
-      submissionId: s.id as string,
+      submissionId: s.id,
       assignmentTypeId: doc.assignmentTypeId,
       assignmentTypeTitle: doc.assignmentType?.title ?? '(deleted)',
-      grade: (s as { numericPercentage: number | null }).numericPercentage,
-      releasedAt: (s as { releasedAt: Date }).releasedAt,
+      grade: s.numericPercentage,
+      releasedAt: s.releasedAt,
     };
   });
 }
