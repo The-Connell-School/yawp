@@ -17,12 +17,10 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Badge } from '~/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { formatDateOnly } from '~/utils/date-only';
 import { AssignmentTypesList } from './components/assignment-types-list';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
-import { CoursesList } from './components/courses-list';
-import { TrainingList } from './components/training-list';
 
 export type AssignmentTypeRow = {
   id: string;
@@ -42,18 +40,6 @@ export type CourseGlanceRow = {
   released: number;
 };
 
-export type CourseRow = {
-  id: string;
-  name: string;
-  studentCount: number;
-};
-
-export type TrainingRow = {
-  id: string;
-  name: string;
-  status: 'not-started' | 'in-progress' | 'completed';
-};
-
 // Prototype mock data — replace with real DB queries once assignments-unification schema lands
 const MOCK_ASSIGNMENT_TYPES: AssignmentTypeRow[] = [
   { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false, image: null },
@@ -65,17 +51,6 @@ const MOCK_COURSES_GLANCE: CourseGlanceRow[] = [
   { id: 'c1', name: 'Period 1 English', inProgress: 12, submitted: 3, graded: 8, released: 5 },
   { id: 'c2', name: 'Period 3 English', inProgress: 16, submitted: 0, graded: 10, released: 6 },
   { id: 'c3', name: 'AP Lit', inProgress: 14, submitted: 2, graded: 4, released: 12 },
-];
-
-const MOCK_COURSES: CourseRow[] = [
-  { id: 'c1', name: 'Period 1 English', studentCount: 28 },
-  { id: 'c2', name: 'Period 3 English', studentCount: 31 },
-  { id: 'c3', name: 'AP Lit', studentCount: 24 },
-];
-
-const MOCK_TRAINING: TrainingRow[] = [
-  { id: 'tr1', name: 'Getting Started with Yawp', status: 'completed' },
-  { id: 'tr2', name: 'Advanced Feedback Techniques', status: 'in-progress' },
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -369,18 +344,6 @@ export default function AppRoute() {
         <div className="flex flex-col gap-8 p-6 max-w-4xl">
           <AssignmentTypesList assignmentTypes={MOCK_ASSIGNMENT_TYPES} />
           <ClassesAtAGlance courses={MOCK_COURSES_GLANCE} />
-          <Tabs defaultValue="courses">
-            <TabsList>
-              <TabsTrigger value="courses">Courses</TabsTrigger>
-              <TabsTrigger value="training">Training</TabsTrigger>
-            </TabsList>
-            <TabsContent value="courses" className="mt-4">
-              <CoursesList courses={MOCK_COURSES} />
-            </TabsContent>
-            <TabsContent value="training" className="mt-4">
-              <TrainingList training={MOCK_TRAINING} />
-            </TabsContent>
-          </Tabs>
         </div>
       </div>
     );
