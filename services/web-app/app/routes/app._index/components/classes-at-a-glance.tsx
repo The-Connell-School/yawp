@@ -55,7 +55,7 @@ function StatusBadge({
     );
   }
   return (
-    <Link to={`/app/courses/${courseId}?status=${status}`}>
+    <Link to={`/app/my-classes/${courseId}?status=${status}`}>
       <Badge
         size="sm"
         className={cn('cursor-pointer transition-opacity', activeClassName)}
@@ -98,7 +98,14 @@ export function ClassesAtAGlance({ courses }: { courses: CourseGlanceRow[] }) {
           <TableBody>
             {courses.map((course) => (
               <TableRow key={course.id}>
-                <TableCell className="font-medium text-sm">{course.name}</TableCell>
+                <TableCell className="font-medium text-sm">
+                  <Link
+                    to={`/app/my-classes/${course.id}`}
+                    className="hover:underline"
+                  >
+                    {course.name}
+                  </Link>
+                </TableCell>
                 {COLUMNS.map((col) => (
                   <TableCell key={col.key} className="text-center">
                     <StatusBadge
