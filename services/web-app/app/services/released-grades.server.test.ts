@@ -11,9 +11,12 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { loadPiles, loadPileContents } = await import(
-  './released-grades.server'
-);
+const {
+  loadPiles,
+  loadPileContents,
+  loadStudentPiles,
+  loadStudentPileContents,
+} = await import('./released-grades.server');
 
 describe('loadPiles', () => {
   beforeEach(() => {
@@ -152,5 +155,101 @@ describe('loadPileContents', () => {
     expect(call.where.document.assignmentTypeId).toBe('at_1');
     expect(call.take).toBe(50);
     expect(call.skip).toBe(0);
+  });
+});
+
+describe('loadStudentPiles', () => {
+  beforeEach(() => {
+    prisma.submission.findMany.mockReset();
+  });
+
+  test('returns empty array when no students have released submissions', async () => {
+    prisma.submission.findMany.mockResolvedValue([]);
+    const piles = await loadStudentPiles({ classId: 'class_1', filters: {} });
+    expect(piles).toEqual([]);
+  });
+
+  test('groups by student, sorted by most-recent release desc, count per student', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 's_1',
+        releasedAt: new Date('2026-05-01'),
+        document: {
+          profile: {
+            studentProfile: { id: 'sp_1' },
+            user: { name: 'Jamie Lopez' },
+          },
+        },
+      },
+      {
+        id: 's_2',
+        releasedAt: new Date('2026-04-30'),
+        document: {
+          profile: {
+            studentProfile: { id: 'sp_1' },
+            user: { name: 'Jamie Lopez' },
+          },
+        },
+      },
+      {
+        id: 's_3',
+        releasedAt: new Date('2026-04-29'),
+        document: {
+          profile: {
+            studentProfile: { id: 'sp_2' },
+            user: { name: 'Anita Patel' },
+          },
+        },
+      },
+    ]);
+    const piles = await loadStudentPiles({ classId: 'class_1', filters: {} });
+    expect(piles).toEqual([
+      {
+        studentProfileId: 'sp_1',
+        studentName: 'Jamie Lopez',
+        count: 2,
+        mostRecentReleasedAt: new Date('2026-05-01'),
+      },
+      {
+        studentProfileId: 'sp_2',
+        studentName: 'Anita Patel',
+        count: 1,
+        mostRecentReleasedAt: new Date('2026-04-29'),
+      },
+    ]);
+  });
+});
+
+describe('loadStudentPileContents', () => {
+  beforeEach(() => {
+    prisma.submission.findMany.mockReset();
+  });
+
+  test('returns submissions for a single student, newest released first, with AssignmentType title', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 's_1',
+        releasedAt: new Date('2026-05-01'),
+        numericPercentage: 92,
+        document: {
+          assignmentTypeId: 'at_1',
+          assignmentType: { title: 'Macbeth Essay' },
+        },
+      },
+    ]);
+    const rows = await loadStudentPileContents({
+      classId: 'class_1',
+      studentProfileId: 'sp_1',
+      filters: {},
+    });
+    expect(rows).toEqual([
+      {
+        submissionId: 's_1',
+        assignmentTypeId: 'at_1',
+        assignmentTypeTitle: 'Macbeth Essay',
+        grade: 92,
+        releasedAt: new Date('2026-05-01'),
+      },
+    ]);
   });
 });

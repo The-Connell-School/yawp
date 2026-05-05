@@ -23,6 +23,21 @@ export type PileSubmissionRow = {
   releasedAt: Date;
 };
 
+export type StudentPile = {
+  studentProfileId: string;
+  studentName: string;
+  count: number;
+  mostRecentReleasedAt: Date;
+};
+
+export type StudentPileSubmissionRow = {
+  submissionId: string;
+  assignmentTypeId: string;
+  assignmentTypeTitle: string;
+  grade: number | null;
+  releasedAt: Date;
+};
+
 /**
  * Build a Prisma `where` for released submissions in a class with optional
  * filters. Submission has no direct `assignmentTypeId` or `studentProfileId` —
@@ -175,6 +190,113 @@ export async function loadPileContents(params: {
       submissionId: s.id as string,
       studentProfileId: doc.profile.studentProfile?.id ?? '',
       studentName: doc.profile.user.name ?? '',
+      grade: (s as { numericPercentage: number | null }).numericPercentage,
+      releasedAt: (s as { releasedAt: Date }).releasedAt,
+    };
+  });
+}
+
+export async function loadStudentPiles(params: {
+  classId: string;
+  filters: PileFilters;
+}): Promise<StudentPile[]> {
+  const submissions = await prisma.submission.findMany({
+    where: buildSubmissionWhere(params.classId, params.filters),
+    select: {
+      id: true,
+      releasedAt: true,
+      document: {
+        select: {
+          profile: {
+            select: {
+              studentProfile: { select: { id: true } },
+              user: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { releasedAt: 'desc' },
+  });
+
+  const byStudent = new Map<string, StudentPile>();
+  for (const s of submissions) {
+    const profile = (
+      s as {
+        document: {
+          profile: {
+            studentProfile: { id: string } | null;
+            user: { name: string | null };
+          };
+        };
+      }
+    ).document.profile;
+    const sp = profile.studentProfile;
+    if (!sp) continue;
+    const releasedAt = (s as { releasedAt: Date }).releasedAt;
+    const existing = byStudent.get(sp.id);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      byStudent.set(sp.id, {
+        studentProfileId: sp.id,
+        studentName: profile.user.name ?? '',
+        count: 1,
+        mostRecentReleasedAt: releasedAt,
+      });
+    }
+  }
+
+  return Array.from(byStudent.values()).sort(
+    (a, b) =>
+      b.mostRecentReleasedAt.getTime() - a.mostRecentReleasedAt.getTime()
+  );
+}
+
+export async function loadStudentPileContents(params: {
+  classId: string;
+  studentProfileId: string;
+  filters: PileFilters;
+}): Promise<StudentPileSubmissionRow[]> {
+  const baseWhere = buildSubmissionWhere(params.classId, params.filters);
+  const baseDocument = (baseWhere.document ?? {}) as Record<string, unknown>;
+  const submissions = await prisma.submission.findMany({
+    where: {
+      ...baseWhere,
+      document: {
+        ...baseDocument,
+        profile: {
+          studentProfile: { id: params.studentProfileId },
+        },
+      },
+    },
+    select: {
+      id: true,
+      releasedAt: true,
+      numericPercentage: true,
+      document: {
+        select: {
+          assignmentTypeId: true,
+          assignmentType: { select: { title: true } },
+        },
+      },
+    },
+    orderBy: { releasedAt: 'desc' },
+  });
+
+  return submissions.map((s) => {
+    const doc = (
+      s as {
+        document: {
+          assignmentTypeId: string;
+          assignmentType: { title: string } | null;
+        };
+      }
+    ).document;
+    return {
+      submissionId: s.id as string,
+      assignmentTypeId: doc.assignmentTypeId,
+      assignmentTypeTitle: doc.assignmentType?.title ?? '(deleted)',
       grade: (s as { numericPercentage: number | null }).numericPercentage,
       releasedAt: (s as { releasedAt: Date }).releasedAt,
     };
