@@ -128,11 +128,19 @@ jobs:
           PSQL_URL="$(node -e "const u=new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
           echo "::add-mask::$PSQL_URL"
 
-          EXISTING_TABLES="$(psql "$PSQL_URL" -tAc "SELECT COUNT(*)::text FROM pg_tables WHERE schemaname = '${SCHEMA}'")"
-          EXISTING_TABLES="${EXISTING_TABLES// /}"
-          if [[ "${EXISTING_TABLES:-0}" -gt 0 ]]; then
-            echo "Schema ${SCHEMA} already has ${EXISTING_TABLES} table(s); skipping dump restore to preserve data."
+          # Use pg_stat_user_tables.n_live_tup as a fast row-count proxy: a
+          # healthy production restore has thousands of live tuples, an empty
+          # or partially-restored schema has 0. This makes the workflow
+          # self-healing — a previously aborted restore (which can leave empty
+          # tables behind) won't trick us into skipping the restore.
+          EXISTING_LIVE_TUPLES="$(psql "$PSQL_URL" -tAc "SELECT COALESCE(SUM(n_live_tup), 0)::text FROM pg_stat_user_tables WHERE schemaname = '${SCHEMA}'" || echo 0)"
+          EXISTING_LIVE_TUPLES="${EXISTING_LIVE_TUPLES// /}"
+          if [[ "${EXISTING_LIVE_TUPLES:-0}" -gt 100 ]]; then
+            echo "Schema ${SCHEMA} is populated (${EXISTING_LIVE_TUPLES} live tuples); skipping dump restore to preserve data."
           else
+            echo "Schema ${SCHEMA} is empty or stale (${EXISTING_LIVE_TUPLES:-0} live tuples); dropping and re-restoring..."
+            echo "DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA};" | (cd packages/prisma && bunx prisma db execute --stdin)
+
             DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/production.dump}"
             echo "Restoring production dump into schema ${SCHEMA} from ${DUMP_URI}..."
             # Strip ownership/ACL clauses — preview DB has no `yawp_admin` role,
