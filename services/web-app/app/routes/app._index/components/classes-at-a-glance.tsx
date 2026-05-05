@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { Badge } from '~/components/ui/badge';
+import { cn } from '~/utils/misc';
 import {
   Table,
   TableBody,
@@ -12,21 +13,39 @@ import type { CourseGlanceRow } from '../route';
 
 type StatusKey = keyof Omit<CourseGlanceRow, 'id' | 'name'>;
 
-const COLUMNS: { key: StatusKey; label: string }[] = [
-  { key: 'inProgress', label: 'In Progress' },
-  { key: 'submitted', label: 'Submitted' },
-  { key: 'graded', label: 'Graded' },
-  { key: 'released', label: 'Released' },
+const COLUMNS: { key: StatusKey; label: string; activeClassName: string }[] = [
+  {
+    key: 'inProgress',
+    label: 'In Progress',
+    activeClassName: 'border-yellow-300 bg-yellow-100 text-yellow-900 hover:bg-yellow-200',
+  },
+  {
+    key: 'submitted',
+    label: 'Submitted',
+    activeClassName: 'border-orange-300 bg-orange-50 text-orange-900 hover:bg-orange-100',
+  },
+  {
+    key: 'graded',
+    label: 'Graded',
+    activeClassName: 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100',
+  },
+  {
+    key: 'released',
+    label: 'Released',
+    activeClassName: 'border-green-300 bg-green-100 text-green-900 hover:bg-green-200',
+  },
 ];
 
 function StatusBadge({
   count,
   courseId,
   status,
+  activeClassName,
 }: {
   count: number;
   courseId: string;
   status: string;
+  activeClassName: string;
 }) {
   if (count === 0) {
     return (
@@ -38,9 +57,8 @@ function StatusBadge({
   return (
     <Link to={`/app/courses/${courseId}?status=${status}`}>
       <Badge
-        variant="info-outlined"
         size="sm"
-        className="cursor-pointer hover:opacity-80 transition-opacity"
+        className={cn('cursor-pointer transition-opacity', activeClassName)}
       >
         {count}
       </Badge>
@@ -87,6 +105,7 @@ export function ClassesAtAGlance({ courses }: { courses: CourseGlanceRow[] }) {
                       count={course[col.key]}
                       courseId={course.id}
                       status={col.key}
+                      activeClassName={col.activeClassName}
                     />
                   </TableCell>
                 ))}
