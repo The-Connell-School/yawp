@@ -17,6 +17,7 @@ import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
   isDocumentSubmissionEnabledForSchool,
   isAssignmentsEnabledForOrganization,
+  isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Sheet,
@@ -416,9 +417,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   // Check feature flags
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+  const [
+    isDocumentSubmissionEnabled,
+    assignmentsEnabled,
+    releasedGradesEnabled,
+  ] = await Promise.all([
     isDocumentSubmissionEnabledForSchool(klass.school?.id),
     isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+    isReleasedGradesOrganizationEnabledForOrganization(
+      klass.school?.organizationId
+    ),
   ]);
 
   // Get all submissions for this class
@@ -553,6 +561,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
+    releasedGradesEnabled,
   });
 }
 
@@ -1395,6 +1404,14 @@ export default function ClassDetailRoute() {
               <p className="mt-1 text-muted-foreground">
                 {data.klass.school.name}
               </p>
+            ) : null}
+            {data.releasedGradesEnabled ? (
+              <Link
+                to={`/app/my-classes/${data.klass.id}/released-grades`}
+                className="mt-2 text-sm underline"
+              >
+                Released grades →
+              </Link>
             ) : null}
           </div>
         </div>
