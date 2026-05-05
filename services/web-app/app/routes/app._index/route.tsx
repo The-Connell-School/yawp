@@ -57,8 +57,8 @@ export type TrainingRow = {
 // Prototype mock data — replace with real DB queries once assignments-unification schema lands
 const MOCK_ASSIGNMENT_TYPES: AssignmentTypeRow[] = [
   { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false, image: null },
-  { id: 'at2', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false, image: null },
-  { id: 'at3', name: 'Draft rubric', courseCount: 0, studentCount: 0, isOrphan: true, image: null },
+  { id: 'at2', name: '5-Paragraph Essay', courseCount: 2, studentCount: 31, isOrphan: false, image: null },
+  { id: 'at3', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false, image: null },
 ];
 
 const MOCK_COURSES_GLANCE: CourseGlanceRow[] = [
@@ -215,7 +215,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       include: { profile: { include: { documents: true } } },
     }),
-    // Fetch teacher courses if user has teacher profile
     profile?.teacherProfile
       ? prisma.teacherCourse.findMany({
           where: teacherCourseWhere,
@@ -244,7 +243,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { position: 'asc' },
         })
       : [],
-    // Teacher classes and recent ordering
     profile?.teacherProfile
       ? prisma.class.findMany({
           where: {
@@ -299,7 +297,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [],
   ]);
 
-  // Compute recent activity per class for teachers, based on latest student document
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   if (profile.teacherProfile && teacherClasses.length > 0) {
     const recentDocs = await prisma.document.findMany({

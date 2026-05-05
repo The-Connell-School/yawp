@@ -1,7 +1,6 @@
 import { Link, useFetcher } from 'react-router';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { Trash2Icon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import type { AssignmentTypeRow } from '../route';
 
@@ -17,13 +16,7 @@ export function AssignmentTypesList({
       <div>
         <h2 className="text-base font-semibold mb-3">Assignment Types</h2>
         <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="text-muted-foreground text-sm mb-4">No assignment types yet.</p>
-          <Button size="sm" asChild>
-            <Link to="/app/my-classes/new">
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Create your first assignment type
-            </Link>
-          </Button>
+          <p className="text-muted-foreground text-sm">No assignment types yet.</p>
         </div>
       </div>
     );
@@ -48,18 +41,8 @@ export function AssignmentTypesList({
               ) : (
                 <div className="h-32 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
               )}
-              <div className="flex flex-col gap-1 p-3">
-                <h4 className="font-semibold text-foreground/90">{at.name}</h4>
-                {at.isOrphan ? (
-                  <Badge variant="secondary" size="sm" className="w-fit">
-                    Not yet assigned
-                  </Badge>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    {at.courseCount} {at.courseCount === 1 ? 'course' : 'courses'} ·{' '}
-                    {at.studentCount} students
-                  </p>
-                )}
+              <div className="max-w-42 flex items-center justify-between p-3">
+                <h4 className="text-foreground/90">{at.name}</h4>
               </div>
             </Link>
             {at.isOrphan && (
@@ -84,13 +67,6 @@ export function AssignmentTypesList({
             )}
           </div>
         ))}
-        <Link
-          to="/app/my-classes/new"
-          className="flex min-h-[168px] flex-col items-center justify-center rounded-lg border-2 border-dashed text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-        >
-          <PlusIcon className="mb-2 h-6 w-6" />
-          <span className="text-sm">New assignment type</span>
-        </Link>
       </div>
     </div>
   );
