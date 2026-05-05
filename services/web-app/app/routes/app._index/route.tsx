@@ -17,17 +17,14 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Badge } from '~/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { formatDateOnly } from '~/utils/date-only';
 import { AssignmentTypesList } from './components/assignment-types-list';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 
 export type AssignmentTypeRow = {
   id: string;
-  name: string;
-  courseCount: number;
-  studentCount: number;
-  isOrphan: boolean;
+  title: string;
   image?: { id: string } | null;
 };
 
@@ -40,18 +37,25 @@ export type CourseGlanceRow = {
   released: number;
 };
 
-// Prototype mock data — replace with real DB queries once assignments-unification schema lands
-const MOCK_ASSIGNMENT_TYPES: AssignmentTypeRow[] = [
-  { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false, image: null },
-  { id: 'at2', name: '5-Paragraph Essay', courseCount: 2, studentCount: 31, isOrphan: false, image: null },
-  { id: 'at3', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false, image: null },
-];
-
-const MOCK_COURSES_GLANCE: CourseGlanceRow[] = [
-  { id: 'c1', name: 'Period 1 English', inProgress: 12, submitted: 3, graded: 8, released: 5 },
-  { id: 'c2', name: 'Period 3 English', inProgress: 16, submitted: 0, graded: 10, released: 6 },
-  { id: 'c3', name: 'AP Lit', inProgress: 14, submitted: 2, graded: 4, released: 12 },
-];
+function hasMeaningfulGrade(grade: {
+  score: string | null;
+  feedback: string | null;
+  rubricScores?: unknown | null;
+  overallComment?: string | null;
+  numericPercentage?: number | null;
+  letterGrade?: string | null;
+}) {
+  return Boolean(
+    grade.score ||
+      grade.feedback ||
+      grade.overallComment ||
+      grade.letterGrade ||
+      grade.numericPercentage !== null ||
+      (grade.rubricScores &&
+        typeof grade.rubricScores === 'object' &&
+        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+  );
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -98,7 +102,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     studentClassIds = studentClasses.map((klass) => klass.id);
 
-    // Collect all allowed course IDs from all classes
     const courseIdSet = new Set<string>();
     studentClasses.forEach((cls) => {
       cls.allowedStudentCourses.forEach((asc) => {
@@ -106,7 +109,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       });
     });
 
-    // If we found specific courses, use them; otherwise show all (fallback)
     if (courseIdSet.size > 0) {
       allowedCourseIds = Array.from(courseIdSet);
     }
@@ -311,6 +313,69 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  // Teacher dashboard: real data for assignment types and classes at a glance
+  const [assignmentTypes, coursesGlance] = profile.teacherProfile
+    ? await Promise.all([
+        prisma.studentCourse.findMany({
+          where: {
+            allowedInClasses: {
+              some: {
+                class: {
+                  teachers: { some: { id: profile.teacherProfile.id } },
+                  isArchived: false,
+                },
+              },
+            },
+          },
+          select: { id: true, title: true, image: { select: { id: true } } },
+          orderBy: { position: 'asc' },
+        }),
+        Promise.all(
+          teacherClassesOrdered.map(async (klass) => {
+            const [submissions, inProgressCount] = await Promise.all([
+              prisma.submission.findMany({
+                where: {
+                  archivedAt: null,
+                  document: { classId: klass.id, deletedAt: null },
+                },
+                select: {
+                  score: true,
+                  feedback: true,
+                  rubricScores: true,
+                  overallComment: true,
+                  numericPercentage: true,
+                  letterGrade: true,
+                  releasedAt: true,
+                },
+              }),
+              prisma.document.count({
+                where: {
+                  classId: klass.id,
+                  deletedAt: null,
+                  archivedAt: null,
+                  submissions: { none: { archivedAt: null } },
+                },
+              }),
+            ]);
+            return {
+              id: klass.id,
+              name:
+                klass.title ||
+                `Grade ${klass.grade} • Period ${klass.period}`,
+              inProgress: inProgressCount,
+              submitted: submissions.filter(
+                (s) => !hasMeaningfulGrade(s) && !s.releasedAt
+              ).length,
+              graded: submissions.filter(
+                (s) => hasMeaningfulGrade(s) && !s.releasedAt
+              ).length,
+              released: submissions.filter((s) => s.releasedAt !== null).length,
+            } satisfies CourseGlanceRow;
+          })
+        ),
+      ])
+    : [[] as AssignmentTypeRow[], [] as CourseGlanceRow[]];
+
   return dataResponse({
     courses,
     documents,
@@ -321,6 +386,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherSchoolCount,
     assignments,
     assignmentsEnabled,
+    assignmentTypes,
+    coursesGlance,
   });
 }
 
@@ -342,8 +409,8 @@ export default function AppRoute() {
           <h1 className="text-xl font-semibold">Dashboard</h1>
         </div>
         <div className="flex flex-col gap-8 p-6 max-w-4xl">
-          <AssignmentTypesList assignmentTypes={MOCK_ASSIGNMENT_TYPES} />
-          <ClassesAtAGlance courses={MOCK_COURSES_GLANCE} />
+          <AssignmentTypesList assignmentTypes={data.assignmentTypes} />
+          <ClassesAtAGlance courses={data.coursesGlance} />
         </div>
       </div>
     );

@@ -24,12 +24,12 @@ export function AssignmentTypesList({
         {assignmentTypes.map((at) => (
           <Link
             key={at.id}
-            to={`/app/my-classes/${at.id}`}
+            to={`/app/courses/${at.id}`}
             className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
           >
             {at.image ? (
               <img
-                src={`/api/image/assignment-type/${at.image.id}`}
+                src={`/api/image/course/${at.image.id}`}
                 alt=""
                 className="h-32 w-full rounded-t-lg object-cover"
               />
@@ -37,7 +37,7 @@ export function AssignmentTypesList({
               <div className="h-32 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
             )}
             <div className="p-3">
-              <h4 className="text-foreground/90">{at.name}</h4>
+              <h4 className="text-foreground/90">{at.title}</h4>
             </div>
           </Link>
         ))}
