@@ -135,8 +135,14 @@ jobs:
           else
             DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/production.dump}"
             echo "Restoring production dump into schema ${SCHEMA} from ${DUMP_URI}..."
+            # Strip ownership/ACL clauses — preview DB has no `yawp_admin` role,
+            # so OWNER TO / GRANT / REVOKE statements would fail and abort psql.
             aws s3 cp "$DUMP_URI" - \
-              | sed "s/public\./${SCHEMA}./g; s/search_path = public/search_path = ${SCHEMA}/g" \
+              | sed -e "s/public\./${SCHEMA}./g" \
+                    -e "s/search_path = public/search_path = ${SCHEMA}/g" \
+                    -e "/OWNER TO /d" \
+                    -e "/^GRANT /d" \
+                    -e "/^REVOKE /d" \
               | psql "$PSQL_URL"
           fi
 
