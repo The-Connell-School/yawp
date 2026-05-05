@@ -13,49 +13,66 @@ import type { CourseGlanceRow } from '../route';
 
 type StatusKey = keyof Omit<CourseGlanceRow, 'id' | 'name'>;
 
-const COLUMNS: { key: StatusKey; label: string; activeClassName: string }[] = [
+const COLUMNS: {
+  key: StatusKey;
+  label: string;
+  tabParam: string;
+  activeClassName: string;
+}[] = [
   {
     key: 'inProgress',
     label: 'In Progress',
-    activeClassName: 'border-yellow-300 bg-yellow-100 text-yellow-900 hover:bg-yellow-200',
+    tabParam: 'in-progress',
+    activeClassName:
+      'border-yellow-300 bg-yellow-100 text-yellow-900 hover:bg-yellow-200',
   },
   {
     key: 'submitted',
     label: 'Submitted',
-    activeClassName: 'border-orange-300 bg-orange-50 text-orange-900 hover:bg-orange-100',
+    tabParam: 'to-grade',
+    activeClassName:
+      'border-orange-300 bg-orange-50 text-orange-900 hover:bg-orange-100',
   },
   {
     key: 'graded',
     label: 'Graded',
-    activeClassName: 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100',
+    tabParam: 'graded',
+    activeClassName:
+      'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100',
   },
   {
     key: 'released',
     label: 'Released',
-    activeClassName: 'border-green-300 bg-green-100 text-green-900 hover:bg-green-200',
+    tabParam: 'released',
+    activeClassName:
+      'border-green-300 bg-green-100 text-green-900 hover:bg-green-200',
   },
 ];
 
 function StatusBadge({
   count,
   courseId,
-  status,
+  tabParam,
   activeClassName,
 }: {
   count: number;
   courseId: string;
-  status: string;
+  tabParam: string;
   activeClassName: string;
 }) {
   if (count === 0) {
     return (
-      <Badge variant="secondary" size="sm" className="opacity-40 cursor-default select-none">
+      <Badge
+        variant="secondary"
+        size="sm"
+        className="opacity-40 cursor-default select-none"
+      >
         0
       </Badge>
     );
   }
   return (
-    <Link to={`/app/my-classes/${courseId}?status=${status}`}>
+    <Link to={`/app/my-classes/${courseId}?tab=${tabParam}`}>
       <Badge
         size="sm"
         className={cn('cursor-pointer transition-opacity', activeClassName)}
@@ -111,7 +128,7 @@ export function ClassesAtAGlance({ courses }: { courses: CourseGlanceRow[] }) {
                     <StatusBadge
                       count={course[col.key]}
                       courseId={course.id}
-                      status={col.key}
+                      tabParam={col.tabParam}
                       activeClassName={col.activeClassName}
                     />
                   </TableCell>

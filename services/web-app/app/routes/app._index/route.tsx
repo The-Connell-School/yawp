@@ -84,7 +84,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
-  // Determine which student courses to show
   let allowedCourseIds: string[] | null = null;
   let studentClassIds: string[] = [];
   if (profile.studentProfile) {
@@ -94,21 +93,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       include: {
         allowedStudentCourses: {
-          select: {
-            studentCourseId: true,
-          },
+          select: { studentCourseId: true },
         },
       },
     });
     studentClassIds = studentClasses.map((klass) => klass.id);
-
     const courseIdSet = new Set<string>();
     studentClasses.forEach((cls) => {
       cls.allowedStudentCourses.forEach((asc) => {
         courseIdSet.add(asc.studentCourseId);
       });
     });
-
     if (courseIdSet.size > 0) {
       allowedCourseIds = Array.from(courseIdSet);
     }
@@ -156,11 +151,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-          },
+          select: { id: true, title: true, releasedAt: true },
         },
       },
     }),
@@ -178,11 +169,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
-          select: {
-            id: true,
-            title: true,
-            releasedAt: true,
-          },
+          select: { id: true, title: true, releasedAt: true },
         },
       },
     }),
@@ -206,12 +193,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 title: true,
                 videoDuration: true,
                 teacherCourseModuleSessions: {
-                  where: {
-                    teacherProfileId: profile.teacherProfile.id,
-                  },
-                  select: {
-                    videoTimestamp: true,
-                  },
+                  where: { teacherProfileId: profile.teacherProfile.id },
+                  select: { videoTimestamp: true },
                 },
               },
               orderBy: { position: 'asc' },
@@ -246,28 +229,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : 0,
     profile.studentProfile && assignmentsEnabled
       ? prisma.assignment.findMany({
-          where: {
-            classId: { in: studentClassIds },
-          },
+          where: { classId: { in: studentClassIds } },
           select: {
             id: true,
             title: true,
             prompt: true,
             dueDate: true,
-            class: {
-              select: {
-                id: true,
-                grade: true,
-                period: true,
-                title: true,
-              },
-            },
-            studentCourse: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
+            class: { select: { id: true, grade: true, period: true, title: true } },
+            studentCourse: { select: { id: true, title: true } },
           },
           orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
         })
@@ -313,20 +282,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Teacher dashboard: real data for assignment types and classes at a glance
+  // Show all StudentCourses as assignment types (not filtered to class membership)
   const [assignmentTypes, coursesGlance] = profile.teacherProfile
     ? await Promise.all([
         prisma.studentCourse.findMany({
-          where: {
-            allowedInClasses: {
-              some: {
-                class: {
-                  teachers: { some: { id: profile.teacherProfile.id } },
-                  isArchived: false,
-                },
-              },
-            },
-          },
           select: { id: true, title: true, image: { select: { id: true } } },
           orderBy: { position: 'asc' },
         }),

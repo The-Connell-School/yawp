@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -5,7 +6,7 @@ import {
   Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
-import { PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -17,6 +18,12 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { useUser } from '~/hooks/useUser.js';
 import {
   createStudentDocumentForCourse,
@@ -25,85 +32,97 @@ import {
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { CreateAssignmentSheet } from './create-assignment-sheet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const [course, documents, archivedDocuments] = await Promise.all([
-    prisma.studentCourse.findUnique({
-      where: { id: params.id },
-      include: {
-        image: true,
-        studentCourseModules: {
-          where: { deletedAt: null },
-          orderBy: { position: 'asc' },
-        },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: {
-        profileId: profile.id,
-        deletedAt: null,
-        archivedAt: null,
-        studentCourseModuleSessions: {
-          some: { studentCourseModule: { studentCourseId: params.id } },
-        },
-      },
-      include: {
-        studentCourseModuleSessions: {
-          take: 1,
-          orderBy: { studentCourseModule: { position: 'desc' } },
-          include: { studentCourseModule: true },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
-            releasedAt: true,
+  const [course, documents, archivedDocuments, teacherClasses] =
+    await Promise.all([
+      prisma.studentCourse.findUnique({
+        where: { id: params.id },
+        include: {
+          image: true,
+          studentCourseModules: {
+            where: { deletedAt: null },
+            orderBy: { position: 'asc' },
           },
         },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        profileId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-        studentCourseModuleSessions: {
-          some: { studentCourseModule: { studentCourseId: params.id } },
-        },
-      },
-      include: {
-        studentCourseModuleSessions: {
-          take: 1,
-          orderBy: { studentCourseModule: { position: 'desc' } },
-          include: { studentCourseModule: true },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
-            releasedAt: true,
+      }),
+      prisma.document.findMany({
+        orderBy: { createdAt: 'desc' },
+        where: {
+          profileId: profile.id,
+          deletedAt: null,
+          archivedAt: null,
+          studentCourseModuleSessions: {
+            some: { studentCourseModule: { studentCourseId: params.id } },
           },
         },
-      },
-    }),
-  ]);
+        include: {
+          studentCourseModuleSessions: {
+            take: 1,
+            orderBy: { studentCourseModule: { position: 'desc' } },
+            include: { studentCourseModule: true },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              overallScore: true,
+              numericPercentage: true,
+              letterGrade: true,
+              releasedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.document.findMany({
+        orderBy: { archivedAt: 'desc' },
+        where: {
+          profileId: profile.id,
+          deletedAt: null,
+          archivedAt: { not: null },
+          studentCourseModuleSessions: {
+            some: { studentCourseModule: { studentCourseId: params.id } },
+          },
+        },
+        include: {
+          studentCourseModuleSessions: {
+            take: 1,
+            orderBy: { studentCourseModule: { position: 'desc' } },
+            include: { studentCourseModule: true },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              overallScore: true,
+              numericPercentage: true,
+              letterGrade: true,
+              releasedAt: true,
+            },
+          },
+        },
+      }),
+      profile.teacherProfile
+        ? prisma.class.findMany({
+            where: {
+              teachers: { some: { id: profile.teacherProfile.id } },
+              isArchived: false,
+            },
+            select: { id: true, grade: true, period: true, title: true },
+            orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+          })
+        : [],
+    ]);
 
   if (!course) {
     return redirectWithToast('/app', {
@@ -112,8 +131,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  return dataResponse({ course, documents, archivedDocuments });
+  return dataResponse({ course, documents, archivedDocuments, teacherClasses });
 }
+
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
@@ -137,16 +157,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const requestUrl = new URL(request.url);
   const currentPath = `${requestUrl.pathname}${requestUrl.search}`;
-  const redirectParams = new URLSearchParams({
-    exitTo: currentPath,
-  });
+  const redirectParams = new URLSearchParams({ exitTo: currentPath });
 
   return redirectWithToast(
     `/app/documents/${documentId}?${redirectParams.toString()}`,
-    {
-      type: 'success',
-      description: 'Document created successfully.',
-    }
+    { type: 'success', description: 'Document created successfully.' }
   );
 }
 
@@ -157,6 +172,8 @@ export default function AppCoursesIdRoute() {
   const hasModules = data.course.studentCourseModules.length > 0;
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
+  const docFormRef = useRef<HTMLFormElement>(null);
+  const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -167,17 +184,52 @@ export default function AppCoursesIdRoute() {
               <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
             </Link>
           </Button>
-          <Form method="post">
-            <Button
-              type="submit"
-              className="w-fit"
-              disabled={!hasModules || isLoading}
-              isLoading={isLoading}
-            >
-              New <PlusIcon className="ml-1 h-5 w-5" />
-            </Button>
-          </Form>
+
+          {isTeacher ? (
+            <>
+              <Form method="post" ref={docFormRef} className="hidden" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" className="w-fit">
+                    New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={!hasModules || isLoading}
+                    onSelect={() => docFormRef.current?.requestSubmit()}
+                  >
+                    Document
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={data.teacherClasses.length === 0}
+                    onSelect={() => setIsAssignmentSheetOpen(true)}
+                  >
+                    Assignment
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <CreateAssignmentSheet
+                studentCourseId={data.course.id}
+                teacherClasses={data.teacherClasses}
+                open={isAssignmentSheetOpen}
+                onOpenChange={setIsAssignmentSheetOpen}
+              />
+            </>
+          ) : (
+            <Form method="post">
+              <Button
+                type="submit"
+                className="w-fit"
+                disabled={!hasModules || isLoading}
+                isLoading={isLoading}
+              >
+                New <PlusIcon className="ml-1 h-5 w-5" />
+              </Button>
+            </Form>
+          )}
         </div>
+
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
           {data.course.image ? (
             <img
@@ -191,6 +243,7 @@ export default function AppCoursesIdRoute() {
             <p className="text-sm sm:text-base">{data.course.description}</p>
           </div>
         </div>
+
         {hasModules ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
@@ -209,6 +262,7 @@ export default function AppCoursesIdRoute() {
             </Accordion>
           </>
         ) : null}
+
         {data.documents.length ? (
           <>
             <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
@@ -256,7 +310,7 @@ export default function AppCoursesIdRoute() {
             title="No documents"
             subtitle={
               <>
-                Hit the <code className="px-1">New +</code> button above to
+                Hit the <code className="px-1">New</code> button above to
                 create your first document.
               </>
             }
