@@ -15,6 +15,14 @@ export type Pile = {
   mostRecentReleasedAt: Date;
 };
 
+export type PileSubmissionRow = {
+  submissionId: string;
+  studentProfileId: string;
+  studentName: string;
+  grade: number | null;
+  releasedAt: Date;
+};
+
 /**
  * Build a Prisma `where` for released submissions in a class with optional
  * filters. Submission has no direct `assignmentTypeId` or `studentProfileId` —
@@ -113,4 +121,62 @@ export async function loadPiles(params: {
       b.mostRecentReleasedAt.getTime() - a.mostRecentReleasedAt.getTime()
   );
   return piles;
+}
+
+export async function loadPileContents(params: {
+  classId: string;
+  assignmentTypeId: string;
+  filters: PileFilters;
+  take: number;
+  skip: number;
+}): Promise<PileSubmissionRow[]> {
+  const baseWhere = buildSubmissionWhere(params.classId, params.filters);
+  const baseDocument = (baseWhere.document ?? {}) as Record<string, unknown>;
+  const submissions = await prisma.submission.findMany({
+    where: {
+      ...baseWhere,
+      document: {
+        ...baseDocument,
+        assignmentTypeId: params.assignmentTypeId,
+      },
+    },
+    select: {
+      id: true,
+      releasedAt: true,
+      numericPercentage: true,
+      document: {
+        select: {
+          profile: {
+            select: {
+              studentProfile: { select: { id: true } },
+              user: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { releasedAt: 'desc' },
+    take: params.take,
+    skip: params.skip,
+  });
+
+  return submissions.map((s) => {
+    const doc = (
+      s as {
+        document: {
+          profile: {
+            studentProfile: { id: string } | null;
+            user: { name: string | null };
+          };
+        };
+      }
+    ).document;
+    return {
+      submissionId: s.id as string,
+      studentProfileId: doc.profile.studentProfile?.id ?? '',
+      studentName: doc.profile.user.name ?? '',
+      grade: (s as { numericPercentage: number | null }).numericPercentage,
+      releasedAt: (s as { releasedAt: Date }).releasedAt,
+    };
+  });
 }

@@ -11,7 +11,9 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { loadPiles } = await import('./released-grades.server');
+const { loadPiles, loadPileContents } = await import(
+  './released-grades.server'
+);
 
 describe('loadPiles', () => {
   beforeEach(() => {
@@ -79,5 +81,76 @@ describe('loadPiles', () => {
       gte: new Date('2026-04-01'),
       lte: new Date('2026-04-30'),
     });
+  });
+});
+
+describe('loadPileContents', () => {
+  beforeEach(() => {
+    prisma.submission.findMany.mockReset();
+  });
+
+  test('returns submissions for an AssignmentType in a class, newest released first, paginated', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 's_1',
+        releasedAt: new Date('2026-05-01'),
+        numericPercentage: 89,
+        document: {
+          profile: {
+            studentProfile: { id: 'sp_1' },
+            user: { name: 'Jamie Lopez' },
+          },
+        },
+      },
+      {
+        id: 's_2',
+        releasedAt: new Date('2026-04-28'),
+        numericPercentage: 76,
+        document: {
+          profile: {
+            studentProfile: { id: 'sp_2' },
+            user: { name: 'Anita Patel' },
+          },
+        },
+      },
+    ]);
+    const result = await loadPileContents({
+      classId: 'class_1',
+      assignmentTypeId: 'at_1',
+      filters: {},
+      take: 50,
+      skip: 0,
+    });
+    expect(result).toEqual([
+      {
+        submissionId: 's_1',
+        studentProfileId: 'sp_1',
+        studentName: 'Jamie Lopez',
+        grade: 89,
+        releasedAt: new Date('2026-05-01'),
+      },
+      {
+        submissionId: 's_2',
+        studentProfileId: 'sp_2',
+        studentName: 'Anita Patel',
+        grade: 76,
+        releasedAt: new Date('2026-04-28'),
+      },
+    ]);
+  });
+
+  test('passes assignmentTypeId scope to the query', async () => {
+    prisma.submission.findMany.mockResolvedValue([]);
+    await loadPileContents({
+      classId: 'class_1',
+      assignmentTypeId: 'at_1',
+      filters: {},
+      take: 50,
+      skip: 0,
+    });
+    const call = prisma.submission.findMany.mock.calls[0]![0];
+    expect(call.where.document.assignmentTypeId).toBe('at_1');
+    expect(call.take).toBe(50);
+    expect(call.skip).toBe(0);
   });
 });
