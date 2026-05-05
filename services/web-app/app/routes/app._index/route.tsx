@@ -10,7 +10,6 @@ import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
-import { cn } from '~/utils/misc';
 import {
   Accordion,
   AccordionContent,
@@ -18,8 +17,65 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Badge } from '~/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { formatDateOnly } from '~/utils/date-only';
+import { AssignmentTypesList } from './components/assignment-types-list';
+import { ClassesAtAGlance } from './components/classes-at-a-glance';
+import { CoursesList } from './components/courses-list';
+import { TrainingList } from './components/training-list';
+
+export type AssignmentTypeRow = {
+  id: string;
+  name: string;
+  courseCount: number;
+  studentCount: number;
+  isOrphan: boolean;
+};
+
+export type CourseGlanceRow = {
+  id: string;
+  name: string;
+  inProgress: number;
+  submitted: number;
+  graded: number;
+  released: number;
+};
+
+export type CourseRow = {
+  id: string;
+  name: string;
+  studentCount: number;
+};
+
+export type TrainingRow = {
+  id: string;
+  name: string;
+  status: 'not-started' | 'in-progress' | 'completed';
+};
+
+// Prototype mock data — replace with real DB queries once assignments-unification schema lands
+const MOCK_ASSIGNMENT_TYPES: AssignmentTypeRow[] = [
+  { id: 'at1', name: 'Thesis-Driven Essay', courseCount: 3, studentCount: 47, isOrphan: false },
+  { id: 'at2', name: 'Daily Pages', courseCount: 2, studentCount: 30, isOrphan: false },
+  { id: 'at3', name: 'Draft rubric', courseCount: 0, studentCount: 0, isOrphan: true },
+];
+
+const MOCK_COURSES_GLANCE: CourseGlanceRow[] = [
+  { id: 'c1', name: 'Period 1 English', inProgress: 12, submitted: 3, graded: 8, released: 5 },
+  { id: 'c2', name: 'Period 3 English', inProgress: 16, submitted: 0, graded: 10, released: 6 },
+  { id: 'c3', name: 'AP Lit', inProgress: 14, submitted: 2, graded: 4, released: 12 },
+];
+
+const MOCK_COURSES: CourseRow[] = [
+  { id: 'c1', name: 'Period 1 English', studentCount: 28 },
+  { id: 'c2', name: 'Period 3 English', studentCount: 31 },
+  { id: 'c3', name: 'AP Lit', studentCount: 24 },
+];
+
+const MOCK_TRAINING: TrainingRow[] = [
+  { id: 'tr1', name: 'Getting Started with Yawp', status: 'completed' },
+  { id: 'tr2', name: 'Advanced Feedback Techniques', status: 'in-progress' },
+];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -308,212 +364,27 @@ export default function AppRoute() {
 
   if (isTeacher) {
     return (
-      <section
-        data-testid="app._index"
-        className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll"
-      >
-        <div className="flex w-full justify-between border-b bg-secondary">
-          <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-            <div className="flex flex-col">
-              <h2>Welcome, {user.name}!</h2>
-              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Welcome to your teacher dashboard. Manage students, view
-                resources, and more.
-              </p>
-            </div>
-          </div>
+      <div className="flex h-full flex-col overflow-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h1 className="text-xl font-semibold">Dashboard</h1>
         </div>
-        <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
-          <div className="mt-8 flex flex-col">
-            <div className="mb-1 flex items-center gap-1">
-              <p className="text-foreground/60">My Classes</p>
-            </div>
-            {Array.isArray(data.teacherClasses) &&
-            data.teacherClasses.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {data.teacherClasses.map((klass) => (
-                  <Link
-                    key={klass.id}
-                    to={`/app/my-classes/${klass.id}`}
-                    className="flex flex-col rounded-lg border bg-muted p-4 hover:shadow transition"
-                  >
-                    <div className="flex items-baseline justify-between">
-                      <h4 className="text-foreground/90 font-medium">
-                        Grade {klass.grade} • Period {klass.period}
-                      </h4>
-                    </div>
-                    {klass.title && (
-                      <p className="text-sm font-medium mt-1">{klass.title}</p>
-                    )}
-                    {(data.teacherSchoolCount ?? 0) === 1 ? null : (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {klass.school?.name ?? 'School'}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>{klass._count.students} students</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-2 border rounded-lg p-2 text-muted-foreground">
-                No classes yet.
-              </div>
-            )}
-          </div>
-          <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Teachers' Lounge</p>
-            {data.teacherCourses.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {data.teacherCourses.map((course) => {
-                  // Calculate overall progress
-                  const totalModules = course.teacherCourseModules.length;
-                  const completedModules = course.teacherCourseModules.filter(
-                    (module) =>
-                      module.teacherCourseModuleSessions.some(
-                        (session) =>
-                          session.videoTimestamp === module.videoDuration
-                      )
-                  ).length;
-                  const progressPercentage =
-                    totalModules > 0
-                      ? (completedModules / totalModules) * 100
-                      : 0;
-
-                  return (
-                    <Link
-                      to={`/app/teacher-courses/${course.id}`}
-                      key={course.id}
-                      className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-                    >
-                      <div className="aspect-video w-full overflow-hidden rounded-t-lg">
-                        {course.image ? (
-                          <img
-                            src={`/api/image/teacher-course/${course.image.id}`}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-full w-full bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                        )}
-                      </div>
-                      <div className="flex flex-col p-4">
-                        <h4 className="text-foreground/90 font-medium">
-                          {course.title}
-                        </h4>
-                        {course.description && (
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {course.description}
-                          </p>
-                        )}
-                        <div className="mt-3 flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {completedModules}/{totalModules} modules completed
-                          </span>
-                          <span
-                            className={cn(
-                              'text-primary font-medium',
-                              progressPercentage === 100 && 'text-green-600'
-                            )}
-                          >
-                            {Math.round(progressPercentage)}%
-                          </span>
-                        </div>
-                        <div className="mt-2 w-full bg-muted-foreground/20 rounded-full h-2">
-                          <div
-                            className={cn(
-                              'h-2 rounded-full transition-all duration-300',
-                              progressPercentage === 100 && 'bg-green-600'
-                            )}
-                            style={{ width: `${progressPercentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-                <p>No teacher courses available yet.</p>
-                <p className="text-sm mt-1">
-                  Check back later for professional development opportunities.
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Student Courses</p>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {data.courses.map((course) => (
-                <Link
-                  to={`/app/courses/${course.id}`}
-                  key={course.id}
-                  className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-                >
-                  {course.image ? (
-                    <img
-                      src={`/api/image/course/${course.image.id}`}
-                      alt=""
-                      className="h-32 w-auto rounded-t-lg object-cover"
-                    />
-                  ) : (
-                    <div className="h-32 w-auto rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-                  )}
-                  <div className="max-w-42 flex items-center justify-between p-3">
-                    <h4 className="text-foreground/90">{course.title}</h4>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div className="mt-8 flex flex-col">
-            <p className="my-2 text-foreground/60">Documents</p>
-            {data.documents.length ? (
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {data.documents.map((doc) => (
-                  <DocumentLink
-                    key={doc.id}
-                    doc={doc}
-                    exitTo="/app"
-                    isStudentView
-                  />
-                ))}
-              </div>
-            ) : (
-              <NoDataPlaceholder
-                title="No documents"
-                subtitle="Select a course above to get started."
-              />
-            )}
-            {data.archivedDocuments.length > 0 && (
-              <div className="mt-6">
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="archived" className="border-none">
-                    <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                      View archived documents ({data.archivedDocuments.length})
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 pt-2">
-                        {data.archivedDocuments.map((doc) => (
-                          <DocumentLink
-                            key={doc.id}
-                            doc={doc}
-                            exitTo="/app"
-                            isArchived
-                            isStudentView
-                          />
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </div>
-            )}
-          </div>
+        <div className="flex flex-col gap-8 p-6 max-w-4xl">
+          <AssignmentTypesList assignmentTypes={MOCK_ASSIGNMENT_TYPES} />
+          <ClassesAtAGlance courses={MOCK_COURSES_GLANCE} />
+          <Tabs defaultValue="courses">
+            <TabsList>
+              <TabsTrigger value="courses">Courses</TabsTrigger>
+              <TabsTrigger value="training">Training</TabsTrigger>
+            </TabsList>
+            <TabsContent value="courses" className="mt-4">
+              <CoursesList courses={MOCK_COURSES} />
+            </TabsContent>
+            <TabsContent value="training" className="mt-4">
+              <TrainingList training={MOCK_TRAINING} />
+            </TabsContent>
+          </Tabs>
         </div>
-      </section>
+      </div>
     );
   }
 

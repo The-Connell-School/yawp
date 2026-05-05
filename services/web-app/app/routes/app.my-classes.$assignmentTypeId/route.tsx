@@ -84,7 +84,7 @@ export default function AssignmentTypeDetailRoute() {
       <div className="flex items-center justify-between border-b px-6 py-4">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon-sm" asChild>
-            <Link to="/app/my-classes">
+            <Link to="/app">
               <ArrowLeftIcon className="h-4 w-4" />
             </Link>
           </Button>

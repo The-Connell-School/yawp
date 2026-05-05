@@ -167,7 +167,7 @@ export default function MyClassesRoute() {
           </div>
         ) : null}
         {data.classes.length ? (
-          <div className="grid grid-cols-1 gap-2.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {data.classes
               .filter((klass) =>
                 selectedSchoolId === 'all'
@@ -210,41 +210,41 @@ export default function MyClassesRoute() {
                     </div>
                   </div>
 
-	                  <div className="flex items-center gap-2">
-	                    {(() => {
-	                      const ungradedCount = klass.stats?.ungradedCount ?? 0;
-	                      if (ungradedCount <= 0) return null;
-	                      return (
-	                      <Tooltip
-	                        text={`${ungradedCount} submission${ungradedCount === 1 ? '' : 's'} to grade`}
-	                      >
-	                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-orange-50 dark:bg-orange-950/20">
-	                          <ClipboardCheck className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-	                          <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
-	                            {ungradedCount}
-	                          </span>
-	                        </div>
-	                      </Tooltip>
-	                      );
-	                    })()}
-	                    {(() => {
-	                      const gradedUnreleasedCount =
-	                        klass.stats?.gradedUnreleasedCount ?? 0;
-	                      if (gradedUnreleasedCount <= 0) return null;
-	                      return (
-	                      <Tooltip
-	                        text={`${gradedUnreleasedCount} graded submission${gradedUnreleasedCount === 1 ? '' : 's'} ready to release`}
-	                      >
-	                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-50 dark:bg-blue-950/20">
-	                          <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-	                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-	                            {gradedUnreleasedCount}
-	                          </span>
-	                        </div>
-	                      </Tooltip>
-	                      );
-	                    })()}
-	                  </div>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const ungradedCount = klass.stats?.ungradedCount ?? 0;
+                      if (ungradedCount <= 0) return null;
+                      return (
+                      <Tooltip
+                        text={`${ungradedCount} submission${ungradedCount === 1 ? '' : 's'} to grade`}
+                      >
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-orange-50 dark:bg-orange-950/20">
+                          <ClipboardCheck className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                          <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
+                            {ungradedCount}
+                          </span>
+                        </div>
+                      </Tooltip>
+                      );
+                    })()}
+                    {(() => {
+                      const gradedUnreleasedCount =
+                        klass.stats?.gradedUnreleasedCount ?? 0;
+                      if (gradedUnreleasedCount <= 0) return null;
+                      return (
+                      <Tooltip
+                        text={`${gradedUnreleasedCount} graded submission${gradedUnreleasedCount === 1 ? '' : 's'} ready to release`}
+                      >
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-50 dark:bg-blue-950/20">
+                          <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                            {gradedUnreleasedCount}
+                          </span>
+                        </div>
+                      </Tooltip>
+                      );
+                    })()}
+                  </div>
 
                   <div className="flex items-center gap-1.5">
                     <Button asChild size="sm" variant="default" className="h-8">
