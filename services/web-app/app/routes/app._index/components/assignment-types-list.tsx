@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import type { AssignmentTypeRow, TeacherClassOption } from '../route';
-import { DashboardCreateAssignmentDialog } from './dashboard-create-assignment-dialog';
+import { DashboardCreateAssignmentSheet } from './dashboard-create-assignment-sheet';
 
 export function AssignmentTypesList({
   assignmentTypes,
@@ -57,7 +57,7 @@ export function AssignmentTypesList({
           ))}
         </div>
       )}
-      <DashboardCreateAssignmentDialog
+      <DashboardCreateAssignmentSheet
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         assignmentTypes={assignmentTypes}
