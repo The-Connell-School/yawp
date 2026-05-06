@@ -37,6 +37,11 @@ export type CourseGlanceRow = {
   released: number;
 };
 
+export type TeacherClassOption = {
+  id: string;
+  name: string;
+};
+
 function hasMeaningfulGrade(grade: {
   score: string | null;
   feedback: string | null;
@@ -344,6 +349,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ])
     : [[] as AssignmentTypeRow[], [] as CourseGlanceRow[]];
 
+  const teacherClassOptions: TeacherClassOption[] = teacherClassesOrdered.map(
+    (klass) => ({
+      id: klass.id,
+      name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
+    })
+  );
+
   return dataResponse({
     courses,
     documents,
@@ -356,6 +368,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignmentsEnabled,
     assignmentTypes,
     coursesGlance,
+    teacherClassOptions,
   });
 }
 
@@ -384,7 +397,10 @@ export default function AppRoute() {
           </div>
         </div>
         <div className="mx-auto w-full max-w-screen-lg px-3 py-6 pb-24 sm:px-5 flex flex-col gap-8">
-          <AssignmentTypesList assignmentTypes={data.assignmentTypes} />
+          <AssignmentTypesList
+            assignmentTypes={data.assignmentTypes}
+            teacherClasses={data.teacherClassOptions}
+          />
           <ClassesAtAGlance courses={data.coursesGlance} />
         </div>
       </section>
