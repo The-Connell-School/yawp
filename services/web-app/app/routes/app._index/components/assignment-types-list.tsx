@@ -1,32 +1,12 @@
 import { Link } from 'react-router';
 import type { AssignmentTypeRow } from '../route';
 
-const FIVE_PARAGRAPH_ESSAY_MOCK: AssignmentTypeRow = {
-  id: 'mock-five-paragraph-essay',
-  title: 'The 5-Paragraph Essay',
-  image: null,
-};
-
-function withFiveParagraphEssayMock(
-  assignmentTypes: AssignmentTypeRow[]
-): AssignmentTypeRow[] {
-  const thesisIndex = assignmentTypes.findIndex(
-    (at) => at.title === 'The Thesis-Driven Essay'
-  );
-  if (thesisIndex === -1) return [...assignmentTypes, FIVE_PARAGRAPH_ESSAY_MOCK];
-  const next = [...assignmentTypes];
-  next.splice(thesisIndex + 1, 0, FIVE_PARAGRAPH_ESSAY_MOCK);
-  return next;
-}
-
 export function AssignmentTypesList({
   assignmentTypes,
 }: {
   assignmentTypes: AssignmentTypeRow[];
 }) {
-  const rows = withFiveParagraphEssayMock(assignmentTypes);
-
-  if (rows.length === 0) {
+  if (assignmentTypes.length === 0) {
     return (
       <div>
         <h2 className="text-base font-semibold mb-3">Assignment Types</h2>
@@ -41,7 +21,7 @@ export function AssignmentTypesList({
     <div>
       <h2 className="text-base font-semibold mb-3">Assignment Types</h2>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {rows.map((at) => (
+        {assignmentTypes.map((at) => (
           <Link
             key={at.id}
             to={`/app/courses/${at.id}`}
