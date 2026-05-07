@@ -72,6 +72,7 @@ export const COGNITIVE_MOVE_LABEL: Record<CognitiveMove, string> = {
 };
 
 export const INSPIRATIONAL_EXAMPLES: string[] = [
+  'Pick something in this room nobody else has noticed today. Make the case that it deserves attention.',
   "What's a belief you held two years ago that you no longer hold? What changed?",
   'If you could ask your future self one question, what would it be — and why that one?',
 ];
