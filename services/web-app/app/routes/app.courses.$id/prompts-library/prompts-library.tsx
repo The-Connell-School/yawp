@@ -89,7 +89,6 @@ export function PromptsLibrary({
     searchParams.get(FACET_KEYS.search) ?? ''
   );
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     setSearchInput(searchParams.get(FACET_KEYS.search) ?? '');
@@ -188,7 +187,7 @@ export function PromptsLibrary({
   );
 
   return (
-    <Accordion type="single" collapsible defaultValue="library">
+    <Accordion type="single" collapsible>
       <AccordionItem value="library">
         <AccordionTrigger className="py-2 text-base">
           Prompts Library
@@ -257,10 +256,6 @@ export function PromptsLibrary({
                     <PromptRow
                       key={p.id}
                       prompt={p}
-                      expanded={expandedId === p.id}
-                      onToggleExpand={() =>
-                        setExpandedId((id) => (id === p.id ? null : p.id))
-                      }
                       onSelect={() => onSelectPrompt(p.prompt)}
                     />
                   ))}
@@ -276,52 +271,35 @@ export function PromptsLibrary({
 
 function PromptRow({
   prompt,
-  expanded,
-  onToggleExpand,
   onSelect,
 }: {
   prompt: LibraryPrompt;
-  expanded: boolean;
-  onToggleExpand: () => void;
   onSelect: () => void;
 }) {
   const textOrUnit = prompt.textsOrUnits[0];
   const move = prompt.cognitiveMoves[0];
 
   return (
-    <li className="group/card relative py-5">
+    <li>
       <button
         type="button"
-        onClick={onToggleExpand}
-        aria-expanded={expanded}
-        className="block w-full cursor-text text-left text-[17px] leading-relaxed text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onClick={onSelect}
+        className="group/card block w-full cursor-pointer rounded-md py-5 text-left transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none"
       >
-        {prompt.prompt}
-      </button>
+        <p className="px-2 text-[17px] leading-relaxed text-foreground">
+          {prompt.prompt}
+        </p>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        {textOrUnit ? <span>{textOrUnit}</span> : null}
-        {textOrUnit && move ? <span aria-hidden>·</span> : null}
-        {move ? <span>{COGNITIVE_MOVE_LABEL[move]}</span> : null}
-      </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-2 text-xs text-muted-foreground">
+          {textOrUnit ? <span>{textOrUnit}</span> : null}
+          {textOrUnit && move ? <span aria-hidden>·</span> : null}
+          {move ? <span>{COGNITIVE_MOVE_LABEL[move]}</span> : null}
+        </div>
 
-      {expanded ? (
-        <ExtraTags prompt={prompt} />
-      ) : (
-        <div className="hidden lg:group-hover/card:block lg:group-focus-within/card:block">
+        <div className="hidden px-2 lg:group-hover/card:block lg:group-focus-visible/card:block">
           <ExtraTags prompt={prompt} />
         </div>
-      )}
-
-      {expanded ? (
-        <div className="mt-3">
-          <UseButton onClick={onSelect} />
-        </div>
-      ) : (
-        <div className="hidden lg:absolute lg:right-0 lg:top-5 lg:opacity-0 lg:transition-opacity lg:group-hover/card:block lg:group-hover/card:opacity-100 lg:group-focus-within/card:block lg:group-focus-within/card:opacity-100">
-          <UseButton onClick={onSelect} />
-        </div>
-      )}
+      </button>
     </li>
   );
 }
@@ -345,14 +323,6 @@ function ExtraTags({ prompt }: { prompt: LibraryPrompt }) {
         </>
       ) : null}
     </div>
-  );
-}
-
-function UseButton({ onClick }: { onClick: () => void }) {
-  return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick}>
-      Use this prompt
-    </Button>
   );
 }
 
@@ -406,11 +376,7 @@ function FilterPanel({
         ) : null}
       </div>
 
-      <Accordion
-        type="multiple"
-        defaultValue={['textsOrUnits']}
-        className="border-none"
-      >
+      <Accordion type="multiple" className="border-none">
         {FACET_SECTIONS.map((f) => {
           const values = facets[f.facetKey] as string[];
           if (!values || values.length === 0) return null;
