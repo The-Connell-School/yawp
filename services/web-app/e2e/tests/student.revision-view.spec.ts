@@ -66,4 +66,23 @@ test.describe.serial('Student side-by-side revision view', () => {
       page.getByRole('button', { name: /submit revised version/i })
     ).toBeVisible();
   });
+
+  test('does not expose revision flow before feedback is released', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+
+    await page.goto(`/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`);
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('link', { name: 'Revise Essay' })).toHaveCount(0);
+
+    await page.goto(`/app/submissions/${e2eContext.unreleasedGradedSubmissionId}/revise`);
+    await page.waitForURL(
+      `**/app/submissions/${e2eContext.unreleasedGradedSubmissionId}`,
+      { timeout: 10000 }
+    );
+    await expect(page.getByTestId('revision-feedback-panel')).toHaveCount(0);
+  });
 });

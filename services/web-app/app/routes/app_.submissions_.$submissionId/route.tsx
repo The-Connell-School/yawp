@@ -715,7 +715,7 @@ export default function SubmissionRoute() {
             </Button>
           ) : null}
           {/* Student: Revise Essay link */}
-          {isOwner ? (
+          {isOwner && isReleased ? (
             <Button size="sm" variant="outline" asChild>
               <Link to={revisePath}>Revise Essay</Link>
             </Button>

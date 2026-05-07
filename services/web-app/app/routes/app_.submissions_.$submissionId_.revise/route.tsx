@@ -120,6 +120,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  if (!submission.releasedAt) {
+    return redirectWithToast(`/app/submissions/${submission.id}`, {
+      description: 'Revision is available after feedback is released.',
+      type: 'error',
+    });
+  }
+
   // Sort comments by position in source text
   const sortedComments = [...submission.comments].sort((a, b) => {
     const aRange = findExcerptRange(submission.text, a.excerpt, a.occurrence ?? 1);
