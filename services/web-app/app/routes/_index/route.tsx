@@ -9,20 +9,19 @@ import {
   GraduationCap,
   MessageSquareText,
   ShieldCheck,
-  Sparkles,
   Users,
 } from 'lucide-react';
 
 export const meta: MetaFunction = () => [
-  { title: 'YAWP! Writing Program | AI-guided writing for schools' },
+  { title: 'YAWP! Writing Program | Guided writing for schools' },
   {
     name: 'description',
     content:
-      'YAWP! helps schools teach writing with a proven curriculum, teacher training, and an AI tutor that guides students without writing for them.',
+      'YAWP! helps schools teach writing with a proven curriculum, teacher training, and a tutor that guides students without writing for them.',
   },
   {
     property: 'og:title',
-    content: 'YAWP! Writing Program | AI-guided writing for schools',
+    content: 'YAWP! Writing Program | Guided writing for schools',
   },
   {
     property: 'og:description',
@@ -67,7 +66,7 @@ const solutionFeatures = [
     image: '/img/landing/teacher-training-screen.webp',
   },
   {
-    title: 'An AI tutor that guides, never writes',
+    title: 'A tutor that guides, never writes',
     description:
       "The YAWP! Tutor is trained around the writing process. It asks questions, gives immediate feedback, and keeps the work in the student's hands.",
     image: '/img/landing/tutor-feedback-screen.jpg',
@@ -151,7 +150,7 @@ const footerGroups = [
     title: 'Program',
     links: [
       { label: 'Teacher training', href: '#teacher-training' },
-      { label: 'AI tutor', href: '#ai-tutor' },
+      { label: 'Tutor', href: '#tutor' },
       { label: 'Published student work', href: '#student-work' },
     ],
   },
@@ -264,7 +263,6 @@ export default function IndexRoute() {
       <section className="mx-auto grid max-w-7xl gap-10 px-5 py-14 sm:px-6 sm:py-18 lg:grid-cols-[11fr_9fr] lg:px-8 lg:py-24">
         <div className="flex flex-col justify-center">
           <p className="flex w-fit items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-sm/6 font-medium text-amber-900 ring-1 ring-amber-200">
-            <Sparkles className="size-4" aria-hidden="true" />
             Built by teachers for real classrooms
           </p>
           <h1 className="mt-6 max-w-[20ch] text-5xl/12 font-semibold tracking-tight text-neutral-950 sm:text-6xl/14">
@@ -272,9 +270,9 @@ export default function IndexRoute() {
           </h1>
           <p className="mt-6 max-w-[56ch] text-lg/8 text-neutral-700 sm:text-base/7">
             In the age of ChatGPT, students need more than answers. YAWP!
-            combines a proven writing curriculum, an AI tutor that does not do
-            the work for them, and teacher training that helps schools build
-            confident academic writers.
+            combines a proven writing curriculum, teacher training, and,
+            essentially, a tutor that does not do the work for them, helping
+            schools build confident academic writers.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <PrimaryLink to={demoUrl}>Schedule a demo</PrimaryLink>
@@ -347,7 +345,7 @@ export default function IndexRoute() {
       >
         <SectionHeading
           eyebrow="The YAWP! solution"
-          title="Real teachers, an AI tutor, and stronger original essays."
+          title="Real teachers, a tutor, and stronger original essays."
           description="YAWP! gives teachers a complete writing program and gives students guided practice through the moments where they usually get stuck."
         />
         <div className="mt-10 grid gap-8 lg:grid-cols-3">
@@ -374,10 +372,7 @@ export default function IndexRoute() {
         </div>
       </section>
 
-      <section
-        id="ai-tutor"
-        className="bg-emerald-950 py-16 text-white sm:py-20"
-      >
+      <section id="tutor" className="bg-emerald-950 py-16 text-white sm:py-20">
         <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-6 lg:grid-cols-[7fr_5fr] lg:px-8">
           <div>
             <p className="text-base/7 font-semibold text-emerald-200 sm:text-sm/6">
@@ -581,7 +576,7 @@ export default function IndexRoute() {
                 </span>
               </a>
               <p className="mt-5 max-w-[46ch] text-base/7 text-white/72">
-                AI-guided writing practice, teacher training, and student work
+                Guided writing practice, teacher training, and student work
                 worth publishing. Built by The Connell School of Writing for
                 real classrooms.
               </p>
