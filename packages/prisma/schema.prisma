@@ -130,8 +130,6 @@ model AssignmentModuleSession {
   assignmentModule      AssignmentModule                 @relation(fields: [assignmentModuleId], references: [id], onDelete: Cascade)
   documentId            String
   document              Document                         @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  studentProfileId      String
-  studentProfile        StudentProfile                   @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
   messages              AssignmentModuleSessionMessage[]
 }
 
@@ -159,6 +157,8 @@ model Document {
   html                     String?
   profile                  Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade)
   profileId                String
+  studentProfileId         String
+  studentProfile           StudentProfile            @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
   assignmentTypeId         String
   assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?
@@ -172,6 +172,31 @@ model Document {
 
   @@index([assignmentId])
   @@index([assignmentTypeId])
+  @@index([studentProfileId])
+}
+
+model DocumentClassForensic {
+  documentId String   @id
+  oldClassId String
+  capturedAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AssignmentModuleSessionStudentForensic {
+  sessionId           String   @id
+  oldStudentProfileId String
+  documentId          String
+  capturedAt          DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([documentId])
+  @@index([oldStudentProfileId])
+}
+
+model ClassStudentCourseForensic {
+  classId         String
+  studentCourseId String
+  capturedAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([classId, studentCourseId])
 }
 
 model DocumentComment {
@@ -324,7 +349,7 @@ model StudentProfile {
   profileId                String                    @unique
   profile                  Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   classes                  Class[]
-  assignmentModuleSessions AssignmentModuleSession[]
+  documents                Document[]
 }
 
 model TeacherProfile {

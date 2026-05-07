@@ -29,6 +29,14 @@ type PreflightState = {
     pass7c: Array<{ documentId: string }>;
   };
   assignedDocParity: Array<{ documentId: string; assignmentTypeId: string }>;
+  documentStudentMappings: Array<{ documentId: string; studentProfileId: string }>;
+  documentsWithClassNoAssignment: Array<{ documentId: string; oldClassId: string }>;
+  sessionStudentMappings: Array<{
+    sessionId: string;
+    documentId: string;
+    oldStudentProfileId: string;
+    documentStudentProfileId: string | null;
+  }>;
   whitelistMappings: Array<{ classId: string; studentCourseId: string }>;
 };
 
@@ -136,8 +144,7 @@ describe('C3 — Document → Class derivation paths', () => {
     const { rows } = await pool.query<{ n: number }>(
       `SELECT COUNT(DISTINCT cs."A")::int AS n
        FROM "Document" d
-       JOIN "Profile" p ON p.id = d."profileId"
-       JOIN "StudentProfile" sp ON sp."profileId" = p.id
+       JOIN "StudentProfile" sp ON sp.id = d."studentProfileId"
        JOIN "_ClassToStudentProfile" cs ON cs."B" = sp.id
        WHERE d.id = $1`,
       [documentId],
@@ -146,6 +153,93 @@ describe('C3 — Document → Class derivation paths', () => {
     // The contract here is that the SQL query parses cleanly against the post-migration
     // schema (FK names, junction-table column names). The actual class count is informational.
     expect(rows.length).toBe(1);
+  });
+});
+
+describe('C6 — Document student ownership is canonical', () => {
+  test('Document.studentProfileId exists and is required', async () => {
+    const { rows } = await pool.query<{ isNullable: string }>(`
+      SELECT is_nullable AS "isNullable"
+      FROM information_schema.columns
+      WHERE table_name = 'Document' AND column_name = 'studentProfileId'
+    `);
+    expect(rows.length).toBe(1);
+    expect(rows[0].isNullable).toBe('NO');
+  });
+
+  test('preflight document owner sample is preserved', async () => {
+    if (!preflight || preflight.documentStudentMappings.length === 0) {
+      console.warn('Skipping: no document student mappings in preflight');
+      return;
+    }
+    for (const { documentId, studentProfileId } of preflight.documentStudentMappings.slice(0, 5)) {
+      const { rows } = await pool.query<{ studentProfileId: string | null }>(
+        `SELECT "studentProfileId" FROM "Document" WHERE id = $1`,
+        [documentId],
+      );
+      expect(rows[0]?.studentProfileId).toBe(studentProfileId);
+    }
+  });
+
+  test('AssignmentModuleSession no longer stores student ownership', async () => {
+    const { rows } = await pool.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'AssignmentModuleSession'
+          AND column_name = 'studentProfileId'
+      ) AS exists
+    `);
+    expect(rows[0].exists).toBe(false);
+  });
+});
+
+describe('C7 — Forensic preservation', () => {
+  test('old Document.classId values remain queryable by documentId', async () => {
+    if (!preflight || preflight.documentsWithClassNoAssignment.length === 0) {
+      console.warn('Skipping: no class-without-assignment samples in preflight');
+      return;
+    }
+    const { documentId, oldClassId } = preflight.documentsWithClassNoAssignment[0];
+    const { rows } = await pool.query<{ oldClassId: string }>(
+      `SELECT "oldClassId" FROM "DocumentClassForensic" WHERE "documentId" = $1`,
+      [documentId],
+    );
+    expect(rows[0]?.oldClassId).toBe(oldClassId);
+  });
+
+  test('old AssignmentModuleSession.studentProfileId values remain queryable by sessionId', async () => {
+    if (!preflight || preflight.sessionStudentMappings.length === 0) {
+      console.warn('Skipping: no session student mappings in preflight');
+      return;
+    }
+    const { sessionId, oldStudentProfileId, documentId } = preflight.sessionStudentMappings[0];
+    const { rows } = await pool.query<{
+      oldStudentProfileId: string;
+      documentId: string;
+    }>(
+      `SELECT "oldStudentProfileId", "documentId"
+       FROM "AssignmentModuleSessionStudentForensic"
+       WHERE "sessionId" = $1`,
+      [sessionId],
+    );
+    expect(rows[0]?.oldStudentProfileId).toBe(oldStudentProfileId);
+    expect(rows[0]?.documentId).toBe(documentId);
+  });
+
+  test('old ClassStudentCourse rows remain queryable after live table removal', async () => {
+    if (!preflight || preflight.whitelistMappings.length === 0) {
+      console.warn('Skipping: no whitelist mappings in preflight');
+      return;
+    }
+    const { classId, studentCourseId } = preflight.whitelistMappings[0];
+    const { rows } = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS (
+        SELECT 1 FROM "ClassStudentCourseForensic"
+        WHERE "classId" = $1 AND "studentCourseId" = $2
+      ) AS exists`,
+      [classId, studentCourseId],
+    );
+    expect(rows[0].exists).toBe(true);
   });
 });
 

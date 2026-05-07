@@ -62,6 +62,7 @@ export async function createDocumentForAssignmentType(
   const document = await prisma.document.create({
     data: {
       profileId: input.profileId,
+      studentProfileId: studentProfile.id,
       text: '',
       html: '',
       title: '',
@@ -69,7 +70,6 @@ export async function createDocumentForAssignmentType(
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       assignmentModuleSessions: {
         create: {
-          studentProfileId: studentProfile.id,
           instructionsCompleted: 0,
           assignmentModuleId: firstAssignmentModule.id,
           ...(firstInstruction

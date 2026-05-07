@@ -66,6 +66,15 @@ type PreflightState = {
   capturedAt: string;
   counts: Record<string, number>;
   assignedDocParity: Array<{ documentId: string; assignmentTypeId: string }>;
+  documentStudentMappings: Array<{ documentId: string; studentProfileId: string }>;
+  documentsWithClassNoAssignment: Array<{ documentId: string; oldClassId: string }>;
+  sessionStudentMappings: Array<{
+    sessionId: string;
+    documentId: string;
+    oldStudentProfileId: string;
+    documentStudentProfileId: string | null;
+  }>;
+  whitelistMappings: Array<{ classId: string; studentCourseId: string }>;
   buckets: { pass7a: number; pass7b: number; pass7c: number };
 };
 
@@ -132,6 +141,38 @@ async function main() {
       problems.push(`${docTotals[0]?.nulls} Document(s) have NULL assignmentTypeId`);
     }
 
+    const { rows: docStudentTotals } = await pool.query<{ total: number; nulls: number }>(`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE "studentProfileId" IS NULL)::int AS nulls
+      FROM "Document"
+    `);
+    if ((docStudentTotals[0]?.nulls ?? 0) > 0) {
+      problems.push(`${docStudentTotals[0]?.nulls} Document(s) have NULL studentProfileId`);
+    }
+
+    if (preflight) {
+      let studentOwnerFailures = 0;
+      for (const { documentId, studentProfileId: expected } of preflight.documentStudentMappings) {
+        const { rows } = await pool.query<{ studentProfileId: string | null }>(
+          `SELECT "studentProfileId" FROM "Document" WHERE id = $1`,
+          [documentId],
+        );
+        if (rows[0]?.studentProfileId !== expected) {
+          studentOwnerFailures++;
+        }
+      }
+      if (studentOwnerFailures > 0) {
+        problems.push(
+          `${studentOwnerFailures} of ${preflight.documentStudentMappings.length} Document rows have wrong studentProfileId`,
+        );
+      } else {
+        console.log(
+          `Document student ownership: ${preflight.documentStudentMappings.length}/${preflight.documentStudentMappings.length} rows match preflight mapping.`,
+        );
+      }
+    }
+
     // ── 4. Pass-7a parity (assigned docs) ──────────────────────────────────
     if (preflight) {
       let parityFailures = 0;
@@ -195,6 +236,52 @@ async function main() {
     );
     if (classIdCol.length > 0) {
       problems.push('Document.classId column still exists');
+    }
+
+    const { rows: sessionStudentCol } = await pool.query(
+      `SELECT 1 FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'AssignmentModuleSession'
+         AND column_name = 'studentProfileId'`,
+    );
+    if (sessionStudentCol.length > 0) {
+      problems.push('AssignmentModuleSession.studentProfileId column still exists');
+    }
+
+    if (preflight) {
+      const forensicChecks: Array<{
+        table: string;
+        expected: number;
+        description: string;
+      }> = [
+        {
+          table: 'DocumentClassForensic',
+          expected: preflight.counts.documentsWithClassId ?? 0,
+          description: 'Document.classId forensic rows',
+        },
+        {
+          table: 'AssignmentModuleSessionStudentForensic',
+          expected: preflight.sessionStudentMappings.length,
+          description: 'AssignmentModuleSession.studentProfileId forensic rows',
+        },
+        {
+          table: 'ClassStudentCourseForensic',
+          expected: preflight.whitelistMappings.length,
+          description: 'ClassStudentCourse forensic rows',
+        },
+      ];
+
+      for (const { table, expected, description } of forensicChecks) {
+        const { rows } = await pool.query<{ n: number }>(
+          `SELECT COUNT(*)::int AS n FROM "${table}"`,
+        );
+        const observed = rows[0]?.n ?? 0;
+        if (observed !== expected) {
+          problems.push(`${description} mismatch: observed ${observed}, expected ${expected}`);
+        } else {
+          console.log(`${description}: ${observed}/${expected} rows preserved.`);
+        }
+      }
     }
 
     // ── 9. Pass-7c bucket size ─────────────────────────────────────────────

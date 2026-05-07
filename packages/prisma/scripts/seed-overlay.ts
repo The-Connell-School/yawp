@@ -337,6 +337,7 @@ export async function seedOverlay(): Promise<E2EContext> {
         text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
         html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
         profileId: studentProfileRecord.id,
+        studentProfileId: studentProfileRecord.studentProfile!.id,
         assignmentTypeId: assignmentType.id,
         assignmentId: assignment.id,
       },
@@ -358,7 +359,6 @@ export async function seedOverlay(): Promise<E2EContext> {
     await prisma.assignmentModuleSession.create({
       data: {
         assignmentModuleId: firstModuleId,
-        studentProfileId: studentProfileRecord.studentProfile!.id,
         documentId: document.id,
         title: 'E2E Doc Session',
         instructionsCompleted: 0,

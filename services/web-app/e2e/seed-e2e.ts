@@ -187,6 +187,7 @@ export async function seedE2E(): Promise<E2EContext> {
       text: '',
       html: '<p></p>',
       profileId: profile.id,
+      studentProfileId: studentProfile.id,
       assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
@@ -203,6 +204,7 @@ export async function seedE2E(): Promise<E2EContext> {
       html: editedDocHtml,
       revision: 2,
       profileId: profile.id,
+      studentProfileId: studentProfile.id,
       assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
@@ -248,6 +250,7 @@ export async function seedE2E(): Promise<E2EContext> {
       html: submittedDocHtml,
       revision: 3,
       profileId: profile.id,
+      studentProfileId: studentProfile.id,
       assignmentTypeId: assignmentType.id,
       assignmentId: seededAssignment.id,
     },
@@ -269,7 +272,6 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.assignmentModuleSession.create({
     data: {
       assignmentModuleId: modulesByPosition[1].id,
-      studentProfileId: studentProfile.id,
       documentId: submittedDoc.id,
       title: 'E2E Submitted Doc Session',
       instructionsCompleted: 0,
@@ -289,6 +291,7 @@ export async function seedE2E(): Promise<E2EContext> {
       html: gradedDocHtml,
       revision: 4,
       profileId: profile.id,
+      studentProfileId: studentProfile.id,
       assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
@@ -357,6 +360,7 @@ export async function seedE2E(): Promise<E2EContext> {
       html: unreleasedDocHtml,
       revision: 1,
       profileId: profile.id,
+      studentProfileId: studentProfile.id,
       assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
@@ -413,7 +417,6 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.assignmentModuleSession.create({
     data: {
       assignmentModuleId: modulesByPosition[0].id,
-      studentProfileId: studentProfile.id,
       documentId: editedDoc.id,
       title: 'E2E Doc Session',
       instructionsCompleted: 0,

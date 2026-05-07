@@ -25,6 +25,15 @@ type State = {
   capturedAt: string;
   counts: Record<string, number>;
   assignedDocParity: Array<{ documentId: string; assignmentTypeId: string }>;
+  documentStudentMappings: Array<{ documentId: string; studentProfileId: string }>;
+  unmappedDocuments: Array<{ documentId: string; profileId: string; deletedAt: string | null }>;
+  documentsWithClassNoAssignment: Array<{ documentId: string; oldClassId: string }>;
+  sessionStudentMappings: Array<{
+    sessionId: string;
+    documentId: string;
+    oldStudentProfileId: string;
+    documentStudentProfileId: string | null;
+  }>;
   buckets: { pass7a: number; pass7b: number; pass7c: number };
   bucketSamples: {
     pass7a: Array<{ documentId: string }>;
@@ -76,6 +85,10 @@ const COUNT_QUERIES: Array<[string, string]> = [
   [
     'documentsWithAssignment',
     `SELECT COUNT(*)::int AS n FROM "Document" WHERE "assignmentId" IS NOT NULL`,
+  ],
+  [
+    'documentsWithClassId',
+    `SELECT COUNT(*)::int AS n FROM "Document" WHERE "classId" IS NOT NULL`,
   ],
 ];
 
@@ -133,6 +146,95 @@ async function main() {
       FROM "Document" d
       JOIN "Assignment" a ON a.id = d."assignmentId"
     `);
+
+    // ── Canonical Document.studentProfileId mapping ────────────────────────
+    const { rows: documentStudentMappings } = await pool.query<{
+      documentId: string;
+      studentProfileId: string;
+    }>(`
+      SELECT d.id AS "documentId", sp.id AS "studentProfileId"
+      FROM "Document" d
+      JOIN "StudentProfile" sp ON sp."profileId" = d."profileId"
+    `);
+
+    const { rows: unmappedDocuments } = await pool.query<{
+      documentId: string;
+      profileId: string;
+      deletedAt: string | null;
+    }>(`
+      SELECT d.id AS "documentId", d."profileId", d."deletedAt"
+      FROM "Document" d
+      LEFT JOIN "StudentProfile" sp ON sp."profileId" = d."profileId"
+      WHERE sp.id IS NULL
+      ORDER BY d."deletedAt" NULLS FIRST, d.id
+    `);
+
+    const liveUnmapped = unmappedDocuments.filter((row) => row.deletedAt === null);
+    if (liveUnmapped.length > 0) {
+      console.error(
+        `FAIL: ${liveUnmapped.length} non-deleted Document row(s) cannot map profileId → StudentProfile.`,
+      );
+      console.error('First 20 unmapped live documents:');
+      for (const row of liveUnmapped.slice(0, 20)) {
+        console.error(`  documentId=${row.documentId} profileId=${row.profileId}`);
+      }
+      process.exit(1);
+    }
+    if (unmappedDocuments.length > 0) {
+      console.error(
+        `FAIL: ${unmappedDocuments.length} total Document row(s) cannot map profileId → StudentProfile; Document.studentProfileId is required after migration.`,
+      );
+      console.error('First 20 unmapped documents:');
+      for (const row of unmappedDocuments.slice(0, 20)) {
+        console.error(
+          `  documentId=${row.documentId} profileId=${row.profileId} deletedAt=${row.deletedAt ?? 'null'}`,
+        );
+      }
+      process.exit(1);
+    }
+
+    const { rows: documentsWithClassNoAssignment } = await pool.query<{
+      documentId: string;
+      oldClassId: string;
+    }>(`
+      SELECT id AS "documentId", "classId" AS "oldClassId"
+      FROM "Document"
+      WHERE "classId" IS NOT NULL
+        AND "assignmentId" IS NULL
+      ORDER BY id
+    `);
+    if (documentsWithClassNoAssignment.length > 0) {
+      console.warn(
+        `WARN: ${documentsWithClassNoAssignment.length} Document row(s) have old classId but no assignmentId; forensic preservation will keep the class link.`,
+      );
+    }
+
+    const { rows: sessionStudentMappings } = await pool.query<{
+      sessionId: string;
+      documentId: string;
+      oldStudentProfileId: string;
+      documentStudentProfileId: string | null;
+    }>(`
+      SELECT
+        s.id AS "sessionId",
+        s."documentId",
+        s."studentProfileId" AS "oldStudentProfileId",
+        sp.id AS "documentStudentProfileId"
+      FROM "StudentCourseModuleSession" s
+      JOIN "Document" d ON d.id = s."documentId"
+      LEFT JOIN "StudentProfile" sp ON sp."profileId" = d."profileId"
+    `);
+
+    const sessionMismatches = sessionStudentMappings.filter(
+      (row) =>
+        row.documentStudentProfileId !== null &&
+        row.oldStudentProfileId !== row.documentStudentProfileId,
+    );
+    if (sessionMismatches.length > 0) {
+      console.warn(
+        `WARN: ${sessionMismatches.length} AssignmentModuleSession row(s) point at a different studentProfileId than their Document owner; forensic preservation will keep the old session value.`,
+      );
+    }
 
     // ── Bucket estimates ───────────────────────────────────────────────────
     const pass7a = counts.documentsWithAssignment;
@@ -195,6 +297,10 @@ async function main() {
       capturedAt: new Date().toISOString(),
       counts,
       assignedDocParity,
+      documentStudentMappings,
+      unmappedDocuments,
+      documentsWithClassNoAssignment,
+      sessionStudentMappings,
       buckets: { pass7a, pass7b, pass7c },
       bucketSamples: {
         pass7a: bucket7aSample,

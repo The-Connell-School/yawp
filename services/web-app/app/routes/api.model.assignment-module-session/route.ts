@@ -18,7 +18,7 @@ export async function action({ request }: ActionFunctionArgs) {
     prisma.document.findUnique({
       where: { id: data.documentId },
       select: {
-        profile: { select: { studentProfile: { select: { id: true } } } },
+        studentProfileId: true,
       },
     }),
     prisma.assignmentModule.findUnique({
@@ -36,7 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
 
-  if (!document.profile.studentProfile?.id) {
+  if (!document.studentProfileId) {
     return dataResponse(
       { error: 'No student profile found.' },
       { status: 404 }
@@ -49,7 +49,6 @@ export async function action({ request }: ActionFunctionArgs) {
       ...data,
       instructionsCompleted: 0,
       assignmentModuleId: assignmentModule.id,
-      studentProfileId: document.profile.studentProfile.id,
       ...(firstInstruction && {
         messages: {
           create: [
