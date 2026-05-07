@@ -35,8 +35,108 @@ import { redirectWithToast } from '~/utils/toast.server';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
+import {
+  type CognitiveMove,
+  FACET_KEYS,
+  type FacetValues,
+  type GradeBand,
+  type LibraryPrompt,
+  type PromptSeriousness,
+  type PromptType,
+} from './prompts-library/data';
+import promptsRaw from './prompts-library/prompts.json';
 
 const DAILY_PAGES_TITLE = 'daily pages';
+const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
+
+const SERIOUSNESS_ORDER: PromptSeriousness[] = [
+  'playful',
+  'light',
+  'moderate',
+  'serious',
+  'heavy',
+];
+const GRADE_ORDER: GradeBand[] = ['9', '10', '11', '12'];
+
+function buildFacets(prompts: LibraryPrompt[]): FacetValues {
+  const themes = new Set<string>();
+  const textsOrUnits = new Set<string>();
+  const moves = new Set<CognitiveMove>();
+  const types = new Set<PromptType>();
+  const seriousness = new Set<PromptSeriousness>();
+  const grades = new Set<GradeBand>();
+  for (const p of prompts) {
+    p.themes.forEach((t) => themes.add(t));
+    p.textsOrUnits.forEach((t) => textsOrUnits.add(t));
+    p.cognitiveMoves.forEach((m) => moves.add(m));
+    types.add(p.type);
+    seriousness.add(p.seriousness);
+    p.gradeBands.forEach((g) => grades.add(g));
+  }
+  return {
+    themes: [...themes].sort(),
+    textsOrUnits: [...textsOrUnits].sort(),
+    cognitiveMoves: [...moves].sort(),
+    types: [...types].sort(),
+    seriousness: SERIOUSNESS_ORDER.filter((s) => seriousness.has(s)),
+    gradeBands: GRADE_ORDER.filter((g) => grades.has(g)),
+  };
+}
+
+type LibraryFilters = {
+  q: string;
+  themes: Set<string>;
+  textsOrUnits: Set<string>;
+  cognitiveMoves: Set<string>;
+  types: Set<string>;
+  seriousness: Set<string>;
+  gradeBands: Set<string>;
+};
+
+function readFilters(url: URL): LibraryFilters {
+  const set = (key: string) =>
+    new Set(url.searchParams.get(key)?.split(',').filter(Boolean) ?? []);
+  return {
+    q: (url.searchParams.get(FACET_KEYS.search) ?? '').trim().toLowerCase(),
+    themes: set(FACET_KEYS.themes),
+    textsOrUnits: set(FACET_KEYS.textsOrUnits),
+    cognitiveMoves: set(FACET_KEYS.cognitiveMoves),
+    types: set(FACET_KEYS.types),
+    seriousness: set(FACET_KEYS.seriousness),
+    gradeBands: set(FACET_KEYS.gradeBands),
+  };
+}
+
+function applyFilters(
+  prompts: LibraryPrompt[],
+  f: LibraryFilters
+): LibraryPrompt[] {
+  return prompts.filter((p) => {
+    if (f.themes.size && !p.themes.some((t) => f.themes.has(t))) return false;
+    if (
+      f.textsOrUnits.size &&
+      !p.textsOrUnits.some((t) => f.textsOrUnits.has(t))
+    ) {
+      return false;
+    }
+    if (
+      f.cognitiveMoves.size &&
+      !p.cognitiveMoves.some((m) => f.cognitiveMoves.has(m))
+    ) {
+      return false;
+    }
+    if (f.types.size && !f.types.has(p.type)) return false;
+    if (f.seriousness.size && !f.seriousness.has(p.seriousness)) return false;
+    if (
+      f.gradeBands.size &&
+      !p.gradeBands.some((g) => f.gradeBands.has(g))
+    ) {
+      return false;
+    }
+    if (f.q && !p.prompt.toLowerCase().includes(f.q)) return false;
+    return true;
+  });
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -135,7 +235,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  return dataResponse({ course, documents, archivedDocuments, teacherClasses });
+  const isDailyPages =
+    course.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const promptLibrary =
+    profile.teacherProfile && isDailyPages
+      ? {
+          prompts: applyFilters(
+            ALL_PROMPTS,
+            readFilters(new URL(request.url))
+          ),
+          facets: buildFacets(ALL_PROMPTS),
+          totalCount: ALL_PROMPTS.length,
+        }
+      : null;
+
+  return dataResponse({
+    course,
+    documents,
+    archivedDocuments,
+    teacherClasses,
+    promptLibrary,
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -180,9 +300,7 @@ export default function AppCoursesIdRoute() {
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
 
-  const isDailyPagesCourse =
-    data.course.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
-  const showPromptsLibrary = isTeacher && isDailyPagesCourse;
+  const showPromptsLibrary = data.promptLibrary != null;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -278,9 +396,12 @@ export default function AppCoursesIdRoute() {
           </>
         ) : null}
 
-        {showPromptsLibrary ? (
+        {data.promptLibrary ? (
           <div className="pb-6">
             <PromptsLibrary
+              prompts={data.promptLibrary.prompts}
+              facets={data.promptLibrary.facets}
+              totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setLibraryPrompt(prompt);
                 setIsAssignmentSheetOpen(true);
@@ -306,7 +427,8 @@ export default function AppCoursesIdRoute() {
                 <Accordion type="single" collapsible>
                   <AccordionItem value="archived" className="border-none">
                     <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline py-2">
-                      View archived documents ({data.archivedDocuments.length})
+                      View archived documents (
+                      {data.archivedDocuments.length})
                     </AccordionTrigger>
                     <AccordionContent>
                       <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-2 md:grid-cols-3">
