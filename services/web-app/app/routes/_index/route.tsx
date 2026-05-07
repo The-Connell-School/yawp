@@ -69,7 +69,7 @@ const solutionFeatures = [
   {
     title: 'An AI tutor that guides, never writes',
     description:
-      'The YAWP! Tutor is trained around the writing process. It asks questions, gives immediate feedback, and keeps the work in the student\'s hands.',
+      "The YAWP! Tutor is trained around the writing process. It asks questions, gives immediate feedback, and keeps the work in the student's hands.",
     image: '/img/landing/tutor-feedback-screen.jpg',
   },
   {
@@ -92,7 +92,8 @@ const comparisonRows = [
 const books = [
   {
     title: 'Something Better',
-    subtitle: 'Essays about Problems in Our Communities and How We Might Solve Them',
+    subtitle:
+      'Essays about Problems in Our Communities and How We Might Solve Them',
     detail: 'Written by students from Montgomery Public Schools in Alabama.',
     image: '/img/landing/book-something-better.jpg',
   },
@@ -143,6 +144,26 @@ const testimonials = [
 ];
 
 const demoUrl = 'https://app.usemotion.com/meet/brian-connell/meeting';
+const connellUrl = 'https://www.theconnellschool.com';
+
+const footerGroups = [
+  {
+    title: 'Program',
+    links: [
+      { label: 'Teacher training', href: '#teacher-training' },
+      { label: 'AI tutor', href: '#ai-tutor' },
+      { label: 'Published student work', href: '#student-work' },
+    ],
+  },
+  {
+    title: 'Access',
+    links: [
+      { label: 'Student/Teacher Login', href: '/auth/login' },
+      { label: 'Schedule a demo', href: demoUrl },
+      { label: 'The Connell School', href: connellUrl },
+    ],
+  },
+];
 
 function PrimaryLink({
   to,
@@ -219,7 +240,9 @@ export default function IndexRoute() {
               alt=""
               className="size-10 rounded-full outline-1 -outline-offset-1 outline-neutral-950/10"
             />
-            <span className="text-lg/6 font-semibold tracking-tight">YAWP!</span>
+            <span className="text-lg/6 font-semibold tracking-tight">
+              YAWP!
+            </span>
           </a>
           <div className="flex items-center gap-3">
             <Link
@@ -259,7 +282,10 @@ export default function IndexRoute() {
           </div>
           <dl className="mt-10 grid max-w-2xl grid-cols-3 gap-4" role="list">
             {stats.map((stat) => (
-              <div key={stat.label} className="border-l border-neutral-950/15 pl-4">
+              <div
+                key={stat.label}
+                className="border-l border-neutral-950/15 pl-4"
+              >
                 <dt className="text-base/6 text-neutral-600 sm:text-sm/6">
                   {stat.label}
                 </dt>
@@ -275,7 +301,9 @@ export default function IndexRoute() {
             <p className="text-sm/6 font-semibold text-neutral-950">
               Immediate feedback
             </p>
-            <p className="text-sm/6 text-neutral-600">without writing for students</p>
+            <p className="text-sm/6 text-neutral-600">
+              without writing for students
+            </p>
           </div>
           <img
             src="/img/landing/course-page-screen.jpg"
@@ -313,7 +341,10 @@ export default function IndexRoute() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8">
+      <section
+        id="teacher-training"
+        className="mx-auto max-w-7xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8"
+      >
         <SectionHeading
           eyebrow="The YAWP! solution"
           title="Real teachers, an AI tutor, and stronger original essays."
@@ -343,7 +374,10 @@ export default function IndexRoute() {
         </div>
       </section>
 
-      <section className="bg-emerald-950 py-16 text-white sm:py-20">
+      <section
+        id="ai-tutor"
+        className="bg-emerald-950 py-16 text-white sm:py-20"
+      >
         <div className="mx-auto grid max-w-7xl gap-10 px-5 sm:px-6 lg:grid-cols-[7fr_5fr] lg:px-8">
           <div>
             <p className="text-base/7 font-semibold text-emerald-200 sm:text-sm/6">
@@ -400,7 +434,10 @@ export default function IndexRoute() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8">
+      <section
+        id="student-work"
+        className="mx-auto max-w-7xl px-5 py-16 sm:px-6 sm:py-20 lg:px-8"
+      >
         <SectionHeading
           eyebrow="Student work that goes somewhere"
           title="After class, YAWP! helps students become published writers."
@@ -448,7 +485,10 @@ export default function IndexRoute() {
                   "{testimonial.quote}"
                 </blockquote>
                 <figcaption className="mt-5 flex items-center gap-3 text-base/7 text-neutral-700 sm:text-sm/6">
-                  <CheckCircle2 className="size-5 text-emerald-700" aria-hidden="true" />
+                  <CheckCircle2
+                    className="size-5 text-emerald-700"
+                    aria-hidden="true"
+                  />
                   <span>
                     <span className="font-semibold text-neutral-950">
                       {testimonial.name}
@@ -477,7 +517,9 @@ export default function IndexRoute() {
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <PrimaryLink to={demoUrl}>Schedule a demo</PrimaryLink>
-            <SecondaryLink to="/auth/login">Student/Teacher Login</SecondaryLink>
+            <SecondaryLink to="/auth/login">
+              Student/Teacher Login
+            </SecondaryLink>
           </div>
         </div>
         <dl className="grid gap-4" role="list">
@@ -508,7 +550,10 @@ export default function IndexRoute() {
               className="rounded-lg bg-white p-5 ring-1 ring-neutral-950/10"
             >
               <dt className="flex items-center gap-3 text-lg/7 font-semibold text-neutral-950 sm:text-base/7">
-                <item.icon className="size-5 text-emerald-700" aria-hidden="true" />
+                <item.icon
+                  className="size-5 text-emerald-700"
+                  aria-hidden="true"
+                />
                 {item.title}
               </dt>
               <dd className="mt-2 text-base/7 text-neutral-700">{item.body}</dd>
@@ -517,27 +562,94 @@ export default function IndexRoute() {
         </dl>
       </section>
 
-      <footer className="border-t border-neutral-950/10 bg-neutral-950 px-5 py-8 text-white sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <a href="/" aria-label="Homepage" className="flex items-center gap-3">
-            <img
-              src="/img/landing/yawp-logo-circle.jpg"
-              alt=""
-              className="h-7 rounded-full"
-            />
-            <span className="text-base/6 font-semibold">YAWP!</span>
-          </a>
-          <p className="max-w-[70ch] text-base/7 text-white/70 sm:text-sm/6">
-            The YAWP! Writing Program is a registered trademark of The Connell
-            School of Writing and is licensed to participating schools and
-            educational organizations. All rights reserved.
-          </p>
-          <a
-            href="https://www.theconnellschool.com"
-            className="text-base/7 font-normal text-white/80 hover:text-white sm:text-sm/6"
-          >
-            The Connell School of Writing
-          </a>
+      <footer className="border-t border-white/10 bg-neutral-950 px-5 py-12 text-white sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
+            <div>
+              <a
+                href="/"
+                aria-label="Homepage"
+                className="flex w-fit items-center gap-3"
+              >
+                <img
+                  src="/img/landing/yawp-logo-circle.jpg"
+                  alt=""
+                  className="size-11 rounded-full ring-1 ring-white/15"
+                />
+                <span className="text-2xl/7 font-semibold tracking-tight">
+                  YAWP!
+                </span>
+              </a>
+              <p className="mt-5 max-w-[46ch] text-base/7 text-white/72">
+                AI-guided writing practice, teacher training, and student work
+                worth publishing. Built by The Connell School of Writing for
+                real classrooms.
+              </p>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <a
+                  href={demoUrl}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-3 text-base/6 font-semibold text-neutral-950 transition hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-sm/6"
+                >
+                  Schedule a demo
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </a>
+                <Link
+                  to="/auth/login"
+                  className="inline-flex items-center justify-center rounded-md px-4 py-3 text-base/6 font-semibold text-white ring-1 ring-white/20 transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:text-sm/6"
+                >
+                  Student/Teacher Login
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid gap-8 sm:grid-cols-2">
+              {footerGroups.map((group) => (
+                <nav key={group.title} aria-label={group.title}>
+                  <h2 className="text-sm/6 font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                    {group.title}
+                  </h2>
+                  <ul className="mt-4 space-y-3">
+                    {group.links.map((link) => {
+                      const isInternal = link.href.startsWith('/');
+                      return (
+                        <li key={link.label}>
+                          {isInternal ? (
+                            <Link
+                              to={link.href}
+                              className="text-base/7 text-white/72 transition hover:text-white sm:text-sm/6"
+                            >
+                              {link.label}
+                            </Link>
+                          ) : (
+                            <a
+                              href={link.href}
+                              className="text-base/7 text-white/72 transition hover:text-white sm:text-sm/6"
+                            >
+                              {link.label}
+                            </a>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-12 grid gap-5 border-t border-white/10 pt-6 text-sm/6 text-white/55 sm:grid-cols-[1fr_auto] sm:items-center">
+            <p>
+              The YAWP! Writing Program is a registered trademark of The Connell
+              School of Writing. Licensed to participating schools and
+              educational organizations.
+            </p>
+            <a
+              href={connellUrl}
+              className="font-medium text-white/72 transition hover:text-white"
+            >
+              The Connell School of Writing
+            </a>
+          </div>
         </div>
       </footer>
     </main>
