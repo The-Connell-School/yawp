@@ -44,6 +44,15 @@ export type FacetValues = {
   gradeBands: GradeBand[];
 };
 
+export type OptionCounts = {
+  themes: Record<string, number>;
+  textsOrUnits: Record<string, number>;
+  cognitiveMoves: Record<string, number>;
+  types: Record<string, number>;
+  seriousness: Record<string, number>;
+  gradeBands: Record<string, number>;
+};
+
 export const PROMPT_TYPE_LABEL: Record<PromptType, string> = {
   'agree-disagree': 'Agree / disagree',
   'open-reflection': 'Open reflection',

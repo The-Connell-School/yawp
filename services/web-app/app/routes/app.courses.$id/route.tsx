@@ -41,6 +41,7 @@ import {
   type FacetValues,
   type GradeBand,
   type LibraryPrompt,
+  type OptionCounts,
   type PromptSeriousness,
   type PromptType,
 } from './prompts-library/data';
@@ -82,6 +83,32 @@ function buildFacets(prompts: LibraryPrompt[]): FacetValues {
     gradeBands: GRADE_ORDER.filter((g) => grades.has(g)),
   };
 }
+
+function buildOptionCounts(prompts: LibraryPrompt[]): OptionCounts {
+  const counts: OptionCounts = {
+    themes: {},
+    textsOrUnits: {},
+    cognitiveMoves: {},
+    types: {},
+    seriousness: {},
+    gradeBands: {},
+  };
+  const bump = (bucket: Record<string, number>, key: string) => {
+    bucket[key] = (bucket[key] ?? 0) + 1;
+  };
+  for (const p of prompts) {
+    p.themes.forEach((t) => bump(counts.themes, t));
+    p.textsOrUnits.forEach((t) => bump(counts.textsOrUnits, t));
+    p.cognitiveMoves.forEach((m) => bump(counts.cognitiveMoves, m));
+    bump(counts.types, p.type);
+    bump(counts.seriousness, p.seriousness);
+    p.gradeBands.forEach((g) => bump(counts.gradeBands, g));
+  }
+  return counts;
+}
+
+const ALL_FACETS = buildFacets(ALL_PROMPTS);
+const ALL_OPTION_COUNTS = buildOptionCounts(ALL_PROMPTS);
 
 type LibraryFilters = {
   q: string;
@@ -244,7 +271,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             ALL_PROMPTS,
             readFilters(new URL(request.url))
           ),
-          facets: buildFacets(ALL_PROMPTS),
+          facets: ALL_FACETS,
+          optionCounts: ALL_OPTION_COUNTS,
           totalCount: ALL_PROMPTS.length,
         }
       : null;
@@ -401,6 +429,7 @@ export default function AppCoursesIdRoute() {
             <PromptsLibrary
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
+              optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
                 setLibraryPrompt(prompt);
