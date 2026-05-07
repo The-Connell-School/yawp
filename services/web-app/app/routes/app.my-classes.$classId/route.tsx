@@ -9,6 +9,7 @@ import {
   useLoaderData,
   useSearchParams,
   useNavigate,
+  useOutlet,
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
@@ -575,6 +576,13 @@ type TabValue =
   | 'students';
 
 export default function ClassDetailRoute() {
+  const outlet = useOutlet();
+  if (outlet) return outlet;
+
+  return <ClassDetailPage />;
+}
+
+function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
