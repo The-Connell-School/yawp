@@ -33,6 +33,10 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
+import { PromptsLibrary } from './prompts-library/prompts-library';
+import { TeacherDirections } from './prompts-library/teacher-directions';
+
+const DAILY_PAGES_TITLE = 'daily pages';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -174,6 +178,11 @@ export default function AppCoursesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [libraryPrompt, setLibraryPrompt] = useState('');
+
+  const isDailyPagesCourse =
+    data.course.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const showPromptsLibrary = isTeacher && isDailyPagesCourse;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -203,7 +212,10 @@ export default function AppCoursesIdRoute() {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={data.teacherClasses.length === 0}
-                    onSelect={() => setIsAssignmentSheetOpen(true)}
+                    onSelect={() => {
+                      setLibraryPrompt('');
+                      setIsAssignmentSheetOpen(true);
+                    }}
                   >
                     Assignment
                   </DropdownMenuItem>
@@ -214,6 +226,7 @@ export default function AppCoursesIdRoute() {
                 teacherClasses={data.teacherClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
+                initialPrompt={libraryPrompt}
               />
             </>
           ) : (
@@ -244,6 +257,8 @@ export default function AppCoursesIdRoute() {
           </div>
         </div>
 
+        {showPromptsLibrary ? <TeacherDirections /> : null}
+
         {hasModules ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
@@ -261,6 +276,17 @@ export default function AppCoursesIdRoute() {
               ))}
             </Accordion>
           </>
+        ) : null}
+
+        {showPromptsLibrary ? (
+          <div className="pb-6">
+            <PromptsLibrary
+              onSelectPrompt={(prompt) => {
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
         ) : null}
 
         {data.documents.length ? (
@@ -300,12 +326,12 @@ export default function AppCoursesIdRoute() {
               </div>
             )}
           </>
-        ) : !hasModules ? (
+        ) : !hasModules && !showPromptsLibrary ? (
           <NoDataPlaceholder
             title="No modules"
             subtitle="Come back later to check for modules to work through."
           />
-        ) : (
+        ) : !showPromptsLibrary ? (
           <NoDataPlaceholder
             title="No documents"
             subtitle={
@@ -315,7 +341,7 @@ export default function AppCoursesIdRoute() {
               </>
             }
           />
-        )}
+        ) : null}
       </div>
     </div>
   );
