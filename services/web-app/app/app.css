@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -339,5 +341,693 @@ code {
   .comment-mark.focused,
   .grade-comment-mark.focused {
     background-color: #fde047;
+  }
+}
+
+.yawp-public {
+  --yawp-coral: #e07856;
+  --yawp-cream: #f3f0e8;
+  --yawp-ink: #1b1b1b;
+  --yawp-muted: #555555;
+  background: #ffffff;
+  color: var(--yawp-ink);
+  font-family: adobe-garamond-pro, 'Cormorant Garamond', Garamond, Georgia,
+    serif;
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.8;
+}
+
+.yawp-public a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.yawp-public h1,
+.yawp-public h2,
+.yawp-public h3,
+.yawp-public p,
+.yawp-public figure,
+.yawp-public dl,
+.yawp-public dd,
+.yawp-public pre {
+  margin: 0;
+}
+
+.yawp-public h1,
+.yawp-public h2,
+.yawp-public h3 {
+  color: var(--yawp-ink);
+  font-family: 'Cormorant Garamond', adobe-garamond-pro, Garamond, Georgia,
+    serif;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.yawp-site-header {
+  align-items: center;
+  background: #ffffff;
+  box-shadow: 0 9px 16px rgba(0, 0, 0, 0.28);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  height: 166px;
+  padding: 0 58px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.yawp-logo-link {
+  display: block;
+  height: 101px;
+  width: 101px;
+}
+
+.yawp-logo-link img {
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.yawp-public .yawp-header-login,
+.yawp-public .yawp-header-demo {
+  color: var(--yawp-coral);
+  font-size: 19px;
+  font-weight: 600;
+  justify-self: start;
+  line-height: 1;
+}
+
+.yawp-public .yawp-header-demo {
+  background: var(--yawp-coral);
+  color: #ffffff;
+  justify-self: end;
+  min-width: 142px;
+  padding: 22px 20px;
+  text-align: center;
+}
+
+.yawp-mobile-menu {
+  display: none;
+}
+
+.yawp-hero {
+  background: var(--yawp-cream);
+  min-height: 879px;
+  padding: 104px 4vw 110px;
+  text-align: center;
+}
+
+.yawp-hero-copy {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  margin: 0 auto;
+  max-width: 1100px;
+}
+
+.yawp-hero h1 {
+  font-size: 64px;
+  line-height: 1.23;
+}
+
+.yawp-hero h3 {
+  color: var(--yawp-muted);
+  font-size: 35px;
+  font-weight: 500;
+  line-height: 1.34;
+  margin-top: 35px;
+  max-width: 1100px;
+}
+
+.yawp-button-row {
+  display: flex;
+  gap: 112px;
+  justify-content: center;
+  margin-top: 75px;
+}
+
+.yawp-button {
+  align-items: center;
+  display: inline-flex;
+  font-size: 20px;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 64px;
+  min-width: 191px;
+  padding: 16px 28px;
+}
+
+.yawp-public .yawp-button-primary {
+  background: var(--yawp-coral);
+  color: #ffffff;
+}
+
+.yawp-public .yawp-button-secondary {
+  border: 3px solid var(--yawp-coral);
+  color: var(--yawp-coral);
+}
+
+.yawp-stats {
+  display: grid;
+  gap: 52px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 60px;
+  width: 920px;
+}
+
+.yawp-stats dt {
+  color: var(--yawp-coral);
+  font-family: 'Cormorant Garamond', adobe-garamond-pro, Garamond, Georgia,
+    serif;
+  font-size: 45px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.yawp-stats dd {
+  color: #000000;
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.36;
+}
+
+.yawp-section {
+  padding: 116px 4vw;
+}
+
+.yawp-section-inner {
+  margin: 0 auto;
+  max-width: 1200px;
+}
+
+.yawp-white-section {
+  background: #ffffff;
+}
+
+.yawp-beige-section {
+  background: var(--yawp-cream);
+}
+
+.yawp-section h2 {
+  font-size: 45px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.yawp-section-intro {
+  color: #000000;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.8;
+  margin: 22px auto 0;
+  max-width: 800px;
+  text-align: center;
+}
+
+.yawp-challenge-grid {
+  display: grid;
+  gap: 45px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 82px auto 0;
+  max-width: 1005px;
+}
+
+.yawp-challenge-card {
+  background: #ffffff;
+  border: 3px solid var(--yawp-coral);
+  box-shadow: 3px 3px 8px rgba(224, 120, 86, 0.65);
+  min-height: 528px;
+  padding: 36px 48px 42px;
+  text-align: center;
+}
+
+.yawp-challenge-card img {
+  display: block;
+  height: 93px;
+  margin: 0 auto 22px;
+  object-fit: contain;
+  width: 93px;
+}
+
+.yawp-challenge-card h3 {
+  font-size: 34px;
+  line-height: 1.27;
+}
+
+.yawp-challenge-card p {
+  color: #000000;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.75;
+  margin-top: 25px;
+}
+
+.yawp-solution-inner > h2 {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
+.yawp-solution-stack {
+  display: grid;
+  gap: 115px;
+  margin-top: 132px;
+}
+
+.yawp-solution-block {
+  align-items: center;
+  display: grid;
+  gap: 76px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.42fr);
+}
+
+.yawp-solution-block[data-flip='true'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.yawp-solution-block[data-flip='true'] .yawp-solution-text {
+  order: 2;
+}
+
+.yawp-solution-text {
+  text-align: center;
+}
+
+.yawp-solution-text h3,
+.yawp-comparison-inner h3,
+.yawp-testimonials h3,
+.yawp-final-cta h3 {
+  font-size: 37px;
+  line-height: 1.35;
+}
+
+.yawp-solution-text p {
+  color: #000000;
+  font-size: 29px;
+  line-height: 1.42;
+  margin-top: 34px;
+}
+
+.yawp-solution-block img {
+  border-radius: 0;
+  display: block;
+  max-height: 650px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.yawp-comparison-inner {
+  max-width: 796px;
+  text-align: center;
+}
+
+.yawp-comparison-table {
+  background: var(--yawp-cream);
+  border-collapse: collapse;
+  border-radius: 7px;
+  color: #000000;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 34px;
+  overflow: hidden;
+  text-align: left;
+  width: 100%;
+}
+
+.yawp-comparison-table th {
+  background: #1b1b1b;
+  color: #ffffff;
+  font-size: 20px;
+  padding: 20px 18px;
+  text-align: center;
+}
+
+.yawp-comparison-table td {
+  border-top: 1px solid #d8d0c1;
+  padding: 19px 16px;
+}
+
+.yawp-comparison-table td:first-child {
+  width: 68%;
+}
+
+.yawp-comparison-table td:not(:first-child) {
+  font-size: 27px;
+  text-align: center;
+}
+
+.yawp-comparison-table .yes {
+  color: #35a64a;
+}
+
+.yawp-comparison-table .no {
+  color: #ff3834;
+}
+
+.yawp-books-intro {
+  color: #000000;
+  font-family: 'Cormorant Garamond', adobe-garamond-pro, Garamond, Georgia,
+    serif;
+  font-size: 49px;
+  font-weight: 500;
+  line-height: 1.68;
+  margin: 0 auto;
+  max-width: 1225px;
+  text-align: center;
+}
+
+.yawp-book-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 118px;
+}
+
+.yawp-book-card {
+  background: #ffffff;
+  min-height: 484px;
+  padding: 31px 30px 34px;
+  text-align: center;
+}
+
+.yawp-book-card img {
+  aspect-ratio: 1;
+  border-radius: 999px;
+  display: block;
+  margin: 0 auto 26px;
+  object-fit: cover;
+  width: 228px;
+}
+
+.yawp-book-card h2 {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.28;
+}
+
+.yawp-book-card p {
+  color: #000000;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.7;
+  margin-top: 25px;
+}
+
+.yawp-testimonials {
+  padding-bottom: 96px;
+}
+
+.yawp-testimonials h3 {
+  text-align: center;
+}
+
+.yawp-testimonial-grid {
+  display: grid;
+  gap: 34px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 62px auto 0;
+  max-width: 982px;
+}
+
+.yawp-testimonial-grid figure {
+  border-left: 1px solid #dedede;
+  padding: 6px 0 4px 22px;
+}
+
+.yawp-testimonial-grid blockquote,
+.yawp-testimonial-grid figcaption {
+  color: #000000;
+  font-size: 23px;
+  line-height: 1.45;
+}
+
+.yawp-testimonial-grid figcaption {
+  margin-top: 22px;
+}
+
+.yawp-final-cta {
+  text-align: center;
+}
+
+.yawp-final-cta .yawp-section-inner {
+  max-width: 850px;
+}
+
+.yawp-final-cta p {
+  color: #000000;
+  font-size: 24px;
+  line-height: 1.55;
+  margin-top: 23px;
+}
+
+.yawp-final-cta .yawp-button {
+  margin-top: 35px;
+}
+
+.yawp-footer {
+  background: #ffffff;
+  color: #000000;
+  padding: 56px 4vw 72px;
+  text-align: center;
+}
+
+.yawp-footer p {
+  align-items: center;
+  display: flex;
+  font-size: 18px;
+  gap: 44px;
+  justify-content: center;
+  line-height: 1.6;
+}
+
+.yawp-footer a {
+  text-decoration: underline;
+}
+
+body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
+  display: none;
+}
+
+.yawp-footer pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 38px auto 0;
+  max-width: 720px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 767px) {
+  .yawp-site-header {
+    display: flex;
+    height: 84px;
+    justify-content: space-between;
+    padding: 0 23px;
+  }
+
+  .yawp-logo-link {
+    height: 29px;
+    width: 29px;
+  }
+
+  .yawp-header-login,
+  .yawp-header-demo {
+    display: none;
+  }
+
+  .yawp-mobile-menu {
+    display: block;
+    position: relative;
+  }
+
+  .yawp-mobile-menu summary {
+    cursor: pointer;
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    padding: 10px 6px;
+  }
+
+  .yawp-mobile-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .yawp-mobile-menu summary span {
+    background: var(--yawp-coral);
+    display: block;
+    height: 1px;
+    width: 34px;
+  }
+
+  .yawp-mobile-menu nav {
+    background: #ffffff;
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.12);
+    display: grid;
+    gap: 16px;
+    padding: 18px;
+    position: absolute;
+    right: 0;
+    top: 44px;
+    width: 230px;
+  }
+
+  .yawp-mobile-menu:not([open]) nav {
+    display: none;
+  }
+
+  .yawp-mobile-menu nav a {
+    color: var(--yawp-coral);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .yawp-hero {
+    min-height: calc(100vh - 84px);
+    padding: 83px 23px 24px;
+  }
+
+  .yawp-hero h1 {
+    font-size: 45px;
+    line-height: 1.32;
+  }
+
+  .yawp-hero h3 {
+    font-size: 29px;
+    line-height: 1.31;
+    margin-top: 29px;
+  }
+
+  .yawp-button-row {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+    order: 3;
+    width: 100%;
+  }
+
+  .yawp-button {
+    font-size: 18px;
+    min-height: 59px;
+    width: 100%;
+  }
+
+  .yawp-stats {
+    gap: 40px;
+    grid-template-columns: 1fr;
+    margin-top: 24px;
+    order: 2;
+    width: 100%;
+  }
+
+  .yawp-stats dt {
+    font-size: 32px;
+    line-height: 1.15;
+  }
+
+  .yawp-stats dd {
+    font-size: 29px;
+    line-height: 1.23;
+  }
+
+  .yawp-section {
+    padding: 74px 23px;
+  }
+
+  .yawp-section h2 {
+    font-size: 39px;
+    line-height: 1.18;
+  }
+
+  .yawp-section-intro {
+    font-size: 20px;
+    line-height: 1.7;
+  }
+
+  .yawp-challenge-grid,
+  .yawp-book-grid,
+  .yawp-testimonial-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .yawp-challenge-grid {
+    gap: 26px;
+    margin-top: 48px;
+  }
+
+  .yawp-challenge-card {
+    min-height: auto;
+    padding: 30px 34px;
+  }
+
+  .yawp-challenge-card h3 {
+    font-size: 31px;
+  }
+
+  .yawp-solution-stack {
+    gap: 72px;
+    margin-top: 64px;
+  }
+
+  .yawp-solution-block,
+  .yawp-solution-block[data-flip='true'] {
+    gap: 34px;
+    grid-template-columns: 1fr;
+  }
+
+  .yawp-solution-block[data-flip='true'] .yawp-solution-text {
+    order: 0;
+  }
+
+  .yawp-solution-text h3,
+  .yawp-comparison-inner h3,
+  .yawp-testimonials h3,
+  .yawp-final-cta h3 {
+    font-size: 34px;
+  }
+
+  .yawp-solution-text p {
+    font-size: 25px;
+    line-height: 1.42;
+  }
+
+  .yawp-comparison-table {
+    font-size: 15px;
+  }
+
+  .yawp-comparison-table th,
+  .yawp-comparison-table td {
+    padding: 14px 10px;
+  }
+
+  .yawp-comparison-table td:first-child {
+    width: 58%;
+  }
+
+  .yawp-books-intro {
+    font-size: 36px;
+    line-height: 1.42;
+  }
+
+  .yawp-book-grid {
+    margin-top: 56px;
+  }
+
+  .yawp-book-card {
+    min-height: auto;
+  }
+
+  .yawp-testimonial-grid blockquote,
+  .yawp-testimonial-grid figcaption,
+  .yawp-final-cta p {
+    font-size: 22px;
+  }
+
+  .yawp-footer p {
+    flex-direction: column;
+    gap: 12px;
   }
 }
