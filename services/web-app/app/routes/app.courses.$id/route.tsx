@@ -473,18 +473,16 @@ export default function AppCoursesIdRoute() {
         ) : null}
 
         {data.promptLibrary ? (
-          <div className="pb-6">
-            <PromptsLibrary
-              prompts={data.promptLibrary.prompts}
-              facets={data.promptLibrary.facets}
-              optionCounts={data.promptLibrary.optionCounts}
-              totalCount={data.promptLibrary.totalCount}
-              onSelectPrompt={(prompt) => {
-                setLibraryPrompt(prompt);
-                setIsAssignmentSheetOpen(true);
-              }}
-            />
-          </div>
+          <PromptsLibrary
+            prompts={data.promptLibrary.prompts}
+            facets={data.promptLibrary.facets}
+            optionCounts={data.promptLibrary.optionCounts}
+            totalCount={data.promptLibrary.totalCount}
+            onSelectPrompt={(prompt) => {
+              setLibraryPrompt(prompt);
+              setIsAssignmentSheetOpen(true);
+            }}
+          />
         ) : null}
 
         {data.documents.length ? (

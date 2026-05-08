@@ -195,7 +195,7 @@ export function PromptsLibrary({
     <Accordion type="single" collapsible>
       <AccordionItem value="library">
         <AccordionTrigger className="py-2 text-base">
-          Prompts Library
+          Prompt Library
         </AccordionTrigger>
         <AccordionContent>
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
