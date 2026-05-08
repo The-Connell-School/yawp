@@ -441,16 +441,25 @@ export default function AppCoursesIdRoute() {
 
         {data.documents.length ? (
           <>
-            <div className="grid grid-cols-2 gap-3 pb-10 pt-6 sm:grid-cols-2 md:grid-cols-3">
-              {data.documents.map((doc) => (
-                <DocumentLink
-                  key={doc.id}
-                  doc={doc}
-                  exitTo={`/app/courses/${data.course.id}`}
-                  isStudentView
-                />
-              ))}
-            </div>
+            <Accordion type="single" collapsible>
+              <AccordionItem value="your-pages">
+                <AccordionTrigger className="py-2 text-base">
+                  Your Pages
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="grid grid-cols-2 gap-3 pb-4 pt-2 sm:grid-cols-2 md:grid-cols-3">
+                    {data.documents.map((doc) => (
+                      <DocumentLink
+                        key={doc.id}
+                        doc={doc}
+                        exitTo={`/app/courses/${data.course.id}`}
+                        isStudentView
+                      />
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
             {data.archivedDocuments.length > 0 && (
               <div className="pb-10">
                 <Accordion type="single" collapsible>
@@ -480,7 +489,7 @@ export default function AppCoursesIdRoute() {
         ) : !hasModules && !showPromptsLibrary ? (
           <NoDataPlaceholder
             title="No modules"
-            subtitle="Come back later to check for modules to work through."
+            subtitle="Come back later to create your first page."
           />
         ) : !showPromptsLibrary ? (
           <NoDataPlaceholder
