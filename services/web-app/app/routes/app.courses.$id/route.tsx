@@ -423,34 +423,35 @@ export default function AppCoursesIdRoute() {
                       <AccordionContent>
                         <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
                           <p>
-                            Not every writing assignment has to be long or even
-                            particularly academic — sometimes, in fact often,
-                            it&apos;s good to get students to write freely
-                            about things that interest them. Daily Pages is
-                            intended to get students writing. This is where
-                            their ideas can first take shape.
+                            Daily Pages is the lowest-stakes writing assignment
+                            in the course, and that&apos;s the feature, not the
+                            bug. No thesis, no rubric, no grade — just enough
+                            room that students actually pick up the pen and
+                            start. The goal is simple: get them writing long
+                            enough that an idea can begin to take shape. Once
+                            it has a shape, you can do something with it.
                           </p>
                           <p>
-                            Some teachers use Daily Pages every day at the
-                            beginning of class. Other teachers will use it to
-                            have students reflect on a movie, or a poem, or
-                            something they might have done in class.
+                            Teachers use it differently. Some open every class
+                            with a five-minute warmup. Others pull it out for
+                            reflection — after a poem, a film, a discussion
+                            that didn&apos;t quite finish. Some only reach for
+                            it when something big happens in the world
+                            that&apos;s worth writing through.
                           </p>
                           <p>
-                            I use Daily Pages to get my students thinking about
-                            things that interest them in relation to what
-                            we&apos;re reading. These are big ideas. If
-                            we&apos;re reading <em>Macbeth</em>, I want
-                            students thinking about dreams, goals, desires, and
-                            how chasing them can get messy; or I want them
-                            thinking about how people can influence us to do
-                            things we don&apos;t truly want to do —
-                            self-betrayal.
+                            I tend to bend the prompts toward whatever&apos;s
+                            circling under our current unit. <em>Macbeth</em>{' '}
+                            is technically a play about Scottish kings, but
+                            really it&apos;s a play about wanting something
+                            badly enough to compromise yourself for it, and
+                            about how easily another person&apos;s voice can
+                            become the loudest one in your head. Daily Pages is
+                            where students get to think about <em>those</em>{' '}
+                            questions — without having to perform a reading of
+                            the text.
                           </p>
-                          <p>
-                            Use Daily Pages however you want! But lean into the
-                            fun of it!
-                          </p>
+                          <p>Use it however you want. Lean into the fun!</p>
                         </div>
                       </AccordionContent>
                     </AccordionItem>
