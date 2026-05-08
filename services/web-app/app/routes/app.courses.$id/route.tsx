@@ -426,6 +426,7 @@ export default function AppCoursesIdRoute() {
 
         {data.promptLibrary ? (
           <div className="pb-6">
+            <div className="border-b" />
             <PromptsLibrary
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
