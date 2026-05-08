@@ -410,16 +410,63 @@ export default function AppCoursesIdRoute() {
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
             <Accordion type="multiple">
-              {data.course.studentCourseModules.map((cm) => (
-                <AccordionItem key={cm.id} value={cm.id}>
-                  <AccordionTrigger className="py-2 text-base">
-                    {cm.title}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground">
-                    {cm.description || 'No description.'}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+              {data.course.studentCourseModules.map((cm) => {
+                const isDailyPagesTeacherView =
+                  showPromptsLibrary &&
+                  cm.title.trim().toLowerCase() === 'daily pages';
+                if (isDailyPagesTeacherView) {
+                  return (
+                    <AccordionItem key={cm.id} value={cm.id}>
+                      <AccordionTrigger className="py-2 text-base">
+                        How Teachers Use Daily Pages
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+                          <p>
+                            Not every writing assignment has to be long or even
+                            particularly academic — sometimes, in fact often,
+                            it&apos;s good to get students to write freely
+                            about things that interest them. Daily Pages is
+                            intended to get students writing. This is where
+                            their ideas can first take shape.
+                          </p>
+                          <p>
+                            Some teachers use Daily Pages every day at the
+                            beginning of class. Other teachers will use it to
+                            have students reflect on a movie, or a poem, or
+                            something they might have done in class.
+                          </p>
+                          <p>
+                            I use Daily Pages to get my students thinking about
+                            things that interest them in relation to what
+                            we&apos;re reading. These are big ideas. If
+                            we&apos;re reading <em>Macbeth</em>, I want
+                            students thinking about dreams, goals, desires, and
+                            how chasing them can get messy; or I want them
+                            thinking about how people can influence us to do
+                            things we don&apos;t truly want to do —
+                            self-betrayal.
+                          </p>
+                          <p>
+                            Use Daily Pages however you want! But lean into the
+                            fun of it!
+                          </p>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                }
+                return (
+                  <AccordionItem key={cm.id} value={cm.id}>
+                    <AccordionTrigger className="py-2 text-base">
+                      {cm.title}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-muted-foreground">
+                      {cm.description || 'No description.'}
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
             </Accordion>
           </>
         ) : null}
