@@ -489,7 +489,7 @@ export default function AppCoursesIdRoute() {
         ) : !hasModules && !showPromptsLibrary ? (
           <NoDataPlaceholder
             title="No modules"
-            subtitle="Come back later to create your first page."
+            subtitle="Come back later to check for modules to work through."
           />
         ) : !showPromptsLibrary ? (
           <NoDataPlaceholder
