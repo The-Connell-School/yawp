@@ -186,14 +186,16 @@ export function PromptsLibrary({
     />
   );
 
+  const countLabel =
+    prompts.length === totalCount
+      ? `${totalCount} prompts`
+      : `${prompts.length} of ${totalCount} prompts`;
+
   return (
     <Accordion type="single" collapsible>
       <AccordionItem value="library">
         <AccordionTrigger className="py-2 text-base">
           Prompts Library
-          <span className="ml-2 text-xs text-muted-foreground">
-            {prompts.length} of {totalCount}
-          </span>
         </AccordionTrigger>
         <AccordionContent>
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
@@ -227,9 +229,9 @@ export function PromptsLibrary({
             </div>
 
             <main className="min-w-0 flex-1 lg:max-w-[720px]">
-              {activeChips.length > 0 ? (
-                <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
-                  <span>{prompts.length} prompts</span>
+              <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/40 pb-3 text-xs text-muted-foreground">
+                <span>{countLabel}</span>
+                {activeChips.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {activeChips.map((chip) => (
                       <button
@@ -243,8 +245,8 @@ export function PromptsLibrary({
                       </button>
                     ))}
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               {prompts.length === 0 ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
