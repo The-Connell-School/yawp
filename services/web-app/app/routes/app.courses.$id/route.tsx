@@ -409,7 +409,7 @@ export default function AppCoursesIdRoute() {
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
-            <Accordion type="multiple" className="pb-6">
+            <Accordion type="multiple">
               {data.course.studentCourseModules.map((cm) => (
                 <AccordionItem key={cm.id} value={cm.id}>
                   <AccordionTrigger className="py-2 text-base">
@@ -426,7 +426,6 @@ export default function AppCoursesIdRoute() {
 
         {data.promptLibrary ? (
           <div className="pb-6">
-            <div className="border-b" />
             <PromptsLibrary
               prompts={data.promptLibrary.prompts}
               facets={data.promptLibrary.facets}
