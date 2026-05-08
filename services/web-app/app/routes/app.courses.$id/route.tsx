@@ -407,7 +407,7 @@ export default function AppCoursesIdRoute() {
 
         {hasModules ? (
           <>
-            <h3 className="mb-2 text-foreground/75">Modules</h3>
+            <h3 className="mb-2 text-foreground/75">Resources</h3>
             <div className="border-b" />
             <Accordion type="multiple">
               {data.course.studentCourseModules.map((cm) => {
