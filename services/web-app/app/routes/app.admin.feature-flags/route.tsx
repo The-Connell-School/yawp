@@ -7,8 +7,16 @@ import {
 } from 'react-router';
 import { useMemo, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
 import { Switch } from '~/components/ui/switch';
 import {
   Table,
@@ -18,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
+import { SlidersHorizontal } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -46,6 +55,10 @@ type SchoolOption = {
 type RegisteredFeatureFlag = TargetedFeatureFlagDefinition & {
   key: TargetedFeatureFlag;
 };
+
+type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
+type FlagData = LoaderData['flags'][number];
+type TargetOption = OrganizationOption | SchoolOption;
 
 function getRegisteredFeatureFlags(): RegisteredFeatureFlag[] {
   return Object.entries(TARGETED_FEATURE_FLAGS).map(([key, definition]) => ({
@@ -219,37 +232,187 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function FeatureFlagsRoute() {
   const { flags, organizations, schools } = useLoaderData<typeof loader>();
+  const [selectedFlagKey, setSelectedFlagKey] =
+    useState<TargetedFeatureFlag | null>(null);
+  const selectedFlag =
+    flags.find((flag) => flag.key === selectedFlagKey) ?? null;
 
   return (
     <div className="flex flex-col gap-4 p-3 sm:p-5">
-      {flags.map((flag) => (
-        <FeatureFlagCard
-          key={flag.key}
-          flag={flag}
-          organizations={organizations}
-          schools={schools}
-        />
-      ))}
+      <FeatureFlagOverview
+        flags={flags}
+        organizations={organizations}
+        schools={schools}
+        onManage={(flag) => setSelectedFlagKey(flag.key)}
+      />
+      <Sheet
+        open={Boolean(selectedFlag)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedFlagKey(null);
+        }}
+      >
+        {selectedFlag ? (
+          <FeatureFlagTargetSheet
+            flag={selectedFlag}
+            organizations={organizations}
+            schools={schools}
+          />
+        ) : null}
+      </Sheet>
     </div>
   );
 }
 
-function FeatureFlagCard({
+function FeatureFlagOverview({
+  flags,
+  organizations,
+  schools,
+  onManage,
+}: {
+  flags: FlagData[];
+  organizations: OrganizationOption[];
+  schools: SchoolOption[];
+  onManage: (flag: FlagData) => void;
+}) {
+  const fetcher = useFetcher();
+
+  const submitGlobalToggle = (flag: FlagData, enabled: boolean) => {
+    const formData = new FormData();
+    formData.set('intent', 'toggle-global');
+    formData.set('flag', flag.key);
+    formData.set('enabled', enabled ? 'true' : 'false');
+    fetcher.submit(formData, { method: 'POST' });
+  };
+
+  return (
+    <Card className="bg-muted">
+      <CardHeader className="border-b pb-4">
+        <CardTitle>Feature flag rollout</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Flag</TableHead>
+                <TableHead>Scope</TableHead>
+                <TableHead>Rollout</TableHead>
+                <TableHead>Global</TableHead>
+                <TableHead className="w-[130px] text-right">Targets</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {flags.map((flag) => {
+                const targets = getTargets(flag, organizations, schools);
+                const enabledTargetCount = getEnabledTargetCount(flag, targets);
+                const targetLabel = getTargetLabel(flag);
+                return (
+                  <TableRow key={flag.key}>
+                    <TableCell className="min-w-[260px]">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{flag.label}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {flag.description}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{getScopeLabel(flag)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">
+                          {enabledTargetCount} / {targets.length} {targetLabel}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {targets.length === 0
+                            ? 'No targets available'
+                            : `${Math.round((enabledTargetCount / targets.length) * 100)}% targeted`}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {flag.globalSettingName ? (
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={flag.globalEnabled}
+                            disabled={fetcher.state !== 'idle'}
+                            onCheckedChange={(checked) =>
+                              submitGlobalToggle(flag, checked)
+                            }
+                          />
+                          <span className="text-sm">
+                            {flag.globalEnabled ? 'On' : 'Off'}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          Not applicable
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onManage(flag)}
+                      >
+                        <SlidersHorizontal className="mr-2 h-4 w-4" />
+                        Manage
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FeatureFlagTargetSheet({
   flag,
   organizations,
   schools,
 }: {
-  flag: ReturnType<typeof useLoaderData<typeof loader>>['flags'][number];
+  flag: FlagData;
+  organizations: OrganizationOption[];
+  schools: SchoolOption[];
+}) {
+  return (
+    <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-3xl">
+      <SheetHeader className="border-b p-5">
+        <div className="flex flex-col gap-2 pr-8">
+          <SheetTitle>{flag.label}</SheetTitle>
+          <SheetDescription>{flag.description}</SheetDescription>
+        </div>
+      </SheetHeader>
+      <FeatureFlagTargetControls
+        flag={flag}
+        organizations={organizations}
+        schools={schools}
+      />
+    </SheetContent>
+  );
+}
+
+function FeatureFlagTargetControls({
+  flag,
+  organizations,
+  schools,
+}: {
+  flag: FlagData;
   organizations: OrganizationOption[];
   schools: SchoolOption[];
 }) {
   const fetcher = useFetcher();
   const [query, setQuery] = useState('');
-  const targets = flag.targetKind === 'organization' ? organizations : schools;
+  const targets = getTargets(flag, organizations, schools);
   const enabledIds = new Set(flag.enabledTargetIds);
-  const enabledTargetCount = targets.filter((target) =>
-    enabledIds.has(target.id)
-  ).length;
+  const enabledTargetCount = getEnabledTargetCount(flag, targets);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredTargets = useMemo(
     () =>
@@ -264,8 +427,7 @@ function FeatureFlagCard({
       }),
     [normalizedQuery, targets]
   );
-  const targetLabel =
-    flag.targetKind === 'organization' ? 'organizations' : 'schools';
+  const targetLabel = getTargetLabel(flag);
 
   const submitTargetToggle = (targetId: string, enabled: boolean) => {
     const formData = new FormData();
@@ -276,93 +438,90 @@ function FeatureFlagCard({
     fetcher.submit(formData, { method: 'POST' });
   };
 
-  const submitGlobalToggle = (enabled: boolean) => {
-    const formData = new FormData();
-    formData.set('intent', 'toggle-global');
-    formData.set('flag', flag.key);
-    formData.set('enabled', enabled ? 'true' : 'false');
-    fetcher.submit(formData, { method: 'POST' });
-  };
-
   return (
-    <Card className="bg-muted">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-1">
-          <CardTitle>{flag.label}</CardTitle>
-          <p className="text-sm text-muted-foreground">{flag.description}</p>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-md border bg-muted p-3">
+          <p className="text-sm text-muted-foreground">Scope</p>
+          <p className="font-medium">{getScopeLabel(flag)}</p>
         </div>
-        <Badge variant="secondary" className="w-fit">
-          {enabledTargetCount} / {targets.length} {targetLabel}
-        </Badge>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {flag.globalSettingName ? (
-          <div className="flex items-center justify-between rounded-md border bg-background p-3">
-            <div className="flex flex-col gap-1">
-              <p className="font-medium">{flag.globalLabel ?? 'Global'}</p>
-              {flag.globalDescription ? (
-                <p className="text-sm text-muted-foreground">
-                  {flag.globalDescription}
-                </p>
+        <div className="rounded-md border bg-muted p-3">
+          <p className="text-sm text-muted-foreground">Rollout</p>
+          <p className="font-medium">
+            {enabledTargetCount} / {targets.length} {targetLabel}
+          </p>
+        </div>
+        <div className="rounded-md border bg-muted p-3">
+          <p className="text-sm text-muted-foreground">Global</p>
+          <p className="font-medium">
+            {flag.globalSettingName
+              ? flag.globalEnabled
+                ? 'On'
+                : 'Off'
+              : 'Not applicable'}
+          </p>
+        </div>
+      </div>
+
+      {flag.globalSettingName && flag.globalEnabled ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          School allowlist is bypassed while global is enabled.
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Search ${targetLabel}`}
+          className="sm:max-w-sm"
+        />
+        <span className="text-sm text-muted-foreground">
+          Showing {filteredTargets.length} of {targets.length}
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-background">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              {flag.targetKind === 'school' ? (
+                <>
+                  <TableHead>Code</TableHead>
+                  <TableHead>Organization</TableHead>
+                </>
               ) : null}
-            </div>
-            <Switch
-              checked={flag.globalEnabled}
-              disabled={fetcher.state !== 'idle'}
-              onCheckedChange={submitGlobalToggle}
-            />
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={`Search ${targetLabel}`}
-            className="sm:max-w-sm"
-          />
-          <span className="text-sm text-muted-foreground">
-            Showing {filteredTargets.length} of {targets.length}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto rounded-md border bg-background">
-          <Table>
-            <TableHeader>
+              <TableHead className="w-[130px] text-right">Enabled</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredTargets.length === 0 ? (
               <TableRow>
-                <TableHead>Name</TableHead>
-                {flag.targetKind === 'school' ? (
-                  <>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Organization</TableHead>
-                  </>
-                ) : null}
-                <TableHead className="w-[120px] text-right">Enabled</TableHead>
+                <TableCell
+                  colSpan={flag.targetKind === 'school' ? 4 : 2}
+                  className="h-20 text-center text-sm text-muted-foreground"
+                >
+                  No targets found.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTargets.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={flag.targetKind === 'school' ? 4 : 2}
-                    className="h-20 text-center text-sm text-muted-foreground"
-                  >
-                    No targets found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredTargets.map((target) => (
-                  <TableRow key={target.id}>
-                    <TableCell className="font-medium">{target.name}</TableCell>
-                    {isSchoolOption(target) ? (
-                      <>
-                        <TableCell className="font-mono text-xs">
-                          {target.code}
-                        </TableCell>
-                        <TableCell>{target.organizationName}</TableCell>
-                      </>
-                    ) : null}
-                    <TableCell className="text-right">
+            ) : (
+              filteredTargets.map((target) => (
+                <TableRow key={target.id}>
+                  <TableCell className="font-medium">{target.name}</TableCell>
+                  {isSchoolOption(target) ? (
+                    <>
+                      <TableCell className="font-mono text-xs">
+                        {target.code}
+                      </TableCell>
+                      <TableCell>{target.organizationName}</TableCell>
+                    </>
+                  ) : null}
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        {enabledIds.has(target.id) ? 'Enabled' : 'Disabled'}
+                      </span>
                       <Switch
                         checked={enabledIds.has(target.id)}
                         disabled={fetcher.state !== 'idle'}
@@ -370,16 +529,37 @@ function FeatureFlagCard({
                           submitTargetToggle(target.id, checked)
                         }
                       />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
+}
+
+function getTargets(
+  flag: FlagData,
+  organizations: OrganizationOption[],
+  schools: SchoolOption[]
+): TargetOption[] {
+  return flag.targetKind === 'organization' ? organizations : schools;
+}
+
+function getEnabledTargetCount(flag: FlagData, targets: TargetOption[]) {
+  const enabledIds = new Set(flag.enabledTargetIds);
+  return targets.filter((target) => enabledIds.has(target.id)).length;
+}
+
+function getTargetLabel(flag: FlagData) {
+  return flag.targetKind === 'organization' ? 'organizations' : 'schools';
+}
+
+function getScopeLabel(flag: FlagData) {
+  return flag.targetKind === 'organization' ? 'Organizations' : 'Schools';
 }
 
 export function ErrorBoundary() {
