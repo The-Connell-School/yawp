@@ -66,7 +66,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
   const url = new URL(request.url);
-  const publicLandingPage = url.pathname === '/';
+  const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
 
   if (publicLandingPage) {
     return data(
@@ -81,11 +81,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         ENV: getEnv(),
-        bannerWarning: request.url.includes('staging')
-          ? 'staging'
-          : request.url.includes('localhost')
-            ? 'localhost'
-            : null,
+        bannerWarning: null,
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
