@@ -900,6 +900,13 @@ body:has(.yawp-public) > [data-state='closed'].fixed.bottom-4.right-4 {
   margin: 16px 0 0;
 }
 
+.yawp-entry h1 span {
+  display: block;
+  font-size: 0.82em;
+  font-style: italic;
+  margin-top: 8px;
+}
+
 .yawp-entry-description {
   color: #45413d;
   font-size: clamp(21px, 2.8vw, 27px);

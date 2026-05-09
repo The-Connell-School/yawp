@@ -19,7 +19,7 @@ export const meta: MetaFunction = () => [
   { property: 'og:type', content: 'website' },
 ];
 
-const loginUrl = '/auth/login';
+const loginUrl = '/app';
 const signupUrl = '/auth/inv/signup';
 const infoUrl = '/info';
 
@@ -33,7 +33,10 @@ export default function IndexRoute() {
 
         <div className="yawp-entry-copy">
           <p className="yawp-entry-kicker">Students and teachers</p>
-          <h1>Welcome to YAWP! -- a space for students to think and write.</h1>
+          <h1>
+            Welcome to YAWP!
+            <span>A space for students to think and write.</span>
+          </h1>
           <p className="yawp-entry-description">
             YAWP! is a writing platform built for middle school, high school,
             and college classrooms. Students learn a writing process, draft
