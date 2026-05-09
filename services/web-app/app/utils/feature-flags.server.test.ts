@@ -14,6 +14,7 @@ const {
   isAssignmentsEnabledForOrganization,
   isReleasedGradesOrganizationEnabledForOrganization,
   isTargetedFeatureFlagEnabled,
+  setFeatureFlagBoolean,
   setTargetedFeatureFlagTarget,
 } = await import('./feature-flags.server');
 
@@ -162,6 +163,7 @@ describe('targeted feature flags', () => {
     expect(prisma.setting.upsert).toHaveBeenCalledWith({
       where: { name: 'released_grades_organization_enabled_org_ids' },
       create: {
+        id: 'released_grades_organization_enabled_org_ids',
         name: 'released_grades_organization_enabled_org_ids',
         description:
           'Organization IDs allowed to use released grades organization view',
@@ -194,15 +196,47 @@ describe('targeted feature flags', () => {
     expect(prisma.setting.upsert).toHaveBeenCalledWith({
       where: { name: 'document_submission_enabled_school_ids' },
       create: {
+        id: 'document_submission_enabled_school_ids',
         name: 'document_submission_enabled_school_ids',
-        description: 'School IDs allowed to use document submission and grading',
+        description:
+          'School IDs allowed to use document submission and grading',
         value: 'school-2',
         valueType: 'string',
       },
       update: {
-        description: 'School IDs allowed to use document submission and grading',
+        description:
+          'School IDs allowed to use document submission and grading',
         value: 'school-2',
         valueType: 'string',
+      },
+    });
+  });
+
+  test('upserts a boolean feature flag setting', async () => {
+    prisma.setting.upsert.mockResolvedValue({});
+
+    const result = await setFeatureFlagBoolean(
+      'document_submission_enabled',
+      true,
+      'Allow every school to use document submission and grading'
+    );
+
+    expect(result).toBe('true');
+    expect(prisma.setting.upsert).toHaveBeenCalledWith({
+      where: { name: 'document_submission_enabled' },
+      create: {
+        id: 'document_submission_enabled',
+        name: 'document_submission_enabled',
+        description:
+          'Allow every school to use document submission and grading',
+        value: 'true',
+        valueType: 'boolean',
+      },
+      update: {
+        description:
+          'Allow every school to use document submission and grading',
+        value: 'true',
+        valueType: 'boolean',
       },
     });
   });
