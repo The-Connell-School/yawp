@@ -7,7 +7,8 @@ export function TeacherDirections() {
       <p className="mb-3 text-sm text-muted-foreground">
         Write a prompt, hit New → Assignment, and every student in the class
         gets a blank document pre-titled with your prompt. Daily Pages is
-        effort-based: feedback focuses on ideas rather than rubric scores.
+        effort-based: Tutor and Teacher feedback focuses on ideas rather than
+        rubric scores or correctness.
       </p>
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         For inspiration

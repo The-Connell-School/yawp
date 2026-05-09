@@ -423,33 +423,34 @@ export default function AppCoursesIdRoute() {
                       <AccordionContent>
                         <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
                           <p>
-                            Daily Pages is the lowest-stakes writing assignment
-                            in the course, and that&apos;s the feature, not the
-                            bug. No thesis, no rubric, no grade — just enough
-                            room that students actually pick up the pen and
-                            start. The goal is simple: get them writing long
-                            enough that an idea can begin to take shape. Once
-                            it has a shape, you can do something with it.
+                            Daily Pages are low-stakes writing assignments
+                            designed to give students practice that will build
+                            their writing muscles. No thesis, no rubric, no
+                            grade — just space for students to think and
+                            write. The goal is simple: get them writing in a
+                            way that engages them, expands their critical
+                            thinking, and lets them experience the joy of
+                            writing. Their confidence will follow.
                           </p>
                           <p>
-                            Teachers use it differently. Some open every class
-                            with a five-minute warmup. Others pull it out for
-                            reflection — after a poem, a film, a discussion
-                            that didn&apos;t quite finish. Some only reach for
-                            it when something big happens in the world
-                            that&apos;s worth writing through.
+                            Teachers use Daily Pages differently. Some open
+                            every class with a five-minute warmup. Others pull
+                            it out for reflection — after a poem, a film, a
+                            discussion that they weren&apos;t able to finish in
+                            class. Some reach for it when something big happens
+                            in the world that&apos;s worth writing about.
                           </p>
                           <p>
-                            I tend to bend the prompts toward whatever&apos;s
-                            circling under our current unit. <em>Macbeth</em>{' '}
-                            is technically a play about Scottish kings, but
-                            really it&apos;s a play about wanting something
-                            badly enough to compromise yourself for it, and
-                            about how easily another person&apos;s voice can
-                            become the loudest one in your head. Daily Pages is
-                            where students get to think about <em>those</em>{' '}
-                            questions — without having to perform a reading of
-                            the text.
+                            You might also bend the prompts toward
+                            whatever&apos;s circling under a current unit.{' '}
+                            <em>Macbeth</em> is technically a play about
+                            Scottish kings, but really it&apos;s a play about
+                            wanting something badly enough to compromise
+                            yourself for it, and about how easily another
+                            person&apos;s voice can become the loudest one in
+                            your head. Daily Pages is where students get to
+                            think about <em>those</em> questions — without
+                            having to perform a reading of the text.
                           </p>
                           <p>Use it however you want. Lean into the fun!</p>
                         </div>
