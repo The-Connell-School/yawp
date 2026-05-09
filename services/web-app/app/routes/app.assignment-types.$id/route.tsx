@@ -8,8 +8,10 @@
 //   3. Submissions accordion (empty mock)
 //   4. Prompt Library — filter chips + sample-prompt table
 //
-// Wired in from the dashboard tile (route.tsx → assignment-types-list.tsx)
-// when the AssignmentTypeRow id matches PREVIEW_AP_HISTORY_ESSAY.id.
+// Entry-picker library/PDF/scratch paths and prompt-row clicks navigate to
+// the builder wireframe at /app/assignment-types/:id/builder. The builder
+// in turn cross-links to the student drafting and teacher grading
+// wireframes.
 
 import { useMemo, useState } from 'react';
 import {
@@ -17,7 +19,7 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Link, useLoaderData } from 'react-router';
+import { Link, useLoaderData, useNavigate } from 'react-router';
 import { ChevronDownIcon, FileUpIcon, LibraryIcon, PencilIcon } from 'lucide-react';
 import { CaretLeftIcon } from '~/components/icons';
 import {
@@ -247,8 +249,22 @@ type PeriodFilter = Period | 'all';
 type ReasoningFilter = Reasoning | 'all';
 type DifficultyFilter = Difficulty | 'all';
 
+function builderHref(opts: {
+  type: EssayType;
+  from: 'library' | 'pdf' | 'scratch';
+  promptId?: string;
+}): string {
+  const params = new URLSearchParams({
+    type: opts.type.toLowerCase(),
+    from: opts.from,
+  });
+  if (opts.promptId) params.set('promptId', opts.promptId);
+  return `/app/assignment-types/${PREVIEW_ID}/builder?${params.toString()}`;
+}
+
 export default function AssignmentTypeApHistoryPreviewRoute() {
   const data = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const [isEntryPickerOpen, setIsEntryPickerOpen] = useState(false);
   const [entryEssayType, setEntryEssayType] = useState<EssayType | null>(null);
 
@@ -284,6 +300,12 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
   function openEntryPicker() {
     setEntryEssayType(null);
     setIsEntryPickerOpen(true);
+  }
+
+  function pickPromptFromLibrary(p: LibraryPrompt) {
+    navigate(
+      builderHref({ type: p.type, from: 'library', promptId: p.id })
+    );
   }
 
   return (
@@ -479,10 +501,7 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
                         <TableRow
                           key={p.id}
                           className="cursor-pointer hover:bg-muted/40"
-                          onClick={() => {
-                            setEntryEssayType(p.type);
-                            setIsEntryPickerOpen(true);
-                          }}
+                          onClick={() => pickPromptFromLibrary(p)}
                         >
                           <TableCell>
                             <Badge
@@ -510,10 +529,53 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
           </AccordionItem>
         </Accordion>
 
-        <p className="mt-8 text-xs text-muted-foreground">
-          Preview wireframe driven by mock data. The from-scratch builder, PDF
-          upload pipeline, student drafting surface, tutor coaching, and
-          grading panels are described in the v1 spec but not yet implemented.
+        {/* Cross-link footer to the rest of the prototype loop */}
+        <div className="mt-8 rounded-lg border bg-muted/30 p-4">
+          <p className="mb-1 text-sm font-semibold">Wireframe loop</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Click a prompt above to land in the builder, or jump straight to
+            the student drafting surface or teacher grading view to feel the
+            other ends of the loop.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to={builderHref({ type: 'DBQ', from: 'scratch' })}>
+                Open builder (DBQ)
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to={builderHref({ type: 'LEQ', from: 'scratch' })}>
+                Open builder (LEQ)
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to={`/app/assignment-types/${PREVIEW_ID}/draft?type=dbq`}
+              >
+                Student drafting (DBQ)
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to={`/app/assignment-types/${PREVIEW_ID}/draft?type=leq`}
+              >
+                Student drafting (LEQ)
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link
+                to={`/app/assignment-types/${PREVIEW_ID}/grade?type=dbq`}
+              >
+                Teacher grading (DBQ)
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          Preview wireframes driven by mock data. PDF parsing, real-time tutor
+          coaching, persistence, and AI grading are described in the v1 spec
+          but not implemented.
         </p>
       </div>
 
@@ -558,37 +620,53 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
             </div>
           ) : (
             <div className="flex flex-col gap-2 pt-2">
-              <Button variant="outline" className="justify-start h-auto py-3" disabled>
-                <LibraryIcon className="mr-3 h-5 w-5 shrink-0" />
-                <div className="flex flex-col items-start text-left">
-                  <span className="font-semibold">Pick from the Prompt Library</span>
-                  <span className="text-xs text-muted-foreground">
-                    Curated essays across USH, Euro, and World.
-                  </span>
-                </div>
+              <Button asChild variant="outline" className="justify-start h-auto py-3">
+                <Link
+                  to={builderHref({ type: entryEssayType, from: 'library' })}
+                  onClick={() => setIsEntryPickerOpen(false)}
+                >
+                  <LibraryIcon className="mr-3 h-5 w-5 shrink-0" />
+                  <div className="flex flex-col items-start text-left">
+                    <span className="font-semibold">Pick from the Prompt Library</span>
+                    <span className="text-xs text-muted-foreground">
+                      Curated essays across USH, Euro, and World.
+                    </span>
+                  </div>
+                </Link>
               </Button>
-              <Button variant="outline" className="justify-start h-auto py-3" disabled>
-                <FileUpIcon className="mr-3 h-5 w-5 shrink-0" />
-                <div className="flex flex-col items-start text-left">
-                  <span className="font-semibold">Upload a PDF</span>
-                  <span className="text-xs text-muted-foreground">
-                    Upload a College Board essay or department PDF — Yawp parses
-                    the prompt (and sources, for DBQs). You confirm.
-                  </span>
-                </div>
+              <Button asChild variant="outline" className="justify-start h-auto py-3">
+                <Link
+                  to={builderHref({ type: entryEssayType, from: 'pdf' })}
+                  onClick={() => setIsEntryPickerOpen(false)}
+                >
+                  <FileUpIcon className="mr-3 h-5 w-5 shrink-0" />
+                  <div className="flex flex-col items-start text-left">
+                    <span className="font-semibold">Upload a PDF</span>
+                    <span className="text-xs text-muted-foreground">
+                      Upload a College Board essay or department PDF — Yawp
+                      parses the prompt (and sources, for DBQs). You confirm.
+                    </span>
+                  </div>
+                </Link>
               </Button>
-              <Button variant="outline" className="justify-start h-auto py-3" disabled>
-                <PencilIcon className="mr-3 h-5 w-5 shrink-0" />
-                <div className="flex flex-col items-start text-left">
-                  <span className="font-semibold">Build from scratch</span>
-                  <span className="text-xs text-muted-foreground">
-                    Type the prompt, paste sources, set period, save.
-                  </span>
-                </div>
+              <Button asChild variant="outline" className="justify-start h-auto py-3">
+                <Link
+                  to={builderHref({ type: entryEssayType, from: 'scratch' })}
+                  onClick={() => setIsEntryPickerOpen(false)}
+                >
+                  <PencilIcon className="mr-3 h-5 w-5 shrink-0" />
+                  <div className="flex flex-col items-start text-left">
+                    <span className="font-semibold">Build from scratch</span>
+                    <span className="text-xs text-muted-foreground">
+                      Type the prompt, paste sources, set period, save.
+                    </span>
+                  </div>
+                </Link>
               </Button>
               <p className="pt-2 text-xs text-muted-foreground">
-                These three paths are spec'd in v1 but not wired up yet — they
-                all converge into the same builder.
+                All three paths land on the same builder wireframe; library
+                pre-fills the prompt and (DBQ-only) source set, PDF and
+                from-scratch arrive empty.
               </p>
               <Button
                 variant="ghost"
