@@ -26,6 +26,9 @@ export type AssignmentTypeRow = {
   id: string;
   title: string;
   image?: { id: string } | null;
+  // Preview-only: a static asset URL for prototype tiles whose image is
+  // committed to /public rather than served via /api/image/course/{id}.
+  imageSrc?: string;
 };
 
 export type CourseGlanceRow = {
@@ -50,6 +53,7 @@ const PREVIEW_AP_HISTORY_ESSAY: AssignmentTypeRow = {
   id: 'preview-ap-history-essay',
   title: 'AP History Essay',
   image: null,
+  imageSrc: '/img/AP%20History%20Hero%20Image.png',
 };
 
 function hasMeaningfulGrade(grade: {
