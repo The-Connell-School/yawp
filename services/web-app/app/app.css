@@ -537,14 +537,15 @@ code {
   text-align: center;
 }
 
-.yawp-section-intro {
+.yawp-public .yawp-section-intro {
   color: #000000;
   font-size: 24px;
   font-weight: 600;
   line-height: 1.8;
   margin: 22px auto 0;
-  max-width: 800px;
   text-align: center;
+  max-width: 100%;
+  width: 800px;
 }
 
 .yawp-challenge-grid {
