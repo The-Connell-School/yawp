@@ -329,19 +329,19 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
           </Badge>
         </div>
 
-        {/* Title block */}
-        <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
-          <div className="h-32 w-full max-w-[250px] min-w-[170px] rounded-lg bg-gradient-to-br from-amber-100 via-amber-50 to-stone-100 flex items-center justify-center text-stone-500 text-xs px-3 text-center">
-            Hero image coming
-            <br />
-            (stick figure with quill)
-          </div>
-          <div className="flex flex-col gap-3">
-            <h1 className="text-3xl font-bold">{data.assignmentType.title}</h1>
-            <p className="text-sm text-muted-foreground sm:text-base">
-              {data.assignmentType.description}
-            </p>
-          </div>
+        {/* Hero banner */}
+        <div className="mb-4 overflow-hidden rounded-lg border bg-stone-100">
+          <img
+            src="/img/AP%20History%20Hero%20Image.png"
+            alt="AP History — stick figure with quill, surrounded by AP USH / AP Euro / AP World motifs"
+            className="h-48 w-full object-cover sm:h-64"
+          />
+        </div>
+        <div className="mb-6 flex flex-col gap-3">
+          <h1 className="text-3xl font-bold">{data.assignmentType.title}</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">
+            {data.assignmentType.description}
+          </p>
         </div>
 
         {/* Teacher directions + inspirational examples */}
