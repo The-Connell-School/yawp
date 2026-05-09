@@ -42,6 +42,16 @@ export type TeacherClassOption = {
   name: string;
 };
 
+// Preview-only mock: surfaces the AP History Essay AssignmentType on the
+// teacher dashboard so reviewers can see the v1 spec rendered as a card
+// alongside existing AssignmentTypes. Tied to PR #115 (AP history spec v1,
+// stacked on PR #108). Remove when the real AssignmentType lands.
+const PREVIEW_AP_HISTORY_ESSAY: AssignmentTypeRow = {
+  id: 'preview-ap-history-essay',
+  title: 'AP History Essay',
+  image: null,
+};
+
 function hasMeaningfulGrade(grade: {
   score: string | null;
   feedback: string | null;
@@ -287,7 +297,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  const [assignmentTypes, coursesGlance] = profile.teacherProfile
+  const [assignmentTypesFromDb, coursesGlance] = profile.teacherProfile
     ? await Promise.all([
         prisma.studentCourse.findMany({
           where: {
@@ -348,6 +358,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ),
       ])
     : [[] as AssignmentTypeRow[], [] as CourseGlanceRow[]];
+
+  const assignmentTypes: AssignmentTypeRow[] = profile.teacherProfile
+    ? [PREVIEW_AP_HISTORY_ESSAY, ...assignmentTypesFromDb]
+    : assignmentTypesFromDb;
 
   const teacherClassOptions: TeacherClassOption[] = teacherClassesOrdered.map(
     (klass) => ({
