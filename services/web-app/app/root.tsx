@@ -25,14 +25,7 @@ import {
 } from './routes/api.preferences.nav/cookie.server.ts';
 // @ts-expect-error - TODO: fix this
 import appCssUrl from './app.css?url';
-import {
-  getSessionExpirationDate,
-  getUserId,
-  logout,
-  sessionKey,
-} from './utils/auth.server.ts';
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx';
-import { prisma } from './utils/db.server.ts';
 import { getEnv } from './utils/env.server.ts';
 import { combineHeaders, getDomainUrl } from './utils/misc.tsx';
 import { makeTimings, time } from './utils/timing.server.ts';
@@ -72,12 +65,42 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
+  const url = new URL(request.url);
+  const publicLandingPage = url.pathname === '/';
+
+  if (publicLandingPage) {
+    return data(
+      {
+        user: null,
+        requestInfo: {
+          hints: getHints(request),
+          origin: getDomainUrl(request),
+          path: url.pathname,
+          userPrefs: {
+            navState: 'expanded' as NavState,
+          },
+        },
+        ENV: getEnv(),
+        bannerWarning: request.url.includes('staging')
+          ? 'staging'
+          : request.url.includes('localhost')
+            ? 'localhost'
+            : null,
+        toast: null,
+      },
+      { headers: { 'Server-Timing': timings.toString() } }
+    );
+  }
+
   const cookieHeader = request.headers.get('Cookie');
+  const { getSessionExpirationDate, getUserId, logout, sessionKey } =
+    await import('./utils/auth.server.ts');
   const userId = await time(() => getUserId(request), {
     timings,
     type: 'getUserId',
     desc: 'getUserId in root',
   });
+  const { prisma } = await import('./utils/db.server.ts');
 
   const user = userId
     ? await time(
