@@ -4,6 +4,17 @@ import { Button } from '~/components/ui/button';
 import type { AssignmentTypeRow, TeacherClassOption } from '../route';
 import { DashboardCreateAssignmentSheet } from './dashboard-create-assignment-sheet';
 
+// Preview-only AssignmentTypes have a dedicated wireframe route at
+// /app/assignment-types/:id; real ones still use the legacy /app/courses/:id
+// course-detail page. Remove this branch when the AssignmentType model
+// lands and the new route covers all AssignmentTypes.
+function tileHref(id: string): string {
+  if (id.startsWith('preview-')) {
+    return `/app/assignment-types/${id}`;
+  }
+  return `/app/courses/${id}`;
+}
+
 export function AssignmentTypesList({
   assignmentTypes,
   teacherClasses,
@@ -38,7 +49,7 @@ export function AssignmentTypesList({
           {assignmentTypes.map((at) => (
             <Link
               key={at.id}
-              to={`/app/courses/${at.id}`}
+              to={tileHref(at.id)}
               className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
             >
               {at.image ? (
