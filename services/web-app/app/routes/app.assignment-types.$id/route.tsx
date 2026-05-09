@@ -3,15 +3,17 @@
 // AssignmentType view described in the v1 spec
 // (docs/plans/2026-05-09-ap-history-essay-spec-v1.md):
 //
-//   1. Header — back-to-dashboard, "AP History Essay" title, "New" entry-picker
+//   1. Header — back-to-dashboard, "AP History Essay" title, New ▾ dropdown
+//      matching the existing AssignmentType pattern (Document / Assignment),
+//      each branching to a DBQ / LEQ submenu.
 //   2. Teacher directions + inspirational examples
 //   3. Submissions accordion (empty mock)
 //   4. Prompt Library — filter chips + sample-prompt table
 //
-// Entry-picker library/PDF/scratch paths and prompt-row clicks navigate to
-// the builder wireframe at /app/assignment-types/:id/builder. The builder
-// in turn cross-links to the student drafting and teacher grading
-// wireframes.
+// Document → DBQ/LEQ lands on the student drafting wireframe.
+// Assignment → DBQ/LEQ lands on the builder (from=scratch). Library entries
+// still link straight into the builder via prompt-row clicks; teachers who
+// want a library start use the Prompt Library section directly.
 
 import { useMemo, useState } from 'react';
 import {
@@ -20,7 +22,7 @@ import {
   redirect,
 } from 'react-router';
 import { Link, useLoaderData, useNavigate } from 'react-router';
-import { ChevronDownIcon, FileUpIcon, LibraryIcon, PencilIcon } from 'lucide-react';
+import { ChevronDownIcon } from 'lucide-react';
 import { CaretLeftIcon } from '~/components/icons';
 import {
   Accordion,
@@ -31,12 +33,14 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '~/components/ui/dialog';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Input } from '~/components/ui/input';
 import { Separator } from '~/components/ui/separator';
 import {
@@ -265,8 +269,6 @@ function builderHref(opts: {
 export default function AssignmentTypeApHistoryPreviewRoute() {
   const data = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [isEntryPickerOpen, setIsEntryPickerOpen] = useState(false);
-  const [entryEssayType, setEntryEssayType] = useState<EssayType | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<EssayTypeFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
@@ -297,15 +299,14 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
     search,
   ]);
 
-  function openEntryPicker() {
-    setEntryEssayType(null);
-    setIsEntryPickerOpen(true);
-  }
-
   function pickPromptFromLibrary(p: LibraryPrompt) {
     navigate(
       builderHref({ type: p.type, from: 'library', promptId: p.id })
     );
+  }
+
+  function draftHref(type: EssayType): string {
+    return `/app/assignment-types/${PREVIEW_ID}/draft?type=${type.toLowerCase()}`;
   }
 
   return (
@@ -318,9 +319,49 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
               <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
             </Link>
           </Button>
-          <Button type="button" onClick={openEntryPicker} className="w-fit">
-            New <ChevronDownIcon className="ml-1 h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" className="w-fit">
+                New <ChevronDownIcon className="ml-1 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Document</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    onSelect={() => navigate(draftHref('DBQ'))}
+                  >
+                    DBQ
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => navigate(draftHref('LEQ'))}
+                  >
+                    LEQ
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Assignment</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      navigate(builderHref({ type: 'DBQ', from: 'scratch' }))
+                    }
+                  >
+                    DBQ
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      navigate(builderHref({ type: 'LEQ', from: 'scratch' }))
+                    }
+                  >
+                    LEQ
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="mb-2 flex items-start gap-3">
@@ -579,107 +620,6 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         </p>
       </div>
 
-      {/* Entry-picker dialog */}
-      <Dialog open={isEntryPickerOpen} onOpenChange={setIsEntryPickerOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {entryEssayType
-                ? `New ${entryEssayType} assignment`
-                : 'New AP History essay'}
-            </DialogTitle>
-            <DialogDescription>
-              {entryEssayType
-                ? 'How do you want to start?'
-                : 'Pick the essay type to continue.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          {entryEssayType === null ? (
-            <div className="flex flex-col gap-2 pt-2">
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => setEntryEssayType('DBQ')}
-              >
-                <span className="font-semibold mr-2">DBQ</span>
-                <span className="text-muted-foreground text-xs">
-                  Document-Based Question · 7-pt rubric · 60 min
-                </span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => setEntryEssayType('LEQ')}
-              >
-                <span className="font-semibold mr-2">LEQ</span>
-                <span className="text-muted-foreground text-xs">
-                  Long Essay Question · 6-pt rubric · 40 min
-                </span>
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2 pt-2">
-              <Button asChild variant="outline" className="justify-start h-auto py-3">
-                <Link
-                  to={builderHref({ type: entryEssayType, from: 'library' })}
-                  onClick={() => setIsEntryPickerOpen(false)}
-                >
-                  <LibraryIcon className="mr-3 h-5 w-5 shrink-0" />
-                  <div className="flex flex-col items-start text-left">
-                    <span className="font-semibold">Pick from the Prompt Library</span>
-                    <span className="text-xs text-muted-foreground">
-                      Curated essays across USH, Euro, and World.
-                    </span>
-                  </div>
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start h-auto py-3">
-                <Link
-                  to={builderHref({ type: entryEssayType, from: 'pdf' })}
-                  onClick={() => setIsEntryPickerOpen(false)}
-                >
-                  <FileUpIcon className="mr-3 h-5 w-5 shrink-0" />
-                  <div className="flex flex-col items-start text-left">
-                    <span className="font-semibold">Upload a PDF</span>
-                    <span className="text-xs text-muted-foreground">
-                      Upload a College Board essay or department PDF — Yawp
-                      parses the prompt (and sources, for DBQs). You confirm.
-                    </span>
-                  </div>
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="justify-start h-auto py-3">
-                <Link
-                  to={builderHref({ type: entryEssayType, from: 'scratch' })}
-                  onClick={() => setIsEntryPickerOpen(false)}
-                >
-                  <PencilIcon className="mr-3 h-5 w-5 shrink-0" />
-                  <div className="flex flex-col items-start text-left">
-                    <span className="font-semibold">Build from scratch</span>
-                    <span className="text-xs text-muted-foreground">
-                      Type the prompt, paste sources, set period, save.
-                    </span>
-                  </div>
-                </Link>
-              </Button>
-              <p className="pt-2 text-xs text-muted-foreground">
-                All three paths land on the same builder wireframe; library
-                pre-fills the prompt and (DBQ-only) source set, PDF and
-                from-scratch arrive empty.
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-start"
-                onClick={() => setEntryEssayType(null)}
-              >
-                ← Back to essay type
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
