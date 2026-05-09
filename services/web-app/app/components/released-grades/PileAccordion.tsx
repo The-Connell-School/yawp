@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import {
   Accordion,
@@ -112,6 +112,29 @@ export function PileAccordion({
   filterQuery: string;
   expandAll: boolean;
 }) {
+  const pileIds = useMemo(
+    () => piles.map((p) => p.assignmentTypeId),
+    [piles]
+  );
+  // Single-pile auto-expand; expand-all overrides; otherwise collapsed.
+  const [openValues, setOpenValues] = useState<string[]>(() =>
+    expandAll ? pileIds : piles.length === 1 ? [piles[0]!.assignmentTypeId] : []
+  );
+  const previousExpandAll = useRef(expandAll);
+
+  useEffect(() => {
+    setOpenValues((prev) => {
+      if (expandAll) return pileIds;
+      if (previousExpandAll.current) return [];
+
+      const validIds = new Set(pileIds);
+      const retained = prev.filter((id) => validIds.has(id));
+      if (retained.length > 0) return retained;
+      return piles.length === 1 ? [piles[0]!.assignmentTypeId] : [];
+    });
+    previousExpandAll.current = expandAll;
+  }, [expandAll, pileIds, piles]);
+
   if (piles.length === 0) {
     return (
       <div className="rounded border p-6 text-sm text-muted-foreground">
@@ -119,14 +142,13 @@ export function PileAccordion({
       </div>
     );
   }
-  // Single-pile auto-expand; expand-all overrides; otherwise collapsed.
-  const defaultValue = expandAll
-    ? piles.map((p) => p.assignmentTypeId)
-    : piles.length === 1
-      ? [piles[0]!.assignmentTypeId]
-      : [];
+
   return (
-    <Accordion type="multiple" defaultValue={defaultValue}>
+    <Accordion
+      type="multiple"
+      value={openValues}
+      onValueChange={setOpenValues}
+    >
       {piles.map((p) => (
         <AccordionItem key={p.assignmentTypeId} value={p.assignmentTypeId}>
           <AccordionTrigger>

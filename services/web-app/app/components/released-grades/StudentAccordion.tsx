@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import {
   Accordion,
@@ -82,6 +82,34 @@ export function StudentAccordion({
   filterQuery: string;
   expandAll: boolean;
 }) {
+  const studentIds = useMemo(
+    () => studentPiles.map((p) => p.studentProfileId),
+    [studentPiles]
+  );
+  const [openValues, setOpenValues] = useState<string[]>(() =>
+    expandAll
+      ? studentIds
+      : studentPiles.length === 1
+        ? [studentPiles[0]!.studentProfileId]
+        : []
+  );
+  const previousExpandAll = useRef(expandAll);
+
+  useEffect(() => {
+    setOpenValues((prev) => {
+      if (expandAll) return studentIds;
+      if (previousExpandAll.current) return [];
+
+      const validIds = new Set(studentIds);
+      const retained = prev.filter((id) => validIds.has(id));
+      if (retained.length > 0) return retained;
+      return studentPiles.length === 1
+        ? [studentPiles[0]!.studentProfileId]
+        : [];
+    });
+    previousExpandAll.current = expandAll;
+  }, [expandAll, studentIds, studentPiles]);
+
   if (studentPiles.length === 0) {
     return (
       <div className="rounded border p-6 text-sm text-muted-foreground">
@@ -89,13 +117,13 @@ export function StudentAccordion({
       </div>
     );
   }
-  const defaultValue = expandAll
-    ? studentPiles.map((p) => p.studentProfileId)
-    : studentPiles.length === 1
-      ? [studentPiles[0]!.studentProfileId]
-      : [];
+
   return (
-    <Accordion type="multiple" defaultValue={defaultValue}>
+    <Accordion
+      type="multiple"
+      value={openValues}
+      onValueChange={setOpenValues}
+    >
       {studentPiles.map((p) => (
         <AccordionItem key={p.studentProfileId} value={p.studentProfileId}>
           <AccordionTrigger>

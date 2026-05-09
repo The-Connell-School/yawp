@@ -67,6 +67,8 @@ describe('released-grades loader', () => {
     prisma.class.findFirst.mockResolvedValue({
       id: 'c_1',
       title: 'A',
+      grade: '9th',
+      period: '1st',
       school: { organizationId: 'org_1' },
     });
     isReleasedGradesOrganizationEnabledForOrganization.mockResolvedValue(false);
@@ -91,6 +93,8 @@ describe('released-grades loader', () => {
     prisma.class.findFirst.mockResolvedValue({
       id: 'c_1',
       title: 'A',
+      grade: '9th',
+      period: '1st',
       school: { organizationId: 'org_1' },
     });
     loadPiles.mockResolvedValue([
@@ -110,13 +114,34 @@ describe('released-grades loader', () => {
     expect(data.view).toBe('byAssignment');
     expect(data.piles).toHaveLength(1);
     expect(data.piles[0].title).toBe('Macbeth Essay');
+    expect(data.className).toBe('A');
     expect(data.studentOptions).toEqual([]);
+  });
+
+  test('uses grade and period as class name fallback when title is blank', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'c_1',
+      title: null,
+      grade: '9th',
+      period: '1st',
+      school: { organizationId: 'org_1' },
+    });
+    loadPiles.mockResolvedValue([]);
+    const result = await loader({
+      request: new Request('https://x.test/app/my-classes/c_1/released-grades'),
+      params: { classId: 'c_1' },
+      context: {} as never,
+    });
+    const data = (result as { data: any }).data;
+    expect(data.className).toBe('Grade 9th • Period 1st');
   });
 
   test('returns student piles when ?view=byStudent', async () => {
     prisma.class.findFirst.mockResolvedValue({
       id: 'c_1',
       title: 'A',
+      grade: '9th',
+      period: '1st',
       school: { organizationId: 'org_1' },
     });
     loadStudentPiles.mockResolvedValue([

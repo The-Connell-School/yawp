@@ -58,6 +58,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     select: {
       id: true,
       title: true,
+      grade: true,
+      period: true,
       school: { select: { organizationId: true } },
     },
   });
@@ -94,7 +96,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       a.name.localeCompare(b.name)
     );
 
-  const className = klass.title ?? '';
+  const className =
+    klass.title?.trim() || `Grade ${klass.grade} • Period ${klass.period}`;
 
   if (view === 'byStudent') {
     const studentPiles = await loadStudentPiles({ classId, filters });
