@@ -15,7 +15,7 @@ type CreatedDocument = {
 export async function createDocumentForAssignmentType(
   input: CreateDocumentInput
 ): Promise<CreatedDocument> {
-  const firstAssignmentModule = await prisma.assignmentModule.findFirst({
+  const assignmentModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: input.assignmentTypeId, deletedAt: null },
     orderBy: { position: 'asc' },
     include: {
@@ -26,11 +26,9 @@ export async function createDocumentForAssignmentType(
     },
   });
 
-  if (!firstAssignmentModule) {
+  if (assignmentModules.length === 0) {
     throw new DocumentCreationError('No modules for this AssignmentType.');
   }
-
-  const firstInstruction = firstAssignmentModule.instructions[0];
 
   let studentProfile = await prisma.studentProfile.findUnique({
     where: { profileId: input.profileId },
@@ -50,7 +48,9 @@ export async function createDocumentForAssignmentType(
       select: { assignmentTypeId: true },
     });
     if (!assignment) {
-      throw new DocumentCreationError(`Assignment ${input.assignmentId} not found`);
+      throw new DocumentCreationError(
+        `Assignment ${input.assignmentId} not found`
+      );
     }
     if (assignment.assignmentTypeId !== input.assignmentTypeId) {
       throw new DocumentCreationError(
@@ -69,23 +69,26 @@ export async function createDocumentForAssignmentType(
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       assignmentModuleSessions: {
-        create: {
-          instructionsCompleted: 0,
-          assignmentModuleId: firstAssignmentModule.id,
-          ...(firstInstruction
-            ? {
-                messages: {
-                  create: [
-                    {
-                      content: firstInstruction.prompt,
-                      agent: 'assistant',
-                      instructionId: firstInstruction.id,
-                    },
-                  ],
-                },
-              }
-            : {}),
-        },
+        create: assignmentModules.map((assignmentModule) => {
+          const firstInstruction = assignmentModule.instructions[0];
+          return {
+            instructionsCompleted: 0,
+            assignmentModuleId: assignmentModule.id,
+            ...(firstInstruction
+              ? {
+                  messages: {
+                    create: [
+                      {
+                        content: firstInstruction.prompt,
+                        agent: 'assistant',
+                        instructionId: firstInstruction.id,
+                      },
+                    ],
+                  },
+                }
+              : {}),
+          };
+        }),
       },
     },
     select: { id: true },
