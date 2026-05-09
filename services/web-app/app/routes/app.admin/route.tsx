@@ -8,7 +8,14 @@ import { Outlet } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { Button } from '~/components/ui/button';
-import { Settings2, Book, User, GraduationCap, ScrollText } from 'lucide-react';
+import {
+  Settings2,
+  Book,
+  User,
+  GraduationCap,
+  ScrollText,
+  ToggleLeft,
+} from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
 const tabs = [
@@ -21,6 +28,11 @@ const tabs = [
     label: 'Organizations',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Feature Flags',
+    to: '/app/admin/feature-flags',
+    icon: <ToggleLeft size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Assignment Types',

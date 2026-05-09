@@ -20,11 +20,6 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus } from 'lucide-react';
-import { Switch } from '~/components/ui/switch';
-import {
-  getTargetedFeatureFlagIds,
-  setTargetedFeatureFlagTarget,
-} from '~/utils/feature-flags.server';
 import { requireUserId } from '~/utils/auth.server';
 import {
   getOrganizationTableCookie,
@@ -102,8 +97,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Unauthorized', { status: 401 });
   }
 
-  const [organizations, totalCount, stats, enabledAssignmentOrgIds] =
-    await Promise.all([
+  const [organizations, totalCount, stats] = await Promise.all([
     prisma.organization.findMany({
       skip,
       take,
@@ -127,7 +121,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         (SELECT COUNT(*) FROM "StudentProfile")::int as total_students,
         (SELECT COUNT(*) FROM "TeacherProfile")::int as total_teachers
     `,
-    getTargetedFeatureFlagIds('assignments'),
   ]);
 
   const growthData = await prisma.organization.groupBy({
@@ -142,7 +135,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     growthData,
     totalCount,
     table: { sort, direction, skip, take },
-    enabledAssignmentOrgIds: Array.from(enabledAssignmentOrgIds),
   });
 }
 
@@ -167,33 +159,6 @@ export async function action({ request }: ActionFunctionArgs) {
           : null,
       },
     });
-
-    return dataResponse({ success: true });
-  }
-
-  if (formData.get('intent') === 'toggle-assignments') {
-    const organizationId = formData.get('organizationId') as string;
-    const enabled = formData.get('enabled') === 'true';
-
-    if (!organizationId) {
-      return dataResponse(
-        { error: 'Organization is required.' },
-        { status: 400 }
-      );
-    }
-
-    const org = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { id: true },
-    });
-    if (!org) {
-      return dataResponse(
-        { error: 'Organization not found.' },
-        { status: 404 }
-      );
-    }
-
-    await setTargetedFeatureFlagTarget('assignments', organizationId, enabled);
 
     return dataResponse({ success: true });
   }
@@ -231,16 +196,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OrganizationsRoute() {
-  const {
-    organizations,
-    stats,
-    growthData,
-    totalCount,
-    table,
-    enabledAssignmentOrgIds,
-  } = useLoaderData<typeof loader>();
+  const { organizations, stats, growthData, totalCount, table } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const assignFetcher = useFetcher({ key: 'toggle-assignments' });
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const { handleSort } = useTable({ rows: organizations });
@@ -380,7 +338,9 @@ export default function OrganizationsRoute() {
               {table.skip > 0 && (
                 <div className="flex flex-col items-center gap-3">
                   <p className="text-sm text-muted-foreground">
-                    You're viewing page {Math.floor(table.skip / table.take) + 1}. Results may be on other pages.
+                    You're viewing page{' '}
+                    {Math.floor(table.skip / table.take) + 1}. Results may be on
+                    other pages.
                   </p>
                   <Button
                     variant="default"
@@ -440,7 +400,6 @@ export default function OrganizationsRoute() {
                       </Button>
                     </TableHead>
                   ))}
-                  <TableHead className="pr-4">Assignments</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -473,27 +432,6 @@ export default function OrganizationsRoute() {
                         ).length
                       }{' '}
                       / {organization.numOfTeacherSeats}
-                    </TableCell>
-                    <TableCell
-                      className="pr-4"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Switch
-                        checked={enabledAssignmentOrgIds.includes(
-                          organization.id
-                        )}
-                        disabled={assignFetcher.state !== 'idle'}
-                        onCheckedChange={(checked) => {
-                          const formData = new FormData();
-                          formData.append('intent', 'toggle-assignments');
-                          formData.append('organizationId', organization.id);
-                          formData.append(
-                            'enabled',
-                            checked ? 'true' : 'false'
-                          );
-                          assignFetcher.submit(formData, { method: 'POST' });
-                        }}
-                      />
                     </TableCell>
                   </TableRow>
                 ))}
