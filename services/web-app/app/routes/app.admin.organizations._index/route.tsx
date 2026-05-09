@@ -22,8 +22,8 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus } from 'lucide-react';
 import { Switch } from '~/components/ui/switch';
 import {
-  FEATURE_FLAGS,
-  parseSettingIdList,
+  getTargetedFeatureFlagIds,
+  setTargetedFeatureFlagTarget,
 } from '~/utils/feature-flags.server';
 import { requireUserId } from '~/utils/auth.server';
 import {
@@ -102,7 +102,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Unauthorized', { status: 401 });
   }
 
-  const [organizations, totalCount, stats, assignmentsSetting] =
+  const [organizations, totalCount, stats, enabledAssignmentOrgIds] =
     await Promise.all([
     prisma.organization.findMany({
       skip,
@@ -127,13 +127,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         (SELECT COUNT(*) FROM "StudentProfile")::int as total_students,
         (SELECT COUNT(*) FROM "TeacherProfile")::int as total_teachers
     `,
-    prisma.setting.findUnique({
-      where: { name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS },
-      select: { value: true },
-    }),
+    getTargetedFeatureFlagIds('assignments'),
   ]);
-
-  const enabledAssignmentOrgIds = parseSettingIdList(assignmentsSetting?.value);
 
   const growthData = await prisma.organization.groupBy({
     by: ['createdAt'],
@@ -198,29 +193,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const existing = await prisma.setting.findUnique({
-      where: { name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS },
-      select: { id: true, value: true },
-    });
-
-    const enabledOrgIds = parseSettingIdList(existing?.value);
-    if (enabled) {
-      enabledOrgIds.add(organizationId);
-    } else {
-      enabledOrgIds.delete(organizationId);
-    }
-
-    const value = Array.from(enabledOrgIds).join(',');
-    await prisma.setting.upsert({
-      where: { name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS },
-      create: {
-        name: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
-        description: 'Organization IDs allowed to use assignments',
-        value,
-        valueType: 'string',
-      },
-      update: { value },
-    });
+    await setTargetedFeatureFlagTarget('assignments', organizationId, enabled);
 
     return dataResponse({ success: true });
   }
