@@ -73,6 +73,7 @@ import {
   studentModuleSessionListSelect,
   studentModuleSessionSingleSelect,
 } from './module-session-select.server';
+import { buildClassDocumentScope } from './class-document-where.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -342,6 +343,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const legacyClassDocumentIds = (
+    await prisma.documentClassForensic.findMany({
+      where: { oldClassId: classId },
+      select: { documentId: true },
+    })
+  ).map((row) => row.documentId);
+  const classDocumentScope = buildClassDocumentScope(
+    classId,
+    legacyClassDocumentIds
+  );
+
   const allowedAssignmentTypes = await prisma.assignmentType.findMany({
     where: {
       OR: [
@@ -364,7 +376,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       user: { select: { name: true, email: true } },
       documents: {
-        where: { assignment: { classId } },
+        where: classDocumentScope,
         select: {
           id: true,
           title: true,
@@ -386,7 +398,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get recent paste alerts for this class
   const pasteAlerts = await prisma.pasteAlert.findMany({
     where: {
-      document: { assignment: { classId } },
+      document: classDocumentScope,
     },
     select: {
       id: true,
@@ -435,7 +447,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await prisma.submission.findMany({
         where: {
           document: {
-            assignment: { classId },
+            ...classDocumentScope,
             deletedAt: null,
           },
         },
@@ -490,7 +502,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
     where: {
-      assignment: { classId },
+      ...classDocumentScope,
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
