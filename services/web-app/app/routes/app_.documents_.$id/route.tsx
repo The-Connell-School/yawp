@@ -430,7 +430,15 @@ export default function Route() {
     isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
 
   // ── Derived UI data ────────────────────────────────────────────────
-  const allComments = commentsState.comments as any[];
+  // Re-sort by document-mark order whenever the comments list changes,
+  // so optimistically-added comments slot into the correct position
+  // (loader's pre-sort is stale once the user adds a new comment).
+  const allComments = useMemo(() => {
+    const stateComments = commentsState.comments as any[];
+    const liveHtml = editorBridgeRef.current?.getContent().html;
+    if (!liveHtml) return stateComments;
+    return sortDocumentCommentsByMarkupOrder(stateComments, liveHtml);
+  }, [commentsState.comments]);
   const activeComments = allComments.filter((c) => !c.archivedAt);
   const archivedComments = allComments.filter((c) => !!c.archivedAt);
   const visibleComments = hasAnySubmissionRecord
@@ -766,6 +774,9 @@ export default function Route() {
               <Comments
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
+                onCommentRemoved={commentsState.removeComment}
+                onResponseAdded={commentsState.addResponse}
+                autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
               />
             )}
           </div>

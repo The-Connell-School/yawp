@@ -24,7 +24,7 @@ export type BarProps = {
   editor: Editor | null;
   documentId: string;
   isEditable?: boolean;
-  onCommentCreated?: (comment: { id: string }) => void;
+  onCommentCreated?: (comment: unknown) => void;
 };
 
 export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }: BarProps) => {
@@ -113,7 +113,7 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
                   .then((res) => res.json())
                   .then((data) => {
                     if (data?.id && onCommentCreated) {
-                      onCommentCreated({ id: data.id });
+                      onCommentCreated(data);
                     }
                   })
                   .catch((err) => {

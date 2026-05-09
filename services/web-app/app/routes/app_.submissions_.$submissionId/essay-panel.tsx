@@ -16,7 +16,7 @@ export const EssayPanel = forwardRef<HTMLDivElement, Props>(
         <div className="mx-auto w-full max-w-[920px] font-times">
           <div
             ref={ref}
-            className="h-full pb-5 [&>*]:outline-none"
+            className="submission-essay h-full pb-5 [&>*]:outline-none"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>

@@ -14,7 +14,7 @@ type Props = {
   onBridgeReady: (bridge: EditorBridge | null) => void;
   onSyncStatusChange?: (status: SyncStatus) => void;
   onSubmittableContentChange?: (submittable: boolean) => void;
-  onCommentCreated?: (comment: { id: string }) => void;
+  onCommentCreated?: (comment: unknown) => void;
 };
 
 type HydratedContent = {
