@@ -21,7 +21,7 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
       const assignment = await prisma.assignment.create({
         data: {
           classId: e2eContext.classId,
-          studentCourseId: e2eContext.studentCourseId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
           title: 'E2E Rhetorical Analysis',
           prompt: `${uniquePromptMarker}: Write a 500-word rhetorical analysis of a speech of your choosing.`,
         },

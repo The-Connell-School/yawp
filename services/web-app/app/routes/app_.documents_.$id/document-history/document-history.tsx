@@ -139,7 +139,7 @@ export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
         <SheetHeader className="border-b px-6 py-4 space-y-1">
           <SheetTitle className="text-base">Version History</SheetTitle>
           <SheetDescription className="text-left text-xs">
-            Document versions are kept for 90 days.
+            Document versions are kept for 30 days.
           </SheetDescription>
         </SheetHeader>
 

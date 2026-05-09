@@ -27,6 +27,7 @@ import {
   buildTeacherClassWhere,
   canManageGrades,
   getGradingActor,
+  isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
 
 const POST = z.object({
@@ -113,7 +114,8 @@ export async function action({ request }: ActionFunctionArgs) {
     document: {
       select: {
         id: true,
-        class: { select: { schoolId: true } },
+        profileId: true,
+        assignment: { select: { class: { select: { schoolId: true } } } },
         profile: {
           select: {
             user: { select: { name: true } },
@@ -159,6 +161,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  if (
+    isGradingOwnDocument(actor.profileId, submission.document.profileId)
+  ) {
+    return dataResponse(
+      { success: false, message: 'You cannot run AI grading on your own submission.' },
+      { status: 403 }
+    );
+  }
+
   if (!submission.text?.trim()) {
     console.warn('grade-essay-ai submission text missing', {
       submissionId: submission.id,
@@ -171,7 +182,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    submission.document.class?.schoolId
+    submission.document.assignment?.class?.schoolId
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {

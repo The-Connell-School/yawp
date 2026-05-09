@@ -161,10 +161,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      class: {
+      assignmentType: {
         select: {
-          schoolId: true,
-          school: { select: { organizationId: true } },
+          id: true,
+          title: true,
         },
       },
       assignment: {
@@ -174,6 +174,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          class: {
+            select: {
+              schoolId: true,
+              school: { select: { organizationId: true } },
+            },
+          },
         },
       },
       submissions: {
@@ -189,10 +195,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       revisions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
-      studentCourseModuleSessions: {
-        orderBy: { studentCourseModule: { position: 'desc' } },
+      assignmentModuleSessions: {
+        orderBy: { assignmentModule: { position: 'desc' } },
         include: {
-          studentCourseModule: {
+          assignmentModule: {
             include: {
               instructions: {
                 orderBy: { position: 'asc' },
@@ -202,9 +208,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourse: {
+              assignmentType: {
                 select: {
-                  studentCourseModules: {
+                  assignmentModules: {
                     select: { id: true, position: true },
                     orderBy: { position: 'asc' },
                   },
@@ -255,27 +261,30 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
-  let currentCms = doc.studentCourseModuleSessions[cmsIdx];
+  let currentCms = doc.assignmentModuleSessions[cmsIdx];
 
   if (!currentCms) {
-    currentCms = doc.studentCourseModuleSessions[0];
+    currentCms = doc.assignmentModuleSessions[0];
   }
 
   if (!currentCms) {
     return redirectWithToast('/app', {
-      description: 'No course module session found.',
+      description: 'No assignment module session found.',
       type: 'error',
     });
   }
 
   const nextCmId =
-    currentCms.studentCourseModule.studentCourse?.studentCourseModules.find(
-      (cm) => cm.position === currentCms.studentCourseModule.position + 1
+    currentCms.assignmentModule.assignmentType?.assignmentModules.find(
+      (cm) => cm.position === currentCms.assignmentModule.position + 1
     )?.id;
 
+  const assignmentClass = doc.assignment?.class;
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForSchool(doc.class?.schoolId),
-    isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
+    isDocumentSubmissionEnabledForSchool(assignmentClass?.schoolId),
+    isAssignmentsEnabledForOrganization(
+      assignmentClass?.school?.organizationId
+    ),
   ]);
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
@@ -292,7 +301,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     currentCms,
     nextCmId,
     shouldSaveVersion,
-    hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
+    hasPreviousCms: doc.assignmentModuleSessions[cmsIdx + 1] !== undefined,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
   });

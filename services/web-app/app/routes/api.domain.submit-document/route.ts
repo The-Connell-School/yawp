@@ -57,9 +57,13 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       text: true,
       title: true,
       revision: true,
-      class: {
+      assignment: {
         select: {
-          schoolId: true,
+          class: {
+            select: {
+              schoolId: true,
+            },
+          },
         },
       },
       submissions: {
@@ -84,7 +88,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    document.class?.schoolId
+    document.assignment?.class?.schoolId
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/courses', {

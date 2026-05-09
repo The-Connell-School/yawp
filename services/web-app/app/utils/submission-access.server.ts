@@ -14,13 +14,11 @@ export async function findSubmissionForTitleEdit(params: {
         OR: [
           { profile: { id: params.profileId } },
           {
-            profile: {
-              studentProfile: {
-                classes: {
-                  some: {
-                    teachers: {
-                      some: { profileId: params.profileId },
-                    },
+            studentProfile: {
+              classes: {
+                some: {
+                  teachers: {
+                    some: { profileId: params.profileId },
                   },
                 },
               },

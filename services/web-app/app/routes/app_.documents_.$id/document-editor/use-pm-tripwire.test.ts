@@ -63,13 +63,25 @@ describe('installPmTripwire (with real Editor)', () => {
     editor.destroy();
   });
 
-  it('throws on unauthorized mutation when dev: true', () => {
-    installPmTripwire(editor, { dev: true });
+  it('logs and increments counter on unauthorized mutation (never throws)', () => {
+    const errorSpy = mock(() => {});
+    const original = console.error;
+    console.error = errorSpy;
 
-    expect(() => {
+    try {
+      installPmTripwire(editor, { dev: true });
+
       // Programmatic insert with no user DOM event → no source tag → tripwire fires
-      editor.commands.insertContent('untagged');
-    }).toThrow(/Unauthorized PM mutation/);
+      // Implementation intentionally logs + increments instead of throwing to avoid
+      // silently breaking the editor persistence pipeline.
+      expect(() => {
+        editor.commands.insertContent('untagged');
+      }).not.toThrow();
+      expect(errorSpy).toHaveBeenCalled();
+      expect((window as any).__yawpUnauthorizedPmWrites).toBe(1);
+    } finally {
+      console.error = original;
+    }
   });
 
   it('logs and increments counter in prod (dev: false), does NOT throw', () => {

@@ -200,8 +200,10 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           ? {}
           : {
               document: {
-                class: {
-                  teachers: { some: { profileId: profile.id } },
+                assignment: {
+                  class: {
+                    teachers: { some: { profileId: profile.id } },
+                  },
                 },
               },
             }),

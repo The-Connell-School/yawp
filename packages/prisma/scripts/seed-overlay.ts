@@ -57,7 +57,7 @@ export type E2EContext = {
   adminUserId: string;
   adminEmail: string;
   profileId: string;
-  studentCourseId: string;
+  assignmentTypeId: string;
   documentId: string;
   classId: string;
   classCode: string;
@@ -272,17 +272,21 @@ export async function seedOverlay(): Promise<E2EContext> {
     });
   }
 
-  // 8. Student course with modules + instructions
-  let studentCourse = await prisma.studentCourse.findFirst({
-    where: { title: 'E2E Course' },
-    select: { id: true, studentCourseModules: { select: { id: true, position: true } } },
+  // 8. Assignment type with modules + instructions (formerly StudentCourse)
+  let assignmentType = await prisma.assignmentType.findFirst({
+    where: { title: 'E2E Course', ownerOrgId: org.id },
+    select: {
+      id: true,
+      assignmentModules: { select: { id: true, position: true } },
+    },
   });
-  if (!studentCourse) {
-    studentCourse = await prisma.studentCourse.create({
+  if (!assignmentType) {
+    assignmentType = await prisma.assignmentType.create({
       data: {
         title: 'E2E Course',
         position: 1,
-        studentCourseModules: {
+        ownerOrgId: org.id,
+        assignmentModules: {
           create: [1, 2, 3].map((moduleIndex) => ({
             title: `E2E Module ${moduleIndex}`,
             position: moduleIndex,
@@ -299,18 +303,25 @@ export async function seedOverlay(): Promise<E2EContext> {
       },
       select: {
         id: true,
-        studentCourseModules: { select: { id: true, position: true } },
+        assignmentModules: { select: { id: true, position: true } },
       },
     });
   }
 
-  // 9. Link class to student course
-  const existingLink = await prisma.classStudentCourse.findFirst({
-    where: { classId: klass.id, studentCourseId: studentCourse.id },
+  // 9. Class assignment linking the class to the assignment type (formerly ClassStudentCourse)
+  let assignment = await prisma.assignment.findFirst({
+    where: { classId: klass.id, assignmentTypeId: assignmentType.id },
+    select: { id: true },
   });
-  if (!existingLink) {
-    await prisma.classStudentCourse.create({
-      data: { classId: klass.id, studentCourseId: studentCourse.id },
+  if (!assignment) {
+    assignment = await prisma.assignment.create({
+      data: {
+        classId: klass.id,
+        assignmentTypeId: assignmentType.id,
+        title: 'E2E Class Assignment',
+        prompt: 'E2E prompt for class assignment.',
+      },
+      select: { id: true },
     });
   }
 
@@ -326,27 +337,28 @@ export async function seedOverlay(): Promise<E2EContext> {
         text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
         html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
         profileId: studentProfileRecord.id,
-        classId: klass.id,
+        studentProfileId: studentProfileRecord.studentProfile!.id,
+        assignmentTypeId: assignmentType.id,
+        assignmentId: assignment.id,
       },
       select: { id: true },
     });
   }
 
-  // 11. Course module session
-  const firstModuleId = studentCourse.studentCourseModules.sort(
+  // 11. Assignment module session (formerly StudentCourseModuleSession)
+  const firstModuleId = assignmentType.assignmentModules.sort(
     (a, b) => a.position - b.position
   )[0].id;
-  const existingSession = await prisma.studentCourseModuleSession.findFirst({
+  const existingSession = await prisma.assignmentModuleSession.findFirst({
     where: {
       documentId: document.id,
-      studentCourseModuleId: firstModuleId,
+      assignmentModuleId: firstModuleId,
     },
   });
   if (!existingSession) {
-    await prisma.studentCourseModuleSession.create({
+    await prisma.assignmentModuleSession.create({
       data: {
-        studentCourseModuleId: firstModuleId,
-        studentProfileId: studentProfileRecord.studentProfile!.id,
+        assignmentModuleId: firstModuleId,
         documentId: document.id,
         title: 'E2E Doc Session',
         instructionsCompleted: 0,
@@ -361,7 +373,7 @@ export async function seedOverlay(): Promise<E2EContext> {
     adminUserId: adminUser.id,
     adminEmail: adminUser.email,
     profileId: studentProfileRecord.id,
-    studentCourseId: studentCourse.id,
+    assignmentTypeId: assignmentType.id,
     documentId: document.id,
     classId: klass.id,
     classCode: CLASS_CODE,

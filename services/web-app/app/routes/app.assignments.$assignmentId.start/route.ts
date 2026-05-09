@@ -2,9 +2,9 @@ import { type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import {
-  createStudentDocumentForCourse,
-  StudentDocumentCreationError,
-} from '~/domain/student-documents.server';
+  createDocumentForAssignmentType,
+  DocumentCreationError,
+} from '~/domain/documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
@@ -49,8 +49,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      classId: true,
-      studentCourseId: true,
+      assignmentTypeId: true,
     },
   });
 
@@ -63,15 +62,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   let documentId = '';
   try {
-    const created = await createStudentDocumentForCourse({
+    const created = await createDocumentForAssignmentType({
       profileId: profile.id,
-      studentCourseId: assignment.studentCourseId,
-      classId: assignment.classId,
+      assignmentTypeId: assignment.assignmentTypeId,
       assignmentId: assignment.id,
     });
     documentId = created.documentId;
   } catch (creationError) {
-    if (creationError instanceof StudentDocumentCreationError) {
+    if (creationError instanceof DocumentCreationError) {
       return redirectWithToast('/app?tab=assignments', {
         type: 'error',
         description: creationError.message,

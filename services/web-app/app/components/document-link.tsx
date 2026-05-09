@@ -14,7 +14,7 @@ import { Tooltip } from './ui/tooltip';
 type Props = {
   exitTo: string;
   doc: Document & {
-    studentCourseModuleSessions: { studentCourseModule: { title: string } }[];
+    assignmentModuleSessions: { assignmentModule: { title: string } }[];
     submissions?: {
       id: string;
       releasedAt: Date | string | null;
@@ -59,7 +59,7 @@ export const DocumentLink = ({
         </span>
       ) : (
         <span className="absolute right-0 top-0 z-20 rounded-bl-lg rounded-tr-lg border border-primary px-2 py-0.5 text-xs text-primary">
-          {doc.studentCourseModuleSessions[0]?.studentCourseModule.title}
+          {doc.assignmentModuleSessions[0]?.assignmentModule.title}
         </span>
       )}
       {doc.html ? (

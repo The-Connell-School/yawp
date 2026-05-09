@@ -109,7 +109,7 @@ test.describe.serial('Student onboarding, document, tutor, comments, and submiss
       await expect(page.getByTestId('app._index')).toBeVisible();
 
       await page.getByRole('link', { name: /e2e course/i }).first().click();
-      await page.waitForURL('**/app/courses/**', { timeout: 15000 });
+      await page.waitForURL('**/app/assignment-types/**', { timeout: 15000 });
       await page.getByRole('button', { name: /^new/i }).click();
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
       await page.waitForLoadState('networkidle');

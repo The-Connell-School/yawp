@@ -42,3 +42,11 @@ export function buildTeacherClassWhere(actor: GradingActor) {
     },
   };
 }
+
+/** Document owner must never use teacher grading flows on that submission, including admins. */
+export function isGradingOwnDocument(
+  actorProfileId: string,
+  documentProfileId: string
+): boolean {
+  return actorProfileId === documentProfileId;
+}

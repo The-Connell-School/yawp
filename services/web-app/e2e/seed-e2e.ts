@@ -48,7 +48,7 @@ export type E2EContext = {
   teacherProfileId: string;
   teacherName: string;
   teacherEmail: string;
-  studentCourseId: string;
+  assignmentTypeId: string;
   freshDocumentId: string;
   editedDocumentId: string;
   submittedDocumentId: string;
@@ -148,18 +148,18 @@ export async function seedE2E(): Promise<E2EContext> {
   const profile = await prisma.profile.findFirstOrThrow({
     where: { userId: user.id },
   });
-  // Create a StudentProfile to satisfy FK on StudentCourseModuleSession
+  // Create a StudentProfile to satisfy FK on AssignmentModuleSession
   const studentProfile = await prisma.studentProfile.create({
     data: {
       profileId: profile.id,
       classes: { connect: { id: seededClass.id } },
     },
   });
-  const studentCourse = await prisma.studentCourse.create({
+  const assignmentType = await prisma.assignmentType.create({
     data: {
       title: 'E2E Course',
       position: 1,
-      studentCourseModules: {
+      assignmentModules: {
         create: [1, 2, 3].map((moduleIndex) => ({
           title: `E2E Module ${moduleIndex}`,
           position: moduleIndex,
@@ -176,13 +176,7 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: {
       id: true,
-      studentCourseModules: { select: { id: true, position: true } },
-    },
-  });
-  await prisma.classStudentCourse.create({
-    data: {
-      classId: seededClass.id,
-      studentCourseId: studentCourse.id,
+      assignmentModules: { select: { id: true, position: true } },
     },
   });
 
@@ -193,7 +187,8 @@ export async function seedE2E(): Promise<E2EContext> {
       text: '',
       html: '<p></p>',
       profileId: profile.id,
-      classId: seededClass.id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
   });
@@ -209,7 +204,8 @@ export async function seedE2E(): Promise<E2EContext> {
       html: editedDocHtml,
       revision: 2,
       profileId: profile.id,
-      classId: seededClass.id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
   });
@@ -237,6 +233,16 @@ export async function seedE2E(): Promise<E2EContext> {
   const submittedDocTitle = 'E2E Document workspace title';
   const submittedSubmissionTitle = 'E2E Essay submission title';
   const submittedAt = new Date();
+  // Create an assignment so the document appears in the teacher's class view
+  const seededAssignment = await prisma.assignment.create({
+    data: {
+      classId: seededClass.id,
+      assignmentTypeId: assignmentType.id,
+      title: 'E2E Class Assignment',
+      prompt: 'E2E prompt for class assignment.',
+    },
+    select: { id: true },
+  });
   const submittedDoc = await prisma.document.create({
     data: {
       title: submittedDocTitle,
@@ -244,7 +250,9 @@ export async function seedE2E(): Promise<E2EContext> {
       html: submittedDocHtml,
       revision: 3,
       profileId: profile.id,
-      classId: seededClass.id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId: assignmentType.id,
+      assignmentId: seededAssignment.id,
     },
     select: { id: true },
   });
@@ -258,13 +266,12 @@ export async function seedE2E(): Promise<E2EContext> {
     },
     select: { id: true },
   });
-  const modulesByPosition = studentCourse.studentCourseModules.sort(
+  const modulesByPosition = assignmentType.assignmentModules.sort(
     (a, b) => a.position - b.position
   );
-  await prisma.studentCourseModuleSession.create({
+  await prisma.assignmentModuleSession.create({
     data: {
-      studentCourseModuleId: modulesByPosition[1].id,
-      studentProfileId: studentProfile.id,
+      assignmentModuleId: modulesByPosition[1].id,
       documentId: submittedDoc.id,
       title: 'E2E Submitted Doc Session',
       instructionsCompleted: 0,
@@ -284,7 +291,8 @@ export async function seedE2E(): Promise<E2EContext> {
       html: gradedDocHtml,
       revision: 4,
       profileId: profile.id,
-      classId: seededClass.id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
   });
@@ -352,7 +360,8 @@ export async function seedE2E(): Promise<E2EContext> {
       html: unreleasedDocHtml,
       revision: 1,
       profileId: profile.id,
-      classId: seededClass.id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
   });
@@ -405,10 +414,9 @@ export async function seedE2E(): Promise<E2EContext> {
   });
 
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
-  await prisma.studentCourseModuleSession.create({
+  await prisma.assignmentModuleSession.create({
     data: {
-      studentCourseModuleId: modulesByPosition[0].id,
-      studentProfileId: studentProfile.id,
+      assignmentModuleId: modulesByPosition[0].id,
       documentId: editedDoc.id,
       title: 'E2E Doc Session',
       instructionsCompleted: 0,
@@ -429,7 +437,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherProfileId: seededTeacherProfileId,
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
-    studentCourseId: studentCourse.id,
+    assignmentTypeId: assignmentType.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,
     submittedDocumentId: submittedDoc.id,

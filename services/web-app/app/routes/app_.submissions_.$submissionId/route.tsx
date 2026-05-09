@@ -8,6 +8,7 @@ import {
   useFetcher,
   useLocation,
   useRevalidator,
+  redirect,
 } from 'react-router';
 import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -162,9 +163,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isAdmin = user?.isAdmin ?? false;
 
-  // Grade mode: teacher AND (not yet released OR explicitly editing)
+  if (isOwner && editParam) {
+    const next = new URL(request.url);
+    next.searchParams.delete('edit');
+    throw redirect(`${next.pathname}${next.search}${next.hash}`);
+  }
+
+  // Grade mode: teacher/admin grading someone else's work; not yet released OR ?edit=1
   const isGradeMode =
-    (isTeacher || isAdmin) && (!submission.releasedAt || editParam);
+    !isOwner &&
+    (isTeacher || isAdmin) &&
+    (!submission.releasedAt || editParam);
 
   // Sort comments by document location
   const sortedComments = [...submission.comments].sort((a, b) => {
@@ -214,7 +223,10 @@ export default function SubmissionRoute() {
   // URL param is the explicit override: ?edit=1 → grade, ?edit=0 → view.
   // When no param, fall back to loader default (ungraded = grade mode).
   const editParam = searchParams.get('edit');
-  const isGradeMode = isTeacher && (editParam !== null ? editParam === '1' : loaderGradeMode);
+  const isGradingOther = isTeacher && !isOwner;
+  const isGradeMode =
+    isGradingOther &&
+    (editParam !== null ? editParam === '1' : loaderGradeMode);
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
@@ -387,9 +399,8 @@ export default function SubmissionRoute() {
 
   const showGrammarMarksInEssay =
     isPending ||
-    !isOwner ||
-    isTeacher ||
-    studentGrammarHighlightsVisible;
+    isGradingOther ||
+    (isOwner && studentGrammarHighlightsVisible);
 
   const essayHighlights = useMemo(() => [
     ...(isPending
@@ -536,8 +547,8 @@ export default function SubmissionRoute() {
   const [isSavingGrade, setIsSavingGrade] = useState(false);
   const isReleased = !!effectiveReleasedAt;
   const isGraded = !!effectiveGradedAt;
-  const canSaveGrade = isTeacher && isGradeMode && !isGraded;
-  const canRelease = isTeacher && isGraded && !isReleased;
+  const canSaveGrade = isGradingOther && isGradeMode && !isGraded;
+  const canRelease = isGradingOther && isGraded && !isReleased;
   const isReleasing = releaseFetcher.state !== 'idle';
 
   const lastHandledReleaseRef = useRef<unknown>(null);
@@ -597,12 +608,12 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isTeacher && submission.document.profile.user.name ? (
+          {isGradingOther && submission.document.profile.user.name ? (
             <span className="shrink-0 text-sm text-muted-foreground">
               {submission.document.profile.user.name}
             </span>
           ) : null}
-          {isTeacher && submission.document.profile.user.name ? (
+          {isGradingOther && submission.document.profile.user.name ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (
@@ -649,7 +660,7 @@ export default function SubmissionRoute() {
         ) : null}
 
         <div className="ml-auto flex items-center gap-2">
-          {isTeacher ? (
+          {isGradingOther ? (
             <Button size="sm" variant="outline" asChild>
               <Link
                 to={viewDocumentHref}
@@ -689,7 +700,7 @@ export default function SubmissionRoute() {
               </Button>
             </ConfirmationDialog>
           ) : null}
-          {isTeacher && isReleased ? (
+          {isGradingOther && isReleased ? (
             <Badge variant="success" className="shrink-0">Released</Badge>
           ) : null}
           {isOwner && !isPending && persistedGrammarIssues.length > 0 ? (
@@ -717,7 +728,7 @@ export default function SubmissionRoute() {
         </div>
       </nav>
 
-      {isTeacher && submission.archivedAt ? (
+      {isGradingOther && submission.archivedAt ? (
         <div
           className="border-b border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100"
           data-testid="teacher-submission-archived-banner"
@@ -733,7 +744,7 @@ export default function SubmissionRoute() {
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
         <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white" style={{ width: 380 }}>
-          {isTeacher ? (
+          {isGradingOther ? (
             <>
               <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
@@ -801,7 +812,7 @@ export default function SubmissionRoute() {
         {/* Center: Essay */}
         <div className="flex min-w-0 grow flex-col overflow-hidden bg-white md:h-full">
           <EssayPanel ref={setEssayRef} html={submission.html ?? ''} />
-          {isTeacher && essayElement ? (
+          {isGradingOther && essayElement ? (
             <SelectionToolbar contentRoot={essayElement} />
           ) : null}
           {essayElement ? (
@@ -821,7 +832,7 @@ export default function SubmissionRoute() {
             submissionComments={isPending ? [] : (comments as any)}
             submissionId={submission.id}
             sourceText={submission.text ?? ''}
-            readOnly={!isTeacher}
+            readOnly={!isGradingOther}
             activeGradeCommentId={activeGradeCommentId}
             onSelectGradeComment={setActiveGradeCommentId}
             onDraftHighlightChange={setDraftHighlight}
