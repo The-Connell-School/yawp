@@ -8,9 +8,10 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { isAssignmentsEnabledForOrganization } = await import(
-  './feature-flags.server'
-);
+const {
+  isAssignmentsEnabledForOrganization,
+  isReleasedGradesOrganizationEnabledForOrganization,
+} = await import('./feature-flags.server');
 
 describe('isAssignmentsEnabledForOrganization', () => {
   beforeEach(() => {
@@ -66,5 +67,48 @@ describe('isAssignmentsEnabledForOrganization', () => {
     });
     const result = await isAssignmentsEnabledForOrganization('org-1');
     expect(result).toBe(true);
+  });
+});
+
+describe('isReleasedGradesOrganizationEnabledForOrganization', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+  });
+
+  test('returns false when flag setting absent', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    const result =
+      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
+    expect(result).toBe(false);
+  });
+
+  test('returns true when org id is in the allowlist setting value', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'org-1,org-2',
+      valueType: 'string',
+    });
+    const result =
+      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
+    expect(result).toBe(true);
+  });
+
+  test('returns false when org id not in allowlist', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'org-2',
+      valueType: 'string',
+    });
+    const result =
+      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
+    expect(result).toBe(false);
+  });
+
+  test('returns false when organizationId is null', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'org-1',
+      valueType: 'string',
+    });
+    const result =
+      await isReleasedGradesOrganizationEnabledForOrganization(null);
+    expect(result).toBe(false);
   });
 });

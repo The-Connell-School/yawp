@@ -9,6 +9,7 @@ import {
   useLoaderData,
   useSearchParams,
   useNavigate,
+  useOutlet,
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
@@ -17,6 +18,7 @@ import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
   isDocumentSubmissionEnabledForSchool,
   isAssignmentsEnabledForOrganization,
+  isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Sheet,
@@ -416,9 +418,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   // Check feature flags
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+  const [
+    isDocumentSubmissionEnabled,
+    assignmentsEnabled,
+    releasedGradesEnabled,
+  ] = await Promise.all([
     isDocumentSubmissionEnabledForSchool(klass.school?.id),
     isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+    isReleasedGradesOrganizationEnabledForOrganization(
+      klass.school?.organizationId
+    ),
   ]);
 
   // Get all submissions for this class
@@ -553,6 +562,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
+    releasedGradesEnabled,
   });
 }
 
@@ -566,6 +576,13 @@ type TabValue =
   | 'students';
 
 export default function ClassDetailRoute() {
+  const outlet = useOutlet();
+  if (outlet) return outlet;
+
+  return <ClassDetailPage />;
+}
+
+function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -1395,6 +1412,14 @@ export default function ClassDetailRoute() {
               <p className="mt-1 text-muted-foreground">
                 {data.klass.school.name}
               </p>
+            ) : null}
+            {data.releasedGradesEnabled ? (
+              <Link
+                to={`/app/my-classes/${data.klass.id}/released-grades`}
+                className="mt-2 text-sm underline"
+              >
+                Released grades →
+              </Link>
             ) : null}
           </div>
         </div>
