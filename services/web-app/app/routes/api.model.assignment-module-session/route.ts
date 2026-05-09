@@ -9,6 +9,30 @@ const POST = z.object({
   documentId: z.string(),
 });
 
+function cmsInclude() {
+  return {
+    messages: {
+      orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    },
+    assignmentModule: {
+      include: {
+        instructions: {
+          orderBy: { position: 'asc' as const },
+          include: { buttons: { orderBy: { position: 'asc' as const } } },
+        },
+        assignmentType: {
+          select: {
+            assignmentModules: {
+              select: { id: true, position: true },
+              orderBy: { position: 'asc' as const },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   await requireUserId(request);
   const { error, data } = await parseFormData(request, POST);
@@ -43,6 +67,24 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const existing = await prisma.assignmentModuleSession.findFirst({
+    where: {
+      documentId: data.documentId,
+      assignmentModuleId: data.assignmentModuleId,
+      deletedAt: null,
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  if (existing) {
+    const cms = await prisma.assignmentModuleSession.findUnique({
+      where: { id: existing.id },
+      include: cmsInclude(),
+    });
+    return dataResponse({ created: existing, cms });
+  }
+
   const firstInstruction = assignmentModule.instructions[0];
   const created = await prisma.assignmentModuleSession.create({
     data: {
@@ -65,25 +107,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const cms = await prisma.assignmentModuleSession.findUnique({
     where: { id: created.id },
-    include: {
-      messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-      assignmentModule: {
-        include: {
-          instructions: {
-            orderBy: { position: 'asc' },
-            include: { buttons: { orderBy: { position: 'asc' } } },
-          },
-          assignmentType: {
-            select: {
-              assignmentModules: {
-                select: { id: true, position: true },
-                orderBy: { position: 'asc' },
-              },
-            },
-          },
-        },
-      },
-    },
+    include: cmsInclude(),
   });
 
   return dataResponse({ created, cms });
