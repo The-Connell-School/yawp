@@ -15,6 +15,12 @@ function tileHref(id: string): string {
   return `/app/courses/${id}`;
 }
 
+function tileImageSrc(at: AssignmentTypeRow): string | null {
+  if (at.imageSrc) return at.imageSrc;
+  if (at.image) return `/api/image/course/${at.image.id}`;
+  return null;
+}
+
 export function AssignmentTypesList({
   assignmentTypes,
   teacherClasses,
@@ -46,26 +52,29 @@ export function AssignmentTypesList({
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {assignmentTypes.map((at) => (
-            <Link
-              key={at.id}
-              to={tileHref(at.id)}
-              className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
-            >
-              {at.image ? (
-                <img
-                  src={`/api/image/course/${at.image.id}`}
-                  alt=""
-                  className="h-32 w-full rounded-t-lg object-cover"
-                />
-              ) : (
-                <div className="h-32 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
-              )}
-              <div className="p-3">
-                <h4 className="text-foreground/90">{at.title}</h4>
-              </div>
-            </Link>
-          ))}
+          {assignmentTypes.map((at) => {
+            const src = tileImageSrc(at);
+            return (
+              <Link
+                key={at.id}
+                to={tileHref(at.id)}
+                className="flex flex-col rounded-lg border transition-shadow hover:shadow bg-muted"
+              >
+                {src ? (
+                  <img
+                    src={src}
+                    alt=""
+                    className="h-32 w-full rounded-t-lg object-cover"
+                  />
+                ) : (
+                  <div className="h-32 w-full rounded-t-lg bg-gradient-to-br from-foreground/5 to-foreground/20" />
+                )}
+                <div className="p-3">
+                  <h4 className="text-foreground/90">{at.title}</h4>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
       <DashboardCreateAssignmentSheet
