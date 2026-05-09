@@ -73,7 +73,8 @@ describe('C1 — Ownership visibility baseline', () => {
     const { rows } = await pool.query<{ exists: boolean }>(`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'AssignmentType_owner_single_check'
+        WHERE table_schema = current_schema()
+          AND constraint_name = 'AssignmentType_owner_single_check'
           AND constraint_type = 'CHECK'
       ) AS exists
     `);
@@ -108,7 +109,9 @@ describe('C2 — Free Write usability', () => {
           ON kcu.constraint_name = rc.constraint_name
         JOIN information_schema.constraint_column_usage ccu
           ON ccu.constraint_name = rc.unique_constraint_name
-        WHERE kcu.table_name = 'Document'
+        WHERE kcu.table_schema = current_schema()
+          AND ccu.table_schema = current_schema()
+          AND kcu.table_name = 'Document'
           AND kcu.column_name = 'assignmentTypeId'
           AND ccu.table_name = 'AssignmentType'
       ) AS exists
@@ -161,7 +164,9 @@ describe('C6 — Document student ownership is canonical', () => {
     const { rows } = await pool.query<{ isNullable: string }>(`
       SELECT is_nullable AS "isNullable"
       FROM information_schema.columns
-      WHERE table_name = 'Document' AND column_name = 'studentProfileId'
+      WHERE table_schema = current_schema()
+        AND table_name = 'Document'
+        AND column_name = 'studentProfileId'
     `);
     expect(rows.length).toBe(1);
     expect(rows[0].isNullable).toBe('NO');
@@ -185,7 +190,8 @@ describe('C6 — Document student ownership is canonical', () => {
     const { rows } = await pool.query<{ exists: boolean }>(`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'AssignmentModuleSession'
+        WHERE table_schema = current_schema()
+          AND table_name = 'AssignmentModuleSession'
           AND column_name = 'studentProfileId'
       ) AS exists
     `);

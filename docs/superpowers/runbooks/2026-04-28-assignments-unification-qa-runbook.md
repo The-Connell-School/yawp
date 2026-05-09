@@ -103,9 +103,17 @@ EOF
 
 Wait for the preview workflow to deploy. The PR comment will include the preview URL when ready (see `.github/workflows/preview-environments.yml`).
 
-### 2b. Run preflight + postcheck against the preview DB
+### 2b. Verify preview DB migration gate
 
-The preview env runs in schema `pr_<PR_NUMBER>` of the shared preview Postgres. Pull the connection details:
+The preview workflow runs the assignments-unification preflight, migration
+postcheck, and behavior contracts immediately after `prisma migrate deploy` and
+before `seed-overlay.ts`. This is the authoritative preview data-integrity gate,
+because the seed overlay intentionally adds E2E rows after migration.
+
+If you need to run the checks manually, use a clean preview schema before seed
+overlay, or use a local restore of the exact preview dump. The preview env runs
+in schema `pr_<PR_NUMBER>` of the shared preview Postgres. Pull the connection
+details:
 
 ```bash
 PR_NUMBER=$(gh pr view --json number -q .number)
@@ -123,17 +131,24 @@ fi
 SCHEMA_URL="${BASE_URL}&schema=pr_${PR_NUMBER}"
 
 cd packages/prisma
-# Note: preflight is NOT run against preview — the preview workflow has already
-# applied the migration by the time the deploy completes, so the old tables are
-# gone. Use the local preflight state file (captured against the same prod dump
-# baseline) when running contracts.
+# Note: after a completed deploy, seed-overlay has added test rows. These
+# commands are for a clean schema gate before overlay, or for a local restore of
+# the exact preview dump.
+#
+# These verification scripts use node-postgres directly, so Prisma's `schema=`
+# URL parameter is not enough by itself. PGOPTIONS sets the session search_path
+# to the preview schema.
 
-DATABASE_URL="$SCHEMA_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
+PGOPTIONS="-c search_path=pr_${PR_NUMBER}" \
+  DATABASE_URL="$SCHEMA_URL" \
+  PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
   bun ./scripts/assignments-unification-postcheck.ts
 ```
 
 ```bash
-DATABASE_URL="$SCHEMA_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
+PGOPTIONS="-c search_path=pr_${PR_NUMBER}" \
+  DATABASE_URL="$SCHEMA_URL" \
+  PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json \
   bun test ./scripts/assignments-unification-contracts.test.ts
 ```
 

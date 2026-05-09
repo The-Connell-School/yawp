@@ -128,6 +128,23 @@ jobs:
           PSQL_URL="$(node -e "const u=new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
           echo "::add-mask::$PSQL_URL"
 
+          # If a migration file was edited after this preview schema already
+          # recorded it, Prisma will not replay it. Preview data is disposable,
+          # so rebuild the schema when stored checksums no longer match the
+          # checked-out migration files.
+          MIGRATION_CHECKSUM_DRIFT="0"
+          while IFS= read -r migration_file; do
+            migration_name="$(basename "$(dirname "$migration_file")")"
+            expected_checksum="$(shasum -a 256 "$migration_file" | awk '{print $1}')"
+            applied_checksum="$(psql "$PSQL_URL" -tAc "SELECT checksum FROM ${SCHEMA}._prisma_migrations WHERE migration_name = '${migration_name}' AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1" 2>/dev/null || true)"
+            applied_checksum="${applied_checksum// /}"
+            if [[ -n "$applied_checksum" && "$applied_checksum" != "$expected_checksum" ]]; then
+              echo "Schema ${SCHEMA} has migration checksum drift for ${migration_name}; forcing restore."
+              MIGRATION_CHECKSUM_DRIFT="1"
+              break
+            fi
+          done < <(find packages/prisma/migrations -mindepth 2 -maxdepth 2 -name migration.sql | sort)
+
           # Use pg_stat_user_tables.n_live_tup as a fast row-count proxy: a
           # healthy production restore has thousands of live tuples, an empty
           # or partially-restored schema has 0. This makes the workflow
@@ -135,7 +152,7 @@ jobs:
           # tables behind) won't trick us into skipping the restore.
           EXISTING_LIVE_TUPLES="$(psql "$PSQL_URL" -tAc "SELECT COALESCE(SUM(n_live_tup), 0)::text FROM pg_stat_user_tables WHERE schemaname = '${SCHEMA}'" || echo 0)"
           EXISTING_LIVE_TUPLES="${EXISTING_LIVE_TUPLES// /}"
-          if [[ "${EXISTING_LIVE_TUPLES:-0}" -gt 100 ]]; then
+          if [[ "$MIGRATION_CHECKSUM_DRIFT" != "1" && "${EXISTING_LIVE_TUPLES:-0}" -gt 100 ]]; then
             echo "Schema ${SCHEMA} is populated (${EXISTING_LIVE_TUPLES} live tuples); skipping dump restore to preserve data."
           else
             echo "Schema ${SCHEMA} is empty or stale (${EXISTING_LIVE_TUPLES:-0} live tuples); dropping and re-restoring..."
@@ -155,7 +172,21 @@ jobs:
           fi
 
           # Apply any newer migrations
+          HAS_ASSIGNMENTS_PRE_SCHEMA="$(psql "$PSQL_URL" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '${SCHEMA}' AND table_name = 'StudentCourse')" || echo f)"
+          HAS_ASSIGNMENTS_PRE_SCHEMA="${HAS_ASSIGNMENTS_PRE_SCHEMA// /}"
+          if [[ "$HAS_ASSIGNMENTS_PRE_SCHEMA" == "t" ]]; then
+            echo "Capturing assignments-unification preflight state for ${SCHEMA}..."
+            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun ./scripts/assignments-unification-preflight.ts)
+          fi
+
           (cd packages/prisma && DATABASE_URL="$MIGRATE_URL" bunx prisma migrate deploy)
+
+          if [[ "$HAS_ASSIGNMENTS_PRE_SCHEMA" == "t" ]]; then
+            echo "Verifying assignments-unification migration before seed overlay..."
+            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun ./scripts/assignments-unification-postcheck.ts)
+            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun test ./scripts/assignments-unification-contracts.test.ts)
+          fi
+
           bun run prisma:generate
 
           # Overlay test users (for smoke tests)
