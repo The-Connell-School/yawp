@@ -249,10 +249,13 @@ export function PromptsLibrary({
       : `${visiblePrompts.length} of ${prompts.length} prompts`;
 
   return (
-    <Accordion type="single" collapsible defaultValue="library">
+    <Accordion type="single" collapsible>
       <AccordionItem value="library">
         <AccordionTrigger className="py-2 text-base">
           Prompt Library
+          <span className="ml-2 text-sm text-muted-foreground">
+            {prompts.length}
+          </span>
         </AccordionTrigger>
         <AccordionContent>
           <div className="flex flex-col gap-6 pt-2 lg:flex-row">
@@ -434,11 +437,7 @@ function FilterPanel({
         ) : null}
       </div>
 
-      <Accordion
-        type="multiple"
-        defaultValue={['type', 'period']}
-        className="border-none"
-      >
+      <Accordion type="multiple" className="border-none">
         {FACETS.map((f) => {
           const values = f.values(prompts);
           if (!values || values.length === 0) return null;

@@ -42,29 +42,18 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { Separator } from '~/components/ui/separator';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
-import { CreateAssignmentSheet } from './create-assignment-sheet';
+import {
+  type CreateAssignmentMode,
+  CreateAssignmentSheet,
+} from './create-assignment-sheet';
 import {
   type EssayType,
   INSPIRATIONAL_EXAMPLES,
   type LibraryPrompt,
+  PREVIEW_ID,
   SAMPLE_PROMPTS,
 } from './library-data';
 import { PromptsLibrary } from './prompts-library';
-
-const PREVIEW_ID = 'preview-ap-history-essay';
-
-function builderHref(opts: {
-  type: EssayType;
-  from: 'library' | 'pdf' | 'scratch';
-  promptId?: string;
-}): string {
-  const params = new URLSearchParams({
-    type: opts.type.toLowerCase(),
-    from: opts.from,
-  });
-  if (opts.promptId) params.set('promptId', opts.promptId);
-  return `/app/assignment-types/${PREVIEW_ID}/builder?${params.toString()}`;
-}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -99,13 +88,17 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
   const data = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  const [selectedPrompt, setSelectedPrompt] = useState<LibraryPrompt | null>(
-    null
-  );
+  const [assignmentMode, setAssignmentMode] =
+    useState<CreateAssignmentMode | null>(null);
   const [createSheetOpen, setCreateSheetOpen] = useState(false);
 
-  function handleSelectPrompt(p: LibraryPrompt) {
-    setSelectedPrompt(p);
+  function openSheetFromLibrary(p: LibraryPrompt) {
+    setAssignmentMode({ kind: 'library', prompt: p });
+    setCreateSheetOpen(true);
+  }
+
+  function openSheetFromScratch(type: EssayType) {
+    setAssignmentMode({ kind: 'scratch', essayType: type });
     setCreateSheetOpen(true);
   }
 
@@ -149,16 +142,12 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
                 <DropdownMenuSubTrigger>Assignment</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent>
                   <DropdownMenuItem
-                    onSelect={() =>
-                      navigate(builderHref({ type: 'DBQ', from: 'scratch' }))
-                    }
+                    onSelect={() => openSheetFromScratch('DBQ')}
                   >
                     DBQ
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onSelect={() =>
-                      navigate(builderHref({ type: 'LEQ', from: 'scratch' }))
-                    }
+                    onSelect={() => openSheetFromScratch('LEQ')}
                   >
                     LEQ
                   </DropdownMenuItem>
@@ -223,7 +212,7 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         </div>
 
         {/* Submissions */}
-        <Accordion type="single" collapsible defaultValue="submissions">
+        <Accordion type="single" collapsible>
           <AccordionItem value="submissions">
             <AccordionTrigger className="text-base">
               Submissions
@@ -251,53 +240,10 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         {/* Prompt Library */}
         <PromptsLibrary
           prompts={data.libraryPrompts}
-          onSelectPrompt={handleSelectPrompt}
+          onSelectPrompt={openSheetFromLibrary}
         />
 
-        {/* Cross-link footer to the rest of the prototype loop */}
-        <div className="mt-8 rounded-lg border bg-muted/30 p-4">
-          <p className="mb-1 text-sm font-semibold">Wireframe loop</p>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Click a prompt above to open the create-assignment sheet
-            pre-populated. Or jump straight to the student drafting surface
-            or teacher grading view.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to={builderHref({ type: 'DBQ', from: 'scratch' })}>
-                Open builder (DBQ)
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to={builderHref({ type: 'LEQ', from: 'scratch' })}>
-                Open builder (LEQ)
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link
-                to={`/app/assignment-types/${PREVIEW_ID}/draft?type=dbq`}
-              >
-                Student drafting (DBQ)
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link
-                to={`/app/assignment-types/${PREVIEW_ID}/draft?type=leq`}
-              >
-                Student drafting (LEQ)
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link
-                to={`/app/assignment-types/${PREVIEW_ID}/grade?type=dbq`}
-              >
-                Teacher grading (DBQ)
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        <p className="mt-4 text-xs text-muted-foreground">
+        <p className="mt-8 text-xs text-muted-foreground">
           Preview wireframes driven by mock data. PDF parsing, real-time tutor
           coaching, persistence, and AI grading are described in the v1 spec
           but not implemented.
@@ -305,12 +251,9 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
       </div>
 
       <CreateAssignmentSheet
-        prompt={selectedPrompt}
+        mode={assignmentMode}
         open={createSheetOpen}
         onOpenChange={setCreateSheetOpen}
-        builderHref={({ promptId, type }) =>
-          builderHref({ type, from: 'library', promptId })
-        }
       />
     </div>
   );
