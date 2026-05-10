@@ -6,16 +6,15 @@
 //   1. Header — back-to-dashboard, "AP History Essay" title, New ▾ dropdown
 //      matching the existing AssignmentType pattern (Document / Assignment),
 //      each branching to a DBQ / LEQ submenu.
-//   2. Teacher directions + inspirational examples
-//   3. Submissions accordion (empty mock)
-//   4. Prompt Library — filter chips + sample-prompt table
-//
-// Document → DBQ/LEQ lands on the student drafting wireframe.
-// Assignment → DBQ/LEQ lands on the builder (from=scratch). Library entries
-// still link straight into the builder via prompt-row clicks; teachers who
-// want a library start use the Prompt Library section directly.
+//   2. Hero banner + title + description
+//   3. Teacher directions + inspirational examples
+//   4. Submissions accordion (empty mock)
+//   5. Prompt Library — sidebar (stacked filter accordions) + vertical list
+//      of prompt rows. Click a row → opens the create-assignment sheet
+//      pre-populated from the library entry. Mirrors PR #111 (Daily Pages
+//      prompt library).
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -41,183 +40,31 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
-import { Input } from '~/components/ui/input';
 import { Separator } from '~/components/ui/separator';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '~/components/ui/table';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { CreateAssignmentSheet } from './create-assignment-sheet';
+import {
+  type EssayType,
+  INSPIRATIONAL_EXAMPLES,
+  type LibraryPrompt,
+  SAMPLE_PROMPTS,
+} from './library-data';
+import { PromptsLibrary } from './prompts-library';
 
 const PREVIEW_ID = 'preview-ap-history-essay';
 
-type EssayType = 'DBQ' | 'LEQ';
-type Period = 'AP USH' | 'AP Euro' | 'AP World';
-type Reasoning =
-  | 'causation'
-  | 'comparison'
-  | 'continuity-and-change'
-  | 'periodization';
-type Difficulty = 'intro' | 'mid-year' | 'exam-ready';
-
-type LibraryPrompt = {
-  id: string;
+function builderHref(opts: {
   type: EssayType;
-  period: Period;
-  prompt: string;
-  era: string;
-  sourceCount: number | null;
-  reasoning: Reasoning;
-  skillEmphasis: string[];
-  difficulty: Difficulty;
-};
-
-const SAMPLE_PROMPTS: LibraryPrompt[] = [
-  {
-    id: 'DBQ-USH-001',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Reconstruction era (1865–1877) marked a turning point in the lives of formerly enslaved people.',
-    era: 'Reconstruction',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['sourcing-heavy', 'complexity-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-USH-002',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Progressive Era reforms (1890–1920) addressed the problems of industrialization.',
-    era: 'Progressive Era',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-USH-003',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Cold War shaped American domestic policy from 1945 to 1975.',
-    era: 'Cold War',
-    sourceCount: 6,
-    reasoning: 'causation',
-    skillEmphasis: ['contextualization-heavy'],
-    difficulty: 'exam-ready',
-  },
-  {
-    id: 'LEQ-USH-001',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the relative importance of causes of the American Civil War.',
-    era: 'Antebellum',
-    sourceCount: null,
-    reasoning: 'causation',
-    skillEmphasis: ['outside-evidence-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-USH-002',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Compare the goals and outcomes of Reconstruction policies in the 1860s and 1870s.',
-    era: 'Reconstruction',
-    sourceCount: null,
-    reasoning: 'comparison',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-USH-003',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the period from 1945 to 1980 represents a continuation of New Deal liberalism.',
-    era: 'Postwar & Civil Rights',
-    sourceCount: null,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['complexity-heavy'],
-    difficulty: 'exam-ready',
-  },
-  {
-    id: 'DBQ-EUR-001',
-    type: 'DBQ',
-    period: 'AP Euro',
-    prompt:
-      'Evaluate the extent to which the Reformation transformed European political authority in the 16th century.',
-    era: 'Reformation',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['complexity-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-EUR-001',
-    type: 'LEQ',
-    period: 'AP Euro',
-    prompt: 'Compare the responses of European states to the French Revolution.',
-    era: 'French Revolution',
-    sourceCount: null,
-    reasoning: 'comparison',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-WLD-001',
-    type: 'DBQ',
-    period: 'AP World',
-    prompt:
-      'Evaluate the extent to which trans-Saharan trade networks transformed West African societies between 1000 and 1450.',
-    era: 'Post-Classical',
-    sourceCount: 5,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['contextualization-heavy'],
-    difficulty: 'intro',
-  },
-  {
-    id: 'LEQ-WLD-001',
-    type: 'LEQ',
-    period: 'AP World',
-    prompt:
-      'Evaluate the relative importance of factors that drove industrialization between 1750 and 1900.',
-    era: 'Industrial',
-    sourceCount: null,
-    reasoning: 'causation',
-    skillEmphasis: ['outside-evidence-heavy'],
-    difficulty: 'exam-ready',
-  },
-];
-
-const INSPIRATIONAL_EXAMPLES = [
-  {
-    type: 'DBQ' as EssayType,
-    title: 'Reconstruction as a turning point',
-    blurb:
-      '7-source DBQ pushing students to argue continuity vs. change in the lives of formerly enslaved people, 1865–1877.',
-  },
-  {
-    type: 'LEQ' as EssayType,
-    title: 'Causes of the Civil War',
-    blurb:
-      'Causation LEQ — students rely entirely on outside evidence to weigh the relative importance of antebellum causes.',
-  },
-  {
-    type: 'DBQ' as EssayType,
-    title: 'Cold War & domestic policy',
-    blurb:
-      '6-source DBQ tuned for contextualization. Strong fit for late-year exam-prep practice.',
-  },
-];
+  from: 'library' | 'pdf' | 'scratch';
+  promptId?: string;
+}): string {
+  const params = new URLSearchParams({
+    type: opts.type.toLowerCase(),
+    from: opts.from,
+  });
+  if (opts.promptId) params.set('promptId', opts.promptId);
+  return `/app/assignment-types/${PREVIEW_ID}/builder?${params.toString()}`;
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -248,61 +95,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type EssayTypeFilter = EssayType | 'all';
-type PeriodFilter = Period | 'all';
-type ReasoningFilter = Reasoning | 'all';
-type DifficultyFilter = Difficulty | 'all';
-
-function builderHref(opts: {
-  type: EssayType;
-  from: 'library' | 'pdf' | 'scratch';
-  promptId?: string;
-}): string {
-  const params = new URLSearchParams({
-    type: opts.type.toLowerCase(),
-    from: opts.from,
-  });
-  if (opts.promptId) params.set('promptId', opts.promptId);
-  return `/app/assignment-types/${PREVIEW_ID}/builder?${params.toString()}`;
-}
-
 export default function AssignmentTypeApHistoryPreviewRoute() {
   const data = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  const [typeFilter, setTypeFilter] = useState<EssayTypeFilter>('all');
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
-  const [reasoningFilter, setReasoningFilter] =
-    useState<ReasoningFilter>('all');
-  const [difficultyFilter, setDifficultyFilter] =
-    useState<DifficultyFilter>('all');
-  const [search, setSearch] = useState('');
+  const [selectedPrompt, setSelectedPrompt] = useState<LibraryPrompt | null>(
+    null
+  );
+  const [createSheetOpen, setCreateSheetOpen] = useState(false);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return data.libraryPrompts.filter((p) => {
-      if (typeFilter !== 'all' && p.type !== typeFilter) return false;
-      if (periodFilter !== 'all' && p.period !== periodFilter) return false;
-      if (reasoningFilter !== 'all' && p.reasoning !== reasoningFilter)
-        return false;
-      if (difficultyFilter !== 'all' && p.difficulty !== difficultyFilter)
-        return false;
-      if (q && !p.prompt.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [
-    data.libraryPrompts,
-    typeFilter,
-    periodFilter,
-    reasoningFilter,
-    difficultyFilter,
-    search,
-  ]);
-
-  function pickPromptFromLibrary(p: LibraryPrompt) {
-    navigate(
-      builderHref({ type: p.type, from: 'library', promptId: p.id })
-    );
+  function handleSelectPrompt(p: LibraryPrompt) {
+    setSelectedPrompt(p);
+    setCreateSheetOpen(true);
   }
 
   function draftHref(type: EssayType): string {
@@ -397,8 +201,8 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
             the rubric, anchored on calibration samples, and surfaces named
             failure-mode flags (walking-through-documents, HIPP-without-relevance,
             generic-context, period-bleed). Hit <code className="px-1">New</code>{' '}
-            above to start from the prompt library, upload a College Board PDF,
-            or build from scratch.
+            above to start a Document or Assignment from scratch, or pick a
+            prompt from the library below to pre-fill the assignment form.
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             {data.inspirationalExamples.map((ex) => (
@@ -445,138 +249,18 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         <Separator className="my-2" />
 
         {/* Prompt Library */}
-        <Accordion type="single" collapsible defaultValue="library">
-          <AccordionItem value="library">
-            <AccordionTrigger className="text-base">
-              Prompt Library
-              <span className="ml-2 text-sm text-muted-foreground">
-                {filtered.length} of {data.libraryPrompts.length}
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              {/* Filter chip rows */}
-              <div className="mb-3 space-y-2">
-                <FilterChipRow
-                  label="Essay type"
-                  value={typeFilter}
-                  onChange={(v) => setTypeFilter(v as EssayTypeFilter)}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'DBQ', label: 'DBQ' },
-                    { value: 'LEQ', label: 'LEQ' },
-                  ]}
-                />
-                <FilterChipRow
-                  label="Period"
-                  value={periodFilter}
-                  onChange={(v) => setPeriodFilter(v as PeriodFilter)}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'AP USH', label: 'AP USH' },
-                    { value: 'AP Euro', label: 'AP Euro' },
-                    { value: 'AP World', label: 'AP World' },
-                  ]}
-                />
-                <FilterChipRow
-                  label="Reasoning"
-                  value={reasoningFilter}
-                  onChange={(v) => setReasoningFilter(v as ReasoningFilter)}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'causation', label: 'Causation' },
-                    { value: 'comparison', label: 'Comparison' },
-                    {
-                      value: 'continuity-and-change',
-                      label: 'Continuity & change',
-                    },
-                    { value: 'periodization', label: 'Periodization' },
-                  ]}
-                />
-                <FilterChipRow
-                  label="Difficulty"
-                  value={difficultyFilter}
-                  onChange={(v) => setDifficultyFilter(v as DifficultyFilter)}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'intro', label: 'Intro' },
-                    { value: 'mid-year', label: 'Mid-year' },
-                    { value: 'exam-ready', label: 'Exam-ready' },
-                  ]}
-                />
-                <div className="pt-1">
-                  <Input
-                    placeholder="Search prompt body…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="max-w-sm"
-                  />
-                </div>
-              </div>
-
-              {/* Prompts table */}
-              <div className="overflow-x-auto rounded border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[80px]">Type</TableHead>
-                      <TableHead className="w-[100px]">Period</TableHead>
-                      <TableHead>Prompt</TableHead>
-                      <TableHead className="w-[120px]">Era</TableHead>
-                      <TableHead className="w-[60px] text-right">Docs</TableHead>
-                      <TableHead className="w-[140px]">Reasoning</TableHead>
-                      <TableHead className="w-[110px]">Difficulty</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center text-sm text-muted-foreground py-8"
-                        >
-                          No prompts match the current filters.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filtered.map((p) => (
-                        <TableRow
-                          key={p.id}
-                          className="cursor-pointer hover:bg-muted/40"
-                          onClick={() => pickPromptFromLibrary(p)}
-                        >
-                          <TableCell>
-                            <Badge
-                              variant={p.type === 'DBQ' ? 'default' : 'secondary'}
-                              size="sm"
-                            >
-                              {p.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs">{p.period}</TableCell>
-                          <TableCell className="text-sm">{p.prompt}</TableCell>
-                          <TableCell className="text-xs">{p.era}</TableCell>
-                          <TableCell className="text-right text-xs">
-                            {p.sourceCount ?? '—'}
-                          </TableCell>
-                          <TableCell className="text-xs">{p.reasoning}</TableCell>
-                          <TableCell className="text-xs">{p.difficulty}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        <PromptsLibrary
+          prompts={data.libraryPrompts}
+          onSelectPrompt={handleSelectPrompt}
+        />
 
         {/* Cross-link footer to the rest of the prototype loop */}
         <div className="mt-8 rounded-lg border bg-muted/30 p-4">
           <p className="mb-1 text-sm font-semibold">Wireframe loop</p>
           <p className="mb-3 text-xs text-muted-foreground">
-            Click a prompt above to land in the builder, or jump straight to
-            the student drafting surface or teacher grading view to feel the
-            other ends of the loop.
+            Click a prompt above to open the create-assignment sheet
+            pre-populated. Or jump straight to the student drafting surface
+            or teacher grading view.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
@@ -620,44 +304,14 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         </p>
       </div>
 
-    </div>
-  );
-}
-
-function FilterChipRow({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="w-24 shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange(opt.value)}
-            className={
-              'rounded-full border px-3 py-1 text-xs transition-colors ' +
-              (active
-                ? 'border-foreground bg-foreground text-background'
-                : 'border-border bg-background text-foreground/80 hover:bg-muted')
-            }
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+      <CreateAssignmentSheet
+        prompt={selectedPrompt}
+        open={createSheetOpen}
+        onOpenChange={setCreateSheetOpen}
+        builderHref={({ promptId, type }) =>
+          builderHref({ type, from: 'library', promptId })
+        }
+      />
     </div>
   );
 }
