@@ -6,18 +6,25 @@
 //   { kind: 'scratch', essayType } — user clicked New ▾ → Assignment → DBQ/LEQ;
 //                                    sheet opens blank with the chosen type.
 //
-// Mock data only — submitting closes the sheet without persisting. For DBQ
-// from-library, the sources panel surfaces two affordances:
-//   - Preview — inline expand of each source (title / attribution / body)
-//   - Download PDF — opens the printable sources route in a new tab; the
-//     teacher uses the browser's Print → Save as PDF to capture it.
+// Mock data only — submitting closes the sheet without persisting.
 //
-// For DBQ from-scratch, the sources panel is a placeholder pointing at the
-// builder for full source authoring.
+// For DBQ assignments (either mode), the Sources panel is a horizontal
+// carousel: click Preview to expand, swipe through one source at a time
+// with prev/next arrows or dot navigation. Editable inline (Title /
+// Attribution / Body) so the teacher can compose or tweak the source set
+// without leaving the sheet. From-library adds a Download PDF button that
+// opens a printable source-set view in a new tab.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { DownloadIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  EyeIcon,
+  EyeOffIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Input } from '~/components/ui/input';
@@ -62,6 +69,15 @@ function modeEssayType(mode: CreateAssignmentMode): EssayType {
   return mode.kind === 'library' ? mode.prompt.type : mode.essayType;
 }
 
+function makeEmptySource(index: number): SourceCard {
+  return {
+    id: `src-${Date.now()}-${index}`,
+    title: `Doc ${index + 1} — `,
+    attribution: '',
+    body: '',
+  };
+}
+
 export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
   const [classId, setClassId] = useState(MOCK_TEACHER_CLASSES[0]?.id ?? '');
   const [title, setTitle] = useState('');
@@ -69,6 +85,7 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
   const [timeMode, setTimeMode] = useState<'untimed' | 'timed'>('untimed');
   const [dueDate, setDueDate] = useState('');
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [sources, setSources] = useState<SourceCard[]>([]);
 
   useEffect(() => {
     if (!open || !mode) return;
@@ -79,20 +96,16 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
     if (mode.kind === 'library') {
       setTitle(suggestedAssignmentTitle(mode.prompt));
       setBody(mode.prompt.prompt);
+      setSources(getSourcesForPrompt(mode.prompt.id));
     } else {
       setTitle('');
       setBody('');
+      setSources([]);
     }
   }, [open, mode]);
 
   const essayType = mode ? modeEssayType(mode) : null;
   const totalMinutes = essayType === 'LEQ' ? 40 : 60;
-
-  const sources = useMemo<SourceCard[]>(
-    () =>
-      mode?.kind === 'library' ? getSourcesForPrompt(mode.prompt.id) : [],
-    [mode]
-  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -104,10 +117,6 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
     mode?.kind === 'library'
       ? `/app/assignment-types/${PREVIEW_ID}/sources/print?promptId=${mode.prompt.id}`
       : '';
-
-  const builderScratchHref = essayType
-    ? `/app/assignment-types/${PREVIEW_ID}/builder?type=${essayType.toLowerCase()}&from=scratch`
-    : '';
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -128,8 +137,8 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
                   ? 'Pre-filled from the prompt library. Edit anything before assigning.'
                   : `Type your prompt and pick a class. ${
                       essayType === 'DBQ'
-                        ? "Sources can be added in the builder after you've drafted the prompt."
-                        : 'LEQs don\'t carry documents.'
+                        ? 'Add 5–7 sources in the carousel below.'
+                        : "LEQs don't carry documents."
                     }`}
               </SheetDescription>
             </SheetHeader>
@@ -181,6 +190,7 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
                     {essayType}
                   </Badge>
                   <span className="text-xs text-muted-foreground">
+                    APUSH ·{' '}
                     {essayType === 'DBQ'
                       ? '7-point rubric · 60 min when timed'
                       : '6-point rubric · 40 min when timed'}
@@ -240,35 +250,40 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
 
               {/* Sources panel */}
               {essayType === 'DBQ' ? (
-                mode.kind === 'library' ? (
-                  <div className="rounded-md border bg-muted/30">
-                    <div className="flex items-start justify-between gap-3 p-3">
-                      <div className="flex-1">
-                        <p className="text-sm font-semibold">
-                          Sources ({sources.length})
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Pre-filled from the library entry. Preview each
-                          source or download a printable PDF copy.
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSourcesOpen((v) => !v)}
-                        >
-                          {sourcesOpen ? (
-                            <>
-                              <EyeOffIcon className="mr-1 h-3 w-3" /> Hide
-                            </>
-                          ) : (
-                            <>
-                              <EyeIcon className="mr-1 h-3 w-3" /> Preview
-                            </>
-                          )}
-                        </Button>
+                <div className="rounded-md border bg-muted/30">
+                  <div className="flex items-start justify-between gap-3 p-3">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold">
+                        Sources ({sources.length}
+                        {sources.length < 5 || sources.length > 7
+                          ? ' · need 5–7'
+                          : ''}
+                        )
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {mode.kind === 'library'
+                          ? 'Pre-filled from the library. Click Preview to swipe through each source — edit inline if you want to tweak.'
+                          : 'Click Preview to author your source set. Swipe between cards with the arrows.'}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSourcesOpen((v) => !v)}
+                      >
+                        {sourcesOpen ? (
+                          <>
+                            <EyeOffIcon className="mr-1 h-3 w-3" /> Hide
+                          </>
+                        ) : (
+                          <>
+                            <EyeIcon className="mr-1 h-3 w-3" /> Preview
+                          </>
+                        )}
+                      </Button>
+                      {mode.kind === 'library' && sources.length > 0 ? (
                         <Button asChild size="sm" variant="outline">
                           <a
                             href={printHref}
@@ -279,46 +294,18 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
                             PDF
                           </a>
                         </Button>
-                      </div>
+                      ) : null}
                     </div>
-                    {sourcesOpen ? (
-                      <div className="space-y-3 border-t bg-background/40 p-3">
-                        {sources.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">
-                            Source set seeding pending for this prompt.
-                          </p>
-                        ) : (
-                          sources.map((src, idx) => (
-                            <SourcePreviewCard
-                              key={src.id}
-                              index={idx}
-                              source={src}
-                            />
-                          ))
-                        )}
-                      </div>
-                    ) : null}
                   </div>
-                ) : (
-                  <div className="rounded-md border bg-muted/30 p-3 text-xs">
-                    <p className="mb-1 font-semibold">Sources</p>
-                    <p className="text-muted-foreground">
-                      DBQ assignments need 5–7 primary sources. Save this
-                      assignment and add the source set in the builder, or
-                      jump straight there now.
-                    </p>
-                    <Button
-                      asChild
-                      variant="link"
-                      size="sm"
-                      className="-ml-2 mt-1 h-auto p-0"
-                    >
-                      <Link to={builderScratchHref}>
-                        Open builder for source editing →
-                      </Link>
-                    </Button>
-                  </div>
-                )
+                  {sourcesOpen ? (
+                    <div className="border-t bg-background/40 p-3">
+                      <SourcesCarousel
+                        sources={sources}
+                        onChange={setSources}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <div className="rounded-md border bg-muted/30 p-3 text-xs">
                   <p className="mb-1 font-semibold">No documents (LEQ)</p>
@@ -392,23 +379,156 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
   );
 }
 
-function SourcePreviewCard({
-  index,
-  source,
+function SourcesCarousel({
+  sources,
+  onChange,
 }: {
-  index: number;
-  source: SourceCard;
+  sources: SourceCard[];
+  onChange: (next: SourceCard[]) => void;
 }) {
-  return (
-    <div className="rounded border bg-background p-3 text-xs">
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <p className="font-semibold">{source.title}</p>
-        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-          {index + 1}
-        </span>
+  const [active, setActive] = useState(0);
+
+  // If the active index falls outside the current sources length (e.g. after
+  // removing a source), clamp it back into range.
+  useEffect(() => {
+    if (sources.length === 0) {
+      setActive(0);
+      return;
+    }
+    if (active >= sources.length) setActive(sources.length - 1);
+  }, [sources.length, active]);
+
+  if (sources.length === 0) {
+    return (
+      <div className="rounded border border-dashed bg-background p-6 text-center">
+        <p className="mb-3 text-sm text-muted-foreground">
+          No sources yet. DBQs need 5–7 primary documents.
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => onChange([makeEmptySource(0)])}
+        >
+          <PlusIcon className="mr-1 h-3 w-3" /> Add first source
+        </Button>
       </div>
-      <p className="mb-1 italic text-muted-foreground">{source.attribution}</p>
-      <p className="whitespace-pre-line leading-relaxed">{source.body}</p>
+    );
+  }
+
+  const current = sources[active];
+
+  function updateCurrent(patch: Partial<SourceCard>) {
+    const next = [...sources];
+    next[active] = { ...current, ...patch };
+    onChange(next);
+  }
+
+  function addSource() {
+    if (sources.length >= 7) return;
+    const next = [...sources, makeEmptySource(sources.length)];
+    onChange(next);
+    setActive(next.length - 1);
+  }
+
+  function removeCurrent() {
+    if (sources.length <= 1) return;
+    const next = sources.filter((_, i) => i !== active);
+    onChange(next);
+    if (active >= next.length) setActive(next.length - 1);
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Carousel header — position + prev/next */}
+      <div className="flex items-center justify-between">
+        <Badge variant="outline" size="sm">
+          Source {active + 1} of {sources.length}
+        </Badge>
+        <div className="flex gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setActive((a) => Math.max(0, a - 1))}
+            disabled={active === 0}
+          >
+            <ChevronLeftIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              setActive((a) => Math.min(sources.length - 1, a + 1))
+            }
+            disabled={active === sources.length - 1}
+          >
+            <ChevronRightIcon className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Dots indicator */}
+      <div className="flex justify-center gap-1.5">
+        {sources.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setActive(i)}
+            aria-label={`Go to source ${i + 1}`}
+            className={
+              'h-1.5 w-1.5 rounded-full transition-colors ' +
+              (i === active
+                ? 'bg-foreground'
+                : 'bg-foreground/20 hover:bg-foreground/40')
+            }
+          />
+        ))}
+      </div>
+
+      {/* Current source card — editable inline */}
+      <div className="space-y-2 rounded border bg-background p-3">
+        <Input
+          value={current.title}
+          onChange={(e) => updateCurrent({ title: e.target.value })}
+          placeholder="Doc 1 — Title"
+          className="text-sm font-semibold"
+        />
+        <Input
+          value={current.attribution}
+          onChange={(e) => updateCurrent({ attribution: e.target.value })}
+          placeholder="Author, date (e.g. Frederick Douglass, 1870)"
+          className="text-xs italic"
+        />
+        <Textarea
+          value={current.body}
+          onChange={(e) => updateCurrent({ body: e.target.value })}
+          rows={6}
+          placeholder="Source body — paste the excerpt students will analyze."
+          className="text-sm leading-relaxed"
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={removeCurrent}
+          disabled={sources.length <= 1}
+        >
+          <Trash2Icon className="mr-1 h-3 w-3" /> Remove this source
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addSource}
+          disabled={sources.length >= 7}
+        >
+          <PlusIcon className="mr-1 h-3 w-3" /> Add source ({sources.length}/7)
+        </Button>
+      </div>
     </div>
   );
 }
