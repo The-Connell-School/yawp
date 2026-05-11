@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageSquarePlus, Trash2 } from 'lucide-react';
+import { Maximize2, MessageSquarePlus, Minimize2, Trash2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import type { DbqSource, SourceAnnotation } from './types';
 import type { DbqState } from './use-dbq-state';
 import { cn } from '~/utils/misc';
 
-export function SourcesColumn({ state }: { state: DbqState }) {
+export function SourcesColumn({
+  state,
+  isMaximized,
+  onToggleMaximize,
+}: {
+  state: DbqState;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+}) {
   const { prompt, annotations, addAnnotation, removeAnnotation, insertCitation } =
     state;
   const [selectedId, setSelectedId] = useState(prompt.sources[0]?.id ?? '');
@@ -27,9 +35,38 @@ export function SourcesColumn({ state }: { state: DbqState }) {
       <header className="shrink-0 border-b">
         <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2">
           <h2 className="text-sm font-semibold">Documents</h2>
-          <span className="text-[11px] text-muted-foreground">
-            {prompt.sources.length} sources · click a thumbnail
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              {prompt.sources.length} sources · click a thumbnail
+            </span>
+            {onToggleMaximize ? (
+              <button
+                type="button"
+                onClick={onToggleMaximize}
+                aria-label={
+                  isMaximized
+                    ? 'Restore split (50/50)'
+                    : 'Read mode (expand sources)'
+                }
+                aria-pressed={isMaximized}
+                title={
+                  isMaximized ? 'Restore split (50/50)' : 'Read mode'
+                }
+                className={cn(
+                  'inline-flex h-6 w-6 items-center justify-center rounded-md border transition',
+                  isMaximized
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+                )}
+              >
+                {isMaximized ? (
+                  <Minimize2 size={12} />
+                ) : (
+                  <Maximize2 size={12} />
+                )}
+              </button>
+            ) : null}
+          </div>
         </div>
         <div className="flex items-center gap-1 overflow-x-auto px-2 pb-2">
           {prompt.sources.map((s) => {
@@ -107,7 +144,6 @@ function ActiveSourceViewer({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
 
-  // Reset the note composer when the user switches docs.
   useEffect(() => {
     setAdding(false);
     setDraft('');
@@ -230,8 +266,6 @@ function ActiveSourceViewer({
 }
 
 function shortTitle(title: string): string {
-  // Strip a leading category prefix like "Petition of…" → keep what follows the
-  // first preposition / colon. Falls back to the full title if no obvious cut.
   const after = title.replace(/^(Petition of|Testimony of|Address of)\s+/i, '');
   return after.replace(/^.*?[—:]\s*/, '').slice(0, 60);
 }

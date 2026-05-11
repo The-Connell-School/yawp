@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import { CitedSources } from './cited-sources';
 import { PlanningSidebar } from './planning-sidebar';
 import type { DbqState } from './use-dbq-state';
 import { cn } from '~/utils/misc';
 
-export function EditorColumn({ state }: { state: DbqState }) {
+export function EditorColumn({
+  state,
+  isMaximized,
+  onToggleMaximize,
+}: {
+  state: DbqState;
+  isMaximized?: boolean;
+  onToggleMaximize?: () => void;
+}) {
   const { prompt, essay, setEssay, editorRef, insertCitation, planning, setPlanning } =
     state;
   const [planningOpen, setPlanningOpen] = useState(false);
@@ -19,18 +27,45 @@ export function EditorColumn({ state }: { state: DbqState }) {
             {wordCount(essay)} words
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPlanningOpen((v) => !v)}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-        >
-          {planningOpen ? (
-            <ChevronDown size={12} />
-          ) : (
-            <ChevronRight size={12} />
-          )}
-          Planning
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setPlanningOpen((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          >
+            {planningOpen ? (
+              <ChevronDown size={12} />
+            ) : (
+              <ChevronRight size={12} />
+            )}
+            Planning
+          </button>
+          {onToggleMaximize ? (
+            <button
+              type="button"
+              onClick={onToggleMaximize}
+              aria-label={
+                isMaximized
+                  ? 'Restore split (50/50)'
+                  : 'Write mode (expand editor)'
+              }
+              aria-pressed={isMaximized}
+              title={isMaximized ? 'Restore split (50/50)' : 'Write mode'}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-md border transition',
+                isMaximized
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {isMaximized ? (
+                <Minimize2 size={12} />
+              ) : (
+                <Maximize2 size={12} />
+              )}
+            </button>
+          ) : null}
+        </div>
       </header>
 
       {planningOpen ? (

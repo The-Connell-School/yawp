@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { BookOpen, PanelLeftOpen, PenLine, Sparkles } from 'lucide-react';
+import { PanelLeftOpen, Sparkles } from 'lucide-react';
 import { EditorColumn } from './editor-column';
 import { PromptBanner } from './prompt-banner';
 import { ResizeHandle } from './resize-handle';
@@ -9,7 +9,6 @@ import { TutorChatStripe } from './tutor-chat-stripe';
 import { sampleDbq } from './sample-data';
 import { useDbqState } from './use-dbq-state';
 import type { DbqState } from './use-dbq-state';
-import { cn } from '~/utils/misc';
 
 const SNAP_READ_PCT = 75;
 const SNAP_WRITE_PCT = 25;
@@ -80,7 +79,8 @@ export function DbqAssignmentScreen() {
       <footer className="shrink-0 border-t bg-muted/20 px-3 py-1 text-[10px] text-muted-foreground">
         Prototype — student drafting surface for the AP History essay
         AssignmentType. Stacked on PR #115. No persistence, no backend. Drag
-        the dividers to resize columns.
+        the dividers to resize; click the maximize icons in the column headers
+        to snap.
       </footer>
     </div>
   );
@@ -99,14 +99,14 @@ function DraftingPane({
   onSplitDrag: (dx: number) => void;
   splitContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const isRead = splitPct >= SNAP_READ_PCT - SNAP_TOLERANCE;
-  const isWrite = splitPct <= SNAP_WRITE_PCT + SNAP_TOLERANCE;
+  const isReadMaxed = splitPct >= SNAP_READ_PCT - SNAP_TOLERANCE;
+  const isWriteMaxed = splitPct <= SNAP_WRITE_PCT + SNAP_TOLERANCE;
 
-  function snapRead() {
-    setSplitPct(isRead ? BALANCED_PCT : SNAP_READ_PCT);
+  function toggleReadMax() {
+    setSplitPct(isReadMaxed ? BALANCED_PCT : SNAP_READ_PCT);
   }
-  function snapWrite() {
-    setSplitPct(isWrite ? BALANCED_PCT : SNAP_WRITE_PCT);
+  function toggleWriteMax() {
+    setSplitPct(isWriteMaxed ? BALANCED_PCT : SNAP_WRITE_PCT);
   }
 
   return (
@@ -118,69 +118,26 @@ function DraftingPane({
         style={{ width: `${splitPct}%` }}
         className="min-h-0 shrink-0 pr-1.5"
       >
-        <SourcesColumn state={state} />
+        <SourcesColumn
+          state={state}
+          isMaximized={isReadMaxed}
+          onToggleMaximize={toggleReadMax}
+        />
       </div>
 
-      <div className="relative shrink-0">
-        <ResizeHandle
-          onDrag={onSplitDrag}
-          ariaLabel="Resize sources vs editor"
-        />
-        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center justify-center gap-1">
-          <SnapButton
-            active={isRead}
-            onClick={snapRead}
-            icon={<BookOpen size={12} />}
-            label={isRead ? 'Reset split (50/50)' : 'Read mode (expand sources)'}
-          />
-          <SnapButton
-            active={isWrite}
-            onClick={snapWrite}
-            icon={<PenLine size={12} />}
-            label={isWrite ? 'Reset split (50/50)' : 'Write mode (expand editor)'}
-          />
-        </div>
-      </div>
+      <ResizeHandle
+        onDrag={onSplitDrag}
+        ariaLabel="Resize sources vs editor"
+      />
 
       <div className="min-h-0 flex-1 pl-1.5">
-        <EditorColumn state={state} />
+        <EditorColumn
+          state={state}
+          isMaximized={isWriteMaxed}
+          onToggleMaximize={toggleWriteMax}
+        />
       </div>
     </div>
-  );
-}
-
-function SnapButton({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={cn(
-        'pointer-events-auto inline-flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition',
-        active
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary'
-      )}
-    >
-      {icon}
-    </button>
   );
 }
 
