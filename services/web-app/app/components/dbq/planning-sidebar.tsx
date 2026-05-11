@@ -10,36 +10,32 @@ export function PlanningSidebar({
   setPlanning: (p: PlanningState) => void;
   disabled?: boolean;
 }) {
-  function patch<K extends keyof PlanningState>(key: K, value: PlanningState[K]) {
+  function patch<K extends keyof PlanningState>(
+    key: K,
+    value: PlanningState[K]
+  ) {
     setPlanning({ ...planning, [key]: value });
   }
 
   return (
-    <aside className="flex h-full flex-col rounded-lg border bg-background">
-      <header className="border-b px-3 py-2">
-        <h2 className="text-sm font-semibold">Planning</h2>
-        <p className="text-xs text-muted-foreground">
-          Persists across reading and writing.
-        </p>
-      </header>
-
-      <Tabs defaultValue="outline" className="flex min-h-0 flex-1 flex-col p-2">
-        <TabsList className="grid h-9 grid-cols-4">
-          <TabsTrigger value="outline" className="text-xs">
+    <div className="flex flex-col">
+      <Tabs defaultValue="outline" className="flex flex-col">
+        <TabsList className="h-8 self-start">
+          <TabsTrigger value="outline" className="text-[11px]">
             Outline
           </TabsTrigger>
-          <TabsTrigger value="thesis" className="text-xs">
+          <TabsTrigger value="thesis" className="text-[11px]">
             Thesis
           </TabsTrigger>
-          <TabsTrigger value="groupings" className="text-xs">
+          <TabsTrigger value="groupings" className="text-[11px]">
             Groupings
           </TabsTrigger>
-          <TabsTrigger value="outside" className="text-xs">
+          <TabsTrigger value="outside" className="text-[11px]">
             Outside ev.
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="outline" className="min-h-0 flex-1">
+        <TabsContent value="outline">
           <PlannerField
             value={planning.outline}
             onChange={(v) => patch('outline', v)}
@@ -47,7 +43,7 @@ export function PlanningSidebar({
             disabled={disabled}
           />
         </TabsContent>
-        <TabsContent value="thesis" className="min-h-0 flex-1">
+        <TabsContent value="thesis">
           <PlannerField
             value={planning.thesisDraft}
             onChange={(v) => patch('thesisDraft', v)}
@@ -55,7 +51,7 @@ export function PlanningSidebar({
             disabled={disabled}
           />
         </TabsContent>
-        <TabsContent value="groupings" className="min-h-0 flex-1">
+        <TabsContent value="groupings">
           <PlannerField
             value={planning.docGroupings}
             onChange={(v) => patch('docGroupings', v)}
@@ -63,16 +59,16 @@ export function PlanningSidebar({
             disabled={disabled}
           />
         </TabsContent>
-        <TabsContent value="outside" className="min-h-0 flex-1">
+        <TabsContent value="outside">
           <PlannerField
             value={planning.outsideEvidence}
             onChange={(v) => patch('outsideEvidence', v)}
-            placeholder="Outside evidence brainstorm: Compromise of 1877, Freedmen's Bureau, Plessy v. Ferguson, sharecropping…"
+            placeholder="Compromise of 1877, Plessy v. Ferguson, sharecropping, Freedmen's Bureau…"
             disabled={disabled}
           />
         </TabsContent>
       </Tabs>
-    </aside>
+    </div>
   );
 }
 
@@ -93,7 +89,7 @@ function PlannerField({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="h-full min-h-[160px] w-full resize-none rounded-md border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+      className="min-h-[96px] w-full resize-y rounded-md border bg-background px-2 py-1.5 text-[12px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
     />
   );
 }

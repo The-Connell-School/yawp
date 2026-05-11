@@ -13,8 +13,19 @@ export const phaseHints: Record<DraftingPhase, string> = {
     'Re-read for: thesis still defensible, sourcing on at least two documents, complexity move present.',
 };
 
-// Quick-and-dirty client-side stand-ins for the named failure-mode detectors.
-// Real implementation runs server-side via packages/tutor.
+export const phaseTutorIntro: Record<DraftingPhase, string> = {
+  'source-analysis':
+    "Let's start with the documents. Skim each one for who is speaking and what they're claiming about Reconstruction — don't worry about citing yet.",
+  thesis:
+    'Ready to take a stand. What position on *extent* does the evidence push you toward? Try writing one sentence in the editor.',
+  contextualization:
+    'Now a sentence or two of broader context — something just outside the prompt window that explains how we got here.',
+  drafting:
+    'Time to draft. Each body paragraph should advance the thesis with at least one document and one piece of outside knowledge.',
+  revision:
+    "You've got a draft. Re-read for: thesis still defensible, sourcing on at least two documents, a complexity move present.",
+};
+
 export function detectFailureFlags(
   essay: string,
   prompt: DbqPrompt
@@ -23,7 +34,6 @@ export function detectFailureFlags(
   const trimmed = essay.trim();
   if (!trimmed) return flags;
 
-  // thesis-restates-prompt: first sentence shares 4+ content words with the prompt.
   const firstSentence = trimmed.split(/(?<=[.!?])\s/)[0] ?? '';
   const promptWords = new Set(
     prompt.prompt
@@ -46,7 +56,6 @@ export function detectFailureFlags(
     });
   }
 
-  // walking-through-documents: doc tokens appear in alphabetical order, 4+ in a row.
   const tokens = Array.from(essay.matchAll(/\[Doc ([A-G])\]/g)).map(
     (m) => m[1]
   );
@@ -72,7 +81,6 @@ export function detectFailureFlags(
     });
   }
 
-  // length-not-sophistication: very long without complexity-signalling phrases.
   const wordCount = trimmed.split(/\s+/).length;
   const hasComplexitySignal =
     /\b(however|although|nevertheless|while|whereas|on the other hand|despite)\b/i.test(
@@ -97,8 +105,34 @@ export function suggestNextPhase(
 ): DraftingPhase | null {
   const wordCount = essay.trim() ? essay.trim().split(/\s+/).length : 0;
   if (current === 'source-analysis' && thesisDraft.length > 30) return 'thesis';
-  if (current === 'thesis' && thesisDraft.length > 60) return 'contextualization';
+  if (current === 'thesis' && thesisDraft.length > 60)
+    return 'contextualization';
   if (current === 'contextualization' && wordCount > 60) return 'drafting';
   if (current === 'drafting' && wordCount > 300) return 'revision';
   return null;
+}
+
+// Stand-in for an LLM tutor turn. Keyword-routes the student's question to a
+// canned reply so the chat surface feels alive in the prototype.
+export function cannedTutorReply(question: string): string {
+  const q = question.toLowerCase();
+  if (/thesis/.test(q)) {
+    return 'A strong DBQ thesis stakes a position on *extent* — try naming one goal that was achieved AND one that was reversed, then explain why both happened.';
+  }
+  if (/context|contextualiz/.test(q)) {
+    return 'Contextualization is a sentence or two just outside the prompt window. For this prompt, the end of the Civil War (1865) or earlier abolitionist debates work well — anything that explains how Reconstruction even became possible.';
+  }
+  if (/hipp|sourcing|source\b/.test(q)) {
+    return 'Sourcing means accounting for at least one document’s Historical context, Intended audience, Purpose, or Point of view — and why that matters for your argument. Doc B (Edisto petition) and Doc F (Civil Rights Cases) are juicy for this.';
+  }
+  if (/outside|evidence/.test(q)) {
+    return 'Outside evidence is anything relevant that isn’t in the documents. Strong moves for this prompt: the Compromise of 1877, Plessy v. Ferguson (1896), sharecropping, the collapse of the Freedmen’s Bureau.';
+  }
+  if (/complex/.test(q)) {
+    return 'Complexity points reward nuance. You can earn one by qualifying your thesis (“while X was achieved on paper, Y reversed it in practice”) or by addressing a counterargument and explaining why your position still holds.';
+  }
+  if (/start|begin|where do i/.test(q)) {
+    return 'Start with the documents. Note who is speaking, what they’re claiming, and whether they suggest a Reconstruction goal achieved or reversed. Then we’ll group them and write a thesis.';
+  }
+  return 'Tell me more — which document or which part of the prompt are you working through right now?';
 }

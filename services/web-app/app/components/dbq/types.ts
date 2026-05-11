@@ -27,7 +27,7 @@ export type DbqPrompt = {
 
 export type TimeMode = 'untimed' | 'timed';
 
-export type Mode = 'reading' | 'writing' | 'submitted';
+export type View = 'drafting' | 'submitted';
 
 export type DraftingPhase =
   | 'source-analysis'
@@ -69,4 +69,16 @@ export type FailureFlag = {
   id: string;
   label: string;
   detail: string;
+};
+
+export type ChatRole = 'tutor' | 'student';
+
+export type ChatMessage = {
+  id: string;
+  role: ChatRole;
+  body: string;
+  createdAt: number;
+  // If the message came from a deterministic source we want to dedupe.
+  origin?: 'seed' | 'phase' | 'detector' | 'reply';
+  detectorId?: string;
 };

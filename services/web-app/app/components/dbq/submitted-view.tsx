@@ -1,12 +1,11 @@
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
-import { PromptBanner } from './prompt-banner';
 import type { DbqState } from './use-dbq-state';
 
 export function SubmittedView({ state }: { state: DbqState }) {
-  const { prompt, essay, annotations, planning, setMode, resetTimer } = state;
+  const { prompt, essay, annotations, planning, setView, resetTimer } = state;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
         <div className="flex items-center gap-2">
           <CheckCircle2 size={18} />
@@ -23,7 +22,7 @@ export function SubmittedView({ state }: { state: DbqState }) {
             size="sm"
             onClick={() => {
               resetTimer();
-              setMode('reading');
+              setView('drafting');
             }}
           >
             Reopen for revision
@@ -31,7 +30,12 @@ export function SubmittedView({ state }: { state: DbqState }) {
         </div>
       </div>
 
-      <PromptBanner prompt={prompt} />
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          Prompt
+        </div>
+        <p className="text-sm font-medium">{prompt.prompt}</p>
+      </div>
 
       <section className="rounded-lg border bg-background p-4">
         <h3 className="mb-2 text-sm font-semibold">Your essay</h3>

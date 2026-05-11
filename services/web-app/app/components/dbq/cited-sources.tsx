@@ -19,22 +19,22 @@ export function CitedSources({
   const uncited = sources.filter((s) => !cited.includes(s));
 
   return (
-    <div className="rounded-lg border bg-background p-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Citations in your essay
+    <div className="shrink-0 rounded-md border bg-muted/20 p-2">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Cited
         </h3>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-[10px] text-muted-foreground">
           {cited.length} of {sources.length}
         </span>
       </div>
       {cited.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No documents cited yet. Use the toolbar above the editor to drop a
-          chip at the cursor.
+        <p className="text-[11px] text-muted-foreground">
+          No documents cited yet. Use the toolbar above or each source’s Cite
+          button.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1">
           {cited.map((s) => (
             <Tooltip
               key={s.id}
@@ -49,7 +49,7 @@ export function CitedSources({
                 </div>
               }
             >
-              <span className="inline-flex cursor-help items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              <span className="inline-flex cursor-help items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 Doc {s.label}
               </span>
             </Tooltip>
@@ -57,7 +57,7 @@ export function CitedSources({
         </div>
       )}
       {uncited.length > 0 ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
           Not yet cited: {uncited.map((s) => s.label).join(', ')}.
         </p>
       ) : null}
