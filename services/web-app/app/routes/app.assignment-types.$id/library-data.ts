@@ -54,34 +54,6 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   'exam-ready': 'Exam-ready',
 };
 
-// Three short example summaries shown on the AssignmentType detail page
-// to help a teacher imagine what they could write if they don't want to
-// use a library prompt. Unlinked; purely illustrative.
-export const INSPIRATIONAL_EXAMPLES: Array<{
-  type: EssayType;
-  title: string;
-  blurb: string;
-}> = [
-  {
-    type: 'DBQ',
-    title: 'Independence as a turning point',
-    blurb:
-      '6-source DBQ tracing how American ideas of independence shifted from 1763 to 1783 — strong sourcing + contextualization fit.',
-  },
-  {
-    type: 'LEQ',
-    title: 'Causes of colonial migration',
-    blurb:
-      'Causation LEQ on what drove population movement to British America between 1607 and 1754 — outside-evidence-heavy.',
-  },
-  {
-    type: 'DBQ',
-    title: 'Articles → Constitution',
-    blurb:
-      '5-source DBQ on whether Articles of Confederation weaknesses drove the 1787 push for a new Constitution. Mid-year complexity.',
-  },
-];
-
 // Mock teacher classes for the create-assignment sheet preview.
 export const MOCK_TEACHER_CLASSES: Array<{ id: string; label: string }> = [
   { id: 'mock-class-apush-3', label: 'APUSH · Period 3' },

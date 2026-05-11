@@ -7,8 +7,8 @@
 //      matching the existing AssignmentType pattern (Document / Assignment),
 //      each branching to a DBQ / LEQ submenu.
 //   2. Hero banner + title + description
-//   3. Teacher directions + inspirational examples
-//   4. Submissions accordion (empty mock)
+//   3. Teacher directions
+//   4. Submissions (empty-state placeholder)
 //   5. Prompt Library — sidebar (stacked filter accordions) + vertical list
 //      of prompt rows. Click a row → opens the create-assignment sheet
 //      pre-populated from the library entry. Mirrors PR #111 (Daily Pages
@@ -23,12 +23,6 @@ import {
 import { Link, useLoaderData, useNavigate } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { CaretLeftIcon } from '~/components/icons';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '~/components/ui/accordion';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
@@ -48,7 +42,6 @@ import {
 } from './create-assignment-sheet';
 import {
   type EssayType,
-  INSPIRATIONAL_EXAMPLES,
   type LibraryPrompt,
   PREVIEW_ID,
   SAMPLE_PROMPTS,
@@ -80,7 +73,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       released: 0,
     },
     libraryPrompts: SAMPLE_PROMPTS,
-    inspirationalExamples: INSPIRATIONAL_EXAMPLES,
   });
 }
 
@@ -178,10 +170,10 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
           </p>
         </div>
 
-        {/* Teacher directions + inspirational examples */}
+        {/* Teacher directions */}
         <div className="mb-6 rounded-lg border bg-muted/40 p-4">
           <h3 className="mb-2 text-sm font-semibold">How AP History essays work in Yawp</h3>
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Each assignment is one prompt graded against the College Board rubric
             (7-pt DBQ or 6-pt LEQ). The tutor coaches in genre-specific phases —
             DBQ runs source analysis → thesis → contextualization → drafting →
@@ -193,47 +185,20 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
             above to start a Document or Assignment from scratch, or pick a
             prompt from the library below to pre-fill the assignment form.
           </p>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {data.inspirationalExamples.map((ex) => (
-              <div
-                key={ex.title}
-                className="rounded border bg-background p-3 text-sm"
-              >
-                <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="secondary" size="sm">
-                    {ex.type}
-                  </Badge>
-                  <span className="font-medium">{ex.title}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{ex.blurb}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Submissions */}
-        <Accordion type="single" collapsible>
-          <AccordionItem value="submissions">
-            <AccordionTrigger className="text-base">
-              Submissions
-              <span className="ml-2 text-sm text-muted-foreground">
-                {data.submissions.total} total
-              </span>
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="flex flex-wrap gap-2 pb-3">
-                <Badge variant="outline">DBQ</Badge>
-                <Badge variant="outline">LEQ</Badge>
-                <Badge variant="outline">All</Badge>
-              </div>
-              <div className="rounded border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-                No submissions yet. Once students start drafting, this section
-                will track in-progress, submitted, graded, and released essays —
-                filterable by DBQ vs. LEQ.
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+        <div className="mb-2 flex items-baseline gap-2">
+          <h3 className="text-base font-medium">Submissions</h3>
+          <span className="text-sm text-muted-foreground">
+            {data.submissions.total} total
+          </span>
+        </div>
+        <div className="rounded border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          No submissions yet. Once students start drafting, this section will
+          track in-progress, submitted, graded, and released essays — filterable
+          by DBQ vs. LEQ.
+        </div>
 
         <Separator className="my-2" />
 
