@@ -1,10 +1,15 @@
 // Print-friendly view of a DBQ's source set. Opens in a new tab from the
-// Create Assignment sheet's Download PDF button; the teacher uses the
-// browser's Print → Save as PDF to capture it. Designed to render cleanly
-// on white paper: no app chrome (overlaid on top of the app via fixed inset),
-// per-source page-break hints, and a print-only stylesheet that strips the
-// preview controls.
+// Create Assignment sheet's Download PDF button. On mount the page
+// auto-triggers the browser's print dialog so the teacher's experience
+// is "click Download PDF → Save as PDF dialog opens" rather than "land
+// on a preview page first." A manual Print button stays as a fallback
+// in case the browser blocks the auto-print (popup blockers, etc.).
+//
+// Designed to render cleanly on white paper: no app chrome (overlaid on
+// top of the app via fixed inset), per-source page-break hints, and a
+// print-only stylesheet that strips the preview controls.
 
+import { useEffect } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -51,6 +56,17 @@ export default function SourcesPrintRoute() {
     sources: SourceCard[];
   };
 
+  // Auto-trigger the browser's print dialog once the page has rendered.
+  // The small delay gives the document body, stylesheet, and source
+  // cards time to lay out before print is invoked — otherwise some
+  // browsers print a half-rendered page.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      window.print();
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-white text-black print:static print:overflow-visible">
       <style>{`
@@ -65,10 +81,12 @@ export default function SourcesPrintRoute() {
         {/* Toolbar — hidden in print */}
         <div className="print-hide mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-3">
           <p className="text-xs text-stone-500">
-            Print preview · use <kbd className="rounded border px-1 text-[10px]">Cmd</kbd>+<kbd className="rounded border px-1 text-[10px]">P</kbd> (or your browser's Print menu) → "Save as PDF" to capture this source set.
+            Print dialog opening… In the dialog, set <strong>Destination</strong>{' '}
+            to <strong>"Save as PDF"</strong> and click Save. If the dialog
+            didn't open automatically, use the button →
           </p>
           <Button size="sm" onClick={() => window.print()}>
-            <PrinterIcon className="mr-1 h-4 w-4" /> Print / Save as PDF
+            <PrinterIcon className="mr-1 h-4 w-4" /> Open print dialog
           </Button>
         </div>
 
