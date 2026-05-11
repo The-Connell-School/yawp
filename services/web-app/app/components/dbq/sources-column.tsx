@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Maximize2, MessageSquarePlus, Minimize2, Trash2 } from 'lucide-react';
+import { BookOpen, MessageSquarePlus, Trash2 } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import type { DbqSource, SourceAnnotation } from './types';
 import type { DbqState } from './use-dbq-state';
@@ -45,25 +45,19 @@ export function SourcesColumn({
                 onClick={onToggleMaximize}
                 aria-label={
                   isMaximized
-                    ? 'Restore split (50/50)'
+                    ? 'Exit Read mode (restore 50/50)'
                     : 'Read mode (expand sources)'
                 }
                 aria-pressed={isMaximized}
-                title={
-                  isMaximized ? 'Restore split (50/50)' : 'Read mode'
-                }
+                title={isMaximized ? 'Exit Read mode' : 'Read mode'}
                 className={cn(
                   'inline-flex h-6 w-6 items-center justify-center rounded-md border transition',
                   isMaximized
                     ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary'
                 )}
               >
-                {isMaximized ? (
-                  <Minimize2 size={12} />
-                ) : (
-                  <Maximize2 size={12} />
-                )}
+                <BookOpen size={12} />
               </button>
             ) : null}
           </div>

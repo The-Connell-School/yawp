@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, PenLine } from 'lucide-react';
 import { CitedSources } from './cited-sources';
 import { PlanningSidebar } from './planning-sidebar';
 import type { DbqState } from './use-dbq-state';
@@ -46,23 +46,19 @@ export function EditorColumn({
               onClick={onToggleMaximize}
               aria-label={
                 isMaximized
-                  ? 'Restore split (50/50)'
+                  ? 'Exit Write mode (restore 50/50)'
                   : 'Write mode (expand editor)'
               }
               aria-pressed={isMaximized}
-              title={isMaximized ? 'Restore split (50/50)' : 'Write mode'}
+              title={isMaximized ? 'Exit Write mode' : 'Write mode'}
               className={cn(
                 'inline-flex h-6 w-6 items-center justify-center rounded-md border transition',
                 isMaximized
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary'
               )}
             >
-              {isMaximized ? (
-                <Minimize2 size={12} />
-              ) : (
-                <Maximize2 size={12} />
-              )}
+              <PenLine size={12} />
             </button>
           ) : null}
         </div>
