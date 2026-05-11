@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { PanelLeftOpen, Sparkles } from 'lucide-react';
+import { BookOpen, PanelLeftOpen, PenLine, Sparkles } from 'lucide-react';
 import { EditorColumn } from './editor-column';
 import { PromptBanner } from './prompt-banner';
 import { ResizeHandle } from './resize-handle';
@@ -9,6 +9,12 @@ import { TutorChatStripe } from './tutor-chat-stripe';
 import { sampleDbq } from './sample-data';
 import { useDbqState } from './use-dbq-state';
 import type { DbqState } from './use-dbq-state';
+import { cn } from '~/utils/misc';
+
+const SNAP_READ_PCT = 75;
+const SNAP_WRITE_PCT = 25;
+const BALANCED_PCT = 50;
+const SNAP_TOLERANCE = 5;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -19,7 +25,7 @@ export function DbqAssignmentScreen() {
 
   const [tutorCollapsed, setTutorCollapsed] = useState(false);
   const [tutorWidth, setTutorWidth] = useState(320);
-  const [splitPct, setSplitPct] = useState(50);
+  const [splitPct, setSplitPct] = useState(BALANCED_PCT);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
   function handleTutorDrag(dx: number) {
@@ -62,6 +68,7 @@ export function DbqAssignmentScreen() {
             <DraftingPane
               state={state}
               splitPct={splitPct}
+              setSplitPct={setSplitPct}
               onSplitDrag={handleSplitDrag}
               splitContainerRef={splitContainerRef}
             />
@@ -82,14 +89,26 @@ export function DbqAssignmentScreen() {
 function DraftingPane({
   state,
   splitPct,
+  setSplitPct,
   onSplitDrag,
   splitContainerRef,
 }: {
   state: DbqState;
   splitPct: number;
+  setSplitPct: (n: number) => void;
   onSplitDrag: (dx: number) => void;
   splitContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const isRead = splitPct >= SNAP_READ_PCT - SNAP_TOLERANCE;
+  const isWrite = splitPct <= SNAP_WRITE_PCT + SNAP_TOLERANCE;
+
+  function snapRead() {
+    setSplitPct(isRead ? BALANCED_PCT : SNAP_READ_PCT);
+  }
+  function snapWrite() {
+    setSplitPct(isWrite ? BALANCED_PCT : SNAP_WRITE_PCT);
+  }
+
   return (
     <div
       ref={splitContainerRef}
@@ -101,14 +120,67 @@ function DraftingPane({
       >
         <SourcesColumn state={state} />
       </div>
-      <ResizeHandle
-        onDrag={onSplitDrag}
-        ariaLabel="Resize sources vs editor"
-      />
+
+      <div className="relative shrink-0">
+        <ResizeHandle
+          onDrag={onSplitDrag}
+          ariaLabel="Resize sources vs editor"
+        />
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center justify-center gap-1">
+          <SnapButton
+            active={isRead}
+            onClick={snapRead}
+            icon={<BookOpen size={12} />}
+            label={isRead ? 'Reset split (50/50)' : 'Read mode (expand sources)'}
+          />
+          <SnapButton
+            active={isWrite}
+            onClick={snapWrite}
+            icon={<PenLine size={12} />}
+            label={isWrite ? 'Reset split (50/50)' : 'Write mode (expand editor)'}
+          />
+        </div>
+      </div>
+
       <div className="min-h-0 flex-1 pl-1.5">
         <EditorColumn state={state} />
       </div>
     </div>
+  );
+}
+
+function SnapButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      title={label}
+      aria-label={label}
+      aria-pressed={active}
+      className={cn(
+        'pointer-events-auto inline-flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition',
+        active
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-background text-muted-foreground hover:border-primary hover:text-primary'
+      )}
+    >
+      {icon}
+    </button>
   );
 }
 
