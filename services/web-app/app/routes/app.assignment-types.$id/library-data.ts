@@ -1,6 +1,11 @@
 // Mock data for the AP History Essay prompt library and create-assignment
 // sheet. Mirrors the LibraryPrompt shape called out in the v1 spec
 // (docs/plans/2026-05-09-ap-history-essay-spec-v1.md).
+//
+// SAMPLE_PROMPTS and SOURCES_* arrays are auto-generated from
+// docs/content/yawp_apush_library_v1.xlsx — run
+// `python3 scripts/ingest-library.py` after editing the xlsx. Everything
+// outside the auto-generated block is preserved.
 
 export const PREVIEW_ID = 'preview-ap-history-essay';
 
@@ -25,6 +30,13 @@ export type LibraryPrompt = {
   difficulty: Difficulty;
 };
 
+export type SourceCard = {
+  id: string;
+  title: string;
+  attribution: string;
+  body: string;
+};
+
 export const REASONING_LABEL: Record<Reasoning, string> = {
   causation: 'Causation',
   comparison: 'Comparison',
@@ -38,128 +50,9 @@ export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
   'exam-ready': 'Exam-ready',
 };
 
-export const SAMPLE_PROMPTS: LibraryPrompt[] = [
-  {
-    id: 'DBQ-USH-001',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Reconstruction era (1865–1877) marked a turning point in the lives of formerly enslaved people.',
-    era: 'Reconstruction',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['sourcing-heavy', 'complexity-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-USH-002',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Progressive Era reforms (1890–1920) addressed the problems of industrialization.',
-    era: 'Progressive Era',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-USH-003',
-    type: 'DBQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the Cold War shaped American domestic policy from 1945 to 1975.',
-    era: 'Cold War',
-    sourceCount: 6,
-    reasoning: 'causation',
-    skillEmphasis: ['contextualization-heavy'],
-    difficulty: 'exam-ready',
-  },
-  {
-    id: 'LEQ-USH-001',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the relative importance of causes of the American Civil War.',
-    era: 'Antebellum',
-    sourceCount: null,
-    reasoning: 'causation',
-    skillEmphasis: ['outside-evidence-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-USH-002',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Compare the goals and outcomes of Reconstruction policies in the 1860s and 1870s.',
-    era: 'Reconstruction',
-    sourceCount: null,
-    reasoning: 'comparison',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-USH-003',
-    type: 'LEQ',
-    period: 'AP USH',
-    prompt:
-      'Evaluate the extent to which the period from 1945 to 1980 represents a continuation of New Deal liberalism.',
-    era: 'Postwar & Civil Rights',
-    sourceCount: null,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['complexity-heavy'],
-    difficulty: 'exam-ready',
-  },
-  {
-    id: 'DBQ-EUR-001',
-    type: 'DBQ',
-    period: 'AP Euro',
-    prompt:
-      'Evaluate the extent to which the Reformation transformed European political authority in the 16th century.',
-    era: 'Reformation',
-    sourceCount: 7,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['complexity-heavy'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'LEQ-EUR-001',
-    type: 'LEQ',
-    period: 'AP Euro',
-    prompt: 'Compare the responses of European states to the French Revolution.',
-    era: 'French Revolution',
-    sourceCount: null,
-    reasoning: 'comparison',
-    skillEmphasis: ['balanced'],
-    difficulty: 'mid-year',
-  },
-  {
-    id: 'DBQ-WLD-001',
-    type: 'DBQ',
-    period: 'AP World',
-    prompt:
-      'Evaluate the extent to which trans-Saharan trade networks transformed West African societies between 1000 and 1450.',
-    era: 'Post-Classical',
-    sourceCount: 5,
-    reasoning: 'continuity-and-change',
-    skillEmphasis: ['contextualization-heavy'],
-    difficulty: 'intro',
-  },
-  {
-    id: 'LEQ-WLD-001',
-    type: 'LEQ',
-    period: 'AP World',
-    prompt:
-      'Evaluate the relative importance of factors that drove industrialization between 1750 and 1900.',
-    era: 'Industrial',
-    sourceCount: null,
-    reasoning: 'causation',
-    skillEmphasis: ['outside-evidence-heavy'],
-    difficulty: 'exam-ready',
-  },
-];
-
+// Three short example summaries shown on the AssignmentType detail page
+// to help a teacher imagine what they could write if they don't want to
+// use a library prompt. Unlinked; purely illustrative.
 export const INSPIRATIONAL_EXAMPLES: Array<{
   type: EssayType;
   title: string;
@@ -167,21 +60,21 @@ export const INSPIRATIONAL_EXAMPLES: Array<{
 }> = [
   {
     type: 'DBQ',
-    title: 'Reconstruction as a turning point',
+    title: 'Independence as a turning point',
     blurb:
-      '7-source DBQ pushing students to argue continuity vs. change in the lives of formerly enslaved people, 1865–1877.',
+      '6-source DBQ tracing how American ideas of independence shifted from 1763 to 1783 — strong sourcing + contextualization fit.',
   },
   {
     type: 'LEQ',
-    title: 'Causes of the Civil War',
+    title: 'Causes of colonial migration',
     blurb:
-      'Causation LEQ — students rely entirely on outside evidence to weigh the relative importance of antebellum causes.',
+      'Causation LEQ on what drove population movement to British America between 1607 and 1754 — outside-evidence-heavy.',
   },
   {
     type: 'DBQ',
-    title: 'Cold War & domestic policy',
+    title: 'Articles → Constitution',
     blurb:
-      '6-source DBQ tuned for contextualization. Strong fit for late-year exam-prep practice.',
+      '5-source DBQ on whether Articles of Confederation weaknesses drove the 1787 push for a new Constitution. Mid-year complexity.',
   },
 ];
 
@@ -196,257 +89,280 @@ export function suggestedAssignmentTitle(p: LibraryPrompt): string {
   return `${p.era} ${p.type}`;
 }
 
-// ---------------------------------------------------------------------------
-// Source sets
-// ---------------------------------------------------------------------------
-// One source set per DBQ prompt in the library. LEQ prompts have no sources.
-// Content is illustrative — real corpus seeding happens during engineering
-// handoff. Source bodies are abbreviated to ~1–2 sentences for the preview;
-// the real library entries will carry full primary-source excerpts.
+// <library:begin auto-generated by scripts/ingest-library.py>
+// Do not edit by hand. Run `python3 scripts/ingest-library.py`
+// after editing docs/content/yawp_apush_library_v1.xlsx.
 
-export type SourceCard = {
-  id: string;
-  title: string;
-  attribution: string;
-  body: string;
-};
+export const SAMPLE_PROMPTS: LibraryPrompt[] = [
+  {
+    id: 'LEQ-USH-001',
+    type: 'LEQ',
+    period: 'AP USH',
+    prompt: `Evaluate the relative importance of causes of population movement to colonial British America in the period from 1607 to 1754. (Released 2022 APUSH LEQ #2)`,
+    era: '1607–1754: Colonization',
+    sourceCount: null,
+    reasoning: 'causation',
+    skillEmphasis: ['contextualization-heavy', 'outside-evidence-heavy'],
+    difficulty: 'exam-ready',
+  },
+  {
+    id: 'LEQ-USH-002',
+    type: 'LEQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent to which English colonial societies in the New England and Chesapeake regions prior to 1700 were similar to each other. (Released College Board APUSH Sample DBQ, 2018 CED — adapted as LEQ)`,
+    era: '1607–1754: Colonization',
+    sourceCount: null,
+    reasoning: 'comparison',
+    skillEmphasis: ['complexity-heavy', 'outside-evidence-heavy'],
+    difficulty: 'mid-year',
+  },
+  {
+    id: 'DBQ-USH-001',
+    type: 'DBQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent of change in ideas about American independence from 1763 to 1783. (Released 2017 APUSH DBQ)`,
+    era: '1754–1800: Revolution & Founding',
+    sourceCount: 6,
+    reasoning: 'continuity-and-change',
+    skillEmphasis: ['sourcing-heavy', 'contextualization-heavy'],
+    difficulty: 'exam-ready',
+  },
+  {
+    id: 'DBQ-USH-002',
+    type: 'DBQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent to which weaknesses of the Articles of Confederation led to the drafting and adoption of the United States Constitution from 1781 to 1788.`,
+    era: '1754–1800: Revolution & Founding',
+    sourceCount: 5,
+    reasoning: 'causation',
+    skillEmphasis: ['complexity-heavy', 'sourcing-heavy'],
+    difficulty: 'mid-year',
+  },
+  {
+    id: 'DBQ-USH-003',
+    type: 'DBQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent to which debates over the proper scope of federal power shaped American politics in the period from 1789 to 1800.`,
+    era: '1754–1800: Revolution & Founding',
+    sourceCount: 5,
+    reasoning: 'comparison',
+    skillEmphasis: ['sourcing-heavy', 'outside-evidence-heavy'],
+    difficulty: 'exam-ready',
+  },
+  {
+    id: 'LEQ-USH-003',
+    type: 'LEQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent to which the Seven Years' War (French and Indian War, 1754–1763) marked a turning point in American relations with Great Britain, analyzing what changed and what stayed the same from the period before the war to the period after it. (Released 2015 APUSH LEQ #2)`,
+    era: '1754–1800: Revolution & Founding',
+    sourceCount: null,
+    reasoning: 'periodization',
+    skillEmphasis: ['complexity-heavy', 'outside-evidence-heavy'],
+    difficulty: 'exam-ready',
+  },
+  {
+    id: 'LEQ-USH-004',
+    type: 'LEQ',
+    period: 'AP USH',
+    prompt: `Evaluate the extent to which ideas of self-government influenced American colonial reaction to British imperial authority in the period from 1754 to 1776. (Released 2019 APUSH LEQ #2)`,
+    era: '1754–1800: Revolution & Founding',
+    sourceCount: null,
+    reasoning: 'causation',
+    skillEmphasis: ['contextualization-heavy', 'outside-evidence-heavy'],
+    difficulty: 'mid-year',
+  },
+];
 
 const SOURCES_DBQ_USH_001: SourceCard[] = [
   {
     id: 'src-1',
-    title: 'Doc 1 — Petition from a Freedmen’s Convention',
-    attribution: 'Black Virginia delegates, June 1865',
-    body:
-      'We the colored people of Virginia… demand that we be permitted the rights of citizens, the protection of the laws, and the use of the ballot…',
+    title: `Doc 1 — Virginia Resolves`,
+    attribution: `The Virginia House of Burgesses, May 16, 1769, asserting the sole right of the colonial legislature to tax Virginians.`,
+    body: `Resolved, That it is the Opinion of this Committee, that the sole Right of imposing Taxes on the Inhabitants of this his Majesty's Colony and Dominion of Virginia, is now, and ever hath been, legally and constitutionally vested in the House of Burgesses, lawfully convened according to the ancient and established Practice, with the Consent of the Council, and of his Majesty, the King of Great-Britain, or his Governor, for the Time being.
+
+Resolved, That it is the Opinion of this Committee, that it is the undoubted Privilege of the Inhabitants of this Colony, to petition their Sovereign for Redress of Grievances; and that it is lawful and expedient to procure the Concurrence of his Majesty's other Colonies, in dutiful Addresses, praying the royal Interposition in Favour of the Violated Rights of America.
+
+Resolved, That it is the Opinion of this Committee, that all Trials for Treason, Misprison of Treason, or for any Felony or Crime whatsoever, committed and done in this his Majesty's said Colony and Dominion, by any Person or Persons, residing in this Colony… and sending such Person, or Persons, to Places beyond the Sea, to be tried, is highly derogatory of the Rights of British Subjects.`,
   },
   {
     id: 'src-2',
-    title: 'Doc 2 — Black Codes, State of Mississippi',
-    attribution: 'Mississippi state legislature, 1865',
-    body:
-      'Every freedman, free negro, and mulatto shall, on the second Monday of January, 1866, and annually thereafter, have a lawful home or employment, and shall produce a written contract showing the same to any officer who shall demand it…',
+    title: `Doc 2 — Samuel Adams, Rights of the Colonists`,
+    attribution: `Samuel Adams, writing for the Boston Committee of Correspondence, November 20, 1772 (the 'Boston Pamphlet').`,
+    body: `Among the natural rights of the Colonists are these: First, a right to life; Secondly, to liberty; Thirdly, to property; together with the right to support and defend them in the best manner they can. These are evident branches of, rather than deductions from, the duty of self-preservation, commonly called the first law of nature.
+
+All men have a right to remain in a state of nature as long as they please; and in case of intolerable oppression, civil or religious, to leave the society they belong to, and enter into another. When men enter into society, it is by voluntary consent; and they have a right to demand and insist upon the performance of such conditions and previous limitations as form an equitable original compact.
+
+In short, it is the greatest absurdity to suppose it in the power of one, or any number of men, at the entering into society, to renounce their essential natural rights, or the means of preserving those rights; when the grand end of civil government, from the very nature of its institution, is for the support, protection, and defence of those very rights; the principal of which, as is before observed, are Life, Liberty, and Property.`,
   },
   {
     id: 'src-3',
-    title: 'Doc 3 — Letter from a Freedmen’s Bureau Agent',
-    attribution: 'Capt. R. S. Donaldson to Gen. O. O. Howard, 1866',
-    body:
-      'The freedmen are eager for schools and for the means of self-improvement, but the planters in this region resist their efforts at every turn — wages withheld, contracts torn up, violence used freely against any who attempt to leave their former masters…',
+    title: `Doc 3 — Quaker Testimony`,
+    attribution: `The Religious Society of Friends (Quakers), Pennsylvania and New Jersey Meeting at Philadelphia, January 24, 1775.`,
+    body: `HAVING considered with real sorrow, the unhappy contest between the legislature of Great Britain and the people of these Colonies, and the animosities consequent thereon; we have by repeated public advices and private admonitions, used our endeavours to dissuade the members of our religious society from joining with the public resolutions promoted and entered into by some of the people, which as we apprehended, so we now find have increased contention, and produced great discord and confusion.
+
+The Divine Principle of Grace and Truth which we profess, leads all who attend to its dictates, to demean themselves as peaceable subjects, and to discountenance and avoid every measure tending to excite disaffection to the King, as supreme magistrate, or to the legal authority of his government.
+
+May we therefore firmly unite in the abhorrence of all such writings, and measures, as evince a desire and design to break off the happy connection we have heretofore enjoyed, with the kingdom of Great Britain, and our just and necessary subordination to the King and those who are lawfully placed in authority under him.`,
   },
   {
     id: 'src-4',
-    title: 'Doc 4 — Sharecropping Contract',
-    attribution: 'Greene County, Georgia, 1872',
-    body:
-      'The said laborer shall furnish his own labor and tools… the proprietor shall furnish the land and one-half of the seed… The crop shall be divided as follows: one-half to the proprietor, one-half to the laborer, less any advances or supplies…',
+    title: `Doc 4 — Janet Schaw, Journal of a Lady of Quality`,
+    attribution: `Janet Schaw, a Scottish loyalist visiting her brother's plantation near Wilmington, North Carolina, June 1775.`,
+    body: `At present the martial law stands thus: An officer or committeeman enters a plantation with his posse. The Alternative is proposed: Agree to join us, and your persons and properties are safe. You have a shilling sterling a day; your duty is no more than once a month appearing under Arms at Wilmingtown, which will prove only a merry-making, where you will have as much grog as you can drink. But if you refuse, we are directly to cut up your corn, shoot your pigs, burn your houses, seize your Negroes, and perhaps tar and feather yourself.
+
+Not to choose the first requires more courage than they are possessed of, and I believe this method has seldom failed with the lower sort. No sooner do they appear under arms on the stated day, than they are harangued by their officers with the implacable cruelty of the king of Great Britain, who has resolved to take their property from them, and to deprive them of their Charter rights.
+
+Everything here is in the utmost confusion. Committees are appointed to inspect into the Characters and Conduct of every tradesman, to prevent them selling Tea or buying British Manufactures. Some of them have been tarred and feathered, others had their property burnt and destroyed by the populace.`,
   },
   {
     id: 'src-5',
-    title: 'Doc 5 — Editorial on the Compromise of 1877',
-    attribution: 'Atlanta Constitution, March 1877',
-    body:
-      'The withdrawal of federal troops from Louisiana and South Carolina marks an end to bayonet rule and a new dawn for self-government. The southern states will now resume their rightful place in the Union, governed by their own people without northern interference.',
+    title: `Doc 5 — Charles Inglis, True Interest of America`,
+    attribution: `Rev. Charles Inglis, Anglican loyalist clergyman at Trinity Church in New York City, replying to Paine's Common Sense, 1776.`,
+    body: `This melancholy contest would last till one side conquered. Supposing Britain to be victorious; however high my opinion is of British Generosity, I should be exceedingly sorry to receive terms from her in the haughty tone of a conqueror. Or supposing such a failure of her manufactures, commerce and strength, that victory should incline to the side of America; yet who can say in that case, what extremities her sense of resentment and self-preservation will drive Great-Britain to?
+
+For my part, I should not in the least be surprized, if on such a prospect as the Independency of America, she would parcel out this continent to the different European Powers. Canada might be restored to France, Florida to Spain, with additions to each—other states also might come in for a portion. Let no man think this chimerical or improbable. The independency of America would be so fatal to Britain, that she would leave nothing in her power undone to prevent it.
+
+By a connection with Great-Britain, our trade would still have the protection of the greatest naval power in the world… What an exhaustless fund of wealth would Britain become to America, who shares its commerce!`,
   },
   {
     id: 'src-6',
-    title: 'Doc 6 — Speech on the 15th Amendment',
-    attribution: 'Frederick Douglass, 1870',
-    body:
-      'Slavery is not abolished until the black man has the ballot. The right to vote is the most important political right; it is the right which secures all other rights.',
-  },
-  {
-    id: 'src-7',
-    title: 'Doc 7 — Photograph: Freedmen’s school, Beaufort, SC',
-    attribution: 'Library of Congress, c. 1866 (image-only)',
-    body:
-      '[Image-only source. Caption: rows of formerly enslaved children at a Freedmen’s Bureau school, with two Black teachers at the front.]',
+    title: `Doc 6 — Thomas Paine, The American Crisis`,
+    attribution: `Thomas Paine, The American Crisis No. 1, published in the Pennsylvania Journal, December 19, 1776, during Washington's retreat across the Delaware.`,
+    body: `THESE are the times that try men's souls. The summer soldier and the sunshine patriot will, in this crisis, shrink from the service of their country; but he that stands it now, deserves the love and thanks of man and woman. Tyranny, like hell, is not easily conquered; yet we have this consolation with us, that the harder the conflict, the more glorious the triumph. What we obtain too cheap, we esteem too lightly: it is dearness only that gives every thing its value. Heaven knows how to put a proper price upon its goods; and it would be strange indeed if so celestial an article as FREEDOM should not be highly rated.
+
+Britain, with an army to enforce her tyranny, has declared that she has a right (not only to TAX) but "to BIND us in ALL CASES WHATSOEVER," and if being bound in that manner, is not slavery, then is there not such a thing as slavery upon earth. Even the expression is impious; for so unlimited a power can belong only to God.
+
+Not all the treasures of the world, so far as I believe, could have induced me to support an offensive war, for I think it murder; but if a thief breaks into my house, burns and destroys my property, and kills or threatens to kill me, or those that are in it… am I to suffer it?`,
   },
 ];
 
 const SOURCES_DBQ_USH_002: SourceCard[] = [
   {
     id: 'src-1',
-    title: 'Doc 1 — Triangle Shirtwaist Factory fire report',
-    attribution: 'New York Factory Investigating Commission, 1912',
-    body:
-      'The investigation revealed that exit doors had been locked to prevent worker theft and unauthorized breaks. The fire claimed 146 lives, almost all young immigrant women, and exposed the human cost of unregulated factory conditions.',
+    title: `Doc 1 — Washington to Knox on Shays' Rebellion`,
+    attribution: `George Washington, letter to Henry Knox, Mount Vernon, February 3, 1787. Washington was at Mount Vernon when Shays' Rebellion erupted.`,
+    body: `I feel my self exceedingly obliged to you for the full, & friendly communications in your letters of the 14th 21st & 25th ult.; and shall (critically as matters are described in the latter) be extremely anxious to know the issue of the movements of the forces that were assembling, the one to support, the other to oppose the constitutional rights of Massachusetts. The moment is, indeed, important!
+
+If government shrinks, or is unable to enforce its laws; fresh manœuvres will be displayed by the insurgents—anarchy & confusion must prevail—and every thing will be turned topsy turvey in that State; where it is not probable the mischiefs will terminate.
+
+In your letter of the 14th you express a wish to know my intention respecting the Convention, proposed to be held at Philada in May next. In confidence I inform you, that it is not, at this time, my purpose to attend it.
+
+[I am] indeed, after what I have seen, or rather after what I have heard, I shall be surprized at nothing; for if three years ago, any person had told me that at this day, I should see such a formidable rebellion against the laws & constitutions of our own making as now appears I should have thought him a bedlamite—a fit subject for a mad house.`,
   },
   {
     id: 'src-2',
-    title: 'Doc 2 — The Jungle (excerpt)',
-    attribution: 'Upton Sinclair, 1906',
-    body:
-      'There were the bones of beef carcasses on the floor, the lard buckets that had not been emptied in months, and the men who worked in the cooking-rooms whose bodies, sweating from the steam, gave the meat its only seasoning…',
+    title: `Doc 2 — Knox to Washington on the Rebels`,
+    attribution: `Henry Knox, Secretary of War, letter to George Washington, October 23, 1786, reporting on the spreading unrest in western Massachusetts.`,
+    body: `Their creed is "That the property of the United States, has been protected from the confiscations of Britain by the joint exertions of all, and therefore ought to be the common property of all. And he that attempts opposition to this creed is an enemy to equity and justice, & ought to be swept from off the face of the earth."
+
+In a word they are determined to annihilate all debts public and private and have agrarian Laws which are easily effected by means of unfunded paper money which shall be a tender in all cases whatever.
+
+The numbers of these people may amount in [M]assachusetts to about one fifth part of several populous counties, and to them may be collected, people of similar sentiments, from the States of Rhode Island, Connecticut and New Hampshire so as to constitute a body of 12 or 15,000 desperate and unprincipled men—They are chiefly of the Young and active part of the community.
+
+This dreadful situation has alarmed every man of principle and property in New England—They start as from a dream, and ask what has been the Cause of our delusion? What is to give us security against the violence of lawless men?—Our government must be braced, changed, or altered to secure our lives and property.`,
   },
   {
     id: 'src-3',
-    title: 'Doc 3 — The New Nationalism speech',
-    attribution: 'Theodore Roosevelt, Osawatomie, Kansas, 1910',
-    body:
-      'I stand for the square deal. But when I say I am for the square deal, I mean not merely that I stand for fair play under the present rules of the game, but that I stand for having those rules changed so as to work for a more substantial equality of opportunity.',
+    title: `Doc 3 — Madison, Vices of the Political System`,
+    attribution: `James Madison, memorandum prepared in April 1787 in advance of the Constitutional Convention. Madison enumerated the structural failures of the Articles of Confederation.`,
+    body: `1. Failure of the States to comply with the Constitutional requisitions.
+
+This evil has been so fully experienced both during the war and since the peace, results so naturally from the number and independent authority of the States and has been so uniformly examplified in every similar Confederacy, that it may be considered as not less radically and permanently inherent in, than it is fatal to the object of, the present System.
+
+7. Want of sanction to the laws, and of coercion in the Government of the Confederacy.
+
+A sanction is essential to the idea of law, as coercion is to that of Government. The federal system being destitute of both, wants the great vital principles of a Political Cons[ti]tution. Under the form of such a Constitution, it is in fact nothing more than a treaty of amity of commerce and of alliance, between so many independent and Sovereign States.
+
+11. Injustice of the laws of the States.
+
+If the multiplicity and mutability of laws prove a want of wisdom, their injustice betrays a defect still more alarming: more alarming not merely because it is a greater evil in itself, but because it brings more into question the fundamental principle of republican Government, that the majority who rule in such Governments, are the safest Guardians both of public Good and of private rights.`,
   },
   {
     id: 'src-4',
-    title: 'Doc 4 — The History of the Standard Oil Company',
-    attribution: 'Ida Tarbell, 1904',
-    body:
-      'Whatever weapons came handy — the railway, the legislature, the courts — were used. The result was not industrial reform; it was a monopoly built by means that no man of fair mind could defend.',
+    title: `Doc 4 — Madison, Federalist No. 10`,
+    attribution: `James Madison, writing as 'Publius,' Federalist No. 10, published in the New-York Packet, November 22, 1787, defending the proposed Constitution.`,
+    body: `Among the numerous advantages promised by a well constructed union, none deserves to be more accurately developed than its tendency to break and control the violence of faction. The friend of popular governments, never finds himself so much alarmed for their character and fate, as when he contemplates their propensity to this dangerous vice.
+
+By a faction, I understand a number of citizens, whether amounting to a majority or minority of the whole, who are united and actuated by some common impulse of passion, or of interest, adverse to the rights of other citizens, or to the permanent and aggregate interests of the community.
+
+The latent causes of faction are thus sown in the nature of man… The most common and durable source of factions, has been the various and unequal distribution of property.
+
+A rage for paper money, for an abolition of debts, for an equal division of property, or for any other improper or wicked project, will be less apt to pervade the whole body of the Union than a particular member of it; in the same proportion as such a malady is more likely to taint a particular county or district, than an entire State.
+
+In the extent and proper structure of the Union, therefore, we behold a republican remedy for the diseases most incident to republican government.`,
   },
   {
     id: 'src-5',
-    title: 'Doc 5 — Twenty Years at Hull-House',
-    attribution: 'Jane Addams, 1910',
-    body:
-      'We believed that the dependence of classes on each other is reciprocal; and that as the social relation is essentially a reciprocal relation, it gives a form of expression that has peculiar value to a settlement of women working among the immigrant poor.',
-  },
-  {
-    id: 'src-6',
-    title: 'Doc 6 — Muller v. Oregon opinion',
-    attribution: 'U.S. Supreme Court, 1908',
-    body:
-      'That woman\'s physical structure and the performance of maternal functions place her at a disadvantage in the struggle for subsistence is obvious. This is especially true when the burdens of motherhood are upon her.',
-  },
-  {
-    id: 'src-7',
-    title: 'Doc 7 — "The Trust-Buster" (political cartoon)',
-    attribution: 'Puck Magazine, 1907 (image-only)',
-    body:
-      '[Image-only source. Caption: Theodore Roosevelt brandishing a club labeled "Public Service" at corporate trusts depicted as multi-headed serpents.]',
+    title: `Doc 5 — Brutus No. 1`,
+    attribution: `Robert Yates (writing as 'Brutus'), Anti-Federalist essay published in the New-York Journal, October 18, 1787, opposing ratification of the Constitution.`,
+    body: `If respect is to be paid to the opinion of the greatest and wisest men who have ever thought or wrote on the science of government, we shall be constrained to conclude, that a free republic cannot succeed over a country of such immense extent, containing such a number of inhabitants…
+
+It is natural to a republic to have only a small territory, otherwise it cannot long subsist. In a large republic there are men of large fortunes, and consequently of less moderation; there are trusts too great to be placed in any single subject; he has interest of his own; he soon begins to think that he may be happy, great and glorious, by oppressing his fellow citizens; and that he may raise himself to grandeur on the ruins of his country.
+
+The territory of the United States is of vast extent; it now contains near three millions of souls, and is capable of containing much more than ten times that number. Is it practicable for a country, so large and so numerous as they will soon become, to elect a representation, that will speak their sentiments, without their becoming so numerous as to be incapable of transacting public business? It certainly is not.
+
+These are some of the reasons by which it appears, that a free republic cannot long subsist over a country of the great extent of these states. If then this new constitution is calculated to consolidate the thirteen states into one, as it evidently is, it ought not to be adopted.`,
   },
 ];
 
 const SOURCES_DBQ_USH_003: SourceCard[] = [
   {
     id: 'src-1',
-    title: 'Doc 1 — The Truman Doctrine',
-    attribution: 'President Harry S. Truman, address to Congress, March 12, 1947',
-    body:
-      'I believe that it must be the policy of the United States to support free peoples who are resisting attempted subjugation by armed minorities or by outside pressures. The future of free peoples depends on the willingness of the United States to act.',
-  },
-  {
-    id: 'src-2',
-    title: 'Doc 2 — NSC-68 (excerpt)',
-    attribution: 'United States National Security Council, April 1950',
-    body:
-      'The integrity and vitality of our system is in greater jeopardy than ever before in our history. A defeat of free institutions anywhere is a defeat everywhere.',
-  },
-  {
-    id: 'src-3',
-    title: 'Doc 3 — Farewell Address',
-    attribution: 'President Dwight D. Eisenhower, January 17, 1961',
-    body:
-      'In the councils of government, we must guard against the acquisition of unwarranted influence, whether sought or unsought, by the military-industrial complex.',
-  },
-  {
-    id: 'src-4',
-    title: 'Doc 4 — Inaugural Address',
-    attribution: 'President John F. Kennedy, January 20, 1961',
-    body:
-      'Let every nation know, whether it wishes us well or ill, that we shall pay any price, bear any burden, meet any hardship, support any friend, oppose any foe, to assure the survival and the success of liberty.',
-  },
-  {
-    id: 'src-5',
-    title: 'Doc 5 — The Pentagon Papers (excerpt)',
-    attribution: 'U.S. Department of Defense study, 1967 (published 1971)',
-    body:
-      'American policy in Vietnam consisted of acts undertaken to prevent a Communist takeover, and was carried on under public statements that did not reflect the actual military and political situation on the ground.',
-  },
-  {
-    id: 'src-6',
-    title: 'Doc 6 — The Silent Majority Speech',
-    attribution: 'President Richard Nixon, November 3, 1969',
-    body:
-      'And so tonight — to you, the great silent majority of my fellow Americans — I ask for your support. North Vietnam cannot defeat or humiliate the United States. Only Americans can do that.',
-  },
-];
+    title: `Doc 1 — Hamilton, Report on Public Credit`,
+    attribution: `Alexander Hamilton, Secretary of the Treasury, First Report on Public Credit, submitted to Congress January 9, 1790, proposing federal assumption of state Revolutionary War debts.`,
+    body: `While the observance of that good faith, which is the basis of public credit, is recommended by the strongest inducements of political expediency, it is enforced by considerations of still greater authority. There are arguments for it, which rest on the immutable principles of moral obligation… This reflection derives additional strength from the nature of the debt of the United States. It was the price of liberty.
 
-const SOURCES_DBQ_EUR_001: SourceCard[] = [
-  {
-    id: 'src-1',
-    title: 'Doc 1 — The Ninety-Five Theses',
-    attribution: 'Martin Luther, Wittenberg, 1517',
-    body:
-      'Christians are to be taught that he who gives to the poor or lends to the needy does a better deed than he who buys indulgences. Christians are to be taught that he who sees a needy man and passes him by, yet gives his money for indulgences, does not buy papal indulgences but God\'s wrath.',
-  },
-  {
-    id: 'src-2',
-    title: 'Doc 2 — Diet of Worms speech',
-    attribution: 'Martin Luther, 1521',
-    body:
-      'Unless I am convinced by the testimony of Scripture or by clear reason, I am bound by the Scriptures I have quoted. My conscience is captive to the Word of God. I cannot and I will not recant anything.',
-  },
-  {
-    id: 'src-3',
-    title: 'Doc 3 — Edict of Worms',
-    attribution: 'Holy Roman Emperor Charles V, 1521',
-    body:
-      'It is our intent that this notorious heretic be apprehended and his books burned, that his memory be utterly extirpated, and that all his followers be similarly punished.',
-  },
-  {
-    id: 'src-4',
-    title: 'Doc 4 — Institutes of the Christian Religion (excerpt)',
-    attribution: 'John Calvin, 1536',
-    body:
-      'We call predestination God\'s eternal decree, by which he compacted with himself what he willed to become of each man. For all are not created in equal condition; rather, eternal life is foreordained for some, eternal damnation for others.',
-  },
-  {
-    id: 'src-5',
-    title: 'Doc 5 — Act of Supremacy',
-    attribution: 'English Parliament, 1534',
-    body:
-      'The King, his heirs and successors, kings of this realm, shall be taken, accepted, and reputed the only Supreme Head in earth of the Church of England, called Anglicana Ecclesia.',
-  },
-  {
-    id: 'src-6',
-    title: 'Doc 6 — Council of Trent decrees (excerpt)',
-    attribution: 'Roman Catholic Church, 1545–1563',
-    body:
-      'If anyone says that men are justified solely by the imputation of the righteousness of Christ, excluding grace and charity which is poured into their hearts by the Holy Spirit, let him be anathema.',
-  },
-  {
-    id: 'src-7',
-    title: 'Doc 7 — Peace of Augsburg',
-    attribution: 'Holy Roman Empire treaty, 1555',
-    body:
-      'It is agreed that the religion of the ruler shall be the religion of the territory (cuius regio, eius religio). Subjects who do not agree with their ruler\'s confession may emigrate freely to a territory of their preferred faith.',
-  },
-];
+The Secretary, after mature reflection on this point, entertains a full conviction that an assumption of the debts of the particular states by the Union, and a like provision for them as for those of the Union, will be a measure of sound policy and substantial justice. It would, in the opinion of the Secretary, contribute, in an eminent degree, to an orderly, stable and satisfactory arrangement of the national finances.
 
-const SOURCES_DBQ_WLD_001: SourceCard[] = [
-  {
-    id: 'src-1',
-    title: 'Doc 1 — Travels in Asia and Africa',
-    attribution: 'Ibn Battuta, c. 1354',
-    body:
-      'I arrived at the city of Niani, the capital of Mali. The sultan is generous and the kingdom is well-governed, with judges, scribes, and great libraries; salt and gold pass through every market.',
+It is a well known fact that in countries in which the national debt is properly funded and an object of established confidence, it answers most of the purposes of money. Transfers of stock or public debt are there equivalent to payments in specie… Trade is extended by it; because there is a larger capital to carry it on, and the merchant can at the same time afford to trade for smaller profits.`,
   },
   {
     id: 'src-2',
-    title: 'Doc 2 — Map of West African trade routes',
-    attribution: 'al-Idrisi, 12th century (with caption)',
-    body:
-      'Caravans of camels crossed the Sahara from Sijilmasa to Awdaghust, exchanging North African salt slabs for the gold dust of Wangara south of the Niger.',
+    title: `Doc 2 — Jefferson, Opinion on the Bank`,
+    attribution: `Thomas Jefferson, Secretary of State, Opinion on the Constitutionality of a National Bank, February 15, 1791, submitted to President Washington.`,
+    body: `I consider the foundation of the Constitution as laid on this ground: That "all powers not delegated to the United States, by the Constitution, nor prohibited by it to the States, are reserved to the States or to the people." To take a single step beyond the boundaries thus specially drawn around the powers of Congress, is to take possession of a boundless field of power, no longer susceptible of any definition.
+
+The incorporation of a bank, and the powers assumed by this bill, have not, in my opinion, been delegated to the United States, by the Constitution.
+
+They are not among the powers specially enumerated: for these are: 1st A power to lay taxes for the purpose of paying the debts of the United States; but no debt is paid by this bill, nor any tax laid. Were it a bill to raise money, its origination in the Senate would condemn it by the Constitution.
+
+2. 'to borrow money.' But this bill neither borrows money nor ensures the borrowing of it…
+
+The second general phrase is, 'to make all laws necessary and proper for carrying into execution the enumerated powers.' But they can all be carried into execution without a bank. A bank therefore is not necessary, and consequently not authorized by this phrase.`,
   },
   {
     id: 'src-3',
-    title: 'Doc 3 — The Catalan Atlas (excerpt)',
-    attribution: 'Abraham Cresques, 1375',
-    body:
-      'This is the kingdom of Mali, whose lord is Mansa Musa, the richest and noblest of all kings on account of the abundance of gold which is found in his lands.',
+    title: `Doc 3 — Hamilton, Opinion on the Bank`,
+    attribution: `Alexander Hamilton, Secretary of the Treasury, Opinion on the Constitutionality of an Act to Establish a Bank, February 23, 1791, defending the bank to President Washington.`,
+    body: `Now it appears to the Secretary of the Treasury that this general principle is inherent in the very definition of Government and essential to every step of the progress to be made by that of the United States; namely—that every power vested in a Government is in its nature sovereign, and includes by force of the term, a right to employ all the means requisite, and fairly applicable to the attainment of the ends of such power; and which are not precluded by restrictions & exceptions specified in the constitution; or not immoral, or not contrary to the essential ends of political society.
+
+This principle in its application to Government in general would be admitted as an axiom… The means by which national exigencies are to be provided for, national inconveniencies obviated, national prosperity promoted, are of such infinite variety, extent and complexity, that there must, of necessity, be great latitude of discretion in the selection & application of those means.
+
+It is essential to the being of the National government, that so erroneous a conception of the meaning of the word necessary, should be exploded. It is certain that neither the grammatical, nor popular sense of the term requires that construction. According to both, necessary often means no more than needful, requisite, incidental, useful, or conducive to.`,
   },
   {
     id: 'src-4',
-    title: 'Doc 4 — Description of Africa',
-    attribution: 'Leo Africanus, 1526',
-    body:
-      'In Timbuktu the merchants live in great wealth, and many books from Barbary are sold; the king pays scholars well to teach the religion of Muhammad, and the city has many judges, doctors, and clerics.',
+    title: `Doc 4 — Washington's Farewell Address`,
+    attribution: `George Washington, Farewell Address, published in the American Daily Advertiser, September 19, 1796, as Washington declined a third term.`,
+    body: `I have already intimated to you the danger of parties in the State, with particular reference to the founding of them on geographical discriminations. Let me now take a more comprehensive view, and warn you in the most solemn manner against the baneful effects of the spirit of party generally.
+
+This spirit, unfortunately, is inseparable from our nature, having its root in the strongest passions of the human mind… It serves always to distract the public councils and enfeeble the public administration. It agitates the community with ill-founded jealousies and false alarms; kindles the animosity of one part against another; foments occasionally riot and insurrection.
+
+The great rule of conduct for us in regard to foreign nations is, in extending our commercial relations to have with them as little political connection as possible. So far as we have already formed engagements let them be fulfilled with perfect good faith. Here let us stop.
+
+Why forego the advantages of so peculiar a situation? Why quit our own to stand upon foreign ground? Why, by interweaving our destiny with that of any part of Europe, entangle our peace and prosperity in the toils of European ambition, rivalship, interest, humor or caprice? It is our true policy to steer clear of permanent alliances with any portion of the foreign world.`,
   },
   {
     id: 'src-5',
-    title: 'Doc 5 — Inscription from the Great Mosque of Djenné',
-    attribution: 'c. 13th century',
-    body:
-      'By the grace of God this house was built that the worship of God might be made known among all peoples who come to trade in this place. May all who pass through honor the laws and the markets of this land.',
+    title: `Doc 5 — Kentucky Resolutions`,
+    attribution: `Thomas Jefferson (anonymously), Kentucky Resolutions, drafted October 1798, passed by Kentucky legislature November 1798, protesting the Alien and Sedition Acts.`,
+    body: `Resolved, That the several States composing the United States of America, are not united on the principle of unlimited submission to their General Government; but that, by a compact under the style and title of a Constitution for the United States, and of amendments thereto, they constituted a General Government for special purposes—delegated to that government certain definite powers, reserving, each State to itself, the residuary mass of right to their own self-government.
+
+And that whensoever the General Government assumes undelegated powers, its acts are unauthoritative, void, and of no force…
+
+That the Constitution of the United States, having delegated to Congress a power to punish treason, counterfeiting the securities and current coin of the United States, piracies, and felonies committed on the high seas, and offences against the law of nations, and no other crimes whatsoever… therefore the act of Congress, passed on the 14th day of July, 1798, intituled "An Act in addition to the act intituled An Act for the punishment of certain crimes against the United States" [the Sedition Act]… is altogether void, and of no force.
+
+That in cases of an abuse of the delegated powers, the members of the General Government, being chosen by the people, a change by the people would be the constitutional remedy; but, where powers are assumed which have not been delegated, a nullification of the act is the rightful remedy.`,
   },
 ];
 
@@ -454,9 +370,9 @@ export const SOURCES_BY_PROMPT_ID: Record<string, SourceCard[]> = {
   'DBQ-USH-001': SOURCES_DBQ_USH_001,
   'DBQ-USH-002': SOURCES_DBQ_USH_002,
   'DBQ-USH-003': SOURCES_DBQ_USH_003,
-  'DBQ-EUR-001': SOURCES_DBQ_EUR_001,
-  'DBQ-WLD-001': SOURCES_DBQ_WLD_001,
 };
+
+// <library:end>
 
 export function getSourcesForPrompt(promptId: string): SourceCard[] {
   return SOURCES_BY_PROMPT_ID[promptId] ?? [];
