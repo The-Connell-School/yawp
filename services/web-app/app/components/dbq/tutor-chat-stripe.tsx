@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Sparkles } from 'lucide-react';
+import { PanelLeftClose, Send, Sparkles } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { DBQ_PHASES } from './types';
 import type { ChatMessage } from './types';
 import type { DbqState } from './use-dbq-state';
 import { cn } from '~/utils/misc';
 
-export function TutorChatStripe({ state }: { state: DbqState }) {
+export function TutorChatStripe({
+  state,
+  onCollapse,
+}: {
+  state: DbqState;
+  onCollapse?: () => void;
+}) {
   const { messages, askTutor, phase, setPhase } = state;
   const [draft, setDraft] = useState('');
-  const listRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -23,11 +28,24 @@ export function TutorChatStripe({ state }: { state: DbqState }) {
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r bg-background">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <header className="shrink-0 border-b px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          <Sparkles size={14} className="text-primary" />
-          <h2 className="text-sm font-semibold">Tutor</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Sparkles size={14} className="text-primary" />
+            <h2 className="text-sm font-semibold">Tutor</h2>
+          </div>
+          {onCollapse ? (
+            <button
+              type="button"
+              onClick={onCollapse}
+              className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Collapse tutor"
+              title="Collapse tutor"
+            >
+              <PanelLeftClose size={14} />
+            </button>
+          ) : null}
         </div>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
           Phase-aware coaching. Failure-mode flags post here. Ask anything.
@@ -53,10 +71,7 @@ export function TutorChatStripe({ state }: { state: DbqState }) {
         </div>
       </header>
 
-      <div
-        ref={listRef}
-        className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5"
-      >
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
         {messages.map((m) => (
           <MessageCard key={m.id} message={m} />
         ))}
