@@ -112,6 +112,11 @@ export default function SourcesPrintRoute() {
                 <p className="whitespace-pre-line text-sm leading-relaxed">
                   {src.body}
                 </p>
+                {src.sourceUrl ? (
+                  <p className="mt-1 break-all text-[11px] text-stone-500">
+                    Source: {src.sourceUrl}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ol>

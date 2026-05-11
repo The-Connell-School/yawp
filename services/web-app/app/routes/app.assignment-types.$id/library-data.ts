@@ -35,6 +35,10 @@ export type SourceCard = {
   title: string;
   attribution: string;
   body: string;
+  // Provenance URL for the original document — set per row in the xlsx
+  // (the "Open Source" hyperlink). Lets teachers verify the excerpt
+  // against the canonical source.
+  sourceUrl?: string;
 };
 
 export const REASONING_LABEL: Record<Reasoning, string> = {
@@ -183,6 +187,7 @@ const SOURCES_DBQ_USH_001: SourceCard[] = [
 Resolved, That it is the Opinion of this Committee, that it is the undoubted Privilege of the Inhabitants of this Colony, to petition their Sovereign for Redress of Grievances; and that it is lawful and expedient to procure the Concurrence of his Majesty's other Colonies, in dutiful Addresses, praying the royal Interposition in Favour of the Violated Rights of America.
 
 Resolved, That it is the Opinion of this Committee, that all Trials for Treason, Misprison of Treason, or for any Felony or Crime whatsoever, committed and done in this his Majesty's said Colony and Dominion, by any Person or Persons, residing in this Colony… and sending such Person, or Persons, to Places beyond the Sea, to be tried, is highly derogatory of the Rights of British Subjects.`,
+    sourceUrl: 'https://teachingamericanhistory.org/document/the-virginia-resolves-of-1769/',
   },
   {
     id: 'src-2',
@@ -193,6 +198,7 @@ Resolved, That it is the Opinion of this Committee, that all Trials for Treason,
 All men have a right to remain in a state of nature as long as they please; and in case of intolerable oppression, civil or religious, to leave the society they belong to, and enter into another. When men enter into society, it is by voluntary consent; and they have a right to demand and insist upon the performance of such conditions and previous limitations as form an equitable original compact.
 
 In short, it is the greatest absurdity to suppose it in the power of one, or any number of men, at the entering into society, to renounce their essential natural rights, or the means of preserving those rights; when the grand end of civil government, from the very nature of its institution, is for the support, protection, and defence of those very rights; the principal of which, as is before observed, are Life, Liberty, and Property.`,
+    sourceUrl: 'https://americainclass.org/sources/makingrevolution/crisis/text6/bostonpamphlet.pdf',
   },
   {
     id: 'src-3',
@@ -203,6 +209,7 @@ In short, it is the greatest absurdity to suppose it in the power of one, or any
 The Divine Principle of Grace and Truth which we profess, leads all who attend to its dictates, to demean themselves as peaceable subjects, and to discountenance and avoid every measure tending to excite disaffection to the King, as supreme magistrate, or to the legal authority of his government.
 
 May we therefore firmly unite in the abhorrence of all such writings, and measures, as evince a desire and design to break off the happy connection we have heretofore enjoyed, with the kingdom of Great Britain, and our just and necessary subordination to the King and those who are lawfully placed in authority under him.`,
+    sourceUrl: 'https://www.loc.gov/resource/rbpe.1440320b/?sp=1&st=text',
   },
   {
     id: 'src-4',
@@ -213,6 +220,7 @@ May we therefore firmly unite in the abhorrence of all such writings, and measur
 Not to choose the first requires more courage than they are possessed of, and I believe this method has seldom failed with the lower sort. No sooner do they appear under arms on the stated day, than they are harangued by their officers with the implacable cruelty of the king of Great Britain, who has resolved to take their property from them, and to deprive them of their Charter rights.
 
 Everything here is in the utmost confusion. Committees are appointed to inspect into the Characters and Conduct of every tradesman, to prevent them selling Tea or buying British Manufactures. Some of them have been tarred and feathered, others had their property burnt and destroyed by the populace.`,
+    sourceUrl: 'https://americainclass.org/wp-content/uploads/2012/06/schaw-journal.pdf',
   },
   {
     id: 'src-5',
@@ -223,6 +231,7 @@ Everything here is in the utmost confusion. Committees are appointed to inspect 
 For my part, I should not in the least be surprized, if on such a prospect as the Independency of America, she would parcel out this continent to the different European Powers. Canada might be restored to France, Florida to Spain, with additions to each—other states also might come in for a portion. Let no man think this chimerical or improbable. The independency of America would be so fatal to Britain, that she would leave nothing in her power undone to prevent it.
 
 By a connection with Great-Britain, our trade would still have the protection of the greatest naval power in the world… What an exhaustless fund of wealth would Britain become to America, who shares its commerce!`,
+    sourceUrl: 'https://www.let.rug.nl/usa/documents/1776-1785/charles-inglis-the-true-interest-of-america-impartially-stated-1776.php',
   },
   {
     id: 'src-6',
@@ -233,6 +242,7 @@ By a connection with Great-Britain, our trade would still have the protection of
 Britain, with an army to enforce her tyranny, has declared that she has a right (not only to TAX) but "to BIND us in ALL CASES WHATSOEVER," and if being bound in that manner, is not slavery, then is there not such a thing as slavery upon earth. Even the expression is impious; for so unlimited a power can belong only to God.
 
 Not all the treasures of the world, so far as I believe, could have induced me to support an offensive war, for I think it murder; but if a thief breaks into my house, burns and destroys my property, and kills or threatens to kill me, or those that are in it… am I to suffer it?`,
+    sourceUrl: 'https://www.gutenberg.org/files/3741/3741-h/3741-h.htm',
   },
 ];
 
@@ -248,6 +258,7 @@ If government shrinks, or is unable to enforce its laws; fresh manœuvres will b
 In your letter of the 14th you express a wish to know my intention respecting the Convention, proposed to be held at Philada in May next. In confidence I inform you, that it is not, at this time, my purpose to attend it.
 
 [I am] indeed, after what I have seen, or rather after what I have heard, I shall be surprized at nothing; for if three years ago, any person had told me that at this day, I should see such a formidable rebellion against the laws & constitutions of our own making as now appears I should have thought him a bedlamite—a fit subject for a mad house.`,
+    sourceUrl: 'https://founders.archives.gov/documents/Washington/04-05-02-0006',
   },
   {
     id: 'src-2',
@@ -260,6 +271,7 @@ In a word they are determined to annihilate all debts public and private and hav
 The numbers of these people may amount in [M]assachusetts to about one fifth part of several populous counties, and to them may be collected, people of similar sentiments, from the States of Rhode Island, Connecticut and New Hampshire so as to constitute a body of 12 or 15,000 desperate and unprincipled men—They are chiefly of the Young and active part of the community.
 
 This dreadful situation has alarmed every man of principle and property in New England—They start as from a dream, and ask what has been the Cause of our delusion? What is to give us security against the violence of lawless men?—Our government must be braced, changed, or altered to secure our lives and property.`,
+    sourceUrl: 'https://www.historyisaweapon.com/defcon1/knoxwashington.html',
   },
   {
     id: 'src-3',
@@ -276,6 +288,7 @@ A sanction is essential to the idea of law, as coercion is to that of Government
 11. Injustice of the laws of the States.
 
 If the multiplicity and mutability of laws prove a want of wisdom, their injustice betrays a defect still more alarming: more alarming not merely because it is a greater evil in itself, but because it brings more into question the fundamental principle of republican Government, that the majority who rule in such Governments, are the safest Guardians both of public Good and of private rights.`,
+    sourceUrl: 'https://founders.archives.gov/documents/Madison/01-09-02-0187',
   },
   {
     id: 'src-4',
@@ -290,6 +303,7 @@ The latent causes of faction are thus sown in the nature of man… The most comm
 A rage for paper money, for an abolition of debts, for an equal division of property, or for any other improper or wicked project, will be less apt to pervade the whole body of the Union than a particular member of it; in the same proportion as such a malady is more likely to taint a particular county or district, than an entire State.
 
 In the extent and proper structure of the Union, therefore, we behold a republican remedy for the diseases most incident to republican government.`,
+    sourceUrl: 'https://founders.archives.gov/documents/Madison/01-10-02-0178',
   },
   {
     id: 'src-5',
@@ -302,6 +316,7 @@ It is natural to a republic to have only a small territory, otherwise it cannot 
 The territory of the United States is of vast extent; it now contains near three millions of souls, and is capable of containing much more than ten times that number. Is it practicable for a country, so large and so numerous as they will soon become, to elect a representation, that will speak their sentiments, without their becoming so numerous as to be incapable of transacting public business? It certainly is not.
 
 These are some of the reasons by which it appears, that a free republic cannot long subsist over a country of the great extent of these states. If then this new constitution is calculated to consolidate the thirteen states into one, as it evidently is, it ought not to be adopted.`,
+    sourceUrl: 'https://minio.la.utexas.edu/webeditor-files/coretexts/pdf/178720brutus201.pdf',
   },
 ];
 
@@ -315,6 +330,7 @@ const SOURCES_DBQ_USH_003: SourceCard[] = [
 The Secretary, after mature reflection on this point, entertains a full conviction that an assumption of the debts of the particular states by the Union, and a like provision for them as for those of the Union, will be a measure of sound policy and substantial justice. It would, in the opinion of the Secretary, contribute, in an eminent degree, to an orderly, stable and satisfactory arrangement of the national finances.
 
 It is a well known fact that in countries in which the national debt is properly funded and an object of established confidence, it answers most of the purposes of money. Transfers of stock or public debt are there equivalent to payments in specie… Trade is extended by it; because there is a larger capital to carry it on, and the merchant can at the same time afford to trade for smaller profits.`,
+    sourceUrl: 'https://teachingamericanhistory.org/document/first-report-on-public-credit/',
   },
   {
     id: 'src-2',
@@ -329,6 +345,7 @@ They are not among the powers specially enumerated: for these are: 1st A power t
 2. 'to borrow money.' But this bill neither borrows money nor ensures the borrowing of it…
 
 The second general phrase is, 'to make all laws necessary and proper for carrying into execution the enumerated powers.' But they can all be carried into execution without a bank. A bank therefore is not necessary, and consequently not authorized by this phrase.`,
+    sourceUrl: 'https://founders.archives.gov/documents/Jefferson/01-19-02-0051',
   },
   {
     id: 'src-3',
@@ -339,6 +356,7 @@ The second general phrase is, 'to make all laws necessary and proper for carryin
 This principle in its application to Government in general would be admitted as an axiom… The means by which national exigencies are to be provided for, national inconveniencies obviated, national prosperity promoted, are of such infinite variety, extent and complexity, that there must, of necessity, be great latitude of discretion in the selection & application of those means.
 
 It is essential to the being of the National government, that so erroneous a conception of the meaning of the word necessary, should be exploded. It is certain that neither the grammatical, nor popular sense of the term requires that construction. According to both, necessary often means no more than needful, requisite, incidental, useful, or conducive to.`,
+    sourceUrl: 'https://hamilton.gilderlehrman.org/supporting-document/hamilton-constitutionality-national-bank-1791',
   },
   {
     id: 'src-4',
@@ -351,6 +369,7 @@ This spirit, unfortunately, is inseparable from our nature, having its root in t
 The great rule of conduct for us in regard to foreign nations is, in extending our commercial relations to have with them as little political connection as possible. So far as we have already formed engagements let them be fulfilled with perfect good faith. Here let us stop.
 
 Why forego the advantages of so peculiar a situation? Why quit our own to stand upon foreign ground? Why, by interweaving our destiny with that of any part of Europe, entangle our peace and prosperity in the toils of European ambition, rivalship, interest, humor or caprice? It is our true policy to steer clear of permanent alliances with any portion of the foreign world.`,
+    sourceUrl: 'https://avalon.law.yale.edu/18th_century/washing.asp',
   },
   {
     id: 'src-5',
@@ -363,6 +382,7 @@ And that whensoever the General Government assumes undelegated powers, its acts 
 That the Constitution of the United States, having delegated to Congress a power to punish treason, counterfeiting the securities and current coin of the United States, piracies, and felonies committed on the high seas, and offences against the law of nations, and no other crimes whatsoever… therefore the act of Congress, passed on the 14th day of July, 1798, intituled "An Act in addition to the act intituled An Act for the punishment of certain crimes against the United States" [the Sedition Act]… is altogether void, and of no force.
 
 That in cases of an abuse of the delegated powers, the members of the General Government, being chosen by the people, a change by the people would be the constitutional remedy; but, where powers are assumed which have not been delegated, a nullification of the act is the rightful remedy.`,
+    sourceUrl: 'https://avalon.law.yale.edu/18th_century/jeffken.asp',
   },
 ];
 

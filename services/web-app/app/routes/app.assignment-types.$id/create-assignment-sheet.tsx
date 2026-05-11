@@ -507,6 +507,16 @@ function SourcesCarousel({
           placeholder="Source body — paste the excerpt students will analyze."
           className="text-sm leading-relaxed"
         />
+        {current.sourceUrl ? (
+          <a
+            href={current.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-xs text-muted-foreground underline-offset-2 hover:underline"
+          >
+            View original source →
+          </a>
+        ) : null}
       </div>
 
       <div className="flex items-center justify-between gap-2">

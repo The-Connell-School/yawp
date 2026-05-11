@@ -84,13 +84,28 @@ def main() -> int:
         prompts.append(dict(zip(headers, row)))
 
     # ---- SOURCES ----
+    # Read with iter_rows for values, then walk the same range looking at
+    # cell.hyperlink.target on the pdf_url column — the xlsx uses HYPERLINK
+    # cells whose display text is "Open Source" but whose link is the real
+    # source URL. We want the URL, not the display text.
     ws = wb['SOURCES']
     headers = [c.value for c in ws[1]]
+    pdf_url_col_idx = headers.index('pdf_url') + 1 if 'pdf_url' in headers else None
     sources = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if all(v is None for v in row):
+    for r in range(2, ws.max_row + 1):
+        row_values = [ws.cell(row=r, column=c).value for c in range(1, len(headers) + 1)]
+        if all(v is None for v in row_values):
             continue
-        sources.append(dict(zip(headers, row)))
+        obj = dict(zip(headers, row_values))
+        # Replace the pdf_url field with the hyperlink target if present.
+        if pdf_url_col_idx is not None:
+            cell = ws.cell(row=r, column=pdf_url_col_idx)
+            if cell.hyperlink and cell.hyperlink.target:
+                obj['pdf_url'] = cell.hyperlink.target
+            elif obj.get('pdf_url') == 'Open Source':
+                # Display text without a link — treat as missing.
+                obj['pdf_url'] = None
+        sources.append(obj)
 
     src_count = Counter(s['prompt_id'] for s in sources)
     by_prompt: dict[str, list] = defaultdict(list)
@@ -137,6 +152,9 @@ def main() -> int:
             out.append(f"    title: {ts_template(s['title'])},")
             out.append(f"    attribution: {ts_template(s['attribution'])},")
             out.append(f"    body: {ts_template(s['body'])},")
+            url = s.get('pdf_url')
+            if url and url != 'Open Source':
+                out.append(f"    sourceUrl: {ts_single(url)},")
             out.append('  },')
         out.append('];')
         out.append('')
