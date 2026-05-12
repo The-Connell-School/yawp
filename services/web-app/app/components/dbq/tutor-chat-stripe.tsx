@@ -88,12 +88,12 @@ export function TutorChatStripe({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               send();
             }
           }}
-          placeholder="Ask the tutor… (⌘/Ctrl + Enter to send)"
+          placeholder="Ask the tutor… (Enter to send, Shift+Enter for newline)"
           rows={2}
           className="w-full resize-none rounded-md border bg-background px-2 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-ring"
         />
