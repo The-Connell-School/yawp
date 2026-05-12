@@ -92,15 +92,22 @@ export function CreateAssignmentSheet({ mode, open, onOpenChange }: Props) {
     setClassId(MOCK_TEACHER_CLASSES[0]?.id ?? '');
     setTimeMode('untimed');
     setDueDate('');
-    setSourcesOpen(false);
     if (mode.kind === 'library') {
       setTitle(suggestedAssignmentTitle(mode.prompt));
       setBody(mode.prompt.prompt);
       setSources(getSourcesForPrompt(mode.prompt.id));
+      // Library prompts arrive with sources already attached — keep the
+      // carousel collapsed so the teacher can scan the form first.
+      setSourcesOpen(false);
     } else {
       setTitle('');
       setBody('');
       setSources([]);
+      // From-scratch DBQs start with zero sources — open the carousel
+      // by default so the teacher sees the empty state and the "Add
+      // first source" affordance without having to hunt for Preview.
+      // LEQs from-scratch don't have a sources section to expand.
+      setSourcesOpen(mode.essayType === 'DBQ');
     }
   }, [open, mode]);
 
