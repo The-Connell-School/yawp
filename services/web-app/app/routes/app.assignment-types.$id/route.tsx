@@ -8,8 +8,7 @@
 //      each branching to a DBQ / LEQ submenu.
 //   2. Hero banner + title + description
 //   3. Teacher directions
-//   4. Submissions (empty-state placeholder)
-//   5. Prompt Library — sidebar (stacked filter accordions) + vertical list
+//   4. Prompt Library — sidebar (stacked filter accordions) + vertical list
 //      of prompt rows. Click a row → opens the create-assignment sheet
 //      pre-populated from the library entry. Mirrors PR #111 (Daily Pages
 //      prompt library).
@@ -23,7 +22,6 @@ import {
 import { Link, useLoaderData, useNavigate } from 'react-router';
 import { ChevronDownIcon } from 'lucide-react';
 import { CaretLeftIcon } from '~/components/icons';
-import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
@@ -63,14 +61,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: PREVIEW_ID,
       title: 'AP History Essay',
       description:
-        'One AssignmentType for both DBQ and LEQ across AP US, European, and World History. Tutor and grading branch on essay type; same prompt library, same drill scopes, same calibration samples.',
-    },
-    submissions: {
-      total: 0,
-      inProgress: 0,
-      submitted: 0,
-      graded: 0,
-      released: 0,
+        "Writing, as you know, isn't exclusive to English class. In this assignment type, your AP US, European, and World History students draft full DBQs and LEQs on a real prompt — coached by a tutor that knows the genre and graded against the College Board rubric. One workflow covers both essay formats; the tutor and grading assistant branch on essay type so the coaching matches the moves each one rewards.",
     },
     libraryPrompts: SAMPLE_PROMPTS,
   });
@@ -149,12 +140,6 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
           </DropdownMenu>
         </div>
 
-        <div className="mb-2 flex items-start gap-3">
-          <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
-            Preview · v1 spec
-          </Badge>
-        </div>
-
         {/* Hero banner */}
         <div className="mb-4 overflow-hidden rounded-lg border bg-stone-100">
           <img
@@ -171,33 +156,53 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
         </div>
 
         {/* Teacher directions */}
-        <div className="mb-6 rounded-lg border bg-muted/40 p-4">
-          <h3 className="mb-2 text-sm font-semibold">How AP History essays work in Yawp</h3>
-          <p className="text-sm text-muted-foreground">
-            Each assignment is one prompt graded against the College Board rubric
-            (7-pt DBQ or 6-pt LEQ). The tutor coaches in genre-specific phases —
-            DBQ runs source analysis → thesis → contextualization → drafting →
-            revision; LEQ collapses to thesis → context + evidence brainstorm →
-            drafting → revision. The grading assistant scores additively against
-            the rubric, anchored on calibration samples, and surfaces named
-            failure-mode flags (walking-through-documents, HIPP-without-relevance,
-            generic-context, period-bleed). Hit <code className="px-1">New</code>{' '}
-            above to start a Document or Assignment from scratch, or pick a
-            prompt from the library below to pre-fill the assignment form.
+        <div className="mb-6 rounded-lg border bg-muted/40 p-5">
+          <h3 className="mb-3 text-base font-semibold">
+            How AP History essays work in Yawp
+          </h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Each assignment is one prompt graded against the College Board
+            rubric. Hit <code className="px-1">New</code> above to start a
+            Document or Assignment from scratch, or pick a prompt from the
+            library below to pre-fill the assignment form.
           </p>
-        </div>
 
-        {/* Submissions */}
-        <div className="mb-2 flex items-baseline gap-2">
-          <h3 className="text-base font-medium">Submissions</h3>
-          <span className="text-sm text-muted-foreground">
-            {data.submissions.total} total
-          </span>
-        </div>
-        <div className="rounded border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          No submissions yet. Once students start drafting, this section will
-          track in-progress, submitted, graded, and released essays — filterable
-          by DBQ vs. LEQ.
+          <div className="mb-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <h4 className="mb-1 text-sm font-semibold">DBQ — 7 points</h4>
+              <p className="mb-2 text-sm text-muted-foreground">
+                Students build an argument from a packet of 4–7 primary sources.
+                The tutor coaches in five phases:
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>Source analysis — read the docs, surface HIPP elements</li>
+                <li>Thesis — defensible claim with a line of reasoning</li>
+                <li>Contextualization — situate the prompt in the broader era</li>
+                <li>Drafting — weave 4+ documents with outside evidence</li>
+                <li>Revision — sharpen sourcing, complexity, tie-back</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="mb-1 text-sm font-semibold">LEQ — 6 points</h4>
+              <p className="mb-2 text-sm text-muted-foreground">
+                No documents — students argue entirely from outside evidence.
+                The tutor collapses to four phases:
+              </p>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>Thesis</li>
+                <li>Context + evidence brainstorm</li>
+                <li>Drafting</li>
+                <li>Revision</li>
+              </ul>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            The grading assistant scores additively against the rubric, anchored
+            on calibration samples, and surfaces named failure-mode flags
+            (walking-through-documents, HIPP-without-relevance, generic-context,
+            period-bleed).
+          </p>
         </div>
 
         <Separator className="my-2" />
@@ -207,12 +212,6 @@ export default function AssignmentTypeApHistoryPreviewRoute() {
           prompts={data.libraryPrompts}
           onSelectPrompt={openSheetFromLibrary}
         />
-
-        <p className="mt-8 text-xs text-muted-foreground">
-          Preview wireframes driven by mock data. PDF parsing, real-time tutor
-          coaching, persistence, and AI grading are described in the v1 spec
-          but not implemented.
-        </p>
       </div>
 
       <CreateAssignmentSheet

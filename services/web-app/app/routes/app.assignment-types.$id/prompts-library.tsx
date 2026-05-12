@@ -251,9 +251,9 @@ export function PromptsLibrary({
   return (
     <Accordion type="single" collapsible>
       <AccordionItem value="library">
-        <AccordionTrigger className="py-2 text-base">
+        <AccordionTrigger className="group py-2 text-base">
           Prompt Library
-          <span className="ml-2 text-sm text-muted-foreground">
+          <span className="ml-2 hidden text-sm text-muted-foreground group-data-[state=open]:inline">
             {prompts.length}
           </span>
         </AccordionTrigger>
