@@ -47,7 +47,7 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
-  isDocumentSubmissionEnabledForSchool,
+  isDocumentSubmissionEnabledForSchools,
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import { Comments } from './comments';
@@ -62,6 +62,7 @@ import {
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
+import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
@@ -178,6 +179,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               schoolId: true,
               school: { select: { organizationId: true } },
+            },
+          },
+        },
+      },
+      studentProfile: {
+        select: {
+          classes: {
+            select: {
+              schoolId: true,
             },
           },
         },
@@ -302,7 +312,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const assignmentClass = doc.assignment?.class;
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForSchool(assignmentClass?.schoolId),
+    isDocumentSubmissionEnabledForSchools(getDocumentSubmissionSchoolIds(doc)),
     isAssignmentsEnabledForOrganization(
       assignmentClass?.school?.organizationId
     ),

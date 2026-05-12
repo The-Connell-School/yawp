@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
+import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -66,6 +67,15 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           },
         },
       },
+      studentProfile: {
+        select: {
+          classes: {
+            select: {
+              schoolId: true,
+            },
+          },
+        },
+      },
       submissions: {
         take: 1,
         select: { id: true },
@@ -87,8 +97,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
     });
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    document.assignment?.class?.schoolId
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
+    getDocumentSubmissionSchoolIds(document)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/courses', {

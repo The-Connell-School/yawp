@@ -19,7 +19,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireProfile = mock();
-const isDocumentSubmissionEnabledForSchool = mock();
+const isDocumentSubmissionEnabledForSchools = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -27,7 +27,7 @@ mock.module('~/utils/auth.server', () => ({
   requireProfile,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForSchool,
+  isDocumentSubmissionEnabledForSchools,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -49,7 +49,7 @@ describe('api.domain.submit-document', () => {
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
-    isDocumentSubmissionEnabledForSchool.mockReset();
+    isDocumentSubmissionEnabledForSchools.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({ id: 'profile-1' });
@@ -61,11 +61,12 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submissions: [],
       revision: 4,
-      class: {
-        schoolId: 'school-1',
+      assignment: null,
+      studentProfile: {
+        classes: [{ schoolId: 'school-1' }],
       },
     });
-    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
     prisma.documentWriteJournal.create.mockResolvedValue({ id: 'journal-1' });
     prisma.documentWriteJournal.update.mockResolvedValue({
       id: 'journal-1',
@@ -104,6 +105,47 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'school-1',
+    ]);
+  });
+
+  test('prefers the assignment class school when the document is assignment-backed', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce({
+      id: 'doc-1',
+      html: '<p>Draft</p>',
+      text: 'Draft',
+      title: 'Essay',
+      submissions: [],
+      revision: 4,
+      assignment: {
+        class: {
+          schoolId: 'assignment-school',
+        },
+      },
+      studentProfile: {
+        classes: [{ schoolId: 'student-school' }],
+      },
+    });
+
+    const form = new FormData();
+    form.append('documentId', 'doc-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/submit-document', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      data: {
+        success: boolean;
+      };
+    };
+
+    expect(response.data.success).toBe(true);
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'assignment-school',
+    ]);
   });
 
   test('records a document submit journal entry with the full document payload', async () => {
