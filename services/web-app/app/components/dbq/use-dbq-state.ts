@@ -3,13 +3,25 @@ import {
   type ChatMessage,
   type DbqPrompt,
   type DraftingPhase,
+  type FailureFlag,
   type PlanningState,
   type SourceAnnotation,
   type TimeMode,
   type View,
   emptyPlanning,
 } from './types';
-import { cannedTutorReply, detectFailureFlags, phaseTutorIntro } from './coaching';
+import { phaseTutorIntro } from './coaching';
+
+const TUTOR_ENDPOINT = '/api/prototypes/dbq-tutor';
+
+function promptContext(prompt: DbqPrompt) {
+  return {
+    prompt: prompt.prompt,
+    title: prompt.title,
+    era: prompt.era,
+    sources: prompt.sources,
+  };
+}
 
 export type DbqState = {
   prompt: DbqPrompt;
@@ -38,6 +50,7 @@ export type DbqState = {
   // Chat.
   messages: ChatMessage[];
   askTutor: (text: string) => void;
+  tutorPending: boolean;
   submit: () => void;
 };
 
@@ -58,6 +71,7 @@ export function useDbqState(prompt: DbqPrompt): DbqState {
   const [timerRunning, setTimerRunning] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const [tutorPending, setTutorPending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: 'seed-welcome',
@@ -88,25 +102,53 @@ export function useDbqState(prompt: DbqPrompt): DbqState {
     }
   }, [timeMode, msRemaining, view]);
 
-  // Detector → tutor message bridge: whenever a new flag appears, post a tutor card.
+  // Detector → tutor message bridge. Asks the server-side tutor to scan the
+  // current draft for failure modes and surface new ones as tutor cards.
+  // Debounced so we don't fire on every keystroke.
+  const planningRef = useRef(planning);
+  planningRef.current = planning;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   useEffect(() => {
-    const flags = detectFailureFlags(essay, prompt);
-    const newMessages: ChatMessage[] = [];
-    for (const f of flags) {
-      if (firedDetectors.current.has(f.id)) continue;
-      firedDetectors.current.add(f.id);
-      newMessages.push({
-        id: makeId('det'),
-        role: 'tutor',
-        origin: 'detector',
-        detectorId: f.id,
-        createdAt: Date.now(),
-        body: `Heads up — ${f.label.toLowerCase()}. ${f.detail}`,
-      });
-    }
-    if (newMessages.length > 0) {
-      setMessages((prev) => [...prev, ...newMessages]);
-    }
+    if (!essay.trim()) return;
+    if (essay.trim().split(/\s+/).length < 25) return;
+    const handle = window.setTimeout(async () => {
+      try {
+        const res = await fetch(TUTOR_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'scan',
+            essay,
+            planning: planningRef.current,
+            phase: phaseRef.current,
+            alreadyFired: Array.from(firedDetectors.current),
+            promptContext: promptContext(prompt),
+          }),
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { flags?: FailureFlag[] };
+        const newMessages: ChatMessage[] = [];
+        for (const f of json.flags ?? []) {
+          if (firedDetectors.current.has(f.id)) continue;
+          firedDetectors.current.add(f.id);
+          newMessages.push({
+            id: makeId('det'),
+            role: 'tutor',
+            origin: 'detector',
+            detectorId: f.id,
+            createdAt: Date.now(),
+            body: `Heads up — ${f.label.toLowerCase()}. ${f.detail}`,
+          });
+        }
+        if (newMessages.length > 0) {
+          setMessages((prev) => [...prev, ...newMessages]);
+        }
+      } catch {
+        // Prototype: swallow network errors silently.
+      }
+    }, 4000);
+    return () => window.clearTimeout(handle);
   }, [essay, prompt]);
 
   // Phase change → tutor message bridge.
@@ -170,25 +212,75 @@ export function useDbqState(prompt: DbqPrompt): DbqState {
     [essay]
   );
 
-  const askTutor = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const studentMsg: ChatMessage = {
-      id: makeId('stu'),
-      role: 'student',
-      origin: 'reply',
-      createdAt: Date.now(),
-      body: trimmed,
-    };
-    const tutorMsg: ChatMessage = {
-      id: makeId('tut'),
-      role: 'tutor',
-      origin: 'reply',
-      createdAt: Date.now() + 1,
-      body: cannedTutorReply(trimmed),
-    };
-    setMessages((prev) => [...prev, studentMsg, tutorMsg]);
-  }, []);
+  const askTutor = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const studentMsg: ChatMessage = {
+        id: makeId('stu'),
+        role: 'student',
+        origin: 'reply',
+        createdAt: Date.now(),
+        body: trimmed,
+      };
+      // Capture history *before* this turn so the server sees what the
+      // student/tutor have already said.
+      const priorHistory = messages.map((m) => ({
+        role: m.role,
+        body: m.body,
+      }));
+      setMessages((prev) => [...prev, studentMsg]);
+      setTutorPending(true);
+      try {
+        const res = await fetch(TUTOR_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'reply',
+            question: trimmed,
+            history: priorHistory,
+            essay,
+            planning: planningRef.current,
+            phase: phaseRef.current,
+            promptContext: promptContext(prompt),
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          reply?: string;
+          error?: string;
+        };
+        const body =
+          (res.ok && json.reply?.trim()) ||
+          `(tutor unreachable — ${json.error ?? 'try again in a moment'})`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId('tut'),
+            role: 'tutor',
+            origin: 'reply',
+            createdAt: Date.now(),
+            body,
+          },
+        ]);
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: makeId('tut'),
+            role: 'tutor',
+            origin: 'reply',
+            createdAt: Date.now(),
+            body: `(tutor unreachable — ${
+              error instanceof Error ? error.message : 'network error'
+            })`,
+          },
+        ]);
+      } finally {
+        setTutorPending(false);
+      }
+    },
+    [essay, messages, prompt]
+  );
 
   const submit = useCallback(() => {
     setView('submitted');
@@ -220,6 +312,7 @@ export function useDbqState(prompt: DbqPrompt): DbqState {
       insertCitation,
       messages,
       askTutor,
+      tutorPending,
       submit,
     }),
     [
@@ -240,6 +333,7 @@ export function useDbqState(prompt: DbqPrompt): DbqState {
       insertCitation,
       messages,
       askTutor,
+      tutorPending,
       submit,
     ]
   );

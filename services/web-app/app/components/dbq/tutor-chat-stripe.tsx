@@ -13,7 +13,7 @@ export function TutorChatStripe({
   state: DbqState;
   onCollapse?: () => void;
 }) {
-  const { messages, askTutor, phase, setPhase } = state;
+  const { messages, askTutor, tutorPending, phase, setPhase } = state;
   const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -75,6 +75,11 @@ export function TutorChatStripe({
         {messages.map((m) => (
           <MessageCard key={m.id} message={m} />
         ))}
+        {tutorPending ? (
+          <div className="text-[11px] italic text-muted-foreground">
+            Tutor is thinking…
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
@@ -97,7 +102,7 @@ export function TutorChatStripe({
             size="sm"
             className="h-7 px-2.5 text-[11px]"
             onClick={send}
-            disabled={!draft.trim()}
+            disabled={!draft.trim() || tutorPending}
           >
             <Send size={12} className="mr-1" /> Send
           </Button>
