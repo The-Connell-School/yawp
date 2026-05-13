@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
+import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   canManageGrades,
@@ -53,6 +54,15 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           },
+          studentProfile: {
+            select: {
+              classes: {
+                select: {
+                  schoolId: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -66,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    submissions.map((s) => s.document.assignment?.class?.schoolId)
+    submissions.flatMap((s) => getDocumentSubmissionSchoolIds(s.document))
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
