@@ -62,8 +62,10 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          class: {
-            schoolId: 'school-1',
+          assignment: {
+            class: {
+              schoolId: 'school-1',
+            },
           },
         },
       },

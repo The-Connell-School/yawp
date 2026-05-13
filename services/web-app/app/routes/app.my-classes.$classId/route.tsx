@@ -447,8 +447,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await prisma.submission.findMany({
         where: {
           document: {
-            ...classDocumentScope,
-            deletedAt: null,
+            is: {
+              ...classDocumentScope,
+              deletedAt: null,
+            },
           },
         },
         select: {

@@ -17,16 +17,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: {
       id: params.id,
       submission: {
-        document: {
-          deletedAt: null,
-          profileId: { not: profile.id },
-          ...(isAdmin
-            ? {}
-            : {
-                class: {
-                  teachers: { some: { profileId: profile.id } },
-                },
-              }),
+        is: {
+          document: {
+            is: {
+              deletedAt: null,
+              profileId: { not: profile.id },
+              ...(isAdmin
+                ? {}
+                : {
+                    class: {
+                      teachers: { some: { profileId: profile.id } },
+                    },
+                  }),
+            },
+          },
         },
       },
     },

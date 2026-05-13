@@ -36,7 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const submissions = await prisma.submission.findMany({
     where: {
       id: { in: data.submissionIds },
-      document: { profileId: { not: actor.profileId } },
+      document: { is: { profileId: { not: actor.profileId } } },
       ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
       releasedAt: null,
     },
