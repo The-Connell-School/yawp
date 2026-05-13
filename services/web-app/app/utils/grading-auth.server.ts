@@ -33,10 +33,12 @@ export function canManageGrades(actor: GradingActor): boolean {
 export function buildTeacherClassWhere(actor: GradingActor) {
   if (actor.isAdmin) return {};
   return {
-    class: {
-      teachers: {
-        some: {
-          profileId: actor.profileId,
+    assignment: {
+      class: {
+        teachers: {
+          some: {
+            profileId: actor.profileId,
+          },
         },
       },
     },
