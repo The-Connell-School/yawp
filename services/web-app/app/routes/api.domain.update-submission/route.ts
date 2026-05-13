@@ -29,16 +29,18 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: submissionId,
       document: {
-        deletedAt: null,
-        ...(actor.isAdmin
-          ? {}
-          : {
-              assignment: {
-                class: {
-                  teachers: { some: { profileId: actor.profileId } },
+        is: {
+          deletedAt: null,
+          ...(actor.isAdmin
+            ? {}
+            : {
+                assignment: {
+                  class: {
+                    teachers: { some: { profileId: actor.profileId } },
+                  },
                 },
-              },
-            }),
+              }),
+        },
       },
     },
     select: {

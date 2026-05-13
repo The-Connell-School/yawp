@@ -65,26 +65,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: {
       id: params.submissionId,
       document: {
-        OR: [
-          // Owner of the document
-          { profile: { id: profile.id } },
-          // Teacher of the student's class
-          {
-            profile: {
-              studentProfile: {
-                classes: {
-                  some: {
-                    teachers: {
-                      some: { profileId: profile.id },
+        is: {
+          OR: [
+            // Owner of the document
+            { profile: { id: profile.id } },
+            // Teacher of the student's class
+            {
+              profile: {
+                studentProfile: {
+                  classes: {
+                    some: {
+                      teachers: {
+                        some: { profileId: profile.id },
+                      },
                     },
                   },
                 },
               },
             },
-          },
-          // Admin override
-          ...(user?.isAdmin ? [{}] : []),
-        ],
+            // Admin override
+            ...(user?.isAdmin ? [{}] : []),
+          ],
+        },
       },
     },
     select: {

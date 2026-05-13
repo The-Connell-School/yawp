@@ -130,8 +130,10 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           id: data.submissionId,
           document: {
-            deletedAt: null,
-            ...teacherClassWhere,
+            is: {
+              deletedAt: null,
+              ...teacherClassWhere,
+            },
           },
         },
         select: submissionSelect,
@@ -140,8 +142,10 @@ export async function action({ request }: ActionFunctionArgs) {
         where: {
           documentId: data.documentId,
           document: {
-            deletedAt: null,
-            ...teacherClassWhere,
+            is: {
+              deletedAt: null,
+              ...teacherClassWhere,
+            },
           },
         },
         orderBy: { submittedAt: 'desc' },

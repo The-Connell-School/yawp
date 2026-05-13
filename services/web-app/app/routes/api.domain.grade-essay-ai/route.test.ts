@@ -151,6 +151,40 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
+  test('filters submission access through Prisma relation is clause', async () => {
+    buildTeacherClassWhere.mockReturnValue({
+      class: {
+        teachers: { some: { profileId: 'teacher-profile-1' } },
+      },
+    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: {
+            is: {
+              deletedAt: null,
+              class: {
+                teachers: { some: { profileId: 'teacher-profile-1' } },
+              },
+            },
+          },
+        }),
+      })
+    );
+  });
+
   test('uses the updated rubric instructions in the grading prompt', async () => {
     prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-2' }));
 

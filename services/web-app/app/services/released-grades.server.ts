@@ -61,7 +61,7 @@ function buildSubmissionWhere(classId: string, filters: PileFilters) {
   if (filters.releasedTo) releasedAt.lte = filters.releasedTo;
 
   const where: Record<string, unknown> = {
-    document: documentWhere,
+    document: { is: documentWhere },
     releasedAt,
   };
 
