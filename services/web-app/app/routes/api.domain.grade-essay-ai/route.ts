@@ -17,7 +17,8 @@ import {
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
+import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -116,6 +117,15 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         profileId: true,
         assignment: { select: { class: { select: { schoolId: true } } } },
+        studentProfile: {
+          select: {
+            classes: {
+              select: {
+                schoolId: true,
+              },
+            },
+          },
+        },
         profile: {
           select: {
             user: { select: { name: true } },
@@ -185,8 +195,8 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    submission.document.assignment?.class?.schoolId
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
+    getDocumentSubmissionSchoolIds(submission.document)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {

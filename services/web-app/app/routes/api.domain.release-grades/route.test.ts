@@ -85,6 +85,35 @@ describe('api.domain.release-grades', () => {
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
   });
 
+  test('checks school flags from student classes for legacy submissions when releasing', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'legacy-sub-1',
+        document: {
+          assignment: null,
+          studentProfile: {
+            classes: [{ schoolId: 'scranton-prep-school' }],
+          },
+        },
+      },
+    ]);
+
+    const form = new FormData();
+    form.append('submissionIds', 'legacy-sub-1');
+
+    const request = new Request('https://example.com/api/domain/release-grades', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'scranton-prep-school',
+    ]);
+    expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+  });
+
   test('returns 404 when no unreleased submissions found', async () => {
     prisma.submission.findMany.mockResolvedValue([]);
 

@@ -75,7 +75,8 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     document: {
       id: 'doc-1',
       profileId: 'student-profile-1',
-      class: { schoolId: 'school-1' },
+      assignment: { class: { schoolId: 'school-1' } },
+      studentProfile: { classes: [] },
       profile: { user: { name: 'Jordan Student' } },
     },
     ...overrides,
@@ -187,6 +188,40 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       })
     );
+  });
+
+  test('checks the document submission flag through student classes for legacy submissions', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'legacy-sub-1',
+        document: {
+          id: 'legacy-doc-1',
+          profileId: 'student-profile-1',
+          assignment: null,
+          studentProfile: {
+            classes: [{ schoolId: 'scranton-prep-school' }],
+          },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'legacy-sub-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'scranton-prep-school',
+    ]);
+    expect(isDocumentSubmissionEnabledForSchool).not.toHaveBeenCalled();
+    expect(redirectWithToast).not.toHaveBeenCalled();
+    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
   test('uses the updated rubric instructions in the grading prompt', async () => {
