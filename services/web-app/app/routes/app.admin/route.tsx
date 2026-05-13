@@ -41,7 +41,7 @@ const tabs = [
   },
   {
     label: 'Teacher Courses',
-    to: '/app/admin/teacher-courses',
+    to: '/app/admin/teacher-trainings',
     icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
   },
   {
