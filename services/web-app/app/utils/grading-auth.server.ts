@@ -1,3 +1,4 @@
+import type { Prisma } from '@app/prisma';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
@@ -30,18 +31,37 @@ export function canManageGrades(actor: GradingActor): boolean {
   return actor.isTeacher || actor.isAdmin;
 }
 
-export function buildTeacherClassWhere(actor: GradingActor) {
+export function buildTeacherClassWhere(
+  actor: GradingActor
+): Prisma.DocumentWhereInput {
   if (actor.isAdmin) return {};
   return {
-    assignment: {
-      class: {
-        teachers: {
-          some: {
-            profileId: actor.profileId,
+    OR: [
+      {
+        assignment: {
+          class: {
+            teachers: {
+              some: {
+                profileId: actor.profileId,
+              },
+            },
           },
         },
       },
-    },
+      {
+        studentProfile: {
+          classes: {
+            some: {
+              teachers: {
+                some: {
+                  profileId: actor.profileId,
+                },
+              },
+            },
+          },
+        },
+      },
+    ],
   };
 }
 

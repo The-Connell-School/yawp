@@ -6,7 +6,7 @@ import {
 } from './grading-auth.server';
 
 describe('grading auth helpers', () => {
-  test('builds the current Document assignment-class filter for teachers', () => {
+  test('builds document class filters for current and legacy submissions', () => {
     expect(
       buildTeacherClassWhere({
         profileId: 'teacher-profile-1',
@@ -14,15 +14,32 @@ describe('grading auth helpers', () => {
         isAdmin: false,
       })
     ).toEqual({
-      assignment: {
-        class: {
-          teachers: {
-            some: {
-              profileId: 'teacher-profile-1',
+      OR: [
+        {
+          assignment: {
+            class: {
+              teachers: {
+                some: {
+                  profileId: 'teacher-profile-1',
+                },
+              },
             },
           },
         },
-      },
+        {
+          studentProfile: {
+            classes: {
+              some: {
+                teachers: {
+                  some: {
+                    profileId: 'teacher-profile-1',
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
     });
   });
 
