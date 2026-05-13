@@ -42,6 +42,7 @@ model AssignmentType {
   assignmentModules AssignmentModule[]
   assignments       Assignment[]
   documents         Document[]
+  modelEssays       ModelEssay[]
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
@@ -296,6 +297,7 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   ownedAssignmentTypes     AssignmentType[]          @relation("AssignmentTypeOwner")
+  authoredModelEssays      ModelEssay[]              @relation("ModelEssayAuthor")
   isOwner                  Boolean                   @default(false)
 }
 
@@ -340,16 +342,16 @@ model Setting {
 }
 
 model StudentProfile {
-  id                       String                    @id @default(cuid())
-  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
-  school                   String?
-  schoolTeacher            String?
-  grade                    String?
-  period                   String?
-  profileId                String                    @unique
-  profile                  Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classes                  Class[]
-  documents                Document[]
+  id            String     @id @default(cuid())
+  createdAt     DateTime   @default(now()) @db.Timestamptz(6)
+  school        String?
+  schoolTeacher String?
+  grade         String?
+  period        String?
+  profileId     String     @unique
+  profile       Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  classes       Class[]
+  documents     Document[]
 }
 
 model TeacherProfile {
@@ -542,6 +544,34 @@ model LegacyGradeRedirect {
   gradeId      String   @id
   submissionId String
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model ModelEssay {
+  id               String          @id @default(cuid())
+  createdAt        DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @db.Timestamptz(6)
+  title            String
+  subtitle         String?
+  body             String
+  teachingNotes    String?
+  rhetoricalMove   String?
+  topicCategory    String?
+  part             String?
+  difficulty       String?
+  gradeLevel       Int?
+  assignmentTypeId String?
+  assignmentType   AssignmentType? @relation(fields: [assignmentTypeId], references: [id], onDelete: SetNull)
+  isHidden         Boolean         @default(false)
+  hiddenReason     String?
+  hiddenAt         DateTime?       @db.Timestamptz(6)
+  hiddenBy         String?
+  createdById      String?
+  createdBy        Profile?        @relation("ModelEssayAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  draftingNotes    String?
+
+  @@index([assignmentTypeId])
+  @@index([isHidden])
+  @@index([gradeLevel])
 }
 
 model LlmLog {

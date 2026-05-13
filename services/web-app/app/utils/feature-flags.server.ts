@@ -16,6 +16,7 @@ export const FEATURE_FLAGS = {
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
   RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
     'released_grades_organization_enabled_org_ids',
+  ESSAY_EXAMPLES: 'essay_examples_enabled',
 } as const;
 
 export const TARGETED_FEATURE_FLAGS = {
@@ -208,4 +209,8 @@ export async function isReleasedGradesOrganizationEnabledForOrganization(
     'releasedGradesOrganization',
     organizationId
   );
+}
+
+export async function isEssayExamplesEnabled(): Promise<boolean> {
+  return getFeatureFlag(FEATURE_FLAGS.ESSAY_EXAMPLES);
 }

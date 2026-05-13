@@ -1,4 +1,6 @@
 /* eslint-disable no-console */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { PrismaClient, type Prisma } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { cleanupDb, createPassword } from './utils';
@@ -82,7 +84,79 @@ const settings: SeedData['settings'] = [
     description:
       'Comma-separated school IDs allowed to use document submission and grading',
   },
+  {
+    id: 'essay_examples_flag',
+    name: 'essay_examples_enabled',
+    value: 'false',
+    valueType: 'boolean',
+    description:
+      'Enable the YAWP! Library of model essays (V1 staff-curated; default off until seeded for pilot).',
+  },
 ];
+
+type ModelEssayFixture = {
+  number: number;
+  slug: string;
+  title: string;
+  subtitle: string;
+  part: string;
+  topicCategory: string;
+  subject: string;
+  rhetoricalMove: string;
+  thesis: string;
+  keyIdeas: string;
+  whatTheMoveDoes: string;
+  structuralFeatures: string;
+  memorablePhrases: string;
+  bestForTeaching: string;
+  difficulty: string;
+  body: string;
+  teachingNotes: string;
+};
+
+function loadModelEssayFixtures(): ModelEssayFixture[] {
+  const path = join(__dirname, '..', 'seeds', 'model-essays.json');
+  const raw = readFileSync(path, 'utf8');
+  return JSON.parse(raw) as ModelEssayFixture[];
+}
+
+async function seedModelEssays(client: PrismaClient): Promise<void> {
+  const fixtures = loadModelEssayFixtures();
+  // All 22 V1 fixtures are critical-essay exemplars. Link them to the seeded
+  // "Critical Essay" assignment type if it exists; otherwise leave null.
+  const criticalEssay = await client.assignmentType.findFirst({
+    where: { title: 'Critical Essay' },
+    select: { id: true },
+  });
+
+  for (const fixture of fixtures) {
+    const draftingNotes =
+      `Draft #${fixture.number}. ` +
+      `Subject: ${fixture.subject}. ` +
+      `Thesis: ${fixture.thesis} ` +
+      `Move: ${fixture.whatTheMoveDoes} ` +
+      `Structure: ${fixture.structuralFeatures} ` +
+      `Memorable phrases: ${fixture.memorablePhrases}. ` +
+      `Best for teaching: ${fixture.bestForTeaching}.`;
+
+    await client.modelEssay.create({
+      data: {
+        title: fixture.title,
+        subtitle: fixture.subtitle || null,
+        body: fixture.body,
+        teachingNotes: fixture.teachingNotes || null,
+        rhetoricalMove: fixture.rhetoricalMove || null,
+        topicCategory: fixture.topicCategory || null,
+        part: fixture.part || null,
+        difficulty: fixture.difficulty || null,
+        gradeLevel: null,
+        assignmentTypeId: criticalEssay?.id ?? null,
+        draftingNotes,
+      },
+    });
+  }
+  console.log(`  → seeded ${fixtures.length} model essays`);
+}
 
 const studentCourses: SeedData['studentCourses'] = [
   {
@@ -423,6 +497,10 @@ async function seed() {
     );
     console.timeEnd(`Created ${key}`);
   }
+
+  console.time('Created modelEssays');
+  await seedModelEssays(prisma);
+  console.timeEnd('Created modelEssays');
 
   const module = await prisma.studentCourseModule.findFirst({
     where: { deletedAt: null },
