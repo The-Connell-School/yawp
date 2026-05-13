@@ -151,10 +151,12 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
-  test('filters submission access through Prisma relation is clause', async () => {
+  test('filters submission access through assignment class relation', async () => {
     buildTeacherClassWhere.mockReturnValue({
-      class: {
-        teachers: { some: { profileId: 'teacher-profile-1' } },
+      assignment: {
+        class: {
+          teachers: { some: { profileId: 'teacher-profile-1' } },
+        },
       },
     });
     prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
@@ -175,8 +177,10 @@ describe('api.domain.grade-essay-ai', () => {
           document: {
             is: {
               deletedAt: null,
-              class: {
-                teachers: { some: { profileId: 'teacher-profile-1' } },
+              assignment: {
+                class: {
+                  teachers: { some: { profileId: 'teacher-profile-1' } },
+                },
               },
             },
           },
