@@ -146,12 +146,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: {
+      id: params.id,
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!assignmentType) {
+    return redirectWithToast('/app', {
+      type: 'error',
+      description: 'Assignment type not found',
+    });
+  }
 
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
       profileId: profile.id,
-      assignmentTypeId: params.id!,
+      assignmentTypeId: assignmentType.id,
     });
     documentId = created.documentId;
   } catch (creationError) {
