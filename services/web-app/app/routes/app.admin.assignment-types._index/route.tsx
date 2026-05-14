@@ -28,7 +28,7 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [courses] = await Promise.all([
+  const [courses, organizations] = await Promise.all([
     prisma.assignmentType.findMany({
       include: {
         assignmentModules: {
@@ -38,13 +38,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         },
         image: { select: { id: true } },
+        ownerOrg: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
+    }),
+    prisma.organization.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
     }),
   ]);
 
   return dataResponse({
     courses,
+    organizations,
   });
 }
 
@@ -56,16 +62,31 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
+    const ownerOrgId = formData.get('ownerOrgId')?.toString();
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
     }
+    if (!ownerOrgId) {
+      throw new Response('Organization is required', { status: 400 });
+    }
 
-    const count = await prisma.assignmentType.count();
+    const organization = await prisma.organization.findUnique({
+      where: { id: ownerOrgId },
+      select: { id: true },
+    });
+    if (!organization) {
+      throw new Response('Organization not found', { status: 404 });
+    }
+
+    const count = await prisma.assignmentType.count({
+      where: { ownerOrgId },
+    });
     const course = await prisma.assignmentType.create({
       data: {
         title,
         description: description || null,
+        ownerOrgId,
         position: count,
       },
     });
@@ -77,7 +98,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypesRoute() {
-  const { courses } = useLoaderData<typeof loader>();
+  const { courses, organizations } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const navigate = useNavigate();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -113,10 +134,31 @@ export default function AssignmentTypesRoute() {
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" name="description" rows={3} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ownerOrgId">Organization</Label>
+                  <select
+                    id="ownerOrgId"
+                    name="ownerOrgId"
+                    required
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    defaultValue={organizations[0]?.id ?? ''}
+                  >
+                    <option value="" disabled>
+                      Select an organization
+                    </option>
+                    {organizations.map((organization) => (
+                      <option key={organization.id} value={organization.id}>
+                        {organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={fetcher.state !== 'idle'}
+                  disabled={
+                    fetcher.state !== 'idle' || organizations.length === 0
+                  }
                 >
                   {fetcher.state === 'idle' ? 'Create Assignment Type' : 'Creating...'}
                 </Button>
@@ -172,6 +214,7 @@ export default function AssignmentTypesRoute() {
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
                       <span>{course.assignmentModules.length} modules</span>
+                      <span>{course.ownerOrg?.name ?? 'No organization'}</span>
                     </div>
                   </CardContent>
                 </Card>

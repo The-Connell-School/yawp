@@ -154,11 +154,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ] = await Promise.all([
     prisma.assignmentType.findMany({
       where: {
-        OR: [
-          { ownerOrgId: null, ownerTeacherId: null }, // system-owned
-          { ownerOrgId: profile.organization.id },
-          { ownerTeacherId: profile.id },
-        ],
+        ownerOrgId: profile.organization.id,
       },
       select: { image: { select: { id: true } }, id: true, title: true },
       orderBy: { position: 'asc' },

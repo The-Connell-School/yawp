@@ -125,11 +125,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {
       id: assignmentTypeId,
-      OR: [
-        { ownerOrgId: null, ownerTeacherId: null },
-        { ownerOrgId: { in: organizationIds } },
-        { ownerTeacherId: profile.id },
-      ],
+      ownerOrgId: { in: organizationIds },
     },
     select: { id: true },
   });

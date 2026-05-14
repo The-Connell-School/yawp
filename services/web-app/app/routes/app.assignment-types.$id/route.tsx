@@ -40,8 +40,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const [assignmentType, documents, archivedDocuments, teacherClasses] =
     await Promise.all([
-      prisma.assignmentType.findUnique({
-        where: { id: params.id },
+      prisma.assignmentType.findFirst({
+        where: { id: params.id, ownerOrgId: profile.organization.id },
         include: {
           image: true,
           assignmentModules: {
