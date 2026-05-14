@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { formatDateOnly } from '~/utils/date-only';
 import { AssignmentTypesList } from './components/assignment-types-list';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
+import { TeacherAssignmentsList } from './components/teacher-assignments-list';
 
 export type AssignmentTypeRow = {
   id: string;
@@ -40,6 +41,27 @@ export type CourseGlanceRow = {
 export type TeacherClassOption = {
   id: string;
   name: string;
+};
+
+export type TeacherAssignmentRow = {
+  id: string;
+  title: string | null;
+  prompt: string;
+  dueDate: Date | null;
+  createdAt: Date;
+  assignmentType: {
+    id: string;
+    title: string;
+  };
+  class: {
+    id: string;
+    grade: string;
+    period: string;
+    title: string | null;
+  };
+  _count: {
+    documents: number;
+  };
 };
 
 function hasMeaningfulGrade(grade: {
@@ -128,6 +150,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClasses,
     teacherSchoolCount,
     assignments,
+    teacherAssignments,
   ] = await Promise.all([
     prisma.assignmentType.findMany({
       where: {
@@ -268,6 +291,43 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
         })
       : [],
+    profile.teacherProfile && assignmentsEnabled
+      ? prisma.assignment.findMany({
+          where: {
+            class: {
+              teachers: { some: { id: profile.teacherProfile.id } },
+              isArchived: false,
+            },
+          },
+          select: {
+            id: true,
+            title: true,
+            prompt: true,
+            dueDate: true,
+            createdAt: true,
+            assignmentType: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+            class: {
+              select: {
+                id: true,
+                grade: true,
+                period: true,
+                title: true,
+              },
+            },
+            _count: {
+              select: {
+                documents: true,
+              },
+            },
+          },
+          orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+        })
+      : [],
   ]);
 
   // Compute recent activity per class for teachers, based on latest student document
@@ -379,6 +439,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
+    teacherAssignments,
     assignmentsEnabled,
     assignmentTypes: courses,
     coursesGlance,
@@ -418,6 +479,7 @@ export default function AppRoute() {
             assignmentTypes={data.assignmentTypes}
             teacherClasses={data.teacherClassOptions}
           />
+          <TeacherAssignmentsList assignments={data.teacherAssignments} />
           <ClassesAtAGlance courses={data.coursesGlance} />
         </div>
       </section>

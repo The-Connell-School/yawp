@@ -40,14 +40,18 @@ test.describe.serial('Teacher dashboard assignment types', () => {
     await page.getByRole('link', { name: /Back to dashboard/i }).click();
     await page.waitForURL('**/app');
 
+    const title = `Dashboard E2E Assignment ${Date.now()}`;
     const prompt = `Dashboard E2E prompt ${Date.now()}`;
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByLabel(/Grade 9th .* Period 1st/).check();
-    await page.getByLabel('Title (optional)').fill('Dashboard E2E Assignment');
+    await page.getByLabel('Title (optional)').fill(title);
     await page.getByLabel('Prompt').fill(prompt);
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(
+      page.getByTestId('teacher-assignments-list').getByText(title)
+    ).toBeVisible();
 
     const prisma = createE2EPrismaClient();
     try {
@@ -59,7 +63,7 @@ test.describe.serial('Teacher dashboard assignment types', () => {
         },
         select: { id: true, title: true },
       });
-      expect(created?.title).toBe('Dashboard E2E Assignment');
+      expect(created?.title).toBe(title);
     } finally {
       await prisma.$disconnect();
     }
