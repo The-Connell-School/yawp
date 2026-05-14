@@ -101,7 +101,9 @@ describe('api.assignments.create', () => {
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'at-1',
-        ownerOrgId: { in: ['org-1'] },
+        organizationAssignments: {
+          some: { organizationId: { in: ['org-1'] } },
+        },
       },
       select: { id: true },
     });

@@ -112,7 +112,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Determine which class IDs this student belongs to (for assignment fetching).
-  // Note: AssignmentType visibility is owner-scoped (system / org / teacher).
   let studentClassIds: string[] = [];
   if (profile.studentProfile) {
     const studentClasses = await prisma.class.findMany({
@@ -154,7 +153,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ] = await Promise.all([
     prisma.assignmentType.findMany({
       where: {
-        ownerOrgId: profile.organization.id,
+        organizationAssignments: {
+          some: { organizationId: profile.organization.id },
+        },
       },
       select: { image: { select: { id: true } }, id: true, title: true },
       orderBy: { position: 'asc' },

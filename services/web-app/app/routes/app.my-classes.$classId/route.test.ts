@@ -97,7 +97,11 @@ describe('class detail loader document visibility', () => {
       select: { documentId: true },
     });
     expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
-      where: { ownerOrgId: 'org-1' },
+      where: {
+        organizationAssignments: {
+          some: { organizationId: 'org-1' },
+        },
+      },
       select: { id: true, title: true },
       orderBy: { position: 'asc' },
     });

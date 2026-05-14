@@ -58,7 +58,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const course = await prisma.assignmentType.findUnique({
     where: { id: params.id },
     include: {
-      ownerOrg: { select: { id: true, name: true } },
+      organizationAssignments: {
+        include: { organization: { select: { id: true, name: true } } },
+        orderBy: { organization: { name: 'asc' } },
+      },
       assignmentModules: {
         where: { deletedAt: null },
         include: {
@@ -76,12 +79,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const organizations = await prisma.organization.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
-
-  return dataResponse({ course, organizations });
+  return dataResponse({ course });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -100,23 +98,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (intent === 'updateCourse') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
-    const ownerOrgId = formData.get('ownerOrgId')?.toString();
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
-    }
-    if (!ownerOrgId) {
-      throw new Response('Organization is required', { status: 400 });
-    }
-
-    const organization = await prisma.organization.findUnique({
-      where: { id: ownerOrgId },
-      select: { id: true },
-    });
-    if (!organization) {
-      throw new Response('Organization not found', { status: 404 });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -145,7 +131,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           title,
           description: description || null,
-          ownerOrgId,
         },
       });
     });
@@ -200,7 +185,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, organizations } = useLoaderData<typeof loader>();
+  const { course } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
@@ -423,31 +408,10 @@ export default function AssignmentTypeRoute() {
                     rows={3}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ownerOrgId">Organization</Label>
-                  <select
-                    id="ownerOrgId"
-                    name="ownerOrgId"
-                    required
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    defaultValue={course.ownerOrgId ?? ''}
-                  >
-                    <option value="" disabled>
-                      Select an organization
-                    </option>
-                    {organizations.map((organization) => (
-                      <option key={organization.id} value={organization.id}>
-                        {organization.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={
-                    fetcher.state !== 'idle' || organizations.length === 0
-                  }
+                  disabled={fetcher.state !== 'idle'}
                 >
                   {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -488,10 +452,14 @@ export default function AssignmentTypeRoute() {
             </div>
             <div>
               <dt className="text-sm font-medium text-muted-foreground">
-                Organization
+                Available To
               </dt>
               <dd className="text-base">
-                {course.ownerOrg?.name ?? 'No organization assigned'}
+                {course.organizationAssignments.length === 0
+                  ? 'No organizations'
+                  : course.organizationAssignments
+                      .map((assignment) => assignment.organization.name)
+                      .join(', ')}
               </dd>
             </div>
             <div>

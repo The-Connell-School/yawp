@@ -45,13 +45,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireProfile(request, currentUser.id);
 
-  const [organization, invitations, totalOrganizations] = await Promise.all([
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
+    await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
       include: {
         profiles: {
           where: { isOwner: true },
           include: { user: { select: { name: true, email: true } } },
+        },
+        assignmentTypeAssignments: {
+          include: {
+            assignmentType: {
+              select: { id: true, title: true, description: true },
+            },
+          },
+          orderBy: { assignmentType: { position: 'asc' } },
         },
       },
     }),
@@ -62,6 +71,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
     }),
     prisma.organization.count(),
+    prisma.assignmentType.findMany({
+      select: { id: true, title: true, description: true },
+      orderBy: { position: 'asc' },
+    }),
   ]);
 
   if (!organization) {
@@ -76,6 +89,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     organization,
     invitations,
+    assignmentTypes,
     canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
   });
 }
@@ -155,6 +169,46 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
 
     return dataResponse({ status: 'success' });
+  }
+
+  if (intent === 'update-assignment-types') {
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
+
+    if (assignmentTypeIds.length > 0) {
+      const validAssignmentTypes = await prisma.assignmentType.findMany({
+        where: { id: { in: assignmentTypeIds } },
+        select: { id: true },
+      });
+      if (validAssignmentTypes.length !== assignmentTypeIds.length) {
+        throw new Response('Assignment type not found', { status: 404 });
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.organizationAssignmentType.deleteMany({
+        where: { organizationId: params.id },
+      }),
+      ...(assignmentTypeIds.length > 0
+        ? [
+            prisma.organizationAssignmentType.createMany({
+              data: assignmentTypeIds.map((assignmentTypeId) => ({
+                organizationId: params.id!,
+                assignmentTypeId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+
+    return dataResponse({ status: 'assignment-types-updated' });
   }
 
   if (intent === 'invite-owners') {
@@ -289,14 +343,20 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations, canDelete } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
+  const assignmentTypesFetcher = useFetcher();
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
   const [isInviteSheetOpen, setIsInviteSheetOpen] = React.useState(false);
 
   const owners = organization.profiles.filter((profile) => profile.isOwner);
+  const assignedAssignmentTypeIds = new Set(
+    organization.assignmentTypeAssignments.map(
+      (assignment) => assignment.assignmentType.id
+    )
+  );
 
   React.useEffect(() => {
     if (fetcher.data?.status === 'success') {
@@ -572,6 +632,80 @@ export default function OrganizationRoute() {
               )}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card
+        className="bg-muted"
+        data-testid="organization-assignment-types-manager"
+      >
+        <CardHeader className="space-y-1">
+          <CardTitle>Assignment Types</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Select the assignment types teachers in this organization can see
+            and use.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <assignmentTypesFetcher.Form method="post" className="space-y-4">
+            <input
+              type="hidden"
+              name="intent"
+              value="update-assignment-types"
+            />
+            {assignmentTypes.length === 0 ? (
+              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                No assignment types exist yet.
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {assignmentTypes.map((assignmentType) => (
+                  <label
+                    key={assignmentType.id}
+                    className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="assignmentTypeIds"
+                      value={assignmentType.id}
+                      defaultChecked={assignedAssignmentTypeIds.has(
+                        assignmentType.id
+                      )}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {assignmentType.title}
+                      </span>
+                      {assignmentType.description ? (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {assignmentType.description}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-3">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={
+                  assignmentTypesFetcher.state !== 'idle' ||
+                  assignmentTypes.length === 0
+                }
+              >
+                {assignmentTypesFetcher.state === 'idle'
+                  ? 'Save Assignment Types'
+                  : 'Saving...'}
+              </Button>
+              {assignmentTypesFetcher.data?.status ===
+              'assignment-types-updated' ? (
+                <span className="text-sm text-muted-foreground">Saved</span>
+              ) : null}
+            </div>
+          </assignmentTypesFetcher.Form>
         </CardContent>
       </Card>
     </div>

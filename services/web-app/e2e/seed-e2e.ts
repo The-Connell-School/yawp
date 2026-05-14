@@ -160,6 +160,9 @@ export async function seedE2E(): Promise<E2EContext> {
       title: 'E2E Course',
       position: 1,
       ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
       assignmentModules: {
         create: [1, 2, 3].map((moduleIndex) => ({
           title: `E2E Module ${moduleIndex}`,
