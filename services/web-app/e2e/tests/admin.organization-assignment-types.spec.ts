@@ -13,7 +13,7 @@ test.describe.serial('Admin organization assignment types', () => {
       data: {
         title,
         description: 'Assigned from the organization admin screen.',
-        position: 50,
+        position: -1,
       },
       select: { id: true },
     });
@@ -21,14 +21,21 @@ test.describe.serial('Admin organization assignment types', () => {
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(`/app/admin/organizations/${e2eContext.organizationId}`);
+      await page.getByRole('button', { name: 'Edit Organization' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Organization' })
+      ).toBeVisible();
+      await page.waitForTimeout(750);
 
       const manager = page.getByTestId('organization-assignment-types-manager');
       await expect(manager).toBeVisible();
       await manager
         .locator(`input[name="assignmentTypeIds"][value="${assignmentType.id}"]`)
         .setChecked(true, { force: true });
-      await manager.getByRole('button', { name: 'Save Assignment Types' }).click();
-      await expect(manager.getByText('Saved')).toBeVisible();
+      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Edit Organization' })
+      ).toBeVisible();
 
       const assignment = await prisma.organizationAssignmentType.findUnique({
         where: {
