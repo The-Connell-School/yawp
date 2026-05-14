@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import {
+  buildTeacherClassWhere,
   canManageGrades,
   getGradingActor,
   isGradingOwnDocument,
@@ -25,21 +26,15 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const teacherClassWhere = buildTeacherClassWhere(actor);
+
   const submission = await prisma.submission.findFirst({
     where: {
       id: submissionId,
       document: {
         is: {
           deletedAt: null,
-          ...(actor.isAdmin
-            ? {}
-            : {
-                assignment: {
-                  class: {
-                    teachers: { some: { profileId: actor.profileId } },
-                  },
-                },
-              }),
+          ...teacherClassWhere,
         },
       },
     },

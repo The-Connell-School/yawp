@@ -49,6 +49,26 @@ describe('api.domain.update-submission', () => {
   });
 
   test('updates grading fields on a submission', async () => {
+    buildTeacherClassWhere.mockReturnValue({
+      OR: [
+        {
+          assignment: {
+            class: {
+              teachers: { some: { profileId: 'teacher-1' } },
+            },
+          },
+        },
+        {
+          studentProfile: {
+            classes: {
+              some: {
+                teachers: { some: { profileId: 'teacher-1' } },
+              },
+            },
+          },
+        },
+      ],
+    });
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: new Date(),
@@ -73,6 +93,23 @@ describe('api.domain.update-submission', () => {
     expect(body.success).toBe(true);
     expect(body.submission.score).toBe('85% B');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'sub-1',
+          document: {
+            is: expect.objectContaining({
+              deletedAt: null,
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  studentProfile: expect.any(Object),
+                }),
+              ]),
+            }),
+          },
+        }),
+      })
+    );
   });
 
   test('sets gradedAt and gradedById on first grading edit', async () => {
