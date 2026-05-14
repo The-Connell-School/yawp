@@ -4,8 +4,27 @@ import { buildClassDocumentScope } from './class-document-where.server';
 describe('buildClassDocumentScope', () => {
   test('uses assignment class linkage for new assignment documents', () => {
     expect(buildClassDocumentScope('class-1', [])).toEqual({
-      OR: [{ assignment: { classId: 'class-1' } }],
+      OR: [
+        { assignment: { classId: 'class-1' } },
+        {
+          assignmentId: null,
+          studentProfile: { classes: { some: { id: 'class-1' } } },
+        },
+      ],
     });
+  });
+
+  test('also includes unassigned documents for students in the class', () => {
+    expect(buildClassDocumentScope('class-1', [])).toEqual(
+      expect.objectContaining({
+        OR: expect.arrayContaining([
+          {
+            assignmentId: null,
+            studentProfile: { classes: { some: { id: 'class-1' } } },
+          },
+        ]),
+      })
+    );
   });
 
   test('also includes legacy documents preserved by DocumentClassForensic', () => {
@@ -14,9 +33,12 @@ describe('buildClassDocumentScope', () => {
     ).toEqual({
       OR: [
         { assignment: { classId: 'class-1' } },
+        {
+          assignmentId: null,
+          studentProfile: { classes: { some: { id: 'class-1' } } },
+        },
         { id: { in: ['doc-legacy-1', 'doc-legacy-2'] } },
       ],
     });
   });
 });
-
