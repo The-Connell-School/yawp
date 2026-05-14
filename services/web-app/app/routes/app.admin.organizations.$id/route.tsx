@@ -45,13 +45,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireProfile(request, currentUser.id);
 
-  const [organization, invitations, totalOrganizations] = await Promise.all([
+  const [organization, invitations, totalOrganizations, assignmentTypes] =
+    await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
       include: {
         profiles: {
           where: { isOwner: true },
           include: { user: { select: { name: true, email: true } } },
+        },
+        assignmentTypeAssignments: {
+          include: {
+            assignmentType: {
+              select: { id: true, title: true, description: true },
+            },
+          },
+          orderBy: { assignmentType: { position: 'asc' } },
         },
       },
     }),
@@ -62,6 +71,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
     }),
     prisma.organization.count(),
+    prisma.assignmentType.findMany({
+      select: { id: true, title: true, description: true },
+      orderBy: { position: 'asc' },
+    }),
   ]);
 
   if (!organization) {
@@ -76,6 +89,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     organization,
     invitations,
+    assignmentTypes,
     canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
   });
 }
@@ -139,20 +153,54 @@ export async function action({ request, params }: ActionFunctionArgs) {
       formData.get('numOfTeacherSeats')?.toString() || '10'
     );
     const accessExpiresAt = formData.get('accessExpiresAt')?.toString();
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
 
     if (!name) {
       throw new Response('Name is required', { status: 400 });
     }
 
-    await prisma.organization.update({
-      where: { id: params.id },
-      data: {
-        name,
-        numOfStudentSeats,
-        numOfTeacherSeats,
-        accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
-      },
-    });
+    if (assignmentTypeIds.length > 0) {
+      const validAssignmentTypes = await prisma.assignmentType.findMany({
+        where: { id: { in: assignmentTypeIds } },
+        select: { id: true },
+      });
+      if (validAssignmentTypes.length !== assignmentTypeIds.length) {
+        throw new Response('Assignment type not found', { status: 404 });
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.organization.update({
+        where: { id: params.id },
+        data: {
+          name,
+          numOfStudentSeats,
+          numOfTeacherSeats,
+          accessExpiresAt: accessExpiresAt ? new Date(accessExpiresAt) : null,
+        },
+      }),
+      prisma.organizationAssignmentType.deleteMany({
+        where: { organizationId: params.id },
+      }),
+      ...(assignmentTypeIds.length > 0
+        ? [
+            prisma.organizationAssignmentType.createMany({
+              data: assignmentTypeIds.map((assignmentTypeId) => ({
+                organizationId: params.id!,
+                assignmentTypeId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
 
     return dataResponse({ status: 'success' });
   }
@@ -289,7 +337,7 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations, canDelete } =
+  const { organization, invitations, assignmentTypes, canDelete } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -297,6 +345,11 @@ export default function OrganizationRoute() {
   const [isInviteSheetOpen, setIsInviteSheetOpen] = React.useState(false);
 
   const owners = organization.profiles.filter((profile) => profile.isOwner);
+  const assignedAssignmentTypeIds = new Set(
+    organization.assignmentTypeAssignments.map(
+      (assignment) => assignment.assignmentType.id
+    )
+  );
 
   React.useEffect(() => {
     if (fetcher.data?.status === 'success') {
@@ -331,55 +384,104 @@ export default function OrganizationRoute() {
                 Edit Organization
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent className="sm:max-w-md">
               <SheetHeader>
                 <SheetTitle>Edit Organization</SheetTitle>
               </SheetHeader>
-              <fetcher.Form method="post" className="mt-4 space-y-4">
+              <fetcher.Form method="post" className="mt-4 space-y-5">
                 <input type="hidden" name="intent" value="update" />
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={organization.name}
-                    required
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      defaultValue={organization.name}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="numOfStudentSeats">Student Seats</Label>
+                      <Input
+                        id="numOfStudentSeats"
+                        name="numOfStudentSeats"
+                        type="number"
+                        defaultValue={organization.numOfStudentSeats}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="numOfTeacherSeats">Teacher Seats</Label>
+                      <Input
+                        id="numOfTeacherSeats"
+                        name="numOfTeacherSeats"
+                        type="number"
+                        defaultValue={organization.numOfTeacherSeats}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="accessExpiresAt">Access Expires At</Label>
+                    <Input
+                      id="accessExpiresAt"
+                      name="accessExpiresAt"
+                      type="datetime-local"
+                      defaultValue={organization.accessExpiresAt
+                        ?.toISOString()
+                        .slice(0, 16)}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="numOfStudentSeats">
-                    Number of Student Seats
-                  </Label>
-                  <Input
-                    id="numOfStudentSeats"
-                    name="numOfStudentSeats"
-                    type="number"
-                    defaultValue={organization.numOfStudentSeats}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="numOfTeacherSeats">
-                    Number of Teacher Seats
-                  </Label>
-                  <Input
-                    id="numOfTeacherSeats"
-                    name="numOfTeacherSeats"
-                    type="number"
-                    defaultValue={organization.numOfTeacherSeats}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="accessExpiresAt">Access Expires At</Label>
-                  <Input
-                    id="accessExpiresAt"
-                    name="accessExpiresAt"
-                    type="datetime-local"
-                    defaultValue={organization.accessExpiresAt
-                      ?.toISOString()
-                      .slice(0, 16)}
-                  />
+
+                <div
+                  className="border-t pt-5"
+                  data-testid="organization-assignment-types-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">
+                      Assignment Types
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Select the assignment types teachers in this organization
+                      can see and use.
+                    </p>
+                  </div>
+                  {assignmentTypes.length === 0 ? (
+                    <div className="mt-3 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                      No assignment types exist yet.
+                    </div>
+                  ) : (
+                    <div className="mt-3 grid gap-2">
+                      {assignmentTypes.map((assignmentType) => (
+                        <label
+                          key={assignmentType.id}
+                          className="flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm"
+                        >
+                          <input
+                            type="checkbox"
+                            name="assignmentTypeIds"
+                            value={assignmentType.id}
+                            defaultChecked={assignedAssignmentTypeIds.has(
+                              assignmentType.id
+                            )}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {assignmentType.title}
+                            </span>
+                            {assignmentType.description ? (
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {assignmentType.description}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <Button
                   type="submit"
@@ -574,6 +676,7 @@ export default function OrganizationRoute() {
           </Table>
         </CardContent>
       </Card>
+
     </div>
   );
 }

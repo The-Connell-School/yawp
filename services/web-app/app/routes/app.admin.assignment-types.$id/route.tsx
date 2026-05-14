@@ -58,6 +58,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const course = await prisma.assignmentType.findUnique({
     where: { id: params.id },
     include: {
+      organizationAssignments: {
+        include: { organization: { select: { id: true, name: true } } },
+        orderBy: { organization: { name: 'asc' } },
+      },
       assignmentModules: {
         where: { deletedAt: null },
         include: {
@@ -445,6 +449,18 @@ export default function AssignmentTypeRoute() {
                 Title
               </dt>
               <dd className="text-base font-medium">{course.title}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted-foreground">
+                Available To
+              </dt>
+              <dd className="text-base">
+                {course.organizationAssignments.length === 0
+                  ? 'No organizations'
+                  : course.organizationAssignments
+                      .map((assignment) => assignment.organization.name)
+                      .join(', ')}
+              </dd>
             </div>
             <div>
               <dt className="text-sm font-medium text-muted-foreground">

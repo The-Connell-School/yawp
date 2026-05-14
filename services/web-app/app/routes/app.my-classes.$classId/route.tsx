@@ -131,11 +131,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const allowedAssignmentTypes = await prisma.assignmentType.findMany({
     where: {
-      OR: [
-        { ownerOrgId: null, ownerTeacherId: null },
-        { ownerOrgId: profile.organization.id },
-        { ownerTeacherId: profile.id },
-      ],
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
     },
     select: { id: true },
   });
@@ -356,11 +354,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const allowedAssignmentTypes = await prisma.assignmentType.findMany({
     where: {
-      OR: [
-        { ownerOrgId: null, ownerTeacherId: null },
-        { ownerOrgId: profile.organization.id },
-        { ownerTeacherId: profile.id },
-      ],
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
     },
     select: { id: true, title: true },
     orderBy: { position: 'asc' },

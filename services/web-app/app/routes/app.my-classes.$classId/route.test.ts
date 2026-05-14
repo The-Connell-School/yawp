@@ -96,16 +96,29 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
+    expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
+      where: {
+        organizationAssignments: {
+          some: { organizationId: 'org-1' },
+        },
+      },
+      select: { id: true, title: true },
+      orderBy: { position: 'asc' },
+    });
     expect(prisma.profile.findMany.mock.calls[0][0].select.documents.where).toEqual(
       expectedScope
     );
     expect(prisma.pasteAlert.findMany.mock.calls[0][0].where.document).toEqual(
       expectedScope
     );
-    expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
-      ...expectedScope,
-      deletedAt: null,
-    });
+    expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual(
+      {
+        is: {
+          ...expectedScope,
+          deletedAt: null,
+        },
+      }
+    );
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,

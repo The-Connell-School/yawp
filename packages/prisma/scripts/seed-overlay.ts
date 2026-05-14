@@ -286,6 +286,9 @@ export async function seedOverlay(): Promise<E2EContext> {
         title: 'E2E Course',
         position: 1,
         ownerOrgId: org.id,
+        organizationAssignments: {
+          create: { organizationId: org.id },
+        },
         assignmentModules: {
           create: [1, 2, 3].map((moduleIndex) => ({
             title: `E2E Module ${moduleIndex}`,
@@ -307,6 +310,19 @@ export async function seedOverlay(): Promise<E2EContext> {
       },
     });
   }
+  await prisma.organizationAssignmentType.upsert({
+    where: {
+      organizationId_assignmentTypeId: {
+        organizationId: org.id,
+        assignmentTypeId: assignmentType.id,
+      },
+    },
+    create: {
+      organizationId: org.id,
+      assignmentTypeId: assignmentType.id,
+    },
+    update: {},
+  });
 
   // 9. Class assignment linking the class to the assignment type (formerly ClassStudentCourse)
   let assignment = await prisma.assignment.findFirst({

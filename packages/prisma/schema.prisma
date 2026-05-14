@@ -28,20 +28,21 @@ model Class {
 }
 
 model AssignmentType {
-  id                String               @id @default(cuid())
-  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime             @default(now()) @db.Timestamptz(6)
-  title             String
-  description       String?
-  position          Int
-  ownerOrgId        String?
-  ownerOrg          Organization?        @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
-  ownerTeacherId    String?
-  ownerTeacher      Profile?             @relation("AssignmentTypeOwner", fields: [ownerTeacherId], references: [id], onDelete: Cascade)
-  image             AssignmentTypeImage?
-  assignmentModules AssignmentModule[]
-  assignments       Assignment[]
-  documents         Document[]
+  id                      String                       @id @default(cuid())
+  createdAt               DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                     @default(now()) @db.Timestamptz(6)
+  title                   String
+  description             String?
+  position                Int
+  ownerOrgId              String?
+  ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerTeacherId          String?
+  ownerTeacher            Profile?                     @relation("AssignmentTypeOwner", fields: [ownerTeacherId], references: [id], onDelete: Cascade)
+  image                   AssignmentTypeImage?
+  organizationAssignments OrganizationAssignmentType[]
+  assignmentModules       AssignmentModule[]
+  assignments             Assignment[]
+  documents               Document[]
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
@@ -267,17 +268,29 @@ model DocumentWriteJournal {
 }
 
 model Organization {
-  id                String           @id @default(cuid())
-  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime         @default(now()) @db.Timestamptz(6)
-  name              String
-  accessExpiresAt   DateTime?        @db.Timestamptz(6)
-  numOfStudentSeats Int              @default(10)
-  numOfTeacherSeats Int              @default(10)
-  profiles          Profile[]
-  invitations       Invitation[]
-  schools           School[]
-  assignmentTypes   AssignmentType[]
+  id                        String                       @id @default(cuid())
+  createdAt                 DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                     @default(now()) @db.Timestamptz(6)
+  name                      String
+  accessExpiresAt           DateTime?                    @db.Timestamptz(6)
+  numOfStudentSeats         Int                          @default(10)
+  numOfTeacherSeats         Int                          @default(10)
+  profiles                  Profile[]
+  invitations               Invitation[]
+  schools                   School[]
+  assignmentTypes           AssignmentType[]
+  assignmentTypeAssignments OrganizationAssignmentType[]
+}
+
+model OrganizationAssignmentType {
+  organizationId   String
+  assignmentTypeId String
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, assignmentTypeId])
+  @@index([assignmentTypeId])
 }
 
 model Profile {
@@ -340,16 +353,16 @@ model Setting {
 }
 
 model StudentProfile {
-  id                       String                    @id @default(cuid())
-  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
-  school                   String?
-  schoolTeacher            String?
-  grade                    String?
-  period                   String?
-  profileId                String                    @unique
-  profile                  Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classes                  Class[]
-  documents                Document[]
+  id            String     @id @default(cuid())
+  createdAt     DateTime   @default(now()) @db.Timestamptz(6)
+  school        String?
+  schoolTeacher String?
+  grade         String?
+  period        String?
+  profileId     String     @unique
+  profile       Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  classes       Class[]
+  documents     Document[]
 }
 
 model TeacherProfile {

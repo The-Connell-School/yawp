@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import {
   type LoaderFunctionArgs,
   data as dataResponse,
@@ -5,7 +6,7 @@ import {
   Form,
 } from 'react-router';
 import { Link, useLoaderData, useNavigation } from 'react-router';
-import { PlusIcon } from 'lucide-react';
+import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { CaretLeftIcon } from '~/components/icons';
@@ -17,6 +18,12 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { useUser } from '~/hooks/useUser.js';
 import {
   createDocumentForAssignmentType,
@@ -25,85 +32,102 @@ import {
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { CreateAssignmentSheet } from './create-assignment-sheet';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const [assignmentType, documents, archivedDocuments] = await Promise.all([
-    prisma.assignmentType.findUnique({
-      where: { id: params.id },
-      include: {
-        image: true,
-        assignmentModules: {
-          where: { deletedAt: null },
-          orderBy: { position: 'asc' },
-        },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { createdAt: 'desc' },
-      where: {
-        profileId: profile.id,
-        deletedAt: null,
-        archivedAt: null,
-        assignmentModuleSessions: {
-          some: { assignmentModule: { assignmentTypeId: params.id } },
-        },
-      },
-      include: {
-        assignmentModuleSessions: {
-          take: 1,
-          orderBy: { assignmentModule: { position: 'desc' } },
-          include: { assignmentModule: true },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
-            releasedAt: true,
+  const [assignmentType, documents, archivedDocuments, teacherClasses] =
+    await Promise.all([
+      prisma.assignmentType.findFirst({
+        where: {
+          id: params.id,
+          organizationAssignments: {
+            some: { organizationId: profile.organization.id },
           },
         },
-      },
-    }),
-    prisma.document.findMany({
-      orderBy: { archivedAt: 'desc' },
-      where: {
-        profileId: profile.id,
-        deletedAt: null,
-        archivedAt: { not: null },
-        assignmentModuleSessions: {
-          some: { assignmentModule: { assignmentTypeId: params.id } },
-        },
-      },
-      include: {
-        assignmentModuleSessions: {
-          take: 1,
-          orderBy: { assignmentModule: { position: 'desc' } },
-          include: { assignmentModule: true },
-        },
-        submissions: {
-          where: { archivedAt: null },
-          orderBy: { submittedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            score: true,
-            overallScore: true,
-            numericPercentage: true,
-            letterGrade: true,
-            releasedAt: true,
+        include: {
+          image: true,
+          assignmentModules: {
+            where: { deletedAt: null },
+            orderBy: { position: 'asc' },
           },
         },
-      },
-    }),
-  ]);
+      }),
+      prisma.document.findMany({
+        orderBy: { createdAt: 'desc' },
+        where: {
+          profileId: profile.id,
+          deletedAt: null,
+          archivedAt: null,
+          assignmentModuleSessions: {
+            some: { assignmentModule: { assignmentTypeId: params.id } },
+          },
+        },
+        include: {
+          assignmentModuleSessions: {
+            take: 1,
+            orderBy: { assignmentModule: { position: 'desc' } },
+            include: { assignmentModule: true },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              overallScore: true,
+              numericPercentage: true,
+              letterGrade: true,
+              releasedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.document.findMany({
+        orderBy: { archivedAt: 'desc' },
+        where: {
+          profileId: profile.id,
+          deletedAt: null,
+          archivedAt: { not: null },
+          assignmentModuleSessions: {
+            some: { assignmentModule: { assignmentTypeId: params.id } },
+          },
+        },
+        include: {
+          assignmentModuleSessions: {
+            take: 1,
+            orderBy: { assignmentModule: { position: 'desc' } },
+            include: { assignmentModule: true },
+          },
+          submissions: {
+            where: { archivedAt: null },
+            orderBy: { submittedAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              score: true,
+              overallScore: true,
+              numericPercentage: true,
+              letterGrade: true,
+              releasedAt: true,
+            },
+          },
+        },
+      }),
+      profile.teacherProfile
+        ? prisma.class.findMany({
+            where: {
+              teachers: { some: { id: profile.teacherProfile.id } },
+              isArchived: false,
+            },
+            select: { id: true, grade: true, period: true, title: true },
+            orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+          })
+        : [],
+    ]);
 
   if (!assignmentType) {
     return redirectWithToast('/app', {
@@ -112,17 +136,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  return dataResponse({ assignmentType, documents, archivedDocuments });
+  return dataResponse({
+    assignmentType,
+    documents,
+    archivedDocuments,
+    teacherClasses,
+  });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: {
+      id: params.id,
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!assignmentType) {
+    return redirectWithToast('/app', {
+      type: 'error',
+      description: 'Assignment type not found',
+    });
+  }
 
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
       profileId: profile.id,
-      assignmentTypeId: params.id!,
+      assignmentTypeId: assignmentType.id,
     });
     documentId = created.documentId;
   } catch (creationError) {
@@ -157,6 +202,8 @@ export default function AppAssignmentTypesIdRoute() {
   const hasModules = data.assignmentType.assignmentModules.length > 0;
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
+  const docFormRef = useRef<HTMLFormElement>(null);
+  const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -167,16 +214,50 @@ export default function AppAssignmentTypesIdRoute() {
               <CaretLeftIcon className="mr-1 h-5 w-5" /> Back to dashboard
             </Link>
           </Button>
-          <Form method="post">
-            <Button
-              type="submit"
-              className="w-fit"
-              disabled={!hasModules || isLoading}
-              isLoading={isLoading}
-            >
-              New <PlusIcon className="ml-1 h-5 w-5" />
-            </Button>
-          </Form>
+
+          {isTeacher ? (
+            <>
+              <Form method="post" ref={docFormRef} className="hidden" />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" className="w-fit">
+                    New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    disabled={!hasModules || isLoading}
+                    onSelect={() => docFormRef.current?.requestSubmit()}
+                  >
+                    Document
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={data.teacherClasses.length === 0}
+                    onSelect={() => setIsAssignmentSheetOpen(true)}
+                  >
+                    Assignment
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <CreateAssignmentSheet
+                assignmentTypeId={data.assignmentType.id}
+                teacherClasses={data.teacherClasses}
+                open={isAssignmentSheetOpen}
+                onOpenChange={setIsAssignmentSheetOpen}
+              />
+            </>
+          ) : (
+            <Form method="post">
+              <Button
+                type="submit"
+                className="w-fit"
+                disabled={!hasModules || isLoading}
+                isLoading={isLoading}
+              >
+                New <PlusIcon className="ml-1 h-5 w-5" />
+              </Button>
+            </Form>
+          )}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
           {data.assignmentType.image ? (

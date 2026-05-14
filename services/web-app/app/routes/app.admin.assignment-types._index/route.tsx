@@ -28,20 +28,22 @@ import { requireAdmin } from '~/utils/auth.server';
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [courses] = await Promise.all([
-    prisma.assignmentType.findMany({
-      include: {
-        assignmentModules: {
-          where: { deletedAt: null },
-          include: {
-            instructions: true,
-          },
+  const courses = await prisma.assignmentType.findMany({
+    include: {
+      assignmentModules: {
+        where: { deletedAt: null },
+        include: {
+          instructions: true,
         },
-        image: { select: { id: true } },
       },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ]);
+      image: { select: { id: true } },
+      organizationAssignments: {
+        include: { organization: { select: { id: true, name: true } } },
+        orderBy: { organization: { name: 'asc' } },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
 
   return dataResponse({
     courses,
@@ -172,6 +174,12 @@ export default function AssignmentTypesRoute() {
                     </p>
                     <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
                       <span>{course.assignmentModules.length} modules</span>
+                      <span>
+                        {course.organizationAssignments.length}{' '}
+                        {course.organizationAssignments.length === 1
+                          ? 'organization'
+                          : 'organizations'}
+                      </span>
                     </div>
                   </CardContent>
                 </Card>
