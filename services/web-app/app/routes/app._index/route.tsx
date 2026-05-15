@@ -22,6 +22,7 @@ import { formatDateOnly } from '~/utils/date-only';
 import { AssignmentTypesList } from './components/assignment-types-list';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherAssignmentsList } from './components/teacher-assignments-list';
+import { TeacherTrainingsList } from './components/teacher-trainings-list';
 
 export type AssignmentTypeRow = {
   id: string;
@@ -476,6 +477,7 @@ export default function AppRoute() {
             assignmentTypes={data.assignmentTypes}
             teacherClasses={data.teacherClassOptions}
           />
+          <TeacherTrainingsList teacherTrainings={data.teacherTrainings} />
           <TeacherAssignmentsList assignments={data.teacherAssignments} />
           <ClassesAtAGlance courses={data.coursesGlance} />
         </div>

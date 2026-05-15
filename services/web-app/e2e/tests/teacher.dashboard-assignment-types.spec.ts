@@ -16,6 +16,15 @@ test.describe.serial('Teacher dashboard assignment types', () => {
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
     await expect(
+      page.getByRole('heading', { name: "Teacher's Lounge" })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /E2E Teacher Lounge/ })
+    ).toHaveAttribute(
+      'href',
+      `/app/teacher-trainings/${e2eContext.teacherTrainingId}`
+    );
+    await expect(
       page.getByRole('heading', { name: 'Classes at a Glance' })
     ).toBeVisible();
     await expect(
