@@ -5,7 +5,7 @@ import {
   useLoaderData,
   redirect,
 } from 'react-router';
-import { TrashIcon, ImageIcon } from 'lucide-react';
+import { ArchiveIcon, ImageIcon, RotateCcwIcon, TrashIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
@@ -88,11 +88,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const intent = formData.get('intent');
 
   if (intent === 'deleteCourse') {
-    await prisma.assignmentType.delete({
+    await prisma.assignmentType.update({
       where: { id: params.id },
+      data: { archivedAt: new Date() },
     });
 
     return redirect('/app/admin/assignment-types');
+  }
+
+  if (intent === 'unarchiveCourse') {
+    await prisma.assignmentType.update({
+      where: { id: params.id },
+      data: { archivedAt: null },
+    });
+
+    return dataResponse({ status: 'success' });
   }
 
   if (intent === 'updateCourse') {
@@ -418,23 +428,43 @@ export default function AssignmentTypeRoute() {
               </fetcher.Form>
             </SheetContent>
           </Sheet>
-          <ConfirmationDialog
-            variant="destructive"
-            title="Delete Assignment Type"
-            description={`Are you sure you want to delete "${course.title}"? This action cannot be undone and will permanently remove the assignment type and all its modules.`}
-            confirmText="Delete Assignment Type"
-            cancelText="Cancel"
-            onConfirm={() => {
-              fetcher.submit({ intent: 'deleteCourse' }, { method: 'post' });
-            }}
-            onCancel={() => {
-              // Dialog will close automatically
-            }}
-          >
-            <Button variant="destructive-outline" size="icon">
-              <TrashIcon className="h-4 w-4" />
+          {course.archivedAt ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                fetcher.submit(
+                  { intent: 'unarchiveCourse' },
+                  { method: 'post' }
+                )
+              }
+              disabled={fetcher.state !== 'idle'}
+            >
+              <RotateCcwIcon className="mr-2 h-4 w-4" />
+              Restore
             </Button>
-          </ConfirmationDialog>
+          ) : (
+            <ConfirmationDialog
+              variant="destructive"
+              title="Archive Assignment Type"
+              description={`Archive "${course.title}"? Existing assignments and documents will keep this assignment type, but it will no longer appear as an option for dashboards or new assignments.`}
+              confirmText="Archive Assignment Type"
+              cancelText="Cancel"
+              onConfirm={() => {
+                fetcher.submit({ intent: 'deleteCourse' }, { method: 'post' });
+              }}
+              onCancel={() => {
+                // Dialog will close automatically
+              }}
+            >
+              <Button
+                variant="destructive-outline"
+                size="icon"
+                aria-label="Archive assignment type"
+              >
+                <ArchiveIcon className="h-4 w-4" />
+              </Button>
+            </ConfirmationDialog>
+          )}
         </div>
       </div>
 

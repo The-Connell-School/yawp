@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  assignmentType: {
+    findFirst: mock(),
+  },
   assignmentModule: {
     findMany: mock(),
   },
@@ -22,12 +25,16 @@ const { createDocumentForAssignmentType } = await import('./documents.server');
 
 describe('createDocumentForAssignmentType', () => {
   beforeEach(() => {
+    prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentModule.findMany.mockReset();
     prisma.assignment.findUnique.mockReset();
     prisma.studentProfile.findUnique.mockReset();
     prisma.studentProfile.create.mockReset();
     prisma.document.create.mockReset();
 
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'assignment-type-1',
+    });
     prisma.assignment.findUnique.mockResolvedValue({
       assignmentTypeId: 'assignment-type-1',
     });
@@ -56,6 +63,10 @@ describe('createDocumentForAssignmentType', () => {
       assignmentId: 'assignment-1',
     });
 
+    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
+      where: { id: 'assignment-type-1', archivedAt: null },
+      select: { id: true },
+    });
     expect(prisma.assignmentModule.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { assignmentTypeId: 'assignment-type-1', deletedAt: null },
@@ -74,5 +85,19 @@ describe('createDocumentForAssignmentType', () => {
         }),
       })
     );
+  });
+
+  test('does not create a document for an archived assignment type', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(null);
+
+    await expect(
+      createDocumentForAssignmentType({
+        profileId: 'profile-1',
+        assignmentTypeId: 'assignment-type-1',
+      })
+    ).rejects.toThrow('AssignmentType is not available.');
+
+    expect(prisma.assignmentModule.findMany).not.toHaveBeenCalled();
+    expect(prisma.document.create).not.toHaveBeenCalled();
   });
 });

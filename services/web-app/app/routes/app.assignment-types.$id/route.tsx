@@ -43,6 +43,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       prisma.assignmentType.findFirst({
         where: {
           id: params.id,
+          archivedAt: null,
           organizationAssignments: {
             some: { organizationId: profile.organization.id },
           },
@@ -149,6 +150,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {
       id: params.id,
+      archivedAt: null,
       organizationAssignments: {
         some: { organizationId: profile.organization.id },
       },

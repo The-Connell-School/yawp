@@ -8,7 +8,12 @@ const prisma = {
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
-  assignment: { findMany: mock() },
+  assignment: {
+    create: mock(),
+    findFirst: mock(),
+    findMany: mock(),
+    update: mock(),
+  },
 };
 
 const requireUserId = mock();
@@ -19,7 +24,12 @@ const isAssignmentsEnabledForOrganization = mock();
 const isReleasedGradesOrganizationEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
+mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
+  requireUserId,
+  requireProfile,
+}));
+mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireProfile,
 }));
@@ -32,7 +42,7 @@ mock.module('~/utils/feature-flags.server', () => ({
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
-const { loader } = await import('./route');
+const { action, loader } = await import('./route');
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {
@@ -72,6 +82,9 @@ describe('class detail loader document visibility', () => {
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
+    prisma.assignment.findFirst.mockResolvedValue(null);
+    prisma.assignment.create.mockResolvedValue({});
+    prisma.assignment.update.mockResolvedValue({});
     getSubmittedPapersFilter.mockResolvedValue('all');
     isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     isAssignmentsEnabledForOrganization.mockResolvedValue(true);
@@ -88,6 +101,10 @@ describe('class detail loader document visibility', () => {
     const expectedScope = {
       OR: [
         { assignment: { classId: 'class-1' } },
+        {
+          assignmentId: null,
+          studentProfile: { classes: { some: { id: 'class-1' } } },
+        },
         { id: { in: ['legacy-doc-1', 'legacy-doc-2'] } },
       ],
     };
@@ -98,6 +115,7 @@ describe('class detail loader document visibility', () => {
     });
     expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
       where: {
+        archivedAt: null,
         organizationAssignments: {
           some: { organizationId: 'org-1' },
         },
@@ -125,5 +143,62 @@ describe('class detail loader document visibility', () => {
       archivedAt: null,
       submissions: { none: {} },
     });
+  });
+
+  test('allows editing an assignment that keeps its archived assignment type', async () => {
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'archived-type-1',
+    });
+
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'archived-type-1');
+    form.set('prompt', 'Updated prompt');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(prisma.assignment.update).toHaveBeenCalledWith({
+      where: { id: 'assignment-1' },
+      data: {
+        assignmentTypeId: 'archived-type-1',
+        title: null,
+        prompt: 'Updated prompt',
+        tutorContext: null,
+        dueDate: null,
+      },
+    });
+  });
+
+  test('rejects creating an assignment from an archived assignment type', async () => {
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'archived-type-1');
+    form.set('prompt', 'Prompt');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Selected assignment type is not available.',
+    });
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(prisma.assignment.create).not.toHaveBeenCalled();
   });
 });

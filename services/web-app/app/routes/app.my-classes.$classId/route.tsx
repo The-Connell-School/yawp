@@ -131,6 +131,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const allowedAssignmentTypes = await prisma.assignmentType.findMany({
     where: {
+      archivedAt: null,
       organizationAssignments: {
         some: { organizationId: profile.organization.id },
       },
@@ -227,7 +228,37 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (!allowedAssignmentTypeIds.has(assignmentTypeId)) {
+    let existingAssignment: { id: string; assignmentTypeId: string } | null =
+      null;
+    if (intent === 'update-assignment') {
+      if (!assignmentId) {
+        return dataResponse(
+          { success: false, message: 'Assignment is required.' },
+          { status: 400 }
+        );
+      }
+
+      existingAssignment = await prisma.assignment.findFirst({
+        where: { id: assignmentId, classId },
+        select: { id: true, assignmentTypeId: true },
+      });
+
+      if (!existingAssignment) {
+        return dataResponse(
+          { success: false, message: 'Assignment not found.' },
+          { status: 404 }
+        );
+      }
+    }
+
+    const isPreservingCurrentArchivedType =
+      intent === 'update-assignment' &&
+      existingAssignment?.assignmentTypeId === assignmentTypeId;
+
+    if (
+      !allowedAssignmentTypeIds.has(assignmentTypeId) &&
+      !isPreservingCurrentArchivedType
+    ) {
       return dataResponse(
         {
           success: false,
@@ -267,27 +298,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    if (!assignmentId) {
-      return dataResponse(
-        { success: false, message: 'Assignment is required.' },
-        { status: 400 }
-      );
-    }
-
-    const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, classId },
-      select: { id: true },
-    });
-
-    if (!assignment) {
-      return dataResponse(
-        { success: false, message: 'Assignment not found.' },
-        { status: 404 }
-      );
-    }
-
     await prisma.assignment.update({
-      where: { id: assignment.id },
+      where: { id: existingAssignment!.id },
       data: {
         assignmentTypeId,
         title,
@@ -354,6 +366,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const allowedAssignmentTypes = await prisma.assignmentType.findMany({
     where: {
+      archivedAt: null,
       organizationAssignments: {
         some: { organizationId: profile.organization.id },
       },
