@@ -101,6 +101,7 @@ describe('api.assignments.create', () => {
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'at-1',
+        archivedAt: null,
         organizationAssignments: {
           some: { organizationId: { in: ['org-1'] } },
         },
@@ -146,7 +147,7 @@ describe('api.assignments.create', () => {
     expect(prisma.assignment.createMany).not.toHaveBeenCalled();
   });
 
-  test('rejects assignment types outside the teacher scope', async () => {
+  test('rejects assignment types outside the teacher scope or archived', async () => {
     prisma.assignmentType.findFirst.mockResolvedValue(null);
 
     const response = await action({
@@ -162,6 +163,16 @@ describe('api.assignments.create', () => {
     const body = await readBody(response);
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
+    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'at-forbidden',
+        archivedAt: null,
+        organizationAssignments: {
+          some: { organizationId: { in: ['org-1'] } },
+        },
+      },
+      select: { id: true },
+    });
     expect(prisma.assignment.createMany).not.toHaveBeenCalled();
   });
 });

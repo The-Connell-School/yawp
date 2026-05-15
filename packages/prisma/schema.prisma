@@ -34,6 +34,7 @@ model AssignmentType {
   title                   String
   description             String?
   position                Int
+  archivedAt              DateTime?                    @db.Timestamptz(6)
   ownerOrgId              String?
   ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerTeacherId          String?
@@ -46,6 +47,7 @@ model AssignmentType {
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
+  @@index([archivedAt])
 }
 
 model Assignment {

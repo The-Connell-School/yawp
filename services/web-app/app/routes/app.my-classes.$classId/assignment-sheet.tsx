@@ -27,6 +27,7 @@ type AssignmentRecord = {
   tutorContext: string | null;
   dueDate: Date | string | null;
   assignmentTypeId: string;
+  assignmentType: { id: string; title: string };
 };
 
 type AssignmentSheetProps = {
@@ -68,18 +69,37 @@ export function AssignmentSheet({
     return extractFetcher.data.message || 'Unable to extract PDF content.';
   }, [extractFetcher.data]);
 
+  const assignmentTypeOptions = useMemo(() => {
+    if (
+      !editingAssignment ||
+      allowedAssignmentTypes.some(
+        (type) => type.id === editingAssignment.assignmentTypeId
+      )
+    ) {
+      return allowedAssignmentTypes;
+    }
+
+    return [
+      ...allowedAssignmentTypes,
+      {
+        id: editingAssignment.assignmentTypeId,
+        title: `${editingAssignment.assignmentType.title} (archived)`,
+      },
+    ];
+  }, [allowedAssignmentTypes, editingAssignment]);
+
   useEffect(() => {
     if (!open) return;
     setTitle(editingAssignment?.title ?? '');
     setAssignmentTypeId(
-      editingAssignment?.assignmentTypeId ?? allowedAssignmentTypes[0]?.id ?? ''
+      editingAssignment?.assignmentTypeId ?? assignmentTypeOptions[0]?.id ?? ''
     );
     setPrompt(editingAssignment?.prompt ?? '');
     setTutorContext(editingAssignment?.tutorContext ?? '');
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
     setPromptMode('manual');
     setPdfFile(null);
-  }, [allowedAssignmentTypes, editingAssignment, open]);
+  }, [assignmentTypeOptions, editingAssignment, open]);
 
   useEffect(() => {
     if (!extractFetcher.data?.success) return;
@@ -153,7 +173,7 @@ export function AssignmentSheet({
                 <SelectValue placeholder="Select assignment type" />
               </SelectTrigger>
               <SelectContent>
-                {allowedAssignmentTypes.map((type) => (
+                {assignmentTypeOptions.map((type) => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.title}
                   </SelectItem>

@@ -15,6 +15,15 @@ type CreatedDocument = {
 export async function createDocumentForAssignmentType(
   input: CreateDocumentInput
 ): Promise<CreatedDocument> {
+  const assignmentType = await prisma.assignmentType.findFirst({
+    where: { id: input.assignmentTypeId, archivedAt: null },
+    select: { id: true },
+  });
+
+  if (!assignmentType) {
+    throw new DocumentCreationError('AssignmentType is not available.');
+  }
+
   const assignmentModules = await prisma.assignmentModule.findMany({
     where: { assignmentTypeId: input.assignmentTypeId, deletedAt: null },
     orderBy: { position: 'asc' },

@@ -154,6 +154,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ] = await Promise.all([
     prisma.assignmentType.findMany({
       where: {
+        archivedAt: null,
         organizationAssignments: {
           some: { organizationId: profile.organization.id },
         },

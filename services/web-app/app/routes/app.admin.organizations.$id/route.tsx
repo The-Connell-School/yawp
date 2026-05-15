@@ -72,6 +72,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
     prisma.organization.count(),
     prisma.assignmentType.findMany({
+      where: { archivedAt: null },
       select: { id: true, title: true, description: true },
       orderBy: { position: 'asc' },
     }),
@@ -168,7 +169,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     if (assignmentTypeIds.length > 0) {
       const validAssignmentTypes = await prisma.assignmentType.findMany({
-        where: { id: { in: assignmentTypeIds } },
+        where: { id: { in: assignmentTypeIds }, archivedAt: null },
         select: { id: true },
       });
       if (validAssignmentTypes.length !== assignmentTypeIds.length) {

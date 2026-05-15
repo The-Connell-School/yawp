@@ -125,6 +125,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {
       id: assignmentTypeId,
+      archivedAt: null,
       organizationAssignments: {
         some: { organizationId: { in: organizationIds } },
       },
