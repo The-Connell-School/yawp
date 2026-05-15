@@ -49,6 +49,7 @@ export type E2EContext = {
   teacherName: string;
   teacherEmail: string;
   assignmentTypeId: string;
+  teacherTrainingId: string;
   freshDocumentId: string;
   editedDocumentId: string;
   submittedDocumentId: string;
@@ -182,6 +183,24 @@ export async function seedE2E(): Promise<E2EContext> {
       id: true,
       assignmentModules: { select: { id: true, position: true } },
     },
+  });
+
+  const teacherTraining = await prisma.teacherTraining.create({
+    data: {
+      title: 'E2E Teacher Lounge',
+      description: 'Teacher training content for the E2E dashboard.',
+      position: 1,
+      teacherTrainingModules: {
+        create: [
+          {
+            title: 'E2E Lounge Module',
+            position: 1,
+            description: 'Start here.',
+          },
+        ],
+      },
+    },
+    select: { id: true },
   });
 
   // 1. Fresh document — minimal content, no revisions
@@ -442,6 +461,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
+    teacherTrainingId: teacherTraining.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,
     submittedDocumentId: submittedDoc.id,
