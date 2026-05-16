@@ -27,6 +27,48 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=infra-pr init -backend=false && terraform -chdir=infra-pr validate
 
+  validate-prisma-migrations:
+    name: Prisma migrations
+    runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v3
+
+      - name: 📥 Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: 📦 Install dependencies
+        run: bun install
+
+      - name: 🧪 Validate deployment contract
+        run: bun test ./scripts/deployment-contract.test.ts
+
+      - name: 🧰 Install Postgres client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: 🛠️ Create migration validation database
+        env:
+          PGPASSWORD: postgres
+        run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
+
+      - name: 🧱 Apply Prisma migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun prisma migrate deploy
+
   typecheck-web-app:
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
@@ -56,7 +98,7 @@ jobs:
   e2e-web-app:
     name: 🧪 E2E Tests (Playwright)
     runs-on: ubuntu-22.04
-    needs: [typecheck-web-app]
+    needs: [typecheck-web-app, validate-prisma-migrations]
     services:
       postgres:
         image: postgres:16
