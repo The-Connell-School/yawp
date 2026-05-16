@@ -39,10 +39,19 @@ describe('production deployment contract', () => {
     );
   });
 
+  test('Docker runtime image exposes client assets for root-level serve commands', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(dockerfile).toContain(
+      'COPY --from=build /app/services/web-app/build/client ./build/client',
+    );
+  });
+
   test('container startup runs React Router serve with Bun instead of requiring Node', () => {
     const startScript = readRepoFile('services/web-app/start.sh');
 
-    expect(startScript).toContain('exec bun services/web-app/node_modules/@react-router/serve/bin.js');
+    expect(startScript).toContain('cd "$(dirname "$0")"');
+    expect(startScript).toContain('exec bun node_modules/@react-router/serve/bin.js');
     expect(startScript).not.toContain('bun run web-app:start');
   });
 

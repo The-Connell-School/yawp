@@ -8,4 +8,6 @@ echo "--- BUN VERSION ---"
 bun --version
 echo ""
 
-exec bun services/web-app/node_modules/@react-router/serve/bin.js ./services/web-app/build/server/index.js
+cd "$(dirname "$0")"
+
+exec bun node_modules/@react-router/serve/bin.js ./build/server/index.js
