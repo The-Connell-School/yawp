@@ -537,12 +537,38 @@ export default function SubmissionRoute() {
     [submission, teacherGradeUi],
   );
 
-  const handleRemoveGrammarIssue = useCallback((id: string) => {
-    setGrammarIssues((prev) => prev.filter((issue) => issue.id !== id));
+  const persistGrammarIssues = useCallback(
+    async (issues: GrammarIssue[]) => {
+      if (!isGradingOther || !isGradeMode) return;
+      const res = await fetch('/api/domain/update-submission', {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissionId: submission.id,
+          grammarIssues: issues,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to save grammar issue removal.');
+      }
+    },
+    [isGradeMode, isGradingOther, submission.id]
+  );
+
+  const handleRemoveGrammarIssue = useCallback(async (id: string) => {
+    const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
+    try {
+      await persistGrammarIssues(nextIssues);
+    } catch {
+      revalidator.revalidate();
+      return;
+    }
+    setGrammarIssues(nextIssues);
     setHiddenGrammarIssueIds((prev) =>
       prev.filter((currentId) => currentId !== id)
     );
-  }, []);
+  }, [grammarIssues, persistGrammarIssues, revalidator]);
 
   // ── Save / Release grade ────────────────────────────────────────────
   const releaseFetcher = useFetcher<{ success?: boolean }>();
