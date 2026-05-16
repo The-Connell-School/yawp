@@ -112,6 +112,34 @@ describe('api.domain.update-submission', () => {
     );
   });
 
+  test('persists grammar issue updates for teacher-managed submissions', async () => {
+    const grammarIssues = [
+      {
+        id: 'grammar-1',
+        kind: 'style',
+        message: 'Consider a stronger verb.',
+        start: 12,
+        end: 18,
+      },
+    ];
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: new Date(),
+      gradedById: 'teacher-1',
+      document: { profileId: 'student-1' },
+    });
+    prisma.submission.update.mockResolvedValue({ id: 'sub-1', grammarIssues });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', grammarIssues }),
+    } as any)) as Response;
+
+    const body = await response.json();
+    const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+    expect(body.success).toBe(true);
+    expect(updateCall.data.grammarIssues).toEqual(grammarIssues);
+  });
+
   test('sets gradedAt and gradedById on first grading edit', async () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
