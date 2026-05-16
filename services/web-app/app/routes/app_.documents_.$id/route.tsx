@@ -47,7 +47,7 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
-  isDocumentSubmissionEnabledForSchool,
+  isDocumentSubmissionEnabledForSchools,
   isAssignmentsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import { Comments } from './comments';
@@ -62,6 +62,7 @@ import {
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
+import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
@@ -161,10 +162,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      class: {
+      assignmentType: {
         select: {
-          schoolId: true,
-          school: { select: { organizationId: true } },
+          id: true,
+          title: true,
         },
       },
       assignment: {
@@ -174,6 +175,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          class: {
+            select: {
+              schoolId: true,
+              school: { select: { organizationId: true } },
+            },
+          },
+        },
+      },
+      studentProfile: {
+        select: {
+          classes: {
+            select: {
+              schoolId: true,
+            },
+          },
         },
       },
       submissions: {
@@ -189,10 +205,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       revisions: { orderBy: { createdAt: 'desc' } },
       profile: { include: { user: { select: { name: true } } } },
-      studentCourseModuleSessions: {
-        orderBy: { studentCourseModule: { position: 'desc' } },
+      assignmentModuleSessions: {
+        orderBy: [
+          { assignmentModule: { position: 'asc' } },
+          { createdAt: 'desc' },
+        ],
         include: {
-          studentCourseModule: {
+          assignmentModule: {
             include: {
               instructions: {
                 orderBy: { position: 'asc' },
@@ -202,9 +221,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourse: {
+              assignmentType: {
                 select: {
-                  studentCourseModules: {
+                  assignmentModules: {
                     select: { id: true, position: true },
                     orderBy: { position: 'asc' },
                   },
@@ -255,27 +274,48 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
   }
 
-  let currentCms = doc.studentCourseModuleSessions[cmsIdx];
+  const moduleSessionsByModuleId = new Map<
+    string,
+    (typeof doc.assignmentModuleSessions)[number]
+  >();
+  for (const session of doc.assignmentModuleSessions) {
+    if (!moduleSessionsByModuleId.has(session.assignmentModuleId)) {
+      moduleSessionsByModuleId.set(session.assignmentModuleId, session);
+    }
+  }
+  const orderedModuleSessions = Array.from(moduleSessionsByModuleId.values());
+
+  let currentCms = orderedModuleSessions[cmsIdx];
 
   if (!currentCms) {
-    currentCms = doc.studentCourseModuleSessions[0];
+    currentCms = orderedModuleSessions[0];
   }
 
   if (!currentCms) {
     return redirectWithToast('/app', {
-      description: 'No course module session found.',
+      description: 'No assignment module session found.',
       type: 'error',
     });
   }
 
+  const assignmentModules =
+    currentCms.assignmentModule.assignmentType?.assignmentModules ?? [];
+  const currentModuleIndex = assignmentModules.findIndex(
+    (cm) => cm.id === currentCms.assignmentModuleId
+  );
   const nextCmId =
-    currentCms.studentCourseModule.studentCourse?.studentCourseModules.find(
-      (cm) => cm.position === currentCms.studentCourseModule.position + 1
-    )?.id;
+    currentModuleIndex >= 0
+      ? assignmentModules[currentModuleIndex + 1]?.id
+      : assignmentModules.find(
+          (cm) => cm.position === currentCms.assignmentModule.position + 1
+        )?.id;
 
+  const assignmentClass = doc.assignment?.class;
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForSchool(doc.class?.schoolId),
-    isAssignmentsEnabledForOrganization(doc.class?.school?.organizationId),
+    isDocumentSubmissionEnabledForSchools(getDocumentSubmissionSchoolIds(doc)),
+    isAssignmentsEnabledForOrganization(
+      assignmentClass?.school?.organizationId
+    ),
   ]);
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
@@ -286,13 +326,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     doc: {
       ...doc,
+      assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
     },
     submissions,
     currentCms,
     nextCmId,
     shouldSaveVersion,
-    hasPreviousCms: doc.studentCourseModuleSessions[cmsIdx + 1] !== undefined,
+    hasPreviousCms: cmsIdx > 0,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
   });
@@ -349,11 +390,10 @@ export default function Route() {
     return [...newLocal, ...serverSubs];
   }, [data.submissions, localSubmissions]);
 
-  const { active: activeSubmissions, archived: archivedSubmissions } =
-    useMemo(
-      () => partitionSubmissionsByArchive(submissions),
-      [submissions]
-    );
+  const { active: activeSubmissions, archived: archivedSubmissions } = useMemo(
+    () => partitionSubmissionsByArchive(submissions),
+    [submissions]
+  );
 
   const studentList = isViewingAsTeacher ? submissions : activeSubmissions;
   const submissionCountForBadge = isViewingAsTeacher
@@ -389,9 +429,7 @@ export default function Route() {
     isEditable: isDocumentEditable,
   });
   const tutor = useTutorState(data.currentCms as any, cmsIdx);
-  const commentsState = useCommentsState(
-    (data.doc.comments as any[]) ?? []
-  );
+  const commentsState = useCommentsState((data.doc.comments as any[]) ?? []);
   const submit = useDocumentSubmit({
     documentId: data.doc.id,
     editorBridgeRef,
@@ -444,9 +482,7 @@ export default function Route() {
 
   const tutorHasPreviousCms = useMemo(() => {
     const liveCmsId = tutor.cms?.id ?? data.currentCms.id;
-    return (
-      data.hasPreviousCms || liveCmsId !== data.currentCms.id
-    );
+    return data.hasPreviousCms || liveCmsId !== data.currentCms.id;
   }, [data.hasPreviousCms, data.currentCms.id, tutor.cms?.id]);
 
   const changeTab = (value: string) => {
@@ -471,7 +507,9 @@ export default function Route() {
 
   useEffect(() => {
     if (submissionArchiveFetcher.state !== 'idle') return;
-    const body = submissionArchiveFetcher.data as { success?: boolean } | undefined;
+    const body = submissionArchiveFetcher.data as
+      | { success?: boolean }
+      | undefined;
     if (body?.success) {
       revalidator.revalidate();
     }
@@ -525,7 +563,10 @@ export default function Route() {
                   <FileText className="h-3.5 w-3.5" />
                   Submissions ({submissionCountForBadge})
                   {gradedCount > 0 && (
-                    <Badge variant="success" className="ml-1 text-[10px] px-1.5 py-0">
+                    <Badge
+                      variant="success"
+                      className="ml-1 text-[10px] px-1.5 py-0"
+                    >
                       {gradedCount} graded
                     </Badge>
                   )}
@@ -584,7 +625,10 @@ export default function Route() {
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
                               {isArchived ? (
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
                                   Archived
                                 </Badge>
                               ) : null}
@@ -756,9 +800,7 @@ export default function Route() {
                 }}
                 onSyncStatusChange={setSyncStatus}
                 onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) =>
-                  commentsState.addComment(c as any)
-                }
+                onCommentCreated={(c) => commentsState.addComment(c as any)}
               />
             )}
             {isMobile && tab !== 'comments' ? null : (
@@ -787,7 +829,10 @@ export default function Route() {
               <DialogDescription asChild>
                 <div className="space-y-4 pt-2">
                   <div className="space-y-2">
-                    <label htmlFor="submission-title" className="text-sm font-medium text-foreground">
+                    <label
+                      htmlFor="submission-title"
+                      className="text-sm font-medium text-foreground"
+                    >
                       Submission Title
                     </label>
                     <Input
@@ -799,12 +844,10 @@ export default function Route() {
                   </div>
                   <ul className="list-disc space-y-1.5 pl-5 text-sm">
                     <li>
-                      Submitting creates a snapshot of your essay for your teacher
-                      to grade.
+                      Submitting creates a snapshot of your essay for your
+                      teacher to grade.
                     </li>
-                    <li>
-                      You can keep editing and submit again after this.
-                    </li>
+                    <li>You can keep editing and submit again after this.</li>
                   </ul>
                   {activeSubmissions.length > 0 && (
                     <div className="space-y-2">
@@ -864,7 +907,11 @@ export default function Route() {
                     className="inline-flex"
                     data-testid="document-finalize-submit-empty-trigger"
                   >
-                    <Button variant="default" data-testid="document-finalize-submit" disabled>
+                    <Button
+                      variant="default"
+                      data-testid="document-finalize-submit"
+                      disabled
+                    >
                       {`Submit Version ${versionNumber}`}
                     </Button>
                   </span>

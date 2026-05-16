@@ -16,6 +16,7 @@ import { timeAgo } from '~/utils/timeAgo/timeAgo';
 import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
 import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
+import { getNextAssignmentModuleId } from './assignment-module-navigation';
 
 type Props = {
   docId: string;
@@ -26,9 +27,11 @@ type Props = {
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
   cms: {
-    studentCourseModule: {
-      studentCourse: {
-        studentCourseModules: { id: string; position: number }[];
+    assignmentModuleId?: string;
+    assignmentModule: {
+      id?: string;
+      assignmentType: {
+        assignmentModules: { id: string; position: number }[];
       } | null;
       instructions: {
         buttons: { id: string; label: string; action: string }[];
@@ -70,126 +73,126 @@ export const Tutor = ({
   } | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
 
   const finishedCms =
-    cms.instructionsCompleted === cms.studentCourseModule.instructions.length;
+    cms.instructionsCompleted === cms.assignmentModule.instructions.length;
   const isLastCmInstruction =
-    cms.instructionsCompleted ===
-    cms.studentCourseModule.instructions.length - 1;
+    cms.instructionsCompleted === cms.assignmentModule.instructions.length - 1;
 
   const instruction =
-    cms.studentCourseModule.instructions[cms.instructionsCompleted] ?? {};
+    cms.assignmentModule.instructions[cms.instructionsCompleted] ?? {};
 
-  const prevCmsIdx = hasPreviousCms ? cmsIdx + 1 : undefined;
-  const nextCmsIdx = cmsIdx > 0 ? cmsIdx - 1 : undefined;
-  const isCurrentCms = cmsIdx === 0;
+  const prevCmsIdx = hasPreviousCms ? cmsIdx - 1 : undefined;
+  const liveNextModuleId = useMemo(
+    () => getNextAssignmentModuleId(cms, nextCmId),
+    [cms, nextCmId]
+  );
 
-  const navigateToCmsIdx = (nextIdx: number | undefined) => {
-    const params = new URLSearchParams(searchParams);
-    if (nextIdx === undefined || nextIdx === 0) {
-      params.delete('cmsIdx');
-    } else {
-      params.set('cmsIdx', String(nextIdx));
-    }
-    const query = params.toString();
-    navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
-      replace: true,
-    });
-  };
-
-
-  const respond = useCallback(async (response: string) => {
-    if (isSessionLocked) return;
-    if (beforeRespond) {
-      const canProceed = await beforeRespond();
-      if (!canProceed) return;
-    }
-    setTutorError(null);
-    setOptimisticMessage({
-      agent: 'user',
-      createdAt: new Date(),
-      content: response,
-    });
-    setIsTutorResponding(true);
-    try {
-      const formData = new FormData();
-      formData.append('response', response);
-      formData.append('cmsId', cms.id);
-      formData.append('content', getCurrentDocumentText?.() ?? '');
-      const res = await fetch('/api/domain/tutor-response', {
-        method: 'POST',
-        body: formData,
-      });
-      const json = await res.json();
-      if (!res.ok || json.error) {
-        setTutorError(json.error ?? 'An error occurred.');
-        setOptimisticMessage(null);
+  const navigateToCmsIdx = useCallback(
+    (nextIdx: number | undefined) => {
+      const params = new URLSearchParams(searchParams);
+      if (nextIdx === undefined || nextIdx === 0) {
+        params.delete('cmsIdx');
       } else {
+        params.set('cmsIdx', String(nextIdx));
+      }
+      const query = params.toString();
+      navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
+        replace: true,
+      });
+    },
+    [docId, navigate, searchParams]
+  );
+
+  const respond = useCallback(
+    async (response: string) => {
+      if (isSessionLocked) return;
+      if (beforeRespond) {
+        const canProceed = await beforeRespond();
+        if (!canProceed) return;
+      }
+      setTutorError(null);
+      setOptimisticMessage({
+        agent: 'user',
+        createdAt: new Date(),
+        content: response,
+      });
+      setIsTutorResponding(true);
+      try {
+        const formData = new FormData();
+        formData.append('response', response);
+        formData.append('cmsId', cms.id);
+        formData.append('content', getCurrentDocumentText?.() ?? '');
+        const res = await fetch('/api/domain/tutor-response', {
+          method: 'POST',
+          body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok || json.error) {
+          setTutorError(json.error ?? 'An error occurred.');
+          setOptimisticMessage(null);
+        } else {
+          setOptimisticMessage(null);
+          setIsTutorResponding(false);
+          if (json?.cms) {
+            onCmsUpdate?.(json.cms);
+          }
+          return;
+        }
+      } catch {
+        setTutorError(
+          'Failed to get a response from the tutor. Please try again.'
+        );
         setOptimisticMessage(null);
+      } finally {
         setIsTutorResponding(false);
-        if (json?.cms) {
-          onCmsUpdate?.(json.cms);
-        }
-        return;
       }
-    } catch {
-      setTutorError('Failed to get a response from the tutor. Please try again.');
-      setOptimisticMessage(null);
-    } finally {
-      setIsTutorResponding(false);
-    }
-  }, [isSessionLocked, beforeRespond, cms.id, getCurrentDocumentText, onCmsUpdate]);
+    },
+    [
+      isSessionLocked,
+      beforeRespond,
+      cms.id,
+      getCurrentDocumentText,
+      onCmsUpdate,
+    ]
+  );
 
-  const incrementInstruction = useCallback(async (label?: string) => {
-    if (isSessionLocked) return;
-    const formData = new FormData();
-    formData.append('instructionsCompleted.increment', '1');
-    if (label) formData.append('incrementButtonText', label);
-    try {
-      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.cms) {
-          onCmsUpdate?.(json.cms);
+  const incrementInstruction = useCallback(
+    async (label?: string) => {
+      if (isSessionLocked) return;
+      const formData = new FormData();
+      formData.append('instructionsCompleted.increment', '1');
+      if (label) formData.append('incrementButtonText', label);
+      try {
+        const res = await fetch(
+          `/api/model/assignment-module-session/${cms.id}`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.cms) {
+            onCmsUpdate?.(json.cms);
+          }
         }
+      } catch {
+        // Silently fail — user can retry
       }
-    } catch {
-      // Silently fail — user can retry
-    }
-  }, [isSessionLocked, cms.id, onCmsUpdate]);
-
-  const decrementInstruction = useCallback(async () => {
-    if (isSessionLocked) return;
-    const formData = new FormData();
-    formData.append('instructionsCompleted.decrement', '1');
-    try {
-      const res = await fetch(`/api/model/course-module-session/${cms.id}`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.cms) {
-          onCmsUpdate?.(json.cms);
-        }
-      }
-    } catch {
-      // Silently fail — user can retry
-    }
-  }, [isSessionLocked, cms.id, onCmsUpdate]);
+    },
+    [isSessionLocked, cms.id, onCmsUpdate]
+  );
 
   const advanceToNextCourseModule = useCallback(async () => {
-    if (isSessionLocked) return;
+    if (isSessionLocked || !liveNextModuleId) return;
     const formData = new FormData();
-    formData.append('studentCourseModuleId', nextCmId ?? '');
+    formData.append('assignmentModuleId', liveNextModuleId);
     formData.append('documentId', docId);
     try {
-      const res = await fetch('/api/model/course-module-session', {
+      const res = await fetch('/api/model/assignment-module-session', {
         method: 'POST',
         body: formData,
       });
@@ -197,21 +200,27 @@ export const Tutor = ({
         const json = await res.json();
         if (json?.cms) {
           onCmsUpdate?.(json.cms);
+          navigateToCmsIdx(cmsIdx + 1);
         }
       }
     } catch {
       // Silently fail — user can retry
     }
-  }, [isSessionLocked, nextCmId, docId, onCmsUpdate]);
+  }, [
+    isSessionLocked,
+    liveNextModuleId,
+    docId,
+    onCmsUpdate,
+    cmsIdx,
+    navigateToCmsIdx,
+  ]);
 
   const messages = useMemo(() => {
     const base = cms.messages.filter((m) =>
       ['user', 'assistant'].includes(m.agent)
     );
     base.sort(compareTutorMessagesByTimeThenId);
-    return optimisticMessage
-      ? base.concat([optimisticMessage as any])
-      : base;
+    return optimisticMessage ? base.concat([optimisticMessage as any]) : base;
   }, [cms.messages, optimisticMessage]);
 
   useEffect(() => {
@@ -221,13 +230,12 @@ export const Tutor = ({
     });
   }, [messages.length]);
 
-
   return (
     <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
       <div
         className={cn(
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
-          cms.studentCourseModule.isSelfGuided ? '' : 'border-b'
+          cms.assignmentModule.isSelfGuided ? '' : 'border-b'
         )}
       >
         <div className="flex h-[32px] w-full items-center gap-1">
@@ -236,6 +244,7 @@ export const Tutor = ({
               <Button
                 variant="secondary"
                 size="icon-sm"
+                data-testid="tutor-previous-module"
                 disabled={prevCmsIdx === undefined}
                 onClick={() =>
                   !isSessionLocked &&
@@ -247,24 +256,21 @@ export const Tutor = ({
               </Button>
             </Tooltip>
             <p className="text-sm font-bold text-foreground/80">
-              {cms.studentCourseModule.title}
+              {cms.assignmentModule.title}
             </p>
             <Tooltip text="Next step" delayDuration={0}>
               <Button
                 variant="secondary"
                 size="icon-sm"
-                disabled={nextCmsIdx === undefined}
-                onClick={() =>
-                  !isSessionLocked &&
-                  nextCmsIdx !== undefined &&
-                  navigateToCmsIdx(nextCmsIdx)
-                }
+                data-testid="tutor-next-module"
+                disabled={!liveNextModuleId || isSessionLocked}
+                onClick={advanceToNextCourseModule}
               >
                 <ChevronRightIcon size={20} />
               </Button>
             </Tooltip>
           </div>
-          {cms.studentCourseModule.isSelfGuided ? null : (
+          {cms.assignmentModule.isSelfGuided ? null : (
             <Tooltip
               text={messagesExpanded ? 'Hide messages' : 'Show messages'}
               delayDuration={0}
@@ -286,14 +292,12 @@ export const Tutor = ({
           )}
         </div>
       </div>
-      {cms.studentCourseModule.isSelfGuided ? (
+      {cms.assignmentModule.isSelfGuided ? (
         <div className="flex items-center justify-center gap-4 p-4">
           <p className="text-sm text-muted-foreground">
-            {isCurrentCms
-              ? 'This step is self-guided. You can proceed to the next step by clicking next.'
-              : 'This step is self-guided.'}
+            This step is self-guided.
           </p>
-          {isCurrentCms ? (
+          {liveNextModuleId ? (
             <Button
               variant="outline"
               className="w-fit"
@@ -313,7 +317,7 @@ export const Tutor = ({
               : 'max-h-0 overflow-hidden'
           )}
           ref={messagesRef}
-          id="course-module-session-messages"
+          id="assignment-module-session-messages"
         >
           {messages.map((message) => (
             <div
@@ -349,9 +353,7 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {isTutorResponding && optimisticMessage ? (
-            <Loading />
-          ) : null}
+          {isTutorResponding && optimisticMessage ? <Loading /> : null}
           {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
               {tutorError}
@@ -359,47 +361,32 @@ export const Tutor = ({
           ) : null}
         </div>
       )}
-      {cmsIdx !== 0 ? (
-        <ResponseBar
-          className={
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
-              ? undefined
-              : 'border-t-0'
-          }
-          buttons={instruction.buttons ?? []}
-          respond={respond}
-          showChatButton={!!instruction.showChatButton}
-          showNextButton={false}
-          disabled={isSessionLocked || isTutorResponding}
-        />
-      ) : finishedCms && nextCmId ? (
+      {finishedCms && liveNextModuleId ? (
         <div
           className={cn(
-            'flex flex-col items-center gap-4 border-t p-2 px-4',
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            'flex items-center justify-end gap-2 border-t p-2 px-4',
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
         >
-          <p className="text-center text-sm text-muted-foreground">
-            This will take you to the next step of the writing process. Click
-            next again only if you are ready to move on, or click back to stay
-            on this step.
-          </p>
-          <div className="flex items-center gap-2">
-            <Button onClick={decrementInstruction} variant="secondary">
+          {hasPreviousCms ? (
+            <Button
+              onClick={() => navigateToCmsIdx(prevCmsIdx)}
+              variant="secondary"
+            >
               <ArrowLeftIcon size={18} className="mr-2" /> Back
             </Button>
-            <Button onClick={advanceToNextCourseModule}>
-              Next <ArrowRightIcon size={18} className="ml-2" />
-            </Button>
-          </div>
+          ) : null}
+          <Button onClick={advanceToNextCourseModule}>
+            Next <ArrowRightIcon size={18} className="ml-2" />
+          </Button>
         </div>
       ) : finishedCms ? (
         <p
           className={cn(
             'p-2 text-center text-sm text-muted-foreground',
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? 'border-t'
               : undefined
           )}
@@ -409,7 +396,7 @@ export const Tutor = ({
       ) : (
         <ResponseBar
           className={
-            messagesExpanded && !cms.studentCourseModule.isSelfGuided
+            messagesExpanded && !cms.assignmentModule.isSelfGuided
               ? undefined
               : 'border-t-0'
           }
@@ -419,7 +406,7 @@ export const Tutor = ({
           showNextButton={!!instruction.showNextButton}
           disabled={isSessionLocked || isTutorResponding}
           advanceInstruction={
-            isLastCmInstruction && nextCmId
+            isLastCmInstruction && liveNextModuleId
               ? () => advanceToNextCourseModule()
               : incrementInstruction
           }

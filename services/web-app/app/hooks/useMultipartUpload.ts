@@ -6,13 +6,13 @@ export function useMultipartUpload() {
 
   async function uploadFile({
     file,
-    teacherCourseId,
+    teacherTrainingId,
     moduleId,
     partSize = 8 * 1024 * 1024, // 8MB parts
     concurrency = 4,
   }: {
     file: File;
-    teacherCourseId: string;
+    teacherTrainingId: string;
     moduleId: string;
     partSize?: number;
     concurrency?: number;
@@ -23,7 +23,7 @@ export function useMultipartUpload() {
     try {
       // 1) Start upload
       const startForm = new FormData();
-      startForm.append('teacherCourseId', teacherCourseId);
+      startForm.append('teacherTrainingId', teacherTrainingId);
       startForm.append('moduleId', moduleId);
       startForm.append('fileName', file.name);
       startForm.append('contentType', file.type || 'application/octet-stream');

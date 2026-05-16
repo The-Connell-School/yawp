@@ -21,7 +21,7 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
       const assignment = await prisma.assignment.create({
         data: {
           classId: e2eContext.classId,
-          studentCourseId: e2eContext.studentCourseId,
+          assignmentTypeId: e2eContext.assignmentTypeId,
           title: 'E2E Rhetorical Analysis',
           prompt: `${uniquePromptMarker}: Write a 500-word rhetorical analysis of a speech of your choosing.`,
         },
@@ -53,6 +53,38 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         expect(createdDoc).not.toBeNull();
         expect(createdDoc?.assignmentId).toBe(assignment.id);
         expect(createdDoc?.profileId).toBe(e2eContext.profileId);
+
+        const assignmentModules = await prisma.assignmentModule.findMany({
+          where: { assignmentTypeId: e2eContext.assignmentTypeId },
+          select: { id: true, position: true },
+          orderBy: { position: 'asc' },
+        });
+        const initialSessions = await prisma.assignmentModuleSession.findMany({
+          where: { documentId: documentId as string },
+          select: {
+            assignmentModuleId: true,
+            assignmentModule: { select: { position: true } },
+          },
+          orderBy: { assignmentModule: { position: 'asc' } },
+        });
+        expect(initialSessions).toHaveLength(assignmentModules.length);
+        expect(initialSessions.map((s) => s.assignmentModule.position)).toEqual(
+          assignmentModules.map((m) => m.position)
+        );
+
+        await expect(page.getByText('E2E Module 1')).toBeVisible();
+        await page.getByTestId('tutor-next-module').click();
+        await expect(page).toHaveURL(/cmsIdx=1/);
+        await expect(page.getByText('E2E Module 2')).toBeVisible();
+
+        const afterNextSessions = await prisma.assignmentModuleSession.count({
+          where: { documentId: documentId as string },
+        });
+        expect(afterNextSessions).toBe(assignmentModules.length);
+
+        await page.getByTestId('tutor-previous-module').click();
+        await expect(page).not.toHaveURL(/cmsIdx=1/);
+        await expect(page.getByText('E2E Module 1')).toBeVisible();
 
         await helpers.typeInEditor('My opening paragraph for the assignment.');
         await expect(helpers.getEditor()).toContainText(

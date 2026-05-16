@@ -6,11 +6,15 @@ const prisma = {
 
 const getGradingActor = mock();
 const canManageGrades = mock();
+const isGradingOwnDocument = mock();
+const buildTeacherClassWhere = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
+  isGradingOwnDocument,
+  buildTeacherClassWhere,
 }));
 
 const { action } = await import('./route');
@@ -29,6 +33,8 @@ describe('api.domain.update-submission', () => {
     prisma.submission.update.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
+    isGradingOwnDocument.mockReset();
+    buildTeacherClassWhere.mockReset();
 
     getGradingActor.mockResolvedValue({
       profileId: 'teacher-1',
@@ -36,13 +42,38 @@ describe('api.domain.update-submission', () => {
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
+    isGradingOwnDocument.mockImplementation(
+      (actorId: string, docProfileId: string) => actorId === docProfileId
+    );
+    buildTeacherClassWhere.mockReturnValue({});
   });
 
   test('updates grading fields on a submission', async () => {
+    buildTeacherClassWhere.mockReturnValue({
+      OR: [
+        {
+          assignment: {
+            class: {
+              teachers: { some: { profileId: 'teacher-1' } },
+            },
+          },
+        },
+        {
+          studentProfile: {
+            classes: {
+              some: {
+                teachers: { some: { profileId: 'teacher-1' } },
+              },
+            },
+          },
+        },
+      ],
+    });
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: new Date(),
       gradedById: 'teacher-1',
+      document: { profileId: 'student-1' },
     });
     prisma.submission.update.mockResolvedValue({
       id: 'sub-1',
@@ -62,6 +93,23 @@ describe('api.domain.update-submission', () => {
     expect(body.success).toBe(true);
     expect(body.submission.score).toBe('85% B');
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'sub-1',
+          document: {
+            is: expect.objectContaining({
+              deletedAt: null,
+              OR: expect.arrayContaining([
+                expect.objectContaining({
+                  studentProfile: expect.any(Object),
+                }),
+              ]),
+            }),
+          },
+        }),
+      })
+    );
   });
 
   test('sets gradedAt and gradedById on first grading edit', async () => {
@@ -69,11 +117,16 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: null,
       gradedById: null,
+      document: { profileId: 'student-1' },
     });
     prisma.submission.update.mockResolvedValue({ id: 'sub-1', score: '90% A' });
 
     await action({
-      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
+      request: makeRequest({
+        submissionId: 'sub-1',
+        score: '90% A',
+        markAsGraded: true,
+      }),
     } as any);
 
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];
@@ -87,6 +140,7 @@ describe('api.domain.update-submission', () => {
       id: 'sub-1',
       gradedAt: existingGradedAt,
       gradedById: 'teacher-1',
+      document: { profileId: 'student-1' },
     });
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
 
@@ -107,6 +161,22 @@ describe('api.domain.update-submission', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(403);
+  });
+
+  test('rejects grading own submission', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      gradedAt: null,
+      gradedById: null,
+      document: { profileId: 'teacher-1' },
+    });
+
+    const response = (await action({
+      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
+    } as any)) as Response;
+
+    expect(response.status).toBe(403);
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 
   test('returns 404 when submission not found', async () => {

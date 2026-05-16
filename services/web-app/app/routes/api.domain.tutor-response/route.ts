@@ -32,10 +32,10 @@ export async function action({ request }: ActionFunctionArgs) {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);
 
-    const cms = await prisma.studentCourseModuleSession.findUnique({
+    const cms = await prisma.assignmentModuleSession.findUnique({
       where: { id: data.cmsId },
       include: {
-        studentCourseModule: {
+        assignmentModule: {
           include: { instructions: { orderBy: { position: 'asc' } } },
         },
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
@@ -56,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const instruction =
-      cms.studentCourseModule.instructions[cms.instructionsCompleted];
+      cms.assignmentModule.instructions[cms.instructionsCompleted];
     if (!instruction) {
       return dataResponse(
         { error: 'No current instruction found.' },
@@ -65,7 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.studentCourseModule.tutorInstructions,
+      tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
       assignmentTutorContext: cms.document.assignment?.tutorContext,
     });
@@ -114,7 +114,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return errorResponse(error as any);
     }
 
-    await prisma.studentCourseModuleSession.update({
+    await prisma.assignmentModuleSession.update({
       where: { id: cms.id },
       data: {
         messages: {
@@ -135,19 +135,19 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    const updatedCms = await prisma.studentCourseModuleSession.findUnique({
+    const updatedCms = await prisma.assignmentModuleSession.findUnique({
       where: { id: cms.id },
       include: {
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
-        studentCourseModule: {
+        assignmentModule: {
           include: {
             instructions: {
               orderBy: { position: 'asc' },
               include: { buttons: { orderBy: { position: 'asc' } } },
             },
-            studentCourse: {
+            assignmentType: {
               select: {
-                studentCourseModules: {
+                assignmentModules: {
                   select: { id: true, position: true },
                   orderBy: { position: 'asc' },
                 },

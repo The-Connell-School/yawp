@@ -26,12 +26,13 @@ type AssignmentRecord = {
   prompt: string;
   tutorContext: string | null;
   dueDate: Date | string | null;
-  studentCourseId: string;
+  assignmentTypeId: string;
+  assignmentType: { id: string; title: string };
 };
 
 type AssignmentSheetProps = {
   classId: string;
-  allowedStudentCourses: { id: string; title: string }[];
+  allowedAssignmentTypes: { id: string; title: string }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentRecord | null;
@@ -39,7 +40,7 @@ type AssignmentSheetProps = {
 
 export function AssignmentSheet({
   classId,
-  allowedStudentCourses,
+  allowedAssignmentTypes,
   open,
   onOpenChange,
   editingAssignment,
@@ -47,7 +48,7 @@ export function AssignmentSheet({
   const fetcher = useFetcher<any>();
   const extractFetcher = useFetcher<any>();
   const [title, setTitle] = useState('');
-  const [studentCourseId, setStudentCourseId] = useState('');
+  const [assignmentTypeId, setAssignmentTypeId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [tutorContext, setTutorContext] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -68,18 +69,37 @@ export function AssignmentSheet({
     return extractFetcher.data.message || 'Unable to extract PDF content.';
   }, [extractFetcher.data]);
 
+  const assignmentTypeOptions = useMemo(() => {
+    if (
+      !editingAssignment ||
+      allowedAssignmentTypes.some(
+        (type) => type.id === editingAssignment.assignmentTypeId
+      )
+    ) {
+      return allowedAssignmentTypes;
+    }
+
+    return [
+      ...allowedAssignmentTypes,
+      {
+        id: editingAssignment.assignmentTypeId,
+        title: `${editingAssignment.assignmentType.title} (archived)`,
+      },
+    ];
+  }, [allowedAssignmentTypes, editingAssignment]);
+
   useEffect(() => {
     if (!open) return;
     setTitle(editingAssignment?.title ?? '');
-    setStudentCourseId(
-      editingAssignment?.studentCourseId ?? allowedStudentCourses[0]?.id ?? ''
+    setAssignmentTypeId(
+      editingAssignment?.assignmentTypeId ?? assignmentTypeOptions[0]?.id ?? ''
     );
     setPrompt(editingAssignment?.prompt ?? '');
     setTutorContext(editingAssignment?.tutorContext ?? '');
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
     setPromptMode('manual');
     setPdfFile(null);
-  }, [allowedStudentCourses, editingAssignment, open]);
+  }, [assignmentTypeOptions, editingAssignment, open]);
 
   useEffect(() => {
     if (!extractFetcher.data?.success) return;
@@ -143,24 +163,24 @@ export function AssignmentSheet({
           </div>
 
           <div className="space-y-2">
-            <Label>Student Course</Label>
+            <Label>Assignment Type</Label>
             <Select
-              value={studentCourseId}
-              onValueChange={setStudentCourseId}
+              value={assignmentTypeId}
+              onValueChange={setAssignmentTypeId}
               disabled={isSaving}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select course" />
+                <SelectValue placeholder="Select assignment type" />
               </SelectTrigger>
               <SelectContent>
-                {allowedStudentCourses.map((course) => (
-                  <SelectItem key={course.id} value={course.id}>
-                    {course.title}
+                {assignmentTypeOptions.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.title}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <input type="hidden" name="studentCourseId" value={studentCourseId} />
+            <input type="hidden" name="assignmentTypeId" value={assignmentTypeId} />
           </div>
 
           <div className="space-y-2">
@@ -262,7 +282,7 @@ export function AssignmentSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving || isExtracting || !studentCourseId}>
+            <Button type="submit" disabled={isSaving || isExtracting || !assignmentTypeId}>
               {isSaving
                 ? isEditing
                   ? 'Saving...'

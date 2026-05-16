@@ -15,12 +15,12 @@ const region = process.env.AWS_S3_REGION_FOR_VIDEOS!;
 export const s3 = new S3Client({ region });
 
 export function buildModuleVideoKey(
-  teacherCourseId: string,
+  teacherTrainingId: string,
   moduleId: string,
   fileName: string
 ) {
   const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  return `teacher-courses/${teacherCourseId}/modules/${moduleId}/video/${Date.now()}-${safe}`;
+  return `teacher-trainings/${teacherTrainingId}/modules/${moduleId}/video/${Date.now()}-${safe}`;
 }
 
 export async function putSmallObject(

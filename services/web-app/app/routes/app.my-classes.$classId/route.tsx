@@ -9,6 +9,7 @@ import {
   useLoaderData,
   useSearchParams,
   useNavigate,
+  useOutlet,
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
@@ -17,6 +18,7 @@ import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
   isDocumentSubmissionEnabledForSchool,
   isAssignmentsEnabledForOrganization,
+  isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Sheet,
@@ -71,6 +73,7 @@ import {
   studentModuleSessionListSelect,
   studentModuleSessionSingleSelect,
 } from './module-session-select.server';
+import { buildClassDocumentScope } from './class-document-where.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -116,12 +119,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: classId,
       teachers: { some: { id: profile.teacherProfile.id } },
     },
-    select: {
-      id: true,
-      allowedStudentCourses: {
-        select: { studentCourseId: true },
-      },
-    },
+    select: { id: true },
   });
 
   if (!classAccess) {
@@ -130,6 +128,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
       { status: 404 }
     );
   }
+
+  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
+    where: {
+      archivedAt: null,
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
+    },
+    select: { id: true },
+  });
+  const allowedAssignmentTypeIds = new Set(
+    allowedAssignmentTypes.map((type) => type.id)
+  );
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
@@ -199,7 +210,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === 'create-assignment' || intent === 'update-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
-    const studentCourseId = formData.get('studentCourseId')?.toString();
+    const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
@@ -211,21 +222,47 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
-    if (!studentCourseId) {
+    if (!assignmentTypeId) {
       return dataResponse(
-        { success: false, message: 'Student course is required.' },
+        { success: false, message: 'Assignment type is required.' },
         { status: 400 }
       );
     }
+    let existingAssignment: { id: string; assignmentTypeId: string } | null =
+      null;
+    if (intent === 'update-assignment') {
+      if (!assignmentId) {
+        return dataResponse(
+          { success: false, message: 'Assignment is required.' },
+          { status: 400 }
+        );
+      }
+
+      existingAssignment = await prisma.assignment.findFirst({
+        where: { id: assignmentId, classId },
+        select: { id: true, assignmentTypeId: true },
+      });
+
+      if (!existingAssignment) {
+        return dataResponse(
+          { success: false, message: 'Assignment not found.' },
+          { status: 404 }
+        );
+      }
+    }
+
+    const isPreservingCurrentArchivedType =
+      intent === 'update-assignment' &&
+      existingAssignment?.assignmentTypeId === assignmentTypeId;
+
     if (
-      !classAccess.allowedStudentCourses.some(
-        (course) => course.studentCourseId === studentCourseId
-      )
+      !allowedAssignmentTypeIds.has(assignmentTypeId) &&
+      !isPreservingCurrentArchivedType
     ) {
       return dataResponse(
         {
           success: false,
-          message: 'Selected course is not available for this class.',
+          message: 'Selected assignment type is not available.',
         },
         { status: 400 }
       );
@@ -247,7 +284,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.assignment.create({
         data: {
           classId,
-          studentCourseId,
+          assignmentTypeId,
           title,
           prompt,
           tutorContext,
@@ -261,29 +298,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
     }
 
-    if (!assignmentId) {
-      return dataResponse(
-        { success: false, message: 'Assignment is required.' },
-        { status: 400 }
-      );
-    }
-
-    const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, classId },
-      select: { id: true },
-    });
-
-    if (!assignment) {
-      return dataResponse(
-        { success: false, message: 'Assignment not found.' },
-        { status: 404 }
-      );
-    }
-
     await prisma.assignment.update({
-      where: { id: assignment.id },
+      where: { id: existingAssignment!.id },
       data: {
-        studentCourseId,
+        assignmentTypeId,
         title,
         prompt,
         tutorContext,
@@ -322,20 +340,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       period: true,
       title: true,
       school: { select: { id: true, name: true, organizationId: true } },
-      allowedStudentCourses: {
-        select: {
-          studentCourseId: true,
-          studentCourse: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-        },
-        orderBy: {
-          studentCourse: { position: 'asc' },
-        },
-      },
       students: {
         select: {
           id: true,
@@ -349,6 +353,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!klass) throw new Response('Class not found', { status: 404 });
 
+  const legacyClassDocumentIds = (
+    await prisma.documentClassForensic.findMany({
+      where: { oldClassId: classId },
+      select: { documentId: true },
+    })
+  ).map((row) => row.documentId);
+  const classDocumentScope = buildClassDocumentScope(
+    classId,
+    legacyClassDocumentIds
+  );
+
+  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
+    where: {
+      archivedAt: null,
+      organizationAssignments: {
+        some: { organizationId: profile.organization.id },
+      },
+    },
+    select: { id: true, title: true },
+    orderBy: { position: 'asc' },
+  });
+
   const profiles = await prisma.profile.findMany({
     where: {
       studentProfile: {
@@ -359,7 +385,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       user: { select: { name: true, email: true } },
       documents: {
-        where: { classId },
+        where: classDocumentScope,
         select: {
           id: true,
           title: true,
@@ -367,7 +393,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           updatedAt: true,
           html: true,
           text: true,
-          studentCourseModuleSessions: studentModuleSessionListSelect,
+          assignmentModuleSessions: studentModuleSessionListSelect,
           _count: {
             select: {
               pasteAlerts: true,
@@ -381,7 +407,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get recent paste alerts for this class
   const pasteAlerts = await prisma.pasteAlert.findMany({
     where: {
-      document: { classId },
+      document: classDocumentScope,
     },
     select: {
       id: true,
@@ -413,9 +439,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   // Check feature flags
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+  const [
+    isDocumentSubmissionEnabled,
+    assignmentsEnabled,
+    releasedGradesEnabled,
+  ] = await Promise.all([
     isDocumentSubmissionEnabledForSchool(klass.school?.id),
     isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+    isReleasedGradesOrganizationEnabledForOrganization(
+      klass.school?.organizationId
+    ),
   ]);
 
   // Get all submissions for this class
@@ -423,8 +456,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? await prisma.submission.findMany({
         where: {
           document: {
-            classId,
-            deletedAt: null,
+            is: {
+              ...classDocumentScope,
+              deletedAt: null,
+            },
           },
         },
         select: {
@@ -465,7 +500,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                   },
                 },
               },
-              studentCourseModuleSessions: studentModuleSessionSingleSelect,
+              assignmentModuleSessions: studentModuleSessionSingleSelect,
             },
           },
         },
@@ -478,7 +513,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
     where: {
-      classId,
+      ...classDocumentScope,
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
@@ -504,7 +539,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      studentCourseModuleSessions: studentModuleSessionSingleSelect,
+      assignmentModuleSessions: studentModuleSessionSingleSelect,
     },
     orderBy: {
       updatedAt: 'desc',
@@ -520,8 +555,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
-          studentCourseId: true,
-          studentCourse: {
+          assignmentTypeId: true,
+          assignmentType: {
             select: {
               id: true,
               title: true,
@@ -541,6 +576,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     klass,
+    allowedAssignmentTypes,
     profiles,
     pasteAlerts,
     submissions,
@@ -549,6 +585,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
+    releasedGradesEnabled,
   });
 }
 
@@ -562,6 +599,13 @@ type TabValue =
   | 'students';
 
 export default function ClassDetailRoute() {
+  const outlet = useOutlet();
+  if (outlet) return outlet;
+
+  return <ClassDetailPage />;
+}
+
+function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -913,8 +957,8 @@ export default function ClassDetailRoute() {
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {doc.studentCourseModuleSessions[0]?.studentCourseModule
-                      .title || '—'}
+                    {doc.assignmentModuleSessions[0]?.assignmentModule.title ||
+                      '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {timeAgo(new Date(doc.updatedAt))}
@@ -965,8 +1009,8 @@ export default function ClassDetailRoute() {
                     </TableCell>
                   )}
                   <TableCell className="text-muted-foreground">
-                    {submission.document.studentCourseModuleSessions[0]
-                      ?.studentCourseModule.title || '—'}
+                    {submission.document.assignmentModuleSessions[0]
+                      ?.assignmentModule.title || '—'}
                   </TableCell>
                   <TableCell>
                     <StudentArchiveCell archivedAt={submission.archivedAt} />
@@ -1147,7 +1191,7 @@ export default function ClassDetailRoute() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
-                <TableHead>Course</TableHead>
+                <TableHead>Assignment Type</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead>Prompt</TableHead>
                 <TableHead>Docs</TableHead>
@@ -1160,7 +1204,7 @@ export default function ClassDetailRoute() {
                   <TableCell className="font-medium">
                     {assignment.title || 'Untitled Assignment'}
                   </TableCell>
-                  <TableCell>{assignment.studentCourse.title}</TableCell>
+                  <TableCell>{assignment.assignmentType.title}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {assignment.dueDate ? formatDateOnly(assignment.dueDate) : '—'}
                   </TableCell>
@@ -1391,6 +1435,14 @@ export default function ClassDetailRoute() {
               <p className="mt-1 text-muted-foreground">
                 {data.klass.school.name}
               </p>
+            ) : null}
+            {data.releasedGradesEnabled ? (
+              <Link
+                to={`/app/my-classes/${data.klass.id}/released-grades`}
+                className="mt-2 text-sm underline"
+              >
+                Released grades →
+              </Link>
             ) : null}
           </div>
         </div>
@@ -1646,12 +1698,7 @@ export default function ClassDetailRoute() {
       {assignmentsEnabled && (
         <AssignmentSheet
           classId={data.klass.id}
-          allowedStudentCourses={data.klass.allowedStudentCourses.map(
-            (course) => ({
-              id: course.studentCourse.id,
-              title: course.studentCourse.title,
-            })
-          )}
+          allowedAssignmentTypes={data.allowedAssignmentTypes}
           open={isAssignmentSheetOpen}
           onOpenChange={(open) => {
             setIsAssignmentSheetOpen(open);

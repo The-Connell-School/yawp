@@ -98,7 +98,7 @@ const LINKS: {
     requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {
-    to: '/app/teacher-courses',
+    to: '/app/teacher-trainings',
     label: "Teacher's Lounge",
     icon: <MonitorPlay size={20} />,
     requires: (user) => !!user.selectedProfile?.teacherProfile,
