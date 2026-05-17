@@ -14,6 +14,7 @@ const isDocumentSubmissionEnabledForSchool = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
+const isGradingOwnDocument = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -26,6 +27,7 @@ mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
   buildTeacherClassWhere,
+  isGradingOwnDocument,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -72,7 +74,9 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     gradedAt: null,
     document: {
       id: 'doc-1',
-      class: { schoolId: 'school-1' },
+      profileId: 'student-profile-1',
+      assignment: { class: { schoolId: 'school-1' } },
+      studentProfile: { classes: [] },
       profile: { user: { name: 'Jordan Student' } },
     },
     ...overrides,
@@ -89,6 +93,7 @@ describe('api.domain.grade-essay-ai', () => {
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
+    isGradingOwnDocument.mockReset();
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
@@ -98,6 +103,9 @@ describe('api.domain.grade-essay-ai', () => {
     });
     canManageGrades.mockReturnValue(true);
     buildTeacherClassWhere.mockReturnValue({});
+    isGradingOwnDocument.mockImplementation(
+      (actorId: string, docProfileId: string) => actorId === docProfileId
+    );
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
     isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
@@ -141,6 +149,78 @@ describe('api.domain.grade-essay-ai', () => {
       'Jordan, this draft has clear progress and focus.'
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
+    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
+  });
+
+  test('filters submission access through assignment class relation', async () => {
+    buildTeacherClassWhere.mockReturnValue({
+      assignment: {
+        class: {
+          teachers: { some: { profileId: 'teacher-profile-1' } },
+        },
+      },
+    });
+    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          document: {
+            is: {
+              deletedAt: null,
+              assignment: {
+                class: {
+                  teachers: { some: { profileId: 'teacher-profile-1' } },
+                },
+              },
+            },
+          },
+        }),
+      })
+    );
+  });
+
+  test('checks the document submission flag through student classes for legacy submissions', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'legacy-sub-1',
+        document: {
+          id: 'legacy-doc-1',
+          profileId: 'student-profile-1',
+          assignment: null,
+          studentProfile: {
+            classes: [{ schoolId: 'scranton-prep-school' }],
+          },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'legacy-sub-1');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'scranton-prep-school',
+    ]);
+    expect(isDocumentSubmissionEnabledForSchool).not.toHaveBeenCalled();
+    expect(redirectWithToast).not.toHaveBeenCalled();
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 

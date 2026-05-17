@@ -1,8 +1,10 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import {
+  buildTeacherClassWhere,
   canManageGrades,
   getGradingActor,
+  isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -24,27 +26,39 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const teacherClassWhere = buildTeacherClassWhere(actor);
+
   const submission = await prisma.submission.findFirst({
     where: {
       id: submissionId,
       document: {
-        deletedAt: null,
-        ...(actor.isAdmin
-          ? {}
-          : {
-              class: {
-                teachers: { some: { profileId: actor.profileId } },
-              },
-            }),
+        is: {
+          deletedAt: null,
+          ...teacherClassWhere,
+        },
       },
     },
-    select: { id: true, gradedAt: true, gradedById: true },
+    select: {
+      id: true,
+      gradedAt: true,
+      gradedById: true,
+      document: { select: { profileId: true } },
+    },
   });
 
   if (!submission) {
     return Response.json(
       { success: false, message: 'Submission not found.' },
       { status: 404 }
+    );
+  }
+
+  if (
+    isGradingOwnDocument(actor.profileId, submission.document.profileId)
+  ) {
+    return Response.json(
+      { success: false, message: 'You cannot grade your own submission.' },
+      { status: 403 }
     );
   }
 

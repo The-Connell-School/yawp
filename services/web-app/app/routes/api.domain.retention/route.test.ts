@@ -60,12 +60,12 @@ describe('api.domain.retention', () => {
     const revisionCutoff =
       prisma.documentRevision.deleteMany.mock.calls[0]?.[0]?.where?.createdAt
         ?.lt;
-    const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
 
     expect(journalCutoff).toBeInstanceOf(Date);
     expect(revisionCutoff).toEqual(journalCutoff);
     expect(
-      Math.abs((journalCutoff as Date).getTime() - (startedAt - ninetyDaysMs))
+      Math.abs((journalCutoff as Date).getTime() - (startedAt - thirtyDaysMs))
     ).toBeLessThan(10_000);
 
     expect(response.data).toMatchObject({

@@ -10,11 +10,11 @@ export async function findSubmissionForTitleEdit(params: {
     where: {
       id: params.submissionId,
       document: {
-        deletedAt: null,
-        OR: [
-          { profile: { id: params.profileId } },
-          {
-            profile: {
+        is: {
+          deletedAt: null,
+          OR: [
+            { profile: { id: params.profileId } },
+            {
               studentProfile: {
                 classes: {
                   some: {
@@ -25,9 +25,9 @@ export async function findSubmissionForTitleEdit(params: {
                 },
               },
             },
-          },
-          ...(params.isAdmin ? [{}] : []),
-        ],
+            ...(params.isAdmin ? [{}] : []),
+          ],
+        },
       },
     },
     select: { id: true },

@@ -38,14 +38,17 @@ export async function action({ request }: ActionFunctionArgs) {
     where: {
       id: data.submissionId,
       document: {
-        deletedAt: null,
-        ...(isAdmin
-          ? {}
-          : {
-              class: {
-                teachers: { some: { profileId: profile.id } },
-              },
-            }),
+        is: {
+          deletedAt: null,
+          profileId: { not: profile.id },
+          ...(isAdmin
+            ? {}
+            : {
+                class: {
+                  teachers: { some: { profileId: profile.id } },
+                },
+              }),
+        },
       },
     },
     select: { id: true },

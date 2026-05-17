@@ -78,8 +78,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: {
       id: params.id,
       document: {
-        deletedAt: null,
-        profileId: profile.id,
+        is: {
+          deletedAt: null,
+          profileId: profile.id,
+        },
       },
     },
     select: { id: true },
