@@ -24,7 +24,8 @@ mock.module('~/services/released-grades.server', () => ({
   loadStudentPiles,
 }));
 
-const { loader } = await import('./route');
+const { loader: routeLoader } = await import('./route');
+const loader = routeLoader as any;
 
 describe('released-grades loader', () => {
   beforeEach(() => {

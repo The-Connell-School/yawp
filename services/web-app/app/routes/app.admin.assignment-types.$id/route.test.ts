@@ -24,7 +24,8 @@ mock.module('~/utils/auth.server.js', () => ({
   requireProfile,
 }));
 
-const { action } = await import('./route');
+const { action: routeAction } = await import('./route');
+const action = routeAction as any;
 
 describe('admin assignment type detail action', () => {
   beforeEach(() => {

@@ -42,7 +42,9 @@ mock.module('~/utils/feature-flags.server', () => ({
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
-const { action, loader } = await import('./route');
+const { action: routeAction, loader: routeLoader } = await import('./route');
+const action = routeAction as any;
+const loader = routeLoader as any;
 
 describe('class detail loader document visibility', () => {
   beforeEach(() => {

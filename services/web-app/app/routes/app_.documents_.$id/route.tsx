@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Archive,
   ArchiveRestore,
+  Printer,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -77,6 +78,25 @@ import {
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
+
+function escapePrintHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return char;
+    }
+  });
+}
 
 function sortDocumentCommentsByMarkupOrder<
   T extends { id: string; createdAt: Date | string },
@@ -505,6 +525,60 @@ export default function Route() {
     window.location.href = `/auth/login?redirectTo=${redirectTo}`;
   }, []);
 
+  const handlePrint = useCallback(() => {
+    const liveContent = editorBridgeRef.current?.getContent();
+    const rawHtml = liveContent?.html ?? data.doc.html ?? '';
+    const title = getLiveDocumentTitle();
+
+    const parser = new DOMParser();
+    const parsed = parser.parseFromString(rawHtml, 'text/html');
+    parsed.querySelectorAll('[data-comment-id]').forEach((el) => {
+      const parent = el.parentNode;
+      if (!parent) return;
+      while (el.firstChild) parent.insertBefore(el.firstChild, el);
+      parent.removeChild(el);
+    });
+    const cleanHtml = parsed.body.innerHTML;
+    const printDate = new Date().toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+    const safeTitle = escapePrintHtml(title || 'Untitled Document');
+    const safeStudentName = escapePrintHtml(studentName);
+    const safePrintDate = escapePrintHtml(printDate);
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${safeTitle}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; font-size: 12pt; line-height: 1.6; color: #000; padding: 1in; }
+    header { border-bottom: 1px solid #ccc; padding-bottom: 0.5em; margin-bottom: 1.5em; }
+    header h1 { font-size: 18pt; font-weight: bold; margin-bottom: 0.25em; }
+    header p { font-size: 10pt; color: #555; }
+    h1, h2, h3, h4 { margin: 1em 0 0.5em; }
+    p { margin: 0.5em 0; }
+    ul, ol { margin: 0.5em 0 0.5em 1.5em; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${safeTitle}</h1>
+    <p>${safeStudentName} &middot; ${safePrintDate}</p>
+  </header>
+  <main>${cleanHtml}</main>
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>`);
+    printWindow.document.close();
+  }, [data.doc.html, getLiveDocumentTitle, studentName]);
+
   useEffect(() => {
     if (submissionArchiveFetcher.state !== 'idle') return;
     const body = submissionArchiveFetcher.data as
@@ -731,6 +805,16 @@ export default function Route() {
                 {showOldComments ? 'Hide old comments' : 'Show old comments'}
               </Button>
             )}
+            <Tooltip text="Print / Save as PDF" delayDuration={300}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handlePrint}
+                aria-label="Print document"
+              >
+                <Printer className="h-4 w-4" />
+              </Button>
+            </Tooltip>
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
