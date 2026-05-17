@@ -52,7 +52,9 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { action, loader } = await import('./route');
+const { action: routeAction, loader: routeLoader } = await import('./route');
+const action = routeAction as any;
+const loader = routeLoader as any;
 
 describe('admin feature flags route', () => {
   beforeEach(() => {

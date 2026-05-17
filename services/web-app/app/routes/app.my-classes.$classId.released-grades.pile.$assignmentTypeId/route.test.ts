@@ -17,7 +17,8 @@ mock.module('~/services/released-grades.server', () => ({
   loadPileContents,
 }));
 
-const { loader } = await import('./route');
+const { loader: routeLoader } = await import('./route');
+const loader = routeLoader as any;
 
 describe('pile-contents resource loader', () => {
   beforeEach(() => {

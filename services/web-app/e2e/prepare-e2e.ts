@@ -2,7 +2,6 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-// @ts-expect-error `pg` types are not installed in the web-app package.
 import { Client } from 'pg';
 
 const CONTAINER_NAME = 'yawp-e2e-postgres';
