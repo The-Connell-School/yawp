@@ -1,7 +1,10 @@
 import { test, expect } from '../test-setup';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
-import { invalidateUserSessions } from '../db-helpers';
+import {
+  invalidateUserSessions,
+  setDocumentSubmissionForSchool,
+} from '../db-helpers';
 
 const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
 const SELECT_ALL_SHORTCUT = process.platform === 'darwin' ? 'Meta+A' : 'Control+A';
@@ -35,6 +38,46 @@ test.describe.serial('Document Editor E2E Tests', () => {
     // Check that basic page structure is present
     await expectExitControlVisible(page);
     await expect(editor).toBeVisible({ timeout: 10000 });
+  });
+
+  test('submits a practice document when the student school is targeted', async ({
+    page,
+    signIn,
+    e2eContext,
+    helpers,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    try {
+      await setDocumentSubmissionForSchool({
+        prisma,
+        schoolId: e2eContext.schoolId,
+        enabled: true,
+      });
+
+      await signIn('jdoe@brock.software', 'johndoe');
+      await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
+
+      await expect(page.getByTestId('document-submit-button')).toBeVisible({
+        timeout: 10000,
+      });
+      await page.getByTestId('document-submit-button').click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByTestId('document-finalize-submit').click();
+      await expect(page.getByText('Submitted').first()).toBeVisible({
+        timeout: 15000,
+      });
+      await expect
+        .poll(
+          () =>
+            prisma.submission.count({
+              where: { documentId: e2eContext.editedDocumentId },
+            }),
+          { timeout: 10000 }
+        )
+        .toBeGreaterThan(0);
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   test('clicking editor pane padding focuses so typing works', async ({

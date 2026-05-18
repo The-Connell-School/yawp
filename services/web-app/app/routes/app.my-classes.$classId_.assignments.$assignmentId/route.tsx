@@ -39,11 +39,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
+  if (!profile.teacherProfile) {
+    throw new Response('Not Found', { status: 404 });
+  }
 
   const klass = await prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { profileId: profile.id } },
+      teachers: { some: { id: profile.teacherProfile.id } },
     },
     select: {
       id: true,
@@ -60,7 +63,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       dueDate: true,
-      studentCourse: { select: { title: true } },
+      assignmentType: { select: { title: true } },
     },
   });
   if (!assignment) throw new Response('Not Found', { status: 404 });
@@ -79,7 +82,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           where: {
             document: {
               assignmentId,
-              classId,
               deletedAt: null,
             },
             ...(status === 'submitted'
@@ -119,7 +121,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await prisma.document.findMany({
           where: {
             assignmentId,
-            classId,
             deletedAt: null,
             archivedAt: null,
             submissions: { none: {} },
@@ -298,7 +299,7 @@ export default function AssignmentSubmissionsRoute() {
             {assignment.title || 'Untitled Assignment'}
           </h3>
           <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
-            <span>{assignment.studentCourse.title}</span>
+            <span>{assignment.assignmentType.title}</span>
             {assignment.dueDate && (
               <span>Due {formatDateOnly(assignment.dueDate)}</span>
             )}

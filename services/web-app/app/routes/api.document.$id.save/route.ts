@@ -35,13 +35,11 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
             OR: [
               { profileId: profile.id },
               {
-                profile: {
-                  studentProfile: {
-                    classes: {
-                      some: {
-                        teachers: {
-                          some: { profileId: profile.id },
-                        },
+                studentProfile: {
+                  classes: {
+                    some: {
+                      teachers: {
+                        some: { profileId: profile.id },
                       },
                     },
                   },

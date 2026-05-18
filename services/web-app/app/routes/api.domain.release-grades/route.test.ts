@@ -8,17 +8,23 @@ const prisma = {
 };
 
 const isDocumentSubmissionEnabledForSchools = mock();
+const isDocumentSubmissionEnabledForSchool = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
+const buildTeacherClassWhere = mock();
+const isGradingOwnDocument = mock();
 const redirectWithToast = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/feature-flags.server', () => ({
   isDocumentSubmissionEnabledForSchools,
+  isDocumentSubmissionEnabledForSchool,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
+  buildTeacherClassWhere,
+  isGradingOwnDocument,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -31,8 +37,11 @@ describe('api.domain.release-grades', () => {
     prisma.submission.findMany.mockReset();
     prisma.submission.updateMany.mockReset();
     isDocumentSubmissionEnabledForSchools.mockReset();
+    isDocumentSubmissionEnabledForSchool.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
+    buildTeacherClassWhere.mockReset();
+    isGradingOwnDocument.mockReset();
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
@@ -41,7 +50,10 @@ describe('api.domain.release-grades', () => {
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
+    buildTeacherClassWhere.mockReturnValue({});
+    isGradingOwnDocument.mockReturnValue(false);
     isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
   });
 
@@ -50,8 +62,10 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          class: {
-            schoolId: 'school-1',
+          assignment: {
+            class: {
+              schoolId: 'school-1',
+            },
           },
         },
       },
@@ -68,6 +82,35 @@ describe('api.domain.release-grades', () => {
     await action({ request } as any);
 
     expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith(['school-1']);
+    expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('checks school flags from student classes for legacy submissions when releasing', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'legacy-sub-1',
+        document: {
+          assignment: null,
+          studentProfile: {
+            classes: [{ schoolId: 'scranton-prep-school' }],
+          },
+        },
+      },
+    ]);
+
+    const form = new FormData();
+    form.append('submissionIds', 'legacy-sub-1');
+
+    const request = new Request('https://example.com/api/domain/release-grades', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
+      'scranton-prep-school',
+    ]);
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
   });
 

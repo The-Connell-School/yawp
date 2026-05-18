@@ -8,12 +8,12 @@ describe('module-session-select', () => {
   test('single select takes the furthest module by position', () => {
     expect(studentModuleSessionSingleSelect).toMatchObject({
       select: {
-        studentCourseModule: {
+        assignmentModule: {
           select: { title: true },
         },
       },
       orderBy: {
-        studentCourseModule: {
+        assignmentModule: {
           position: 'desc',
         },
       },
@@ -24,12 +24,12 @@ describe('module-session-select', () => {
   test('list select preserves descending module position order', () => {
     expect(studentModuleSessionListSelect).toMatchObject({
       select: {
-        studentCourseModule: {
+        assignmentModule: {
           select: { title: true },
         },
       },
       orderBy: {
-        studentCourseModule: {
+        assignmentModule: {
           position: 'desc',
         },
       },
