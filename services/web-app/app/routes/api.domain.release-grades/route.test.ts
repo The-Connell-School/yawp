@@ -9,6 +9,7 @@ const prisma = {
 
 const isDocumentSubmissionEnabledForSchools = mock();
 const isDocumentSubmissionEnabledForSchool = mock();
+const isClassInsightsEnabledForOrganization = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
@@ -19,6 +20,7 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/feature-flags.server', () => ({
   isDocumentSubmissionEnabledForSchools,
   isDocumentSubmissionEnabledForSchool,
+  isClassInsightsEnabledForOrganization,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,

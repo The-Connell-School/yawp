@@ -16,6 +16,7 @@ export const FEATURE_FLAGS = {
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
   RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
     'released_grades_organization_enabled_org_ids',
+  CLASS_INSIGHTS_ENABLED_ORG_IDS: 'class_insights_enabled_org_ids',
 } as const;
 
 export const TARGETED_FEATURE_FLAGS = {
@@ -41,6 +42,13 @@ export const TARGETED_FEATURE_FLAGS = {
     targetKind: 'organization',
     description:
       'Organization IDs allowed to use released grades organization view',
+  },
+  classInsights: {
+    label: 'Class insights',
+    settingName: FEATURE_FLAGS.CLASS_INSIGHTS_ENABLED_ORG_IDS,
+    targetKind: 'organization',
+    description:
+      'Organization IDs allowed to generate class-level AI insights on graded assignments',
   },
 } as const satisfies Record<string, TargetedFeatureFlagDefinition>;
 
@@ -208,4 +216,10 @@ export async function isReleasedGradesOrganizationEnabledForOrganization(
     'releasedGradesOrganization',
     organizationId
   );
+}
+
+export async function isClassInsightsEnabledForOrganization(
+  organizationId: string | null | undefined
+): Promise<boolean> {
+  return isTargetedFeatureFlagEnabled('classInsights', organizationId);
 }

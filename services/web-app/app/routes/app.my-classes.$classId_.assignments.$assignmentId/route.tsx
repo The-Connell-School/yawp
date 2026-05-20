@@ -3,7 +3,10 @@ import { Link, useLoaderData, useSearchParams, useNavigate } from 'react-router'
 import { useState, useCallback, useMemo } from 'react';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import {
+  isClassInsightsEnabledForOrganization,
+  isDocumentSubmissionEnabledForSchool,
+} from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -18,7 +21,24 @@ import {
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
 import { formatDateOnly } from '~/utils/date-only';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
+
+type ClassInsights = {
+  strengths: string[];
+  weaknesses: Array<{
+    rubricCategory: string;
+    label: string;
+    observation: string;
+    affectedCount: number;
+  }>;
+  nextSteps: Array<{
+    step: string;
+    moduleId: string | null;
+    moduleTitle: string | null;
+    teacherTrainingId: string | null;
+  }>;
+  submissionCount: number;
+};
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -52,7 +72,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       grade: true,
       period: true,
-      school: { select: { id: true, name: true } },
+      school: {
+        select: { id: true, name: true, organizationId: true },
+      },
     },
   });
   if (!klass) throw new Response('Not Found', { status: 404 });
@@ -64,9 +86,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       dueDate: true,
       assignmentType: { select: { title: true } },
+      classInsights: true,
+      classInsightsGeneratedAt: true,
     },
   });
   if (!assignment) throw new Response('Not Found', { status: 404 });
+
+  const isClassInsightsEnabled = await isClassInsightsEnabledForOrganization(
+    klass.school?.organizationId
+  );
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
@@ -140,12 +168,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       : [];
 
+  const hasGradedSubmissions = await prisma.submission.count({
+    where: {
+      document: { assignmentId, deletedAt: null },
+      gradedAt: { not: null },
+    },
+  });
+
   return dataResponse({
     klass,
     assignment,
     status,
     submissions,
     inProgressDocuments,
+    isClassInsightsEnabled,
+    hasGradedSubmissions: hasGradedSubmissions > 0,
+    gradedSubmissionCount: hasGradedSubmissions,
   });
 }
 
@@ -156,7 +194,16 @@ export default function AssignmentSubmissionsRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const { klass, assignment, status, submissions, inProgressDocuments } = data;
+  const {
+    klass,
+    assignment,
+    status,
+    submissions,
+    inProgressDocuments,
+    isClassInsightsEnabled,
+    hasGradedSubmissions,
+    gradedSubmissionCount,
+  } = data;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gradingProgress, setGradingProgress] = useState<
@@ -305,6 +352,23 @@ export default function AssignmentSubmissionsRoute() {
             )}
           </div>
         </div>
+
+        {/* Class Insights panel */}
+        {isClassInsightsEnabled && (
+          <ClassInsightsPanel
+            assignmentId={assignment.id}
+            initialInsights={
+              (assignment.classInsights as ClassInsights | null) ?? null
+            }
+            initialGeneratedAt={
+              assignment.classInsightsGeneratedAt
+                ? new Date(assignment.classInsightsGeneratedAt)
+                : null
+            }
+            hasGradedSubmissions={hasGradedSubmissions}
+            gradedSubmissionCount={gradedSubmissionCount}
+          />
+        )}
 
         {/* Status tabs */}
         <div className="mb-4 flex gap-1 border-b">
@@ -625,5 +689,184 @@ export default function AssignmentSubmissionsRoute() {
         )}
       </div>
     </section>
+  );
+}
+
+function ClassInsightsPanel({
+  assignmentId,
+  initialInsights,
+  initialGeneratedAt,
+  hasGradedSubmissions,
+  gradedSubmissionCount,
+}: {
+  assignmentId: string;
+  initialInsights: ClassInsights | null;
+  initialGeneratedAt: Date | null;
+  hasGradedSubmissions: boolean;
+  gradedSubmissionCount: number;
+}) {
+  const [insights, setInsights] = useState<ClassInsights | null>(
+    initialInsights
+  );
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(
+    initialGeneratedAt
+  );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generate = useCallback(async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('assignmentId', assignmentId);
+      const response = await fetch(
+        '/api/domain/assignment-class-insights',
+        { method: 'POST', body: form }
+      );
+      const payload = (await response.json()) as {
+        success: boolean;
+        message?: string;
+        classInsights?: ClassInsights;
+        classInsightsGeneratedAt?: string;
+      };
+      if (response.ok && payload.success && payload.classInsights) {
+        setInsights(payload.classInsights);
+        setGeneratedAt(
+          payload.classInsightsGeneratedAt
+            ? new Date(payload.classInsightsGeneratedAt)
+            : new Date()
+        );
+      } else {
+        setError(payload.message ?? 'Failed to generate insights.');
+      }
+    } catch {
+      setError('Network error. Please try again.');
+    }
+    setIsGenerating(false);
+  }, [assignmentId]);
+
+  return (
+    <div className="mb-6 rounded-lg border border-dashed bg-secondary/30 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h4 className="text-sm font-semibold">Class Insights</h4>
+        </div>
+        {insights ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isGenerating}
+            onClick={generate}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Regenerating…
+              </>
+            ) : (
+              'Regenerate'
+            )}
+          </Button>
+        ) : hasGradedSubmissions ? (
+          <Button size="sm" disabled={isGenerating} onClick={generate}>
+            {isGenerating ? (
+              <>
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              'Generate Class Insights'
+            )}
+          </Button>
+        ) : null}
+      </div>
+
+      {!hasGradedSubmissions && !insights ? (
+        <p className="text-sm text-muted-foreground">
+          Grade some submissions to unlock class-level feedback.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="mb-2 text-sm text-red-600">{error}</p>
+      ) : null}
+
+      {insights ? (
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Generated from {insights.submissionCount} graded submission
+            {insights.submissionCount === 1 ? '' : 's'}
+            {generatedAt ? ` • ${timeAgo(generatedAt)}` : null}
+            {gradedSubmissionCount > insights.submissionCount
+              ? ` • ${gradedSubmissionCount - insights.submissionCount} new since last run`
+              : null}
+          </p>
+
+          {insights.strengths.length > 0 && (
+            <div>
+              <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Strengths
+              </h5>
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {insights.strengths.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {insights.weaknesses.length > 0 && (
+            <div>
+              <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Common Weaknesses
+              </h5>
+              <ul className="space-y-1 text-sm">
+                {insights.weaknesses.map((w, i) => (
+                  <li key={i} className="flex gap-2">
+                    <Badge variant="secondary" className="shrink-0">
+                      {w.label}
+                    </Badge>
+                    <span>
+                      {w.observation}{' '}
+                      <span className="text-muted-foreground">
+                        ({w.affectedCount} student
+                        {w.affectedCount === 1 ? '' : 's'})
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {insights.nextSteps.length > 0 && (
+            <div>
+              <h5 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Suggested Next Steps
+              </h5>
+              <ul className="list-disc space-y-1 pl-5 text-sm">
+                {insights.nextSteps.map((step, i) => (
+                  <li key={i}>
+                    {step.step}{' '}
+                    {step.moduleId &&
+                    step.moduleTitle &&
+                    step.teacherTrainingId ? (
+                      <Link
+                        to={`/app/teacher-trainings/${step.teacherTrainingId}/modules/${step.moduleId}`}
+                        className="text-primary hover:underline"
+                      >
+                        → {step.moduleTitle}
+                      </Link>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }

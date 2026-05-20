@@ -7,6 +7,7 @@ const DOCUMENT_SUBMISSION_SCHOOL_IDS =
 const ASSIGNMENTS_ENABLED_ORG_IDS = 'assignments_enabled_org_ids';
 const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
   'released_grades_organization_enabled_org_ids';
+const CLASS_INSIGHTS_ENABLED_ORG_IDS = 'class_insights_enabled_org_ids';
 
 function parseIdList(value: string | null | undefined) {
   return new Set(
@@ -118,6 +119,38 @@ export async function setReleasedGradesOrganizationForOrganization(params: {
       name: RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS,
       description:
         'Organization IDs allowed to use the released-grades organization view',
+      value: Array.from(orgIds).join(','),
+      valueType: 'string',
+    },
+    update: {
+      value: Array.from(orgIds).join(','),
+      valueType: 'string',
+    },
+  });
+}
+
+export async function setClassInsightsForOrganization(params: {
+  prisma: E2EPrismaClient;
+  organizationId: string;
+  enabled: boolean;
+}) {
+  const { prisma, organizationId, enabled } = params;
+  const existing = await prisma.setting.findUnique({
+    where: { name: CLASS_INSIGHTS_ENABLED_ORG_IDS },
+    select: { value: true },
+  });
+  const orgIds = parseIdList(existing?.value);
+  if (enabled) {
+    orgIds.add(organizationId);
+  } else {
+    orgIds.delete(organizationId);
+  }
+  await prisma.setting.upsert({
+    where: { name: CLASS_INSIGHTS_ENABLED_ORG_IDS },
+    create: {
+      name: CLASS_INSIGHTS_ENABLED_ORG_IDS,
+      description:
+        'Organization IDs allowed to generate class-level AI insights on graded assignments',
       value: Array.from(orgIds).join(','),
       valueType: 'string',
     },

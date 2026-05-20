@@ -64,6 +64,9 @@ model Assignment {
   dueDate          DateTime?      @db.Timestamptz(6)
   documents        Document[]
 
+  classInsights            Json?
+  classInsightsGeneratedAt DateTime? @db.Timestamptz(6)
+
   @@index([classId, createdAt(sort: Desc)])
   @@index([assignmentTypeId])
   @@index([dueDate])
