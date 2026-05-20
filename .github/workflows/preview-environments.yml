@@ -189,8 +189,21 @@ jobs:
 
           bun run prisma:generate
 
-          # Overlay test users (for smoke tests)
-          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/seed-overlay.ts
+          # Run every preview seed script in alphabetical order. This includes
+          # seed-overlay.ts (test users) and any feature-specific seeds
+          # (e.g. seed-model-essays.ts) added by future PRs. seed.ts (no dash)
+          # is the local-dev seed and is intentionally excluded.
+          shopt -s nullglob
+          for seed in packages/prisma/scripts/seed-*.ts; do
+            echo "Running $seed..."
+            DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run "$seed"
+          done
+          shopt -u nullglob
+
+          # Enable every targeted feature flag for every org/school in the
+          # preview DB. Without this, new flags introduced by a PR are off in
+          # the restored production dump and the feature is invisible.
+          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/preview-enable-targeted-flags.ts
 
       - name: Build and push image to ECR
         run: |
@@ -342,6 +355,7 @@ jobs:
             - **Postgres schema:** `pr_${{ github.event.pull_request.number }}`
             - **Image:** `${{ vars.PREVIEW_ECR_REPOSITORY }}:pr-${{ env.PR_NUMBER }}`
             - **Data:** Production dump + test overlay (e.g. `teacher@fake.test` / `teacher123`)
+            - **Feature flags:** Every targeted flag enabled for every org/school
             - **Smoke:** `services/web-app/scripts/smoke-pr-preview.mjs`
 
   preview-destroy:
