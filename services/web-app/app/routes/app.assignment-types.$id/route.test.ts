@@ -30,7 +30,25 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 
-const { action } = await import('./route');
+const { action, loader } = await import('./route');
+
+function makeAssignmentType(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'at-1',
+    title: 'Daily Pages',
+    description: 'Daily writing',
+    archivedAt: null,
+    image: null,
+    assignmentModules: [
+      {
+        id: 'module-1',
+        title: 'Daily Pages',
+        description: 'Daily writing practice.',
+      },
+    ],
+    ...overrides,
+  };
+}
 
 describe('app.assignment-types.$id action', () => {
   beforeEach(() => {
@@ -62,10 +80,11 @@ describe('app.assignment-types.$id action', () => {
     } as never);
 
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: 'at-1',
-        organizationAssignments: {
-          some: { organizationId: 'org-1' },
+        where: {
+          archivedAt: null,
+          id: 'at-1',
+          organizationAssignments: {
+            some: { organizationId: 'org-1' },
         },
       },
       select: { id: true },
@@ -94,5 +113,77 @@ describe('app.assignment-types.$id action', () => {
       },
     });
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+});
+
+describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
+  beforeEach(() => {
+    prisma.assignmentType.findFirst.mockReset();
+    prisma.document.findMany.mockReset();
+    prisma.class.findMany.mockReset();
+    requireUserId.mockReset();
+    requireProfile.mockReset();
+    redirectWithToast.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireProfile.mockResolvedValue({
+      id: 'profile-1',
+      organization: { id: 'org-1' },
+      teacherProfile: { id: 'teacher-1' },
+    });
+    prisma.assignmentType.findFirst.mockResolvedValue(makeAssignmentType());
+    prisma.document.findMany.mockResolvedValue([]);
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', grade: '9th', period: '1st', title: null },
+    ]);
+  });
+
+  test('provides prompt library data for teachers viewing Daily Pages', async () => {
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.promptLibrary).toMatchObject({
+      totalCount: 200,
+    });
+    expect(response.data.promptLibrary.prompts[0]).toMatchObject({
+      prompt:
+        'I am the captain of my destiny. Agree or disagree and explain your rationale.',
+    });
+    expect(response.data.promptLibrary.facets.textsOrUnits).toContain(
+      'Macbeth'
+    );
+  });
+
+  test('omits prompt library for student profiles and other assignment types', async () => {
+    requireProfile.mockResolvedValueOnce({
+      id: 'profile-1',
+      organization: { id: 'org-1' },
+      teacherProfile: null,
+    });
+
+    const studentResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(studentResponse.data.promptLibrary).toBeNull();
+
+    requireProfile.mockResolvedValueOnce({
+      id: 'profile-1',
+      organization: { id: 'org-1' },
+      teacherProfile: { id: 'teacher-1' },
+    });
+    prisma.assignmentType.findFirst.mockResolvedValueOnce(
+      makeAssignmentType({ title: 'E2E Course' })
+    );
+
+    const otherTypeResponse = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(otherTypeResponse.data.promptLibrary).toBeNull();
   });
 });

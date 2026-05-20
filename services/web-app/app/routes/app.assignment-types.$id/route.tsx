@@ -33,6 +33,161 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
+import { PromptsLibrary } from './prompts-library/prompts-library';
+import { TeacherDirections } from './prompts-library/teacher-directions';
+import {
+  type CognitiveMove,
+  FACET_KEYS,
+  type FacetValues,
+  type GradeBand,
+  type LibraryPrompt,
+  type OptionCounts,
+  type PromptSeriousness,
+  type PromptType,
+} from './prompts-library/data';
+import promptsRaw from './prompts-library/prompts.json';
+
+const DAILY_PAGES_TITLE = 'daily pages';
+const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
+const SERIOUSNESS_ORDER: PromptSeriousness[] = [
+  'playful',
+  'light',
+  'moderate',
+  'serious',
+  'heavy',
+];
+const GRADE_ORDER: GradeBand[] = ['9', '10', '11', '12'];
+
+function buildFacets(prompts: LibraryPrompt[]): FacetValues {
+  const themes = new Set<string>();
+  const textsOrUnits = new Set<string>();
+  const cognitiveMoves = new Set<CognitiveMove>();
+  const types = new Set<PromptType>();
+  const seriousness = new Set<PromptSeriousness>();
+  const gradeBands = new Set<GradeBand>();
+
+  for (const prompt of prompts) {
+    prompt.themes.forEach((theme) => themes.add(theme));
+    prompt.textsOrUnits.forEach((textOrUnit) => textsOrUnits.add(textOrUnit));
+    prompt.cognitiveMoves.forEach((move) => cognitiveMoves.add(move));
+    types.add(prompt.type);
+    seriousness.add(prompt.seriousness);
+    prompt.gradeBands.forEach((gradeBand) => gradeBands.add(gradeBand));
+  }
+
+  return {
+    themes: [...themes].sort(),
+    textsOrUnits: [...textsOrUnits].sort(),
+    cognitiveMoves: [...cognitiveMoves].sort(),
+    types: [...types].sort(),
+    seriousness: SERIOUSNESS_ORDER.filter((value) => seriousness.has(value)),
+    gradeBands: GRADE_ORDER.filter((value) => gradeBands.has(value)),
+  };
+}
+
+function buildOptionCounts(prompts: LibraryPrompt[]): OptionCounts {
+  const counts: OptionCounts = {
+    themes: {},
+    textsOrUnits: {},
+    cognitiveMoves: {},
+    types: {},
+    seriousness: {},
+    gradeBands: {},
+  };
+  const bump = (bucket: Record<string, number>, key: string) => {
+    bucket[key] = (bucket[key] ?? 0) + 1;
+  };
+
+  for (const prompt of prompts) {
+    prompt.themes.forEach((theme) => bump(counts.themes, theme));
+    prompt.textsOrUnits.forEach((textOrUnit) =>
+      bump(counts.textsOrUnits, textOrUnit)
+    );
+    prompt.cognitiveMoves.forEach((move) => bump(counts.cognitiveMoves, move));
+    bump(counts.types, prompt.type);
+    bump(counts.seriousness, prompt.seriousness);
+    prompt.gradeBands.forEach((gradeBand) =>
+      bump(counts.gradeBands, gradeBand)
+    );
+  }
+
+  return counts;
+}
+
+const ALL_FACETS = buildFacets(ALL_PROMPTS);
+const ALL_OPTION_COUNTS = buildOptionCounts(ALL_PROMPTS);
+
+type LibraryFilters = {
+  q: string;
+  themes: Set<string>;
+  textsOrUnits: Set<string>;
+  cognitiveMoves: Set<string>;
+  types: Set<string>;
+  seriousness: Set<string>;
+  gradeBands: Set<string>;
+};
+
+function readFilters(url: URL): LibraryFilters {
+  const readSet = (key: string) =>
+    new Set(url.searchParams.get(key)?.split(',').filter(Boolean) ?? []);
+
+  return {
+    q: (url.searchParams.get(FACET_KEYS.search) ?? '').trim().toLowerCase(),
+    themes: readSet(FACET_KEYS.themes),
+    textsOrUnits: readSet(FACET_KEYS.textsOrUnits),
+    cognitiveMoves: readSet(FACET_KEYS.cognitiveMoves),
+    types: readSet(FACET_KEYS.types),
+    seriousness: readSet(FACET_KEYS.seriousness),
+    gradeBands: readSet(FACET_KEYS.gradeBands),
+  };
+}
+
+function applyFilters(
+  prompts: LibraryPrompt[],
+  filters: LibraryFilters
+): LibraryPrompt[] {
+  return prompts.filter((prompt) => {
+    if (
+      filters.themes.size &&
+      !prompt.themes.some((theme) => filters.themes.has(theme))
+    ) {
+      return false;
+    }
+    if (
+      filters.textsOrUnits.size &&
+      !prompt.textsOrUnits.some((textOrUnit) =>
+        filters.textsOrUnits.has(textOrUnit)
+      )
+    ) {
+      return false;
+    }
+    if (
+      filters.cognitiveMoves.size &&
+      !prompt.cognitiveMoves.some((move) => filters.cognitiveMoves.has(move))
+    ) {
+      return false;
+    }
+    if (filters.types.size && !filters.types.has(prompt.type)) return false;
+    if (
+      filters.seriousness.size &&
+      !filters.seriousness.has(prompt.seriousness)
+    ) {
+      return false;
+    }
+    if (
+      filters.gradeBands.size &&
+      !prompt.gradeBands.some((gradeBand) =>
+        filters.gradeBands.has(gradeBand)
+      )
+    ) {
+      return false;
+    }
+    if (filters.q && !prompt.prompt.toLowerCase().includes(filters.q)) {
+      return false;
+    }
+    return true;
+  });
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -137,11 +292,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
+  const isDailyPages =
+    assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const promptLibrary =
+    profile.teacherProfile && isDailyPages
+      ? {
+          prompts: applyFilters(
+            ALL_PROMPTS,
+            readFilters(new URL(request.url))
+          ),
+          facets: ALL_FACETS,
+          optionCounts: ALL_OPTION_COUNTS,
+          totalCount: ALL_PROMPTS.length,
+        }
+      : null;
+
   return dataResponse({
     assignmentType,
     documents,
     archivedDocuments,
     teacherClasses,
+    promptLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -206,6 +377,8 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [libraryPrompt, setLibraryPrompt] = useState('');
+  const showPromptsLibrary = data.promptLibrary != null;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -235,7 +408,10 @@ export default function AppAssignmentTypesIdRoute() {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={data.teacherClasses.length === 0}
-                    onSelect={() => setIsAssignmentSheetOpen(true)}
+                    onSelect={() => {
+                      setLibraryPrompt('');
+                      setIsAssignmentSheetOpen(true);
+                    }}
                   >
                     Assignment
                   </DropdownMenuItem>
@@ -246,6 +422,7 @@ export default function AppAssignmentTypesIdRoute() {
                 teacherClasses={data.teacherClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
+                initialPrompt={libraryPrompt}
               />
             </>
           ) : (
@@ -276,6 +453,7 @@ export default function AppAssignmentTypesIdRoute() {
             </p>
           </div>
         </div>
+        {showPromptsLibrary ? <TeacherDirections /> : null}
         {hasModules ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
@@ -293,6 +471,20 @@ export default function AppAssignmentTypesIdRoute() {
               ))}
             </Accordion>
           </>
+        ) : null}
+        {data.promptLibrary ? (
+          <div className="pb-6">
+            <PromptsLibrary
+              prompts={data.promptLibrary.prompts}
+              facets={data.promptLibrary.facets}
+              optionCounts={data.promptLibrary.optionCounts}
+              totalCount={data.promptLibrary.totalCount}
+              onSelectPrompt={(prompt) => {
+                setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
         ) : null}
         {data.documents.length ? (
           <>
