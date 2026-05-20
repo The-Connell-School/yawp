@@ -61,4 +61,50 @@ test.describe.serial('Teacher class page redesign - simplified tabs', () => {
     const assignmentsTab = page.getByRole('tab', { name: /assignments/i });
     await expect(assignmentsTab).toHaveAttribute('data-state', 'active');
   });
+
+  test('clicking an assignment title opens the overview on the Submitted tab', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
+
+    // Title link: href ends in /assignments/<id> with no query string.
+    // Badge links carry ?tab=… so they don't match this regex.
+    const titleLinkSelector = `a[href^="/app/my-classes/${e2eContext.classId}/assignments/"]:not([href*="?"])`;
+    const titleLink = page.locator(titleLinkSelector).first();
+    await expect(titleLink).toBeVisible();
+
+    await titleLink.click();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(
+      new RegExp(`/app/my-classes/${e2eContext.classId}/assignments/[^/?]+$`)
+    );
+
+    const submittedTab = page.getByRole('tab', { name: 'Submitted' });
+    await expect(submittedTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('status-badge link opens the overview pre-selected on that tab', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+    await page.waitForLoadState('networkidle');
+
+    const gradedBadgeLink = page
+      .locator(`a[href*="/assignments/"][href*="tab=graded"]`)
+      .first();
+    await gradedBadgeLink.click();
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(/tab=graded/);
+    const gradedTab = page.getByRole('tab', { name: 'Graded' });
+    await expect(gradedTab).toHaveAttribute('aria-selected', 'true');
+  });
 });

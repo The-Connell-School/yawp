@@ -1215,7 +1215,12 @@ function ClassDetailPage() {
                 return (
                   <TableRow key={assignment.id}>
                     <TableCell className="font-medium">
-                      {assignment.title || 'Untitled Assignment'}
+                      <Link
+                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {assignment.title || 'Untitled Assignment'}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {assignment.assignmentType.title}
@@ -1227,7 +1232,7 @@ function ClassDetailPage() {
                     </TableCell>
                     <TableCell>
                       <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=in-progress`}
+                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?tab=in-progress`}
                       >
                         <Badge
                           variant="secondary"
@@ -1239,7 +1244,7 @@ function ClassDetailPage() {
                     </TableCell>
                     <TableCell>
                       <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=submitted`}
+                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?tab=submitted`}
                       >
                         {submittedCount > 0 ? (
                           <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer">
@@ -1257,7 +1262,7 @@ function ClassDetailPage() {
                     </TableCell>
                     <TableCell>
                       <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=graded`}
+                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?tab=graded`}
                       >
                         {gradedCount > 0 ? (
                           <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 cursor-pointer">
@@ -1275,7 +1280,7 @@ function ClassDetailPage() {
                     </TableCell>
                     <TableCell>
                       <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=released`}
+                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?tab=released`}
                       >
                         <Badge
                           variant="secondary"

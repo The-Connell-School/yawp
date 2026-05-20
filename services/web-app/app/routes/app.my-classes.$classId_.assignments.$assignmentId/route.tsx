@@ -20,13 +20,13 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatDateOnly } from '~/utils/date-only';
 import { Loader2 } from 'lucide-react';
 
-type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
+type StatusFilter = 'in-progress' | 'submitted' | 'graded' | 'released';
 
 const VALID_STATUSES: StatusFilter[] = [
+  'in-progress',
   'submitted',
   'graded',
   'released',
-  'in-progress',
 ];
 
 function isValidStatus(s: string | null): s is StatusFilter {
@@ -69,12 +69,46 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (!assignment) throw new Response('Not Found', { status: 404 });
 
   const url = new URL(request.url);
-  const rawStatus = url.searchParams.get('status');
-  const status: StatusFilter = isValidStatus(rawStatus) ? rawStatus : 'submitted';
+  const rawTab = url.searchParams.get('tab') ?? url.searchParams.get('status');
+  const status: StatusFilter = isValidStatus(rawTab) ? rawTab : 'submitted';
 
   const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
     klass.school?.id
   );
+
+  const [inProgressCount, submittedCount, gradedCount, releasedCount] =
+    isDocumentSubmissionEnabled
+      ? await Promise.all([
+          prisma.document.count({
+            where: {
+              assignmentId,
+              deletedAt: null,
+              archivedAt: null,
+              submissions: { none: {} },
+            },
+          }),
+          prisma.submission.count({
+            where: {
+              document: { assignmentId, deletedAt: null },
+              gradedAt: null,
+              releasedAt: null,
+            },
+          }),
+          prisma.submission.count({
+            where: {
+              document: { assignmentId, deletedAt: null },
+              gradedAt: { not: null },
+              releasedAt: null,
+            },
+          }),
+          prisma.submission.count({
+            where: {
+              document: { assignmentId, deletedAt: null },
+              releasedAt: { not: null },
+            },
+          }),
+        ])
+      : [0, 0, 0, 0];
 
   const submissions =
     isDocumentSubmissionEnabled && status !== 'in-progress'
@@ -146,6 +180,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     status,
     submissions,
     inProgressDocuments,
+    counts: {
+      'in-progress': inProgressCount,
+      submitted: submittedCount,
+      graded: gradedCount,
+      released: releasedCount,
+    },
   });
 }
 
@@ -156,7 +196,8 @@ export default function AssignmentSubmissionsRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const { klass, assignment, status, submissions, inProgressDocuments } = data;
+  const { klass, assignment, status, submissions, inProgressDocuments, counts } =
+    data;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gradingProgress, setGradingProgress] = useState<
@@ -257,7 +298,7 @@ export default function AssignmentSubmissionsRoute() {
 
   const handleStatusChange = (newStatus: StatusFilter) => {
     setSelected(new Set());
-    navigate(`?status=${newStatus}`);
+    navigate(`?tab=${newStatus}`);
   };
 
   const statusLabel: Record<StatusFilter, string> = {
@@ -306,11 +347,27 @@ export default function AssignmentSubmissionsRoute() {
           </div>
         </div>
 
+        {/* Summary row — totals across all states */}
+        <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
+          {VALID_STATUSES.map((s) => (
+            <span key={s}>
+              {statusLabel[s]}:{' '}
+              <span className="font-medium text-foreground">{counts[s]}</span>
+            </span>
+          ))}
+        </div>
+
         {/* Status tabs */}
-        <div className="mb-4 flex gap-1 border-b">
+        <div
+          role="tablist"
+          aria-label="Assignment lifecycle"
+          className="mb-4 flex gap-1 border-b"
+        >
           {VALID_STATUSES.map((s) => (
             <button
               key={s}
+              role="tab"
+              aria-selected={status === s}
               onClick={() => handleStatusChange(s)}
               className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 status === s
