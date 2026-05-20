@@ -4,14 +4,17 @@ import {
   NavLink,
   Outlet,
   data,
+  useLoaderData,
   useLocation,
   useMatches,
   type ActionFunctionArgs,
+  type LoaderFunctionArgs,
   redirect,
   useFetcher,
   useRevalidator,
 } from 'react-router';
 import {
+  BookOpen,
   CogIcon,
   GaugeIcon,
   GraduationCap,
@@ -74,14 +77,17 @@ export const NavExpandedContext = createContext({
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
-type RequiresFn = (
-  user: ReturnType<typeof useUser>
-) => boolean | null | undefined;
+type RequiresContext = {
+  user: ReturnType<typeof useUser>;
+  featureFlags: { essayExamples: boolean };
+};
+type RequiresFn = (ctx: RequiresContext) => boolean | null | undefined;
 
 const LINKS: {
   to: string;
   label: string;
   end?: boolean;
+  position?: 'top' | 'bottom';
   icon: React.ReactNode;
   requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 }[] = [
@@ -95,25 +101,32 @@ const LINKS: {
     to: '/app/my-classes',
     label: 'My Classes',
     icon: <Users size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
+    requires: ({ user }) => !!user.selectedProfile?.teacherProfile,
   },
   {
     to: '/app/teacher-trainings',
     label: "Teacher's Lounge",
     icon: <MonitorPlay size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
+    requires: ({ user }) => !!user.selectedProfile?.teacherProfile,
   },
   {
     to: '/app/organization',
     label: 'Organization',
     icon: <CogIcon size={20} />,
-    requires: (user) => user.selectedProfile?.isOwner,
+    requires: ({ user }) => user.selectedProfile?.isOwner,
   },
   {
     to: '/app/admin',
     label: 'Admin',
     icon: <LockIcon size={20} />,
-    requires: (user) => user.isAdmin,
+    requires: ({ user }) => user.isAdmin,
+  },
+  {
+    to: '/app/yawp-library',
+    label: 'YAWP! Library',
+    icon: <BookOpen size={20} />,
+    position: 'bottom',
+    requires: ({ featureFlags }) => featureFlags.essayExamples,
   },
 ];
 
@@ -121,9 +134,42 @@ const EditNameSchema = z.object({
   name: NameSchema,
 });
 
+export async function loader({ request }: LoaderFunctionArgs) {
+  const { getUserId } = await import('~/utils/auth.server.ts');
+  const { isEssayExamplesEnabledForOrganization } = await import(
+    '~/utils/feature-flags.server.ts'
+  );
+  const { prisma } = await import('~/utils/db.server.ts');
+  const { getProfileId } = await import('~/cookies/profile-id.server.ts');
+
+  const userId = await getUserId(request);
+  if (!userId) {
+    return data({ featureFlags: { essayExamples: false } });
+  }
+
+  const profileId = await getProfileId(request);
+  const profile = profileId
+    ? await prisma.profile.findUnique({
+        where: { id: profileId, userId },
+        select: { organization: { select: { id: true } } },
+      })
+    : await prisma.profile.findFirst({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        select: { organization: { select: { id: true } } },
+      });
+
+  const essayExamples = await isEssayExamplesEnabledForOrganization(
+    profile?.organization?.id
+  );
+
+  return data({ featureFlags: { essayExamples } });
+}
+
 export default function Route() {
   const location = useLocation();
   const user = useUser();
+  const { featureFlags } = useLoaderData<typeof loader>();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
 
@@ -238,49 +284,66 @@ export default function Route() {
           </Button>
         </div>
         <div className="grid gap-1 p-3">
-          {LINKS.filter(
-            (link) =>
-              !link.requires ||
-              (typeof link.requires === 'object'
-                ? 'OR' in link.requires
-                  ? link.requires.OR.some((r) => r(user))
-                  : link.requires.AND.every((r) => r(user))
-                : link.requires(user))
-          ).map((link) => (
-            <NavLink
-              key={link.to}
-              className={({ isActive }) =>
-                cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
-                  {
-                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary font-bold':
-                      isActive,
-                    'py-2': !navExpanded,
-                  }
-                )
-              }
-              to={link.to}
-              end={link.end}
-            >
-              {link.icon ? (
-                navExpanded ? (
-                  link.icon
-                ) : (
-                  <Tooltip
-                    key={link.to}
-                    text={link.label}
-                    open={navExpanded ? false : undefined}
-                    contentProps={{ side: 'right' }}
-                  >
-                    {link.icon}
-                  </Tooltip>
-                )
-              ) : null}
-              {navExpanded ? (
-                <span className="w-full">{link.label}</span>
-              ) : null}
-            </NavLink>
-          ))}
+          {(() => {
+            const ctx = { user, featureFlags };
+            const visible = LINKS.filter(
+              (link) =>
+                !link.requires ||
+                (typeof link.requires === 'object'
+                  ? 'OR' in link.requires
+                    ? link.requires.OR.some((r) => r(ctx))
+                    : link.requires.AND.every((r) => r(ctx))
+                  : link.requires(ctx))
+            );
+            const top = visible.filter((l) => l.position !== 'bottom');
+            const bottom = visible.filter((l) => l.position === 'bottom');
+            const renderLink = (link: (typeof LINKS)[number]) => (
+              <NavLink
+                key={link.to}
+                className={({ isActive }) =>
+                  cn(
+                    'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
+                    {
+                      'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary font-bold':
+                        isActive,
+                      'py-2': !navExpanded,
+                    }
+                  )
+                }
+                to={link.to}
+                end={link.end}
+              >
+                {link.icon ? (
+                  navExpanded ? (
+                    link.icon
+                  ) : (
+                    <Tooltip
+                      key={link.to}
+                      text={link.label}
+                      open={navExpanded ? false : undefined}
+                      contentProps={{ side: 'right' }}
+                    >
+                      {link.icon}
+                    </Tooltip>
+                  )
+                ) : null}
+                {navExpanded ? (
+                  <span className="w-full">{link.label}</span>
+                ) : null}
+              </NavLink>
+            );
+            return (
+              <>
+                {top.map(renderLink)}
+                {bottom.length > 0 ? (
+                  <>
+                    <div className="my-1 border-t" aria-hidden />
+                    {bottom.map(renderLink)}
+                  </>
+                ) : null}
+              </>
+            );
+          })()}
         </div>
         <div className="flex flex-grow flex-col justify-end">
           <Popover>

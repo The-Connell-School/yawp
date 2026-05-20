@@ -11,6 +11,7 @@ import { Button } from '~/components/ui/button';
 import {
   Settings2,
   Book,
+  BookOpen,
   User,
   GraduationCap,
   ScrollText,
@@ -43,6 +44,11 @@ const tabs = [
     label: 'Teacher Courses',
     to: '/app/admin/teacher-trainings',
     icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Model Essays',
+    to: '/app/admin/model-essays',
+    icon: <BookOpen size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Audit',

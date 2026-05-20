@@ -44,6 +44,7 @@ model AssignmentType {
   assignmentModules       AssignmentModule[]
   assignments             Assignment[]
   documents               Document[]
+  modelEssays             ModelEssay[]
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
@@ -94,6 +95,7 @@ model AssignmentModule {
   assignmentType    AssignmentType                @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   instructions      AssignmentModuleInstruction[]
   sessions          AssignmentModuleSession[]
+  modelEssays       ModelEssay[]
 }
 
 model AssignmentModuleInstruction {
@@ -382,15 +384,17 @@ model TeacherProfile {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @db.Timestamptz(6)
-  email     String    @unique
-  name      String?
-  password  Password?
-  sessions  Session[]
-  profiles  Profile[]
-  isAdmin   Boolean   @default(false)
+  id                  String       @id @default(cuid())
+  createdAt           DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime     @default(now()) @db.Timestamptz(6)
+  email               String       @unique
+  name                String?
+  password            Password?
+  sessions            Session[]
+  profiles            Profile[]
+  isAdmin             Boolean      @default(false)
+  authoredModelEssays ModelEssay[] @relation("ModelEssayCreatedBy")
+  hiddenModelEssays   ModelEssay[] @relation("ModelEssayHiddenBy")
 }
 
 model Invitation {
@@ -577,4 +581,59 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+// Essay Examples V1 — staff-curated model essays surfaced in the YAWP! Library
+// and on module-page in-context galleries. See spec at
+// features/essay-examples.md in yawp-pm.
+model ModelEssay {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  title    String
+  subtitle String?
+  body     String
+
+  // Editorial taxonomy from the source collection. Surfaced as filter chips
+  // in the library. None of these are tied to the YAWP domain — they describe
+  // the essay's rhetorical move ("The Reframe"), editorial grouping
+  // ("Part One: School"), and topic bucket ("School/Daily Life").
+  essayType     String?
+  part          String?
+  topicCategory String?
+
+  // YAWP-domain taxonomy. Nullable so an essay can live in the library without
+  // being scoped to any particular assignment type / module / grade level. The
+  // module-page gallery filters on these.
+  gradeLevel       Int?
+  assignmentTypeId String?
+  assignmentType   AssignmentType?   @relation(fields: [assignmentTypeId], references: [id], onDelete: SetNull)
+  moduleId         String?
+  module           AssignmentModule? @relation(fields: [moduleId], references: [id], onDelete: SetNull)
+
+  // Internal staff-only notes — never surfaced to students. `teachingNotes`
+  // is the per-essay teacher-facing breakdown that ships with the source
+  // collection; `draftingNotes` is freeform provenance / editorial context.
+  teachingNotes String?
+  draftingNotes String?
+
+  // Authorship. Internal-only; students see "Model essay" attribution.
+  createdById String?
+  createdBy   User?   @relation("ModelEssayCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Soft-hide lever. The V1 spec calls for an `is_hidden` boolean — the row
+  // stays so anything that needs pulling can be brought back without losing
+  // history.
+  isHidden     Boolean   @default(false)
+  hiddenReason String?
+  hiddenAt     DateTime? @db.Timestamptz(6)
+  hiddenById   String?
+  hiddenBy     User?     @relation("ModelEssayHiddenBy", fields: [hiddenById], references: [id], onDelete: SetNull)
+
+  @@index([isHidden])
+  @@index([assignmentTypeId])
+  @@index([moduleId])
+  @@index([gradeLevel])
+  @@index([essayType])
 }
