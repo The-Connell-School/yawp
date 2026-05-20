@@ -49,6 +49,9 @@ import {
   Send,
   User,
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
@@ -56,8 +59,11 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatGrade } from '~/domain/grading/gradeMath';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import {
@@ -74,6 +80,12 @@ import {
   studentModuleSessionSingleSelect,
 } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import {
+  type AssignmentSort,
+  filterAssignmentsByType,
+  sortAssignments,
+  sortStudents,
+} from './sort-filter';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -691,10 +703,119 @@ function ClassDetailPage() {
     () => data.submissions,
     [data.submissions]
   );
-  // Reset pagination when tab changes
+
+  // Sorting / filtering controls for Students and Assignments tabs.
+  // State is per-page-load; URL-persistence is intentionally out of scope.
+  const [studentSortDir, setStudentSortDir] = useState<'asc' | 'desc'>('asc');
+  const [assignmentSort, setAssignmentSort] = useState<AssignmentSort>({
+    column: 'title',
+    direction: 'asc',
+  });
+  const [selectedAssignmentTypeIds, setSelectedAssignmentTypeIds] = useState<
+    Set<string>
+  >(() => new Set());
+
+  const sortedStudents = useMemo(
+    () => sortStudents(students, studentSortDir),
+    [students, studentSortDir]
+  );
+
+  // Types that this teacher can normally see AND that appear in this course's
+  // assignment table. Empty options and out-of-scope types are filtered out.
+  const courseAssignmentTypes = useMemo(() => {
+    const allowedIds = new Set(
+      data.allowedAssignmentTypes.map((type) => type.id)
+    );
+    const presentTypes = new Map<string, { id: string; title: string }>();
+    for (const assignment of data.assignments) {
+      const type = assignment.assignmentType;
+      if (!allowedIds.has(type.id)) continue;
+      if (!presentTypes.has(type.id)) {
+        presentTypes.set(type.id, { id: type.id, title: type.title });
+      }
+    }
+    const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+    return Array.from(presentTypes.values()).sort((a, b) =>
+      collator.compare(a.title, b.title)
+    );
+  }, [data.assignments, data.allowedAssignmentTypes]);
+
+  // Drop selections that no longer correspond to a visible type (e.g. the last
+  // assignment of that type was deleted) so the chip count stays honest.
+  useEffect(() => {
+    setSelectedAssignmentTypeIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(courseAssignmentTypes.map((type) => type.id));
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visible.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [courseAssignmentTypes]);
+
+  const isTypeFilterActive =
+    selectedAssignmentTypeIds.size > 0 &&
+    selectedAssignmentTypeIds.size < courseAssignmentTypes.length;
+
+  const filteredAndSortedAssignments = useMemo(
+    () =>
+      sortAssignments(
+        filterAssignmentsByType(data.assignments, selectedAssignmentTypeIds),
+        assignmentSort
+      ),
+    [data.assignments, selectedAssignmentTypeIds, assignmentSort]
+  );
+
+  const toggleStudentSort = () =>
+    setStudentSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+
+  const toggleAssignmentSort = (column: 'title' | 'dueDate') => {
+    setAssignmentSort((prev) =>
+      prev.column === column
+        ? { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { column, direction: 'asc' }
+    );
+  };
+
+  const toggleAssignmentTypeFilter = (typeId: string) => {
+    setSelectedAssignmentTypeIds((prev) => {
+      const next = new Set(prev);
+      // Empty selection means "all"; first interaction snapshots the current
+      // full set so the teacher's tick removes that one type rather than
+      // collapsing the table to a single row.
+      if (next.size === 0) {
+        for (const type of courseAssignmentTypes) next.add(type.id);
+      }
+      if (next.has(typeId)) {
+        next.delete(typeId);
+      } else {
+        next.add(typeId);
+      }
+      // Selecting everything is equivalent to no filter.
+      if (next.size === courseAssignmentTypes.length) return new Set();
+      return next;
+    });
+  };
+
+  const clearAssignmentTypeFilter = () =>
+    setSelectedAssignmentTypeIds(new Set());
+
+  // Reset pagination when tab changes, when sort flips, or when the filter
+  // changes — otherwise the teacher can end up on an empty page.
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
-  }, [activeTab]);
+  }, [
+    activeTab,
+    studentSortDir,
+    assignmentSort,
+    selectedAssignmentTypeIds,
+  ]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
@@ -856,11 +977,11 @@ function ClassDetailPage() {
       case 'released':
         return filteredReleasedDocuments;
       case 'assignments':
-        return data.assignments;
+        return filteredAndSortedAssignments;
       case 'paste-activity':
         return data.pasteAlerts;
       case 'students':
-        return students;
+        return sortedStudents;
       default:
         return [];
     }
@@ -870,9 +991,9 @@ function ClassDetailPage() {
     filteredUngradedDocuments,
     filteredGradedUnreleasedDocuments,
     filteredReleasedDocuments,
-    data.assignments,
+    filteredAndSortedAssignments,
     data.pasteAlerts,
-    students,
+    sortedStudents,
   ]) as any[];
 
   const paginatedData = useMemo(() => {
@@ -905,6 +1026,24 @@ function ClassDetailPage() {
   // Render table based on active tab
   const renderTable = () => {
     if (paginatedData.length === 0) {
+      if (
+        activeTab === 'assignments' &&
+        isTypeFilterActive &&
+        data.assignments.length > 0
+      ) {
+        return (
+          <div className="text-center text-muted-foreground py-8">
+            <p className="mb-2">No assignments match this filter.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={clearAssignmentTypeFilter}
+            >
+              Clear filter
+            </Button>
+          </div>
+        );
+      }
       return (
         <div className="text-center text-muted-foreground py-8">
           <p>
@@ -1176,14 +1315,61 @@ function ClassDetailPage() {
     }
 
     if (activeTab === 'assignments') {
+      const renderSortIcon = (column: 'title' | 'dueDate') => {
+        if (assignmentSort.column !== column) {
+          return (
+            <ArrowUpDown
+              className="h-3.5 w-3.5 opacity-40"
+              aria-hidden="true"
+            />
+          );
+        }
+        return assignmentSort.direction === 'asc' ? (
+          <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+        );
+      };
       return (
         <div className="rounded-lg bg-muted/50">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleAssignmentSort('title')}
+                    aria-label={`Sort by title (${
+                      assignmentSort.column === 'title'
+                        ? assignmentSort.direction === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'ascending'
+                    })`}
+                    className="inline-flex items-center gap-1 font-medium text-foreground hover:text-foreground/80"
+                  >
+                    Title
+                    {renderSortIcon('title')}
+                  </button>
+                </TableHead>
                 <TableHead>Assignment Type</TableHead>
-                <TableHead>Due Date</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleAssignmentSort('dueDate')}
+                    aria-label={`Sort by due date (${
+                      assignmentSort.column === 'dueDate'
+                        ? assignmentSort.direction === 'asc'
+                          ? 'soonest first'
+                          : 'latest first'
+                        : 'soonest first'
+                    })`}
+                    className="inline-flex items-center gap-1 font-medium text-foreground hover:text-foreground/80"
+                  >
+                    Due Date
+                    {renderSortIcon('dueDate')}
+                  </button>
+                </TableHead>
                 <TableHead>In Progress</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Graded</TableHead>
@@ -1415,7 +1601,23 @@ function ClassDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student Name</TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={toggleStudentSort}
+                    aria-label={`Sort by student name (${
+                      studentSortDir === 'asc' ? 'ascending' : 'descending'
+                    })`}
+                    className="inline-flex items-center gap-1 font-medium text-foreground hover:text-foreground/80"
+                  >
+                    Student Name
+                    {studentSortDir === 'asc' ? (
+                      <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Documents</TableHead>
                 <TableHead>Action</TableHead>
@@ -1713,6 +1915,59 @@ function ClassDetailPage() {
               </Button>
             </div>
             <TabsContent value={activeTab} className="mt-4">
+              {activeTab === 'assignments' &&
+                courseAssignmentTypes.length > 0 && (
+                  <div className="mb-3 flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          Type
+                          {isTypeFilterActive
+                            ? ` (${selectedAssignmentTypeIds.size})`
+                            : ''}
+                          <ArrowDown
+                            className="ml-1 h-3.5 w-3.5 opacity-60"
+                            aria-hidden="true"
+                          />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="min-w-[14rem]">
+                        <DropdownMenuLabel>Filter by type</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {courseAssignmentTypes.map((type) => {
+                          const checked =
+                            selectedAssignmentTypeIds.size === 0 ||
+                            selectedAssignmentTypeIds.has(type.id);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={type.id}
+                              checked={checked}
+                              onCheckedChange={() =>
+                                toggleAssignmentTypeFilter(type.id)
+                              }
+                              onSelect={(event) => event.preventDefault()}
+                            >
+                              {type.title}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                        {isTypeFilterActive && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={(event) => {
+                                event.preventDefault();
+                                clearAssignmentTypeFilter();
+                              }}
+                            >
+                              Clear filter
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
               <div>{renderTable()}</div>
               {currentTabData.length > 0 && (
                 <div className="mt-4">
