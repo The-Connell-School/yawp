@@ -95,6 +95,10 @@ describe('Product Lab environment contract', () => {
     expect(workflow).toContain('pg_dump "$PSQL_URL" --schema="$databaseSchema" --format=plain --no-owner --no-acl');
     expect(workflow).toContain('actions/upload-artifact@v4');
     expect(workflow).toContain('product-lab-${{ inputs.initiative_id }}-checkpoint');
+    expect(workflow).toContain('Publish lab environment summary');
+    expect(workflow).toContain('terraform -chdir=infra-pr output -raw apprunner_service_url');
+    expect(workflow).toContain('Product Lab URL');
+    expect(workflow).toContain('Checkpoint key');
     expect(workflow).not.toContain('branches:\n      - main');
     expect(workflow).not.toContain('bun web-app:docker:production:push');
   });

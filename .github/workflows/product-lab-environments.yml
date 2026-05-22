@@ -238,6 +238,22 @@ jobs:
           path: /tmp/${{ inputs.initiative_id }}-checkpoint.sql
           retention-days: 14
 
+      - name: Publish lab environment summary
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          LAB_URL="$(terraform -chdir=infra-pr output -raw apprunner_service_url)"
+          {
+            echo "## Product Lab environment"
+            echo ""
+            echo "- Product Lab URL: https://${LAB_URL}"
+            echo "- Initiative: ${{ inputs.initiative_id }}"
+            echo "- Environment: ${environment}"
+            echo "- Database schema: ${databaseSchema}"
+            echo "- Checkpoint key: ${checkpointKey}"
+            echo "- Checkpoint artifact: product-lab-${{ inputs.initiative_id }}-checkpoint"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Terraform destroy
         if: inputs.operation == 'destroy'
         env:
