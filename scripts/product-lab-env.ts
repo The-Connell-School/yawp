@@ -15,6 +15,7 @@ export type ProductLabEnvironment = {
 };
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SAFE_BRANCH_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const BLOCKED_ENV_NAMES = new Set(['prod', 'production', 'staging', 'main']);
 const BLOCKED_DATABASE_PARTS = ['prod', 'production'];
 
@@ -77,6 +78,17 @@ export function parseProductLabManifest(
 
   if (!engineeringBranch) {
     throw new Error('engineering_branch is required');
+  }
+
+  if (
+    !SAFE_BRANCH_REF_RE.test(engineeringBranch) ||
+    engineeringBranch.includes('..') ||
+    engineeringBranch.includes('@{') ||
+    engineeringBranch.includes('//') ||
+    engineeringBranch.endsWith('/') ||
+    engineeringBranch.endsWith('.')
+  ) {
+    throw new Error('engineering_branch must be a safe branch ref');
   }
 
   if (options.expectedId && id !== options.expectedId) {

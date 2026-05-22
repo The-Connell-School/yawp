@@ -93,4 +93,15 @@ describe('Product Lab environment contract', () => {
       /manifest id product-lab-build-out does not match requested initiative revision-flow/,
     );
   });
+
+  test('rejects unsafe engineering branch refs before checkout', () => {
+    const unsafeBranchManifest = manifest.replace(
+      'engineering_branch: codex/product-lab-build-out',
+      'engineering_branch: codex/product-lab-build-out;echo-nope',
+    );
+
+    expect(() => parseProductLabManifest(unsafeBranchManifest)).toThrow(
+      /engineering_branch must be a safe branch ref/,
+    );
+  });
 });
