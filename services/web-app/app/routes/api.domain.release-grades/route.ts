@@ -3,7 +3,6 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   canManageGrades,
@@ -45,6 +44,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       document: {
         select: {
+          id: true,
           assignment: {
             select: {
               class: {
@@ -75,9 +75,37 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    submissions.flatMap((s) => getDocumentSubmissionSchoolIds(s.document))
-  );
+  const directSchoolIds = submissions
+    .map((s) => s.document.assignment?.class?.schoolId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  const documentIdsMissingSchool = submissions
+    .filter((s) => !s.document.assignment?.class?.schoolId)
+    .map((s) => s.document.id);
+
+  let forensicSchoolIds: string[] = [];
+  if (documentIdsMissingSchool.length > 0) {
+    const forensic = await prisma.documentClassForensic.findMany({
+      where: { documentId: { in: documentIdsMissingSchool } },
+      select: { oldClassId: true },
+    });
+    const oldClassIds = Array.from(
+      new Set(forensic.map((row) => row.oldClassId).filter(Boolean))
+    );
+    if (oldClassIds.length > 0) {
+      const oldClasses = await prisma.class.findMany({
+        where: { id: { in: oldClassIds } },
+        select: { schoolId: true },
+      });
+      forensicSchoolIds = oldClasses
+        .map((row) => row.schoolId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+    }
+  }
+
+  const schoolIds = Array.from(new Set([...directSchoolIds, ...forensicSchoolIds]));
+
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(schoolIds);
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
       description: 'Grade release is currently disabled for one or more schools.',

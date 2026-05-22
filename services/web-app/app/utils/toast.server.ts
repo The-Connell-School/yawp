@@ -5,6 +5,12 @@ import { combineHeaders } from './misc.tsx'
 
 export const toastKey = 'toast'
 
+function getSessionSecrets(): string[] {
+	const raw = process.env.SESSION_SECRET
+	const secrets = raw ? raw.split(',').map((s) => s.trim()).filter(Boolean) : []
+	return secrets.length ? secrets : ['dev-secret']
+}
+
 const TypeSchema = z.enum(['message', 'success', 'error'])
 const ToastSchema = z.object({
 	description: z.string(),
@@ -26,7 +32,7 @@ export const toastSessionStorage = createCookieSessionStorage({
 		sameSite: 'lax',
 		path: '/',
 		httpOnly: true,
-		secrets: process.env.SESSION_SECRET.split(','),
+		secrets: getSessionSecrets(),
 		secure: process.env.NODE_ENV === 'production',
 	},
 })

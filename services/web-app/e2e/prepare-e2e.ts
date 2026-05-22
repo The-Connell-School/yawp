@@ -192,8 +192,9 @@ export async function prepareE2E() {
   const env = { ...process.env, DATABASE_URL: databaseUrl };
 
   // 3. Generate Prisma client + run migrations from production schema
-  run('bun prisma generate', { cwd: prismaDir, env });
-  run('bun prisma migrate deploy', { cwd: prismaDir, env });
+  // Use `bunx --bun` to ensure Prisma runs under Bun (system Node may be too old).
+  run('bunx --bun prisma generate', { cwd: prismaDir, env });
+  run('bunx --bun prisma migrate deploy', { cwd: prismaDir, env });
 
   // 4. Seed deterministic test data
   const { seedE2E } = await import('./seed-e2e');

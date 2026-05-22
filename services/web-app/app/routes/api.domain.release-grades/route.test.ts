@@ -58,18 +58,19 @@ describe('api.domain.release-grades', () => {
   });
 
   test('checks school flags from submission.document when releasing', async () => {
-    prisma.submission.findMany.mockResolvedValue([
-      {
-        id: 'sub-1',
-        document: {
-          assignment: {
-            class: {
-              schoolId: 'school-1',
-            },
-          },
-        },
-      },
-    ]);
+	    prisma.submission.findMany.mockResolvedValue([
+	      {
+	        id: 'sub-1',
+	        document: {
+	          id: 'doc-1',
+	          assignment: {
+	            class: {
+	              schoolId: 'school-1',
+	            },
+	          },
+	        },
+	      },
+	    ]);
 
     const form = new FormData();
     form.append('submissionIds', 'sub-1');
