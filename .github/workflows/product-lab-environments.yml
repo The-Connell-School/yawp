@@ -151,7 +151,8 @@ jobs:
           echo "::add-mask::$labDatabaseUrl"
           echo "::add-mask::$PSQL_URL"
 
-          echo "DROP SCHEMA IF EXISTS ${databaseSchema} CASCADE; CREATE SCHEMA ${databaseSchema};" | (cd packages/prisma && DATABASE_URL="$labDatabaseUrl" bunx prisma db execute --stdin)
+          echo "DROP SCHEMA IF EXISTS ${databaseSchema} CASCADE; CREATE SCHEMA ${databaseSchema};" \
+            | psql "$PSQL_URL" -v ON_ERROR_STOP=1
 
           if aws s3 ls "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" >/dev/null 2>&1; then
             echo "Restoring Product Lab checkpoint ${checkpointKey} into ${databaseSchema}..."
