@@ -19,6 +19,10 @@ on:
         options:
           - deploy
           - destroy
+      product_lab_slug:
+        description: Optional Product Lab initiative slug for a stable lab environment
+        required: false
+        type: string
 
 concurrency:
   group: preview-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
@@ -154,6 +158,30 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Derive preview environment identifiers
+        env:
+          PRODUCT_LAB_SLUG: ${{ inputs.product_lab_slug }}
+        run: |
+          set -euo pipefail
+          bun scripts/preview-environment-id.mjs > /tmp/preview-env
+          while IFS='=' read -r key value; do
+            case "$key" in
+              envId)
+                echo "PREVIEW_ENV_ID=$value" >> "$GITHUB_ENV"
+                ;;
+              databaseSchema)
+                echo "PREVIEW_DATABASE_SCHEMA=$value" >> "$GITHUB_ENV"
+                ;;
+              imageTag)
+                echo "PREVIEW_IMAGE_TAG=$value" >> "$GITHUB_ENV"
+                ;;
+              stateKey)
+                echo "PREVIEW_TF_STATE_KEY=$value" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /tmp/preview-env
+          cat /tmp/preview-env
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -183,7 +211,7 @@ jobs:
           NODE_TLS_REJECT_UNAUTHORIZED: "0"
         run: |
           set -euo pipefail
-          SCHEMA="pr_${PR_NUMBER}"
+          SCHEMA="$PREVIEW_DATABASE_SCHEMA"
           export DATABASE_URL="$BASE_DATABASE_URL"
 
           # Create schema
@@ -272,8 +300,8 @@ jobs:
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
           docker build -f services/web-app/Dockerfile \
             --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/preview_build \
-            -t "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}" .
-          docker push "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+            -t "${PREVIEW_ECR_REPOSITORY}:${PREVIEW_IMAGE_TAG}" .
+          docker push "${PREVIEW_ECR_REPOSITORY}:${PREVIEW_IMAGE_TAG}"
 
       - name: Terraform apply (infra-pr)
         id: tf
@@ -284,9 +312,9 @@ jobs:
         run: |
           set -euo pipefail
           export TF_VAR_app_name="$PREVIEW_APP_NAME"
-          export TF_VAR_env="pr-${PR_NUMBER}"
-          export TF_VAR_database_schema="pr_${PR_NUMBER}"
-          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+          export TF_VAR_env="$PREVIEW_ENV_ID"
+          export TF_VAR_database_schema="$PREVIEW_DATABASE_SCHEMA"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:${PREVIEW_IMAGE_TAG}"
           export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
           export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
           export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
@@ -300,7 +328,7 @@ jobs:
           export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
           terraform -chdir=infra-pr init \
             -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
-            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="key=${PREVIEW_TF_STATE_KEY}" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
           # Import IAM roles if they already exist (leftover from prior deploys)
@@ -407,6 +435,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           PREVIEW_URL: ${{ steps.tf.outputs.url }}
+          PRODUCT_LAB_SLUG: ${{ inputs.product_lab_slug }}
         with:
           script: |
             const prNumber = Number(process.env.PR_NUMBER);
@@ -415,8 +444,10 @@ jobs:
               '**PR preview** (App Runner)',
               '',
               `- **URL:** ${process.env.PREVIEW_URL}`,
-              `- **Postgres schema:** \`pr_${prNumber}\``,
-              `- **Image:** \`${process.env.PREVIEW_ECR_REPOSITORY}:pr-${prNumber}\``,
+              ...(process.env.PRODUCT_LAB_SLUG ? [`- **Product Lab:** \`${process.env.PRODUCT_LAB_SLUG}\``] : []),
+              `- **Environment:** \`${process.env.PREVIEW_ENV_ID}\``,
+              `- **Postgres schema:** \`${process.env.PREVIEW_DATABASE_SCHEMA}\``,
+              `- **Image:** \`${process.env.PREVIEW_ECR_REPOSITORY}:${process.env.PREVIEW_IMAGE_TAG}\``,
               '- **Data:** Production dump + test overlay (e.g. `teacher@fake.test` / `teacher123`)',
               '- **Smoke:** `services/web-app/scripts/smoke-pr-preview.mjs`',
               marker,
@@ -527,6 +558,33 @@ jobs:
           terraform_version: 1.8.5
           terraform_wrapper: false
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Derive preview environment identifiers
+        env:
+          PRODUCT_LAB_SLUG: ${{ inputs.product_lab_slug }}
+        run: |
+          set -euo pipefail
+          bun scripts/preview-environment-id.mjs > /tmp/preview-env
+          while IFS='=' read -r key value; do
+            case "$key" in
+              envId)
+                echo "PREVIEW_ENV_ID=$value" >> "$GITHUB_ENV"
+                ;;
+              databaseSchema)
+                echo "PREVIEW_DATABASE_SCHEMA=$value" >> "$GITHUB_ENV"
+                ;;
+              imageTag)
+                echo "PREVIEW_IMAGE_TAG=$value" >> "$GITHUB_ENV"
+                ;;
+              stateKey)
+                echo "PREVIEW_TF_STATE_KEY=$value" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done < /tmp/preview-env
+          cat /tmp/preview-env
+
       - name: Terraform destroy (infra-pr)
         env:
           TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
@@ -535,9 +593,9 @@ jobs:
         run: |
           set -euo pipefail
           export TF_VAR_app_name="$PREVIEW_APP_NAME"
-          export TF_VAR_env="pr-${PR_NUMBER}"
-          export TF_VAR_database_schema="pr_${PR_NUMBER}"
-          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+          export TF_VAR_env="$PREVIEW_ENV_ID"
+          export TF_VAR_database_schema="$PREVIEW_DATABASE_SCHEMA"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:${PREVIEW_IMAGE_TAG}"
           export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
           export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
           export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
@@ -551,7 +609,7 @@ jobs:
           export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
           terraform -chdir=infra-pr init \
             -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
-            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
+            -backend-config="key=${PREVIEW_TF_STATE_KEY}" \
             -backend-config="region=${AWS_REGION}" \
             -backend-config="encrypt=true"
           terraform -chdir=infra-pr destroy -auto-approve
@@ -565,7 +623,7 @@ jobs:
             const body = [
               '**PR preview** (App Runner)',
               '',
-              `Preview infrastructure for \`pr_${prNumber}\` has been destroyed.`,
+              `Preview infrastructure for \`${process.env.PREVIEW_ENV_ID}\` has been destroyed.`,
               marker,
             ].join('\n');
 

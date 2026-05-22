@@ -38,10 +38,27 @@ The preview workflow also has a manual GitHub Actions button:
 
 The manual deploy path is useful when someone asks for a refresh and you do not want to add an empty commit to their branch.
 
+## Product Lab path
+
+For a PM-owned Product Lab initiative, use the same manual workflow but also
+enter the initiative's `lab.environment_slug` from the `yawp-pm` manifest in
+the optional Product Lab slug field.
+
+That creates a stable lab environment keyed by initiative instead of by PR:
+
+- App Runner environment: `lab-<initiative-slug>`
+- Postgres schema: `lab_<initiative_slug>`
+- Terraform state: `yawp/product-lab/<initiative-slug>/terraform.tfstate`
+- ECR image tag: `lab-<initiative-slug>`
+
+This lets Kevin keep one durable preview for an initiative across PR refreshes
+while normal PR previews continue to use `pr-<number>`.
+
 ## Constraints
 
 - The PR branch must live in `The-Connell-School/yawp-2.0`, not a fork. Preview deploys use repository secrets.
 - The PR must not contain `[skip preview]` in the title, body, or branch name.
+- Product Lab slugs must be kebab-case and should match the initiative manifest.
 - Closing a PR destroys its preview infrastructure.
 - Commenting `/preview destroy` on a PR also destroys that PR's preview infrastructure. Use that only when the preview is no longer needed.
 
@@ -54,4 +71,3 @@ If Kevin says a preview is gone:
 3. Confirm the branch is same-repo.
 4. Comment `/preview` on the PR, or run the manual workflow with action `deploy`.
 5. Check the latest **PR preview (App Runner)** workflow run if the sticky comment does not update.
-
