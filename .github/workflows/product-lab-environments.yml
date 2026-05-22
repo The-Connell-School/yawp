@@ -101,6 +101,7 @@ jobs:
           set -euo pipefail
           MANIFEST="yawp-pm/product-lab/initiatives/${{ inputs.initiative_id }}.yaml"
           test -f "$MANIFEST" || { echo "Missing Product Lab manifest: $MANIFEST"; exit 1; }
+          cp scripts/product-lab-env.ts /tmp/product-lab-env.ts
           bun scripts/product-lab-env.ts "$MANIFEST" "${{ inputs.initiative_id }}" | tee /tmp/product-lab-env
           while IFS='=' read -r key value; do
             echo "$key=$value" >> "$GITHUB_ENV"
@@ -151,7 +152,7 @@ jobs:
           NODE_TLS_REJECT_UNAUTHORIZED: "0"
         run: |
           set -euo pipefail
-          labDatabaseUrl="$(bun -e "import { appendSchemaToDatabaseUrl } from './scripts/product-lab-env.ts'; process.stdout.write(appendSchemaToDatabaseUrl(process.env.BASE_DATABASE_URL, { databaseSchema: process.env.databaseSchema }))")"
+          labDatabaseUrl="$(bun -e "import { appendSchemaToDatabaseUrl } from '/tmp/product-lab-env.ts'; process.stdout.write(appendSchemaToDatabaseUrl(process.env.BASE_DATABASE_URL, { databaseSchema: process.env.databaseSchema }))")"
           PSQL_URL="$(bun -e "const u = new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
           echo "::add-mask::$labDatabaseUrl"
           echo "::add-mask::$PSQL_URL"
