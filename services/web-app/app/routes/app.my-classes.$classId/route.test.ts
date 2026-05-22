@@ -42,7 +42,11 @@ mock.module('~/utils/feature-flags.server', () => ({
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
-const { action: routeAction, loader: routeLoader } = await import('./route');
+const {
+  action: routeAction,
+  getDraftDisplayTitle,
+  loader: routeLoader,
+} = await import('./route');
 const action = routeAction as any;
 const loader = routeLoader as any;
 
@@ -202,5 +206,21 @@ describe('class detail loader document visibility', () => {
     });
     expect(response.init).toMatchObject({ status: 400 });
     expect(prisma.assignment.create).not.toHaveBeenCalled();
+  });
+
+  test('shows a visible draft title when the document title is blank', () => {
+    expect(
+      getDraftDisplayTitle({
+        title: '   ',
+        assignment: { title: 'Welcome Exercise' },
+      })
+    ).toBe('Welcome Exercise');
+
+    expect(
+      getDraftDisplayTitle({
+        title: '',
+        assignment: null,
+      })
+    ).toBe('Untitled draft');
   });
 });
