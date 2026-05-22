@@ -53,6 +53,7 @@ describe('Product Lab environment contract', () => {
     expect(environment.terraformStateKey).toBe(
       'yawp/product-lab/product-lab-build-out/terraform.tfstate',
     );
+    expect(environment.engineeringBranch).toBe('codex/product-lab-build-out');
   });
 
   test('derives a schema-scoped database URL for checkpoint commands', () => {
@@ -84,6 +85,12 @@ describe('Product Lab environment contract', () => {
   test('rejects unsafe slugs', () => {
     expect(() => parseProductLabManifest('id: Bad Slug\nlab:\n  environment_slug: Bad Slug\n')).toThrow(
       /kebab-case/,
+    );
+  });
+
+  test('rejects manifests whose id does not match the requested initiative', () => {
+    expect(() => parseProductLabManifest(manifest, { expectedId: 'revision-flow' })).toThrow(
+      /manifest id product-lab-build-out does not match requested initiative revision-flow/,
     );
   });
 });

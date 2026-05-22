@@ -7,6 +7,7 @@ export type ProductLabManifest = {
 export type ProductLabEnvironment = {
   appName: string;
   environment: string;
+  engineeringBranch: string;
   databaseSchema: string;
   imageTag: string;
   checkpointKey: string;
@@ -29,7 +30,10 @@ function parseScalar(value: string): string {
   return trimmed;
 }
 
-export function parseProductLabManifest(rawManifest: string): ProductLabManifest {
+export function parseProductLabManifest(
+  rawManifest: string,
+  options: { expectedId?: string } = {},
+): ProductLabManifest {
   const values = new Map<string, string>();
   const parents: Array<{ indent: number; key: string }> = [];
 
@@ -75,6 +79,10 @@ export function parseProductLabManifest(rawManifest: string): ProductLabManifest
     throw new Error('engineering_branch is required');
   }
 
+  if (options.expectedId && id !== options.expectedId) {
+    throw new Error(`manifest id ${id} does not match requested initiative ${options.expectedId}`);
+  }
+
   return { id, engineeringBranch, environmentSlug };
 }
 
@@ -90,6 +98,7 @@ export function deriveProductLabEnvironment(manifest: ProductLabManifest): Produ
   return {
     appName: 'yawp-lab',
     environment: `lab-${manifest.environmentSlug}`,
+    engineeringBranch: manifest.engineeringBranch,
     databaseSchema: `lab_${manifest.environmentSlug.replaceAll('-', '_')}`,
     imageTag: `lab-${manifest.environmentSlug}`,
     checkpointKey: `product-lab/${manifest.id}/checkpoints/latest.sql`,
@@ -99,7 +108,7 @@ export function deriveProductLabEnvironment(manifest: ProductLabManifest): Produ
 
 export function appendSchemaToDatabaseUrl(
   databaseUrl: string,
-  environment: ProductLabEnvironment,
+  environment: Pick<ProductLabEnvironment, 'databaseSchema'>,
 ): string {
   const url = new URL(databaseUrl);
   const unsafeParts = [url.hostname, url.pathname].join(' ').toLowerCase();
@@ -114,11 +123,12 @@ export function appendSchemaToDatabaseUrl(
 if (import.meta.main) {
   const manifestPath = process.argv[2];
   if (!manifestPath) {
-    console.error('Usage: bun scripts/product-lab-env.ts <initiative-manifest.yaml>');
+    console.error('Usage: bun scripts/product-lab-env.ts <initiative-manifest.yaml> [expected-initiative-id]');
     process.exit(1);
   }
 
-  const manifest = parseProductLabManifest(await Bun.file(manifestPath).text());
+  const expectedId = process.argv[3];
+  const manifest = parseProductLabManifest(await Bun.file(manifestPath).text(), { expectedId });
   const environment = deriveProductLabEnvironment(manifest);
   const databaseUrl = process.env.PRODUCT_LAB_DATABASE_URL;
   const output = databaseUrl

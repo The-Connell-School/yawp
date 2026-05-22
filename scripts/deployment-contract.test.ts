@@ -90,7 +90,9 @@ describe('Product Lab environment contract', () => {
     expect(workflow).toContain('TF_VAR_app_name="$appName"');
     expect(workflow).toContain('TF_VAR_env="$environment"');
     expect(workflow).toContain('TF_VAR_database_schema="$databaseSchema"');
-    expect(workflow).toContain('bun scripts/product-lab-env.ts "$MANIFEST"');
+    expect(workflow).toContain('bun scripts/product-lab-env.ts "$MANIFEST" "${{ inputs.initiative_id }}"');
+    expect(workflow).toContain('ref: ${{ env.engineeringBranch }}');
+    expect(workflow).toContain('App branch: ${engineeringBranch}');
     expect(workflow).toContain('DATABASE_URL="$labDatabaseUrl" bun prisma migrate deploy');
     expect(workflow).toContain('pg_dump "$PSQL_URL" --schema="$databaseSchema" --format=plain --no-owner --no-acl');
     expect(workflow).toContain('actions/upload-artifact@v4');

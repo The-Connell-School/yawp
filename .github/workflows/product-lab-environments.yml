@@ -101,10 +101,15 @@ jobs:
           set -euo pipefail
           MANIFEST="yawp-pm/product-lab/initiatives/${{ inputs.initiative_id }}.yaml"
           test -f "$MANIFEST" || { echo "Missing Product Lab manifest: $MANIFEST"; exit 1; }
-          bun scripts/product-lab-env.ts "$MANIFEST" | tee /tmp/product-lab-env
+          bun scripts/product-lab-env.ts "$MANIFEST" "${{ inputs.initiative_id }}" | tee /tmp/product-lab-env
           while IFS='=' read -r key value; do
             echo "$key=$value" >> "$GITHUB_ENV"
           done < /tmp/product-lab-env
+
+      - name: Checkout app branch from manifest
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.engineeringBranch }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -248,6 +253,7 @@ jobs:
             echo ""
             echo "- Product Lab URL: https://${LAB_URL}"
             echo "- Initiative: ${{ inputs.initiative_id }}"
+            echo "- App branch: ${engineeringBranch}"
             echo "- Environment: ${environment}"
             echo "- Database schema: ${databaseSchema}"
             echo "- Checkpoint key: ${checkpointKey}"
