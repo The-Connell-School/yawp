@@ -96,6 +96,19 @@ function parseDateOnlyToUtc(value: string): Date | null {
   return parsed;
 }
 
+export function getDraftDisplayTitle(document: {
+  title?: string | null;
+  assignment?: { title?: string | null } | null;
+}) {
+  const documentTitle = document.title?.trim();
+  if (documentTitle) return documentTitle;
+
+  const assignmentTitle = document.assignment?.title?.trim();
+  if (assignmentTitle) return assignmentTitle;
+
+  return 'Untitled draft';
+}
+
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
@@ -941,7 +954,7 @@ function ClassDetailPage() {
                   <TableCell className="font-medium">
                     {doc.profile.user.name || doc.profile.user.email}
                   </TableCell>
-                  <TableCell>{doc.title}</TableCell>
+                  <TableCell>{getDraftDisplayTitle(doc)}</TableCell>
                   {assignmentsEnabled && (
                     <TableCell className="text-muted-foreground">
                       {doc.assignment?.title || '—'}
@@ -1605,7 +1618,7 @@ function ClassDetailPage() {
                                           to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
                                           className="text-primary hover:underline truncate block"
                                         >
-                                          {doc.title}
+                                          {getDraftDisplayTitle(doc)}
                                         </Link>
                                         {doc.assignment && (
                                           <span className="text-xs text-muted-foreground">{doc.assignment.title}</span>
