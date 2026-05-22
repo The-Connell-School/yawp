@@ -161,10 +161,12 @@ jobs:
 
           if aws s3 ls "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" >/dev/null 2>&1; then
             echo "Restoring Product Lab checkpoint ${checkpointKey} into ${databaseSchema}..."
+            echo "checkpointState=restored" >> "$GITHUB_ENV"
             aws s3 cp "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" - | psql "$PSQL_URL" -v ON_ERROR_STOP=1
           else
             DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/preview-base.dump}"
             echo "No Product Lab checkpoint found; seeding ${databaseSchema} from preview dump ${DUMP_URI}."
+            echo "checkpointState=created" >> "$GITHUB_ENV"
             aws s3 cp "$DUMP_URI" - \
               | sed -e "s/public\./${databaseSchema}./g" \
                     -e "s/search_path = public/search_path = ${databaseSchema}/g" \
@@ -256,6 +258,7 @@ jobs:
             echo "- App branch: ${engineeringBranch}"
             echo "- Environment: ${environment}"
             echo "- Database schema: ${databaseSchema}"
+            echo "- Checkpoint state: ${checkpointState}"
             echo "- Checkpoint key: ${checkpointKey}"
             echo "- Checkpoint artifact: product-lab-${{ inputs.initiative_id }}-checkpoint"
           } >> "$GITHUB_STEP_SUMMARY"

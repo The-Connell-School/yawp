@@ -100,6 +100,7 @@ describe('Product Lab environment contract', () => {
     expect(workflow).toContain('Publish lab environment summary');
     expect(workflow).toContain('terraform -chdir=infra-pr output -raw apprunner_service_url');
     expect(workflow).toContain('Product Lab URL');
+    expect(workflow).toContain('Checkpoint state');
     expect(workflow).toContain('Checkpoint key');
     expect(workflow).not.toContain('branches:\n      - main');
     expect(workflow).not.toContain('bun web-app:docker:production:push');
