@@ -1,0 +1,186 @@
+name: Product Lab environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      initiative_id:
+        description: Product Lab initiative id from yawp-pm
+        required: true
+        type: string
+      pm_ref:
+        description: yawp-pm ref containing the initiative manifest
+        required: true
+        default: main
+        type: string
+      operation:
+        description: Create/update or destroy the lab environment
+        required: true
+        default: apply
+        type: choice
+        options:
+          - apply
+          - destroy
+
+concurrency:
+  group: product-lab-${{ inputs.initiative_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  product-lab:
+    runs-on: ubuntu-22.04
+    env:
+      PREVIEW_TF_STATE_BUCKET: ${{ vars.PREVIEW_TF_STATE_BUCKET }}
+      PREVIEW_ECR_REPOSITORY: ${{ vars.PREVIEW_ECR_REPOSITORY }}
+      PREVIEW_DB_URL_SECRET_ARN: ${{ vars.PREVIEW_DB_URL_SECRET_ARN }}
+      PREVIEW_SESSION_SECRET_ARN: ${{ vars.PREVIEW_SESSION_SECRET_ARN }}
+      PREVIEW_HONEYPOT_SECRET_ARN: ${{ vars.PREVIEW_HONEYPOT_SECRET_ARN }}
+      PREVIEW_OPENAI_ORG_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_ORG_SECRET_ARN }}
+      PREVIEW_OPENAI_KEY_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_KEY_SECRET_ARN }}
+      PREVIEW_ANTHROPIC_KEY_SECRET_ARN: ${{ vars.PREVIEW_ANTHROPIC_KEY_SECRET_ARN }}
+      PREVIEW_INTERNAL_TOKEN_SECRET_ARN: ${{ vars.PREVIEW_INTERNAL_TOKEN_SECRET_ARN }}
+      PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
+      PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
+      PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
+      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
+    steps:
+      - name: Normalize configuration
+        run: |
+          echo "AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}" >> "$GITHUB_ENV"
+        env:
+          PREVIEW_AWS_REGION: ${{ vars.PREVIEW_AWS_REGION }}
+
+      - name: Check lab configuration
+        run: |
+          test -n "${{ secrets.AWS_ROLE_ARN }}" || { echo "Missing secret AWS_ROLE_ARN"; exit 1; }
+          test -n "$PREVIEW_TF_STATE_BUCKET" || { echo "Missing var PREVIEW_TF_STATE_BUCKET"; exit 1; }
+          test -n "$PREVIEW_ECR_REPOSITORY" || { echo "Missing var PREVIEW_ECR_REPOSITORY"; exit 1; }
+          test -n "$PREVIEW_DB_URL_SECRET_ARN" || { echo "Missing var PREVIEW_DB_URL_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_SESSION_SECRET_ARN" || { echo "Missing var PREVIEW_SESSION_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_HONEYPOT_SECRET_ARN" || { echo "Missing var PREVIEW_HONEYPOT_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_OPENAI_ORG_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_ORG_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_OPENAI_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_KEY_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_ANTHROPIC_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_ANTHROPIC_KEY_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_INTERNAL_TOKEN_SECRET_ARN" || { echo "Missing var PREVIEW_INTERNAL_TOKEN_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_RESEND_SECRET_ARN" || { echo "Missing var PREVIEW_RESEND_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_SENTRY_DSN_SECRET_ARN" || { echo "Missing var PREVIEW_SENTRY_DSN_SECRET_ARN"; exit 1; }
+          test -n "$PREVIEW_AWS_S3_BUCKET" || { echo "Missing var PREVIEW_AWS_S3_BUCKET"; exit 1; }
+          test -n "$PREVIEW_RESEND_FROM_EMAIL" || { echo "Missing var PREVIEW_RESEND_FROM_EMAIL"; exit 1; }
+
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout PM manifests
+        uses: actions/checkout@v4
+        with:
+          repository: The-Connell-School/yawp-pm
+          ref: ${{ inputs.pm_ref }}
+          path: yawp-pm
+          token: ${{ secrets.PRODUCT_LAB_PM_REPO_TOKEN || github.token }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+          terraform_wrapper: false
+
+      - name: Derive environment contract
+        run: |
+          set -euo pipefail
+          MANIFEST="yawp-pm/product-lab/initiatives/${{ inputs.initiative_id }}.yaml"
+          test -f "$MANIFEST" || { echo "Missing Product Lab manifest: $MANIFEST"; exit 1; }
+          bun scripts/product-lab-env.ts "$MANIFEST" | tee /tmp/product-lab-env
+          while IFS='=' read -r key value; do
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done < /tmp/product-lab-env
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        if: inputs.operation == 'apply'
+        run: bun install
+
+      - name: Build and push lab image
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          REGISTRY="${PREVIEW_ECR_REPOSITORY%%/*}"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+          docker build -f services/web-app/Dockerfile \
+            --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/product_lab_build \
+            -t "${PREVIEW_ECR_REPOSITORY}:${imageTag}" .
+          docker push "${PREVIEW_ECR_REPOSITORY}:${imageTag}"
+
+      - name: Terraform init
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra-pr init \
+            -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
+            -backend-config="key=${terraformStateKey}" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform apply
+        if: inputs.operation == 'apply'
+        env:
+          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
+          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+        run: |
+          set -euo pipefail
+          export TF_VAR_app_name="$appName"
+          export TF_VAR_env="$environment"
+          export TF_VAR_database_schema="$databaseSchema"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:${imageTag}"
+          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
+          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
+          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
+          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
+          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
+          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
+          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
+          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
+          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
+          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
+          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
+          terraform -chdir=infra-pr apply -auto-approve
+
+      - name: Terraform destroy
+        if: inputs.operation == 'destroy'
+        env:
+          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
+          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
+          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+        run: |
+          set -euo pipefail
+          export TF_VAR_app_name="$appName"
+          export TF_VAR_env="$environment"
+          export TF_VAR_database_schema="$databaseSchema"
+          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:${imageTag}"
+          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
+          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
+          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
+          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
+          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
+          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
+          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
+          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
+          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
+          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
+          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
+          terraform -chdir=infra-pr destroy -auto-approve

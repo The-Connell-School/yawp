@@ -73,3 +73,19 @@ describe('production deployment contract', () => {
     expect(migrateIndex).toBeLessThan(pushIndex);
   });
 });
+
+describe('Product Lab environment contract', () => {
+  test('manual Product Lab workflow derives stable lab infra from yawp-pm manifests', () => {
+    const workflow = readRepoFile('.github/workflows/product-lab-environments.yml');
+
+    expect(workflow).toContain('workflow_dispatch');
+    expect(workflow).toContain('The-Connell-School/yawp-pm');
+    expect(workflow).toContain('bun scripts/product-lab-env.ts');
+    expect(workflow).toContain('key=${terraformStateKey}');
+    expect(workflow).toContain('TF_VAR_app_name="$appName"');
+    expect(workflow).toContain('TF_VAR_env="$environment"');
+    expect(workflow).toContain('TF_VAR_database_schema="$databaseSchema"');
+    expect(workflow).not.toContain('branches:\n      - main');
+    expect(workflow).not.toContain('production');
+  });
+});
