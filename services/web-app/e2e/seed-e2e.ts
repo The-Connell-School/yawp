@@ -49,6 +49,7 @@ export type E2EContext = {
   teacherName: string;
   teacherEmail: string;
   assignmentTypeId: string;
+  dailyPagesAssignmentTypeId: string;
   teacherTrainingId: string;
   freshDocumentId: string;
   editedDocumentId: string;
@@ -183,6 +184,39 @@ export async function seedE2E(): Promise<E2EContext> {
       id: true,
       assignmentModules: { select: { id: true, position: true } },
     },
+  });
+
+  const dailyPagesAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'Daily Pages',
+      description:
+        'Low-stakes daily writing assignments that help students build fluency.',
+      position: 2,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'Daily Pages',
+            position: 1,
+            description: 'Short daily writing practice.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
   });
 
   const teacherTraining = await prisma.teacherTraining.create({
@@ -461,6 +495,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
+    dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
     teacherTrainingId: teacherTraining.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,

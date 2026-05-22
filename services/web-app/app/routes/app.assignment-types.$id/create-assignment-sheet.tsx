@@ -31,6 +31,7 @@ type Props = {
   teacherClasses: TeacherClass[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialPrompt?: string;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -42,6 +43,7 @@ export function CreateAssignmentSheet({
   teacherClasses,
   open,
   onOpenChange,
+  initialPrompt = '',
 }: Props) {
   const fetcher = useFetcher<{ success?: boolean; message?: string }>();
   const [selectedClassId, setSelectedClassId] = useState(
@@ -58,10 +60,10 @@ export function CreateAssignmentSheet({
     if (!open) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-    setPrompt('');
+    setPrompt(initialPrompt);
     setTutorContext('');
     setDueDate('');
-  }, [open, teacherClasses]);
+  }, [open, teacherClasses, initialPrompt]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
