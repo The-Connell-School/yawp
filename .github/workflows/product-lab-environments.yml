@@ -45,6 +45,7 @@ jobs:
       PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
       PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
       PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
+      PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI }}
       PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
     steps:
       - name: Normalize configuration
@@ -115,6 +116,62 @@ jobs:
         if: inputs.operation == 'apply'
         run: bun install
 
+      - name: Install Postgres client
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Load base database URL
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          BASE_DATABASE_URL=$(aws secretsmanager get-secret-value \
+            --secret-id "$PREVIEW_DB_URL_SECRET_ARN" \
+            --query SecretString --output text)
+          if [[ "$BASE_DATABASE_URL" != *sslmode=* ]]; then
+            if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
+              BASE_DATABASE_URL="${BASE_DATABASE_URL}&sslmode=require"
+            else
+              BASE_DATABASE_URL="${BASE_DATABASE_URL}?sslmode=require"
+            fi
+          fi
+          echo "::add-mask::$BASE_DATABASE_URL"
+          echo "BASE_DATABASE_URL=$BASE_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Create or restore lab data checkpoint
+        if: inputs.operation == 'apply'
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: "0"
+        run: |
+          set -euo pipefail
+          labDatabaseUrl="$(bun -e "import { appendSchemaToDatabaseUrl } from './scripts/product-lab-env.ts'; process.stdout.write(appendSchemaToDatabaseUrl(process.env.BASE_DATABASE_URL, { databaseSchema: process.env.databaseSchema }))")"
+          PSQL_URL="$(bun -e "const u = new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
+          echo "::add-mask::$labDatabaseUrl"
+          echo "::add-mask::$PSQL_URL"
+
+          echo "DROP SCHEMA IF EXISTS ${databaseSchema} CASCADE; CREATE SCHEMA ${databaseSchema};" | (cd packages/prisma && DATABASE_URL="$labDatabaseUrl" bunx prisma db execute --stdin)
+
+          if aws s3 ls "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" >/dev/null 2>&1; then
+            echo "Restoring Product Lab checkpoint ${checkpointKey} into ${databaseSchema}..."
+            aws s3 cp "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" - | psql "$PSQL_URL" -v ON_ERROR_STOP=1
+          else
+            DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/preview-base.dump}"
+            echo "No Product Lab checkpoint found; seeding ${databaseSchema} from preview dump ${DUMP_URI}."
+            aws s3 cp "$DUMP_URI" - \
+              | sed -e "s/public\./${databaseSchema}./g" \
+                    -e "s/search_path = public/search_path = ${databaseSchema}/g" \
+                    -e "/OWNER TO /d" \
+                    -e "/^GRANT /d" \
+                    -e "/^REVOKE /d" \
+              | psql "$PSQL_URL" -v ON_ERROR_STOP=1
+          fi
+
+          DATABASE_URL="$labDatabaseUrl" bun prisma migrate deploy
+          bun run prisma:generate
+          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$labDatabaseUrl" bun run packages/prisma/scripts/seed-overlay.ts
+
       - name: Build and push lab image
         if: inputs.operation == 'apply'
         run: |
@@ -159,6 +216,26 @@ jobs:
           export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
           export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
           terraform -chdir=infra-pr apply -auto-approve
+
+      - name: Capture lab data checkpoint
+        if: inputs.operation == 'apply'
+        run: |
+          set -euo pipefail
+          PSQL_URL="$(bun -e "const u = new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
+          echo "::add-mask::$PSQL_URL"
+          CHECKPOINT_ARTIFACT="/tmp/${{ inputs.initiative_id }}-checkpoint.sql"
+          pg_dump "$PSQL_URL" --schema="$databaseSchema" --format=plain --no-owner --no-acl \
+            | sed -e '/^\\restrict/d' -e '/^\\unrestrict/d' -e '/^SET transaction_timeout/d' \
+            | tee "$CHECKPOINT_ARTIFACT" \
+            | aws s3 cp - "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}"
+
+      - name: Upload checkpoint artifact
+        if: inputs.operation == 'apply'
+        uses: actions/upload-artifact@v4
+        with:
+          name: product-lab-${{ inputs.initiative_id }}-checkpoint
+          path: /tmp/${{ inputs.initiative_id }}-checkpoint.sql
+          retention-days: 14
 
       - name: Terraform destroy
         if: inputs.operation == 'destroy'

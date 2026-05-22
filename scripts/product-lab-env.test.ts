@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { deriveProductLabEnvironment, parseProductLabManifest } from './product-lab-env';
+import {
+  appendSchemaToDatabaseUrl,
+  deriveProductLabEnvironment,
+  parseProductLabManifest,
+} from './product-lab-env';
 
 const manifest = `id: product-lab-build-out
 name: Product Lab build-out
@@ -43,8 +47,27 @@ describe('Product Lab environment contract', () => {
     expect(environment.environment).toBe('lab-product-lab-build-out');
     expect(environment.databaseSchema).toBe('lab_product_lab_build_out');
     expect(environment.imageTag).toBe('lab-product-lab-build-out');
+    expect(environment.checkpointKey).toBe(
+      'product-lab/product-lab-build-out/checkpoints/latest.sql',
+    );
     expect(environment.terraformStateKey).toBe(
       'yawp/product-lab/product-lab-build-out/terraform.tfstate',
+    );
+  });
+
+  test('derives a schema-scoped database URL for checkpoint commands', () => {
+    const environment = deriveProductLabEnvironment(parseProductLabManifest(manifest));
+
+    expect(appendSchemaToDatabaseUrl('postgresql://user:pass@preview.example/yawp', environment)).toBe(
+      'postgresql://user:pass@preview.example/yawp?schema=lab_product_lab_build_out',
+    );
+  });
+
+  test('rejects production-shaped database URLs for checkpoints', () => {
+    const environment = deriveProductLabEnvironment(parseProductLabManifest(manifest));
+
+    expect(() => appendSchemaToDatabaseUrl('postgresql://user:pass@prod.example/yawp', environment)).toThrow(
+      /non-production/i,
     );
   });
 

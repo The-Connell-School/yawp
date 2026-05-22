@@ -9,11 +9,13 @@ export type ProductLabEnvironment = {
   environment: string;
   databaseSchema: string;
   imageTag: string;
+  checkpointKey: string;
   terraformStateKey: string;
 };
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BLOCKED_ENV_NAMES = new Set(['prod', 'production', 'staging', 'main']);
+const BLOCKED_DATABASE_PARTS = ['prod', 'production'];
 
 function parseScalar(value: string): string {
   const trimmed = value.trim();
@@ -90,8 +92,23 @@ export function deriveProductLabEnvironment(manifest: ProductLabManifest): Produ
     environment: `lab-${manifest.environmentSlug}`,
     databaseSchema: `lab_${manifest.environmentSlug.replaceAll('-', '_')}`,
     imageTag: `lab-${manifest.environmentSlug}`,
+    checkpointKey: `product-lab/${manifest.id}/checkpoints/latest.sql`,
     terraformStateKey: `yawp/product-lab/${manifest.id}/terraform.tfstate`,
   };
+}
+
+export function appendSchemaToDatabaseUrl(
+  databaseUrl: string,
+  environment: ProductLabEnvironment,
+): string {
+  const url = new URL(databaseUrl);
+  const unsafeParts = [url.hostname, url.pathname].join(' ').toLowerCase();
+  if (BLOCKED_DATABASE_PARTS.some((part) => unsafeParts.includes(part))) {
+    throw new Error('Product Lab checkpoints require a non-production database URL');
+  }
+
+  url.searchParams.set('schema', environment.databaseSchema);
+  return url.toString();
 }
 
 if (import.meta.main) {
@@ -103,8 +120,12 @@ if (import.meta.main) {
 
   const manifest = parseProductLabManifest(await Bun.file(manifestPath).text());
   const environment = deriveProductLabEnvironment(manifest);
+  const databaseUrl = process.env.PRODUCT_LAB_DATABASE_URL;
+  const output = databaseUrl
+    ? { ...environment, labDatabaseUrl: appendSchemaToDatabaseUrl(databaseUrl, environment) }
+    : environment;
 
-  for (const [key, value] of Object.entries(environment)) {
+  for (const [key, value] of Object.entries(output)) {
     console.log(`${key}=${value}`);
   }
 }
