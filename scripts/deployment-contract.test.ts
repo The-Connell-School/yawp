@@ -104,6 +104,10 @@ describe('Product Lab environment contract', () => {
     expect(workflow).toContain('Product Lab URL');
     expect(workflow).toContain('Checkpoint state');
     expect(workflow).toContain('Checkpoint key');
+    expect(workflow).toContain('bin/record-product-lab-run ${{ inputs.initiative_id }}');
+    expect(workflow).toContain('--preview-url \\"https://${LAB_URL}\\"');
+    expect(workflow).toContain('--checkpoint-state \\"${checkpointState}\\"');
+    expect(workflow).toContain('--checkpoint-artifact \\"product-lab-${{ inputs.initiative_id }}-checkpoint\\"');
     expect(workflow).not.toContain('branches:\n      - main');
     expect(workflow).not.toContain('bun web-app:docker:production:push');
   });

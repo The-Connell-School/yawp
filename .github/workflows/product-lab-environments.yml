@@ -262,6 +262,18 @@ jobs:
             echo "- Checkpoint state: ${checkpointState}"
             echo "- Checkpoint key: ${checkpointKey}"
             echo "- Checkpoint artifact: product-lab-${{ inputs.initiative_id }}-checkpoint"
+            echo ""
+            echo "### Record this run in yawp-pm"
+            echo ""
+            echo '```sh'
+            echo "bin/record-product-lab-run ${{ inputs.initiative_id }} \\"
+            echo "  --preview-url \"https://${LAB_URL}\" \\"
+            echo "  --checkpoint-state \"${checkpointState}\" \\"
+            echo "  --app-branch \"${engineeringBranch}\" \\"
+            echo "  --database-schema \"${databaseSchema}\" \\"
+            echo "  --checkpoint-key \"${checkpointKey}\" \\"
+            echo "  --checkpoint-artifact \"product-lab-${{ inputs.initiative_id }}-checkpoint\""
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Terraform destroy
