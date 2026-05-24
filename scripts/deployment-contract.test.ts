@@ -85,6 +85,7 @@ describe('Product Lab environment contract', () => {
     expect(workflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(workflow).toContain('Create or restore lab data checkpoint');
     expect(workflow).toContain('aws s3 ls "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}"');
+    expect(workflow).toContain('sed -e "/^CREATE SCHEMA ${databaseSchema};/d"');
     expect(workflow).toContain('Capture lab data checkpoint');
     expect(workflow).toContain('aws s3 cp - "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}"');
     expect(workflow).toContain('TF_VAR_app_name="$appName"');

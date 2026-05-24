@@ -163,7 +163,10 @@ jobs:
           if aws s3 ls "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" >/dev/null 2>&1; then
             echo "Restoring Product Lab checkpoint ${checkpointKey} into ${databaseSchema}..."
             echo "checkpointState=restored" >> "$GITHUB_ENV"
-            aws s3 cp "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" - | psql "$PSQL_URL" -v ON_ERROR_STOP=1
+            aws s3 cp "s3://${PREVIEW_AWS_S3_BUCKET}/${checkpointKey}" - \
+              | sed -e "/^CREATE SCHEMA ${databaseSchema};/d" \
+                    -e "/^ALTER SCHEMA ${databaseSchema} OWNER TO /d" \
+              | psql "$PSQL_URL" -v ON_ERROR_STOP=1
           else
             DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/preview-base.dump}"
             echo "No Product Lab checkpoint found; seeding ${databaseSchema} from preview dump ${DUMP_URI}."
