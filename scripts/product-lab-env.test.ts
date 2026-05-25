@@ -94,6 +94,28 @@ describe('Product Lab environment contract', () => {
     );
   });
 
+  test('rejects manifests for unsupported engineering repos', () => {
+    const unsupportedRepoManifest = manifest.replace(
+      'engineering_repo: yawp-2.0',
+      'engineering_repo: yawp-experiments',
+    );
+
+    expect(() => parseProductLabManifest(unsupportedRepoManifest)).toThrow(
+      /engineering_repo must be yawp-2.0/,
+    );
+  });
+
+  test('rejects lab environment slug drift before infra can run', () => {
+    const driftedEnvironmentManifest = manifest.replace(
+      'environment_slug: product-lab-build-out',
+      'environment_slug: other-lab',
+    );
+
+    expect(() => parseProductLabManifest(driftedEnvironmentManifest)).toThrow(
+      /lab.environment_slug must match id/,
+    );
+  });
+
   test('rejects unsafe engineering branch refs before checkout', () => {
     const unsafeBranchManifest = manifest.replace(
       'engineering_branch: codex/product-lab-build-out',

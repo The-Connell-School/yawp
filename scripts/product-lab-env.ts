@@ -1,5 +1,6 @@
 export type ProductLabManifest = {
   id: string;
+  engineeringRepo: string;
   engineeringBranch: string;
   environmentSlug: string;
 };
@@ -65,6 +66,7 @@ export function parseProductLabManifest(
 
   const id = values.get('id') ?? '';
   const environmentSlug = values.get('lab.environment_slug') ?? '';
+  const engineeringRepo = values.get('engineering_repo') ?? '';
   const engineeringBranch = values.get('engineering_branch') ?? '';
 
   for (const [field, value] of [
@@ -74,6 +76,14 @@ export function parseProductLabManifest(
     if (!SLUG_RE.test(value)) {
       throw new Error(`${field} must be kebab-case`);
     }
+  }
+
+  if (environmentSlug !== id) {
+    throw new Error('lab.environment_slug must match id');
+  }
+
+  if (engineeringRepo !== 'yawp-2.0') {
+    throw new Error('engineering_repo must be yawp-2.0');
   }
 
   if (!engineeringBranch) {
@@ -95,7 +105,7 @@ export function parseProductLabManifest(
     throw new Error(`manifest id ${id} does not match requested initiative ${options.expectedId}`);
   }
 
-  return { id, engineeringBranch, environmentSlug };
+  return { id, engineeringRepo, engineeringBranch, environmentSlug };
 }
 
 export function deriveProductLabEnvironment(manifest: ProductLabManifest): ProductLabEnvironment {
