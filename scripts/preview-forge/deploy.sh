@@ -37,12 +37,15 @@ fi
 "${compose[@]}" up -d --force-recreate web
 
 health_url="${PREVIEW_FORGE_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
+login_url="${PREVIEW_FORGE_LOGIN_URL:-${URL}}"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
+  login_url="http://127.0.0.1:${DIRECT_PORT}"
 fi
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
+    PREVIEW_BASE_URL="$login_url" node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"

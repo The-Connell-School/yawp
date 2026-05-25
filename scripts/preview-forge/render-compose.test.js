@@ -16,7 +16,8 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('image: oven/bun:1.3.1');
     expect(compose).toContain('yawp-pr-142-node-modules');
     expect(compose).toContain('rm -rf services/web-app/.react-router services/web-app/.vite');
-    expect(compose).toContain('bun run --cwd services/web-app dev -- --host 0.0.0.0 --port 8080');
+    expect(compose).toContain('cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080');
+    expect(compose).not.toContain('bun run --cwd services/web-app dev');
     expect(compose).toContain('web:');
     expect(compose).toContain('PORT: "8080"');
     expect(compose).not.toContain('target: production');

@@ -97,7 +97,7 @@ jobs:
             - **Runtime:** Docker Compose on the Preview Forge host
             - **Data:** isolated Postgres volume plus deterministic seed overlay
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
-            - **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck
+            - **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck + seeded login
 
   preview-destroy:
     if: >-

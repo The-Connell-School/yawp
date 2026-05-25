@@ -62,6 +62,15 @@ describe('production deployment contract', () => {
     expect(startScript).not.toContain('bun run web-app:start');
   });
 
+  test('Vite dev redirects bare /app before static middleware handles the app directory', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(viteConfig).toContain('redirectBareAppRoute');
+    expect(viteConfig).toContain("req.url === '/app'");
+    expect(viteConfig).toContain("startsWith('/app?')");
+    expect(viteConfig).toContain("res.setHeader('Location', location)");
+  });
+
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
@@ -111,6 +120,16 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).not.toContain('sleep 2');
   });
 
+  test('preview forge verifies seeded login before reporting the preview URL', () => {
+    const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
+    const loginSmokeIndex = deployScript.indexOf('smoke-login.mjs');
+    const previewUrlIndex = deployScript.indexOf('echo "PREVIEW_URL=$URL"');
+
+    expect(loginSmokeIndex).toBeGreaterThan(-1);
+    expect(previewUrlIndex).toBeGreaterThan(-1);
+    expect(loginSmokeIndex).toBeLessThan(previewUrlIndex);
+  });
+
   test('preview forge restarts the web container after source syncs', () => {
     const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
     const stopIndex = deployScript.indexOf('"${compose[@]}" stop web');
@@ -127,5 +146,13 @@ describe('PR preview deployment contract', () => {
 
     expect(previewWorkflow).toContain("--exclude 'services/web-app/.react-router'");
     expect(previewWorkflow).toContain("--exclude 'services/web-app/.vite'");
+  });
+
+  test('preview comment describes the seeded login smoke', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewWorkflow).toContain(
+      '- **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck + seeded login',
+    );
   });
 });
