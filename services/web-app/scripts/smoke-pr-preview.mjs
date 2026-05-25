@@ -1,17 +1,19 @@
 /**
- * PR preview smoke (Playwright). CI sets PREVIEW_BASE_URL after App Runner is up.
+ * PR preview smoke (Playwright). CI sets PREVIEW_BASE_URL after Preview Forge is up.
  *
- *   PREVIEW_BASE_URL=https://....amazonaws.com bun run scripts/smoke-pr-preview.mjs
+ *   PREVIEW_BASE_URL=https://pr-123.preview.yawp.school bun run scripts/smoke-pr-preview.mjs
  *
- * Seeded users: packages/prisma/scripts/seed.ts (e.g. teacher@fake.test / teacher123).
+ * Seeded users: packages/prisma/scripts/seed-overlay.ts.
  */
 import { chromium } from 'playwright';
 
 const BASE =
   process.env.PREVIEW_BASE_URL?.replace(/\/$/, '') || 'http://127.0.0.1:5173';
 
-const DEFAULT_EMAIL = process.env.PREVIEW_EMAIL?.trim() || 'teacher@fake.test';
-const DEFAULT_PASSWORD = process.env.PREVIEW_PASSWORD ?? 'teacher123';
+const DEFAULT_EMAIL =
+  process.env.PREVIEW_EMAIL?.trim() || 'teacher.e2e@yawp.test';
+const DEFAULT_PASSWORD =
+  process.env.PREVIEW_PASSWORD ?? 'teacher-e2e-password';
 
 const steps = [];
 

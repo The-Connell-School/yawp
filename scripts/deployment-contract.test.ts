@@ -31,6 +31,13 @@ describe('production deployment contract', () => {
     expect(dockerfile).toContain('FROM oven/bun:1.3.1 AS base');
   });
 
+  test('Dockerfile exposes a dependency target for preview migration tooling', () => {
+    const dockerfile = readRepoFile('services/web-app/Dockerfile');
+
+    expect(dockerfile).toContain('FROM base AS deps');
+    expect(dockerfile).toContain('FROM deps AS build');
+  });
+
   test('Docker runtime image includes workspace node_modules for web app binaries', () => {
     const dockerfile = readRepoFile('services/web-app/Dockerfile');
 
@@ -71,5 +78,54 @@ describe('production deployment contract', () => {
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
+  });
+});
+
+describe('PR preview deployment contract', () => {
+  test('preview workflow deploys every same-repo pull request through preview forge', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewWorkflow).toContain('pull_request');
+    expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, closed]');
+    expect(previewWorkflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
+    expect(previewWorkflow).toContain('scripts/preview-forge/deploy.sh');
+    expect(previewWorkflow).toContain('scripts/preview-forge/destroy.sh');
+  });
+
+  test('preview workflow no longer uses App Runner, Terraform, ECR pushes, or slash-command previews', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml').toLowerCase();
+
+    expect(previewWorkflow).not.toContain('apprunner');
+    expect(previewWorkflow).not.toContain('infra-pr');
+    expect(previewWorkflow).not.toContain('terraform');
+    expect(previewWorkflow).not.toContain('docker push');
+    expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
+  });
+
+  test('preview forge polls health quickly once containers are starting', () => {
+    const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
+
+    expect(deployScript).toContain('curl -fsS --connect-timeout 1 --max-time 2 "$health_url"');
+    expect(deployScript).toContain('sleep 1');
+    expect(deployScript).not.toContain('--max-time 5 "$health_url"');
+    expect(deployScript).not.toContain('sleep 2');
+  });
+
+  test('preview forge restarts the web container after source syncs', () => {
+    const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
+    const stopIndex = deployScript.indexOf('"${compose[@]}" stop web');
+    const toolboxIndex = deployScript.indexOf('"${compose[@]}" run --rm toolbox');
+
+    expect(stopIndex).toBeGreaterThan(-1);
+    expect(toolboxIndex).toBeGreaterThan(-1);
+    expect(stopIndex).toBeLessThan(toolboxIndex);
+    expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
+  });
+
+  test('preview source sync excludes generated container output', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewWorkflow).toContain("--exclude 'services/web-app/.react-router'");
+    expect(previewWorkflow).toContain("--exclude 'services/web-app/.vite'");
   });
 });

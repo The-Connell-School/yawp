@@ -2,6 +2,7 @@
 import { PrismaClient } from '../generated/prisma';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { createPassword } from './utils';
+import { isLocalDatabaseUrl } from './seed-overlay-connection';
 
 // --- Connection setup (same pattern as seed.ts) ---
 
@@ -20,9 +21,7 @@ const schema =
   process.env.DATABASE_SCHEMA?.trim() ||
   getSchemaFromDatabaseUrl(connectionString);
 
-const isLocal =
-  connectionString.includes('localhost') ||
-  connectionString.includes('127.0.0.1');
+const isLocal = isLocalDatabaseUrl(connectionString);
 
 const isSimpleLocal =
   !schema &&

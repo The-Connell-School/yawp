@@ -1,4 +1,5 @@
 import { createCookie } from 'react-router';
+import { shouldUseSecureCookies } from '~/utils/cookie-security.server';
 
 const cookieName = 'profile-id';
 const PROFILE_ID_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
@@ -6,7 +7,7 @@ const PROFILE_ID_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const profileIdCookie = createCookie(cookieName, {
   path: '/',
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: shouldUseSecureCookies(),
   sameSite: 'lax',
   secrets: process.env.SESSION_SECRET.split(','),
 });
