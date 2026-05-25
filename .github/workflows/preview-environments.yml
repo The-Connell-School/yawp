@@ -1,4 +1,4 @@
-name: PR preview (App Runner)
+name: PR preview (Preview Forge)
 
 on:
   pull_request:
@@ -10,7 +10,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
   pull-requests: write
 
 jobs:
@@ -24,311 +23,67 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      PREVIEW_TF_STATE_BUCKET: ${{ vars.PREVIEW_TF_STATE_BUCKET }}
-      PREVIEW_ECR_REPOSITORY: ${{ vars.PREVIEW_ECR_REPOSITORY }}
-      PREVIEW_DB_URL_SECRET_ARN: ${{ vars.PREVIEW_DB_URL_SECRET_ARN }}
-      PREVIEW_SESSION_SECRET_ARN: ${{ vars.PREVIEW_SESSION_SECRET_ARN }}
-      PREVIEW_HONEYPOT_SECRET_ARN: ${{ vars.PREVIEW_HONEYPOT_SECRET_ARN }}
-      PREVIEW_OPENAI_ORG_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_ORG_SECRET_ARN }}
-      PREVIEW_OPENAI_KEY_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_KEY_SECRET_ARN }}
-      PREVIEW_ANTHROPIC_KEY_SECRET_ARN: ${{ vars.PREVIEW_ANTHROPIC_KEY_SECRET_ARN }}
-      PREVIEW_INTERNAL_TOKEN_SECRET_ARN: ${{ vars.PREVIEW_INTERNAL_TOKEN_SECRET_ARN }}
-      PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
-      PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
-      PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
-      PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI }}
-      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
+      PREVIEW_FORGE_HOST: ${{ vars.PREVIEW_FORGE_HOST }}
+      PREVIEW_FORGE_DOMAIN: ${{ vars.PREVIEW_FORGE_DOMAIN }}
+      PREVIEW_FORGE_ROOT: ${{ vars.PREVIEW_FORGE_ROOT || '/srv/yawp-preview-forge' }}
+      PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
+      PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
+      PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
     steps:
-      - name: Normalize configuration
-        run: |
-          echo "AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}" >> "$GITHUB_ENV"
-          echo "PREVIEW_APP_NAME=${PREVIEW_APP_NAME_INPUT:-yawp-preview}" >> "$GITHUB_ENV"
+      - name: Check preview forge configuration
         env:
-          PREVIEW_AWS_REGION: ${{ vars.PREVIEW_AWS_REGION }}
-          PREVIEW_APP_NAME_INPUT: ${{ vars.PREVIEW_APP_NAME }}
-
-      - name: Check preview configuration
+          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
         run: |
-          test -n "${{ secrets.AWS_ROLE_ARN }}" || { echo "Missing secret AWS_ROLE_ARN (OIDC role for preview deploy)"; exit 1; }
-          test -n "$PREVIEW_TF_STATE_BUCKET" || { echo "Missing var PREVIEW_TF_STATE_BUCKET"; exit 1; }
-          test -n "$PREVIEW_ECR_REPOSITORY" || { echo "Missing var PREVIEW_ECR_REPOSITORY"; exit 1; }
-          test -n "$PREVIEW_DB_URL_SECRET_ARN" || { echo "Missing var PREVIEW_DB_URL_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_SESSION_SECRET_ARN" || { echo "Missing var PREVIEW_SESSION_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_HONEYPOT_SECRET_ARN" || { echo "Missing var PREVIEW_HONEYPOT_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_OPENAI_ORG_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_ORG_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_OPENAI_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_OPENAI_KEY_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_ANTHROPIC_KEY_SECRET_ARN" || { echo "Missing var PREVIEW_ANTHROPIC_KEY_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_INTERNAL_TOKEN_SECRET_ARN" || { echo "Missing var PREVIEW_INTERNAL_TOKEN_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_RESEND_SECRET_ARN" || { echo "Missing var PREVIEW_RESEND_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_SENTRY_DSN_SECRET_ARN" || { echo "Missing var PREVIEW_SENTRY_DSN_SECRET_ARN"; exit 1; }
-          test -n "$PREVIEW_AWS_S3_BUCKET" || { echo "Missing var PREVIEW_AWS_S3_BUCKET (use staging bucket name, not production)"; exit 1; }
-          test -n "$PREVIEW_RESEND_FROM_EMAIL" || { echo "Missing var PREVIEW_RESEND_FROM_EMAIL"; exit 1; }
+          set -euo pipefail
+          test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
+          test -n "$PREVIEW_FORGE_DOMAIN" || { echo "Missing repository variable PREVIEW_FORGE_DOMAIN"; exit 1; }
+          test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-          terraform_wrapper: false
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Load base database URL from Secrets Manager
-        run: |
-          BASE_DATABASE_URL=$(aws secretsmanager get-secret-value \
-            --secret-id "$PREVIEW_DB_URL_SECRET_ARN" \
-            --query SecretString --output text)
-          if [[ "$BASE_DATABASE_URL" != *sslmode=* ]]; then
-            if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
-              BASE_DATABASE_URL="${BASE_DATABASE_URL}&sslmode=require"
-            else
-              BASE_DATABASE_URL="${BASE_DATABASE_URL}?sslmode=require"
-            fi
-          fi
-          echo "::add-mask::$BASE_DATABASE_URL"
-          echo "BASE_DATABASE_URL=$BASE_DATABASE_URL" >> "$GITHUB_ENV"
-
-      - name: Create PR schema, restore dump, and migrate
+      - name: Prepare SSH
         env:
-          NODE_TLS_REJECT_UNAUTHORIZED: "0"
+          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          SCHEMA="pr_${PR_NUMBER}"
-          export DATABASE_URL="$BASE_DATABASE_URL"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PREVIEW_FORGE_SSH_PRIVATE_KEY" > ~/.ssh/preview_forge_key
+          chmod 600 ~/.ssh/preview_forge_key
+          ssh-keyscan -H "$PREVIEW_FORGE_HOST" >> ~/.ssh/known_hosts
 
-          # Create schema
-          echo "CREATE SCHEMA IF NOT EXISTS ${SCHEMA};" | (cd packages/prisma && bunx prisma db execute --stdin)
-
-          # Build schema-qualified URL
-          if [[ "$BASE_DATABASE_URL" == *\?* ]]; then
-            MIGRATE_URL="${BASE_DATABASE_URL}&schema=${SCHEMA}"
-          else
-            MIGRATE_URL="${BASE_DATABASE_URL}?schema=${SCHEMA}"
-          fi
-          echo "::add-mask::$MIGRATE_URL"
-
-          # psql/libpq rejects Prisma's ?schema= — use URL without it (sed output is schema-qualified)
-          PSQL_URL="$(node -e "const u=new URL(process.env.BASE_DATABASE_URL); u.searchParams.delete('schema'); process.stdout.write(u.toString())")"
-          echo "::add-mask::$PSQL_URL"
-
-          # If a migration file was edited after this preview schema already
-          # recorded it, Prisma will not replay it. Preview data is disposable,
-          # so rebuild the schema when stored checksums no longer match the
-          # checked-out migration files.
-          MIGRATION_CHECKSUM_DRIFT="0"
-          while IFS= read -r migration_file; do
-            migration_name="$(basename "$(dirname "$migration_file")")"
-            expected_checksum="$(shasum -a 256 "$migration_file" | awk '{print $1}')"
-            applied_checksum="$(psql "$PSQL_URL" -tAc "SELECT checksum FROM ${SCHEMA}._prisma_migrations WHERE migration_name = '${migration_name}' AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1" 2>/dev/null || true)"
-            applied_checksum="${applied_checksum// /}"
-            if [[ -n "$applied_checksum" && "$applied_checksum" != "$expected_checksum" ]]; then
-              echo "Schema ${SCHEMA} has migration checksum drift for ${migration_name}; forcing restore."
-              MIGRATION_CHECKSUM_DRIFT="1"
-              break
-            fi
-          done < <(find packages/prisma/migrations -mindepth 2 -maxdepth 2 -name migration.sql | sort)
-
-          # Use pg_stat_user_tables.n_live_tup as a fast row-count proxy: a
-          # healthy production restore has thousands of live tuples, an empty
-          # or partially-restored schema has 0. This makes the workflow
-          # self-healing — a previously aborted restore (which can leave empty
-          # tables behind) won't trick us into skipping the restore.
-          EXISTING_LIVE_TUPLES="$(psql "$PSQL_URL" -tAc "SELECT COALESCE(SUM(n_live_tup), 0)::text FROM pg_stat_user_tables WHERE schemaname = '${SCHEMA}'" || echo 0)"
-          EXISTING_LIVE_TUPLES="${EXISTING_LIVE_TUPLES// /}"
-          if [[ "$MIGRATION_CHECKSUM_DRIFT" != "1" && "${EXISTING_LIVE_TUPLES:-0}" -gt 100 ]]; then
-            echo "Schema ${SCHEMA} is populated (${EXISTING_LIVE_TUPLES} live tuples); skipping dump restore to preserve data."
-          else
-            echo "Schema ${SCHEMA} is empty or stale (${EXISTING_LIVE_TUPLES:-0} live tuples); dropping and re-restoring..."
-            echo "DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE; CREATE SCHEMA ${SCHEMA};" | (cd packages/prisma && bunx prisma db execute --stdin)
-
-            DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://${PREVIEW_AWS_S3_BUCKET}/production.dump}"
-            echo "Restoring production dump into schema ${SCHEMA} from ${DUMP_URI}..."
-            # Strip ownership/ACL clauses — preview DB has no `yawp_admin` role,
-            # so OWNER TO / GRANT / REVOKE statements would fail and abort psql.
-            aws s3 cp "$DUMP_URI" - \
-              | sed -e "s/public\./${SCHEMA}./g" \
-                    -e "s/search_path = public/search_path = ${SCHEMA}/g" \
-                    -e "/OWNER TO /d" \
-                    -e "/^GRANT /d" \
-                    -e "/^REVOKE /d" \
-              | psql "$PSQL_URL"
-          fi
-
-          # Apply any newer migrations
-          HAS_ASSIGNMENTS_PRE_SCHEMA="$(psql "$PSQL_URL" -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '${SCHEMA}' AND table_name = 'StudentCourse')" || echo f)"
-          HAS_ASSIGNMENTS_PRE_SCHEMA="${HAS_ASSIGNMENTS_PRE_SCHEMA// /}"
-          if [[ "$HAS_ASSIGNMENTS_PRE_SCHEMA" == "t" ]]; then
-            echo "Capturing assignments-unification preflight state for ${SCHEMA}..."
-            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun ./scripts/assignments-unification-preflight.ts)
-          fi
-
-          (cd packages/prisma && DATABASE_URL="$MIGRATE_URL" bunx prisma migrate deploy)
-
-          if [[ "$HAS_ASSIGNMENTS_PRE_SCHEMA" == "t" ]]; then
-            echo "Verifying assignments-unification migration before seed overlay..."
-            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun ./scripts/assignments-unification-postcheck.ts)
-            (cd packages/prisma && PGOPTIONS="-c search_path=${SCHEMA}" DATABASE_URL="$MIGRATE_URL" PREFLIGHT_STATE_PATH=/tmp/assignments-unification-preflight.json bun test ./scripts/assignments-unification-contracts.test.ts)
-          fi
-
-          bun run prisma:generate
-
-          # Overlay test users (for smoke tests)
-          DATABASE_SSL_REJECT_UNAUTHORIZED=false DATABASE_URL="$MIGRATE_URL" bun run packages/prisma/scripts/seed-overlay.ts
-
-      - name: Build and push image to ECR
+      - name: Sync source to preview host
         run: |
           set -euo pipefail
-          REGISTRY="${PREVIEW_ECR_REPOSITORY%%/*}"
-          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
-          docker build -f services/web-app/Dockerfile \
-            --build-arg DATABASE_URL=postgresql://postgres:postgres@localhost:5432/preview_build \
-            -t "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}" .
-          docker push "${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
+          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
+          ssh -i ~/.ssh/preview_forge_key "$ssh_target" "mkdir -p '$remote_source'"
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude 'services/web-app/node_modules' \
+            --exclude 'services/web-app/.react-router' \
+            --exclude 'services/web-app/.vite' \
+            --exclude 'packages/prisma/generated' \
+            --exclude '.worktrees' \
+            -e "ssh -i ~/.ssh/preview_forge_key" \
+            ./ "$ssh_target:$remote_source/"
 
-      - name: Terraform apply (infra-pr)
-        id: tf
-        env:
-          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
-          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
-          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+      - name: Deploy preview
+        id: deploy
         run: |
           set -euo pipefail
-          export TF_VAR_app_name="$PREVIEW_APP_NAME"
-          export TF_VAR_env="pr-${PR_NUMBER}"
-          export TF_VAR_database_schema="pr_${PR_NUMBER}"
-          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
-          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
-          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
-          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
-          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
-          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
-          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
-          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
-          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
-          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
-          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
-          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
-          terraform -chdir=infra-pr init \
-            -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
-            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true"
-          # Import IAM roles if they already exist (leftover from prior deploys)
-          for role_resource in aws_iam_role.apprunner_access aws_iam_role.apprunner_instance; do
-            role_name="${TF_VAR_app_name}-${TF_VAR_env}-${role_resource##*.}"
-            role_name="${role_name//_/-}"
-            if aws iam get-role --role-name "$role_name" >/dev/null 2>&1; then
-              echo "Importing existing IAM role: $role_name"
-              terraform -chdir=infra-pr import "$role_resource" "$role_name" 2>/dev/null || true
-            fi
-          done
-          # Import App Runner service if it already exists but is missing from state
-          SVC_NAME="${TF_VAR_app_name}-${TF_VAR_env}"
-          EXISTING_SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
-            --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
-            --output text 2>/dev/null || true)
-          if [[ -n "$EXISTING_SVC_ARN" && "$EXISTING_SVC_ARN" != "None" ]]; then
-            echo "Importing existing App Runner service: $SVC_NAME ($EXISTING_SVC_ARN)"
-            terraform -chdir=infra-pr import aws_apprunner_service.web "$EXISTING_SVC_ARN" 2>/dev/null || true
-          fi
-          for attempt in $(seq 1 8); do
-            set +e
-            terraform -chdir=infra-pr apply -auto-approve 2>&1 | tee /tmp/tf-apply.log
-            tf_rc=$?
-            set -e
-            if [[ "$tf_rc" -eq 0 ]]; then break; fi
-            if grep -q 'EntityAlreadyExists' /tmp/tf-apply.log; then
-              echo "IAM entity exists; attempting import and retry ($attempt/8)..."
-              # Extract role names from error and import
-              grep -oP 'Role with name \K[^ ]+' /tmp/tf-apply.log | while read -r rname; do
-                if echo "$rname" | grep -q "access"; then
-                  terraform -chdir=infra-pr import aws_iam_role.apprunner_access "$rname" 2>/dev/null || true
-                elif echo "$rname" | grep -q "instance"; then
-                  terraform -chdir=infra-pr import aws_iam_role.apprunner_instance "$rname" 2>/dev/null || true
-                fi
-              done
-              continue
-            fi
-            if grep -q 'already exists' /tmp/tf-apply.log || grep -q 'InvalidRequestException' /tmp/tf-apply.log; then
-              echo "App Runner service already exists; attempting import and retry ($attempt/8)..."
-              SVC_ARN=$(aws apprunner list-services --region "${AWS_REGION}" \
-                --query "ServiceSummaryList[?ServiceName=='${SVC_NAME}'].ServiceArn | [0]" \
-                --output text 2>/dev/null || true)
-              if [[ -n "$SVC_ARN" && "$SVC_ARN" != "None" ]]; then
-                terraform -chdir=infra-pr import aws_apprunner_service.web "$SVC_ARN" 2>/dev/null || true
-              fi
-              continue
-            fi
-            if ! grep -q 'OPERATION_IN_PROGRESS' /tmp/tf-apply.log; then exit "$tf_rc"; fi
-            if [[ "$attempt" -eq 8 ]]; then exit "$tf_rc"; fi
-            echo "App Runner busy; sleeping 45s before terraform retry ($attempt/8)..."
-            sleep 45
-          done
-          URL=$(terraform -chdir=infra-pr output -raw apprunner_service_url)
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
-
-      - name: Start App Runner deployment
-        run: |
-          set -euo pipefail
-          SVC_ARN=$(terraform -chdir=infra-pr output -raw apprunner_service_arn)
-          aws apprunner start-deployment --service-arn "$SVC_ARN" --region "${AWS_REGION}"
-
-      - name: Wait for preview URL
-        run: |
-          set -euo pipefail
-          SVC_ARN=$(terraform -chdir=infra-pr output -raw apprunner_service_arn)
-          echo "Waiting for App Runner status RUNNING (not OPERATION_IN_PROGRESS) after deployment..."
-          STATUS=""
-          for i in $(seq 1 90); do
-            STATUS=$(aws apprunner describe-service --service-arn "$SVC_ARN" --region "${AWS_REGION}" --query 'Service.Status' --output text)
-            if [[ "$STATUS" == "RUNNING" ]]; then
-              echo "App Runner status RUNNING after attempt $i."
-              break
-            fi
-            echo "Attempt $i/90 — App Runner status: $STATUS"
-            sleep 10
-          done
-          if [[ "${STATUS:-}" != "RUNNING" ]]; then
-            echo "App Runner did not reach RUNNING in time (last status: ${STATUS:-unknown})."
-            exit 1
-          fi
-          RAW="${{ steps.tf.outputs.url }}"
-          if [[ "$RAW" != http* ]]; then PREVIEW_BASE_URL="https://${RAW}"; else PREVIEW_BASE_URL="$RAW"; fi
-          echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
-          echo "Waiting for $PREVIEW_BASE_URL/api/healthcheck ..."
-          for i in $(seq 1 60); do
-            if curl -sf -o /dev/null --max-time 25 "$PREVIEW_BASE_URL/api/healthcheck"; then
-              echo "Preview responded after attempt $i."
-              exit 0
-            fi
-            echo "Attempt $i/60 — App Runner may still be warming up..."
-            sleep 10
-          done
-          echo "Preview URL did not return HTTP 200 in time."
-          exit 1
-
-      - name: Install Playwright (Chromium)
-        run: cd services/web-app && bunx playwright install --with-deps chromium
-
-      - name: PR preview smoke tests
-        run: cd services/web-app && bun run scripts/smoke-pr-preview.mjs
+          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
+          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh -i ~/.ssh/preview_forge_key "$ssh_target" \
+            "cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_FORGE_DOMAIN='$PREVIEW_FORGE_DOMAIN' PREVIEW_FORGE_ROOT='$PREVIEW_FORGE_ROOT' PREVIEW_FORGE_TLS='$PREVIEW_FORGE_TLS' PREVIEW_FORGE_RUNTIME='$PREVIEW_FORGE_RUNTIME' SOURCE_DIR='$remote_source' bash scripts/preview-forge/deploy.sh" \
+            | tee /tmp/preview-forge-deploy.log
+          preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
+          elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
+          test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
+          echo "url=$preview_url" >> "$GITHUB_OUTPUT"
+          echo "elapsed_ms=${elapsed_ms:-unknown}" >> "$GITHUB_OUTPUT"
 
       - name: Comment preview URL on PR
         uses: marocchino/sticky-pull-request-comment@v2
@@ -336,13 +91,13 @@ jobs:
           header: pr-preview-${{ github.event.pull_request.number }}
           append: false
           message: |
-            **PR preview** (App Runner)
+            **PR preview**
 
-            - **URL:** ${{ steps.tf.outputs.url }}
-            - **Postgres schema:** `pr_${{ github.event.pull_request.number }}`
-            - **Image:** `${{ vars.PREVIEW_ECR_REPOSITORY }}:pr-${{ env.PR_NUMBER }}`
-            - **Data:** Production dump + test overlay (e.g. `teacher@fake.test` / `teacher123`)
-            - **Smoke:** `services/web-app/scripts/smoke-pr-preview.mjs`
+            - **URL:** ${{ steps.deploy.outputs.url }}
+            - **Runtime:** Docker Compose on the Preview Forge host
+            - **Data:** isolated Postgres volume plus deterministic seed overlay
+            - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
+            - **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck
 
   preview-destroy:
     if: >-
@@ -354,68 +109,42 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      PREVIEW_TF_STATE_BUCKET: ${{ vars.PREVIEW_TF_STATE_BUCKET }}
-      PREVIEW_ECR_REPOSITORY: ${{ vars.PREVIEW_ECR_REPOSITORY }}
-      PREVIEW_DB_URL_SECRET_ARN: ${{ vars.PREVIEW_DB_URL_SECRET_ARN }}
-      PREVIEW_SESSION_SECRET_ARN: ${{ vars.PREVIEW_SESSION_SECRET_ARN }}
-      PREVIEW_HONEYPOT_SECRET_ARN: ${{ vars.PREVIEW_HONEYPOT_SECRET_ARN }}
-      PREVIEW_OPENAI_ORG_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_ORG_SECRET_ARN }}
-      PREVIEW_OPENAI_KEY_SECRET_ARN: ${{ vars.PREVIEW_OPENAI_KEY_SECRET_ARN }}
-      PREVIEW_ANTHROPIC_KEY_SECRET_ARN: ${{ vars.PREVIEW_ANTHROPIC_KEY_SECRET_ARN }}
-      PREVIEW_INTERNAL_TOKEN_SECRET_ARN: ${{ vars.PREVIEW_INTERNAL_TOKEN_SECRET_ARN }}
-      PREVIEW_RESEND_SECRET_ARN: ${{ vars.PREVIEW_RESEND_SECRET_ARN }}
-      PREVIEW_SENTRY_DSN_SECRET_ARN: ${{ vars.PREVIEW_SENTRY_DSN_SECRET_ARN }}
-      PREVIEW_AWS_S3_BUCKET: ${{ vars.PREVIEW_AWS_S3_BUCKET }}
-      PREVIEW_RESEND_FROM_EMAIL: ${{ vars.PREVIEW_RESEND_FROM_EMAIL }}
+      PREVIEW_FORGE_HOST: ${{ vars.PREVIEW_FORGE_HOST }}
+      PREVIEW_FORGE_DOMAIN: ${{ vars.PREVIEW_FORGE_DOMAIN }}
+      PREVIEW_FORGE_ROOT: ${{ vars.PREVIEW_FORGE_ROOT || '/srv/yawp-preview-forge' }}
+      PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
+      PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
+      PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
     steps:
-      - name: Normalize configuration
-        run: |
-          echo "AWS_REGION=${PREVIEW_AWS_REGION:-us-east-1}" >> "$GITHUB_ENV"
-          echo "PREVIEW_APP_NAME=${PREVIEW_APP_NAME_INPUT:-yawp-preview}" >> "$GITHUB_ENV"
+      - name: Check preview forge configuration
         env:
-          PREVIEW_AWS_REGION: ${{ vars.PREVIEW_AWS_REGION }}
-          PREVIEW_APP_NAME_INPUT: ${{ vars.PREVIEW_APP_NAME }}
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.8.5
-          terraform_wrapper: false
-
-      - name: Terraform destroy (infra-pr)
-        env:
-          TF_VAR_posthog_api_key: ${{ vars.PREVIEW_POSTHOG_API_KEY }}
-          TF_VAR_posthog_host: ${{ vars.PREVIEW_POSTHOG_HOST }}
-          TF_VAR_ai_model: ${{ vars.PREVIEW_AI_MODEL }}
+          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          export TF_VAR_app_name="$PREVIEW_APP_NAME"
-          export TF_VAR_env="pr-${PR_NUMBER}"
-          export TF_VAR_database_schema="pr_${PR_NUMBER}"
-          export TF_VAR_web_app_image_identifier="${PREVIEW_ECR_REPOSITORY}:pr-${PR_NUMBER}"
-          export TF_VAR_shared_database_url_secret_arn="$PREVIEW_DB_URL_SECRET_ARN"
-          export TF_VAR_shared_session_secret_arn="$PREVIEW_SESSION_SECRET_ARN"
-          export TF_VAR_shared_honeypot_secret_arn="$PREVIEW_HONEYPOT_SECRET_ARN"
-          export TF_VAR_shared_openai_org_secret_arn="$PREVIEW_OPENAI_ORG_SECRET_ARN"
-          export TF_VAR_shared_openai_key_secret_arn="$PREVIEW_OPENAI_KEY_SECRET_ARN"
-          export TF_VAR_shared_anthropic_key_secret_arn="$PREVIEW_ANTHROPIC_KEY_SECRET_ARN"
-          export TF_VAR_shared_internal_token_secret_arn="$PREVIEW_INTERNAL_TOKEN_SECRET_ARN"
-          export TF_VAR_shared_resend_api_key_secret_arn="$PREVIEW_RESEND_SECRET_ARN"
-          export TF_VAR_shared_sentry_dsn_secret_arn="$PREVIEW_SENTRY_DSN_SECRET_ARN"
-          export TF_VAR_aws_s3_bucket_for_videos="$PREVIEW_AWS_S3_BUCKET"
-          export TF_VAR_resend_from_email="$PREVIEW_RESEND_FROM_EMAIL"
-          terraform -chdir=infra-pr init \
-            -backend-config="bucket=${PREVIEW_TF_STATE_BUCKET}" \
-            -backend-config="key=yawp/pr/pr-${PR_NUMBER}/terraform.tfstate" \
-            -backend-config="region=${AWS_REGION}" \
-            -backend-config="encrypt=true"
-          terraform -chdir=infra-pr destroy -auto-approve
+          test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
+          test -n "$PREVIEW_FORGE_DOMAIN" || { echo "Missing repository variable PREVIEW_FORGE_DOMAIN"; exit 1; }
+          test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Prepare SSH
+        env:
+          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PREVIEW_FORGE_SSH_PRIVATE_KEY" > ~/.ssh/preview_forge_key
+          chmod 600 ~/.ssh/preview_forge_key
+          ssh-keyscan -H "$PREVIEW_FORGE_HOST" >> ~/.ssh/known_hosts
+
+      - name: Destroy preview
+        run: |
+          set -euo pipefail
+          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
+          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh -i ~/.ssh/preview_forge_key "$ssh_target" "\
+            if test -x '$remote_source/scripts/preview-forge/destroy.sh'; then \
+              cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_FORGE_DOMAIN='$PREVIEW_FORGE_DOMAIN' PREVIEW_FORGE_ROOT='$PREVIEW_FORGE_ROOT' PREVIEW_FORGE_TLS='$PREVIEW_FORGE_TLS' PREVIEW_FORGE_RUNTIME='$PREVIEW_FORGE_RUNTIME' bash scripts/preview-forge/destroy.sh; \
+            else \
+              docker compose -p 'yawp-pr-${PR_NUMBER}' -f '${PREVIEW_FORGE_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml' down -v --remove-orphans || true; \
+              rm -rf '${PREVIEW_FORGE_ROOT}/previews/pr-${PR_NUMBER}'; \
+            fi"
