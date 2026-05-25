@@ -87,6 +87,7 @@ model Assignment {
   apHistorySnapshot               Json?
   classAssignments                ClassAssignment[]
   documents                       Document[]
+  classSummary                    AssignmentClassSummary?
 
   @@index([assignmentTypeId])
 }
@@ -671,6 +672,21 @@ model SubmissionComment {
 
   @@index([submissionId, createdAt(sort: Desc)])
   @@index([membershipId])
+}
+
+model AssignmentClassSummary {
+  id                   String     @id @default(cuid())
+  createdAt            DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime   @default(now()) @db.Timestamptz(6)
+  assignmentId         String     @unique
+  assignment           Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  generatedAt          DateTime   @db.Timestamptz(6)
+  gradedAtGeneration   Int
+  totalAtGeneration    Int
+  summaryJson          Json
+  lastMilestone        Int?
+
+  @@index([assignmentId])
 }
 
 model LegacyGradeRedirect {

@@ -8,6 +8,7 @@ import {
 import { useState, useCallback, useMemo } from 'react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isAssignmentLevelFeedbackEnabledForSchool } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -24,6 +25,7 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
+import { ClassSummaryPanel } from './class-summary-panel';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -157,6 +159,66 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       : [];
 
+  const feedbackEnabled = await isAssignmentLevelFeedbackEnabledForSchool(
+    klass.school?.id
+  );
+
+  let classSummary: {
+    id: string;
+    generatedAt: string;
+    gradedAtGeneration: number;
+    totalAtGeneration: number;
+    summaryJson: {
+      version: number;
+      strengths: string[];
+      weaknesses: string[];
+      focusAreas: string[];
+    };
+    lastMilestone: number | null;
+  } | null = null;
+  let gradedCount = 0;
+  let totalStudents = 0;
+
+  if (feedbackEnabled) {
+    const [summary, totalDocs, gradedSubs] = await Promise.all([
+      prisma.assignmentClassSummary.findUnique({
+        where: { assignmentId },
+        select: {
+          id: true,
+          generatedAt: true,
+          gradedAtGeneration: true,
+          totalAtGeneration: true,
+          summaryJson: true,
+          lastMilestone: true,
+        },
+      }),
+      prisma.document.count({
+        where: { assignmentId, deletedAt: null },
+      }),
+      prisma.submission.count({
+        where: {
+          document: { assignmentId, deletedAt: null },
+          gradedAt: { not: null },
+        },
+      }),
+    ]);
+
+    classSummary = summary
+      ? {
+          ...summary,
+          generatedAt: summary.generatedAt.toISOString(),
+          summaryJson: summary.summaryJson as {
+            version: number;
+            strengths: string[];
+            weaknesses: string[];
+            focusAreas: string[];
+          },
+        }
+      : null;
+    totalStudents = totalDocs;
+    gradedCount = gradedSubs;
+  }
+
   return dataResponse({
     klass,
     assignment,
@@ -164,6 +226,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
+    feedbackEnabled,
+    classSummary,
+    gradedCount,
+    totalStudents,
   });
 }
 
@@ -181,6 +247,10 @@ export default function AssignmentSubmissionsRoute() {
     isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
+    feedbackEnabled,
+    classSummary,
+    gradedCount,
+    totalStudents,
   } = data;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -338,6 +408,16 @@ export default function AssignmentSubmissionsRoute() {
             <span>{assignment.assignmentType.title}</span>
           </div>
         </div>
+
+        {/* Class summary panel */}
+        {feedbackEnabled && (
+          <ClassSummaryPanel
+            assignmentId={assignment.id}
+            existingSummary={classSummary}
+            gradedCount={gradedCount}
+            totalStudents={totalStudents}
+          />
+        )}
 
         {/* Status tabs */}
         <div className="mb-4 flex gap-1 border-b">
