@@ -3,13 +3,15 @@ RUN apt-get update -y && apt-get install -y openssl
 ARG DATABASE_URL
 ENV DATABASE_URL=${DATABASE_URL}
 
-FROM base AS build
+FROM base AS deps
 WORKDIR /app
 COPY package.json bun.lockb ./
 COPY services/web-app ./services/web-app
 COPY packages/prisma ./packages/prisma
 RUN bun install --ignore-scripts
 RUN bun prisma generate
+
+FROM deps AS build
 RUN bun web-app:build
 
 FROM base AS production
