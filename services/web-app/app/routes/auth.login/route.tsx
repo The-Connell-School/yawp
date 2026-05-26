@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { FormInput } from '~/components/forms/form-input-2';
-import { Button, button } from '~/components/ui/button';
+import { Button } from '~/components/ui/button';
 import {
   getSessionExpirationDate,
   requireAnonymous,
@@ -103,18 +103,17 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-md">
-      <div className="mt-8 flex flex-col gap-3 text-center">
-        <img
-          src="/img/logo_for_light_mode.png"
-          alt="Logo"
-          className="mx-auto mb-8 h-auto w-48 rounded object-cover sm:w-52"
-        />
-        <h1>Welcome back!</h1>
-        <p>Please enter your details.</p>
-      </div>
-      <div className="mx-auto mt-10 w-full max-w-md px-8">
-        <Form {...form.getFormProps()} className="flex flex-col gap-3">
+    <main className="yawp-login-page" data-testid="login-page">
+      <section className="yawp-login-panel" data-testid="login-panel">
+        <div className="yawp-login-brand">
+          <img src="/img/logo_for_light_mode.png" alt="YAWP!" />
+        </div>
+        <div className="yawp-login-heading">
+          <p>Account access</p>
+          <h1>Welcome back</h1>
+          <span>Continue to your YAWP workspace.</span>
+        </div>
+        <Form {...form.getFormProps()} className="yawp-login-form">
           <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
           <FormInput
             scope={form.scope('email')}
@@ -128,40 +127,32 @@ export default function LoginPage() {
             label="Password"
             autoComplete="current-password"
           />
-          <div className="flex items-center justify-end">
-            <Link
-              to="/auth/inv/forgot-password"
-              className={button({ variant: 'link' })}
-            >
-              Forgot password?
-            </Link>
+          <div className="yawp-login-forgot">
+            <Link to="/auth/inv/forgot-password">Forgot password?</Link>
           </div>
-          <Button className="w-full" type="submit" isLoading={isLoading}>
+          <Button
+            className="yawp-login-submit"
+            type="submit"
+            isLoading={isLoading}
+          >
             Log in
           </Button>
         </Form>
-        <div className="my-8 rounded-xl border bg-muted p-6">
-          <p className="text-xl font-bold">New here?</p>
-          <p className="text-muted-foreground">
-            Create an account to get started.
-          </p>
+        <div className="yawp-login-secondary">
+          <p>New to YAWP?</p>
           <Link
-            className={button({
-              variant: 'outline',
-              size: 'lg',
-              className: 'mt-4 w-full shadow',
-            })}
+            className="yawp-login-create"
             to={
               redirectTo
                 ? `/auth/inv/signup?${encodeURIComponent(redirectTo)}`
                 : '/auth/inv/signup'
             }
           >
-            Create an account <ArrowRightIcon className="ml-2 h-4 w-4" />
+            Create account <ArrowRightIcon aria-hidden="true" />
           </Link>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 

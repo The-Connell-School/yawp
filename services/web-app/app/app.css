@@ -384,6 +384,192 @@ code {
   letter-spacing: 0;
 }
 
+.yawp-login-page {
+  align-items: center;
+  background-color: #f8f1e6;
+  color: #241f19;
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: 32px 18px;
+}
+
+.yawp-login-panel {
+  background: #fffdf8;
+  border: 1px solid rgba(36, 31, 25, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 22px 58px rgba(48, 37, 25, 0.12);
+  max-width: 386px;
+  padding: 30px;
+  width: 100%;
+}
+
+.yawp-login-brand {
+  display: grid;
+  place-items: center;
+}
+
+.yawp-login-brand img {
+  border-radius: 999px;
+  box-shadow: 0 1px 0 rgba(36, 31, 25, 0.08);
+  height: 68px;
+  object-fit: cover;
+  width: 68px;
+}
+
+.yawp-login-heading {
+  margin-top: 22px;
+  text-align: center;
+}
+
+.yawp-login-heading p {
+  color: #a9563d;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.yawp-login-heading h1 {
+  color: #241f19;
+  font-family: 'Cormorant Garamond', adobe-garamond-pro, Garamond, Georgia,
+    serif;
+  font-size: 38px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 8px 0 0;
+}
+
+.yawp-login-heading span {
+  color: #5f5750;
+  display: block;
+  font-size: 15px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.yawp-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 26px;
+}
+
+.yawp-login-form label {
+  color: #3f3933;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.yawp-login-form input:not([type='hidden']) {
+  background-color: #ffffff;
+  border-color: #d6ccbf;
+  border-radius: 8px;
+  color: #241f19;
+  font-size: 16px;
+  height: 46px;
+}
+
+.yawp-login-form input:not([type='hidden']):focus-visible {
+  outline: 2px solid #a9563d;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 1px #a9563d;
+}
+
+.yawp-login-forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
+}
+
+.yawp-login-forgot a {
+  color: #a9563d;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.yawp-login-forgot a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.yawp-login-forgot a:focus-visible,
+.yawp-login-create:focus-visible {
+  outline: 2px solid #a9563d;
+  outline-offset: 3px;
+}
+
+.yawp-login-submit {
+  background-color: #a9563d;
+  border-radius: 8px;
+  color: #ffffff;
+  height: 44px;
+  margin-top: 2px;
+}
+
+.yawp-login-submit:hover {
+  background-color: #994b35;
+}
+
+.yawp-login-submit:focus-visible {
+  outline: 2px solid #a9563d;
+  outline-offset: 2px;
+}
+
+.yawp-login-secondary {
+  border-top: 1px solid rgba(36, 31, 25, 0.1);
+  margin-top: 22px;
+  padding-top: 18px;
+}
+
+.yawp-login-secondary p {
+  color: #5f5750;
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+  text-align: center;
+}
+
+.yawp-login-create {
+  align-items: center;
+  background-color: #f5eee6;
+  border-radius: 8px;
+  color: #66473b;
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  gap: 8px;
+  height: 40px;
+  justify-content: center;
+  margin-top: 10px;
+  text-decoration: none;
+  width: 100%;
+}
+
+.yawp-login-create:hover {
+  background-color: #efe3d6;
+}
+
+.yawp-login-create svg {
+  height: 16px;
+  width: 16px;
+}
+
+@media (max-width: 480px) {
+  .yawp-login-page {
+    align-items: stretch;
+    padding: 18px;
+  }
+
+  .yawp-login-panel {
+    align-self: center;
+    padding: 26px 20px;
+  }
+}
+
 .yawp-site-header {
   align-items: center;
   background: #ffffff;

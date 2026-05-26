@@ -66,13 +66,23 @@ Append this test inside the existing `Authentication - real sign in` describe bl
     const submitBackground = await submit.evaluate(
       (element) => window.getComputedStyle(element).backgroundColor
     );
+    const submitColor = await submit.evaluate(
+      (element) => window.getComputedStyle(element).color
+    );
     const secondaryBackground = await createAccount.evaluate(
       (element) => window.getComputedStyle(element).backgroundColor
     );
-    expect(submitBackground).toBe('rgb(191, 98, 68)');
+    expect(contrastRatio(submitColor, submitBackground)).toBeGreaterThanOrEqual(
+      4.5
+    );
     expect(secondaryBackground).not.toBe(submitBackground);
   });
 ```
+
+Also add the small `contrastRatio` helper used by the assertion and a mobile
+layout test that verifies the panel, fields, forgot-password link, submit
+button, and create-account link are visible and vertically stacked at a
+390px viewport.
 
 - [ ] **Step 2: Run the new test and verify RED**
 
@@ -205,12 +215,11 @@ Add these styles near the existing public/login page CSS in `services/web-app/ap
 
 .yawp-login-heading p {
   color: #a9563d;
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
   line-height: 1.5;
   margin: 0;
-  text-transform: uppercase;
 }
 
 .yawp-login-heading h1 {
@@ -255,7 +264,9 @@ Add these styles near the existing public/login page CSS in `services/web-app/ap
 }
 
 .yawp-login-form input:not([type='hidden']):focus-visible {
-  box-shadow: inset 0 0 0 1px #bf6244;
+  outline: 2px solid #a9563d;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 1px #a9563d;
 }
 
 .yawp-login-forgot {
@@ -276,8 +287,14 @@ Add these styles near the existing public/login page CSS in `services/web-app/ap
   text-underline-offset: 4px;
 }
 
+.yawp-login-forgot a:focus-visible,
+.yawp-login-create:focus-visible {
+  outline: 2px solid #a9563d;
+  outline-offset: 3px;
+}
+
 .yawp-login-submit {
-  background-color: #bf6244;
+  background-color: #a9563d;
   border-radius: 8px;
   color: #ffffff;
   height: 44px;
@@ -285,7 +302,12 @@ Add these styles near the existing public/login page CSS in `services/web-app/ap
 }
 
 .yawp-login-submit:hover {
-  background-color: #aa563c;
+  background-color: #994b35;
+}
+
+.yawp-login-submit:focus-visible {
+  outline: 2px solid #a9563d;
+  outline-offset: 2px;
 }
 
 .yawp-login-secondary {
@@ -398,4 +420,3 @@ Then inspect `/auth/login` at desktop and mobile widths. The page should show a 
 - Spec coverage: the plan covers the approved C+ direction, auth behavior preservation, page-scoped styles, button hierarchy, input styling, typography, and e2e-first verification.
 - Placeholder scan: no TBD/TODO placeholders.
 - Type consistency: the new test IDs match the planned JSX; the CSS class names match the planned markup.
-

@@ -63,8 +63,9 @@ Add an e2e visual contract test before implementation. The test should verify:
 - The shell uses a warm, non-default background treatment.
 - The heading uses a serif display face.
 - The login form still exposes labeled email and password fields.
-- `Log in` is the only filled primary action and uses the conservative square-ish radius.
+- `Log in` is the only filled primary action, uses the conservative square-ish radius, and meets AA contrast with white text.
 - `Create account` remains present as a lower-contrast secondary action.
+- Mobile layout keeps the panel and form actions visible, stacked, and non-overlapping.
 - The existing real sign-in e2e still passes.
 
 ## Non-Goals
@@ -72,4 +73,3 @@ Add an e2e visual contract test before implementation. The test should verify:
 - No redesign of `/`, `/info`, signup, forgot-password, onboarding, or authenticated app screens.
 - No feature flag is required because this is visual-only and keeps all auth behavior backward compatible.
 - No global design-token rollout in this task. Promote successful login-specific tokens globally later after review.
-
