@@ -58,6 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'create') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
+    const essayType = formData.get('essayType')?.toString() || null;
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
@@ -68,6 +69,7 @@ export async function action({ request }: ActionFunctionArgs) {
       data: {
         title,
         description: description || null,
+        essayType,
         position: count,
       },
     });
@@ -114,6 +116,19 @@ export default function AssignmentTypesRoute() {
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" name="description" rows={3} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="essayType">Essay Type (optional)</Label>
+                  <select
+                    id="essayType"
+                    name="essayType"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    defaultValue=""
+                  >
+                    <option value="">Standard</option>
+                    <option value="leq">LEQ (Long Essay Question)</option>
+                    <option value="dbq">DBQ (Document-Based Question)</option>
+                  </select>
                 </div>
                 <Button
                   type="submit"

@@ -35,6 +35,7 @@ model AssignmentType {
   description             String?
   position                Int
   archivedAt              DateTime?                    @db.Timestamptz(6)
+  essayType               String?
   ownerOrgId              String?
   ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerTeacherId          String?
@@ -51,18 +52,19 @@ model AssignmentType {
 }
 
 model Assignment {
-  id               String         @id @default(cuid())
-  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime       @default(now()) @db.Timestamptz(6)
-  classId          String
-  class            Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
-  assignmentTypeId String
-  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  title            String?
-  prompt           String
-  tutorContext     String?
-  dueDate          DateTime?      @db.Timestamptz(6)
-  documents        Document[]
+  id                    String         @id @default(cuid())
+  createdAt             DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime       @default(now()) @db.Timestamptz(6)
+  classId               String
+  class                 Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  assignmentTypeId      String
+  assignmentType        AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title                 String?
+  prompt                String
+  tutorContext          String?
+  dueDate               DateTime?      @db.Timestamptz(6)
+  timedDurationMinutes  Int?
+  documents             Document[]
 
   @@index([classId, createdAt(sort: Desc)])
   @@index([assignmentTypeId])
@@ -172,6 +174,7 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  timedSession             TimedSession?
 
   @@index([assignmentId])
   @@index([assignmentTypeId])
@@ -235,6 +238,21 @@ model DocumentRevision {
   trigger    String
 
   @@index([documentId, createdAt(sort: Desc)])
+}
+
+model TimedSession {
+  id              String    @id @default(cuid())
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @db.Timestamptz(6)
+  documentId      String    @unique
+  document        Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  phase           String    @default("writing")
+  startedAt       DateTime  @default(now()) @db.Timestamptz(6)
+  durationMinutes Int       @default(40)
+  submittedAt     DateTime? @db.Timestamptz(6)
+  autoSubmitted   Boolean   @default(false)
+
+  @@index([phase])
 }
 
 model DocumentWriteJournal {

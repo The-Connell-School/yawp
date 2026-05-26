@@ -70,6 +70,7 @@ import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
 import { useCommentsState } from './hooks/use-comments-state';
 import { useTutorState } from './hooks/use-tutor-state';
 import { useDocumentSubmit } from './hooks/use-document-submit';
+import { TimedSessionBanner } from './_components/timed-session-banner';
 import {
   displaySubmissionTitle,
   partitionSubmissionsByArchive,
@@ -186,6 +187,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          essayType: true,
+        },
+      },
+      timedSession: {
+        select: {
+          id: true,
+          phase: true,
+          startedAt: true,
+          durationMinutes: true,
+          submittedAt: true,
+          autoSubmitted: true,
         },
       },
       assignment: {
@@ -195,6 +207,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          timedDurationMinutes: true,
           class: {
             select: {
               id: true,
@@ -282,6 +295,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const submissions = doc.submissions;
 
+  // Create a TimedSession if this is a timed assignment and one doesn't exist yet
+  let timedSession = doc.timedSession;
+  if (!timedSession && doc.assignment?.timedDurationMinutes) {
+    timedSession = await prisma.timedSession.create({
+      data: {
+        documentId: doc.id,
+        phase: 'writing',
+        durationMinutes: doc.assignment.timedDurationMinutes,
+      },
+      select: {
+        id: true,
+        phase: true,
+        startedAt: true,
+        durationMinutes: true,
+        submittedAt: true,
+        autoSubmitted: true,
+      },
+    });
+  }
+
   if (shouldSaveVersion) {
     const latestRevision = doc.revisions[0];
     if (doc.html && doc.text && latestRevision?.html !== doc.html) {
@@ -355,6 +388,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...doc,
       assignmentModuleSessions: orderedModuleSessions,
       comments: sortedComments,
+      timedSession,
     },
     submissions,
     currentCms,
@@ -846,6 +880,13 @@ export default function Route() {
               </p>
             </div>
           </div>
+        ) : null}
+        {data.doc.timedSession ? (
+          <TimedSessionBanner
+            timedSession={data.doc.timedSession}
+            documentId={data.doc.id}
+            editorBridgeRef={editorBridgeRef}
+          />
         ) : null}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">

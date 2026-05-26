@@ -231,11 +231,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
     const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
 
+    const timedDurationRaw = formData.get('timedDurationMinutes')?.toString() ?? '';
+
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
     const tutorContext = tutorContextRaw.trim() || null;
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
+    const timedDurationMinutes = timedDurationRaw.trim()
+      ? parseInt(timedDurationRaw.trim(), 10) || null
+      : null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -304,6 +309,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           tutorContext,
           dueDate,
+          timedDurationMinutes,
         },
       });
 
@@ -321,6 +327,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         prompt,
         tutorContext,
         dueDate,
+        timedDurationMinutes,
       },
     });
 
@@ -386,7 +393,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         some: { organizationId: profile.organization.id },
       },
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, essayType: true },
     orderBy: { position: 'asc' },
   });
 

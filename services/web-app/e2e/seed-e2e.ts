@@ -50,6 +50,7 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  leqAssignmentTypeId: string;
   teacherTrainingId: string;
   freshDocumentId: string;
   editedDocumentId: string;
@@ -207,6 +208,42 @@ export async function seedE2E(): Promise<E2EContext> {
                 {
                   title: 'Write',
                   prompt: 'Write freely for ten minutes.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const leqAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'AP History Essay – LEQ',
+      description:
+        'Long Essay Question for AP History. Students draft a thesis-driven argument in response to a period-specific prompt.',
+      position: 3,
+      essayType: 'leq',
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'LEQ Drafting',
+            position: 1,
+            description:
+              'Draft your LEQ response. Build a thesis, contextualize, and argue with evidence.',
+            instructions: {
+              create: [
+                {
+                  title: 'Draft your essay',
+                  prompt:
+                    "Write your Long Essay Question response. Start with a defensible thesis that includes a line of reasoning, then build your argument with specific historical evidence. You have the full writing period — there's no separate reading phase for an LEQ.",
                   position: 1,
                   showChatButton: true,
                 },
@@ -496,6 +533,7 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    leqAssignmentTypeId: leqAssignmentType.id,
     teacherTrainingId: teacherTraining.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,

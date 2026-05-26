@@ -32,7 +32,7 @@ type AssignmentRecord = {
 
 type AssignmentSheetProps = {
   classId: string;
-  allowedAssignmentTypes: { id: string; title: string }[];
+  allowedAssignmentTypes: { id: string; title: string; essayType?: string | null }[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentRecord | null;
@@ -52,6 +52,7 @@ export function AssignmentSheet({
   const [prompt, setPrompt] = useState('');
   const [tutorContext, setTutorContext] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [timedDurationMinutes, setTimedDurationMinutes] = useState('');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
 
@@ -97,6 +98,7 @@ export function AssignmentSheet({
     setPrompt(editingAssignment?.prompt ?? '');
     setTutorContext(editingAssignment?.tutorContext ?? '');
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
+    setTimedDurationMinutes('');
     setPromptMode('manual');
     setPdfFile(null);
   }, [assignmentTypeOptions, editingAssignment, open]);
@@ -270,6 +272,32 @@ export function AssignmentSheet({
               disabled={isSaving}
             />
           </div>
+
+          {assignmentTypeOptions.find((t) => t.id === assignmentTypeId)?.essayType ? (
+            <div className="space-y-2">
+              <Label htmlFor="assignment-timed-duration">
+                Timed Mode (minutes, optional)
+              </Label>
+              <Input
+                id="assignment-timed-duration"
+                type="number"
+                name="timedDurationMinutes"
+                value={timedDurationMinutes}
+                onChange={(event) => setTimedDurationMinutes(event.target.value)}
+                placeholder={
+                  assignmentTypeOptions.find((t) => t.id === assignmentTypeId)?.essayType === 'leq'
+                    ? '40'
+                    : '60'
+                }
+                min={1}
+                max={180}
+                disabled={isSaving}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank for untimed practice. Students will see a countdown timer.
+              </p>
+            </div>
+          ) : null}
 
           {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
 
