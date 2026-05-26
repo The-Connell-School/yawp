@@ -9,7 +9,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
+import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import {
   Accordion,
   AccordionContent,
@@ -99,9 +99,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/enter-code');
   }
 
-  const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
-    profile.organization.id
-  );
+  // Determine which class IDs this student belongs to (for assignment fetching).
+  let studentClassIds: string[] = [];
+  let studentTeacherProfileIds: string[] = [];
+  if (profile.studentProfile) {
+    const studentClasses = await prisma.class.findMany({
+      where: {
+        students: { some: { id: profile.studentProfile.id } },
+      },
+      select: { id: true, teachers: { select: { id: true } } },
+    });
+    studentClassIds = studentClasses.map((klass) => klass.id);
+    studentTeacherProfileIds = Array.from(
+      new Set(
+        studentClasses.flatMap((klass) =>
+          klass.teachers.map((teacher) => teacher.id)
+        )
+      )
+    );
+  }
+
+  const assignmentsEnabled = await isAssignmentsEnabledForContext({
+    organizationId: profile.organization.id,
+    teacherProfileId: profile.teacherProfile?.id,
+    teacherProfileIds: studentTeacherProfileIds,
+    classIds: studentClassIds,
+  });
 
   const url = new URL(request.url);
   if (
@@ -110,18 +133,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     url.searchParams.get('tab') === 'assignments'
   ) {
     return redirect('/app');
-  }
-
-  // Determine which class IDs this student belongs to (for assignment fetching).
-  let studentClassIds: string[] = [];
-  if (profile.studentProfile) {
-    const studentClasses = await prisma.class.findMany({
-      where: {
-        students: { some: { id: profile.studentProfile.id } },
-      },
-      select: { id: true },
-    });
-    studentClassIds = studentClasses.map((klass) => klass.id);
   }
 
   let teacherTrainingWhere:

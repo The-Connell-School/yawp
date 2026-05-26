@@ -2,8 +2,8 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
+import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   canManageGrades,
@@ -49,7 +49,9 @@ export async function action({ request }: ActionFunctionArgs) {
             select: {
               class: {
                 select: {
+                  id: true,
                   schoolId: true,
+                  teachers: { select: { id: true } },
                 },
               },
             },
@@ -58,7 +60,9 @@ export async function action({ request }: ActionFunctionArgs) {
             select: {
               classes: {
                 select: {
+                  id: true,
                   schoolId: true,
+                  teachers: { select: { id: true } },
                 },
               },
             },
@@ -75,9 +79,16 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    submissions.flatMap((s) => getDocumentSubmissionSchoolIds(s.document))
+  const submissionScopes = submissions.map((s) =>
+    getDocumentSubmissionScope(s.document)
   );
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
+    schoolIds: submissionScopes.flatMap((scope) => scope.schoolIds),
+    teacherProfileIds: submissionScopes.flatMap(
+      (scope) => scope.teacherProfileIds
+    ),
+    classIds: submissionScopes.flatMap((scope) => scope.classIds),
+  });
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
       description: 'Grade release is currently disabled for one or more schools.',

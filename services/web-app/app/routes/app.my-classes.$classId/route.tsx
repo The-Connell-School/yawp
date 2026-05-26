@@ -16,8 +16,8 @@ import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
-  isDocumentSubmissionEnabledForSchool,
-  isAssignmentsEnabledForOrganization,
+  isAssignmentsEnabledForContext,
+  isDocumentSubmissionEnabledForScope,
   isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
@@ -168,7 +168,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         id: classId,
         teachers: { some: { id: profile.teacherProfile.id } },
       },
-      select: { school: { select: { organizationId: true } } },
+      select: { id: true, school: { select: { organizationId: true } } },
     });
     if (!classWithOrg) {
       return dataResponse(
@@ -176,9 +176,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 404 }
       );
     }
-    const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
-      classWithOrg.school.organizationId
-    );
+    const assignmentsEnabled = await isAssignmentsEnabledForContext({
+      organizationId: classWithOrg.school.organizationId,
+      teacherProfileId: profile.teacherProfile.id,
+      classIds: [classWithOrg.id],
+    });
     if (!assignmentsEnabled) {
       return dataResponse(
         {
@@ -458,8 +460,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     releasedGradesEnabled,
   ] = await Promise.all([
-    isDocumentSubmissionEnabledForSchool(klass.school?.id),
-    isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+    isDocumentSubmissionEnabledForScope({
+      schoolIds: [klass.school?.id],
+      teacherProfileIds: [profile.teacherProfile.id],
+      classIds: [klass.id],
+    }),
+    isAssignmentsEnabledForContext({
+      organizationId: klass.school?.organizationId,
+      teacherProfileId: profile.teacherProfile.id,
+      classIds: [klass.id],
+    }),
     isReleasedGradesOrganizationEnabledForOrganization(
       klass.school?.organizationId
     ),

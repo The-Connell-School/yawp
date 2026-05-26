@@ -18,6 +18,21 @@ export const FEATURE_FLAGS = {
     'released_grades_organization_enabled_org_ids',
 } as const;
 
+export const PILOT_FEATURE_KEYS = {
+  ASSIGNMENTS: 'assignments',
+  DOCUMENT_SUBMISSION_GRADING: 'document_submission_grading',
+} as const;
+
+type PilotFeatureKey =
+  (typeof PILOT_FEATURE_KEYS)[keyof typeof PILOT_FEATURE_KEYS];
+
+type FeatureAccessTargetKind = 'teacher' | 'class';
+
+type FeatureAccessTargetInput = {
+  kind: FeatureAccessTargetKind;
+  ids: Array<string | null | undefined>;
+};
+
 export const TARGETED_FEATURE_FLAGS = {
   documentSubmission: {
     label: 'Document submission',
@@ -195,10 +210,90 @@ export async function isDocumentSubmissionEnabledForSchools(
   return distinctSchoolIds.every((schoolId) => enabledSchoolIds.has(schoolId));
 }
 
+function distinctIds(ids: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
+}
+
+async function isPilotFeatureEnabledForTargets(
+  featureKey: PilotFeatureKey,
+  targets: FeatureAccessTargetInput[]
+): Promise<boolean> {
+  const targetOr = targets
+    .map((target) => ({
+      targetKind: target.kind,
+      ids: distinctIds(target.ids),
+    }))
+    .filter((target) => target.ids.length > 0)
+    .map((target) => ({
+      targetKind: target.targetKind,
+      targetId: { in: target.ids },
+    }));
+
+  if (targetOr.length === 0) return false;
+
+  const match = await prisma.featureAccessTarget.findFirst({
+    where: {
+      featureKey,
+      enabled: true,
+      OR: targetOr,
+      AND: [
+        {
+          OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+        },
+      ],
+    },
+    select: { id: true },
+  });
+
+  return Boolean(match);
+}
+
 export async function isAssignmentsEnabledForOrganization(
   organizationId: string | null | undefined
 ): Promise<boolean> {
   return isTargetedFeatureFlagEnabled('assignments', organizationId);
+}
+
+export async function isAssignmentsEnabledForContext({
+  organizationId,
+  teacherProfileId,
+  teacherProfileIds,
+  classIds,
+}: {
+  organizationId: string | null | undefined;
+  teacherProfileId?: string | null;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  const organizationEnabled =
+    await isAssignmentsEnabledForOrganization(organizationId);
+  if (organizationEnabled) return true;
+
+  return isPilotFeatureEnabledForTargets(PILOT_FEATURE_KEYS.ASSIGNMENTS, [
+    { kind: 'teacher', ids: [teacherProfileId, ...(teacherProfileIds ?? [])] },
+    { kind: 'class', ids: classIds ?? [] },
+  ]);
+}
+
+export async function isDocumentSubmissionEnabledForScope({
+  schoolIds,
+  teacherProfileIds,
+  classIds,
+}: {
+  schoolIds: Array<string | null | undefined>;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  const schoolsEnabled = await isDocumentSubmissionEnabledForSchools(schoolIds);
+  if (schoolsEnabled) return true;
+
+  return isPilotFeatureEnabledForTargets(
+    PILOT_FEATURE_KEYS.DOCUMENT_SUBMISSION_GRADING,
+    [
+      { kind: 'teacher', ids: teacherProfileIds ?? [] },
+      { kind: 'class', ids: classIds ?? [] },
+    ]
+  );
 }
 
 export async function isReleasedGradesOrganizationEnabledForOrganization(

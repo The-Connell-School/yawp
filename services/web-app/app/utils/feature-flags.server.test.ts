@@ -5,13 +5,18 @@ const prisma = {
     findUnique: mock(),
     upsert: mock(),
   },
+  featureAccessTarget: {
+    findFirst: mock(),
+  },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
   getTargetedFeatureFlagIds,
+  isAssignmentsEnabledForContext,
   isAssignmentsEnabledForOrganization,
+  isDocumentSubmissionEnabledForScope,
   isReleasedGradesOrganizationEnabledForOrganization,
   isTargetedFeatureFlagEnabled,
   setFeatureFlagBoolean,
@@ -22,6 +27,7 @@ describe('isAssignmentsEnabledForOrganization', () => {
   beforeEach(() => {
     prisma.setting.findUnique.mockReset();
     prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
   });
 
   test('returns false when organizationId is null', async () => {
@@ -73,6 +79,160 @@ describe('isAssignmentsEnabledForOrganization', () => {
     });
     const result = await isAssignmentsEnabledForOrganization('org-1');
     expect(result).toBe(true);
+  });
+});
+
+describe('isAssignmentsEnabledForContext', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
+  });
+
+  test('keeps existing org allowlist behavior', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'org-1',
+      valueType: 'string',
+    });
+
+    const result = await isAssignmentsEnabledForContext({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('allows a teacher pilot when the org is not broadly enabled', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'org-2',
+      valueType: 'string',
+    });
+    prisma.featureAccessTarget.findFirst.mockResolvedValue({ id: 'fat-1' });
+
+    const result = await isAssignmentsEnabledForContext({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledWith({
+      where: {
+        featureKey: 'assignments',
+        enabled: true,
+        OR: [
+          { targetKind: 'teacher', targetId: { in: ['teacher-1'] } },
+          { targetKind: 'class', targetId: { in: ['class-1'] } },
+        ],
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  test('returns false when no broad flag or pilot target matches', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    prisma.featureAccessTarget.findFirst.mockResolvedValue(null);
+
+    const result = await isAssignmentsEnabledForContext({
+      organizationId: 'org-1',
+      teacherProfileId: null,
+      classIds: [],
+    });
+
+    expect(result).toBe(false);
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('isDocumentSubmissionEnabledForScope', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
+  });
+
+  test('keeps global document submission behavior', async () => {
+    prisma.setting.findUnique.mockImplementation(async ({ where }) => {
+      if (where.name === 'document_submission_enabled') {
+        return { value: 'true', valueType: 'boolean' };
+      }
+      return null;
+    });
+
+    const result = await isDocumentSubmissionEnabledForScope({
+      schoolIds: ['school-1'],
+      teacherProfileIds: ['teacher-1'],
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('keeps existing school allowlist behavior', async () => {
+    prisma.setting.findUnique.mockImplementation(async ({ where }) => {
+      if (where.name === 'document_submission_enabled') {
+        return { value: 'false', valueType: 'boolean' };
+      }
+      if (where.name === 'document_submission_enabled_school_ids') {
+        return { value: 'school-1,school-2', valueType: 'string' };
+      }
+      return null;
+    });
+
+    const result = await isDocumentSubmissionEnabledForScope({
+      schoolIds: ['school-1'],
+      teacherProfileIds: ['teacher-1'],
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('allows a teacher or class pilot when the school is not broadly enabled', async () => {
+    prisma.setting.findUnique.mockImplementation(async ({ where }) => {
+      if (where.name === 'document_submission_enabled') {
+        return { value: 'false', valueType: 'boolean' };
+      }
+      if (where.name === 'document_submission_enabled_school_ids') {
+        return { value: 'school-2', valueType: 'string' };
+      }
+      return null;
+    });
+    prisma.featureAccessTarget.findFirst.mockResolvedValue({ id: 'fat-1' });
+
+    const result = await isDocumentSubmissionEnabledForScope({
+      schoolIds: ['school-1'],
+      teacherProfileIds: ['teacher-1'],
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledWith({
+      where: {
+        featureKey: 'document_submission_grading',
+        enabled: true,
+        OR: [
+          { targetKind: 'teacher', targetId: { in: ['teacher-1'] } },
+          { targetKind: 'class', targetId: { in: ['class-1'] } },
+        ],
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+        ],
+      },
+      select: { id: true },
+    });
   });
 });
 

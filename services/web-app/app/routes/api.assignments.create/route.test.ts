@@ -14,7 +14,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireProfile = mock();
-const isAssignmentsEnabledForOrganization = mock();
+const isAssignmentsEnabledForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -22,7 +22,7 @@ mock.module('~/utils/auth.server', () => ({
   requireProfile,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isAssignmentsEnabledForOrganization,
+  isAssignmentsEnabledForContext,
 }));
 
 const { action } = await import('./route');
@@ -57,7 +57,7 @@ describe('api.assignments.create', () => {
     prisma.assignment.createMany.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
-    isAssignmentsEnabledForOrganization.mockReset();
+    isAssignmentsEnabledForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -70,7 +70,7 @@ describe('api.assignments.create', () => {
     ]);
     prisma.assignmentType.findFirst.mockResolvedValue({ id: 'at-1' });
     prisma.assignment.createMany.mockResolvedValue({ count: 2 });
-    isAssignmentsEnabledForOrganization.mockResolvedValue(true);
+    isAssignmentsEnabledForContext.mockResolvedValue(true);
   });
 
   test('creates one assignment per selected teacher-owned class', async () => {

@@ -19,8 +19,8 @@ const prisma = {
 const requireUserId = mock();
 const requireProfile = mock();
 const getSubmittedPapersFilter = mock();
-const isDocumentSubmissionEnabledForSchool = mock();
-const isAssignmentsEnabledForOrganization = mock();
+const isDocumentSubmissionEnabledForScope = mock();
+const isAssignmentsEnabledForContext = mock();
 const isReleasedGradesOrganizationEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -37,8 +37,8 @@ mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForSchool,
-  isAssignmentsEnabledForOrganization,
+  isDocumentSubmissionEnabledForScope,
+  isAssignmentsEnabledForContext,
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
@@ -60,8 +60,8 @@ describe('class detail loader document visibility', () => {
     requireUserId.mockReset();
     requireProfile.mockReset();
     getSubmittedPapersFilter.mockReset();
-    isDocumentSubmissionEnabledForSchool.mockReset();
-    isAssignmentsEnabledForOrganization.mockReset();
+    isDocumentSubmissionEnabledForScope.mockReset();
+    isAssignmentsEnabledForContext.mockReset();
     isReleasedGradesOrganizationEnabledForOrganization.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
@@ -92,8 +92,8 @@ describe('class detail loader document visibility', () => {
     prisma.assignment.create.mockResolvedValue({});
     prisma.assignment.update.mockResolvedValue({});
     getSubmittedPapersFilter.mockResolvedValue('all');
-    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
-    isAssignmentsEnabledForOrganization.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
+    isAssignmentsEnabledForContext.mockResolvedValue(true);
     isReleasedGradesOrganizationEnabledForOrganization.mockResolvedValue(false);
   });
 

@@ -3,7 +3,7 @@ import { Link, useLoaderData, useSearchParams, useNavigate } from 'react-router'
 import { useState, useCallback, useMemo } from 'react';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -72,9 +72,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const rawStatus = url.searchParams.get('status');
   const status: StatusFilter = isValidStatus(rawStatus) ? rawStatus : 'submitted';
 
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    klass.school?.id
-  );
+  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
+    schoolIds: [klass.school?.id],
+    teacherProfileIds: [profile.teacherProfile.id],
+    classIds: [klass.id],
+  });
 
   const submissions =
     isDocumentSubmissionEnabled && status !== 'in-progress'

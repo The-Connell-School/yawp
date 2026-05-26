@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
+import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -109,7 +109,13 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const assignmentFlags = await Promise.all(
     organizationIds.map((organizationId) =>
-      isAssignmentsEnabledForOrganization(organizationId)
+      isAssignmentsEnabledForContext({
+        organizationId,
+        teacherProfileId: profile.teacherProfile!.id,
+        classIds: classes
+          .filter((klass) => klass.school.organizationId === organizationId)
+          .map((klass) => klass.id),
+      })
     )
   );
   if (assignmentFlags.some((enabled) => !enabled)) {
