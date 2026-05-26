@@ -62,6 +62,12 @@ describe('production deployment contract', () => {
     expect(startScript).not.toContain('bun run web-app:start');
   });
 
+  test('React Router dev pre-optimizes route dependencies before first login', () => {
+    const reactRouterConfig = readRepoFile('services/web-app/react-router.config.ts');
+
+    expect(reactRouterConfig).toContain('unstable_optimizeDeps: true');
+  });
+
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
