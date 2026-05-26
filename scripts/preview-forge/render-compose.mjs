@@ -87,7 +87,7 @@ ${commonEnvironment}
       ? `  web:
     image: oven/bun:1.3.1
     working_dir: /app
-    command: bash -lc "rm -rf services/web-app/.react-router services/web-app/.vite && bun install --ignore-scripts && bun prisma generate && bun run --cwd services/web-app dev -- --host 0.0.0.0 --port 8080"
+    command: bash -lc "rm -rf services/web-app/.react-router services/web-app/.vite && bun install --ignore-scripts && bun prisma generate && cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}
     environment:
 ${commonEnvironment}
