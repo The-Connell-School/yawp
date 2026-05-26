@@ -244,7 +244,7 @@ test.describe.serial('Teacher/class pilot feature rollout', () => {
         userId: nonPilot.studentUserId,
       });
       await page.goto('/app?tab=assignments');
-      await expect(page).toHaveURL(/\/app$/);
+      await expect(page).toHaveURL(/\/app\/?$/);
       await expect
         .soft(page.getByRole('tab', { name: /assignments/i }))
         .toHaveCount(0);
