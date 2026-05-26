@@ -151,7 +151,6 @@ describe('api.assignments.create', () => {
           assignmentTypeId: 'at-1',
           title: 'Essay',
           prompt: 'Write the essay.',
-          tutorContext: null,
           submitForGrade: true,
           pointValue: 100,
         }),
@@ -160,15 +159,17 @@ describe('api.assignments.create', () => {
           assignmentTypeId: 'at-1',
           title: 'Essay',
           prompt: 'Write the essay.',
-          tutorContext: null,
           submitForGrade: true,
           pointValue: 100,
         }),
       ],
     });
+    const createData = prisma.assignment.createMany.mock.calls[0]?.[0].data;
+    expect('tutorContext' in createData[0]).toBe(false);
+    expect('tutorContext' in createData[1]).toBe(false);
   });
 
-  test('keeps legacy tutor context behavior when standardization is not enabled', async () => {
+  test('ignores legacy tutor context when standardization is not enabled', async () => {
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
 
     const response = await action({
@@ -189,16 +190,15 @@ describe('api.assignments.create', () => {
       data: [
         expect.objectContaining({
           classId: 'class-1',
-          tutorContext: 'Legacy context.',
         }),
         expect.objectContaining({
           classId: 'class-2',
-          tutorContext: 'Legacy context.',
         }),
       ],
     });
     const firstAssignment =
       prisma.assignment.createMany.mock.calls[0][0].data[0];
+    expect(firstAssignment).not.toHaveProperty('tutorContext');
     expect(firstAssignment).not.toHaveProperty('submitForGrade');
     expect(firstAssignment).not.toHaveProperty('pointValue');
   });
@@ -226,12 +226,13 @@ describe('api.assignments.create', () => {
       data: [
         expect.objectContaining({
           classId: 'class-1',
-          tutorContext: null,
           submitForGrade: false,
           pointValue: null,
         }),
       ],
     });
+    const createData = prisma.assignment.createMany.mock.calls[0]?.[0].data;
+    expect('tutorContext' in createData[0]).toBe(false);
   });
 
   test('rejects invalid graded point values before creating assignments', async () => {
@@ -465,7 +466,6 @@ describe('api.assignments.create', () => {
           assignmentTypeId: 'ap-type-1',
           title: 'Unit 7 DBQ',
           prompt: libraryEntry.prompt,
-          tutorContext: null,
           dueDate: new Date(Date.UTC(2026, 4, 20)),
           apHistorySnapshot: expect.objectContaining({
             schemaVersion: 1,
@@ -481,7 +481,6 @@ describe('api.assignments.create', () => {
         expect.objectContaining({
           classId: 'class-2',
           prompt: libraryEntry.prompt,
-          tutorContext: null,
           apHistorySnapshot: expect.objectContaining({
             schemaVersion: 1,
             libraryEntryId: 'apush-dbq-new-deal-federal-power',
@@ -490,6 +489,9 @@ describe('api.assignments.create', () => {
         }),
       ],
     });
+    const createData = prisma.assignment.createMany.mock.calls[0]?.[0].data;
+    expect('tutorContext' in createData[0]).toBe(false);
+    expect('tutorContext' in createData[1]).toBe(false);
   });
 
   test('creates AP History assignments when AP access is school-scoped', async () => {

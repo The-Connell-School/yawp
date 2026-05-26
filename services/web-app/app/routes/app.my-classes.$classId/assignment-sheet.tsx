@@ -92,7 +92,6 @@ function AssignmentEditSheet({
   const [title, setTitle] = useState('');
   const [assignmentTypeId, setAssignmentTypeId] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
   const [dueDate, setDueDate] = useState('');
@@ -139,7 +138,6 @@ function AssignmentEditSheet({
       editingAssignment?.assignmentTypeId ?? assignmentTypeOptions[0]?.id ?? ''
     );
     setPrompt(editingAssignment?.prompt ?? '');
-    setTutorContext(editingAssignment?.tutorContext ?? '');
     setSubmitForGrade(editingAssignment?.submitForGrade ?? true);
     setPointValue((editingAssignment?.pointValue ?? 100).toString());
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
@@ -156,13 +154,7 @@ function AssignmentEditSheet({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (
-      !assignmentCreationStandardizationEnabled &&
-      typeof extractFetcher.data.tutorContext === 'string'
-    ) {
-      setTutorContext(extractFetcher.data.tutorContext);
-    }
-  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
+  }, [extractFetcher.data]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -347,22 +339,7 @@ function AssignmentEditSheet({
                 <input type="hidden" name="pointValue" value="" />
               ) : null}
             </>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="assignment-tutor-context">
-                Tutor Context (optional)
-              </Label>
-              <Textarea
-                id="assignment-tutor-context"
-                name="tutorContext"
-                value={tutorContext}
-                onChange={(event) => setTutorContext(event.target.value)}
-                rows={6}
-                placeholder="Guidance for the tutor system prompt..."
-                disabled={isSaving}
-              />
-            </div>
-          )}
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="assignment-due-date">Due Date (optional)</Label>

@@ -54,7 +54,6 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
     assignmentTypeId: params.assignmentTypeId,
     title: params.title ?? params.entry.title,
     prompt: snapshot.prompt,
-    tutorContext: null,
     dueDate: params.dueDate,
     apHistorySnapshot: snapshot as Prisma.InputJsonValue,
   };

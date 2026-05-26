@@ -23,6 +23,7 @@ const getSubmittedPapersFilter = mock();
 const isDocumentSubmissionEnabledForScope = mock();
 const isAssignmentsEnabledForContext = mock();
 const isAssignmentCreationStandardizationEnabledForContext = mock();
+const isApHistoryEssayEnabledForContext = mock();
 const isReleasedGradesOrganizationEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -42,6 +43,7 @@ mock.module('~/utils/feature-flags.server', () => ({
   isDocumentSubmissionEnabledForScope,
   isAssignmentsEnabledForContext,
   isAssignmentCreationStandardizationEnabledForContext,
+  isApHistoryEssayEnabledForContext,
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
@@ -66,6 +68,7 @@ describe('class detail loader document visibility', () => {
     isDocumentSubmissionEnabledForScope.mockReset();
     isAssignmentsEnabledForContext.mockReset();
     isAssignmentCreationStandardizationEnabledForContext.mockReset();
+    isApHistoryEssayEnabledForContext.mockReset();
     isReleasedGradesOrganizationEnabledForOrganization.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
@@ -104,6 +107,7 @@ describe('class detail loader document visibility', () => {
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     isAssignmentsEnabledForContext.mockResolvedValue(true);
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
+    isApHistoryEssayEnabledForContext.mockResolvedValue(true);
     isReleasedGradesOrganizationEnabledForOrganization.mockResolvedValue(false);
   });
 
@@ -326,12 +330,13 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'archived-type-1',
         title: null,
         prompt: 'Updated prompt',
-        tutorContext: 'Legacy tutor guidance',
         dueDate: null,
         submitForGrade: true,
         pointValue: 100,
       },
     });
+    const updateData = prisma.assignment.update.mock.calls[0]?.[0].data;
+    expect('tutorContext' in updateData).toBe(false);
   });
 
   test('creates a standardized class assignment with grading intent and no tutor context', async () => {
@@ -367,15 +372,16 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
-        tutorContext: null,
         dueDate: null,
         submitForGrade: true,
         pointValue: 25,
       },
     });
+    const createData = prisma.assignment.create.mock.calls[0]?.[0].data;
+    expect('tutorContext' in createData).toBe(false);
   });
 
-  test('keeps legacy class assignment tutor context when standardization is disabled', async () => {
+  test('ignores legacy class assignment tutor context when standardization is disabled', async () => {
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
@@ -407,10 +413,11 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
-        tutorContext: 'Legacy tutor context.',
         dueDate: null,
       },
     });
+    const createData = prisma.assignment.create.mock.calls[0]?.[0].data;
+    expect('tutorContext' in createData).toBe(false);
   });
 
   test('rejects invalid class assignment point values', async () => {

@@ -256,14 +256,14 @@ describe('AssignmentCreationSheetContent', () => {
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('keeps legacy tutor context and legacy class routing when the flag is off', () => {
+  it('keeps legacy class routing without tutor context when the flag is off', () => {
     root = renderSheet({
       entryPoint: 'assignment-type',
       fixedAssignmentTypeId: 'type-2',
       assignmentCreationStandardizationEnabled: false,
     }).root;
 
-    expectText('Tutor Context (optional)');
+    expectNoText('Tutor Context');
     expectNoText('Submit for grade');
     expectNoText('Point value');
 

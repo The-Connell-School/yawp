@@ -239,12 +239,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
-    const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
     const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
-    const legacyTutorContext = tutorContextRaw.trim() || null;
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
@@ -258,7 +256,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: string;
       assignmentTypeId: string;
       assignmentType: { systemKey: string | null };
-      tutorContext: string | null;
     } | null = null;
     if (intent === 'update-assignment') {
       if (!assignmentId) {
@@ -274,7 +271,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: true,
           assignmentTypeId: true,
           assignmentType: { select: { systemKey: true } },
-          tutorContext: true,
         },
       });
 
@@ -357,9 +353,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentTypeId,
           title,
           prompt,
-          tutorContext: assignmentCreationStandardizationEnabled
-            ? null
-            : legacyTutorContext,
           dueDate,
           ...(gradingIntent?.success
             ? {
@@ -382,9 +375,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId,
         title,
         prompt,
-        tutorContext: assignmentCreationStandardizationEnabled
-          ? existingAssignment!.tutorContext
-          : legacyTutorContext,
         dueDate,
         ...(gradingIntent?.success
           ? {

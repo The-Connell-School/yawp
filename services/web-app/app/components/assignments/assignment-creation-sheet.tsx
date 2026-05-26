@@ -47,7 +47,6 @@ type CreateFetcherData = {
 type ExtractFetcherData = CreateFetcherData & {
   title?: string;
   prompt?: string;
-  tutorContext?: string;
 };
 
 type AssignmentCreationFetcher<Data> = {
@@ -139,7 +138,6 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
   const [dueDate, setDueDate] = useState('');
@@ -205,7 +203,6 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle('');
     setPrompt(initialPrompt);
-    setTutorContext('');
     setSubmitForGrade(true);
     setPointValue('100');
     setDueDate('');
@@ -235,13 +232,7 @@ export function AssignmentCreationSheetContent({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (
-      !assignmentCreationStandardizationEnabled &&
-      typeof extractFetcher.data.tutorContext === 'string'
-    ) {
-      setTutorContext(extractFetcher.data.tutorContext);
-    }
-  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
+  }, [extractFetcher.data]);
 
   function toggleClass(classId: string) {
     if (hasFixedClass) return;
@@ -512,22 +503,7 @@ export function AssignmentCreationSheetContent({
               <input type="hidden" name="pointValue" value="" />
             ) : null}
           </>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="assignment-create-tutor-context">
-              Tutor Context (optional)
-            </Label>
-            <Textarea
-              id="assignment-create-tutor-context"
-              name="tutorContext"
-              value={tutorContext}
-              onChange={(event) => setTutorContext(event.target.value)}
-              rows={4}
-              placeholder="Guidance for the tutor system prompt..."
-              disabled={isSaving}
-            />
-          </div>
-        )}
+        ) : null}
 
         <div className="space-y-2">
           <Label htmlFor="assignment-create-due-date">
