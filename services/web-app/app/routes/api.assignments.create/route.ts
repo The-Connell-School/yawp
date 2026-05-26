@@ -1,7 +1,7 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
+import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -104,12 +104,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const organizationIds = Array.from(
-    new Set(classes.map((klass) => klass.school.organizationId))
-  );
   const assignmentFlags = await Promise.all(
-    organizationIds.map((organizationId) =>
-      isAssignmentsEnabledForOrganization(organizationId)
+    classes.map((klass) =>
+      isAssignmentsEnabledForContext({
+        organizationId: klass.school.organizationId,
+        teacherProfileId: profile.teacherProfile!.id,
+        classIds: [klass.id],
+      })
     )
   );
   if (assignmentFlags.some((enabled) => !enabled)) {
@@ -121,6 +122,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 403 }
     );
   }
+
+  const organizationIds = Array.from(
+    new Set(classes.map((klass) => klass.school.organizationId))
+  );
 
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {

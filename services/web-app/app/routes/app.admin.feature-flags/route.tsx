@@ -58,7 +58,24 @@ type RegisteredFeatureFlag = TargetedFeatureFlagDefinition & {
 
 type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
 type FlagData = LoaderData['flags'][number];
+type PilotTargetRow = LoaderData['pilotTargetRows'][number];
 type TargetOption = OrganizationOption | SchoolOption;
+type PilotFeatureKey = 'assignments' | 'document_submission_grading';
+type PilotTargetKind = 'teacher' | 'class';
+type PilotTargetOption = {
+  kind: PilotTargetKind;
+  id: string;
+  label: string;
+  detail: string;
+};
+
+const PILOT_FEATURES: Array<{ key: PilotFeatureKey; label: string }> = [
+  { key: 'assignments', label: 'Assignments' },
+  {
+    key: 'document_submission_grading',
+    label: 'Document submission grading',
+  },
+];
 
 function getRegisteredFeatureFlags(): RegisteredFeatureFlag[] {
   return Object.entries(TARGETED_FEATURE_FLAGS).map(([key, definition]) => ({
@@ -110,7 +127,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     )
   );
 
-  const [organizations, schools, settings] = await Promise.all([
+  const [
+    organizations,
+    schools,
+    settings,
+    teacherProfiles,
+    classes,
+    featureAccessTargets,
+  ] = await Promise.all([
     prisma.organization.findMany({
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
@@ -128,6 +152,59 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.setting.findMany({
       where: { name: { in: settingNames } },
       select: { name: true, value: true, valueType: true },
+    }),
+    prisma.teacherProfile.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        profile: {
+          select: {
+            organization: { select: { name: true } },
+            user: { select: { email: true, name: true } },
+          },
+        },
+      },
+      orderBy: {
+        profile: {
+          user: {
+            name: 'asc',
+          },
+        },
+      },
+    }),
+    prisma.class.findMany({
+      where: { isArchived: false },
+      select: {
+        id: true,
+        code: true,
+        grade: true,
+        period: true,
+        schoolYear: true,
+        title: true,
+        school: {
+          select: {
+            name: true,
+            organization: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: [{ schoolYear: 'desc' }, { code: 'asc' }],
+    }),
+    prisma.featureAccessTarget.findMany({
+      where: {
+        featureKey: { in: PILOT_FEATURES.map((feature) => feature.key) },
+        targetKind: { in: ['teacher', 'class'] },
+      },
+      select: {
+        id: true,
+        featureKey: true,
+        targetKind: true,
+        targetId: true,
+        enabled: true,
+        expiresAt: true,
+        note: true,
+      },
+      orderBy: [{ featureKey: 'asc' }, { targetKind: 'asc' }],
     }),
   ]);
 
@@ -159,6 +236,40 @@ export async function loader({ request }: LoaderFunctionArgs) {
       organizationId: school.organizationId,
       organizationName: school.organization.name,
     })),
+    pilotTargetRows: buildPilotTargetRows({
+      teacherTargets: teacherProfiles.map((teacher) => ({
+        kind: 'teacher',
+        id: teacher.id,
+        label:
+          teacher.profile.user.name ??
+          teacher.profile.user.email ??
+          'Unnamed teacher',
+        detail: joinDetailParts([
+          teacher.profile.user.email,
+          teacher.profile.organization.name,
+        ]),
+      })),
+      classTargets: classes.map((classTarget) => ({
+        kind: 'class',
+        id: classTarget.id,
+        label:
+          classTarget.title ??
+          joinDetailParts([
+            classTarget.grade ? `Grade ${classTarget.grade}` : null,
+            classTarget.period ? `Period ${classTarget.period}` : null,
+            classTarget.code,
+          ]) ??
+          classTarget.code,
+        detail: joinDetailParts([
+          classTarget.code,
+          classTarget.grade ? `Grade ${classTarget.grade}` : null,
+          classTarget.period ? `Period ${classTarget.period}` : null,
+          classTarget.school.name,
+          classTarget.school.organization.name,
+        ]),
+      })),
+      featureAccessTargets,
+    }),
   });
 }
 
@@ -167,6 +278,67 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get('intent');
+
+  if (intent === 'toggle-pilot-target') {
+    const feature = getPilotFeature(formData.get('featureKey'));
+    const targetKind = getPilotTargetKind(formData.get('targetKind'));
+    const targetId = formData.get('targetId');
+    const enabled = formData.get('enabled') === 'true';
+
+    if (!feature) {
+      return dataResponse({ error: 'Unknown pilot feature.' }, { status: 400 });
+    }
+    if (!targetKind) {
+      return dataResponse(
+        { error: 'Invalid pilot target kind.' },
+        { status: 400 }
+      );
+    }
+    if (typeof targetId !== 'string' || !targetId) {
+      return dataResponse({ error: 'Target is required.' }, { status: 400 });
+    }
+
+    if (targetKind === 'teacher') {
+      const teacher = await prisma.teacherProfile.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      });
+      if (!teacher) {
+        return dataResponse({ error: 'Teacher not found.' }, { status: 404 });
+      }
+    } else {
+      const classTarget = await prisma.class.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      });
+      if (!classTarget) {
+        return dataResponse({ error: 'Class not found.' }, { status: 404 });
+      }
+    }
+
+    const target = await prisma.featureAccessTarget.upsert({
+      where: {
+        featureKey_targetKind_targetId: {
+          featureKey: feature.key,
+          targetKind,
+          targetId,
+        },
+      },
+      create: {
+        featureKey: feature.key,
+        targetKind,
+        targetId,
+        enabled,
+        expiresAt: null,
+      },
+      update: enabled
+        ? { enabled, expiresAt: null, updatedAt: new Date() }
+        : { enabled, updatedAt: new Date() },
+    });
+
+    return dataResponse({ success: true, target });
+  }
+
   const definition = getRegisteredFeatureFlag(formData.get('flag'));
 
   if (!definition) {
@@ -231,7 +403,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function FeatureFlagsRoute() {
-  const { flags, organizations, schools } = useLoaderData<typeof loader>();
+  const { flags, organizations, schools, pilotTargetRows } =
+    useLoaderData<typeof loader>();
   const [selectedFlagKey, setSelectedFlagKey] =
     useState<TargetedFeatureFlag | null>(null);
   const selectedFlag =
@@ -245,6 +418,7 @@ export default function FeatureFlagsRoute() {
         schools={schools}
         onManage={(flag) => setSelectedFlagKey(flag.key)}
       />
+      <PilotFeatureTargetTable rows={pilotTargetRows} />
       <Sheet
         open={Boolean(selectedFlag)}
         onOpenChange={(open) => {
@@ -541,6 +715,125 @@ function FeatureFlagTargetControls({
   );
 }
 
+function PilotFeatureTargetTable({ rows }: { rows: PilotTargetRow[] }) {
+  const fetcher = useFetcher();
+  const [query, setQuery] = useState('');
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredRows = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (!normalizedQuery) return true;
+        return [
+          row.featureLabel,
+          row.targetKind,
+          row.targetLabel,
+          row.targetDetail,
+          row.note ?? '',
+        ].some((value) => value.toLowerCase().includes(normalizedQuery));
+      }),
+    [normalizedQuery, rows]
+  );
+
+  const submitPilotTargetToggle = (row: PilotTargetRow, enabled: boolean) => {
+    const formData = new FormData();
+    formData.set('intent', 'toggle-pilot-target');
+    formData.set('featureKey', row.featureKey);
+    formData.set('targetKind', row.targetKind);
+    formData.set('targetId', row.targetId);
+    formData.set('enabled', enabled ? 'true' : 'false');
+    fetcher.submit(formData, { method: 'POST' });
+  };
+
+  return (
+    <Card className="bg-muted">
+      <CardHeader className="border-b pb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle>Teacher cohorts and class pilots</CardTitle>
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search pilot targets"
+            className="sm:max-w-sm"
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Feature</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Kind</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Note</TableHead>
+                <TableHead className="w-[130px] text-right">Enabled</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="h-20 text-center text-sm text-muted-foreground"
+                  >
+                    No pilot targets found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRows.map((row) => (
+                  <TableRow
+                    key={`${row.featureKey}:${row.targetKind}:${row.targetId}`}
+                  >
+                    <TableCell className="font-medium">
+                      {row.featureLabel}
+                    </TableCell>
+                    <TableCell className="min-w-[260px]">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">{row.targetLabel}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {row.targetDetail}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {row.targetKind === 'teacher'
+                          ? 'Teacher cohort'
+                          : 'Class access'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(row.expiresAt)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.note ?? '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-3">
+                        <span className="text-sm text-muted-foreground">
+                          {row.enabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                        <Switch
+                          checked={row.enabled}
+                          disabled={fetcher.state !== 'idle'}
+                          onCheckedChange={(checked) =>
+                            submitPilotTargetToggle(row, checked)
+                          }
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function getTargets(
   flag: FlagData,
   organizations: OrganizationOption[],
@@ -560,6 +853,96 @@ function getTargetLabel(flag: FlagData) {
 
 function getScopeLabel(flag: FlagData) {
   return flag.targetKind === 'organization' ? 'Organizations' : 'Schools';
+}
+
+function buildPilotTargetRows({
+  teacherTargets,
+  classTargets,
+  featureAccessTargets,
+}: {
+  teacherTargets: PilotTargetOption[];
+  classTargets: PilotTargetOption[];
+  featureAccessTargets: Array<{
+    id: string;
+    featureKey: string;
+    targetKind: string;
+    targetId: string;
+    enabled: boolean;
+    expiresAt: Date | null;
+    note: string | null;
+  }>;
+}) {
+  const targetsByKey = new Map(
+    featureAccessTargets.map((target) => [
+      getPilotTargetMapKey(
+        target.featureKey,
+        target.targetKind,
+        target.targetId
+      ),
+      target,
+    ])
+  );
+  const targets = [...teacherTargets, ...classTargets];
+
+  return PILOT_FEATURES.flatMap((feature) =>
+    targets.map((target) => {
+      const accessTarget = targetsByKey.get(
+        getPilotTargetMapKey(feature.key, target.kind, target.id)
+      );
+
+      return {
+        featureKey: feature.key,
+        featureLabel: feature.label,
+        targetKind: target.kind,
+        targetId: target.id,
+        targetLabel: target.label,
+        targetDetail: target.detail,
+        featureAccessTargetId: accessTarget?.id ?? null,
+        enabled:
+          accessTarget?.enabled === true && !isExpired(accessTarget.expiresAt),
+        expiresAt: accessTarget?.expiresAt
+          ? accessTarget.expiresAt.toISOString()
+          : null,
+        note: accessTarget?.note ?? null,
+      };
+    })
+  );
+}
+
+function getPilotFeature(key: FormDataEntryValue | null) {
+  if (typeof key !== 'string') return null;
+  return PILOT_FEATURES.find((feature) => feature.key === key) ?? null;
+}
+
+function getPilotTargetKind(
+  kind: FormDataEntryValue | null
+): PilotTargetKind | null {
+  return kind === 'teacher' || kind === 'class' ? kind : null;
+}
+
+function getPilotTargetMapKey(
+  featureKey: string,
+  targetKind: string,
+  targetId: string
+) {
+  return `${featureKey}:${targetKind}:${targetId}`;
+}
+
+function joinDetailParts(parts: Array<string | null | undefined>) {
+  return parts.filter((part): part is string => Boolean(part)).join(' - ');
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
+}
+
+function isExpired(value: Date | null) {
+  return value !== null && value.getTime() <= Date.now();
 }
 
 export function ErrorBoundary() {

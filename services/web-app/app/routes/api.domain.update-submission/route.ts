@@ -1,5 +1,7 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -42,7 +44,33 @@ export async function action({ request }: ActionFunctionArgs) {
       id: true,
       gradedAt: true,
       gradedById: true,
-      document: { select: { profileId: true } },
+      document: {
+        select: {
+          profileId: true,
+          assignment: {
+            select: {
+              class: {
+                select: {
+                  id: true,
+                  schoolId: true,
+                  teachers: { select: { id: true } },
+                },
+              },
+            },
+          },
+          studentProfile: {
+            select: {
+              classes: {
+                select: {
+                  id: true,
+                  schoolId: true,
+                  teachers: { select: { id: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -53,11 +81,23 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (
-    isGradingOwnDocument(actor.profileId, submission.document.profileId)
-  ) {
+  if (isGradingOwnDocument(actor.profileId, submission.document.profileId)) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
+      { status: 403 }
+    );
+  }
+
+  const isSubmissionGradingEnabled = await isDocumentSubmissionEnabledForScope(
+    getDocumentSubmissionScope(submission.document)
+  );
+  if (!isSubmissionGradingEnabled) {
+    return Response.json(
+      {
+        success: false,
+        message:
+          'Document submission grading is currently disabled for this school.',
+      },
       { status: 403 }
     );
   }
@@ -76,7 +116,6 @@ export async function action({ request }: ActionFunctionArgs) {
     grammarIssues: (v) => (v != null ? v : undefined),
     promptConfig: (v) => (v != null ? v : undefined),
     aiMeta: (v) => (v != null ? v : undefined),
-    releasedAt: (v) => (typeof v === 'string' ? new Date(v) : undefined),
   };
 
   const data: Record<string, unknown> = {};

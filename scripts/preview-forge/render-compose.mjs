@@ -128,6 +128,7 @@ services:
 ${toolboxService}
 ${webService}    labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=preview-forge"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}${tlsLabels}

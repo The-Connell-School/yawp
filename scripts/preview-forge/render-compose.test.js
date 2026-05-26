@@ -41,4 +41,14 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('target: deps');
     expect(compose).toContain('target: production');
   });
+
+  test('pins Traefik to the shared preview network', () => {
+    const compose = renderPreviewCompose({
+      prNumber: '142',
+      domain: 'preview.yawp.school',
+      sourceDir: '/srv/yawp-preview-forge/sources/pr-142',
+    });
+
+    expect(compose).toContain('traefik.docker.network=preview-forge');
+  });
 });

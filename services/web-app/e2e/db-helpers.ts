@@ -1,12 +1,25 @@
 import type { E2EPrismaClient } from './prisma-client';
 import { generateTOTP } from '../app/utils/totp.server';
+import bcrypt from 'bcryptjs';
 
 const DOCUMENT_SUBMISSION_FLAG = 'document_submission_enabled';
-const DOCUMENT_SUBMISSION_SCHOOL_IDS =
-  'document_submission_enabled_school_ids';
+const DOCUMENT_SUBMISSION_SCHOOL_IDS = 'document_submission_enabled_school_ids';
 const ASSIGNMENTS_ENABLED_ORG_IDS = 'assignments_enabled_org_ids';
 const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
   'released_grades_organization_enabled_org_ids';
+const PILOT_FEATURE_KEYS = [
+  'assignments',
+  'document_submission_grading',
+] as const;
+
+type PilotFeatureKey = (typeof PILOT_FEATURE_KEYS)[number];
+type PilotTargetKind = 'teacher' | 'class';
+
+function createPassword(password: string) {
+  return {
+    hash: bcrypt.hashSync(password, 10),
+  };
+}
 
 function parseIdList(value: string | null | undefined) {
   return new Set(
@@ -92,6 +105,51 @@ export async function setAssignmentsForOrganization(params: {
     update: {
       value: Array.from(orgIds).join(','),
       valueType: 'string',
+    },
+  });
+}
+
+export async function clearPilotFeatureAccessTargets(params: {
+  prisma: E2EPrismaClient;
+  featureKeys?: PilotFeatureKey[];
+}) {
+  const { prisma, featureKeys = [...PILOT_FEATURE_KEYS] } = params;
+  await prisma.featureAccessTarget.deleteMany({
+    where: {
+      featureKey: { in: featureKeys },
+      OR: [{ note: { startsWith: 'E2E ' } }, { note: { startsWith: 'e2e ' } }],
+    },
+  });
+}
+
+export async function setPilotFeatureAccessTarget(params: {
+  prisma: E2EPrismaClient;
+  featureKey: PilotFeatureKey;
+  targetKind: PilotTargetKind;
+  targetId: string;
+  enabled: boolean;
+  note?: string;
+}) {
+  const { prisma, featureKey, targetKind, targetId, enabled, note } = params;
+  await prisma.featureAccessTarget.upsert({
+    where: {
+      featureKey_targetKind_targetId: {
+        featureKey,
+        targetKind,
+        targetId,
+      },
+    },
+    create: {
+      featureKey,
+      targetKind,
+      targetId,
+      enabled,
+      note,
+    },
+    update: {
+      enabled,
+      note,
+      expiresAt: null,
     },
   });
 }
@@ -267,4 +325,144 @@ export async function assignTeacherToClass(params: {
   });
 
   return teacherProfileId;
+}
+
+export async function createTeacherClassPilotFixture(params: {
+  prisma: E2EPrismaClient;
+  organizationId: string;
+  schoolId: string;
+  assignmentTypeId: string;
+  suffix: string;
+}) {
+  const { prisma, organizationId, schoolId, assignmentTypeId, suffix } = params;
+  const normalizedSuffix = suffix.replace(/[^a-zA-Z0-9-]/g, '-');
+  const teacherPassword = 'teacher-e2e-password';
+  const studentPassword = 'student-e2e-password';
+  const teacherEmail = `teacher-${normalizedSuffix}@yawp.test`;
+  const studentEmail = `student-${normalizedSuffix}@yawp.test`;
+
+  const teacher = await prisma.user.create({
+    data: {
+      email: teacherEmail,
+      name: `Teacher ${normalizedSuffix}`,
+      password: { create: createPassword(teacherPassword) },
+      profiles: {
+        create: {
+          organizationId,
+          isOwner: false,
+          teacherProfile: { create: {} },
+        },
+      },
+    },
+    include: { profiles: { include: { teacherProfile: true } } },
+  });
+  const teacherProfileId = teacher.profiles[0].teacherProfile?.id;
+  if (!teacherProfileId) {
+    throw new Error(`Teacher profile not created for ${teacherEmail}`);
+  }
+
+  await prisma.teacherProfile.update({
+    where: { id: teacherProfileId },
+    data: { schools: { connect: { id: schoolId } } },
+  });
+
+  const klass = await prisma.class.create({
+    data: {
+      code: `E2E-${normalizedSuffix}`.slice(0, 32),
+      schoolYear: '2024-2025',
+      period: '2nd',
+      grade: '10th',
+      title: `Non-pilot ${normalizedSuffix}`,
+      schoolId,
+      teachers: { connect: { id: teacherProfileId } },
+    },
+    select: { id: true },
+  });
+
+  const student = await prisma.user.create({
+    data: {
+      email: studentEmail,
+      name: `Student ${normalizedSuffix}`,
+      password: { create: createPassword(studentPassword) },
+      profiles: {
+        create: {
+          organizationId,
+          isOwner: false,
+        },
+      },
+    },
+    include: { profiles: true },
+  });
+  const studentProfile = await prisma.studentProfile.create({
+    data: {
+      profileId: student.profiles[0].id,
+      classes: { connect: { id: klass.id } },
+    },
+    select: { id: true },
+  });
+
+  const assignment = await prisma.assignment.create({
+    data: {
+      classId: klass.id,
+      assignmentTypeId,
+      title: `Non-pilot assignment ${normalizedSuffix}`,
+      prompt: 'This assignment should not be available without pilot access.',
+    },
+    select: { id: true },
+  });
+
+  const documentText = `Non-pilot submitted essay ${normalizedSuffix}. This text is long enough to submit.`;
+  const document = await prisma.document.create({
+    data: {
+      title: `Non-pilot document ${normalizedSuffix}`,
+      text: documentText,
+      html: `<p>${documentText}</p>`,
+      profileId: student.profiles[0].id,
+      studentProfileId: studentProfile.id,
+      assignmentTypeId,
+      assignmentId: assignment.id,
+    },
+    select: { id: true },
+  });
+
+  const assignmentModules = await prisma.assignmentModule.findMany({
+    where: { assignmentTypeId },
+    select: { id: true, position: true },
+    orderBy: { position: 'asc' },
+  });
+
+  await prisma.assignmentModuleSession.createMany({
+    data: assignmentModules.map((module) => ({
+      assignmentModuleId: module.id,
+      documentId: document.id,
+      title: `Non-pilot module ${module.position}`,
+      instructionsCompleted: 0,
+    })),
+  });
+
+  const submission = await prisma.submission.create({
+    data: {
+      documentId: document.id,
+      html: `<p>${documentText}</p>`,
+      text: documentText,
+      title: `Non-pilot submission ${normalizedSuffix}`,
+      submittedAt: new Date(),
+    },
+    select: { id: true },
+  });
+
+  return {
+    teacherEmail,
+    teacherPassword,
+    teacherProfileId,
+    teacherUserId: teacher.id,
+    studentEmail,
+    studentPassword,
+    studentUserId: student.id,
+    studentProfileId: studentProfile.id,
+    classId: klass.id,
+    assignmentId: assignment.id,
+    documentId: document.id,
+    submissionId: submission.id,
+  };
 }

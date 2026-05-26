@@ -16,8 +16,8 @@ import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import {
-  isDocumentSubmissionEnabledForSchool,
-  isAssignmentsEnabledForOrganization,
+  isAssignmentsEnabledForContext,
+  isDocumentSubmissionEnabledForScope,
   isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
@@ -168,7 +168,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         id: classId,
         teachers: { some: { id: profile.teacherProfile.id } },
       },
-      select: { school: { select: { organizationId: true } } },
+      select: { id: true, school: { select: { organizationId: true } } },
     });
     if (!classWithOrg) {
       return dataResponse(
@@ -176,9 +176,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 404 }
       );
     }
-    const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
-      classWithOrg.school.organizationId
-    );
+    const assignmentsEnabled = await isAssignmentsEnabledForContext({
+      organizationId: classWithOrg.school.organizationId,
+      teacherProfileId: profile.teacherProfile.id,
+      classIds: [classWithOrg.id],
+    });
     if (!assignmentsEnabled) {
       return dataResponse(
         {
@@ -458,71 +460,77 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentsEnabled,
     releasedGradesEnabled,
   ] = await Promise.all([
-    isDocumentSubmissionEnabledForSchool(klass.school?.id),
-    isAssignmentsEnabledForOrganization(klass.school?.organizationId),
+    isDocumentSubmissionEnabledForScope({
+      schoolIds: [klass.school?.id],
+      teacherProfileIds: [profile.teacherProfile.id],
+      classIds: [klass.id],
+    }),
+    isAssignmentsEnabledForContext({
+      organizationId: klass.school?.organizationId,
+      teacherProfileId: profile.teacherProfile.id,
+      classIds: [klass.id],
+    }),
     isReleasedGradesOrganizationEnabledForOrganization(
       klass.school?.organizationId
     ),
   ]);
 
   // Get all submissions for this class
-  const submissions = isDocumentSubmissionEnabled
-    ? await prisma.submission.findMany({
-        where: {
-          document: {
-            is: {
-              ...classDocumentScope,
-              deletedAt: null,
-            },
-          },
+  const submissions = await prisma.submission.findMany({
+    where: {
+      document: {
+        is: {
+          ...classDocumentScope,
+          deletedAt: null,
         },
+      },
+    },
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
+      submittedAt: true,
+      documentId: true,
+      score: true,
+      feedback: true,
+      rubricScores: true,
+      overallScore: true,
+      overallComment: true,
+      numericPercentage: true,
+      letterGrade: true,
+      aiMeta: true,
+      releasedAt: true,
+      gradedAt: true,
+      archivedAt: true,
+      document: {
         select: {
           id: true,
           title: true,
-          createdAt: true,
-          submittedAt: true,
-          documentId: true,
-          score: true,
-          feedback: true,
-          rubricScores: true,
-          overallScore: true,
-          overallComment: true,
-          numericPercentage: true,
-          letterGrade: true,
-          aiMeta: true,
-          releasedAt: true,
-          gradedAt: true,
-          archivedAt: true,
-          document: {
+          assignment: {
             select: {
               id: true,
               title: true,
-              assignment: {
-                select: {
-                  id: true,
-                  title: true,
-                },
-              },
-              profile: {
-                select: {
-                  id: true,
-                  user: {
-                    select: {
-                      name: true,
-                      email: true,
-                    },
-                  },
-                },
-              },
-              assignmentModuleSessions: studentModuleSessionSingleSelect,
             },
           },
+          profile: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          assignmentModuleSessions: studentModuleSessionSingleSelect,
         },
-        orderBy: {
-          submittedAt: 'desc',
-        },
-      })
-    : [];
+      },
+    },
+    orderBy: {
+      submittedAt: 'desc',
+    },
+  });
 
   // Get in-progress documents (all unsubmitted drafts for this class)
   const inProgressDocuments = await prisma.document.findMany({
@@ -661,8 +669,10 @@ function ClassDetailPage() {
     : classDetailPath;
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
-  const assignmentsEnabled = data.assignmentsEnabled ?? true;
-  const validTabs: TabValue[] = ['students', 'assignments'];
+  const assignmentsEnabled = data.assignmentsEnabled === true;
+  const validTabs: TabValue[] = assignmentsEnabled
+    ? ['students', 'assignments']
+    : ['students'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -671,12 +681,15 @@ function ClassDetailPage() {
   const assignmentFilterParam = searchParams.get('assignmentId') ?? 'all';
   const selectedAssignmentId =
     assignmentFilterParam !== 'all' &&
-    data.assignments.some((assignment) => assignment.id === assignmentFilterParam)
+    data.assignments.some(
+      (assignment) => assignment.id === assignmentFilterParam
+    )
       ? assignmentFilterParam
       : 'all';
   const editingAssignment =
-    data.assignments.find((assignment) => assignment.id === editingAssignmentId) ??
-    null;
+    data.assignments.find(
+      (assignment) => assignment.id === editingAssignmentId
+    ) ?? null;
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
   const hasMeaningfulGrade = (submission: {
     score: string | null;
@@ -689,21 +702,19 @@ function ClassDetailPage() {
   }) =>
     Boolean(
       submission.gradedAt ||
-        submission.score ||
-        submission.feedback ||
-        submission.overallComment ||
-        submission.letterGrade ||
-        submission.numericPercentage !== null ||
-        (submission.rubricScores &&
-          typeof submission.rubricScores === 'object' &&
-          Object.keys(submission.rubricScores as Record<string, unknown>).length > 0)
+      submission.score ||
+      submission.feedback ||
+      submission.overallComment ||
+      submission.letterGrade ||
+      submission.numericPercentage !== null ||
+      (submission.rubricScores &&
+        typeof submission.rubricScores === 'object' &&
+        Object.keys(submission.rubricScores as Record<string, unknown>).length >
+          0)
     );
 
   const students = data.klass.students;
-  const allSubmissions = useMemo(
-    () => data.submissions,
-    [data.submissions]
-  );
+  const allSubmissions = useMemo(() => data.submissions, [data.submissions]);
   // Reset pagination when tab changes
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
@@ -1027,7 +1038,9 @@ function ClassDetailPage() {
                   <TableCell>
                     <Button asChild size="sm" variant="outline">
                       <Link
-                        to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                        to={`/app/submissions/${submission.id}?${
+                          data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                        }exitTo=${encodedClassDetailExitTo}`}
                       >
                         View
                       </Link>
@@ -1105,12 +1118,16 @@ function ClassDetailPage() {
                       <Badge variant="secondary">{gradeDisplay}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(submission.gradedAt ?? submission.createdAt))}
+                      {timeAgo(
+                        new Date(submission.gradedAt ?? submission.createdAt)
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                          to={`/app/submissions/${submission.id}?${
+                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>
@@ -1173,7 +1190,9 @@ function ClassDetailPage() {
                     <TableCell>
                       <Button asChild size="sm" variant="outline">
                         <Link
-                          to={`/app/submissions/${submission.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                          to={`/app/submissions/${submission.id}?${
+                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodedClassDetailExitTo}`}
                         >
                           View
                         </Link>
@@ -1435,7 +1454,7 @@ function ClassDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-            {paginatedData.map((s) => {
+              {paginatedData.map((s) => {
                 const studentProfileId = s.profile.id;
                 const studentSubmissions = allSubmissions.filter(
                   (sub) => sub.document.profile.id === studentProfileId
@@ -1486,11 +1505,12 @@ function ClassDetailPage() {
                             </p>
                           </SheetHeader>
                           <div className="mt-6 space-y-6">
-
                             {/* Submitted */}
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">Submitted</span>
+                                <span className="text-sm font-medium">
+                                  Submitted
+                                </span>
                                 {studentSubmitted.length > 0 && (
                                   <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
                                     {studentSubmitted.length}
@@ -1498,23 +1518,40 @@ function ClassDetailPage() {
                                 )}
                               </div>
                               {studentSubmitted.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">None</p>
+                                <p className="text-sm text-muted-foreground">
+                                  None
+                                </p>
                               ) : (
                                 <div className="space-y-1">
                                   {studentSubmitted.map((sub) => (
-                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                    <div
+                                      key={sub.id}
+                                      className="flex items-center justify-between text-sm"
+                                    >
                                       <div className="min-w-0">
                                         <Link
-                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          to={`/app/submissions/${sub.id}?${
+                                            data.isDocumentSubmissionEnabled
+                                              ? 'edit=1&'
+                                              : ''
+                                          }exitTo=${encodedClassDetailExitTo}`}
                                           className="text-primary hover:underline truncate block"
                                         >
                                           {sub.title}
                                         </Link>
                                         {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {sub.document.assignment.title}
+                                          </span>
                                         )}
                                       </div>
-                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{timeAgo(new Date(sub.submittedAt ?? sub.createdAt))}</span>
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                                        {timeAgo(
+                                          new Date(
+                                            sub.submittedAt ?? sub.createdAt
+                                          )
+                                        )}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
@@ -1524,7 +1561,9 @@ function ClassDetailPage() {
                             {/* Graded */}
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">Graded</span>
+                                <span className="text-sm font-medium">
+                                  Graded
+                                </span>
                                 {studentGraded.length > 0 && (
                                   <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
                                     {studentGraded.length}
@@ -1532,26 +1571,41 @@ function ClassDetailPage() {
                                 )}
                               </div>
                               {studentGraded.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">None</p>
+                                <p className="text-sm text-muted-foreground">
+                                  None
+                                </p>
                               ) : (
                                 <div className="space-y-1">
                                   {studentGraded.map((sub) => (
-                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                    <div
+                                      key={sub.id}
+                                      className="flex items-center justify-between text-sm"
+                                    >
                                       <div className="min-w-0">
                                         <Link
-                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          to={`/app/submissions/${sub.id}?${
+                                            data.isDocumentSubmissionEnabled
+                                              ? 'edit=1&'
+                                              : ''
+                                          }exitTo=${encodedClassDetailExitTo}`}
                                           className="text-primary hover:underline truncate block"
                                         >
                                           {sub.title}
                                         </Link>
                                         {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {sub.document.assignment.title}
+                                          </span>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2 ml-2 shrink-0">
-                                        {(sub.letterGrade || sub.numericPercentage != null) && (
+                                        {(sub.letterGrade ||
+                                          sub.numericPercentage != null) && (
                                           <Badge variant="secondary">
-                                            {formatGrade(sub.numericPercentage ?? null, sub.letterGrade ?? null)}
+                                            {formatGrade(
+                                              sub.numericPercentage ?? null,
+                                              sub.letterGrade ?? null
+                                            )}
                                           </Badge>
                                         )}
                                       </div>
@@ -1564,32 +1618,51 @@ function ClassDetailPage() {
                             {/* Released */}
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">Released</span>
+                                <span className="text-sm font-medium">
+                                  Released
+                                </span>
                                 {studentReleased.length > 0 && (
-                                  <Badge variant="secondary">{studentReleased.length}</Badge>
+                                  <Badge variant="secondary">
+                                    {studentReleased.length}
+                                  </Badge>
                                 )}
                               </div>
                               {studentReleased.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">None</p>
+                                <p className="text-sm text-muted-foreground">
+                                  None
+                                </p>
                               ) : (
                                 <div className="space-y-1">
                                   {studentReleased.map((sub) => (
-                                    <div key={sub.id} className="flex items-center justify-between text-sm">
+                                    <div
+                                      key={sub.id}
+                                      className="flex items-center justify-between text-sm"
+                                    >
                                       <div className="min-w-0">
                                         <Link
-                                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodedClassDetailExitTo}`}
+                                          to={`/app/submissions/${sub.id}?${
+                                            data.isDocumentSubmissionEnabled
+                                              ? 'edit=1&'
+                                              : ''
+                                          }exitTo=${encodedClassDetailExitTo}`}
                                           className="text-primary hover:underline truncate block"
                                         >
                                           {sub.title}
                                         </Link>
                                         {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">{sub.document.assignment.title}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {sub.document.assignment.title}
+                                          </span>
                                         )}
                                       </div>
                                       <div className="flex items-center gap-2 ml-2 shrink-0">
-                                        {(sub.letterGrade || sub.numericPercentage != null) && (
+                                        {(sub.letterGrade ||
+                                          sub.numericPercentage != null) && (
                                           <Badge variant="secondary">
-                                            {formatGrade(sub.numericPercentage ?? null, sub.letterGrade ?? null)}
+                                            {formatGrade(
+                                              sub.numericPercentage ?? null,
+                                              sub.letterGrade ?? null
+                                            )}
                                           </Badge>
                                         )}
                                       </div>
@@ -1602,17 +1675,26 @@ function ClassDetailPage() {
                             {/* Drafts in progress */}
                             <div>
                               <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">Drafts in progress</span>
+                                <span className="text-sm font-medium">
+                                  Drafts in progress
+                                </span>
                                 {studentDrafts.length > 0 && (
-                                  <Badge variant="secondary">{studentDrafts.length}</Badge>
+                                  <Badge variant="secondary">
+                                    {studentDrafts.length}
+                                  </Badge>
                                 )}
                               </div>
                               {studentDrafts.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">None</p>
+                                <p className="text-sm text-muted-foreground">
+                                  None
+                                </p>
                               ) : (
                                 <div className="space-y-1">
                                   {studentDrafts.map((doc) => (
-                                    <div key={doc.id} className="flex items-center justify-between text-sm">
+                                    <div
+                                      key={doc.id}
+                                      className="flex items-center justify-between text-sm"
+                                    >
                                       <div className="min-w-0">
                                         <Link
                                           to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
@@ -1621,16 +1703,19 @@ function ClassDetailPage() {
                                           {getDraftDisplayTitle(doc)}
                                         </Link>
                                         {doc.assignment && (
-                                          <span className="text-xs text-muted-foreground">{doc.assignment.title}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {doc.assignment.title}
+                                          </span>
                                         )}
                                       </div>
-                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">{timeAgo(new Date(doc.updatedAt))}</span>
+                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                                        {timeAgo(new Date(doc.updatedAt))}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
                               )}
                             </div>
-
                           </div>
                         </SheetContent>
                       </Sheet>
@@ -1704,26 +1789,30 @@ function ClassDetailPage() {
                     {students.length}
                   </span>
                 </TabsTrigger>
-                <TabsTrigger
-                  value="assignments"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Assignments</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.assignments.length}
-                  </span>
-                </TabsTrigger>
+                {assignmentsEnabled ? (
+                  <TabsTrigger
+                    value="assignments"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="hidden sm:inline">Assignments</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {data.assignments.length}
+                    </span>
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingAssignmentId(null);
-                  setIsAssignmentSheetOpen(true);
-                }}
-              >
-                + Create New Assignment
-              </Button>
+              {assignmentsEnabled ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingAssignmentId(null);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                >
+                  + Create New Assignment
+                </Button>
+              ) : null}
             </div>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>

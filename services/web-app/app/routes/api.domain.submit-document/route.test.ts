@@ -19,7 +19,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireProfile = mock();
-const isDocumentSubmissionEnabledForSchools = mock();
+const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -27,7 +27,7 @@ mock.module('~/utils/auth.server', () => ({
   requireProfile,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForSchools,
+  isDocumentSubmissionEnabledForScope,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -49,7 +49,7 @@ describe('api.domain.submit-document', () => {
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
-    isDocumentSubmissionEnabledForSchools.mockReset();
+    isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({ id: 'profile-1' });
@@ -63,10 +63,16 @@ describe('api.domain.submit-document', () => {
       revision: 4,
       assignment: null,
       studentProfile: {
-        classes: [{ schoolId: 'school-1' }],
+        classes: [
+          {
+            id: 'class-1',
+            schoolId: 'school-1',
+            teachers: [{ id: 'teacher-1' }],
+          },
+        ],
       },
     });
-    isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     prisma.documentWriteJournal.create.mockResolvedValue({ id: 'journal-1' });
     prisma.documentWriteJournal.update.mockResolvedValue({
       id: 'journal-1',
@@ -105,9 +111,18 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
-    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
-      'school-1',
-    ]);
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
+      schoolIds: ['school-1'],
+      classIds: ['class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'school-1',
+          classId: 'class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
+    });
   });
 
   test('prefers the assignment class school when the document is assignment-backed', async () => {
@@ -120,11 +135,13 @@ describe('api.domain.submit-document', () => {
       revision: 4,
       assignment: {
         class: {
+          id: 'assignment-class',
           schoolId: 'assignment-school',
+          teachers: [{ id: 'assignment-teacher' }],
         },
       },
       studentProfile: {
-        classes: [{ schoolId: 'student-school' }],
+        classes: [{ id: 'student-class', schoolId: 'student-school' }],
       },
     });
 
@@ -143,9 +160,18 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
-    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
-      'assignment-school',
-    ]);
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
+      schoolIds: ['assignment-school'],
+      classIds: ['assignment-class'],
+      teacherProfileIds: ['assignment-teacher'],
+      classScopes: [
+        {
+          schoolId: 'assignment-school',
+          classId: 'assignment-class',
+          teacherProfileIds: ['assignment-teacher'],
+        },
+      ],
+    });
   });
 
   test('records a document submit journal entry with the full document payload', async () => {

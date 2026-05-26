@@ -9,8 +9,7 @@ const prisma = {
 };
 
 const getLLMCompletion = mock();
-const isDocumentSubmissionEnabledForSchools = mock();
-const isDocumentSubmissionEnabledForSchool = mock();
+const isDocumentSubmissionEnabledForScope = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
@@ -20,8 +19,7 @@ const redirectWithToast = mock();
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
 mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForSchools,
-  isDocumentSubmissionEnabledForSchool,
+  isDocumentSubmissionEnabledForScope,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
@@ -88,8 +86,7 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.update.mockReset();
     getLLMCompletion.mockReset();
-    isDocumentSubmissionEnabledForSchools.mockReset();
-    isDocumentSubmissionEnabledForSchool.mockReset();
+    isDocumentSubmissionEnabledForScope.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
@@ -106,8 +103,7 @@ describe('api.domain.grade-essay-ai', () => {
     isGradingOwnDocument.mockImplementation(
       (actorId: string, docProfileId: string) => actorId === docProfileId
     );
-    isDocumentSubmissionEnabledForSchools.mockResolvedValue(true);
-    isDocumentSubmissionEnabledForSchool.mockResolvedValue(true);
+    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
 
@@ -199,7 +195,13 @@ describe('api.domain.grade-essay-ai', () => {
           profileId: 'student-profile-1',
           assignment: null,
           studentProfile: {
-            classes: [{ schoolId: 'scranton-prep-school' }],
+            classes: [
+              {
+                id: 'legacy-class-1',
+                schoolId: 'scranton-prep-school',
+                teachers: [{ id: 'teacher-1' }],
+              },
+            ],
           },
           profile: { user: { name: 'Jordan Student' } },
         },
@@ -216,10 +218,18 @@ describe('api.domain.grade-essay-ai', () => {
       }),
     } as any);
 
-    expect(isDocumentSubmissionEnabledForSchools).toHaveBeenCalledWith([
-      'scranton-prep-school',
-    ]);
-    expect(isDocumentSubmissionEnabledForSchool).not.toHaveBeenCalled();
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
+      schoolIds: ['scranton-prep-school'],
+      classIds: ['legacy-class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'scranton-prep-school',
+          classId: 'legacy-class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
+    });
     expect(redirectWithToast).not.toHaveBeenCalled();
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });

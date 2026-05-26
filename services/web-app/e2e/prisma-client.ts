@@ -24,10 +24,11 @@ if (!PrismaClientCtor) {
 export type E2EPrismaClient = PrismaClientType;
 
 export function createE2EPrismaClient(): E2EPrismaClient {
-  const connectionString =
-    process.env.E2E_DATABASE_URL || process.env.DATABASE_URL;
+  const connectionString = process.env.E2E_DATABASE_URL;
   if (!connectionString) {
-    throw new Error('DATABASE_URL environment variable is not set');
+    throw new Error(
+      'E2E_DATABASE_URL environment variable is required for E2E database helpers'
+    );
   }
 
   const isLocal =

@@ -7,7 +7,7 @@ import {
 } from '~/domain/documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForOrganization } from '~/utils/feature-flags.server';
+import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({});
@@ -26,16 +26,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  const assignmentsEnabled = await isAssignmentsEnabledForOrganization(
-    profile.organization.id
-  );
-  if (!assignmentsEnabled) {
-    return redirectWithToast('/app', {
-      type: 'error',
-      description: 'Assignments are not enabled for your organization.',
-    });
-  }
-
   const assignment = await prisma.assignment.findFirst({
     where: {
       id: params.assignmentId,
@@ -50,6 +40,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     select: {
       id: true,
       assignmentTypeId: true,
+      classId: true,
+      class: {
+        select: {
+          teachers: { select: { id: true } },
+        },
+      },
     },
   });
 
@@ -57,6 +53,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return redirectWithToast('/app?tab=assignments', {
       type: 'error',
       description: 'Assignment not found.',
+    });
+  }
+
+  const assignmentsEnabled = await isAssignmentsEnabledForContext({
+    organizationId: profile.organization.id,
+    teacherProfileId: null,
+    teacherProfileIds: assignment.class.teachers.map((teacher) => teacher.id),
+    classIds: [assignment.classId],
+  });
+  if (!assignmentsEnabled) {
+    return redirectWithToast('/app', {
+      type: 'error',
+      description: 'Assignments are not enabled for your organization.',
     });
   }
 

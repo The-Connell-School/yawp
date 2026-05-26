@@ -48,8 +48,8 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
-  isDocumentSubmissionEnabledForSchools,
-  isAssignmentsEnabledForOrganization,
+  isAssignmentsEnabledForContext,
+  isDocumentSubmissionEnabledForScope,
 } from '~/utils/feature-flags.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
@@ -63,7 +63,7 @@ import {
 } from '~/utils/document-exit';
 import { formatDateOnly } from '~/utils/date-only';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
-import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
+import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
@@ -197,7 +197,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           dueDate: true,
           class: {
             select: {
+              id: true,
               schoolId: true,
+              teachers: { select: { id: true } },
               school: { select: { organizationId: true } },
             },
           },
@@ -207,7 +209,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           classes: {
             select: {
+              id: true,
               schoolId: true,
+              teachers: { select: { id: true } },
             },
           },
         },
@@ -331,11 +335,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         )?.id;
 
   const assignmentClass = doc.assignment?.class;
+  const documentSubmissionScope = getDocumentSubmissionScope(doc);
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForSchools(getDocumentSubmissionSchoolIds(doc)),
-    isAssignmentsEnabledForOrganization(
-      assignmentClass?.school?.organizationId
-    ),
+    isDocumentSubmissionEnabledForScope(documentSubmissionScope),
+    isAssignmentsEnabledForContext({
+      organizationId: assignmentClass?.school?.organizationId,
+      teacherProfileId: profile.teacherProfile?.id,
+      classIds: documentSubmissionScope.classIds,
+    }),
   ]);
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
@@ -818,7 +825,7 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {data.assignmentsEnabled && data.doc.assignment ? (
+        {data.doc.assignment ? (
           <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">

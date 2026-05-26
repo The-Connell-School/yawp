@@ -17,8 +17,8 @@ import {
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
-import { isDocumentSubmissionEnabledForSchools } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionSchoolIds } from '~/utils/document-submission-scope.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
+import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -116,12 +116,24 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         profileId: true,
-        assignment: { select: { class: { select: { schoolId: true } } } },
+        assignment: {
+          select: {
+            class: {
+              select: {
+                id: true,
+                schoolId: true,
+                teachers: { select: { id: true } },
+              },
+            },
+          },
+        },
         studentProfile: {
           select: {
             classes: {
               select: {
+                id: true,
                 schoolId: true,
+                teachers: { select: { id: true } },
               },
             },
           },
@@ -195,8 +207,8 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForSchools(
-    getDocumentSubmissionSchoolIds(submission.document)
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
+    getDocumentSubmissionScope(submission.document)
   );
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {

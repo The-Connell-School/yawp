@@ -1,9 +1,14 @@
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { Link, useLoaderData, useSearchParams, useNavigate } from 'react-router';
+import {
+  Link,
+  useLoaderData,
+  useSearchParams,
+  useNavigate,
+} from 'react-router';
 import { useState, useCallback, useMemo } from 'react';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForSchool } from '~/utils/feature-flags.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -35,7 +40,8 @@ function isValidStatus(s: string | null): s is StatusFilter {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const { classId, assignmentId } = params;
-  if (!classId || !assignmentId) throw new Response('Not Found', { status: 404 });
+  if (!classId || !assignmentId)
+    throw new Response('Not Found', { status: 404 });
 
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
@@ -70,14 +76,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
-  const status: StatusFilter = isValidStatus(rawStatus) ? rawStatus : 'submitted';
+  const status: StatusFilter = isValidStatus(rawStatus)
+    ? rawStatus
+    : 'submitted';
 
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForSchool(
-    klass.school?.id
+  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
+    {
+      schoolIds: [klass.school?.id],
+      teacherProfileIds: [profile.teacherProfile.id],
+      classIds: [klass.id],
+    }
   );
 
   const submissions =
-    isDocumentSubmissionEnabled && status !== 'in-progress'
+    status !== 'in-progress'
       ? await prisma.submission.findMany({
           where: {
             document: {
@@ -117,7 +129,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : [];
 
   const inProgressDocuments =
-    isDocumentSubmissionEnabled && status === 'in-progress'
+    status === 'in-progress'
       ? await prisma.document.findMany({
           where: {
             assignmentId,
@@ -144,6 +156,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     klass,
     assignment,
     status,
+    isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
   });
@@ -156,7 +169,14 @@ export default function AssignmentSubmissionsRoute() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const { klass, assignment, status, submissions, inProgressDocuments } = data;
+  const {
+    klass,
+    assignment,
+    status,
+    isDocumentSubmissionEnabled,
+    submissions,
+    inProgressDocuments,
+  } = data;
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gradingProgress, setGradingProgress] = useState<
@@ -180,7 +200,8 @@ export default function AssignmentSubmissionsRoute() {
     [submissions, releasedIds]
   );
 
-  const activeList = status === 'submitted' ? visibleSubmissions : visibleGraded;
+  const activeList =
+    status === 'submitted' ? visibleSubmissions : visibleGraded;
 
   const allSelected =
     activeList.length > 0 && activeList.every((s) => selected.has(s.id));
@@ -328,7 +349,9 @@ export default function AssignmentSubmissionsRoute() {
           <div className="mb-3 flex items-center gap-3">
             <Button
               size="sm"
-              disabled={selected.size === 0 || isGrading}
+              disabled={
+                !isDocumentSubmissionEnabled || selected.size === 0 || isGrading
+              }
               onClick={gradeWithAI}
             >
               {isGrading ? (
@@ -392,7 +415,8 @@ export default function AssignmentSubmissionsRoute() {
         {/* Submitted table with checkboxes */}
         {status === 'submitted' && (
           <>
-            {visibleSubmissions.length === 0 && Object.values(gradingProgress).some((v) => v === 'done') ? (
+            {visibleSubmissions.length === 0 &&
+            Object.values(gradingProgress).some((v) => v === 'done') ? (
               <p className="py-8 text-center text-muted-foreground text-sm">
                 All selected essays have been graded. Switch to{' '}
                 <button
@@ -436,7 +460,10 @@ export default function AssignmentSubmissionsRoute() {
                           <Checkbox
                             checked={selected.has(sub.id)}
                             onCheckedChange={() => toggleSelect(sub.id)}
-                            disabled={state === 'grading'}
+                            disabled={
+                              !isDocumentSubmissionEnabled ||
+                              state === 'grading'
+                            }
                             aria-label="Select submission"
                           />
                         </TableCell>
@@ -446,7 +473,9 @@ export default function AssignmentSubmissionsRoute() {
                         </TableCell>
                         <TableCell>
                           <Link
-                            to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                            to={`/app/submissions/${sub.id}?${
+                              isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                            }exitTo=${encodeURIComponent(backUrl)}`}
                             className="text-primary hover:underline"
                           >
                             {sub.document.title || sub.title || 'Untitled'}
@@ -485,7 +514,11 @@ export default function AssignmentSubmissionsRoute() {
             <div className="mb-3 flex items-center gap-3">
               <Button
                 size="sm"
-                disabled={selected.size === 0 || isReleasing}
+                disabled={
+                  !isDocumentSubmissionEnabled ||
+                  selected.size === 0 ||
+                  isReleasing
+                }
                 onClick={releaseGrades}
               >
                 {isReleasing ? (
@@ -504,8 +537,7 @@ export default function AssignmentSubmissionsRoute() {
               )}
             </div>
 
-            {visibleGraded.length === 0 &&
-            releasedIds.size > 0 ? (
+            {visibleGraded.length === 0 && releasedIds.size > 0 ? (
               <p className="py-8 text-center text-muted-foreground text-sm">
                 All grades released. Switch to{' '}
                 <button
@@ -544,7 +576,7 @@ export default function AssignmentSubmissionsRoute() {
                         <Checkbox
                           checked={selected.has(sub.id)}
                           onCheckedChange={() => toggleSelect(sub.id)}
-                          disabled={isReleasing}
+                          disabled={!isDocumentSubmissionEnabled || isReleasing}
                           aria-label="Select submission"
                         />
                       </TableCell>
@@ -554,7 +586,9 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?${
+                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
@@ -602,7 +636,9 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?${
+                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
