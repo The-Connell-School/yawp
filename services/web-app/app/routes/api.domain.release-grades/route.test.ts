@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(),
   submission: {
     findMany: mock(),
     updateMany: mock(),
@@ -32,6 +33,7 @@ const { action } = await import('./route');
 
 describe('api.domain.release-grades', () => {
   beforeEach(() => {
+    prisma.$transaction.mockReset();
     prisma.submission.findMany.mockReset();
     prisma.submission.updateMany.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
@@ -51,6 +53,9 @@ describe('api.domain.release-grades', () => {
     isGradingOwnDocument.mockReturnValue(false);
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     prisma.submission.updateMany.mockResolvedValue({ count: 1 });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
   });
 
   test('checks school flags from submission.document when releasing', async () => {
@@ -72,10 +77,13 @@ describe('api.domain.release-grades', () => {
     const form = new FormData();
     form.append('submissionIds', 'sub-1');
 
-    const request = new Request('https://example.com/api/domain/release-grades', {
-      method: 'POST',
-      body: form,
-    });
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
 
     await action({ request } as any);
 
@@ -116,10 +124,13 @@ describe('api.domain.release-grades', () => {
     const form = new FormData();
     form.append('submissionIds', 'legacy-sub-1');
 
-    const request = new Request('https://example.com/api/domain/release-grades', {
-      method: 'POST',
-      body: form,
-    });
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
 
     await action({ request } as any);
 
@@ -179,10 +190,13 @@ describe('api.domain.release-grades', () => {
     form.append('submissionIds', 'pilot-submission');
     form.append('submissionIds', 'non-pilot-submission');
 
-    const request = new Request('https://example.com/api/domain/release-grades', {
-      method: 'POST',
-      body: form,
-    });
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
 
     await action({ request } as any);
 
@@ -212,7 +226,8 @@ describe('api.domain.release-grades', () => {
       ],
     });
     expect(redirectWithToast).toHaveBeenCalledWith('/app/my-classes', {
-      description: 'Grade release is currently disabled for one or more schools.',
+      description:
+        'Grade release is currently disabled for one or more schools.',
       type: 'error',
     });
     expect(prisma.submission.updateMany).not.toHaveBeenCalled();
@@ -224,14 +239,114 @@ describe('api.domain.release-grades', () => {
     const form = new FormData();
     form.append('submissionIds', 'sub-nonexistent');
 
-    const request = new Request('https://example.com/api/domain/release-grades', {
-      method: 'POST',
-      body: form,
-    });
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
 
     const response = await action({ request } as any);
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(404);
+  });
+
+  test('rejects mixed valid and missing submission IDs without partial release', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        document: {
+          assignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              teachers: [{ id: 'teacher-1' }],
+            },
+          },
+        },
+      },
+    ]);
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    form.append('submissionIds', 'missing-sub');
+
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
+
+    const response = await action({ request } as any);
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(404);
+    expect(payload.data.message).toBe(
+      'One or more submissions are no longer eligible for release.'
+    );
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
+  });
+
+  test('rolls back when concurrent updates release fewer submissions than validated', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'sub-1',
+        document: {
+          assignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              teachers: [{ id: 'teacher-1' }],
+            },
+          },
+        },
+      },
+      {
+        id: 'sub-2',
+        document: {
+          assignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              teachers: [{ id: 'teacher-1' }],
+            },
+          },
+        },
+      },
+    ]);
+    prisma.submission.updateMany.mockResolvedValue({ count: 1 });
+
+    const form = new FormData();
+    form.append('submissionIds', 'sub-1');
+    form.append('submissionIds', 'sub-2');
+
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
+
+    const response = await action({ request } as any);
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(409);
+    expect(payload.data.message).toBe(
+      'Submissions changed while releasing grades. Please refresh and try again.'
+    );
   });
 
   test('rejects non-teachers', async () => {
@@ -240,13 +355,19 @@ describe('api.domain.release-grades', () => {
     const form = new FormData();
     form.append('submissionIds', 'sub-1');
 
-    const request = new Request('https://example.com/api/domain/release-grades', {
-      method: 'POST',
-      body: form,
-    });
+    const request = new Request(
+      'https://example.com/api/domain/release-grades',
+      {
+        method: 'POST',
+        body: form,
+      }
+    );
 
     const response = await action({ request } as any);
-    const payload = (response as { data: Record<string, unknown>; init?: { status?: number } });
+    const payload = response as {
+      data: Record<string, unknown>;
+      init?: { status?: number };
+    };
     expect(payload.init?.status).toBe(403);
   });
 });

@@ -331,7 +331,9 @@ export async function action({ request }: ActionFunctionArgs) {
         enabled,
         expiresAt: null,
       },
-      update: enabled ? { enabled, expiresAt: null } : { enabled },
+      update: enabled
+        ? { enabled, expiresAt: null, updatedAt: new Date() }
+        : { enabled, updatedAt: new Date() },
     });
 
     return dataResponse({ success: true, target });
@@ -746,7 +748,7 @@ function PilotFeatureTargetTable({ rows }: { rows: PilotTargetRow[] }) {
     <Card className="bg-muted">
       <CardHeader className="border-b pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Teacher and class pilots</CardTitle>
+          <CardTitle>Teacher cohorts and class pilots</CardTitle>
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -796,7 +798,9 @@ function PilotFeatureTargetTable({ rows }: { rows: PilotTargetRow[] }) {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {row.targetKind === 'teacher' ? 'Teacher' : 'Class'}
+                        {row.targetKind === 'teacher'
+                          ? 'Teacher cohort'
+                          : 'Class access'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

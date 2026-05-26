@@ -10,7 +10,12 @@ import {
   useRevalidator,
   redirect,
 } from 'react-router';
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -24,6 +29,8 @@ import {
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireUserId, requireProfile } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
 import {
@@ -40,6 +47,7 @@ import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
+import { resolveSubmissionGradeMode } from './submission-grade-mode';
 
 // ── Revalidation ─────────────────────────────────────────────────────
 
@@ -114,11 +122,33 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          assignment: {
+            select: {
+              class: {
+                select: {
+                  id: true,
+                  schoolId: true,
+                  teachers: { select: { id: true } },
+                },
+              },
+            },
+          },
           profile: {
             select: {
               id: true,
               userId: true,
               user: { select: { name: true } },
+            },
+          },
+          studentProfile: {
+            select: {
+              classes: {
+                select: {
+                  id: true,
+                  schoolId: true,
+                  teachers: { select: { id: true } },
+                },
+              },
             },
           },
         },
@@ -164,6 +194,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     : false;
 
   const isAdmin = user?.isAdmin ?? false;
+  const isDocumentSubmissionEnabled =
+    !isOwner && (isTeacher || isAdmin)
+      ? await isDocumentSubmissionEnabledForScope(
+          getDocumentSubmissionScope(submission.document)
+        )
+      : true;
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -175,6 +211,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isGradeMode =
     !isOwner &&
     (isTeacher || isAdmin) &&
+    isDocumentSubmissionEnabled &&
     (!submission.releasedAt || editParam);
 
   // Sort comments by document location
@@ -195,9 +232,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }
     if (aRange) return -1;
     if (bRange) return 1;
-    return (
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
   return {
@@ -208,14 +243,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner,
     isTeacher: isTeacher || isAdmin,
     isGradeMode,
+    isDocumentSubmissionEnabled,
   };
 }
 
 // ── Component ────────────────────────────────────────────────────────
 
 export default function SubmissionRoute() {
-  const { submission, isOwner, isTeacher, isGradeMode: loaderGradeMode } =
-    useLoaderData<typeof loader>();
+  const {
+    submission,
+    isOwner,
+    isTeacher,
+    isGradeMode: loaderGradeMode,
+    isDocumentSubmissionEnabled,
+  } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -226,9 +267,12 @@ export default function SubmissionRoute() {
   // When no param, fall back to loader default (ungraded = grade mode).
   const editParam = searchParams.get('edit');
   const isGradingOther = isTeacher && !isOwner;
-  const isGradeMode =
-    isGradingOther &&
-    (editParam !== null ? editParam === '1' : loaderGradeMode);
+  const isGradeMode = resolveSubmissionGradeMode({
+    isGradingOther,
+    isDocumentSubmissionEnabled,
+    editParam,
+    loaderGradeMode,
+  });
 
   const [localGradedAt, setLocalGradedAt] = useState<string | null>(null);
   const [localReleasedAt, setLocalReleasedAt] = useState<string | null>(null);
@@ -257,9 +301,7 @@ export default function SubmissionRoute() {
 
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
-    submission.title.trim() ||
-    submission.document.title ||
-    '';
+    submission.title.trim() || submission.document.title || '';
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -268,13 +310,10 @@ export default function SubmissionRoute() {
   );
   const essayRef = useRef<HTMLDivElement>(null);
   const [essayElement, setEssayElement] = useState<HTMLDivElement | null>(null);
-  const setEssayRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      (essayRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-      setEssayElement(el);
-    },
-    []
-  );
+  const setEssayRef = useCallback((el: HTMLDivElement | null) => {
+    (essayRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+    setEssayElement(el);
+  }, []);
 
   // ── Grade display ──────────────────────────────────────────────────
   const effectiveNumericPct =
@@ -318,11 +357,14 @@ export default function SubmissionRoute() {
   const handleCommentDeleted = useCallback((commentId: string) => {
     setComments((prev) => prev.filter((c) => c.id !== commentId));
   }, []);
-  const handleCommentUpdated = useCallback((commentId: string, content: string) => {
-    setComments((prev) =>
-      prev.map((c) => (c.id === commentId ? { ...c, content } : c))
-    );
-  }, []);
+  const handleCommentUpdated = useCallback(
+    (commentId: string, content: string) => {
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, content } : c))
+      );
+    },
+    []
+  );
 
   // ── Grade mode state ───────────────────────────────────────────────
   const [activeGradeCommentId, setActiveGradeCommentId] = useState<
@@ -350,7 +392,9 @@ export default function SubmissionRoute() {
   const [tooltipRect, setTooltipRect] = useState<DOMRect | null>(null);
   const [tooltipPage, setTooltipPage] = useState(0);
   const tooltipHoveredRef = useRef(false);
-  const tooltipClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tooltipClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const persistedGrammarIssues = useMemo(
     () =>
@@ -359,8 +403,9 @@ export default function SubmissionRoute() {
       }),
     [submission.text, submission.id, submission.grammarIssues]
   );
-  const [grammarIssues, setGrammarIssues] =
-    useState<GrammarIssue[]>(persistedGrammarIssues);
+  const [grammarIssues, setGrammarIssues] = useState<GrammarIssue[]>(
+    persistedGrammarIssues
+  );
   const [hiddenGrammarIssueIds, setHiddenGrammarIssueIds] = useState<string[]>(
     []
   );
@@ -400,45 +445,48 @@ export default function SubmissionRoute() {
   }, [grammarIssues, tooltipIssueIds]);
 
   const showGrammarMarksInEssay =
-    isPending ||
-    isGradingOther ||
-    (isOwner && studentGrammarHighlightsVisible);
+    isPending || isGradingOther || (isOwner && studentGrammarHighlightsVisible);
 
-  const essayHighlights = useMemo(() => [
-    ...(isPending
-      ? []
-      : comments.map((c) => ({
-          id: c.id,
-          excerpt: c.excerpt,
-          occurrence: c.occurrence,
-          dataAttr: 'data-grade-comment-id' as const,
-          className: 'grade-comment-mark',
-        }))),
-    ...(isPending || !showGrammarMarksInEssay
-      ? []
-      : visibleGrammarIssues.map((g) => ({
-          id: g.id,
-          excerpt: g.excerpt,
-          occurrence: g.occurrence,
-          dataAttr: 'data-grammar-issue-id' as const,
-          className: 'grammar-issue-mark',
-        }))),
-    ...(draftHighlight
-      ? [{
-          id: 'draft',
-          excerpt: draftHighlight.excerpt,
-          occurrence: draftHighlight.occurrence,
-          dataAttr: 'data-grade-comment-id' as const,
-          className: 'grade-comment-mark draft',
-        }]
-      : []),
-  ], [
-    comments,
-    visibleGrammarIssues,
-    draftHighlight,
-    isPending,
-    showGrammarMarksInEssay,
-  ]);
+  const essayHighlights = useMemo(
+    () => [
+      ...(isPending
+        ? []
+        : comments.map((c) => ({
+            id: c.id,
+            excerpt: c.excerpt,
+            occurrence: c.occurrence,
+            dataAttr: 'data-grade-comment-id' as const,
+            className: 'grade-comment-mark',
+          }))),
+      ...(isPending || !showGrammarMarksInEssay
+        ? []
+        : visibleGrammarIssues.map((g) => ({
+            id: g.id,
+            excerpt: g.excerpt,
+            occurrence: g.occurrence,
+            dataAttr: 'data-grammar-issue-id' as const,
+            className: 'grammar-issue-mark',
+          }))),
+      ...(draftHighlight
+        ? [
+            {
+              id: 'draft',
+              excerpt: draftHighlight.excerpt,
+              occurrence: draftHighlight.occurrence,
+              dataAttr: 'data-grade-comment-id' as const,
+              className: 'grade-comment-mark draft',
+            },
+          ]
+        : []),
+    ],
+    [
+      comments,
+      visibleGrammarIssues,
+      draftHighlight,
+      isPending,
+      showGrammarMarksInEssay,
+    ]
+  );
 
   useEffect(() => {
     if (studentGrammarHighlightsVisible || !isOwner) return;
@@ -496,7 +544,7 @@ export default function SubmissionRoute() {
         setLocalGradedAt(new Date().toISOString());
       }
     },
-    [submission.gradedAt],
+    [submission.gradedAt]
   );
 
   const teacherExistingGrade = useMemo(
@@ -505,7 +553,8 @@ export default function SubmissionRoute() {
       score: teacherGradeUi?.score ?? submission.score,
       feedback: submission.feedback,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
-      overallComment: teacherGradeUi?.overallComment ?? submission.overallComment,
+      overallComment:
+        teacherGradeUi?.overallComment ?? submission.overallComment,
       numericPercentage:
         teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
       letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
@@ -521,7 +570,7 @@ export default function SubmissionRoute() {
       submission.numericPercentage,
       submission.letterGrade,
       teacherGradeUi,
-    ],
+    ]
   );
 
   const submissionForView = useMemo(
@@ -531,10 +580,11 @@ export default function SubmissionRoute() {
         teacherGradeUi?.numericPercentage ?? submission.numericPercentage,
       letterGrade: teacherGradeUi?.letterGrade ?? submission.letterGrade,
       score: teacherGradeUi?.score ?? submission.score,
-      overallComment: teacherGradeUi?.overallComment ?? submission.overallComment,
+      overallComment:
+        teacherGradeUi?.overallComment ?? submission.overallComment,
       rubricScores: teacherGradeUi?.rubricScores ?? submission.rubricScores,
     }),
-    [submission, teacherGradeUi],
+    [submission, teacherGradeUi]
   );
 
   const persistGrammarIssues = useCallback(
@@ -556,19 +606,22 @@ export default function SubmissionRoute() {
     [isGradeMode, isGradingOther, submission.id]
   );
 
-  const handleRemoveGrammarIssue = useCallback(async (id: string) => {
-    const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
-    try {
-      await persistGrammarIssues(nextIssues);
-    } catch {
-      revalidator.revalidate();
-      return;
-    }
-    setGrammarIssues(nextIssues);
-    setHiddenGrammarIssueIds((prev) =>
-      prev.filter((currentId) => currentId !== id)
-    );
-  }, [grammarIssues, persistGrammarIssues, revalidator]);
+  const handleRemoveGrammarIssue = useCallback(
+    async (id: string) => {
+      const nextIssues = grammarIssues.filter((issue) => issue.id !== id);
+      try {
+        await persistGrammarIssues(nextIssues);
+      } catch {
+        revalidator.revalidate();
+        return;
+      }
+      setGrammarIssues(nextIssues);
+      setHiddenGrammarIssueIds((prev) =>
+        prev.filter((currentId) => currentId !== id)
+      );
+    },
+    [grammarIssues, persistGrammarIssues, revalidator]
+  );
 
   // ── Save / Release grade ────────────────────────────────────────────
   const releaseFetcher = useFetcher<{ success?: boolean }>();
@@ -597,7 +650,10 @@ export default function SubmissionRoute() {
       const res = await fetch('/api/domain/update-submission', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ submissionId: submission.id, markAsGraded: true }),
+        body: JSON.stringify({
+          submissionId: submission.id,
+          markAsGraded: true,
+        }),
       });
       if (res.ok) {
         setLocalGradedAt(new Date().toISOString());
@@ -622,13 +678,23 @@ export default function SubmissionRoute() {
   const viewDocumentHref = useMemo(() => {
     const returnUrl = `${location.pathname}${location.search}${location.hash}`;
     return `/app/documents/${submission.documentId}?exitTo=${encodeURIComponent(returnUrl)}`;
-  }, [location.pathname, location.search, location.hash, submission.documentId]);
+  }, [
+    location.pathname,
+    location.search,
+    location.hash,
+    submission.documentId,
+  ]);
 
   return (
     <main className="flex h-screen flex-col bg-background">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
       <nav className="flex w-full items-center gap-3 border-b bg-white px-3 py-2">
-        <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => navigate(exitTarget)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={() => navigate(exitTarget)}
+        >
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
@@ -656,9 +722,7 @@ export default function SubmissionRoute() {
               onBlur={(e) => {
                 const next = e.target.value.trim();
                 const prev =
-                  submission.title.trim() ||
-                  submission.document.title ||
-                  '';
+                  submission.title.trim() || submission.document.title || '';
                 if (next === prev) return;
                 titleFetcher.submit(
                   { intent: 'updateTitle', title: e.target.value },
@@ -676,7 +740,9 @@ export default function SubmissionRoute() {
           )}
         </div>
 
-        <Badge variant={statusVariant} className="shrink-0">{statusLabel}</Badge>
+        <Badge variant={statusVariant} className="shrink-0">
+          {statusLabel}
+        </Badge>
 
         {gradeDisplay && !isPending ? (
           <Badge
@@ -719,17 +785,15 @@ export default function SubmissionRoute() {
               cancelText="Cancel"
               onConfirm={handleReleaseGrade}
             >
-              <Button
-                size="sm"
-                variant="default"
-                disabled={isReleasing}
-              >
+              <Button size="sm" variant="default" disabled={isReleasing}>
                 {isReleasing ? 'Releasing...' : 'Release Grade'}
               </Button>
             </ConfirmationDialog>
           ) : null}
           {isGradingOther && isReleased ? (
-            <Badge variant="success" className="shrink-0">Released</Badge>
+            <Badge variant="success" className="shrink-0">
+              Released
+            </Badge>
           ) : null}
           {isOwner && !isPending && persistedGrammarIssues.length > 0 ? (
             <Button
@@ -738,9 +802,7 @@ export default function SubmissionRoute() {
               variant="outline"
               aria-pressed={studentGrammarHighlightsVisible}
               data-testid="toggle-grammar-highlights"
-              onClick={() =>
-                setStudentGrammarHighlightsVisible((v) => !v)
-              }
+              onClick={() => setStudentGrammarHighlightsVisible((v) => !v)}
             >
               {studentGrammarHighlightsVisible
                 ? 'Hide grammar highlights'
@@ -762,46 +824,51 @@ export default function SubmissionRoute() {
           data-testid="teacher-submission-archived-banner"
           role="status"
         >
-          <span className="font-medium">Archived by student.</span>{' '}
-          They hid this version from their own list. You can still grade it—make
-          sure this is the submission you intend to score.
+          <span className="font-medium">Archived by student.</span> They hid
+          this version from their own list. You can still grade it—make sure
+          this is the submission you intend to score.
         </div>
       ) : null}
 
       {/* ── Body ────────────────────────────────────────────────────── */}
       <div className="flex grow overflow-hidden">
         {/* Left panel: grading (edit/view toggle for teachers) or view-only summary */}
-        <div className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white" style={{ width: 380 }}>
+        <div
+          className="no-scrollbar flex shrink-0 flex-col overflow-hidden border-r bg-white"
+          style={{ width: 380 }}
+        >
           {isGradingOther ? (
             <>
               <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
-                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
-                  <Button
-                    size="sm"
-                    variant={isGradeMode ? 'secondary' : 'ghost'}
-                    className="h-7 rounded-full px-3 text-xs"
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.set('edit', '1');
-                      setSearchParams(params, { replace: true });
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={!isGradeMode ? 'secondary' : 'ghost'}
-                    className="h-7 rounded-full px-3 text-xs"
-                    onClick={() => {
-                      const params = new URLSearchParams(searchParams);
-                      params.set('edit', '0');
-                      setSearchParams(params, { replace: true });
-                    }}
-                  >
-                    View
-                  </Button>
-                </div>
+                {isDocumentSubmissionEnabled ? (
+                  <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
+                    <Button
+                      size="sm"
+                      variant={isGradeMode ? 'secondary' : 'ghost'}
+                      className="h-7 rounded-full px-3 text-xs"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams);
+                        params.set('edit', '1');
+                        setSearchParams(params, { replace: true });
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={!isGradeMode ? 'secondary' : 'ghost'}
+                      className="h-7 rounded-full px-3 text-xs"
+                      onClick={() => {
+                        const params = new URLSearchParams(searchParams);
+                        params.set('edit', '0');
+                        setSearchParams(params, { replace: true });
+                      }}
+                    >
+                      View
+                    </Button>
+                  </div>
+                ) : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isGradeMode ? (
@@ -855,7 +922,10 @@ export default function SubmissionRoute() {
         </div>
 
         {/* Right: Feedback comments */}
-        <div className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white" style={{ width: 320 }}>
+        <div
+          className="no-scrollbar shrink-0 overflow-y-auto border-l bg-white"
+          style={{ width: 320 }}
+        >
           <GradingCommentsSidebar
             submissionComments={isPending ? [] : (comments as any)}
             submissionId={submission.id}
@@ -872,75 +942,96 @@ export default function SubmissionRoute() {
       </div>
 
       {/* Grammar issue tooltip — shown on hover over purple-highlighted text */}
-      {!isPending && activeGrammarIssues.length > 0 && tooltipPos ? (() => {
-        const currentIssue = activeGrammarIssues[tooltipPage] ?? activeGrammarIssues[0];
-        const hasMultiple = activeGrammarIssues.length > 1;
-        return (
-          <div
-            className="fixed z-50 max-w-xs rounded-lg border border-purple-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
-            style={{ top: tooltipPos.top, left: tooltipPos.left }}
-            onMouseEnter={() => {
-              tooltipHoveredRef.current = true;
-              if (tooltipClearTimerRef.current) {
-                clearTimeout(tooltipClearTimerRef.current);
-                tooltipClearTimerRef.current = null;
-              }
-            }}
-            onMouseLeave={() => {
-              tooltipHoveredRef.current = false;
-              setTooltipIssueIds([]);
-              setTooltipRect(null);
-            }}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
-                <p className="text-xs font-semibold text-purple-700">
-                  {currentIssue.kind === 'error' ? 'Grammar Error' : 'Style Suggestion'}
-                </p>
-              </div>
-              {hasMultiple ? (
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
-                    onClick={() => setTooltipPage((p) => (p - 1 + activeGrammarIssues.length) % activeGrammarIssues.length)}
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="text-xs text-purple-500">{tooltipPage + 1}/{activeGrammarIssues.length}</span>
-                  <button
-                    type="button"
-                    className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
-                    onClick={() => setTooltipPage((p) => (p + 1) % activeGrammarIssues.length)}
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+      {!isPending && activeGrammarIssues.length > 0 && tooltipPos
+        ? (() => {
+            const currentIssue =
+              activeGrammarIssues[tooltipPage] ?? activeGrammarIssues[0];
+            const hasMultiple = activeGrammarIssues.length > 1;
+            return (
+              <div
+                className="fixed z-50 max-w-xs rounded-lg border border-purple-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+                style={{ top: tooltipPos.top, left: tooltipPos.left }}
+                onMouseEnter={() => {
+                  tooltipHoveredRef.current = true;
+                  if (tooltipClearTimerRef.current) {
+                    clearTimeout(tooltipClearTimerRef.current);
+                    tooltipClearTimerRef.current = null;
+                  }
+                }}
+                onMouseLeave={() => {
+                  tooltipHoveredRef.current = false;
+                  setTooltipIssueIds([]);
+                  setTooltipRect(null);
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-purple-500" />
+                    <p className="text-xs font-semibold text-purple-700">
+                      {currentIssue.kind === 'error'
+                        ? 'Grammar Error'
+                        : 'Style Suggestion'}
+                    </p>
+                  </div>
+                  {hasMultiple ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
+                        onClick={() =>
+                          setTooltipPage(
+                            (p) =>
+                              (p - 1 + activeGrammarIssues.length) %
+                              activeGrammarIssues.length
+                          )
+                        }
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-xs text-purple-500">
+                        {tooltipPage + 1}/{activeGrammarIssues.length}
+                      </span>
+                      <button
+                        type="button"
+                        className="flex h-5 w-5 items-center justify-center rounded text-purple-500 hover:bg-purple-100"
+                        onClick={() =>
+                          setTooltipPage(
+                            (p) => (p + 1) % activeGrammarIssues.length
+                          )
+                        }
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-sm leading-snug select-text">{currentIssue.message}</p>
-            {currentIssue.rule ? (
-              <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">Rule: {currentIssue.rule}</p>
-            ) : null}
-            {isGradeMode ? (
-              <div className="mt-2 border-t pt-2">
-                <button
-                  type="button"
-                  className="w-full rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
-                  onClick={() => {
-                    handleRemoveGrammarIssue(currentIssue.id);
-                    setTooltipIssueIds([]);
-                    setTooltipRect(null);
-                  }}
-                >
-                  Remove comment
-                </button>
+                <p className="mt-1.5 text-sm leading-snug select-text">
+                  {currentIssue.message}
+                </p>
+                {currentIssue.rule ? (
+                  <p className="mt-1.5 text-xs text-muted-foreground select-text border-t pt-1.5">
+                    Rule: {currentIssue.rule}
+                  </p>
+                ) : null}
+                {isGradeMode ? (
+                  <div className="mt-2 border-t pt-2">
+                    <button
+                      type="button"
+                      className="w-full rounded-md border border-purple-200 bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 hover:bg-purple-100"
+                      onClick={() => {
+                        handleRemoveGrammarIssue(currentIssue.id);
+                        setTooltipIssueIds([]);
+                        setTooltipRect(null);
+                      }}
+                    >
+                      Remove comment
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
-        );
-      })() : null}
+            );
+          })()
+        : null}
     </main>
   );
 }
@@ -956,11 +1047,15 @@ function PendingViewPanel() {
       </div>
       <div>
         <h3 className="text-sm font-medium text-muted-foreground">Grade</h3>
-        <p className="mt-0.5 text-sm italic text-muted-foreground">Pending grade</p>
+        <p className="mt-0.5 text-sm italic text-muted-foreground">
+          Pending grade
+        </p>
       </div>
       <div>
         <h3 className="text-sm font-medium text-muted-foreground">Feedback</h3>
-        <p className="mt-0.5 text-sm italic text-muted-foreground">Pending feedback</p>
+        <p className="mt-0.5 text-sm italic text-muted-foreground">
+          Pending feedback
+        </p>
       </div>
     </div>
   );
@@ -978,10 +1073,19 @@ function ViewPanel({
     rubricScores: unknown;
   };
 }) {
-  const rawRubric = (submission.rubricScores ?? {}) as Record<string, number | { score: number; comment?: string }>;
+  const rawRubric = (submission.rubricScores ?? {}) as Record<
+    string,
+    number | { score: number; comment?: string }
+  >;
   const rubricEntries = Object.entries(rawRubric).map(([key, val]) => {
-    const score = typeof val === 'object' && val !== null ? (val as { score: number }).score : (val as number);
-    const comment = typeof val === 'object' && val !== null ? (val as { comment?: string }).comment : undefined;
+    const score =
+      typeof val === 'object' && val !== null
+        ? (val as { score: number }).score
+        : (val as number);
+    const comment =
+      typeof val === 'object' && val !== null
+        ? (val as { comment?: string }).comment
+        : undefined;
     return { key, score, comment };
   });
   const hasGrade = submission.numericPercentage != null;
@@ -991,7 +1095,9 @@ function ViewPanel({
       {hasGrade ? (
         <>
           <div>
-            <h3 className="text-sm font-medium text-muted-foreground">Overall Grade</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Overall Grade
+            </h3>
             <p className="text-2xl font-semibold">
               {submission.numericPercentage}%
               {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
@@ -999,27 +1105,45 @@ function ViewPanel({
           </div>
           {submission.overallComment ? (
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Overall Feedback</h3>
-              <p className="mt-1 text-sm whitespace-pre-wrap">{submission.overallComment}</p>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Overall Feedback
+              </h3>
+              <p className="mt-1 text-sm whitespace-pre-wrap">
+                {submission.overallComment}
+              </p>
             </div>
           ) : null}
           {rubricEntries.length > 0 ? (
             <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Rubric</h3>
+              <h3 className="text-sm font-medium text-muted-foreground">
+                Rubric
+              </h3>
               <Accordion type="multiple" className="mt-2">
                 {rubricEntries.map(({ key, score, comment }) => (
-                  <AccordionItem key={key} value={key} className="border-b last:border-0">
+                  <AccordionItem
+                    key={key}
+                    value={key}
+                    className="border-b last:border-0"
+                  >
                     <AccordionTrigger className="py-2 text-sm hover:no-underline">
                       <div className="flex w-full items-center justify-between pr-2">
-                        <span className="font-medium">{key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                        <span className="font-medium">
+                          {key
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
+                        </span>
                         <span className="text-muted-foreground">{score}/5</span>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
                       {comment ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{comment}</p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                          {comment}
+                        </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic">No feedback for this category</p>
+                        <p className="text-xs text-muted-foreground italic">
+                          No feedback for this category
+                        </p>
                       )}
                     </AccordionContent>
                   </AccordionItem>
@@ -1030,9 +1154,12 @@ function ViewPanel({
         </>
       ) : (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
-          <p className="text-sm font-medium text-muted-foreground">Not yet graded</p>
+          <p className="text-sm font-medium text-muted-foreground">
+            Not yet graded
+          </p>
           <p className="text-xs text-muted-foreground/60 leading-relaxed max-w-[200px]">
-            Your grade will appear here once the teacher has reviewed your submission.
+            Your grade will appear here once the teacher has reviewed your
+            submission.
           </p>
         </div>
       )}

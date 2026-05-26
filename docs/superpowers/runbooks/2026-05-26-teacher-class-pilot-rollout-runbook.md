@@ -84,6 +84,11 @@ so the transaction stops if the guard block raises an exception. The script
 intentionally uses deterministic ids because raw SQL does not invoke Prisma's
 `cuid()` default.
 
+Teacher target rows mark Amanda as part of the pilot cohort. They do not grant
+class-scoped access by themselves. The class target rows below are the rows that
+authorize assignments, submission, grading, and release behavior for the three
+pilot classes.
+
 ```sql
 BEGIN;
 
@@ -237,7 +242,9 @@ WHERE id LIKE 'rollout-20260526-amanda-%'
 ORDER BY "featureKey", "targetKind", "targetId";
 ```
 
-Expected: eight rows, all `enabled = true`, all `expiresAt IS NULL`.
+Expected: eight rows, all `enabled = true`, all `expiresAt IS NULL`. The two
+teacher rows are cohort metadata; the six class rows are the effective access
+rows for class-scoped behavior.
 
 Verify Amanda and the three class ids still resolve to the expected school and
 organization:
@@ -288,6 +295,10 @@ WHERE name IN (
 ORDER BY name;
 ```
 
+If rollback was run, repeat the same query and confirm broad org/school settings
+are still unchanged; disabling Amanda's class rows will not remove access if a
+broad org or school allowlist already enables the same feature.
+
 ## Post-Deploy UI Smoke Checklist
 
 Use Amanda's production account or a supervised session with Amanda. Keep the
@@ -295,6 +306,8 @@ smoke narrow; this is a pilot enablement check, not a full regression pass.
 
 - Amanda can sign in.
 - Amanda's dashboard shows assignment affordances.
+- Non-pilot Amanda classes remain visible for normal class navigation, but they
+  do not expose assignment creation or grading affordances from this pilot.
 - Each pilot class page opens for:
   `cmocwxinl03g20ql77u0fd51c`, `cmocwy6vp03g50ql71ioy202o`,
   `cmocwytnm03g80ql7weubpkbr`.
@@ -320,8 +333,8 @@ Do not tell Brian the pilot is ready immediately after deploy. Reply only after:
 If all checks pass, reply to Brian within 15 minutes with:
 
 - Amanda is enabled for assignments and document submission grading.
-- The rollout is scoped to Amanda's teacher profile and the three Parker High
-  School class ids listed above.
+- Amanda is in the pilot cohort, and class-scoped access is limited to the three
+  Parker High School class ids listed above.
 - Amanda can start pilot testing now.
 
 If deploy or smoke is delayed by more than 30 minutes, send Brian a holding

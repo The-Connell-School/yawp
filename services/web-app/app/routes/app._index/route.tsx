@@ -143,7 +143,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })
     : [];
   const assignmentsEnabled =
-    studentAssignmentClassIds.length > 0 || teacherAssignmentClassIds.length > 0;
+    studentAssignmentClassIds.length > 0 ||
+    teacherAssignmentClassIds.length > 0;
 
   const url = new URL(request.url);
   if (
@@ -408,7 +409,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const coursesGlance: CourseGlanceRow[] = profile.teacherProfile
     ? await Promise.all(
-        enabledTeacherClassesOrdered.map(async (klass) => {
+        teacherClassesOrdered.map(async (klass) => {
+          if (!teacherAssignmentClassIds.includes(klass.id)) {
+            return {
+              id: klass.id,
+              name:
+                klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
+              inProgress: 0,
+              submitted: 0,
+              graded: 0,
+              released: 0,
+            };
+          }
+
           const [submissions, inProgressCount] = await Promise.all([
             prisma.submission.findMany({
               where: {
@@ -459,13 +472,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       )
     : [];
 
-  const teacherClassOptions: TeacherClassOption[] = enabledTeacherClassesOrdered.map(
-    (klass) =>
-      ({
-        id: klass.id,
-        name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
-      })
-  );
+  const teacherClassOptions: TeacherClassOption[] =
+    enabledTeacherClassesOrdered.map((klass) => ({
+      id: klass.id,
+      name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
+    }));
 
   return dataResponse({
     courses,
@@ -473,9 +484,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     archivedDocuments,
     studentProfiles,
     teacherTrainings,
-    teacherClasses: profile.teacherProfile
-      ? enabledTeacherClassesOrdered
-      : teacherClassesOrdered,
+    teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
     teacherAssignments,

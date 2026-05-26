@@ -3,8 +3,7 @@ import { generateTOTP } from '../app/utils/totp.server';
 import bcrypt from 'bcryptjs';
 
 const DOCUMENT_SUBMISSION_FLAG = 'document_submission_enabled';
-const DOCUMENT_SUBMISSION_SCHOOL_IDS =
-  'document_submission_enabled_school_ids';
+const DOCUMENT_SUBMISSION_SCHOOL_IDS = 'document_submission_enabled_school_ids';
 const ASSIGNMENTS_ENABLED_ORG_IDS = 'assignments_enabled_org_ids';
 const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
   'released_grades_organization_enabled_org_ids';
@@ -118,6 +117,7 @@ export async function clearPilotFeatureAccessTargets(params: {
   await prisma.featureAccessTarget.deleteMany({
     where: {
       featureKey: { in: featureKeys },
+      OR: [{ note: { startsWith: 'E2E ' } }, { note: { startsWith: 'e2e ' } }],
     },
   });
 }

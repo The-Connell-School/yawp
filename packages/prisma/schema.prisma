@@ -357,7 +357,7 @@ model Setting {
 model FeatureAccessTarget {
   id         String    @id @default(cuid())
   createdAt  DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   featureKey String
   targetKind String
   targetId   String

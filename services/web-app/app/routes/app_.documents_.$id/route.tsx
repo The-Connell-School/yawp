@@ -825,7 +825,7 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {data.assignmentsEnabled && data.doc.assignment ? (
+        {data.doc.assignment ? (
           <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">

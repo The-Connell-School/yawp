@@ -109,7 +109,7 @@ describe('app index loader assignments', () => {
     );
   });
 
-  test('fetches teacher dashboard data only for enabled pilot classes', async () => {
+  test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
     requireProfile.mockResolvedValue({
       id: 'teacher-profile-wrapper-1',
       isOwner: false,
@@ -172,11 +172,19 @@ describe('app index loader assignments', () => {
     expect(data.teacherClassOptions).toEqual([
       { id: 'class-1', name: 'Pilot Class' },
     ]);
-    expect(data.teacherClasses.map((klass: { id: string }) => klass.id)).toEqual([
-      'class-1',
-    ]);
-    expect(data.coursesGlance).toHaveLength(1);
+    expect(
+      data.teacherClasses.map((klass: { id: string }) => klass.id)
+    ).toEqual(['class-1', 'class-2']);
+    expect(data.coursesGlance).toHaveLength(2);
     expect(data.coursesGlance[0].id).toBe('class-1');
+    expect(data.coursesGlance[1]).toMatchObject({
+      id: 'class-2',
+      name: 'Non-Pilot Class',
+      inProgress: 0,
+      submitted: 0,
+      graded: 0,
+      released: 0,
+    });
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
     expect(prisma.submission.findMany.mock.calls[0][0].where).toEqual({
       archivedAt: null,

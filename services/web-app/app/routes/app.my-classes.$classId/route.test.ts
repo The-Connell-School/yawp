@@ -75,7 +75,11 @@ describe('class detail loader document visibility', () => {
       grade: '9',
       period: '2',
       title: 'World History',
-      school: { id: 'school-1', name: 'Tallassee High School', organizationId: 'org-1' },
+      school: {
+        id: 'school-1',
+        name: 'Tallassee High School',
+        organizationId: 'org-1',
+      },
       students: [],
     });
     prisma.documentClassForensic.findMany.mockResolvedValue([
@@ -129,26 +133,44 @@ describe('class detail loader document visibility', () => {
       select: { id: true, title: true },
       orderBy: { position: 'asc' },
     });
-    expect(prisma.profile.findMany.mock.calls[0][0].select.documents.where).toEqual(
-      expectedScope
-    );
+    expect(
+      prisma.profile.findMany.mock.calls[0][0].select.documents.where
+    ).toEqual(expectedScope);
     expect(prisma.pasteAlert.findMany.mock.calls[0][0].where.document).toEqual(
       expectedScope
     );
-    expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual(
-      {
-        is: {
-          ...expectedScope,
-          deletedAt: null,
-        },
-      }
-    );
+    expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
+      is: {
+        ...expectedScope,
+        deletedAt: null,
+      },
+    });
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
       archivedAt: null,
       submissions: { none: {} },
     });
+  });
+
+  test('keeps existing submissions visible when document submission grading is disabled', async () => {
+    isDocumentSubmissionEnabledForScope.mockResolvedValue(false);
+    prisma.submission.findMany.mockResolvedValue([
+      { id: 'submission-1', title: 'Submitted essay' },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.isDocumentSubmissionEnabled).toBe(false);
+    expect(data.submissions).toEqual([
+      { id: 'submission-1', title: 'Submitted essay' },
+    ]);
+    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
   test('allows editing an assignment that keeps its archived assignment type', async () => {

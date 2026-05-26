@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAdmin = mock();
+const requireUserId = mock();
+const requireProfile = mock();
 const setFeatureFlagBoolean = mock();
 const setTargetedFeatureFlagTarget = mock();
 
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireUserId,
+  requireProfile,
+}));
 
 mock.module('~/utils/feature-flags.server', () => ({
   TARGETED_FEATURE_FLAGS: {
@@ -71,6 +77,8 @@ const loader = routeLoader as any;
 describe('admin feature flags route', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    requireUserId.mockReset();
+    requireProfile.mockReset();
     setFeatureFlagBoolean.mockReset();
     setTargetedFeatureFlagTarget.mockReset();
     prisma.class.findMany.mockReset();
@@ -368,7 +376,7 @@ describe('admin feature flags route', () => {
         enabled: false,
         expiresAt: null,
       },
-      update: { enabled: false },
+      update: { enabled: false, updatedAt: expect.any(Date) },
     });
   });
 
@@ -408,7 +416,7 @@ describe('admin feature flags route', () => {
         enabled: true,
         expiresAt: null,
       },
-      update: { enabled: true, expiresAt: null },
+      update: { enabled: true, expiresAt: null, updatedAt: expect.any(Date) },
     });
   });
 });
