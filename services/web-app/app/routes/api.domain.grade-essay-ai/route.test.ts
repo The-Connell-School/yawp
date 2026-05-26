@@ -195,7 +195,13 @@ describe('api.domain.grade-essay-ai', () => {
           profileId: 'student-profile-1',
           assignment: null,
           studentProfile: {
-            classes: [{ schoolId: 'scranton-prep-school' }],
+            classes: [
+              {
+                id: 'legacy-class-1',
+                schoolId: 'scranton-prep-school',
+                teachers: [{ id: 'teacher-1' }],
+              },
+            ],
           },
           profile: { user: { name: 'Jordan Student' } },
         },
@@ -214,8 +220,15 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['scranton-prep-school'],
-      classIds: [],
-      teacherProfileIds: [],
+      classIds: ['legacy-class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'scranton-prep-school',
+          classId: 'legacy-class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
     });
     expect(redirectWithToast).not.toHaveBeenCalled();
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);

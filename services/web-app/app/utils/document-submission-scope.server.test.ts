@@ -61,6 +61,13 @@ describe('getDocumentSubmissionScope', () => {
       schoolIds: ['assignment-school'],
       classIds: ['assignment-class'],
       teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'assignment-school',
+          classId: 'assignment-class',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
     });
   });
 
@@ -87,6 +94,18 @@ describe('getDocumentSubmissionScope', () => {
       schoolIds: ['school-1', 'school-2'],
       classIds: ['class-1', 'class-2'],
       teacherProfileIds: ['teacher-1', 'teacher-2'],
+      classScopes: [
+        {
+          schoolId: 'school-1',
+          classId: 'class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+        {
+          schoolId: 'school-2',
+          classId: 'class-2',
+          teacherProfileIds: ['teacher-2'],
+        },
+      ],
     });
   });
 });

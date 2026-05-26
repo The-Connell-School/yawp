@@ -147,6 +147,41 @@ describe('api.assignments.create', () => {
     expect(prisma.assignment.createMany).not.toHaveBeenCalled();
   });
 
+  test('rejects mixed pilot and non-pilot classes in the same create request', async () => {
+    isAssignmentsEnabledForContext.mockImplementation(async ({ classIds }) =>
+      classIds?.includes('class-1')
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(false);
+    expect(responseStatus(response)).toBe(403);
+    expect(body.message).toBe(
+      'Assignments are not enabled for one or more classes.'
+    );
+    expect(isAssignmentsEnabledForContext).toHaveBeenCalledTimes(2);
+    expect(isAssignmentsEnabledForContext).toHaveBeenNthCalledWith(1, {
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(isAssignmentsEnabledForContext).toHaveBeenNthCalledWith(2, {
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-2'],
+    });
+    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+  });
+
   test('rejects assignment types outside the teacher scope or archived', async () => {
     prisma.assignmentType.findFirst.mockResolvedValue(null);
 

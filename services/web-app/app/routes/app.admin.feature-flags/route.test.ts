@@ -223,6 +223,15 @@ describe('admin feature flags route', () => {
         expiresAt: new Date('2026-06-01T00:00:00.000Z'),
         note: null,
       },
+      {
+        id: 'fat-expired-assignments-class',
+        featureKey: 'assignments',
+        targetKind: 'class',
+        targetId: 'class-1',
+        enabled: true,
+        expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+        note: 'expired pilot',
+      },
     ]);
 
     const result = await loader({
@@ -243,6 +252,18 @@ describe('admin feature flags route', () => {
       enabled: true,
       expiresAt: null,
       note: 'spring pilot',
+    });
+    expect(data.pilotTargetRows).toContainEqual({
+      featureKey: 'assignments',
+      featureLabel: 'Assignments',
+      targetKind: 'class',
+      targetId: 'class-1',
+      targetLabel: 'English 9',
+      targetDetail: 'ENG-1 - Grade 9 - Period 1 - Alpha School - Alpha Org',
+      featureAccessTargetId: 'fat-expired-assignments-class',
+      enabled: false,
+      expiresAt: '2020-01-01T00:00:00.000Z',
+      note: 'expired pilot',
     });
     expect(data.pilotTargetRows).toContainEqual({
       featureKey: 'document_submission_grading',
@@ -347,7 +368,47 @@ describe('admin feature flags route', () => {
         enabled: false,
         expiresAt: null,
       },
-      update: { enabled: false, expiresAt: null },
+      update: { enabled: false },
+    });
+  });
+
+  test('action clears expiry when re-enabling a teacher or class pilot target', async () => {
+    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    const body = new URLSearchParams({
+      intent: 'toggle-pilot-target',
+      featureKey: 'assignments',
+      targetKind: 'teacher',
+      targetId: 'teacher-1',
+      enabled: 'true',
+    });
+
+    const result = await action({
+      request: new Request('https://x.test/app/admin/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+      params: {},
+      context: {} as never,
+    });
+
+    expect((result as { data: any }).data.success).toBe(true);
+    expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
+      where: {
+        featureKey_targetKind_targetId: {
+          featureKey: 'assignments',
+          targetKind: 'teacher',
+          targetId: 'teacher-1',
+        },
+      },
+      create: {
+        featureKey: 'assignments',
+        targetKind: 'teacher',
+        targetId: 'teacher-1',
+        enabled: true,
+        expiresAt: null,
+      },
+      update: { enabled: true, expiresAt: null },
     });
   });
 });

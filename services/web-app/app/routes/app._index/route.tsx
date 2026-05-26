@@ -9,7 +9,7 @@ import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
+import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
 import {
   Accordion,
   AccordionContent,
@@ -100,31 +100,50 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Determine which class IDs this student belongs to (for assignment fetching).
-  let studentClassIds: string[] = [];
-  let studentTeacherProfileIds: string[] = [];
+  let studentAssignmentClassIds: string[] = [];
   if (profile.studentProfile) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.studentProfile.id } },
       },
-      select: { id: true, teachers: { select: { id: true } } },
+      select: {
+        id: true,
+        school: { select: { organizationId: true } },
+        teachers: { select: { id: true } },
+      },
     });
-    studentClassIds = studentClasses.map((klass) => klass.id);
-    studentTeacherProfileIds = Array.from(
-      new Set(
-        studentClasses.flatMap((klass) =>
-          klass.teachers.map((teacher) => teacher.id)
-        )
-      )
-    );
+    studentAssignmentClassIds = await getAssignmentsEnabledClassIdsForContext({
+      organizationId: profile.organization.id,
+      classes: studentClasses.map((klass) => ({
+        id: klass.id,
+        organizationId: klass.school.organizationId,
+        teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
+      })),
+    });
   }
 
-  const assignmentsEnabled = await isAssignmentsEnabledForContext({
-    organizationId: profile.organization.id,
-    teacherProfileId: profile.teacherProfile?.id,
-    teacherProfileIds: studentTeacherProfileIds,
-    classIds: studentClassIds,
-  });
+  const teacherAssignmentClassIds = profile.teacherProfile
+    ? await getAssignmentsEnabledClassIdsForContext({
+        organizationId: profile.organization.id,
+        teacherProfileId: profile.teacherProfile.id,
+        classes: await prisma.class
+          .findMany({
+            where: {
+              teachers: { some: { id: profile.teacherProfile.id } },
+              isArchived: false,
+            },
+            select: { id: true, school: { select: { organizationId: true } } },
+          })
+          .then((classes) =>
+            classes.map((klass) => ({
+              id: klass.id,
+              organizationId: klass.school.organizationId,
+            }))
+          ),
+      })
+    : [];
+  const assignmentsEnabled =
+    studentAssignmentClassIds.length > 0 || teacherAssignmentClassIds.length > 0;
 
   const url = new URL(request.url);
   if (
@@ -276,7 +295,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     profile.studentProfile && assignmentsEnabled
       ? prisma.assignment.findMany({
           where: {
-            classId: { in: studentClassIds },
+            classId: { in: studentAssignmentClassIds },
           },
           select: {
             id: true,
@@ -307,6 +326,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             class: {
               teachers: { some: { id: profile.teacherProfile.id } },
               isArchived: false,
+              id: { in: teacherAssignmentClassIds },
             },
           },
           select: {
@@ -380,9 +400,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  const enabledTeacherClassesOrdered = profile.teacherProfile
+    ? teacherClassesOrdered.filter((klass) =>
+        teacherAssignmentClassIds.includes(klass.id)
+      )
+    : [];
+
   const coursesGlance: CourseGlanceRow[] = profile.teacherProfile
     ? await Promise.all(
-        teacherClassesOrdered.map(async (klass) => {
+        enabledTeacherClassesOrdered.map(async (klass) => {
           const [submissions, inProgressCount] = await Promise.all([
             prisma.submission.findMany({
               where: {
@@ -433,11 +459,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       )
     : [];
 
-  const teacherClassOptions: TeacherClassOption[] = teacherClassesOrdered.map(
-    (klass) => ({
-      id: klass.id,
-      name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
-    })
+  const teacherClassOptions: TeacherClassOption[] = enabledTeacherClassesOrdered.map(
+    (klass) =>
+      ({
+        id: klass.id,
+        name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
+      })
   );
 
   return dataResponse({
@@ -446,7 +473,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     archivedDocuments,
     studentProfiles,
     teacherTrainings,
-    teacherClasses: teacherClassesOrdered,
+    teacherClasses: profile.teacherProfile
+      ? enabledTeacherClassesOrdered
+      : teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
     teacherAssignments,

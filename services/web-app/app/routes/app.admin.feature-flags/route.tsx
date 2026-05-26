@@ -331,7 +331,7 @@ export async function action({ request }: ActionFunctionArgs) {
         enabled,
         expiresAt: null,
       },
-      update: { enabled, expiresAt: null },
+      update: enabled ? { enabled, expiresAt: null } : { enabled },
     });
 
     return dataResponse({ success: true, target });
@@ -894,7 +894,8 @@ function buildPilotTargetRows({
         targetLabel: target.label,
         targetDetail: target.detail,
         featureAccessTargetId: accessTarget?.id ?? null,
-        enabled: accessTarget?.enabled ?? false,
+        enabled:
+          accessTarget?.enabled === true && !isExpired(accessTarget.expiresAt),
         expiresAt: accessTarget?.expiresAt
           ? accessTarget.expiresAt.toISOString()
           : null,
@@ -934,6 +935,10 @@ function formatDate(value: string | null) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+function isExpired(value: Date | null) {
+  return value !== null && value.getTime() <= Date.now();
 }
 
 export function ErrorBoundary() {

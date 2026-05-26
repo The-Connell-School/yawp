@@ -63,7 +63,13 @@ describe('api.domain.submit-document', () => {
       revision: 4,
       assignment: null,
       studentProfile: {
-        classes: [{ schoolId: 'school-1' }],
+        classes: [
+          {
+            id: 'class-1',
+            schoolId: 'school-1',
+            teachers: [{ id: 'teacher-1' }],
+          },
+        ],
       },
     });
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
@@ -107,8 +113,15 @@ describe('api.domain.submit-document', () => {
     expect(response.data.success).toBe(true);
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['school-1'],
-      classIds: [],
-      teacherProfileIds: [],
+      classIds: ['class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'school-1',
+          classId: 'class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
     });
   });
 
@@ -122,11 +135,13 @@ describe('api.domain.submit-document', () => {
       revision: 4,
       assignment: {
         class: {
+          id: 'assignment-class',
           schoolId: 'assignment-school',
+          teachers: [{ id: 'assignment-teacher' }],
         },
       },
       studentProfile: {
-        classes: [{ schoolId: 'student-school' }],
+        classes: [{ id: 'student-class', schoolId: 'student-school' }],
       },
     });
 
@@ -147,8 +162,15 @@ describe('api.domain.submit-document', () => {
     expect(response.data.success).toBe(true);
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['assignment-school'],
-      classIds: [],
-      teacherProfileIds: [],
+      classIds: ['assignment-class'],
+      teacherProfileIds: ['assignment-teacher'],
+      classScopes: [
+        {
+          schoolId: 'assignment-school',
+          classId: 'assignment-class',
+          teacherProfileIds: ['assignment-teacher'],
+        },
+      ],
     });
   });
 

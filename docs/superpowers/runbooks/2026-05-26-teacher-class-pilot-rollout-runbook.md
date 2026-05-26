@@ -88,6 +88,48 @@ intentionally uses deterministic ids because raw SQL does not invoke Prisma's
 BEGIN;
 
 DO $$
+DECLARE
+  teacher_count integer;
+  class_count integer;
+BEGIN
+  SELECT COUNT(*)
+  INTO teacher_count
+  FROM "TeacherProfile" tp
+  JOIN "Profile" p ON p.id = tp."profileId"
+  JOIN "User" u ON u.id = p."userId"
+  JOIN "_SchoolToTeacherProfile" st ON st."B" = tp.id
+  JOIN "School" s ON s.id = st."A"
+  JOIN "Organization" o ON o.id = s."organizationId"
+  WHERE tp.id = 'cmocwzzzl03gg0ql73gbzi22v'
+    AND u.email = 'ametcalfe@bhm.k12.al.us'
+    AND s.id = 'cmocwvqk303g00ql7d9igjzp5'
+    AND o.id = 'cmm93f0zd007z0qjtuwksa3d2';
+
+  IF teacher_count <> 1 THEN
+    RAISE EXCEPTION 'Amanda teacher target did not resolve to expected email, school, and organization';
+  END IF;
+
+  SELECT COUNT(*)
+  INTO class_count
+  FROM "Class" c
+  JOIN "_ClassToTeacherProfile" ctp ON ctp."A" = c.id
+  JOIN "School" s ON s.id = c."schoolId"
+  JOIN "Organization" o ON o.id = s."organizationId"
+  WHERE c.id IN (
+    'cmocwxinl03g20ql77u0fd51c',
+    'cmocwy6vp03g50ql71ioy202o',
+    'cmocwytnm03g80ql7weubpkbr'
+  )
+    AND ctp."B" = 'cmocwzzzl03gg0ql73gbzi22v'
+    AND s.id = 'cmocwvqk303g00ql7d9igjzp5'
+    AND o.id = 'cmm93f0zd007z0qjtuwksa3d2';
+
+  IF class_count <> 3 THEN
+    RAISE EXCEPTION 'One or more Amanda class targets did not resolve to expected teacher, school, and organization';
+  END IF;
+END $$;
+
+DO $$
 BEGIN
   IF EXISTS (
     WITH pilot_target(feature_key, target_kind, target_id, row_id) AS (

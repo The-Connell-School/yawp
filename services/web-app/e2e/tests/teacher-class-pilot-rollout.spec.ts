@@ -159,10 +159,10 @@ test.describe.serial('Teacher/class pilot feature rollout', () => {
       await setPilotFeatureAccessTarget({
         prisma,
         featureKey: 'document_submission_grading',
-        targetKind: 'teacher',
-        targetId: e2eContext.teacherProfileId,
+        targetKind: 'class',
+        targetId: e2eContext.classId,
         enabled: true,
-        note: 'E2E pilot rollout teacher target',
+        note: 'E2E pilot rollout class target',
       });
 
       await authenticateAs({

@@ -60,7 +60,9 @@ describe('api.domain.release-grades', () => {
         document: {
           assignment: {
             class: {
+              id: 'class-1',
               schoolId: 'school-1',
+              teachers: [{ id: 'teacher-1' }],
             },
           },
         },
@@ -79,8 +81,15 @@ describe('api.domain.release-grades', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['school-1'],
-      classIds: [],
-      teacherProfileIds: [],
+      classIds: ['class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'school-1',
+          classId: 'class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
     });
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
   });
@@ -92,7 +101,13 @@ describe('api.domain.release-grades', () => {
         document: {
           assignment: null,
           studentProfile: {
-            classes: [{ schoolId: 'scranton-prep-school' }],
+            classes: [
+              {
+                id: 'legacy-class-1',
+                schoolId: 'scranton-prep-school',
+                teachers: [{ id: 'teacher-1' }],
+              },
+            ],
           },
         },
       },
@@ -110,10 +125,97 @@ describe('api.domain.release-grades', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['scranton-prep-school'],
-      classIds: [],
-      teacherProfileIds: [],
+      classIds: ['legacy-class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'scranton-prep-school',
+          classId: 'legacy-class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
     });
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  test('rejects mixed enabled and disabled submission scopes in the same release request', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      {
+        id: 'pilot-submission',
+        document: {
+          assignment: {
+            class: {
+              id: 'class-1',
+              schoolId: 'school-1',
+              teachers: [{ id: 'teacher-1' }],
+            },
+          },
+        },
+      },
+      {
+        id: 'non-pilot-submission',
+        document: {
+          assignment: {
+            class: {
+              id: 'class-2',
+              schoolId: 'school-2',
+              teachers: [{ id: 'teacher-2' }],
+            },
+          },
+        },
+      },
+    ]);
+    isDocumentSubmissionEnabledForScope.mockImplementation(
+      async ({ classIds }) => classIds?.includes('class-1')
+    );
+    redirectWithToast.mockReturnValue(
+      new Response(null, {
+        status: 302,
+        headers: { Location: '/app/my-classes' },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionIds', 'pilot-submission');
+    form.append('submissionIds', 'non-pilot-submission');
+
+    const request = new Request('https://example.com/api/domain/release-grades', {
+      method: 'POST',
+      body: form,
+    });
+
+    await action({ request } as any);
+
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledTimes(2);
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenNthCalledWith(1, {
+      schoolIds: ['school-1'],
+      classIds: ['class-1'],
+      teacherProfileIds: ['teacher-1'],
+      classScopes: [
+        {
+          schoolId: 'school-1',
+          classId: 'class-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+      ],
+    });
+    expect(isDocumentSubmissionEnabledForScope).toHaveBeenNthCalledWith(2, {
+      schoolIds: ['school-2'],
+      classIds: ['class-2'],
+      teacherProfileIds: ['teacher-2'],
+      classScopes: [
+        {
+          schoolId: 'school-2',
+          classId: 'class-2',
+          teacherProfileIds: ['teacher-2'],
+        },
+      ],
+    });
+    expect(redirectWithToast).toHaveBeenCalledWith('/app/my-classes', {
+      description: 'Grade release is currently disabled for one or more schools.',
+      type: 'error',
+    });
+    expect(prisma.submission.updateMany).not.toHaveBeenCalled();
   });
 
   test('returns 404 when no unreleased submissions found', async () => {

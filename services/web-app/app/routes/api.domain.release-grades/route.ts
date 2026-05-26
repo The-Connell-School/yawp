@@ -79,17 +79,13 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const submissionScopes = submissions.map((s) =>
-    getDocumentSubmissionScope(s.document)
+  const submissionScopeFlags = await Promise.all(
+    submissions.map((submission) => {
+      const scope = getDocumentSubmissionScope(submission.document);
+      return isDocumentSubmissionEnabledForScope(scope);
+    })
   );
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
-    schoolIds: submissionScopes.flatMap((scope) => scope.schoolIds),
-    teacherProfileIds: submissionScopes.flatMap(
-      (scope) => scope.teacherProfileIds
-    ),
-    classIds: submissionScopes.flatMap((scope) => scope.classIds),
-  });
-  if (!isSubmissionEnabled) {
+  if (submissionScopeFlags.some((enabled) => !enabled)) {
     return redirectWithToast('/app/my-classes', {
       description: 'Grade release is currently disabled for one or more schools.',
       type: 'error',

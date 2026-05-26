@@ -104,17 +104,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const organizationIds = Array.from(
-    new Set(classes.map((klass) => klass.school.organizationId))
-  );
   const assignmentFlags = await Promise.all(
-    organizationIds.map((organizationId) =>
+    classes.map((klass) =>
       isAssignmentsEnabledForContext({
-        organizationId,
+        organizationId: klass.school.organizationId,
         teacherProfileId: profile.teacherProfile!.id,
-        classIds: classes
-          .filter((klass) => klass.school.organizationId === organizationId)
-          .map((klass) => klass.id),
+        classIds: [klass.id],
       })
     )
   );
@@ -127,6 +122,10 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 403 }
     );
   }
+
+  const organizationIds = Array.from(
+    new Set(classes.map((klass) => klass.school.organizationId))
+  );
 
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {

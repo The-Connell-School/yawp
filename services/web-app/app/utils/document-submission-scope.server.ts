@@ -4,6 +4,12 @@ type SchoolScopedClass = {
   teachers?: Array<{ id: string | null }>;
 };
 
+type DocumentSubmissionClassScope = {
+  schoolId: string | null;
+  classId?: string | null;
+  teacherProfileIds: string[];
+};
+
 type DocumentSubmissionScope = {
   assignment?: {
     class?: SchoolScopedClass | null;
@@ -27,15 +33,25 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
   schoolIds: string[];
   classIds: string[];
   teacherProfileIds: string[];
+  classScopes: DocumentSubmissionClassScope[];
 } {
   const assignmentClass = document.assignment?.class;
   if (assignmentClass) {
+    const teacherProfileIds = distinctIds(
+      assignmentClass.teachers?.map((teacher) => teacher.id) ?? []
+    );
+
     return {
       schoolIds: distinctIds([assignmentClass.schoolId]),
       classIds: distinctIds([assignmentClass.id]),
-      teacherProfileIds: distinctIds(
-        assignmentClass.teachers?.map((teacher) => teacher.id) ?? []
-      ),
+      teacherProfileIds,
+      classScopes: [
+        {
+          schoolId: assignmentClass.schoolId,
+          classId: assignmentClass.id,
+          teacherProfileIds,
+        },
+      ],
     };
   }
 
@@ -49,5 +65,12 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
         (klass.teachers ?? []).map((teacher) => teacher.id)
       )
     ),
+    classScopes: classes.map((klass) => ({
+      schoolId: klass.schoolId,
+      classId: klass.id,
+      teacherProfileIds: distinctIds(
+        (klass.teachers ?? []).map((teacher) => teacher.id)
+      ),
+    })),
   };
 }
