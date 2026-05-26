@@ -671,8 +671,10 @@ function ClassDetailPage() {
     : classDetailPath;
   const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
 
-  const assignmentsEnabled = data.assignmentsEnabled ?? true;
-  const validTabs: TabValue[] = ['students', 'assignments'];
+  const assignmentsEnabled = data.assignmentsEnabled === true;
+  const validTabs: TabValue[] = assignmentsEnabled
+    ? ['students', 'assignments']
+    : ['students'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1714,26 +1716,30 @@ function ClassDetailPage() {
                     {students.length}
                   </span>
                 </TabsTrigger>
-                <TabsTrigger
-                  value="assignments"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Assignments</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.assignments.length}
-                  </span>
-                </TabsTrigger>
+                {assignmentsEnabled ? (
+                  <TabsTrigger
+                    value="assignments"
+                    className="flex items-center gap-2 h-auto py-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="hidden sm:inline">Assignments</span>
+                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
+                      {data.assignments.length}
+                    </span>
+                  </TabsTrigger>
+                ) : null}
               </TabsList>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditingAssignmentId(null);
-                  setIsAssignmentSheetOpen(true);
-                }}
-              >
-                + Create New Assignment
-              </Button>
+              {assignmentsEnabled ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingAssignmentId(null);
+                    setIsAssignmentSheetOpen(true);
+                  }}
+                >
+                  + Create New Assignment
+                </Button>
+              ) : null}
             </div>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>
