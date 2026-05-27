@@ -21,6 +21,7 @@ export const FEATURE_FLAGS = {
 export const PILOT_FEATURE_KEYS = {
   ASSIGNMENTS: 'assignments',
   DOCUMENT_SUBMISSION_GRADING: 'document_submission_grading',
+  AP_HISTORY_ESSAY: 'ap_history_essay',
 } as const;
 
 type PilotFeatureKey =
@@ -391,5 +392,21 @@ export async function isReleasedGradesOrganizationEnabledForOrganization(
   return isTargetedFeatureFlagEnabled(
     'releasedGradesOrganization',
     organizationId
+  );
+}
+
+export async function isApHistoryEssayEnabled({
+  teacherProfileId,
+  classIds,
+}: {
+  teacherProfileId?: string | null;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  return isPilotFeatureEnabledForTargets(
+    PILOT_FEATURE_KEYS.AP_HISTORY_ESSAY,
+    [
+      { kind: 'teacher', ids: [teacherProfileId] },
+      { kind: 'class', ids: classIds ?? [] },
+    ]
   );
 }

@@ -39,15 +39,22 @@ model AssignmentType {
   ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerTeacherId          String?
   ownerTeacher            Profile?                     @relation("AssignmentTypeOwner", fields: [ownerTeacherId], references: [id], onDelete: Cascade)
+  essayType               String?
+  period                  String?
+  reasoningSkill          String?
+  defaultTimedMode        String?
+  defaultDurationMinutes  Int?
   image                   AssignmentTypeImage?
   organizationAssignments OrganizationAssignmentType[]
   assignmentModules       AssignmentModule[]
   assignments             Assignment[]
   documents               Document[]
+  sourceDocuments         SourceDocument[]
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
   @@index([archivedAt])
+  @@index([essayType])
 }
 
 model Assignment {
@@ -62,6 +69,9 @@ model Assignment {
   prompt           String
   tutorContext     String?
   dueDate          DateTime?      @db.Timestamptz(6)
+  timedMode        String?
+  durationMinutes  Int?
+  coachingScope    String?
   documents        Document[]
 
   @@index([classId, createdAt(sort: Desc)])
@@ -172,6 +182,8 @@ model Document {
   pasteAlerts              PasteAlert[]
   revisions                DocumentRevision[]
   submissions              Submission[]
+  timedSessions            TimedSession[]
+  tutorSessions            TutorSession[]
 
   @@index([assignmentId])
   @@index([assignmentTypeId])
@@ -594,4 +606,104 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+// ──── AP History Essay Models ────
+
+model SourceDocument {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  title            String
+  attribution      String
+  body             String
+  caption          String?
+  position         Int
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentTypeId, position])
+}
+
+model TimedSession {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @default(now()) @db.Timestamptz(6)
+  phase            String    @default("writing")
+  startedAt        DateTime  @db.Timestamptz(6)
+  durationMinutes  Int
+  phaseTransitions Json?
+  submittedAt      DateTime? @db.Timestamptz(6)
+  documentId       String
+  document         Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model TutorSession {
+  id             String         @id @default(cuid())
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime       @default(now()) @db.Timestamptz(6)
+  essayType      String
+  currentPhase   String         @default("source-analysis")
+  coachingScope  String         @default("full")
+  detectorsFired Json?
+  documentId     String
+  document       Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  messages       TutorMessage[]
+
+  @@index([documentId])
+}
+
+model TutorMessage {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  role           String
+  content        String
+  phase          String?
+  tutorSessionId String
+  tutorSession   TutorSession @relation(fields: [tutorSessionId], references: [id], onDelete: Cascade)
+
+  @@index([tutorSessionId, createdAt])
+}
+
+model ContextBankEntry {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  period       String
+  periodNumber Int
+  name         String
+  category     String
+  summary      String
+  dateOrRange  String
+
+  @@index([period, periodNumber])
+}
+
+model PromptLibraryEntry {
+  id              String                @id @default(cuid())
+  createdAt       DateTime              @default(now()) @db.Timestamptz(6)
+  essayType       String
+  period          String
+  periodNumber    Int?
+  reasoningSkill  String?
+  difficulty      String?
+  promptBody      String
+  sourceDocuments PromptLibrarySource[]
+
+  @@index([essayType, period])
+  @@index([difficulty])
+}
+
+model PromptLibrarySource {
+  id                   String             @id @default(cuid())
+  createdAt            DateTime           @default(now()) @db.Timestamptz(6)
+  title                String
+  attribution          String
+  body                 String
+  caption              String?
+  position             Int
+  promptLibraryEntryId String
+  promptLibraryEntry   PromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
+
+  @@index([promptLibraryEntryId, position])
 }
