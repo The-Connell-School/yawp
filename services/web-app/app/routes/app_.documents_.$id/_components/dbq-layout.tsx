@@ -14,6 +14,7 @@ type Props = {
   prompt: string;
   timedMode: string | null;
   durationMinutes: number | null;
+  editor?: React.ReactNode;
 };
 
 function toDbqSources(sources: SourceDoc[]): DbqSource[] {
@@ -32,6 +33,7 @@ export function DbqLayout({
   prompt,
   timedMode,
   durationMinutes,
+  editor,
 }: Props) {
   const dbqPrompt: DbqPrompt = {
     id: 'production',
@@ -49,6 +51,7 @@ export function DbqLayout({
     <DbqAssignmentScreen
       prompt={dbqPrompt}
       initialTimeMode={timedMode === 'timed' ? 'timed' : 'untimed'}
+      editor={editor}
     />
   );
 }

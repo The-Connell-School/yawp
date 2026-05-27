@@ -76,6 +76,7 @@ import {
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
 import { DbqLayout } from './_components/dbq-layout';
+import { TimedModeBanner } from './_components/timed-mode-banner';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -863,6 +864,12 @@ export default function Route() {
             </div>
           </div>
         ) : null}
+        {data.doc.assignment?.timedMode === 'timed' &&
+        data.doc.assignment.durationMinutes ? (
+          <TimedModeBanner
+            durationMinutes={data.doc.assignment.durationMinutes}
+          />
+        ) : null}
         {data.doc.assignmentType?.essayType === 'dbq' &&
         data.doc.assignmentType.sourceDocuments.length > 0 ? (
           <DbqLayout
@@ -870,6 +877,22 @@ export default function Route() {
             prompt={data.doc.assignment?.prompt ?? ''}
             timedMode={data.doc.assignment?.timedMode ?? null}
             durationMinutes={data.doc.assignment?.durationMinutes ?? null}
+            editor={
+              <DocumentEditor
+                docId={data.doc.id}
+                serverHtml={editorServerHtml}
+                serverText={editorServerText}
+                serverUpdatedAt={data.doc.updatedAt}
+                initialRevision={data.doc.revision}
+                isEditable={isEditorEditable}
+                onBridgeReady={(b) => {
+                  editorBridgeRef.current = b;
+                }}
+                onSyncStatusChange={setSyncStatus}
+                onSubmittableContentChange={handleSubmittableContentChange}
+                onCommentCreated={(c) => commentsState.addComment(c as any)}
+              />
+            }
           />
         ) : (
           <>

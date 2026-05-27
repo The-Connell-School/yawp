@@ -9,10 +9,12 @@ export function EditorColumn({
   state,
   isMaximized,
   onToggleMaximize,
+  editor,
 }: {
   state: DbqState;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
+  editor?: React.ReactNode;
 }) {
   const { prompt, essay, setEssay, editorRef, insertCitation, planning, setPlanning } =
     state;
@@ -90,17 +92,23 @@ export function EditorColumn({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-        <textarea
-          ref={editorRef}
-          value={essay}
-          onChange={(e) => setEssay(e.target.value)}
-          placeholder={
-            'Begin drafting. Use the toolbar above or click “Cite” on a source to drop [Doc X] tokens at the cursor.'
-          }
-          className={cn(
-            'min-h-0 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring'
-          )}
-        />
+        {editor ? (
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+            {editor}
+          </div>
+        ) : (
+          <textarea
+            ref={editorRef as React.RefObject<HTMLTextAreaElement>}
+            value={essay}
+            onChange={(e) => setEssay(e.target.value)}
+            placeholder={
+              'Begin drafting. Use the toolbar above or click "Cite" on a source to drop [Doc X] tokens at the cursor.'
+            }
+            className={cn(
+              'min-h-0 flex-1 resize-none rounded-md border bg-background px-3 py-2 text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring'
+            )}
+          />
+        )}
         <CitedSources essay={essay} sources={prompt.sources} />
       </div>
     </section>
