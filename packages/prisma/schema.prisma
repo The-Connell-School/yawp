@@ -617,6 +617,9 @@ model SourceDocument {
   attribution      String
   body             String
   caption          String?
+  mediaType        String         @default("text")
+  imageUrl         String?
+  imageAlt         String?
   position         Int
   assignmentTypeId String
   assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
@@ -701,6 +704,9 @@ model PromptLibrarySource {
   attribution          String
   body                 String
   caption              String?
+  mediaType            String             @default("text")
+  imageUrl             String?
+  imageAlt             String?
   position             Int
   promptLibraryEntryId String
   promptLibraryEntry   PromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
