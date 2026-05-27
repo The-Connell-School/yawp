@@ -18,6 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
+import { FileTextIcon } from 'lucide-react';
 
 type TeacherClass = {
   id: string;
@@ -37,6 +44,13 @@ type Props = {
     title: string;
     prompt: string;
     essayType: string;
+    sources?: Array<{
+      externalKey: string;
+      title: string;
+      attribution: string;
+      body: string;
+      position: number;
+    }>;
   } | null;
 };
 
@@ -155,6 +169,46 @@ export function CreateAssignmentSheet({
               <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                 {apHistoryEntry.prompt}
               </p>
+              {apHistoryEntry.sources && apHistoryEntry.sources.length > 0 ? (
+                <Accordion type="single" collapsible>
+                  <AccordionItem
+                    value="sources"
+                    className="rounded-md border bg-background px-3"
+                  >
+                    <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                      <span className="flex items-center gap-2">
+                        <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+                        {apHistoryEntry.sources.length}{' '}
+                        {apHistoryEntry.sources.length === 1
+                          ? 'Source'
+                          : 'Sources'}
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <ul className="space-y-4 pb-2">
+                        {apHistoryEntry.sources.map((source) => (
+                          <li
+                            key={source.externalKey}
+                            className="border-t pt-3 first:border-t-0 first:pt-0"
+                          >
+                            <p className="text-sm font-medium">
+                              Source {source.position}: {source.title}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {source.attribution}
+                            </p>
+                            <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground/80">
+                              {source.body.length > 300
+                                ? `${source.body.slice(0, 300)}...`
+                                : source.body}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              ) : null}
             </div>
           ) : (
             <>
