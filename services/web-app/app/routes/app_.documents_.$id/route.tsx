@@ -75,6 +75,7 @@ import {
   partitionSubmissionsByArchive,
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
+import { DbqLayout } from './_components/dbq-layout';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -186,6 +187,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          essayType: true,
+          period: true,
+          sourceDocuments: {
+            select: {
+              id: true,
+              title: true,
+              attribution: true,
+              body: true,
+              position: true,
+            },
+            orderBy: { position: 'asc' },
+          },
         },
       },
       assignment: {
@@ -195,6 +208,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          timedMode: true,
+          durationMinutes: true,
+          coachingScope: true,
           class: {
             select: {
               id: true,
@@ -847,64 +863,76 @@ export default function Route() {
             </div>
           </div>
         ) : null}
-        <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-          <TabsList className="w-full rounded-none border-b px-3">
-            <TabsTrigger value="tutor" className="w-full">
-              Tutor
-            </TabsTrigger>
-            <TabsTrigger value="editor" className="w-full">
-              Editor
-            </TabsTrigger>
-            <TabsTrigger value="comments" className="w-full">
-              Comments
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <CommentsSelectionProvider>
-          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
-            {isMobile && tab !== 'tutor' ? null : (
-              <Tutor
-                docId={data.doc.id}
-                cms={(tutor.cms ?? data.currentCms) as any}
-                nextCmId={data.nextCmId}
-                hasPreviousCms={tutorHasPreviousCms}
-                isSessionLocked={auth.isLocked}
-                beforeRespond={handleTutorBeforeRespond}
-                onCmsUpdate={tutor.updateCms}
-                getCurrentDocumentText={() =>
-                  editorBridgeRef.current?.getContent().text ??
-                  data.doc.text ??
-                  ''
-                }
-              />
-            )}
-            {isMobile && tab !== 'editor' ? null : (
-              <DocumentEditor
-                docId={data.doc.id}
-                serverHtml={editorServerHtml}
-                serverText={editorServerText}
-                serverUpdatedAt={data.doc.updatedAt}
-                initialRevision={data.doc.revision}
-                isEditable={isEditorEditable}
-                onBridgeReady={(b) => {
-                  editorBridgeRef.current = b;
-                }}
-                onSyncStatusChange={setSyncStatus}
-                onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) => commentsState.addComment(c as any)}
-              />
-            )}
-            {isMobile && tab !== 'comments' ? null : (
-              <Comments
-                comments={visibleComments as any}
-                readOnly={!isDocumentEditable}
-                onCommentRemoved={commentsState.removeComment}
-                onResponseAdded={commentsState.addResponse}
-                autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-              />
-            )}
-          </div>
-        </CommentsSelectionProvider>
+        {data.doc.assignmentType?.essayType === 'dbq' &&
+        data.doc.assignmentType.sourceDocuments.length > 0 ? (
+          <DbqLayout
+            sources={data.doc.assignmentType.sourceDocuments}
+            prompt={data.doc.assignment?.prompt ?? ''}
+            timedMode={data.doc.assignment?.timedMode ?? null}
+            durationMinutes={data.doc.assignment?.durationMinutes ?? null}
+          />
+        ) : (
+          <>
+            <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
+              <TabsList className="w-full rounded-none border-b px-3">
+                <TabsTrigger value="tutor" className="w-full">
+                  Tutor
+                </TabsTrigger>
+                <TabsTrigger value="editor" className="w-full">
+                  Editor
+                </TabsTrigger>
+                <TabsTrigger value="comments" className="w-full">
+                  Comments
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <CommentsSelectionProvider>
+              <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+                {isMobile && tab !== 'tutor' ? null : (
+                  <Tutor
+                    docId={data.doc.id}
+                    cms={(tutor.cms ?? data.currentCms) as any}
+                    nextCmId={data.nextCmId}
+                    hasPreviousCms={tutorHasPreviousCms}
+                    isSessionLocked={auth.isLocked}
+                    beforeRespond={handleTutorBeforeRespond}
+                    onCmsUpdate={tutor.updateCms}
+                    getCurrentDocumentText={() =>
+                      editorBridgeRef.current?.getContent().text ??
+                      data.doc.text ??
+                      ''
+                    }
+                  />
+                )}
+                {isMobile && tab !== 'editor' ? null : (
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    onBridgeReady={(b) => {
+                      editorBridgeRef.current = b;
+                    }}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  />
+                )}
+                {isMobile && tab !== 'comments' ? null : (
+                  <Comments
+                    comments={visibleComments as any}
+                    readOnly={!isDocumentEditable}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  />
+                )}
+              </div>
+            </CommentsSelectionProvider>
+          </>
+        )}
       </main>
       {data.isDocumentSubmissionEnabled && (
         <Dialog
