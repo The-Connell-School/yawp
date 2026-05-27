@@ -46,6 +46,9 @@ import {
   type PromptType,
 } from './prompts-library/data';
 import promptsRaw from './prompts-library/prompts.json';
+import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
+import { ApCreateAssignmentSheet } from './ap-history/ap-create-assignment-sheet';
+import type { ApPrompt } from './ap-history/types';
 
 const DAILY_PAGES_TITLE = 'daily pages';
 const ALL_PROMPTS = promptsRaw as LibraryPrompt[];
@@ -307,12 +310,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
 
+  const isApHistory =
+    assignmentType.essayType === 'dbq' || assignmentType.essayType === 'leq';
+  const apPromptLibrary =
+    profile.teacherProfile && isApHistory
+      ? await prisma.promptLibraryEntry
+          .findMany({
+            where: { period: assignmentType.period ?? 'ush' },
+            include: { sourceDocuments: { select: { id: true } } },
+            orderBy: [{ essayType: 'asc' }, { createdAt: 'desc' }],
+          })
+          .then((entries) => ({
+            prompts: entries.map((e) => ({
+              id: e.id,
+              essayType: e.essayType,
+              period: e.period,
+              periodNumber: e.periodNumber,
+              reasoningSkill: e.reasoningSkill,
+              difficulty: e.difficulty,
+              promptBody: e.promptBody,
+              sourceCount: e.sourceDocuments.length,
+            })),
+            totalCount: entries.length,
+          }))
+      : null;
+
   return dataResponse({
     assignmentType,
     documents,
     archivedDocuments,
     teacherClasses,
     promptLibrary,
+    apPromptLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -379,6 +408,9 @@ export default function AppAssignmentTypesIdRoute() {
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const showPromptsLibrary = data.promptLibrary != null;
+  const isApHistory = data.apPromptLibrary != null;
+  const [isApSheetOpen, setIsApSheetOpen] = useState(false);
+  const [selectedApPrompt, setSelectedApPrompt] = useState<ApPrompt | null>(null);
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -406,24 +438,46 @@ export default function AppAssignmentTypesIdRoute() {
                   >
                     Document
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={data.teacherClasses.length === 0}
-                    onSelect={() => {
-                      setLibraryPrompt('');
-                      setIsAssignmentSheetOpen(true);
-                    }}
-                  >
-                    Assignment
-                  </DropdownMenuItem>
+                  {isApHistory ? (
+                    <DropdownMenuItem
+                      disabled={data.teacherClasses.length === 0}
+                      onSelect={() => {
+                        setSelectedApPrompt(null);
+                        setIsApSheetOpen(true);
+                      }}
+                    >
+                      Assignment
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      disabled={data.teacherClasses.length === 0}
+                      onSelect={() => {
+                        setLibraryPrompt('');
+                        setIsAssignmentSheetOpen(true);
+                      }}
+                    >
+                      Assignment
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <CreateAssignmentSheet
-                assignmentTypeId={data.assignmentType.id}
-                teacherClasses={data.teacherClasses}
-                open={isAssignmentSheetOpen}
-                onOpenChange={setIsAssignmentSheetOpen}
-                initialPrompt={libraryPrompt}
-              />
+              {isApHistory ? (
+                <ApCreateAssignmentSheet
+                  assignmentTypeId={data.assignmentType.id}
+                  teacherClasses={data.teacherClasses}
+                  open={isApSheetOpen}
+                  onOpenChange={setIsApSheetOpen}
+                  selectedPrompt={selectedApPrompt}
+                />
+              ) : (
+                <CreateAssignmentSheet
+                  assignmentTypeId={data.assignmentType.id}
+                  teacherClasses={data.teacherClasses}
+                  open={isAssignmentSheetOpen}
+                  onOpenChange={setIsAssignmentSheetOpen}
+                  initialPrompt={libraryPrompt}
+                />
+              )}
             </>
           ) : (
             <Form method="post">
@@ -485,6 +539,16 @@ export default function AppAssignmentTypesIdRoute() {
               }}
             />
           </div>
+        ) : null}
+        {data.apPromptLibrary ? (
+          <ApPromptsLibrary
+            prompts={data.apPromptLibrary.prompts}
+            totalCount={data.apPromptLibrary.totalCount}
+            onSelectPrompt={(prompt) => {
+              setSelectedApPrompt(prompt);
+              setIsApSheetOpen(true);
+            }}
+          />
         ) : null}
         {data.documents.length ? (
           <>
