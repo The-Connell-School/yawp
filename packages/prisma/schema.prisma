@@ -34,6 +34,7 @@ model AssignmentType {
   title                   String
   description             String?
   position                Int
+  kind                    String                       @default("standard")
   archivedAt              DateTime?                    @db.Timestamptz(6)
   ownerOrgId              String?
   ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
@@ -48,6 +49,7 @@ model AssignmentType {
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
   @@index([archivedAt])
+  @@index([kind])
 }
 
 model Assignment {
@@ -311,6 +313,7 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   ownedAssignmentTypes     AssignmentType[]          @relation("AssignmentTypeOwner")
+  promptLibraryEntries     PromptLibraryEntry[]      @relation("PromptLibraryEntryCreator")
   isOwner                  Boolean                   @default(false)
 }
 
@@ -568,6 +571,39 @@ model SubmissionComment {
 
   @@index([submissionId, createdAt(sort: Desc)])
   @@index([profileId])
+}
+
+model PromptLibraryEntry {
+  id                 String              @id @default(cuid())
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @default(now()) @db.Timestamptz(6)
+  assignmentTypeKind String
+  essayType          String
+  title              String
+  promptBody         String
+  sourcePassages     Json?
+  year               Int?
+  tags               Json?
+  isSystem           Boolean             @default(false)
+  createdById        String?
+  createdBy          Profile?            @relation("PromptLibraryEntryCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  calibrationSamples CalibrationSample[]
+
+  @@index([assignmentTypeKind, essayType])
+  @@index([createdById])
+}
+
+model CalibrationSample {
+  id                   String             @id @default(cuid())
+  createdAt            DateTime           @default(now()) @db.Timestamptz(6)
+  tier                 String
+  essayText            String
+  score                Int
+  rubricAnnotations    Json?
+  promptLibraryEntryId String
+  promptLibraryEntry   PromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
+
+  @@index([promptLibraryEntryId])
 }
 
 model LegacyGradeRedirect {
