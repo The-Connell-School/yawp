@@ -1,3 +1,11 @@
+export type ApPromptSource = {
+  id: string;
+  title: string;
+  attribution: string;
+  body: string;
+  position: number;
+};
+
 export type ApPrompt = {
   id: string;
   essayType: string;
@@ -7,6 +15,7 @@ export type ApPrompt = {
   difficulty: string | null;
   promptBody: string;
   sourceCount: number;
+  sourceDocuments?: ApPromptSource[];
 };
 
 export const AP_FACET_KEYS = {

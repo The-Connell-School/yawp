@@ -317,7 +317,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await prisma.promptLibraryEntry
           .findMany({
             where: { period: assignmentType.period ?? 'ush' },
-            include: { sourceDocuments: { select: { id: true } } },
+            include: {
+              sourceDocuments: {
+                select: { id: true, title: true, attribution: true, body: true, position: true },
+                orderBy: { position: 'asc' },
+              },
+            },
             orderBy: [{ essayType: 'asc' }, { createdAt: 'desc' }],
           })
           .then((entries) => ({
@@ -330,6 +335,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               difficulty: e.difficulty,
               promptBody: e.promptBody,
               sourceCount: e.sourceDocuments.length,
+              sourceDocuments: e.sourceDocuments,
             })),
             totalCount: entries.length,
           }))

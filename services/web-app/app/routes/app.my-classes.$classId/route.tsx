@@ -230,12 +230,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const promptRaw = formData.get('prompt')?.toString() ?? '';
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
     const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
+    const timedModeRaw = formData.get('timedMode')?.toString() ?? '';
+    const durationMinutesRaw = formData.get('durationMinutes')?.toString() ?? '';
+    const coachingScopeRaw = formData.get('coachingScope')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
     const tutorContext = tutorContextRaw.trim() || null;
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
+    const timedMode = timedModeRaw.trim() || null;
+    const durationMinutes = durationMinutesRaw ? parseInt(durationMinutesRaw, 10) : null;
+    const coachingScope = coachingScopeRaw.trim() || null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -304,6 +310,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           prompt,
           tutorContext,
           dueDate,
+          timedMode,
+          durationMinutes: durationMinutes && !isNaN(durationMinutes) ? durationMinutes : null,
+          coachingScope,
         },
       });
 
@@ -321,6 +330,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         prompt,
         tutorContext,
         dueDate,
+        timedMode,
+        durationMinutes: durationMinutes && !isNaN(durationMinutes) ? durationMinutes : null,
+        coachingScope,
       },
     });
 

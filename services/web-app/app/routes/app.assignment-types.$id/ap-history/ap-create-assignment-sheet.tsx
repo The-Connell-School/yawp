@@ -18,6 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
+import { FileTextIcon } from 'lucide-react';
 import { type ApPrompt, ESSAY_TYPE_LABEL } from './types';
 
 type TeacherClass = {
@@ -231,6 +238,32 @@ export function ApCreateAssignmentSheet({
               </p>
             ) : null}
           </div>
+
+          {selectedPrompt?.sourceDocuments && selectedPrompt.sourceDocuments.length > 0 ? (
+            <Accordion type="single" collapsible>
+              <AccordionItem value="sources" className="border rounded-md px-3">
+                <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                  <span className="flex items-center gap-2">
+                    <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+                    {selectedPrompt.sourceDocuments.length} Source Documents
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <ul className="space-y-4 pb-2">
+                    {selectedPrompt.sourceDocuments.map((doc) => (
+                      <li key={doc.id} className="border-t pt-3 first:border-t-0 first:pt-0">
+                        <p className="text-sm font-medium">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">{doc.attribution}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-foreground/80 whitespace-pre-line">
+                          {doc.body.length > 300 ? doc.body.slice(0, 300) + '…' : doc.body}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="ap-due">Due Date (optional)</Label>
