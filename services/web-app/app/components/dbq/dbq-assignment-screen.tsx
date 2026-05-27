@@ -23,13 +23,17 @@ function clamp(v: number, lo: number, hi: number): number {
 type Props = {
   prompt?: DbqPrompt;
   initialTimeMode?: TimeMode;
+  durationMinutes?: number;
+  editor?: React.ReactNode;
 };
 
 export function DbqAssignmentScreen({
   prompt,
   initialTimeMode,
+  durationMinutes,
+  editor,
 }: Props = {}) {
-  const state = useDbqState(prompt ?? sampleDbq, initialTimeMode);
+  const state = useDbqState(prompt ?? sampleDbq, initialTimeMode, durationMinutes);
 
   const [tutorCollapsed, setTutorCollapsed] = useState(false);
   const [tutorWidth, setTutorWidth] = useState(320);
@@ -79,6 +83,7 @@ export function DbqAssignmentScreen({
               setSplitPct={setSplitPct}
               onSplitDrag={handleSplitDrag}
               splitContainerRef={splitContainerRef}
+              editor={editor}
             />
           ) : (
             <SubmittedView state={state} />
@@ -101,10 +106,12 @@ function DraftingPane({
   setSplitPct,
   onSplitDrag,
   splitContainerRef,
+  editor,
 }: {
   state: DbqState;
   splitPct: number;
   setSplitPct: (n: number) => void;
+  editor?: React.ReactNode;
   onSplitDrag: (dx: number) => void;
   splitContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -120,7 +127,7 @@ function DraftingPane({
 
   return (
     <div
-      ref={splitContainerRef}
+      ref={splitContainerRef as React.RefObject<HTMLDivElement>}
       className="flex min-h-0 flex-1 items-stretch gap-0 overflow-hidden p-3"
     >
       <div
@@ -144,6 +151,7 @@ function DraftingPane({
           state={state}
           isMaximized={isWriteMaxed}
           onToggleMaximize={toggleWriteMax}
+          editor={editor}
         />
       </div>
     </div>

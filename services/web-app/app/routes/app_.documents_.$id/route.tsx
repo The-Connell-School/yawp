@@ -896,7 +896,25 @@ export default function Route() {
           </div>
         ) : null}
         {showDbqWorkspace ? (
-          <DbqLayout snapshot={apHistorySnapshot} />
+          <DbqLayout
+            snapshot={apHistorySnapshot}
+            editor={
+              <DocumentEditor
+                docId={data.doc.id}
+                serverHtml={editorServerHtml}
+                serverText={editorServerText}
+                serverUpdatedAt={data.doc.updatedAt}
+                initialRevision={data.doc.revision}
+                isEditable={isEditorEditable}
+                onBridgeReady={(b) => {
+                  editorBridgeRef.current = b;
+                }}
+                onSyncStatusChange={setSyncStatus}
+                onSubmittableContentChange={handleSubmittableContentChange}
+                onCommentCreated={(c) => commentsState.addComment(c as any)}
+              />
+            }
+          />
         ) : (
           <>
             <Tabs onValueChange={changeTab} value={tab} className="md:hidden">

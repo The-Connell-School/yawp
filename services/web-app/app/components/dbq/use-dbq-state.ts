@@ -27,6 +27,7 @@ export type DbqState = {
   addAnnotation: (sourceId: string, text: string) => void;
   removeAnnotation: (id: string) => void;
   // Timer (single 60-minute combined clock for DBQ).
+  durationMinutes: number;
   msRemaining: number;
   timerRunning: boolean;
   startTimer: () => void;
@@ -41,20 +42,23 @@ export type DbqState = {
   submit: () => void;
 };
 
-const TOTAL_MS = 60 * 60 * 1000;
-
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-export function useDbqState(prompt: DbqPrompt, initialTimeMode?: TimeMode): DbqState {
+export function useDbqState(
+  prompt: DbqPrompt,
+  initialTimeMode?: TimeMode,
+  durationMinutes = 60
+): DbqState {
+  const totalMs = durationMinutes * 60 * 1000;
   const [view, setView] = useState<View>('drafting');
   const [timeMode, setTimeMode] = useState<TimeMode>(initialTimeMode ?? 'untimed');
   const [phase, setPhase] = useState<DraftingPhase>('source-analysis');
   const [essay, setEssay] = useState('');
   const [planning, setPlanning] = useState<PlanningState>(emptyPlanning);
   const [annotations, setAnnotations] = useState<SourceAnnotation[]>([]);
-  const [msRemaining, setMsRemaining] = useState(TOTAL_MS);
+  const [msRemaining, setMsRemaining] = useState(totalMs);
   const [timerRunning, setTimerRunning] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -145,9 +149,9 @@ export function useDbqState(prompt: DbqPrompt, initialTimeMode?: TimeMode): DbqS
   const startTimer = useCallback(() => setTimerRunning(true), []);
   const pauseTimer = useCallback(() => setTimerRunning(false), []);
   const resetTimer = useCallback(() => {
-    setMsRemaining(TOTAL_MS);
+    setMsRemaining(totalMs);
     setTimerRunning(false);
-  }, []);
+  }, [totalMs]);
 
   const insertCitation = useCallback(
     (label: string) => {
@@ -211,6 +215,7 @@ export function useDbqState(prompt: DbqPrompt, initialTimeMode?: TimeMode): DbqS
       annotations,
       addAnnotation,
       removeAnnotation,
+      durationMinutes,
       msRemaining,
       timerRunning,
       startTimer,
@@ -232,6 +237,7 @@ export function useDbqState(prompt: DbqPrompt, initialTimeMode?: TimeMode): DbqS
       annotations,
       addAnnotation,
       removeAnnotation,
+      durationMinutes,
       msRemaining,
       timerRunning,
       startTimer,

@@ -16,6 +16,7 @@ export function PromptBanner({ state }: { state: DbqState }) {
     timeMode,
     setTimeMode,
     msRemaining,
+    durationMinutes,
     timerRunning,
     startTimer,
     pauseTimer,
@@ -30,7 +31,7 @@ export function PromptBanner({ state }: { state: DbqState }) {
     <div className="flex items-center gap-4 border-b bg-background px-4 py-2.5">
       <div className="flex min-w-0 flex-1 items-baseline gap-3">
         <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-          DBQ · APUSH · Reconstruction
+          DBQ · APUSH{prompt.title ? ` · ${prompt.title}` : ''}
         </span>
         <p className="truncate text-sm font-medium text-foreground">
           {prompt.prompt}
@@ -61,7 +62,7 @@ export function PromptBanner({ state }: { state: DbqState }) {
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            Timed · 60m
+            Timed · {durationMinutes}m
           </button>
         </div>
 
