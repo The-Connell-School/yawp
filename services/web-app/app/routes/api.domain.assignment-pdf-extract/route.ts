@@ -5,6 +5,12 @@ import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import { isApEssayType, type ApEssayType } from '~/domain/grading/ap-rubric';
+import {
+  buildApExtractionSystemPrompt,
+  buildApExtractionUserPrompt,
+  parseApExtractionResult,
+} from '~/domain/pdf-extract/ap-prompt-parser';
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -35,6 +41,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const classIdRaw = formData.get('classId');
   const file = formData.get('file');
+  const essayTypeRaw = formData.get('essayType');
+  const essayType: ApEssayType | null =
+    typeof essayTypeRaw === 'string' && isApEssayType(essayTypeRaw)
+      ? (essayTypeRaw as ApEssayType)
+      : null;
 
   if (typeof classIdRaw !== 'string' || !classIdRaw.trim()) {
     return dataResponse(
@@ -119,14 +130,27 @@ export async function action({ request }: ActionFunctionArgs) {
       ? process.env.AI_MODEL
       : 'claude-sonnet-4-6';
 
-  const system = [
-    'You extract classroom writing assignments from PDFs.',
-    'Return only valid JSON in this exact shape:',
-    '{"title":"string?","prompt":"string","tutorContext":"string?"}',
-    'prompt must be the full assignment directions students should see above the editor.',
-    'tutorContext should contain concise tutor guidance for coaching within this assignment when available.',
-    'Never include markdown fences or explanatory text.',
-  ].join('\n');
+  const system = essayType
+    ? buildApExtractionSystemPrompt(essayType)
+    : [
+        'You extract classroom writing assignments from PDFs.',
+        'Return only valid JSON in this exact shape:',
+        '{"title":"string?","prompt":"string","tutorContext":"string?"}',
+        'prompt must be the full assignment directions students should see above the editor.',
+        'tutorContext should contain concise tutor guidance for coaching within this assignment when available.',
+        'Never include markdown fences or explanatory text.',
+      ].join('\n');
+
+  const userText = essayType
+    ? buildApExtractionUserPrompt(essayType)
+    : [
+        'Extract the assignment for student writing.',
+        'If multiple prompts appear, choose the primary essay prompt.',
+        'Also infer tutorContext that helps a writing tutor coach this assignment.',
+        'Return strict JSON only.',
+      ].join(' ');
+
+  const maxTokens = essayType === 'synthesis' ? 4000 : 1200;
 
   const startedAt = Date.now();
   const metadata = {
@@ -134,12 +158,13 @@ export async function action({ request }: ActionFunctionArgs) {
     classId,
     fileName: file.name,
     fileSize: file.size,
+    ...(essayType ? { essayType } : {}),
   };
 
   try {
     const message = await anthropic.messages.create({
       model,
-      max_tokens: 1200,
+      max_tokens: maxTokens,
       temperature: 0,
       system,
       messages: [
@@ -156,12 +181,7 @@ export async function action({ request }: ActionFunctionArgs) {
             },
             {
               type: 'text',
-              text: [
-                'Extract the assignment for student writing.',
-                'If multiple prompts appear, choose the primary essay prompt.',
-                'Also infer tutorContext that helps a writing tutor coach this assignment.',
-                'Return strict JSON only.',
-              ].join(' '),
+              text: userText,
             },
           ],
         },
@@ -172,10 +192,6 @@ export async function action({ request }: ActionFunctionArgs) {
       .map((part) => (part?.type === 'text' ? (part.text as string) : ''))
       .join('\n')
       .trim();
-
-    const parsed = ExtractedAssignmentSchema.parse(
-      parseFirstJsonValue(responseText)
-    );
 
     await prisma.llmLog.create({
       data: {
@@ -194,6 +210,24 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
+    const parsedJson = parseFirstJsonValue(responseText);
+
+    if (essayType) {
+      const apResult = parseApExtractionResult(parsedJson);
+      return dataResponse({
+        success: true,
+        essayType,
+        title: safeText(apResult.title),
+        prompt: apResult.prompt.trim(),
+        sources: apResult.sources ?? [],
+        poet: safeText(apResult.poet),
+        author: safeText(apResult.author),
+        sourceWork: safeText(apResult.sourceWork),
+        year: apResult.year ?? null,
+      });
+    }
+
+    const parsed = ExtractedAssignmentSchema.parse(parsedJson);
     return dataResponse({
       success: true,
       title: safeText(parsed.title),
