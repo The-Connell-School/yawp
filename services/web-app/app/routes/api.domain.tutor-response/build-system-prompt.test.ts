@@ -42,3 +42,70 @@ describe('buildTutorSystemPrompt', () => {
     expect(result.endsWith('\n')).toBe(false);
   });
 });
+
+describe('buildTutorSystemPrompt — AP coaching', () => {
+  it('uses synthesis coaching when tutorContext is AP synthesis JSON', () => {
+    const apContext = JSON.stringify({
+      essayType: 'synthesis',
+      sourcePassages: [
+        { label: 'Source A', title: 'Privacy', body: 'Surveillance text.' },
+      ],
+    });
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: 'Generic module text that should be ignored.',
+      instructionTutorInstructions: null,
+      assignmentTutorContext: apContext,
+    });
+    expect(result).toContain('SYNTHESIS essay');
+    expect(result).toContain('Source A');
+    expect(result).toContain('Surveillance text.');
+    // Generic module text is replaced, not appended, for AP assignments.
+    expect(result).not.toContain('Generic module text');
+    expect(result).toContain('read_student_document');
+  });
+
+  it('uses rhetorical-analysis coaching with the passage text', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({
+        essayType: 'rhetorical-analysis',
+        sourcePassages: [{ label: 'Passage', body: 'A persuasive speech.' }],
+      }),
+    });
+    expect(result).toContain('RHETORICAL ANALYSIS essay');
+    expect(result).toContain('A persuasive speech.');
+  });
+
+  it('uses argument coaching with no sources', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({ essayType: 'argument' }),
+    });
+    expect(result).toContain('ARGUMENT essay');
+  });
+
+  it('includes teacher notes when present', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({
+        essayType: 'argument',
+        teacherNotes: 'Emphasize counterargument.',
+      }),
+    });
+    expect(result).toContain('Emphasize counterargument.');
+  });
+
+  it('falls back to the standard path for plain-text tutorContext', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: 'Module coaching.',
+      instructionTutorInstructions: null,
+      assignmentTutorContext: 'Plain text guidance.',
+    });
+    expect(result).toContain('Module coaching.');
+    expect(result).toContain('Plain text guidance.');
+    expect(result).not.toContain('SYNTHESIS essay');
+  });
+});

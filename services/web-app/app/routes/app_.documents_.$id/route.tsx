@@ -51,6 +51,8 @@ import {
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
 } from '~/utils/feature-flags.server';
+import { SourceViewer } from '~/components/source-viewer';
+import { parseApTutorContext } from '~/domain/ap-tutor-context';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -186,6 +188,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          kind: true,
         },
       },
       assignment: {
@@ -408,6 +411,15 @@ export default function Route() {
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
+
+  // AP assignments encode essay type + source material in tutorContext JSON.
+  const apContext = useMemo(
+    () => parseApTutorContext(data.doc?.assignment?.tutorContext),
+    [data.doc?.assignment?.tutorContext]
+  );
+  const apSources = apContext?.sourcePassages ?? [];
+  const apSourceMode =
+    apContext?.essayType === 'poetry-analysis' ? 'poetry' : 'prose';
 
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
@@ -844,6 +856,14 @@ export default function Route() {
               <p className="whitespace-pre-wrap text-sm text-foreground/90">
                 {data.doc.assignment.prompt}
               </p>
+              {apSources.length > 0 ? (
+                <div className="mt-2">
+                  <SourceViewer
+                    sources={apSources}
+                    mode={apSourceMode}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
