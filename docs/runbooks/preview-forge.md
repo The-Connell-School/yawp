@@ -16,7 +16,7 @@ The target behavior is:
 
 Provision an EC2 instance with enough CPU and disk for concurrent Docker builds. Start with at least `t3.large` or `c7i.large` and 120 GB gp3. The first host can live in the default VPC because the app stack is self-contained.
 
-Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` on the bucket. The deploy script restores through the host AWS CLI when a new PR Postgres volume is empty.
+Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when a new PR Postgres volume is empty.
 
 Open inbound ports:
 
