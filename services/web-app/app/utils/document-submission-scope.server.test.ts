@@ -44,6 +44,7 @@ describe('getDocumentSubmissionScope', () => {
           class: {
             id: 'assignment-class',
             schoolId: 'assignment-school',
+            school: { organizationId: 'assignment-org' },
             teachers: [{ id: 'teacher-1' }, { id: 'teacher-1' }],
           },
         },
@@ -59,11 +60,13 @@ describe('getDocumentSubmissionScope', () => {
       })
     ).toEqual({
       schoolIds: ['assignment-school'],
+      organizationIds: ['assignment-org'],
       classIds: ['assignment-class'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'assignment-school',
+          organizationId: 'assignment-org',
           classId: 'assignment-class',
           teacherProfileIds: ['teacher-1'],
         },
@@ -80,11 +83,13 @@ describe('getDocumentSubmissionScope', () => {
             {
               id: 'class-1',
               schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
               teachers: [{ id: 'teacher-1' }],
             },
             {
               id: 'class-2',
               schoolId: 'school-2',
+              school: { organizationId: 'org-2' },
               teachers: [{ id: 'teacher-2' }],
             },
           ],
@@ -92,16 +97,19 @@ describe('getDocumentSubmissionScope', () => {
       })
     ).toEqual({
       schoolIds: ['school-1', 'school-2'],
+      organizationIds: ['org-1', 'org-2'],
       classIds: ['class-1', 'class-2'],
       teacherProfileIds: ['teacher-1', 'teacher-2'],
       classScopes: [
         {
           schoolId: 'school-1',
+          organizationId: 'org-1',
           classId: 'class-1',
           teacherProfileIds: ['teacher-1'],
         },
         {
           schoolId: 'school-2',
+          organizationId: 'org-2',
           classId: 'class-2',
           teacherProfileIds: ['teacher-2'],
         },

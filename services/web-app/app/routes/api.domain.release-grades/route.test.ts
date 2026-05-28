@@ -45,6 +45,7 @@ describe('api.domain.release-grades', () => {
 
     getGradingActor.mockResolvedValue({
       profileId: 'teacher-profile-1',
+      teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
     });
@@ -67,6 +68,7 @@ describe('api.domain.release-grades', () => {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
               teachers: [{ id: 'teacher-1' }],
             },
           },
@@ -89,15 +91,18 @@ describe('api.domain.release-grades', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['school-1'],
+      organizationIds: ['org-1'],
       classIds: ['class-1'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'school-1',
+          organizationId: 'org-1',
           classId: 'class-1',
           teacherProfileIds: ['teacher-1'],
         },
       ],
+      actorTeacherProfileId: 'teacher-1',
     });
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
   });
@@ -113,6 +118,7 @@ describe('api.domain.release-grades', () => {
               {
                 id: 'legacy-class-1',
                 schoolId: 'scranton-prep-school',
+                school: { organizationId: 'scranton-org' },
                 teachers: [{ id: 'teacher-1' }],
               },
             ],
@@ -136,15 +142,18 @@ describe('api.domain.release-grades', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['scranton-prep-school'],
+      organizationIds: ['scranton-org'],
       classIds: ['legacy-class-1'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'scranton-prep-school',
+          organizationId: 'scranton-org',
           classId: 'legacy-class-1',
           teacherProfileIds: ['teacher-1'],
         },
       ],
+      actorTeacherProfileId: 'teacher-1',
     });
     expect(prisma.submission.updateMany).toHaveBeenCalledTimes(1);
   });
@@ -158,6 +167,7 @@ describe('api.domain.release-grades', () => {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
+              school: { organizationId: 'org-1' },
               teachers: [{ id: 'teacher-1' }],
             },
           },
@@ -170,6 +180,7 @@ describe('api.domain.release-grades', () => {
             class: {
               id: 'class-2',
               schoolId: 'school-2',
+              school: { organizationId: 'org-2' },
               teachers: [{ id: 'teacher-2' }],
             },
           },
@@ -203,27 +214,33 @@ describe('api.domain.release-grades', () => {
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledTimes(2);
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenNthCalledWith(1, {
       schoolIds: ['school-1'],
+      organizationIds: ['org-1'],
       classIds: ['class-1'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'school-1',
+          organizationId: 'org-1',
           classId: 'class-1',
           teacherProfileIds: ['teacher-1'],
         },
       ],
+      actorTeacherProfileId: 'teacher-1',
     });
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenNthCalledWith(2, {
       schoolIds: ['school-2'],
+      organizationIds: ['org-2'],
       classIds: ['class-2'],
       teacherProfileIds: ['teacher-2'],
       classScopes: [
         {
           schoolId: 'school-2',
+          organizationId: 'org-2',
           classId: 'class-2',
           teacherProfileIds: ['teacher-2'],
         },
       ],
+      actorTeacherProfileId: 'teacher-1',
     });
     expect(redirectWithToast).toHaveBeenCalledWith('/app/my-classes', {
       description:

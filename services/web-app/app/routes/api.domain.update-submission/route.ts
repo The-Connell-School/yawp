@@ -53,6 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
+                  school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
                 },
               },
@@ -64,6 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
+                  school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
                 },
               },
@@ -88,9 +90,10 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionGradingEnabled = await isDocumentSubmissionEnabledForScope(
-    getDocumentSubmissionScope(submission.document)
-  );
+  const isSubmissionGradingEnabled = await isDocumentSubmissionEnabledForScope({
+    ...getDocumentSubmissionScope(submission.document),
+    actorTeacherProfileId: actor.teacherProfileId,
+  });
   if (!isSubmissionGradingEnabled) {
     return Response.json(
       {
