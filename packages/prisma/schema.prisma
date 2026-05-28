@@ -477,6 +477,21 @@ model Setting {
   valueType   String   @default("string")
 }
 
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  key         String
+  scopeKind   String   @default("global")
+  scopeId     String   @default("*")
+  enabled     Boolean  @default(false)
+  description String?
+
+  @@unique([key, scopeKind, scopeId])
+  @@index([key, enabled])
+  @@index([scopeKind, scopeId])
+}
+
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
