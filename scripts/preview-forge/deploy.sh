@@ -19,6 +19,10 @@ stream_preview_dump() {
   if [[ -n "${PREVIEW_DB_DUMP_URL:-}" ]]; then
     curl -fSsL --retry 3 --retry-delay 2 "$PREVIEW_DB_DUMP_URL"
   else
+    if ! aws sts get-caller-identity >/dev/null 2>&1; then
+      echo "Preview host cannot access AWS. Attach an instance profile that can read ${DUMP_URI} or provide PREVIEW_DB_DUMP_URL." >&2
+      exit 1
+    fi
     aws s3 cp "$DUMP_URI" -
   fi
 }

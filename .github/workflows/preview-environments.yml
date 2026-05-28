@@ -76,30 +76,8 @@ jobs:
             -e "ssh -i ~/.ssh/preview_forge_key" \
             ./ "$ssh_target:$remote_source/"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Create masked dump URL
-        id: preview-dump-url
-        run: |
-          set -euo pipefail
-          dump_url=""
-          if [[ "$PREVIEW_DB_DUMP_S3_URI" == s3://* ]]; then
-            dump_url="$(aws s3 presign "$PREVIEW_DB_DUMP_S3_URI" --expires-in 21600)"
-          fi
-          if [[ -n "$dump_url" ]]; then
-            echo "::add-mask::$dump_url"
-          fi
-          printf 'url=%s\n' "$dump_url" >> "$GITHUB_OUTPUT"
-
       - name: Deploy preview
         id: deploy
-        env:
-          PREVIEW_DB_DUMP_URL: ${{ steps.preview-dump-url.outputs.url }}
         run: |
           set -euo pipefail
           shell_quote() {
@@ -114,7 +92,6 @@ jobs:
             "PREVIEW_FORGE_TLS=$(shell_quote "$PREVIEW_FORGE_TLS")"
             "PREVIEW_FORGE_RUNTIME=$(shell_quote "$PREVIEW_FORGE_RUNTIME")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
-            "PREVIEW_DB_DUMP_URL=$(shell_quote "$PREVIEW_DB_DUMP_URL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"

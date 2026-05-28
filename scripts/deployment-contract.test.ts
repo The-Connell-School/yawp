@@ -129,6 +129,7 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('PREVIEW_DB_DUMP_URL');
     expect(deployScript).toContain('stream_preview_dump()');
     expect(deployScript).toContain('curl -fSsL --retry 3 --retry-delay 2 "$PREVIEW_DB_DUMP_URL"');
+    expect(deployScript).toContain('aws sts get-caller-identity');
     expect(deployScript).toContain('aws s3 cp "$DUMP_URI" -');
     expect(deployScript).toContain('psql -U postgres -d yawp_preview');
     expect(deployScript).toContain('Schema already has');
@@ -144,26 +145,22 @@ describe('PR preview deployment contract', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
-    expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_URL');
     expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_EMAIL');
     expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_PASSWORD');
     expect(previewWorkflow).toContain('shell_quote()');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
-    expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_URL=$(shell_quote "$PREVIEW_DB_DUMP_URL")');
     expect(previewWorkflow).toContain('PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")');
     expect(previewWorkflow).toContain('PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")');
   });
 
-  test('preview workflow creates a masked presigned dump URL on the runner', () => {
+  test('preview workflow does not require runner AWS credentials for dump restores', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
-    expect(previewWorkflow).toContain('aws-actions/configure-aws-credentials@v4');
-    expect(previewWorkflow).toContain('secrets.AWS_ACCESS_KEY_ID');
-    expect(previewWorkflow).toContain('secrets.AWS_SECRET_ACCESS_KEY');
-    expect(previewWorkflow).toContain('id: preview-dump-url');
-    expect(previewWorkflow).toContain('aws s3 presign "$PREVIEW_DB_DUMP_S3_URI"');
-    expect(previewWorkflow).toContain('echo "::add-mask::$dump_url"');
-    expect(previewWorkflow).toContain('steps.preview-dump-url.outputs.url');
+    expect(previewWorkflow).not.toContain('aws-actions/configure-aws-credentials');
+    expect(previewWorkflow).not.toContain('secrets.AWS_ACCESS_KEY_ID');
+    expect(previewWorkflow).not.toContain('secrets.AWS_SECRET_ACCESS_KEY');
+    expect(previewWorkflow).not.toContain('aws s3 presign');
+    expect(previewWorkflow).not.toContain('PREVIEW_DB_DUMP_URL');
   });
 
   test('preview deploy polls health quickly once containers are starting', () => {
