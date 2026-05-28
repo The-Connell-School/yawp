@@ -44,6 +44,7 @@ import {
 } from '~/utils/document-exit';
 import { EssayPanel } from './essay-panel';
 import { TeacherGradingPanel } from './teacher-grading/teacher-grading-panel';
+import { ApGradingPanel } from './teacher-grading/ap-grading-panel';
 import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sidebar';
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
@@ -122,8 +123,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          assignmentType: {
+            select: { kind: true },
+          },
           assignment: {
             select: {
+              tutorContext: true,
               class: {
                 select: {
                   id: true,
@@ -302,6 +307,7 @@ export default function SubmissionRoute() {
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
     submission.title.trim() || submission.document.title || '';
+  const isApLang = submission.document.assignmentType?.kind === 'ap-lang';
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -872,17 +878,25 @@ export default function SubmissionRoute() {
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isGradeMode ? (
-                  <TeacherGradingPanel
-                    documentId={submission.documentId}
-                    submissionId={submission.id}
-                    existingGrade={teacherExistingGrade}
-                    grammarIssues={grammarIssues}
-                    hiddenGrammarIssueIds={hiddenGrammarIssueIds}
-                    onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                    onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                    onGrammarIssuesChange={handleGrammarIssuesChange}
-                    onAiGradingComplete={handleAiGradingComplete}
-                  />
+                  isApLang ? (
+                    <ApGradingPanel
+                      documentId={submission.documentId}
+                      submissionId={submission.id}
+                      existingGrade={teacherExistingGrade}
+                    />
+                  ) : (
+                    <TeacherGradingPanel
+                      documentId={submission.documentId}
+                      submissionId={submission.id}
+                      existingGrade={teacherExistingGrade}
+                      grammarIssues={grammarIssues}
+                      hiddenGrammarIssueIds={hiddenGrammarIssueIds}
+                      onToggleGrammarIssue={toggleGrammarIssueVisibility}
+                      onRemoveGrammarIssue={handleRemoveGrammarIssue}
+                      onGrammarIssuesChange={handleGrammarIssuesChange}
+                      onAiGradingComplete={handleAiGradingComplete}
+                    />
+                  )
                 ) : (
                   <ViewPanel submission={submissionForView} />
                 )}

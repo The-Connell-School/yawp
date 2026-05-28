@@ -30,6 +30,9 @@ import {
   getGradingActor,
   isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
+import { isApKind } from '~/domain/grading/ap-rubric';
+import { parseApTutorContext } from '~/domain/ap-tutor-context';
+import { gradeApEssay } from './grade-ap-essay';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -116,8 +119,12 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         profileId: true,
+        assignmentType: {
+          select: { kind: true },
+        },
         assignment: {
           select: {
+            tutorContext: true,
             class: {
               select: {
                 id: true,
@@ -215,6 +222,81 @@ export async function action({ request }: ActionFunctionArgs) {
       description: 'Grading is currently disabled for this school.',
       type: 'error',
     });
+  }
+
+  const studentFirstNameForGrade = firstNameFromFullName(
+    submission.document.profile?.user?.name
+  );
+  const aiModel = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+
+  // AP assignments use the College Board additive rubric, not the weighted
+  // percentage model. The essay type + sources live in the assignment's
+  // tutorContext JSON.
+  if (isApKind(submission.document.assignmentType?.kind ?? 'standard')) {
+    const apContext = parseApTutorContext(
+      submission.document.assignment?.tutorContext
+    );
+    if (apContext) {
+      try {
+        const apResult = await gradeApEssay({
+          essayType: apContext.essayType,
+          essayText: submission.text,
+          sources: apContext.sourcePassages,
+          studentFirstName: studentFirstNameForGrade,
+          model: aiModel,
+        });
+
+        if (!apResult) {
+          return dataResponse(
+            {
+              success: false,
+              message: 'Grading Assistant returned malformed data. Please try again.',
+            },
+            { status: 502 }
+          );
+        }
+
+        const now = new Date();
+        await prisma.submission.update({
+          where: { id: submission.id },
+          data: {
+            rubricScores: apResult.rubricScores,
+            overallScore: apResult.overallScore,
+            overallComment: apResult.overallComment,
+            score: apResult.score,
+            numericPercentage: null,
+            letterGrade: null,
+            aiMeta: {
+              model: aiModel,
+              kind: 'ap-rubric',
+              essayType: apContext.essayType,
+              gradedAt: now.toISOString(),
+            } satisfies Prisma.InputJsonValue,
+            ...(!submission.gradedAt
+              ? { gradedAt: now, gradedById: actor.profileId }
+              : {}),
+            updatedAt: now,
+          },
+        });
+
+        return dataResponse({
+          success: true,
+          message: 'Grading Assistant suggestions generated.',
+          rubricScores: apResult.rubricScores,
+          overallScore: apResult.overallScore,
+          overallComment: apResult.overallComment,
+          score: apResult.score,
+        });
+      } catch {
+        return dataResponse(
+          {
+            success: false,
+            message: 'Grading Assistant failed. Please try again.',
+          },
+          { status: 502 }
+        );
+      }
+    }
   }
 
   const rubricText = rubricCategories
