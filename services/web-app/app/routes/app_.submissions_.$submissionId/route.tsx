@@ -307,7 +307,8 @@ export default function SubmissionRoute() {
   const canEditTitle = isOwner || isTeacher;
   const submissionTitleDisplay =
     submission.title.trim() || submission.document.title || '';
-  const isApLang = submission.document.assignmentType?.kind === 'ap-lang';
+  const apKind = submission.document.assignmentType?.kind;
+  const isApRubric = apKind === 'ap-lang' || apKind === 'ap-lit';
 
   // Exit target — same pattern as documents route
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
@@ -878,7 +879,7 @@ export default function SubmissionRoute() {
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isGradeMode ? (
-                  isApLang ? (
+                  isApRubric ? (
                     <ApGradingPanel
                       documentId={submission.documentId}
                       submissionId={submission.id}

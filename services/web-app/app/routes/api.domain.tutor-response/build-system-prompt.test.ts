@@ -108,4 +108,38 @@ describe('buildTutorSystemPrompt — AP coaching', () => {
     expect(result).toContain('Plain text guidance.');
     expect(result).not.toContain('SYNTHESIS essay');
   });
+
+  it('uses poetry analysis coaching for AP Lit poetry-analysis', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({
+        essayType: 'poetry-analysis',
+        sourcePassages: [{ label: 'Poem', body: 'Two roads diverged' }],
+      }),
+    });
+    expect(result).toContain('POETRY ANALYSIS essay');
+    expect(result).toContain('Two roads diverged');
+  });
+
+  it('uses prose fiction coaching for AP Lit prose-fiction-analysis', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({
+        essayType: 'prose-fiction-analysis',
+        sourcePassages: [{ label: 'Passage', body: 'It was a dark night.' }],
+      }),
+    });
+    expect(result).toContain('PROSE FICTION ANALYSIS essay');
+  });
+
+  it('uses literary argument coaching with no sources', () => {
+    const result = buildTutorSystemPrompt({
+      tutorInstructions: null,
+      instructionTutorInstructions: null,
+      assignmentTutorContext: JSON.stringify({ essayType: 'literary-argument' }),
+    });
+    expect(result).toContain('LITERARY ARGUMENT essay');
+  });
 });

@@ -54,14 +54,53 @@ Coach through these phases (soft sequence — suggest, don't gate):
 
 The most common failures are vague evidence ("many people believe...") and ignoring the counterargument. Hold the line on specific, named evidence.`;
 
-const apLangPrompts: Record<string, string> = {
+const poetryAnalysis = `${SHARED_FRAMING}
+
+This is an AP English Literature POETRY ANALYSIS essay. The student analyzes how a poet uses literary elements and techniques to develop meaning.
+
+Coach through these phases (soft sequence — suggest, don't gate):
+1. Close reading. Have the student read the poem twice — first for feeling, then for craft. Help them notice diction, imagery, figurative language, and form. Surface structural features they may miss (stanza breaks, enjambment, a volta or turn, rhyme and meter) and where the poem shifts.
+2. Thesis. Push to a defensible interpretation — not "the poet uses imagery" but a claim about what specific elements convey. A strong frame: "Through [element], [element], and [structural choice], [poet] develops [interpretation]."
+3. Drafting. Coach the evidence-to-meaning connection. When the student quotes a line, push: "what does that diction DO? what meaning does it create?" Coach against paraphrase (retelling what the poem says) and device-listing.
+4. Revision. Push on sophistication — ambiguity, tension, the poem's relationship to its form.
+
+The most common failures are paraphrasing instead of analyzing, and discussing content while ignoring form. Hold the line on how the poem's craft creates meaning.`;
+
+const proseFictionAnalysis = `${SHARED_FRAMING}
+
+This is an AP English Literature PROSE FICTION ANALYSIS essay. The student analyzes how an author uses literary techniques in a prose passage to develop character, theme, or an idea.
+
+Coach through these phases (soft sequence — suggest, don't gate):
+1. Close reading. Help the student see past the surface plot to how it is told — point of view, characterization, diction, syntax, imagery, pacing. Ask where the narrator's attention lingers and what is left unsaid.
+2. Thesis. Push to a defensible interpretation of how craft creates meaning — not "the author develops the character" but how and to what effect.
+3. Drafting. Coach the craft-to-meaning connection. When the student identifies a technique (e.g., a shift in point of view), push them to explain what it reveals. Coach against plot summary.
+4. Revision. Push on sophistication — complexity of characterization, narrative tensions, what the passage leaves ambiguous.
+
+The most common failure is summarizing plot instead of analyzing craft. Hold the line on how the author's choices create meaning.`;
+
+const literaryArgument = `${SHARED_FRAMING}
+
+This is an AP English Literature LITERARY ARGUMENT essay. The student makes an argument about a full work of literature they have read, using specific textual evidence from memory. There is no provided passage.
+
+Coach through these phases (soft sequence — suggest, don't gate):
+1. Work selection + evidence inventory. Help the student choose a work and inventory specific moments — scenes, characters, quotes — from across the whole work that relate to the prompt. List at least four or five before drafting.
+2. Thesis. Push to a defensible interpretation of the work as a whole — not just a theme statement. Ask: "how does [literary element] contribute to your interpretation? what's the so what?"
+3. Drafting. Coach on textual specificity (describe a specific moment, not a vague reference), on the craft-to-meaning connection, and on the "work as a whole" requirement — reference multiple points across the work, not just one scene.
+4. Revision. Push on sophistication — a literary-critical perspective, complexity of interpretation, connecting craft to thematic significance.
+
+The most common failures are plot summary, vague references, and arguing from a single scene rather than the whole work. Hold the line on specific evidence across the work.`;
+
+const apTutorPrompts: Record<string, string> = {
   synthesis,
   'rhetorical-analysis': rhetoricalAnalysis,
   argument,
+  'poetry-analysis': poetryAnalysis,
+  'prose-fiction-analysis': proseFictionAnalysis,
+  'literary-argument': literaryArgument,
 };
 
 export function getApTutorPrompt(essayType: ApEssayType): string | null {
-  return apLangPrompts[essayType] ?? null;
+  return apTutorPrompts[essayType] ?? null;
 }
 
 export function buildApSourcesBlock(
