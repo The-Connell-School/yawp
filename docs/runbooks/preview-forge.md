@@ -5,18 +5,18 @@ PR preview environments replace per-PR App Runner services with one long-lived E
 The target behavior is:
 
 - Every same-repository PR deploys automatically on `opened`, `synchronize`, and `reopened`.
-- Closed PRs are destroyed automatically with `docker compose down -v`.
-- Each PR gets its own app container and Postgres volume.
-- New PR volumes restore the configured production database dump from S3, then apply newer Prisma migrations.
+- Closed PRs are destroyed automatically with `docker compose down -v`, and stale previews are swept by the scheduled cleanup workflow.
+- Each PR gets its own app container and database inside the shared preview Postgres container.
+- The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_FORGE_DOMAIN` when TLS is enabled.
-- The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, and React Router runs in dev mode for faster prototype refreshes. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
+- The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
 
 Provision an EC2 instance with enough CPU and disk for concurrent Docker builds. Start with at least `t3.large` or `c7i.large` and 120 GB gp3. The first host can live in the default VPC because the app stack is self-contained.
 
-Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when a new PR Postgres volume is empty.
+Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
 
 Open inbound ports:
 
@@ -90,4 +90,6 @@ Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSW
 
 ## Performance Notes
 
-The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency layers, and PR-scoped Postgres volumes. The first build on a cold host will be slower. Subsequent PR updates should mostly reuse Docker layers and skip cloud control-plane waits.
+The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, an already-running web container is left in place so the bind-mounted source update can reload without a Docker recreate unless `PREVIEW_FORCE_WEB_RECREATE=true`.
+
+Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_FORGE_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.

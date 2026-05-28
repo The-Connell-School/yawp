@@ -2,8 +2,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_ROOT = '/srv/yawp-preview-forge';
-const DEFAULT_DATABASE_URL =
-  'postgresql://postgres:postgres@postgres:5432/yawp_preview';
+const DEFAULT_DATABASE_HOST = 'preview-postgres';
+const DEFAULT_DATABASE_USER = 'postgres';
+const DEFAULT_DATABASE_PASSWORD = 'postgres';
+const DEFAULT_DATABASE_PORT = '5432';
+const DEFAULT_TEMPLATE_DATABASE_NAME = 'yawp_template';
 
 function trimSlashes(value) {
   return value.replace(/^\/+|\/+$/g, '');
@@ -41,7 +44,14 @@ export function buildPreviewForgeEnv({
   directPort = process.env.PREVIEW_FORGE_DIRECT_PORT,
   tls = process.env.PREVIEW_FORGE_TLS !== 'false',
   runtime = process.env.PREVIEW_FORGE_RUNTIME || 'fast',
-  databaseUrl = process.env.PREVIEW_DATABASE_URL || DEFAULT_DATABASE_URL,
+  databaseHost = process.env.PREVIEW_DB_HOST || DEFAULT_DATABASE_HOST,
+  databaseUser = process.env.PREVIEW_DB_USER || DEFAULT_DATABASE_USER,
+  databasePassword =
+    process.env.PREVIEW_DB_PASSWORD || DEFAULT_DATABASE_PASSWORD,
+  databasePort = process.env.PREVIEW_DB_PORT || DEFAULT_DATABASE_PORT,
+  templateDatabaseName =
+    process.env.PREVIEW_DB_TEMPLATE_DB || DEFAULT_TEMPLATE_DATABASE_NAME,
+  databaseUrl = process.env.PREVIEW_DATABASE_URL,
 } = {}) {
   const safePrNumber = requirePositiveInteger(prNumber);
   const safeDomain = requireDomain(domain);
@@ -49,6 +59,7 @@ export function buildPreviewForgeEnv({
   const safeRoot = trimSlashes(String(root || DEFAULT_ROOT));
   const slug = `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
+  const databaseName = `yawp_pr_${safePrNumber}`;
   const hostname = `${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);
@@ -58,11 +69,20 @@ export function buildPreviewForgeEnv({
   const url = directPort
     ? `http://127.0.0.1:${directPort}`
     : `${scheme}://${hostname}`;
+  const resolvedDatabaseUrl =
+    databaseUrl ||
+    `postgresql://${databaseUser}:${databasePassword}@${databaseHost}:${databasePort}/${databaseName}`;
 
   return {
     prNumber: safePrNumber,
     slug,
     composeProject,
+    databaseName,
+    databaseHost,
+    databasePort,
+    databaseUser,
+    databasePassword,
+    templateDatabaseName,
     hostname,
     url,
     root: previewRoot,
@@ -71,7 +91,7 @@ export function buildPreviewForgeEnv({
     directPort: directPort ? String(directPort) : '',
     tls,
     runtime: safeRuntime,
-    databaseUrl,
+    databaseUrl: resolvedDatabaseUrl,
   };
 }
 

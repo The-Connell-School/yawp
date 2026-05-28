@@ -31,6 +31,45 @@ sudo mkdir -p "$ROOT/traefik/letsencrypt" "$ROOT/previews" "$ROOT/sources"
 sudo chown -R "$USER":"$USER" "$ROOT"
 docker network inspect preview-forge >/dev/null 2>&1 || docker network create preview-forge >/dev/null
 
+if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
+  sudo iptables -C DOCKER-USER -d 169.254.169.254/32 -j REJECT 2>/dev/null || \
+    sudo iptables -I DOCKER-USER -d 169.254.169.254/32 -j REJECT
+  sudo iptables -C DOCKER-USER -d 169.254.170.2/32 -j REJECT 2>/dev/null || \
+    sudo iptables -I DOCKER-USER -d 169.254.170.2/32 -j REJECT
+fi
+
+if command -v ip6tables >/dev/null 2>&1 && sudo ip6tables -S DOCKER-USER >/dev/null 2>&1; then
+  sudo ip6tables -C DOCKER-USER -d fd00:ec2::254/128 -j REJECT 2>/dev/null || \
+    sudo ip6tables -I DOCKER-USER -d fd00:ec2::254/128 -j REJECT
+fi
+
+sudo mkdir -p "$ROOT/postgres"
+sudo chown -R "$USER":"$USER" "$ROOT/postgres"
+cat > "$ROOT/postgres/docker-compose.yml" <<YAML
+services:
+  postgres:
+    image: postgres:16
+    container_name: preview-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PREVIEW_DB_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    volumes:
+      - preview-postgres-data:/var/lib/postgresql/data
+    networks:
+      - preview-forge
+
+volumes:
+  preview-postgres-data:
+
+networks:
+  preview-forge:
+    external: true
+YAML
+
+docker compose -f "$ROOT/postgres/docker-compose.yml" up -d
+
 cat > "$ROOT/traefik/docker-compose.yml" <<YAML
 services:
   traefik:

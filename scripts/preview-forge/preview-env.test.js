@@ -16,7 +16,9 @@ describe('buildPreviewForgeEnv', () => {
     expect(env.runtime).toBe('fast');
     expect(env.previewDir).toBe('/srv/yawp-preview-forge/previews/pr-142');
     expect(env.sourceDir).toBe('/srv/yawp-preview-forge/sources/pr-142');
-    expect(env.databaseUrl).toBe('postgresql://postgres:postgres@postgres:5432/yawp_preview');
+    expect(env.databaseName).toBe('yawp_pr_142');
+    expect(env.databaseHost).toBe('preview-postgres');
+    expect(env.databaseUrl).toBe('postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142');
   });
 
   test('rejects unsafe pull request numbers', () => {
