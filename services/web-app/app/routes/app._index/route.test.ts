@@ -16,6 +16,7 @@ const requireUserId = mock();
 const requireProfile = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
 const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
+const isWritingLessonsEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -30,6 +31,7 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/feature-flags.server', () => ({
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
+  isWritingLessonsEnabledForOrganization,
 }));
 
 const { loader } = await import('./route');
@@ -43,6 +45,7 @@ describe('app index loader assignments', () => {
     requireProfile.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
+    isWritingLessonsEnabledForOrganization.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -82,6 +85,7 @@ describe('app index loader assignments', () => {
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
       []
     );
+    isWritingLessonsEnabledForOrganization.mockResolvedValue(false);
   });
 
   test('fetches student dashboard assignments only for enabled pilot classes', async () => {
@@ -115,6 +119,23 @@ describe('app index loader assignments', () => {
         where: { classId: { in: ['class-1'] } },
       })
     );
+  });
+
+  test('returns the writing lessons feature state for the current organization', async () => {
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
+    isWritingLessonsEnabledForOrganization.mockResolvedValue(true);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(isWritingLessonsEnabledForOrganization).toHaveBeenCalledWith(
+      'org-1'
+    );
+    expect(data.writingLessonsEnabled).toBe(true);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {

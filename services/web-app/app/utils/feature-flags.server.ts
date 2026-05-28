@@ -18,6 +18,7 @@ export const FEATURE_FLAGS = {
     'feature_assignment_creation_standardization',
   RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
     'released_grades_organization_enabled_org_ids',
+  WRITING_LESSONS_ENABLED_ORG_IDS: 'writing_lessons_enabled_org_ids',
 } as const;
 
 export const PILOT_FEATURE_KEYS = {
@@ -60,6 +61,12 @@ export const TARGETED_FEATURE_FLAGS = {
     targetKind: 'organization',
     description:
       'Organization IDs allowed to use released grades organization view',
+  },
+  writingLessons: {
+    label: 'Quick Writing Lessons',
+    settingName: FEATURE_FLAGS.WRITING_LESSONS_ENABLED_ORG_IDS,
+    targetKind: 'organization',
+    description: 'Organization IDs allowed to use Quick Writing Lessons',
   },
 } as const satisfies Record<string, TargetedFeatureFlagDefinition>;
 
@@ -669,4 +676,10 @@ export async function isReleasedGradesOrganizationEnabledForOrganization(
     'releasedGradesOrganization',
     organizationId
   );
+}
+
+export async function isWritingLessonsEnabledForOrganization(
+  organizationId: string | null | undefined
+): Promise<boolean> {
+  return isTargetedFeatureFlagEnabled('writingLessons', organizationId);
 }

@@ -4,6 +4,7 @@ import {
   redirect,
 } from 'react-router';
 import { Form, Link, useLoaderData, useSearchParams } from 'react-router';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
@@ -13,6 +14,7 @@ import { prisma } from '~/utils/db.server.js';
 import {
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
+  isWritingLessonsEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Accordion,
@@ -177,6 +179,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         ]
     : [];
+  const writingLessonsEnabled =
+    await isWritingLessonsEnabledForOrganization(profile.organization.id);
 
   const url = new URL(request.url);
   if (
@@ -559,6 +563,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     teacherAssignments,
     assignmentsEnabled,
     assignmentCreationStandardizationEnabled,
+    writingLessonsEnabled,
     assignmentTypes: courses,
     coursesGlance,
     teacherClassOptions: teacherClassOptionsForCreate,
@@ -593,6 +598,7 @@ export default function AppRoute() {
           </div>
         </div>
         <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
+          {data.writingLessonsEnabled ? <QuickWritingLessonsLink /> : null}
           <AssignmentTypesList
             assignmentTypes={data.assignmentTypes}
             teacherClasses={data.teacherClassOptions}
@@ -626,6 +632,11 @@ export default function AppRoute() {
       </div>
       <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
         <div className="flex flex-col">
+          {data.writingLessonsEnabled ? (
+            <div className="mb-4">
+              <QuickWritingLessonsLink />
+            </div>
+          ) : null}
           {assignmentsEnabled ? (
             <div className="mb-2">
               <Tabs
@@ -778,5 +789,28 @@ export default function AppRoute() {
         </div>
       </div>
     </section>
+  );
+}
+
+function QuickWritingLessonsLink() {
+  return (
+    <Link
+      to="/app/writing-lessons"
+      className="flex items-center justify-between rounded-lg border bg-muted p-4 transition-shadow hover:shadow"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <BookOpen className="h-5 w-5" />
+        </div>
+        <div>
+          <h3 className="text-base font-semibold">Quick Writing Lessons</h3>
+          <p className="text-sm text-muted-foreground">
+            Ten recovered mini-lessons for focused grammar and revision
+            practice.
+          </p>
+        </div>
+      </div>
+      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+    </Link>
   );
 }
