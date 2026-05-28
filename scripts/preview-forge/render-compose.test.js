@@ -23,6 +23,10 @@ describe('renderPreviewCompose', () => {
     expect(compose).not.toContain('target: production');
     expect(compose).toContain('traefik.enable=true');
     expect(compose).toContain('Host(`pr-142.preview.yawp.school`)');
+    expect(compose).toContain(
+      'DATABASE_URL: "postgresql://postgres:postgres@yawp-pr-142-postgres-1:5432/yawp_preview"',
+    );
+    expect(compose).not.toContain('@postgres:5432');
     expect(compose).toContain('yawp-pr-142-postgres-data');
     expect(compose).not.toContain('apprunner');
     expect(compose).not.toContain('terraform');
