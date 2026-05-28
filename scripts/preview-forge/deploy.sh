@@ -15,6 +15,14 @@ docker network inspect preview-forge >/dev/null 2>&1 || docker network create pr
 start_ms="$(date +%s%3N)"
 compose=(docker compose -p "$COMPOSE_PROJECT" -f "$PREVIEW_DIR/docker-compose.yml")
 
+stream_preview_dump() {
+  if [[ -n "${PREVIEW_DB_DUMP_URL:-}" ]]; then
+    curl -fSsL --retry 3 --retry-delay 2 "$PREVIEW_DB_DUMP_URL"
+  else
+    aws s3 cp "$DUMP_URI" -
+  fi
+}
+
 "${compose[@]}" up -d --build postgres
 
 for _ in $(seq 1 60); do
@@ -40,7 +48,7 @@ if [[ "${existing_tables:-0}" -gt 0 ]]; then
 else
   DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
   echo "Restoring production dump into preview database from ${DUMP_URI}..."
-  aws s3 cp "$DUMP_URI" - \
+  stream_preview_dump \
     | sed -e '/^\\restrict/d' \
           -e '/^\\unrestrict/d' \
           -e '/^SET transaction_timeout/d' \
