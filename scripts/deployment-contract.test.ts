@@ -146,14 +146,14 @@ describe('PR preview deployment contract', () => {
     expect(migrateIndex).toBeLessThan(webStartIndex);
   });
 
-  test('preview deploy caches tooling work and leaves warm web containers running', () => {
+  test('preview deploy caches tooling work but still refreshes web containers', () => {
     const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
 
     expect(deployScript).toContain('compute_tooling_fingerprint()');
     expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
     expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
-    expect(deployScript).toContain('Web container already running; relying on bind-mounted source update.');
-    expect(deployScript).toContain('PREVIEW_FORCE_WEB_RECREATE');
+    expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
+    expect(deployScript).not.toContain('Web container already running; relying on bind-mounted source update.');
   });
 
   test('preview containers cannot use EC2 metadata credentials', () => {

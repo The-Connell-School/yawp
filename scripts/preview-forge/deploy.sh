@@ -212,31 +212,12 @@ run_tooling_if_needed() {
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 
-web_container_id() {
-  "${compose[@]}" ps -q web 2>/dev/null || true
-}
-
-web_container_is_running() {
-  local container_id
-  container_id="$(web_container_id)"
-  [[ -n "$container_id" ]] || return 1
-  [[ "$(docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null || true)" == "true" ]]
-}
-
 remove_legacy_project_postgres() {
   docker rm -f "${COMPOSE_PROJECT}-postgres-1" >/dev/null 2>&1 || true
   docker volume rm "${COMPOSE_PROJECT}_${COMPOSE_PROJECT}-postgres-data" >/dev/null 2>&1 || true
 }
 
 refresh_web_container_if_needed() {
-  if [[ "$RUNTIME" == "fast" &&
-        "$DATABASE_CREATED" == "0" &&
-        "$TOOLING_CHANGED" == "0" &&
-        "${PREVIEW_FORCE_WEB_RECREATE:-false}" != "true" ]] && web_container_is_running; then
-    echo "Web container already running; relying on bind-mounted source update."
-    return 0
-  fi
-
   "${compose[@]}" up -d --force-recreate web
   remove_legacy_project_postgres
 }

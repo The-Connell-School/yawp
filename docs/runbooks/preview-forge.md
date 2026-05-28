@@ -10,7 +10,7 @@ The target behavior is:
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_FORGE_DOMAIN` when TLS is enabled.
-- The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
+- The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
 
@@ -90,6 +90,6 @@ Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSW
 
 ## Performance Notes
 
-The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, an already-running web container is left in place so the bind-mounted source update can reload without a Docker recreate unless `PREVIEW_FORCE_WEB_RECREATE=true`.
+The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
 Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_FORGE_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.
