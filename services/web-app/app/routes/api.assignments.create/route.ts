@@ -53,12 +53,30 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
   const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
+  const essayType = formData.get('essayType')?.toString() ?? null;
+  const sourcePassagesRaw = formData.get('sourcePassages')?.toString() ?? '';
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
-  const tutorContext = tutorContextRaw.trim() || null;
   const dueDateInput = dueDateRaw.trim();
   const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
+
+  let sourcePassages: unknown = null;
+  if (sourcePassagesRaw.trim()) {
+    try {
+      sourcePassages = JSON.parse(sourcePassagesRaw);
+    } catch {
+      sourcePassages = null;
+    }
+  }
+
+  const tutorContext = essayType
+    ? JSON.stringify({
+        essayType,
+        ...(sourcePassages ? { sourcePassages } : {}),
+        ...(tutorContextRaw.trim() ? { teacherNotes: tutorContextRaw.trim() } : {}),
+      })
+    : tutorContextRaw.trim() || null;
 
   if (!assignmentTypeId) {
     return dataResponse(
