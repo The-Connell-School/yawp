@@ -52,7 +52,10 @@ import {
   isDocumentSubmissionEnabledForScope,
 } from '~/utils/feature-flags.server';
 import { SourceViewer } from '~/components/source-viewer';
+import { Timer } from '~/components/timed-mode/timer';
 import { parseApTutorContext } from '~/domain/ap-tutor-context';
+import { computeTimedState } from '~/domain/timed-mode';
+import { isApEssayType } from '~/domain/grading/ap-rubric';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -231,6 +234,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
+      timedSession: {
+        select: { essayType: true, startedAt: true, submittedAt: true },
+      },
       profile: { include: { user: { select: { name: true } } } },
       assignmentModuleSessions: {
         orderBy: [
@@ -421,6 +427,24 @@ export default function Route() {
   const apSourceMode =
     apContext?.essayType === 'poetry-analysis' ? 'poetry' : 'prose';
 
+  // Timed practice: an active (un-submitted) session locks the editor during
+  // the reading phase. The Timer component drives live updates; this initial
+  // value avoids a flash of editable state on load.
+  const timedSession = data.doc?.timedSession ?? null;
+  const timedEssayType =
+    timedSession && isApEssayType(timedSession.essayType)
+      ? timedSession.essayType
+      : null;
+  const isTimedActive = !!timedSession && !timedSession.submittedAt && !!timedEssayType;
+  const [editorLockedByTimer, setEditorLockedByTimer] = useState(() => {
+    if (!isTimedActive || !timedEssayType) return false;
+    return computeTimedState(
+      timedEssayType,
+      new Date(timedSession!.startedAt).getTime(),
+      Date.now()
+    ).editorLocked;
+  });
+
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
     const serverSubs = (data.submissions ?? []) as SubmissionRow[];
@@ -495,7 +519,10 @@ export default function Route() {
   }, []);
 
   const isEditorEditable =
-    isDocumentEditable && !auth.isLocked && auth.isInitialCheckComplete;
+    isDocumentEditable &&
+    !auth.isLocked &&
+    auth.isInitialCheckComplete &&
+    !editorLockedByTimer;
 
   // ── Derived UI data ────────────────────────────────────────────────
   // Re-sort by document-mark order whenever the comments list changes,
@@ -851,6 +878,13 @@ export default function Route() {
                   <span className="text-xs text-muted-foreground">
                     Due {formatDateOnly(data.doc.assignment.dueDate)}
                   </span>
+                ) : null}
+                {isTimedActive && timedEssayType ? (
+                  <Timer
+                    essayType={timedEssayType}
+                    startedAtMs={new Date(timedSession!.startedAt).getTime()}
+                    onPhaseChange={(s) => setEditorLockedByTimer(s.editorLocked)}
+                  />
                 ) : null}
               </div>
               <p className="whitespace-pre-wrap text-sm text-foreground/90">
