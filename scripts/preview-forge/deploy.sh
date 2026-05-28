@@ -33,7 +33,24 @@ else
   "${compose[@]}" pull --quiet toolbox web || true
 fi
 
-"${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && cd /app && bun run packages/prisma/scripts/seed-overlay.ts'
+existing_tables="$("${compose[@]}" exec -T postgres psql -U postgres -d yawp_preview -Atc "SELECT COUNT(*)::text FROM pg_tables WHERE schemaname = 'public'")"
+existing_tables="${existing_tables//[[:space:]]/}"
+if [[ "${existing_tables:-0}" -gt 0 ]]; then
+  echo "Schema already has ${existing_tables} table(s); skipping production dump restore to preserve preview data."
+else
+  DUMP_URI="${PREVIEW_DB_DUMP_S3_URI:-s3://yawp-preview-videos/production.dump}"
+  echo "Restoring production dump into preview database from ${DUMP_URI}..."
+  aws s3 cp "$DUMP_URI" - \
+    | sed -e '/^\\restrict/d' \
+          -e '/^\\unrestrict/d' \
+          -e '/^SET transaction_timeout/d' \
+          -e '/OWNER TO /d' \
+          -e '/^GRANT /d' \
+          -e '/^REVOKE /d' \
+    | "${compose[@]}" exec -T postgres psql -U postgres -d yawp_preview -v ON_ERROR_STOP=1
+fi
+
+"${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
 "${compose[@]}" up -d --force-recreate web
 
 health_url="${PREVIEW_FORGE_HEALTHCHECK_URL:-${URL}/api/healthcheck}"

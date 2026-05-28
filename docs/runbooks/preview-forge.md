@@ -1,12 +1,13 @@
-# Preview Forge
+# PR Preview Environments
 
-Preview Forge replaces per-PR App Runner services with one long-lived EC2 host that runs one Docker Compose project per pull request.
+PR preview environments replace per-PR App Runner services with one long-lived EC2 host that runs one Docker Compose project per pull request.
 
 The target behavior is:
 
 - Every same-repository PR deploys automatically on `opened`, `synchronize`, and `reopened`.
 - Closed PRs are destroyed automatically with `docker compose down -v`.
 - Each PR gets its own app container and Postgres volume.
+- New PR volumes restore the configured production database dump from S3, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
 - The preview URL is `https://pr-<number>.$PREVIEW_FORGE_DOMAIN` when TLS is enabled.
 - The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, and React Router runs in dev mode for faster prototype refreshes. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
@@ -57,7 +58,10 @@ Required repository settings:
 - Variable `PREVIEW_FORGE_SSH_USER`
 - Variable `PREVIEW_FORGE_TLS`
 - Variable `PREVIEW_FORGE_RUNTIME`
+- Variable `PREVIEW_DB_DUMP_S3_URI`
 - Secret `PREVIEW_FORGE_SSH_PRIVATE_KEY`
+- Secret `PREVIEW_LOGIN_EMAIL`
+- Secret `PREVIEW_LOGIN_PASSWORD`
 
 ## Local Smoke
 
@@ -80,11 +84,7 @@ PREVIEW_FORGE_ROOT=/tmp/yawp-preview-forge \
 bash scripts/preview-forge/destroy.sh
 ```
 
-Seeded login credentials:
-
-- Teacher: `teacher.e2e@yawp.test` / `teacher-e2e-password`
-- Student: `jdoe@brock.software` / `johndoe`
-- Admin: `admin.e2e@yawp.test` / `admin-e2e-password`
+Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`.
 
 ## Performance Notes
 

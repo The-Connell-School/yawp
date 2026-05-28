@@ -1,4 +1,4 @@
-name: PR preview (Preview Forge)
+name: PR preview
 
 on:
   pull_request:
@@ -29,8 +29,11 @@ jobs:
       PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
       PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
       PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
+      PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
+      PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
+      PREVIEW_LOGIN_PASSWORD: ${{ secrets.PREVIEW_LOGIN_PASSWORD }}
     steps:
-      - name: Check preview forge configuration
+      - name: Check preview environment configuration
         env:
           PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
         run: |
@@ -38,6 +41,9 @@ jobs:
           test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
           test -n "$PREVIEW_FORGE_DOMAIN" || { echo "Missing repository variable PREVIEW_FORGE_DOMAIN"; exit 1; }
           test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_DB_DUMP_S3_URI" || { echo "Missing repository variable PREVIEW_DB_DUMP_S3_URI"; exit 1; }
+          test -n "$PREVIEW_LOGIN_EMAIL" || { echo "Missing repository secret PREVIEW_LOGIN_EMAIL"; exit 1; }
+          test -n "$PREVIEW_LOGIN_PASSWORD" || { echo "Missing repository secret PREVIEW_LOGIN_PASSWORD"; exit 1; }
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,10 +80,24 @@ jobs:
         id: deploy
         run: |
           set -euo pipefail
+          shell_quote() {
+            printf '%q' "$1"
+          }
           ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
           remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
+          remote_env=(
+            "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
+            "PREVIEW_FORGE_DOMAIN=$(shell_quote "$PREVIEW_FORGE_DOMAIN")"
+            "PREVIEW_FORGE_ROOT=$(shell_quote "$PREVIEW_FORGE_ROOT")"
+            "PREVIEW_FORGE_TLS=$(shell_quote "$PREVIEW_FORGE_TLS")"
+            "PREVIEW_FORGE_RUNTIME=$(shell_quote "$PREVIEW_FORGE_RUNTIME")"
+            "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
+            "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
+            "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
+            "SOURCE_DIR=$(shell_quote "$remote_source")"
+          )
           ssh -i ~/.ssh/preview_forge_key "$ssh_target" \
-            "cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_FORGE_DOMAIN='$PREVIEW_FORGE_DOMAIN' PREVIEW_FORGE_ROOT='$PREVIEW_FORGE_ROOT' PREVIEW_FORGE_TLS='$PREVIEW_FORGE_TLS' PREVIEW_FORGE_RUNTIME='$PREVIEW_FORGE_RUNTIME' SOURCE_DIR='$remote_source' bash scripts/preview-forge/deploy.sh" \
+            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview-forge/deploy.sh" \
             | tee /tmp/preview-forge-deploy.log
           preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
           elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
@@ -94,10 +114,10 @@ jobs:
             **PR preview**
 
             - **URL:** ${{ steps.deploy.outputs.url }}
-            - **Runtime:** Docker Compose on the Preview Forge host
-            - **Data:** isolated Postgres volume plus deterministic seed overlay
+            - **Runtime:** Docker Compose on the preview environment host
+            - **Data:** production database dump restored into an isolated Postgres volume
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
-            - **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck + seeded login
+            - **Smoke:** healthcheck + login
 
   preview-destroy:
     if: >-
@@ -116,7 +136,7 @@ jobs:
       PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
       PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
     steps:
-      - name: Check preview forge configuration
+      - name: Check preview environment configuration
         env:
           PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
         run: |

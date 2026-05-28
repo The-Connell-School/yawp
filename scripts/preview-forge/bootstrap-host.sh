@@ -5,16 +5,18 @@ ROOT="${PREVIEW_FORGE_ROOT:-/srv/yawp-preview-forge}"
 ACME_EMAIL="${PREVIEW_FORGE_ACME_EMAIL:-}"
 
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y docker git rsync nodejs
+  sudo dnf install -y docker git rsync nodejs awscli || sudo dnf install -y docker git rsync nodejs awscli2
 elif command -v yum >/dev/null 2>&1; then
-  sudo yum install -y docker git rsync nodejs
+  sudo yum install -y docker git rsync nodejs awscli
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update -y
-  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs ca-certificates curl
+  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs ca-certificates curl awscli
 else
-  echo "Install Docker, Docker Compose v2, git, rsync, and Node before running this script." >&2
+  echo "Install Docker, Docker Compose v2, git, rsync, Node, and AWS CLI before running this script." >&2
   exit 1
 fi
+
+command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required to restore preview production dumps from S3." >&2; exit 1; }
 
 if ! docker compose version >/dev/null 2>&1; then
   sudo mkdir -p /usr/local/lib/docker/cli-plugins
@@ -59,4 +61,4 @@ YAML
 
 docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
 
-echo "Preview Forge host ready at $ROOT"
+echo "Preview environment host ready at $ROOT"
