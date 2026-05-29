@@ -97,7 +97,7 @@ describe('app.assignment-types.$id action', () => {
             some: { organizationId: 'org-1' },
         },
       },
-      select: { id: true },
+      select: { id: true, systemKey: true },
     });
     expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
       profileId: 'profile-1',
@@ -120,6 +120,30 @@ describe('app.assignment-types.$id action', () => {
       toast: {
         type: 'error',
         description: 'Assignment type not found',
+      },
+    });
+    expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+
+  test('rejects direct document creation for AP History assignment types', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'ap-history-type',
+      systemKey: 'ap_history_essay',
+    });
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/assignment-types/ap-history-type',
+        { method: 'POST' }
+      ),
+      params: { id: 'ap-history-type' },
+    } as never);
+
+    expect(response as unknown).toEqual({
+      redirectedTo: '/app/assignment-types/ap-history-type',
+      toast: {
+        type: 'error',
+        description: 'Choose an APUSH prompt from the library first.',
       },
     });
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
