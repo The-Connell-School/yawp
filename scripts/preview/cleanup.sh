@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${PREVIEW_FORGE_ROOT:-/srv/yawp-preview-forge}"
+ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
 OPEN_PR_NUMBERS="${OPEN_PR_NUMBERS:-}"
-PREVIEW_FORGE_TTL_HOURS="${PREVIEW_FORGE_TTL_HOURS:-72}"
+PREVIEW_TTL_HOURS="${PREVIEW_TTL_HOURS:-72}"
 POSTGRES_CONTAINER="${PREVIEW_POSTGRES_CONTAINER:-preview-postgres}"
 now_epoch="$(date +%s)"
 
@@ -21,7 +21,7 @@ is_expired_path() {
   local modified_epoch
   modified_epoch="$(stat -c %Y "$path" 2>/dev/null || stat -f %m "$path")"
   local age_seconds="$((now_epoch - modified_epoch))"
-  local ttl_seconds="$((PREVIEW_FORGE_TTL_HOURS * 3600))"
+  local ttl_seconds="$((PREVIEW_TTL_HOURS * 3600))"
 
   [[ "$age_seconds" -ge "$ttl_seconds" ]]
 }
