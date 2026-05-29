@@ -81,6 +81,52 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const dbqSnapshot = {
+  schemaVersion: 1,
+  libraryEntryId: 'apush-dbq-reconstruction',
+  course: 'apush',
+  essayType: 'dbq',
+  prompt:
+    'Evaluate the extent to which Reconstruction changed political rights for African Americans.',
+  period: 'Period 5: 1844-1877',
+  periodNumber: 5,
+  reasoningSkill: 'Causation',
+  sources: [
+    {
+      externalKey: 'doc-1',
+      position: 1,
+      title: 'Fourteenth Amendment',
+      attribution: 'United States Constitution, 1868',
+      body: 'All persons born or naturalized in the United States are citizens.',
+      caption: null,
+      mediaType: 'text',
+      imageUrl: null,
+      imageAlt: null,
+      provenanceUrl: null,
+    },
+    {
+      externalKey: 'doc-2',
+      position: 2,
+      title: 'Freedmen Petition',
+      attribution: 'Petition from formerly enslaved people, 1865',
+      body: 'We ask for land and protection of our rights.',
+      caption: null,
+      mediaType: 'text',
+      imageUrl: null,
+      imageAlt: null,
+      provenanceUrl: null,
+    },
+  ],
+  rubric: {
+    rubricId: 'ap-history-dbq-2026',
+    totalPoints: 7,
+  },
+  timing: {
+    mode: 'timed',
+    durationMinutes: 60,
+  },
+};
+
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
@@ -302,6 +348,147 @@ describe('api.domain.grade-essay-ai', () => {
     expect(payload.numericPercentage).toBe(77);
     expect(payload.letterGrade).toBe('C');
     expect(payload.score).toBe('77% (C)');
+  });
+
+  test('grades AP History DBQ submissions with AP rubric points and skips grammar pass', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-dbq-2026',
+        points: {
+          thesis: {
+            earned: true,
+            comment: 'The thesis makes a historically defensible claim.',
+          },
+          contextualization: {
+            earned: true,
+            comment: 'The essay places Reconstruction in the Civil War context.',
+          },
+          document_use_describes: {
+            earned: true,
+            comment: 'The essay accurately describes evidence from the documents.',
+          },
+          document_use_supports_argument: {
+            earned: false,
+            comment: 'The documents are not yet tied consistently to the argument.',
+          },
+          outside_evidence: {
+            earned: true,
+            comment: 'The essay uses the Freedmen Bureau as outside evidence.',
+          },
+          sourcing: {
+            earned: false,
+            comment: 'The essay needs clearer sourcing of document perspective.',
+          },
+          complexity: {
+            earned: false,
+            comment: 'The essay does not yet develop a complex argument.',
+          },
+        },
+        overallComment:
+          'Jordan, your DBQ establishes a defensible line of reasoning and should connect document evidence more directly to the argument.',
+      })
+    );
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-sub-1',
+        text: 'Reconstruction changed political rights through amendments and federal enforcement.',
+        document: {
+          id: 'ap-doc-1',
+          profileId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: dbqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          studentProfile: { classes: [] },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-sub-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    const firstCallArgs = getLLMCompletion.mock.calls[0]?.[0];
+    const prompt = firstCallArgs?.messages?.[0]?.content;
+    expect(prompt).toContain('APUSH DBQ');
+    expect(prompt).toContain(dbqSnapshot.prompt);
+
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          document: expect.objectContaining({
+            select: expect.objectContaining({
+              assignment: {
+                select: expect.objectContaining({
+                  apHistorySnapshot: true,
+                }),
+              },
+            }),
+          }),
+        }),
+      })
+    );
+
+    expect(payload.success).toBe(true);
+    expect(payload.grammarIssues).toBeNull();
+    expect(payload.rubricScores).toEqual({
+      schemaVersion: 1,
+      rubricId: 'ap-history-dbq-2026',
+      totalPoints: 7,
+      earnedPoints: 4,
+      points: {
+        thesis: {
+          earned: true,
+          comment: 'The thesis makes a historically defensible claim.',
+        },
+        contextualization: {
+          earned: true,
+          comment: 'The essay places Reconstruction in the Civil War context.',
+        },
+        document_use_describes: {
+          earned: true,
+          comment: 'The essay accurately describes evidence from the documents.',
+        },
+        document_use_supports_argument: {
+          earned: false,
+          comment: 'The documents are not yet tied consistently to the argument.',
+        },
+        outside_evidence: {
+          earned: true,
+          comment: 'The essay uses the Freedmen Bureau as outside evidence.',
+        },
+        sourcing: {
+          earned: false,
+          comment: 'The essay needs clearer sourcing of document perspective.',
+        },
+        complexity: {
+          earned: false,
+          comment: 'The essay does not yet develop a complex argument.',
+        },
+      },
+    });
+    expect(prisma.submission.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          rubricScores: payload.rubricScores,
+          grammarIssues: null,
+          aiMeta: expect.objectContaining({
+            rubricMode: 'ap_history',
+          }),
+        }),
+      })
+    );
   });
 
   test('repairs a top-level categories array response from the model', async () => {

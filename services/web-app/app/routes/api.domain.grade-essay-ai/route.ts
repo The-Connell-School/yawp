@@ -30,6 +30,11 @@ import {
   getGradingActor,
   isGradingOwnDocument,
 } from '~/utils/grading-auth.server';
+import {
+  isApHistorySnapshot,
+  parseApHistorySnapshot,
+  type ApHistorySnapshot,
+} from '~/domain/ap-history/schema';
 
 const POST = z.object({
   documentId: z.string().optional(),
@@ -85,6 +90,114 @@ const AiOverallCommentSchema = z.object({
   overallComment: z.string().min(1),
 });
 
+const apHistoryDbqPointKeys = [
+  'thesis',
+  'contextualization',
+  'document_use_describes',
+  'document_use_supports_argument',
+  'outside_evidence',
+  'sourcing',
+  'complexity',
+] as const;
+
+const apHistoryLeqPointKeys = [
+  'thesis',
+  'contextualization',
+  'evidence',
+  'analysis_reasoning',
+  'complexity',
+  'supporting_evidence',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toJsonValue(value: unknown): Prisma.InputJsonValue | null {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonValue(item));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, toJsonValue(item)])
+    ) as Prisma.InputJsonObject;
+  }
+
+  return null;
+}
+
+function apHistoryPointKeysForSnapshot(snapshot: ApHistorySnapshot) {
+  return snapshot.essayType === 'dbq'
+    ? apHistoryDbqPointKeys
+    : apHistoryLeqPointKeys;
+}
+
+function countApHistoryEarnedPoints(
+  snapshot: ApHistorySnapshot,
+  points: Record<string, unknown>
+) {
+  const pointKeys = apHistoryPointKeysForSnapshot(snapshot);
+  const earnedPoints = pointKeys.reduce((count, key) => {
+    const point = points[key];
+    if (!isRecord(point)) return count;
+    return point.earned === true ? count + 1 : count;
+  }, 0);
+
+  return Math.min(earnedPoints, snapshot.rubric.totalPoints);
+}
+
+function buildApHistoryPrompt({
+  snapshot,
+  essayText,
+  studentFirstName,
+}: {
+  snapshot: ApHistorySnapshot;
+  essayText: string;
+  studentFirstName: string;
+}) {
+  const essayType = snapshot.essayType.toUpperCase();
+  const pointKeys = apHistoryPointKeysForSnapshot(snapshot).join(', ');
+  const sources =
+    snapshot.essayType === 'dbq'
+      ? snapshot.sources
+          .map((source) => {
+            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
+          })
+          .join('\n\n')
+      : 'No DBQ documents apply to this LEQ.';
+
+  return `Student first name: ${studentFirstName}
+
+AP History assignment: APUSH ${essayType}
+Course: APUSH
+Essay type: ${essayType}
+Assignment prompt: ${snapshot.prompt}
+Period: ${snapshot.period} (Period ${snapshot.periodNumber})
+Reasoning skill: ${snapshot.reasoningSkill}
+Rubric: ${snapshot.rubric.rubricId}
+Total points: ${snapshot.rubric.totalPoints}
+Point keys to score: ${pointKeys}
+
+DBQ source list:
+${sources}
+
+Essay:
+${essayText}`;
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -118,6 +231,7 @@ export async function action({ request }: ActionFunctionArgs) {
         profileId: true,
         assignment: {
           select: {
+            apHistorySnapshot: true,
             class: {
               select: {
                 id: true,
@@ -227,12 +341,131 @@ export async function action({ request }: ActionFunctionArgs) {
   const studentFirstName = firstNameFromFullName(
     submission.document.profile?.user?.name
   );
+  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+
+  const apHistorySnapshotCandidate =
+    submission.document.assignment?.apHistorySnapshot;
+  const apHistorySnapshot = isApHistorySnapshot(apHistorySnapshotCandidate)
+    ? parseApHistorySnapshot(apHistorySnapshotCandidate)
+    : null;
+
+  if (apHistorySnapshot) {
+    const apSystem = `You are the AP History Grading Assistant. Return ONLY valid JSON with the schema:
+{
+  "rubricVersion": "${apHistorySnapshot.rubric.rubricId}",
+  "points": {"point_key": {"earned": boolean, "comment": string}},
+  "overallComment": string
+}
+Grade the APUSH ${apHistorySnapshot.essayType.toUpperCase()} using the supplied immutable assignment snapshot and AP point-style rubric.
+Use only evidence from the essay and snapshot.
+For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
+For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.
+In overallComment, start with "${studentFirstName}," and continue with concise, actionable AP History feedback.`;
+
+    const apUserPrompt = buildApHistoryPrompt({
+      snapshot: apHistorySnapshot,
+      essayText: submission.text,
+      studentFirstName,
+    });
+
+    let apResponseText = '';
+    try {
+      apResponseText = await getLLMCompletion({
+        model,
+        system: apSystem,
+        messages: [{ role: 'user', content: apUserPrompt }],
+        maxTokens: 1200,
+        temperature: 0.2,
+        metadata: {
+          feature: 'grading',
+          kind: 'ap-history-rubric',
+          rubricId: apHistorySnapshot.rubric.rubricId,
+          essayType: apHistorySnapshot.essayType,
+        },
+      });
+
+      const parsedJson = parseFirstJsonValue(apResponseText);
+      if (!isRecord(parsedJson) || !isRecord(parsedJson.points)) {
+        throw new Error('Malformed AP History grading assistant response');
+      }
+
+      const points = toJsonValue(
+        parsedJson.points
+      ) as Prisma.InputJsonObject;
+      const earnedPoints = countApHistoryEarnedPoints(
+        apHistorySnapshot,
+        parsedJson.points
+      );
+      const totalPoints = apHistorySnapshot.rubric.totalPoints;
+      const rubricScores = {
+        schemaVersion: 1,
+        rubricId: apHistorySnapshot.rubric.rubricId,
+        totalPoints,
+        earnedPoints,
+        points,
+      } satisfies Prisma.InputJsonObject;
+      const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
+      const letterGrade = letterFromPercent(numericPercentage);
+      const score = formatGrade(numericPercentage, letterGrade);
+      const overallScore = earnedPoints;
+      const overallComment =
+        typeof parsedJson.overallComment === 'string' &&
+        parsedJson.overallComment.trim()
+          ? parsedJson.overallComment
+          : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
+      const grammarIssues = null;
+      const now = new Date();
+
+      await prisma.submission.update({
+        where: { id: submission.id },
+        data: {
+          rubricScores,
+          overallScore,
+          overallComment,
+          numericPercentage,
+          letterGrade,
+          score,
+          grammarIssues:
+            grammarIssues as unknown as Prisma.NullableJsonNullValueInput,
+          aiMeta: {
+            model,
+            rubricMode: 'ap_history',
+            gradedAt: now.toISOString(),
+          } satisfies Prisma.InputJsonValue,
+          ...(!submission.gradedAt
+            ? { gradedAt: now, gradedById: actor.profileId }
+            : {}),
+          updatedAt: now,
+        },
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Grading Assistant suggestions generated.',
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        score,
+        grammarIssues,
+      });
+    } catch {
+      return dataResponse(
+        {
+          success: false,
+          message:
+            'Grading Assistant returned malformed data. Please try again.',
+        },
+        { status: 502 }
+      );
+    }
+  }
 
   const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${gradingAssistantScoreScaleInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
 
   const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submission.text}`;
 
-  const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   let responseText = '';
 
   try {
