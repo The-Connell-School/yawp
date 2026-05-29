@@ -1358,7 +1358,7 @@ function ClassDetailPage() {
 
     if (activeTab === 'assignments') {
       return (
-        <div className="space-y-3 rounded-lg bg-muted/50 p-3">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2032,7 +2032,7 @@ function ClassDetailPage() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+      <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
         <div className="mb-6">
           <Button asChild variant="outline" size="sm">
             <Link to="/app/my-classes" className="w-fit">

@@ -88,6 +88,11 @@ test.describe.serial('Teacher class sorting and filtering', () => {
       await page.waitForLoadState('networkidle');
 
       const studentsTable = page.getByRole('table', { name: 'Students' });
+      const studentHeaders = studentsTable.locator('thead th');
+      await expect(studentHeaders).toHaveCount(4);
+      for (const header of await studentHeaders.all()) {
+        await expect(header).toHaveCSS('white-space', 'nowrap');
+      }
       await expect(studentsTable.locator('tbody tr').nth(0)).toContainText(
         'Ángela Ruiz'
       );
@@ -110,6 +115,23 @@ test.describe.serial('Teacher class sorting and filtering', () => {
       const assignmentsTable = page.getByRole('table', {
         name: 'Assignments',
       });
+      const assignmentsPanel = assignmentsTable.locator(
+        'xpath=ancestor::div[.//button[contains(., "Type")] and .//table[@aria-label="Assignments"]][1]'
+      );
+      await expect(assignmentsPanel).toHaveCSS(
+        'background-color',
+        'rgba(0, 0, 0, 0)'
+      );
+      await expect(assignmentsPanel).toHaveCSS('padding-top', '0px');
+      await expect(assignmentsPanel).toHaveCSS('padding-right', '0px');
+      await expect(assignmentsPanel).toHaveCSS('padding-bottom', '0px');
+      await expect(assignmentsPanel).toHaveCSS('padding-left', '0px');
+
+      const assignmentHeaders = assignmentsTable.locator('thead th');
+      await expect(assignmentHeaders).toHaveCount(9);
+      for (const header of await assignmentHeaders.all()) {
+        await expect(header).toHaveCSS('white-space', 'nowrap');
+      }
       await expect(assignmentsTable.locator('tbody tr').nth(0)).toContainText(
         'Alpha Daily Pages'
       );
