@@ -317,23 +317,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : null;
   let apHistoryLibrary = null;
   if (profile.teacherProfile && isApHistory) {
-    const classIds = teacherClasses.map((klass) => klass.id);
-    const [assignmentsEnabled, apHistoryEnabled] = await Promise.all([
-      isAssignmentsEnabledForContext({
-        organizationId: profile.organization.id,
-        teacherProfileId: profile.teacherProfile.id,
-        classIds,
-      }),
-      isApHistoryEssayEnabledForContext({
-        organizationId: profile.organization.id,
-        teacherProfileId: profile.teacherProfile.id,
-        classIds,
-      }),
-    ]);
+    const teacherProfileId = profile.teacherProfile.id;
+    const classEligibility = await Promise.all(
+      teacherClasses.map(async (klass) => {
+        const context = {
+          organizationId: profile.organization.id,
+          teacherProfileId,
+          classIds: [klass.id],
+        };
+        const [assignmentsEnabled, apHistoryEnabled] = await Promise.all([
+          isAssignmentsEnabledForContext(context),
+          isApHistoryEssayEnabledForContext(context),
+        ]);
 
-    if (assignmentsEnabled && apHistoryEnabled) {
+        return assignmentsEnabled && apHistoryEnabled ? klass : null;
+      })
+    );
+    const apEligibleClasses = classEligibility.filter((klass) => klass != null);
+
+    if (apEligibleClasses.length > 0) {
       apHistoryLibrary = {
         entries: await listApHistoryLibraryEntries(assignmentType.id),
+        teacherClasses: apEligibleClasses,
       };
     }
   }
@@ -417,6 +422,11 @@ export default function AppAssignmentTypesIdRoute() {
     essayType: string;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const isApHistoryAssignmentType =
+    data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const assignmentSheetClasses = isApHistoryAssignmentType
+    ? (data.apHistoryLibrary?.teacherClasses ?? [])
+    : data.teacherClasses;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -444,21 +454,23 @@ export default function AppAssignmentTypesIdRoute() {
                   >
                     Document
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={data.teacherClasses.length === 0}
-                    onSelect={() => {
-                      setLibraryPrompt('');
-                      setApHistoryEntry(null);
-                      setIsAssignmentSheetOpen(true);
-                    }}
-                  >
-                    Assignment
-                  </DropdownMenuItem>
+                  {isApHistoryAssignmentType ? null : (
+                    <DropdownMenuItem
+                      disabled={data.teacherClasses.length === 0}
+                      onSelect={() => {
+                        setLibraryPrompt('');
+                        setApHistoryEntry(null);
+                        setIsAssignmentSheetOpen(true);
+                      }}
+                    >
+                      Assignment
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
-                teacherClasses={data.teacherClasses}
+                teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}

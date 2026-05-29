@@ -240,6 +240,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       title: 'Revolutionary Ideals DBQ',
       essayType: 'dbq',
     });
+    expect(response.data.apHistoryLibrary.teacherClasses).toEqual([
+      { id: 'class-1', grade: '9th', period: '1st', title: null },
+    ]);
     expect(isAssignmentsEnabledForContext).toHaveBeenCalledWith({
       organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
@@ -252,6 +255,76 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     });
   });
 
+  test('provides AP History library for mixed class-scoped pilots using only eligible classes', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(
+      makeAssignmentType({
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      })
+    );
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', grade: '9th', period: '1st', title: null },
+      { id: 'class-2', grade: '10th', period: '2nd', title: null },
+    ]);
+    prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([
+      {
+        id: 'entry-1',
+        externalKey: 'apush-dbq-period-3',
+        title: 'Revolutionary Ideals DBQ',
+        prompt: 'Evaluate the extent to which revolutionary ideals changed American society.',
+        essayType: 'dbq',
+        period: 'Period 3: 1754-1800',
+        periodNumber: 3,
+        reasoningSkill: 'Causation',
+        difficulty: 'medium',
+        sources: [],
+      },
+    ]);
+    isAssignmentsEnabledForContext.mockImplementation(({ classIds }) =>
+      Promise.resolve(classIds[0] === 'class-1')
+    );
+    isApHistoryEssayEnabledForContext.mockImplementation(({ classIds }) =>
+      Promise.resolve(classIds[0] === 'class-1')
+    );
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/ap-history-type'
+      ),
+      params: { id: 'ap-history-type' },
+    } as never)) as any;
+
+    expect(response.data.apHistoryLibrary.entries).toHaveLength(1);
+    expect(response.data.apHistoryLibrary.teacherClasses).toEqual([
+      { id: 'class-1', grade: '9th', period: '1st', title: null },
+    ]);
+    expect(response.data.teacherClasses).toEqual([
+      { id: 'class-1', grade: '9th', period: '1st', title: null },
+      { id: 'class-2', grade: '10th', period: '2nd', title: null },
+    ]);
+    expect(isAssignmentsEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(isAssignmentsEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-2'],
+    });
+    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-2'],
+    });
+  });
+
   test('omits AP History library when AP feature access is disabled', async () => {
     prisma.assignmentType.findFirst.mockResolvedValue(
       makeAssignmentType({
@@ -259,6 +332,25 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         systemKey: 'ap_history_essay',
       })
     );
+    isApHistoryEssayEnabledForContext.mockResolvedValue(false);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.apHistoryLibrary).toBeNull();
+    expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  test('omits AP History library when no classes are eligible', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(
+      makeAssignmentType({
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      })
+    );
+    isAssignmentsEnabledForContext.mockResolvedValue(false);
     isApHistoryEssayEnabledForContext.mockResolvedValue(false);
 
     const response = (await loader({
