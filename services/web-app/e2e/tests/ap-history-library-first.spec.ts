@@ -164,10 +164,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
       await helpers.waitForEditorReady();
 
-      await expect(page.getByText(/DBQ · APUSH/)).toBeVisible();
+      await expect(page.getByTestId('ap-history-context-pill')).toContainText(
+        'DBQ · APUSH'
+      );
       await expect(
         page.getByText(dbqEntry.prompt, { exact: true })
-      ).toBeVisible();
+      ).toHaveCount(0);
       await expect(
         page.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
@@ -206,9 +208,16 @@ test.describe.serial('AP History library-first assignment flow', () => {
         name: 'Document resources',
       });
       await expect(rightRail).toBeVisible();
+      await expect(rightRail).toHaveCSS(
+        'background-color',
+        'rgb(255, 255, 255)'
+      );
       await expect(
         rightRail.getByRole('button', { name: 'Documents' })
       ).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        rightRail.getByRole('button', { name: 'Documents' })
+      ).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(
         rightRail.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
@@ -216,6 +225,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(
         rightRail.getByRole('button', { name: 'Comments' })
       ).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        rightRail.getByRole('button', { name: 'Comments' })
+      ).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       await expect(rightRail.getByText('No comments yet.')).toBeVisible();
       await rightRail.getByRole('button', { name: 'Documents' }).click();
       await expect(

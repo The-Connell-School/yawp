@@ -296,8 +296,8 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
       })
     );
 
-    expect(html).toContain('DBQ · APUSH');
-    expect(html).toContain('Evaluate the extent');
+    expect(html).not.toContain('DBQ · APUSH');
+    expect(html).not.toContain('Evaluate the extent');
     expect(html).toContain('Source 1');
     expect(html).toContain('Resolved, that');
     expect(html).toContain('Production tutor');
