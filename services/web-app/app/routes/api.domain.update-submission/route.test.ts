@@ -43,6 +43,7 @@ describe('api.domain.update-submission', () => {
 
     getGradingActor.mockResolvedValue({
       profileId: 'teacher-1',
+      teacherProfileId: 'teacher-profile-1',
       isTeacher: true,
       isAdmin: false,
     });
@@ -85,6 +86,7 @@ describe('api.domain.update-submission', () => {
           class: {
             id: 'class-1',
             schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
             teachers: [{ id: 'teacher-profile-1' }],
           },
         },
@@ -127,15 +129,18 @@ describe('api.domain.update-submission', () => {
     );
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['school-1'],
+      organizationIds: ['org-1'],
       classIds: ['class-1'],
       teacherProfileIds: ['teacher-profile-1'],
       classScopes: [
         {
           schoolId: 'school-1',
+          organizationId: 'org-1',
           classId: 'class-1',
           teacherProfileIds: ['teacher-profile-1'],
         },
       ],
+      actorTeacherProfileId: 'teacher-profile-1',
     });
   });
 

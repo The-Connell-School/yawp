@@ -168,7 +168,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
         id: classId,
         teachers: { some: { id: profile.teacherProfile.id } },
       },
-      select: { id: true, school: { select: { organizationId: true } } },
+      select: {
+        id: true,
+        school: { select: { id: true, organizationId: true } },
+      },
     });
     if (!classWithOrg) {
       return dataResponse(
@@ -178,6 +181,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     const assignmentsEnabled = await isAssignmentsEnabledForContext({
       organizationId: classWithOrg.school.organizationId,
+      schoolId: classWithOrg.school.id,
       teacherProfileId: profile.teacherProfile.id,
       classIds: [classWithOrg.id],
     });
@@ -462,11 +466,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   ] = await Promise.all([
     isDocumentSubmissionEnabledForScope({
       schoolIds: [klass.school?.id],
+      organizationIds: [klass.school?.organizationId],
       teacherProfileIds: [profile.teacherProfile.id],
       classIds: [klass.id],
     }),
     isAssignmentsEnabledForContext({
       organizationId: klass.school?.organizationId,
+      schoolId: klass.school?.id,
       teacherProfileId: profile.teacherProfile.id,
       classIds: [klass.id],
     }),
@@ -702,15 +708,15 @@ function ClassDetailPage() {
   }) =>
     Boolean(
       submission.gradedAt ||
-      submission.score ||
-      submission.feedback ||
-      submission.overallComment ||
-      submission.letterGrade ||
-      submission.numericPercentage !== null ||
-      (submission.rubricScores &&
-        typeof submission.rubricScores === 'object' &&
-        Object.keys(submission.rubricScores as Record<string, unknown>).length >
-          0)
+        submission.score ||
+        submission.feedback ||
+        submission.overallComment ||
+        submission.letterGrade ||
+        submission.numericPercentage !== null ||
+        (submission.rubricScores &&
+          typeof submission.rubricScores === 'object' &&
+          Object.keys(submission.rubricScores as Record<string, unknown>)
+            .length > 0)
     );
 
   const students = data.klass.students;

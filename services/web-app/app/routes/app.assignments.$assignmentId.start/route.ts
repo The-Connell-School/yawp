@@ -43,6 +43,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       classId: true,
       class: {
         select: {
+          school: { select: { id: true, organizationId: true } },
           teachers: { select: { id: true } },
         },
       },
@@ -57,7 +58,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const assignmentsEnabled = await isAssignmentsEnabledForContext({
-    organizationId: profile.organization.id,
+    organizationId:
+      assignment.class.school.organizationId ?? profile.organization.id,
+    schoolId: assignment.class.school.id,
     teacherProfileId: null,
     teacherProfileIds: assignment.class.teachers.map((teacher) => teacher.id),
     classIds: [assignment.classId],

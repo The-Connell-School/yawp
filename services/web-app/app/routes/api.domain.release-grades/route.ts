@@ -62,6 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
                     select: {
                       id: true,
                       schoolId: true,
+                      school: { select: { organizationId: true } },
                       teachers: { select: { id: true } },
                     },
                   },
@@ -73,6 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
                     select: {
                       id: true,
                       schoolId: true,
+                      school: { select: { organizationId: true } },
                       teachers: { select: { id: true } },
                     },
                   },
@@ -101,7 +103,10 @@ export async function action({ request }: ActionFunctionArgs) {
       const submissionScopeFlags = await Promise.all(
         submissions.map((submission) => {
           const scope = getDocumentSubmissionScope(submission.document);
-          return isDocumentSubmissionEnabledForScope(scope);
+          return isDocumentSubmissionEnabledForScope({
+            ...scope,
+            actorTeacherProfileId: actor.teacherProfileId,
+          });
         })
       );
       if (submissionScopeFlags.some((enabled) => !enabled)) {

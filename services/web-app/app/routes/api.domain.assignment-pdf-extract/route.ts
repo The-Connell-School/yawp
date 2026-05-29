@@ -86,7 +86,10 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
     },
-    select: { id: true, school: { select: { organizationId: true } } },
+    select: {
+      id: true,
+      school: { select: { id: true, organizationId: true } },
+    },
   });
 
   if (!classAccess) {
@@ -98,6 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const assignmentsEnabled = await isAssignmentsEnabledForContext({
     organizationId: classAccess.school.organizationId,
+    schoolId: classAccess.school.id,
     teacherProfileId: profile.teacherProfile.id,
     classIds: [classAccess.id],
   });

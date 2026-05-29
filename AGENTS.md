@@ -9,49 +9,27 @@
     - Dual-write to old and new data models during transitions. Do not stop writing to old tables until the new flow is fully verified.
     - No bypass. Every feature follows this pattern.
 
-## Reporting to HQ
+## Central Station PM Source Of Truth
 
-After meaningful work (see criteria below), report status to HQ:
+Central Station is the live Yawp product-management command center. When a
+request is about PM data or product state, use the Central Station MCP rather
+than editing HQ, markdown status files, raw JSON, or the Central Station HTTP API
+directly.
 
-1. Pull the latest HQ repo:
-   ```
-   git -C ~/hq pull --rebase --autostash
-   ```
+Use Central Station MCP for:
 
-2. Update the workstream entry in the appropriate project file at
-   `~/hq/store/projects/yawp/workstreams.md`. If no entry
-   exists for your workstream, create one using the format below.
+- changing ticket priority, status, owner, notes, questions, tags, or spec body
+- removing/restoring tickets
+- linking or unlinking tickets
+- creating/updating source records from Granola, Gmail, docs, research, PRs, or notes
+- adding comments or inspecting ticket activity
+- reading the Now view before choosing current work
 
-3. If you are blocked or need Bryant's input, set `Agent state:` to
-   `waiting-on-bryant`.
+If the MCP cannot perform a normal PM action, update the Central Station MCP
+with tests, deploy it if production agents need it, and then make the PM change
+through MCP. Direct API/database/file edits are only for Central Station platform
+development, imports, migrations, deploys, or emergency repair.
 
-4. Commit and push:
-   ```
-   cd ~/hq && git add store/projects/ && git commit -m "agent: update yawp/{workstream}" && git push
-   ```
-
-**If git push fails** (network issue, conflict, etc.), save your update
-locally and move on. Do not block your primary work on reporting. The next
-agent session will pick it up.
-
-### When to report
-
-- Created or updated a PR
-- Hit a blocker or decision point (set state to `waiting-on-bryant`)
-- Completed a task or feature
-- Tests failing and need clarification
-- Finished a brainstorming/planning session
-
-### Workstream entry format
-
-```markdown
-## [workstream-name]
-
-- **Repo:** yawp-2.0
-- **Branch:** [branch-name]
-- **PR:** [#number] ([status])
-- **Agent state:** working | waiting-on-bryant | completed | needs-qa | merged
-- **Last check-in:** [ISO 8601 timestamp]
-- **Status:** [brief description]
-- **Notes:** [context, blockers, decisions]
-```
+HQ should pull or summarize from Central Station when needed. Do not keep HQ
+manually synchronized as a parallel PM store unless Bryant explicitly asks for a
+local HQ update.
