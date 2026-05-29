@@ -67,12 +67,10 @@ export function ApHistoryLibrary({ entries, onSelectEntry }: Props) {
                     {label(entry.difficulty)}
                   </Badge>
                 ) : null}
-                {entry.essayType === 'dbq' ? (
-                  <Badge variant="outline" size="sm">
-                    {entry.sources.length}{' '}
-                    {entry.sources.length === 1 ? 'source' : 'sources'}
-                  </Badge>
-                ) : null}
+                <Badge variant="outline" size="sm">
+                  {entry.sources.length}{' '}
+                  {entry.sources.length === 1 ? 'source' : 'sources'}
+                </Badge>
               </div>
             </div>
           </Button>
