@@ -38,7 +38,7 @@ import {
   isApHistoryEssayEnabledForContext,
 } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { ApHistoryLibrary } from './ap-history-library';
+import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -568,7 +568,7 @@ export default function AppAssignmentTypesIdRoute() {
         ) : null}
         {data.apHistoryLibrary ? (
           <div className="pb-6">
-            <ApHistoryLibrary
+            <ApPromptsLibrary
               entries={data.apHistoryLibrary.entries}
               onSelectEntry={(entry) => {
                 setApHistoryEntry(entry);
