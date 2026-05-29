@@ -7,23 +7,19 @@ const prisma = {
   },
   session: {
     create: mock(),
+    findUnique: mock(),
   },
   profile: {
     findFirst: mock(),
   },
 };
 
-const getUserId = mock();
 const commitSession = mock();
+const getProfileId = mock();
 const getSession = mock();
 const setProfileId = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/auth.server.js', () => ({
-  getSessionExpirationDate: () => new Date('2030-01-01T00:00:00.000Z'),
-  getUserId,
-  sessionKey: 'sessionId',
-}));
 mock.module('~/cookie-session-storages/authentication.server.js', () => ({
   authSessionStorage: {
     getSession,
@@ -31,10 +27,21 @@ mock.module('~/cookie-session-storages/authentication.server.js', () => ({
   },
 }));
 mock.module('~/cookies/profile-id.server', () => ({
+  getProfileId,
   setProfileId,
 }));
 
 const { action } = await import('../api.impersonate');
+
+function authSession(values: Record<string, unknown>) {
+  const sessionValues = { ...values };
+  return {
+    get: mock((key: string) => sessionValues[key]),
+    set: mock((key: string, value: unknown) => {
+      sessionValues[key] = value;
+    }),
+  };
+}
 
 function impersonationRequest({
   userIdOrEmail = 'teacher@example.com',
@@ -63,13 +70,16 @@ describe('api.impersonate', () => {
     prisma.user.findFirst.mockReset();
     prisma.user.findFirstOrThrow.mockReset();
     prisma.session.create.mockReset();
+    prisma.session.findUnique.mockReset();
     prisma.profile.findFirst.mockReset();
-    getUserId.mockReset();
     getSession.mockReset();
     commitSession.mockReset();
+    getProfileId.mockReset();
     setProfileId.mockReset();
 
-    getUserId.mockResolvedValue('operator-user');
+    prisma.session.findUnique.mockResolvedValue({
+      user: { id: 'operator-user' },
+    });
     prisma.user.findFirst.mockResolvedValue({ id: 'operator-user' });
     prisma.user.findFirstOrThrow.mockResolvedValue({ id: 'target-user' });
     prisma.session.create.mockResolvedValue({
@@ -78,15 +88,15 @@ describe('api.impersonate', () => {
       userId: 'target-user',
     });
     prisma.profile.findFirst.mockResolvedValue({ id: 'target-profile' });
-    getSession.mockResolvedValue({
-      set: mock(),
-    });
+    getSession.mockResolvedValue(
+      authSession({ sessionId: 'operator-session' })
+    );
     commitSession.mockResolvedValue('en_session=target-session; Path=/');
     setProfileId.mockResolvedValue('profile-id=target-profile; Path=/');
   });
 
   test('rejects a valid token when the request is not authenticated', async () => {
-    getUserId.mockResolvedValue(null);
+    getSession.mockResolvedValue(authSession({}));
 
     const response = (await action({
       request: impersonationRequest(),
@@ -128,9 +138,34 @@ describe('api.impersonate', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
-  test('allows a super admin with the internal token to impersonate any user', async () => {
-    const authSession = { set: mock() };
-    getSession.mockResolvedValue(authSession);
+  test('honors read-only impersonation before nesting another impersonation', async () => {
+    getSession.mockResolvedValue(
+      authSession({
+        sessionId: 'target-session',
+        impersonationMode: 'read-only',
+        impersonatorUserId: 'operator-user',
+      })
+    );
+
+    let thrown: unknown;
+    try {
+      await action({
+        request: impersonationRequest({ cookie: 'en_session=read-only' }),
+      } as any);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Response);
+    expect((thrown as Response).status).toBe(403);
+    expect(prisma.session.findUnique).not.toHaveBeenCalled();
+    expect(prisma.user.findFirstOrThrow).not.toHaveBeenCalled();
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  test('allows a super admin with the internal token to start a read-only impersonation session', async () => {
+    const authSessionStore = authSession({ sessionId: 'operator-session' });
+    getSession.mockResolvedValue(authSessionStore);
 
     const response = (await action({
       request: impersonationRequest({
@@ -153,11 +188,22 @@ describe('api.impersonate', () => {
     expect(prisma.session.create).toHaveBeenCalledWith({
       select: { id: true, expirationDate: true, userId: true },
       data: {
-        expirationDate: new Date('2030-01-01T00:00:00.000Z'),
+        expirationDate: expect.any(Date),
         userId: 'target-user',
       },
     });
-    expect(authSession.set).toHaveBeenCalledWith('sessionId', 'target-session');
+    expect(authSessionStore.set).toHaveBeenCalledWith(
+      'sessionId',
+      'target-session'
+    );
+    expect(authSessionStore.set).toHaveBeenCalledWith(
+      'impersonationMode',
+      'read-only'
+    );
+    expect(authSessionStore.set).toHaveBeenCalledWith(
+      'impersonatorUserId',
+      'operator-user'
+    );
     expect(commitSession).toHaveBeenCalledTimes(1);
     expect(setProfileId).toHaveBeenCalledWith('target-profile');
   });

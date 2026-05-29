@@ -1,7 +1,10 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { prisma } from '~/utils/db.server';
+import { requireMutableRequest } from '~/utils/auth.server';
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireMutableRequest(request);
+
   const json = await request.json();
   const { teacherTrainingModuleId, teacherProfileId } = json;
 
