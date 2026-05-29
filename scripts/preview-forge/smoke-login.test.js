@@ -28,7 +28,15 @@ afterEach(async () => {
 });
 
 describe('runLoginSmoke', () => {
-  test('passes when seeded preview credentials can reach /app with a session cookie', async () => {
+  test('requires explicit preview credentials', async () => {
+    await expect(
+      runLoginSmoke({
+        baseUrl: 'http://127.0.0.1:1',
+      }),
+    ).rejects.toThrow('email and password are required');
+  });
+
+  test('passes when preview credentials can reach /app with a session cookie', async () => {
     const seen = { loginBody: '', appCookie: '' };
     const server = await startServer((req, res) => {
       if (req.url === '/auth/login' && req.method === 'POST') {

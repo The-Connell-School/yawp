@@ -217,6 +217,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               id: true,
               schoolId: true,
+              school: { select: { organizationId: true } },
               teachers: { select: { id: true } },
             },
           },
@@ -345,8 +346,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
     isDocumentSubmissionEnabledForScope(documentSubmissionScope),
     isAssignmentsEnabledForContext({
-      organizationId: assignmentClass?.school?.organizationId,
+      organizationId:
+        assignmentClass?.school?.organizationId ?? profile.organization.id,
+      organizationIds: documentSubmissionScope.organizationIds,
+      schoolIds: documentSubmissionScope.schoolIds,
       teacherProfileId: profile.teacherProfile?.id,
+      teacherProfileIds: documentSubmissionScope.teacherProfileIds,
       classIds: documentSubmissionScope.classIds,
     }),
   ]);

@@ -64,7 +64,7 @@ type PilotFeatureKey =
   | 'assignments'
   | 'document_submission_grading'
   | 'ap_history_essay';
-type PilotTargetKind = 'teacher' | 'class';
+type PilotTargetKind = 'teacher' | 'school' | 'organization';
 type PilotTargetOption = {
   kind: PilotTargetKind;
   id: string;
@@ -136,7 +136,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     schools,
     settings,
     teacherProfiles,
-    classes,
     featureAccessTargets,
   ] = await Promise.all([
     prisma.organization.findMany({
@@ -176,28 +175,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     }),
-    prisma.class.findMany({
-      where: { isArchived: false },
-      select: {
-        id: true,
-        code: true,
-        grade: true,
-        period: true,
-        schoolYear: true,
-        title: true,
-        school: {
-          select: {
-            name: true,
-            organization: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: [{ schoolYear: 'desc' }, { code: 'asc' }],
-    }),
     prisma.featureAccessTarget.findMany({
       where: {
         featureKey: { in: PILOT_FEATURES.map((feature) => feature.key) },
-        targetKind: { in: ['teacher', 'class'] },
+        targetKind: { in: ['teacher', 'school', 'organization'] },
       },
       select: {
         id: true,
@@ -253,24 +234,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
           teacher.profile.organization.name,
         ]),
       })),
-      classTargets: classes.map((classTarget) => ({
-        kind: 'class',
-        id: classTarget.id,
-        label:
-          classTarget.title ??
-          joinDetailParts([
-            classTarget.grade ? `Grade ${classTarget.grade}` : null,
-            classTarget.period ? `Period ${classTarget.period}` : null,
-            classTarget.code,
-          ]) ??
-          classTarget.code,
-        detail: joinDetailParts([
-          classTarget.code,
-          classTarget.grade ? `Grade ${classTarget.grade}` : null,
-          classTarget.period ? `Period ${classTarget.period}` : null,
-          classTarget.school.name,
-          classTarget.school.organization.name,
-        ]),
+      schoolTargets: schools.map((school) => ({
+        kind: 'school',
+        id: school.id,
+        label: school.name,
+        detail: joinDetailParts([school.code, school.organization.name]),
+      })),
+      organizationTargets: organizations.map((organization) => ({
+        kind: 'organization',
+        id: organization.id,
+        label: organization.name,
+        detail: 'Organization',
       })),
       featureAccessTargets,
     }),
@@ -310,13 +284,24 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!teacher) {
         return dataResponse({ error: 'Teacher not found.' }, { status: 404 });
       }
-    } else {
-      const classTarget = await prisma.class.findUnique({
+    } else if (targetKind === 'school') {
+      const school = await prisma.school.findUnique({
         where: { id: targetId },
         select: { id: true },
       });
-      if (!classTarget) {
-        return dataResponse({ error: 'Class not found.' }, { status: 404 });
+      if (!school) {
+        return dataResponse({ error: 'School not found.' }, { status: 404 });
+      }
+    } else {
+      const organization = await prisma.organization.findUnique({
+        where: { id: targetId },
+        select: { id: true },
+      });
+      if (!organization) {
+        return dataResponse(
+          { error: 'Organization not found.' },
+          { status: 404 }
+        );
       }
     }
 
@@ -752,7 +737,7 @@ function PilotFeatureTargetTable({ rows }: { rows: PilotTargetRow[] }) {
     <Card className="bg-muted">
       <CardHeader className="border-b pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Teacher cohorts and class pilots</CardTitle>
+          <CardTitle>Feature access</CardTitle>
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -802,9 +787,7 @@ function PilotFeatureTargetTable({ rows }: { rows: PilotTargetRow[] }) {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {row.targetKind === 'teacher'
-                          ? 'Teacher cohort'
-                          : 'Class access'}
+                        {getPilotTargetKindLabel(row.targetKind)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -861,11 +844,13 @@ function getScopeLabel(flag: FlagData) {
 
 function buildPilotTargetRows({
   teacherTargets,
-  classTargets,
+  schoolTargets,
+  organizationTargets,
   featureAccessTargets,
 }: {
   teacherTargets: PilotTargetOption[];
-  classTargets: PilotTargetOption[];
+  schoolTargets: PilotTargetOption[];
+  organizationTargets: PilotTargetOption[];
   featureAccessTargets: Array<{
     id: string;
     featureKey: string;
@@ -886,7 +871,7 @@ function buildPilotTargetRows({
       target,
     ])
   );
-  const targets = [...teacherTargets, ...classTargets];
+  const targets = [...organizationTargets, ...schoolTargets, ...teacherTargets];
 
   return PILOT_FEATURES.flatMap((feature) =>
     targets.map((target) => {
@@ -921,7 +906,16 @@ function getPilotFeature(key: FormDataEntryValue | null) {
 function getPilotTargetKind(
   kind: FormDataEntryValue | null
 ): PilotTargetKind | null {
-  return kind === 'teacher' || kind === 'class' ? kind : null;
+  return kind === 'teacher' || kind === 'school' || kind === 'organization'
+    ? kind
+    : null;
+}
+
+function getPilotTargetKindLabel(kind: string) {
+  if (kind === 'teacher') return 'Teacher';
+  if (kind === 'school') return 'School';
+  if (kind === 'organization') return 'Organization';
+  return kind;
 }
 
 function getPilotTargetMapKey(

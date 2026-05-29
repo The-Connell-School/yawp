@@ -162,6 +162,7 @@ describe('api.domain.grade-essay-ai', () => {
 
     getGradingActor.mockResolvedValue({
       profileId: 'teacher-profile-1',
+      teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
     });
@@ -190,7 +191,9 @@ describe('api.domain.grade-essay-ai', () => {
   });
 
   test('returns AI suggestions and persists to submission', async () => {
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-1' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-1');
@@ -223,7 +226,9 @@ describe('api.domain.grade-essay-ai', () => {
         },
       },
     });
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-1' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-1' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-1');
@@ -266,6 +271,7 @@ describe('api.domain.grade-essay-ai', () => {
               {
                 id: 'legacy-class-1',
                 schoolId: 'scranton-prep-school',
+                school: { organizationId: 'scranton-org' },
                 teachers: [{ id: 'teacher-1' }],
               },
             ],
@@ -287,22 +293,27 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['scranton-prep-school'],
+      organizationIds: ['scranton-org'],
       classIds: ['legacy-class-1'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'scranton-prep-school',
+          organizationId: 'scranton-org',
           classId: 'legacy-class-1',
           teacherProfileIds: ['teacher-1'],
         },
       ],
+      actorTeacherProfileId: 'teacher-1',
     });
     expect(redirectWithToast).not.toHaveBeenCalled();
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
   test('uses the updated rubric instructions in the grading prompt', async () => {
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-2' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-2' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-2');
@@ -353,7 +364,9 @@ describe('api.domain.grade-essay-ai', () => {
         })
       );
 
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-3' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-3' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-3');
@@ -751,7 +764,9 @@ describe('api.domain.grade-essay-ai', () => {
         })
       );
 
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-4' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-4' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-4');
@@ -778,7 +793,9 @@ describe('api.domain.grade-essay-ai', () => {
       .mockResolvedValueOnce(JSON.stringify([]))
       .mockResolvedValueOnce(JSON.stringify([]));
 
-    prisma.submission.findFirst.mockResolvedValue(mockSubmission({ id: 'sub-5' }));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-5' })
+    );
 
     const form = new FormData();
     form.append('submissionId', 'sub-5');

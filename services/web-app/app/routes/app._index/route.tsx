@@ -75,13 +75,13 @@ function hasMeaningfulGrade(grade: {
 }) {
   return Boolean(
     grade.score ||
-    grade.feedback ||
-    grade.overallComment ||
-    grade.letterGrade ||
-    grade.numericPercentage !== null ||
-    (grade.rubricScores &&
-      typeof grade.rubricScores === 'object' &&
-      Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+      grade.feedback ||
+      grade.overallComment ||
+      grade.letterGrade ||
+      grade.numericPercentage !== null ||
+      (grade.rubricScores &&
+        typeof grade.rubricScores === 'object' &&
+        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
   );
 }
 
@@ -108,7 +108,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       select: {
         id: true,
-        school: { select: { organizationId: true } },
+        school: { select: { id: true, organizationId: true } },
         teachers: { select: { id: true } },
       },
     });
@@ -117,6 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       classes: studentClasses.map((klass) => ({
         id: klass.id,
         organizationId: klass.school.organizationId,
+        schoolId: klass.school.id,
         teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
       })),
     });
@@ -132,12 +133,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
               teachers: { some: { id: profile.teacherProfile.id } },
               isArchived: false,
             },
-            select: { id: true, school: { select: { organizationId: true } } },
+            select: {
+              id: true,
+              school: { select: { id: true, organizationId: true } },
+            },
           })
           .then((classes) =>
             classes.map((klass) => ({
               id: klass.id,
               organizationId: klass.school.organizationId,
+              schoolId: klass.school.id,
             }))
           ),
       })

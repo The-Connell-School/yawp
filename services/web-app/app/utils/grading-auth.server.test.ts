@@ -1,15 +1,21 @@
-import { describe, expect, test } from 'bun:test';
-import {
-  buildTeacherClassWhere,
-  canManageGrades,
-  isGradingOwnDocument,
-} from './grading-auth.server';
+import { describe, expect, mock, test } from 'bun:test';
+
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin: mock(),
+  requireProfile: mock(),
+  requireUserId: mock(),
+}));
+mock.module('~/utils/db.server', () => ({ prisma: {} }));
+
+const { buildTeacherClassWhere, canManageGrades, isGradingOwnDocument } =
+  await import('./grading-auth.server');
 
 describe('grading auth helpers', () => {
   test('builds document class filters for current and legacy submissions', () => {
     expect(
       buildTeacherClassWhere({
         profileId: 'teacher-profile-1',
+        teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
       })
@@ -47,6 +53,7 @@ describe('grading auth helpers', () => {
     expect(
       buildTeacherClassWhere({
         profileId: 'admin-profile-1',
+        teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
       })
@@ -57,6 +64,7 @@ describe('grading auth helpers', () => {
     expect(
       canManageGrades({
         profileId: 'teacher-profile-1',
+        teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
       })
@@ -64,6 +72,7 @@ describe('grading auth helpers', () => {
     expect(
       canManageGrades({
         profileId: 'admin-profile-1',
+        teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
       })
