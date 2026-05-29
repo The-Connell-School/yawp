@@ -113,35 +113,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function toJsonValue(value: unknown): Prisma.InputJsonValue | null {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => toJsonValue(item));
-  }
-
-  if (isRecord(value)) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, item]) => item !== undefined)
-        .map(([key, item]) => [key, toJsonValue(item)])
-    ) as Prisma.InputJsonObject;
-  }
-
-  return null;
-}
-
 function apHistoryPointKeysForSnapshot(snapshot: ApHistorySnapshot) {
   return snapshot.essayType === 'dbq'
     ? apHistoryDbqPointKeys
     : apHistoryLeqPointKeys;
+}
+
+function normalizeApHistoryPoints(
+  snapshot: ApHistorySnapshot,
+  points: Record<string, unknown>
+) {
+  return Object.fromEntries(
+    apHistoryPointKeysForSnapshot(snapshot).map((key) => {
+      const point = points[key];
+      const normalizedPoint = isRecord(point)
+        ? {
+            earned: point.earned === true,
+            comment: typeof point.comment === 'string' ? point.comment : '',
+          }
+        : { earned: false, comment: '' };
+
+      return [key, normalizedPoint];
+    })
+  ) as Prisma.InputJsonObject;
 }
 
 function countApHistoryEarnedPoints(
@@ -368,9 +362,10 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       studentFirstName,
     });
 
-    let apResponseText = '';
+    let parsedJson: Record<string, unknown>;
+    let points: Prisma.InputJsonObject;
     try {
-      apResponseText = await getLLMCompletion({
+      const apResponseText = await getLLMCompletion({
         model,
         system: apSystem,
         messages: [{ role: 'user', content: apUserPrompt }],
@@ -384,72 +379,19 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         },
       });
 
-      const parsedJson = parseFirstJsonValue(apResponseText);
-      if (!isRecord(parsedJson) || !isRecord(parsedJson.points)) {
+      const parsedJsonCandidate = parseFirstJsonValue(apResponseText);
+      if (
+        !isRecord(parsedJsonCandidate) ||
+        !isRecord(parsedJsonCandidate.points)
+      ) {
         throw new Error('Malformed AP History grading assistant response');
       }
 
-      const points = toJsonValue(
-        parsedJson.points
-      ) as Prisma.InputJsonObject;
-      const earnedPoints = countApHistoryEarnedPoints(
+      parsedJson = parsedJsonCandidate;
+      points = normalizeApHistoryPoints(
         apHistorySnapshot,
-        parsedJson.points
+        parsedJsonCandidate.points
       );
-      const totalPoints = apHistorySnapshot.rubric.totalPoints;
-      const rubricScores = {
-        schemaVersion: 1,
-        rubricId: apHistorySnapshot.rubric.rubricId,
-        totalPoints,
-        earnedPoints,
-        points,
-      } satisfies Prisma.InputJsonObject;
-      const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
-      const letterGrade = letterFromPercent(numericPercentage);
-      const score = formatGrade(numericPercentage, letterGrade);
-      const overallScore = earnedPoints;
-      const overallComment =
-        typeof parsedJson.overallComment === 'string' &&
-        parsedJson.overallComment.trim()
-          ? parsedJson.overallComment
-          : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
-      const grammarIssues = null;
-      const now = new Date();
-
-      await prisma.submission.update({
-        where: { id: submission.id },
-        data: {
-          rubricScores,
-          overallScore,
-          overallComment,
-          numericPercentage,
-          letterGrade,
-          score,
-          grammarIssues:
-            grammarIssues as unknown as Prisma.NullableJsonNullValueInput,
-          aiMeta: {
-            model,
-            rubricMode: 'ap_history',
-            gradedAt: now.toISOString(),
-          } satisfies Prisma.InputJsonValue,
-          ...(!submission.gradedAt
-            ? { gradedAt: now, gradedById: actor.profileId }
-            : {}),
-          updatedAt: now,
-        },
-      });
-
-      return dataResponse({
-        success: true,
-        message: 'Grading Assistant suggestions generated.',
-        rubricScores,
-        overallScore,
-        overallComment,
-        numericPercentage,
-        letterGrade,
-        score,
-        grammarIssues,
-      });
     } catch {
       return dataResponse(
         {
@@ -460,6 +402,60 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         { status: 502 }
       );
     }
+
+    const earnedPoints = countApHistoryEarnedPoints(apHistorySnapshot, points);
+    const totalPoints = apHistorySnapshot.rubric.totalPoints;
+    const rubricScores = {
+      schemaVersion: 1,
+      rubricId: apHistorySnapshot.rubric.rubricId,
+      totalPoints,
+      earnedPoints,
+      points,
+    } satisfies Prisma.InputJsonObject;
+    const numericPercentage = Math.round((earnedPoints / totalPoints) * 100);
+    const letterGrade = letterFromPercent(numericPercentage);
+    const score = formatGrade(numericPercentage, letterGrade);
+    const overallScore = earnedPoints;
+    const overallComment =
+      typeof parsedJson.overallComment === 'string' &&
+      parsedJson.overallComment.trim()
+        ? parsedJson.overallComment
+        : `${studentFirstName}, your AP History response has been scored with the ${apHistorySnapshot.rubric.rubricId} rubric.`;
+    const grammarIssues = null;
+    const now = new Date();
+
+    await prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        rubricScores,
+        overallScore,
+        overallComment,
+        numericPercentage,
+        letterGrade,
+        score,
+        aiMeta: {
+          model,
+          rubricMode: 'ap_history',
+          gradedAt: now.toISOString(),
+        } satisfies Prisma.InputJsonValue,
+        ...(!submission.gradedAt
+          ? { gradedAt: now, gradedById: actor.profileId }
+          : {}),
+        updatedAt: now,
+      },
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Grading Assistant suggestions generated.',
+      rubricScores,
+      overallScore,
+      overallComment,
+      numericPercentage,
+      letterGrade,
+      score,
+      grammarIssues,
+    });
   }
 
   const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${gradingAssistantScoreScaleInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
