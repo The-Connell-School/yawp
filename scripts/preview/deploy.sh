@@ -86,9 +86,14 @@ wait_for_shared_postgres() {
   exit 1
 }
 
+connect_shared_postgres_to_preview_network() {
+  docker network connect preview "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
+}
+
 ensure_shared_postgres() {
   write_shared_postgres_compose
   "${db_compose[@]}" up -d
+  connect_shared_postgres_to_preview_network
   wait_for_shared_postgres
 }
 

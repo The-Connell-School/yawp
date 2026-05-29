@@ -280,6 +280,16 @@ describe('PR preview deployment contract', () => {
     expect(bootstrapScript).toContain('docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d');
   });
 
+  test('preview host migration keeps shared services attached to the preview network', () => {
+    const bootstrapScript = readRepoFile('scripts/preview/bootstrap-host.sh');
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+
+    expect(deployScript).toContain('docker network connect preview "$POSTGRES_CONTAINER"');
+    expect(bootstrapScript).toContain('docker network connect preview "$container"');
+    expect(bootstrapScript).toContain('connect_container_to_preview_network preview-postgres');
+    expect(bootstrapScript).toContain('connect_container_to_preview_network traefik-traefik-1');
+  });
+
   test('preview GitHub config can publish dump location and login smoke secrets', () => {
     const configScript = readRepoFile('scripts/github-preview-config.sh');
 

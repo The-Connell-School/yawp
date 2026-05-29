@@ -32,6 +32,13 @@ sudo mkdir -p "$ROOT/traefik/letsencrypt" "$ROOT/previews" "$ROOT/sources"
 sudo chown -R "$USER":"$USER" "$ROOT"
 docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
 
+connect_container_to_preview_network() {
+  local container="$1"
+  if docker inspect "$container" >/dev/null 2>&1; then
+    docker network connect preview "$container" >/dev/null 2>&1 || true
+  fi
+}
+
 if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
   sudo iptables -C DOCKER-USER -d 169.254.169.254/32 -j REJECT 2>/dev/null || \
     sudo iptables -I DOCKER-USER -d 169.254.169.254/32 -j REJECT
@@ -70,6 +77,7 @@ networks:
 YAML
 
 docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d
+connect_container_to_preview_network preview-postgres
 
 cat > "$ROOT/traefik/docker-compose.yml" <<YAML
 services:
@@ -100,5 +108,6 @@ networks:
 YAML
 
 docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
+connect_container_to_preview_network traefik-traefik-1
 
 echo "Preview environment host ready at $ROOT"
