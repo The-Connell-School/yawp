@@ -103,4 +103,55 @@ describe('AP History snapshot schema', () => {
       sources: [],
     });
   });
+
+  test('rejects DBQ snapshots with the LEQ rubric contract', () => {
+    const snapshot = buildApHistorySnapshot(dbqEntry);
+
+    expect(() =>
+      parseApHistorySnapshot({
+        ...snapshot,
+        rubric: { rubricId: 'ap-history-leq-2026', totalPoints: 6 },
+      }),
+    ).toThrow();
+  });
+
+  test('rejects LEQ snapshots with the DBQ rubric contract', () => {
+    const snapshot = buildApHistorySnapshot({
+      ...dbqEntry,
+      externalKey: 'apush-leq-market-revolution',
+      essayType: 'leq',
+      defaultDurationMinutes: 40,
+      sources: [],
+    });
+
+    expect(() =>
+      parseApHistorySnapshot({
+        ...snapshot,
+        rubric: { rubricId: 'ap-history-dbq-2026', totalPoints: 7 },
+      }),
+    ).toThrow();
+  });
+
+  test('rejects non-APUSH library rows instead of coercing the course', () => {
+    expect(() =>
+      buildApHistorySnapshot({
+        ...dbqEntry,
+        course: 'ap-world',
+      }),
+    ).toThrow();
+  });
+
+  test('rejects source snapshots with an invalid media type', () => {
+    expect(() =>
+      buildApHistorySnapshot({
+        ...dbqEntry,
+        sources: [
+          {
+            ...dbqEntry.sources[0],
+            mediaType: 'video',
+          },
+        ],
+      }),
+    ).toThrow();
+  });
 });

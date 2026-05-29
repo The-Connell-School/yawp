@@ -4,6 +4,7 @@ export const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay' as const;
 export const AP_HISTORY_SNAPSHOT_VERSION = 1 as const;
 
 const EssayTypeSchema = z.enum(['dbq', 'leq']);
+const CourseSchema = z.literal('apush');
 const TimeModeSchema = z.enum(['untimed', 'timed']);
 
 export const ApHistorySourceSnapshotSchema = z.object({
@@ -19,25 +20,43 @@ export const ApHistorySourceSnapshotSchema = z.object({
   provenanceUrl: z.string().nullable().optional(),
 });
 
-export const ApHistorySnapshotSchema = z.object({
-  schemaVersion: z.literal(AP_HISTORY_SNAPSHOT_VERSION),
-  libraryEntryId: z.string().min(1),
-  course: z.literal('apush'),
-  essayType: EssayTypeSchema,
-  prompt: z.string().min(1),
-  period: z.string().min(1),
-  periodNumber: z.number().int().positive(),
-  reasoningSkill: z.string().min(1),
-  sources: z.array(ApHistorySourceSnapshotSchema),
-  rubric: z.object({
-    rubricId: z.enum(['ap-history-dbq-2026', 'ap-history-leq-2026']),
-    totalPoints: z.union([z.literal(7), z.literal(6)]),
-  }),
-  timing: z.object({
-    mode: TimeModeSchema,
-    durationMinutes: z.number().int().positive(),
-  }),
-});
+export const ApHistorySnapshotSchema = z
+  .object({
+    schemaVersion: z.literal(AP_HISTORY_SNAPSHOT_VERSION),
+    libraryEntryId: z.string().min(1),
+    course: CourseSchema,
+    essayType: EssayTypeSchema,
+    prompt: z.string().min(1),
+    period: z.string().min(1),
+    periodNumber: z.number().int().positive(),
+    reasoningSkill: z.string().min(1),
+    sources: z.array(ApHistorySourceSnapshotSchema),
+    rubric: z.object({
+      rubricId: z.enum(['ap-history-dbq-2026', 'ap-history-leq-2026']),
+      totalPoints: z.union([z.literal(7), z.literal(6)]),
+    }),
+    timing: z.object({
+      mode: TimeModeSchema,
+      durationMinutes: z.number().int().positive(),
+    }),
+  })
+  .superRefine((snapshot, ctx) => {
+    const expectedRubric =
+      snapshot.essayType === 'dbq'
+        ? { rubricId: 'ap-history-dbq-2026', totalPoints: 7 }
+        : { rubricId: 'ap-history-leq-2026', totalPoints: 6 };
+
+    if (
+      snapshot.rubric.rubricId !== expectedRubric.rubricId ||
+      snapshot.rubric.totalPoints !== expectedRubric.totalPoints
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Rubric must match the AP History essay type.',
+        path: ['rubric'],
+      });
+    }
+  });
 
 export type ApHistorySnapshot = z.infer<typeof ApHistorySnapshotSchema>;
 
@@ -69,6 +88,7 @@ export function isApHistorySnapshot(value: unknown): value is ApHistorySnapshot 
 export function buildApHistorySnapshot(
   entry: LibraryEntryForSnapshot,
 ): ApHistorySnapshot {
+  const course = CourseSchema.parse(entry.course);
   const essayType = EssayTypeSchema.parse(entry.essayType);
   const rubric =
     essayType === 'dbq'
@@ -78,7 +98,7 @@ export function buildApHistorySnapshot(
   const snapshot = {
     schemaVersion: AP_HISTORY_SNAPSHOT_VERSION,
     libraryEntryId: entry.externalKey,
-    course: 'apush' as const,
+    course,
     essayType,
     prompt: entry.prompt,
     period: entry.period,
