@@ -8,7 +8,7 @@ describe('isLocalDatabaseUrl', () => {
     ).toBe(true);
   });
 
-  test('treats Preview Forge PR-scoped Postgres hostnames as local non-TLS Postgres', () => {
+  test('treats preview PR-scoped Postgres hostnames as local non-TLS Postgres', () => {
     expect(
       isLocalDatabaseUrl(
         'postgresql://postgres:postgres@yawp-pr-153-postgres-1:5432/yawp_preview',

@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { buildPreviewForgeEnv } from './preview-env.mjs';
+import { buildPreviewEnv } from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -11,14 +11,14 @@ function optionalEnv(name, fallback = '') {
 
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
-  domain = process.env.PREVIEW_FORGE_DOMAIN,
-  root = process.env.PREVIEW_FORGE_ROOT,
+  domain = process.env.PREVIEW_DOMAIN,
+  root = process.env.PREVIEW_ROOT,
   sourceDir = process.env.SOURCE_DIR,
-  directPort = process.env.PREVIEW_FORGE_DIRECT_PORT,
-  enableTls = process.env.PREVIEW_FORGE_TLS !== 'false',
-  runtime = process.env.PREVIEW_FORGE_RUNTIME || 'fast',
+  directPort = process.env.PREVIEW_DIRECT_PORT,
+  enableTls = process.env.PREVIEW_TLS !== 'false',
+  runtime = process.env.PREVIEW_RUNTIME || 'fast',
 } = {}) {
-  const env = buildPreviewForgeEnv({
+  const env = buildPreviewEnv({
     prNumber,
     domain,
     root,
@@ -66,7 +66,7 @@ ${fastVolumes}
     environment:
 ${commonEnvironment}
     networks:
-      - preview-forge
+      - preview
 `
       : `  toolbox:
     profiles: ["tools"]
@@ -79,7 +79,7 @@ ${commonEnvironment}
     environment:
 ${commonEnvironment}
     networks:
-      - preview-forge
+      - preview
 `;
   const webService =
     env.runtime === 'fast'
@@ -107,21 +107,21 @@ services:
 ${toolboxService}
 ${webService}    labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=preview-forge"
+      - "traefik.docker.network=preview"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}${tlsLabels}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
     networks:
       - default
-      - preview-forge${directPortBlock}
+      - preview${directPortBlock}
 
 volumes:
   ${env.composeProject}-node-modules:
   ${env.composeProject}-web-node-modules:
 
 networks:
-  preview-forge:
+  preview:
     external: true
 `;
 }
