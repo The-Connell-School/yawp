@@ -1,0 +1,134 @@
+import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
+
+const dbqEntry = {
+  externalKey: 'apush-dbq-new-deal-federal-power',
+  title: 'New Deal and Federal Power DBQ',
+  prompt:
+    'Evaluate the extent to which the New Deal changed the role of the federal government in the United States.',
+  sourceCount: 2,
+} as const;
+
+test.describe.serial('AP History library-first assignment flow', () => {
+  test('teacher creates a DBQ assignment from the APUSH library and student sees the snapshot', async ({
+    page,
+    e2eContext,
+    signIn,
+    helpers,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const title = `E2E AP History DBQ ${Date.now()}`;
+
+    try {
+      expect(e2eContext.apHistoryDbqEntryKey).toBe(dbqEntry.externalKey);
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(
+        `/app/assignment-types/${e2eContext.apHistoryAssignmentTypeId}`
+      );
+
+      await expect(
+        page.getByRole('heading', { name: 'AP History Essay', level: 1 })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'APUSH Prompt Library' })
+      ).toBeVisible();
+      await expect(page.getByText('Upload PDF', { exact: true })).toHaveCount(
+        0
+      );
+      await expect(
+        page.locator('label').filter({ hasText: /^Prompt$/ })
+      ).toHaveCount(0);
+      await expect(
+        page
+          .locator('label')
+          .filter({ hasText: /^Tutor Context \(optional\)$/ })
+      ).toHaveCount(0);
+
+      await page.getByRole('button', { name: dbqEntry.title }).click();
+
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText('Selected APUSH Prompt')).toBeVisible();
+      await expect(dialog.getByText(dbqEntry.title)).toBeVisible();
+      await expect(dialog.getByText(dbqEntry.prompt)).toBeVisible();
+      await expect(
+        dialog.locator('label').filter({ hasText: /^Prompt$/ })
+      ).toHaveCount(0);
+      await expect(
+        dialog
+          .locator('label')
+          .filter({ hasText: /^Tutor Context \(optional\)$/ })
+      ).toHaveCount(0);
+      await expect(dialog.getByText('Upload PDF', { exact: true })).toHaveCount(
+        0
+      );
+
+      await dialog.getByLabel('Title (optional)').fill(title);
+      await Promise.all([
+        page.waitForResponse(
+          (response) =>
+            response.url().includes('/api/assignments/create') &&
+            response.request().method() === 'POST' &&
+            response.ok()
+        ),
+        dialog.getByRole('button', { name: 'Create Assignment' }).click(),
+      ]);
+      await expect(dialog).toHaveCount(0);
+
+      const assignment = await prisma.assignment.findFirst({
+        where: {
+          classId: e2eContext.classId,
+          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
+          title,
+        },
+        select: {
+          id: true,
+          prompt: true,
+          tutorContext: true,
+          apHistorySnapshot: true,
+        },
+      });
+
+      expect(assignment).not.toBeNull();
+      expect(assignment?.prompt).toBe(dbqEntry.prompt);
+      expect(assignment?.tutorContext).toBeNull();
+      expect(assignment?.apHistorySnapshot).toMatchObject({
+        schemaVersion: 1,
+        essayType: 'dbq',
+        libraryEntryId: dbqEntry.externalKey,
+        prompt: dbqEntry.prompt,
+      });
+      expect(
+        (assignment?.apHistorySnapshot as { sources?: unknown[] } | null)
+          ?.sources
+      ).toHaveLength(dbqEntry.sourceCount);
+
+      await page.context().clearCookies();
+      await signIn(e2eContext.userEmail, 'johndoe');
+      await page.goto('/app?tab=assignments');
+      await expect(page.getByTestId('app._index')).toBeVisible();
+
+      await page.getByRole('button', { name: new RegExp(title) }).click();
+      await page.waitForURL('**/app/documents/**', { timeout: 15000 });
+      await helpers.waitForEditorReady();
+
+      await expect(page.getByText(/APUSH Period/)).toBeVisible();
+      await expect(
+        page.getByText(dbqEntry.prompt, { exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByText(`${dbqEntry.sourceCount} sources`, { exact: true })
+      ).toBeVisible();
+    } finally {
+      await prisma.assignment.deleteMany({
+        where: {
+          classId: e2eContext.classId,
+          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
+          title,
+        },
+      });
+      await prisma.$disconnect();
+    }
+  });
+});
