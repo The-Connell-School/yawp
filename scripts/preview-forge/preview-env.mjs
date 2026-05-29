@@ -2,8 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_ROOT = '/srv/yawp-preview-forge';
-const DEFAULT_DATABASE_URL =
-  'postgresql://postgres:postgres@postgres:5432/yawp_preview';
+const DEFAULT_DATABASE_NAME = 'yawp_preview';
 
 function trimSlashes(value) {
   return value.replace(/^\/+|\/+$/g, '');
@@ -41,7 +40,7 @@ export function buildPreviewForgeEnv({
   directPort = process.env.PREVIEW_FORGE_DIRECT_PORT,
   tls = process.env.PREVIEW_FORGE_TLS !== 'false',
   runtime = process.env.PREVIEW_FORGE_RUNTIME || 'fast',
-  databaseUrl = process.env.PREVIEW_DATABASE_URL || DEFAULT_DATABASE_URL,
+  databaseUrl = process.env.PREVIEW_DATABASE_URL,
 } = {}) {
   const safePrNumber = requirePositiveInteger(prNumber);
   const safeDomain = requireDomain(domain);
@@ -49,6 +48,7 @@ export function buildPreviewForgeEnv({
   const safeRoot = trimSlashes(String(root || DEFAULT_ROOT));
   const slug = `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
+  const postgresHost = `${composeProject}-postgres-1`;
   const hostname = `${slug}.${safeDomain}`;
   const previewRoot = safeRoot.startsWith('/') ? safeRoot : `/${safeRoot}`;
   const previewDir = path.posix.join(previewRoot, 'previews', slug);
@@ -71,7 +71,9 @@ export function buildPreviewForgeEnv({
     directPort: directPort ? String(directPort) : '',
     tls,
     runtime: safeRuntime,
-    databaseUrl,
+    databaseUrl:
+      databaseUrl ||
+      `postgresql://postgres:postgres@${postgresHost}:5432/${DEFAULT_DATABASE_NAME}`,
   };
 }
 

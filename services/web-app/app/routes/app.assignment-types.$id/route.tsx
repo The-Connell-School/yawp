@@ -31,6 +31,7 @@ import {
 } from '~/domain/documents.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
@@ -176,9 +177,7 @@ function applyFilters(
     }
     if (
       filters.gradeBands.size &&
-      !prompt.gradeBands.some((gradeBand) =>
-        filters.gradeBands.has(gradeBand)
-      )
+      !prompt.gradeBands.some((gradeBand) => filters.gradeBands.has(gradeBand))
     ) {
       return false;
     }
@@ -279,7 +278,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               teachers: { some: { id: profile.teacherProfile.id } },
               isArchived: false,
             },
-            select: { id: true, grade: true, period: true, title: true },
+            select: {
+              id: true,
+              grade: true,
+              period: true,
+              title: true,
+              school: { select: { id: true, organizationId: true } },
+              teachers: { select: { id: true } },
+            },
             orderBy: [{ grade: 'asc' }, { period: 'asc' }],
           })
         : [],
@@ -297,21 +303,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const promptLibrary =
     profile.teacherProfile && isDailyPages
       ? {
-          prompts: applyFilters(
-            ALL_PROMPTS,
-            readFilters(new URL(request.url))
-          ),
+          prompts: applyFilters(ALL_PROMPTS, readFilters(new URL(request.url))),
           facets: ALL_FACETS,
           optionCounts: ALL_OPTION_COUNTS,
           totalCount: ALL_PROMPTS.length,
         }
       : null;
+  const enabledTeacherClassIds = profile.teacherProfile
+    ? new Set(
+        await getAssignmentsEnabledClassIdsForContext({
+          organizationId: profile.organization.id,
+          teacherProfileId: profile.teacherProfile.id,
+          classes: teacherClasses.map((klass) => ({
+            id: klass.id,
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+            teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
+          })),
+        })
+      )
+    : new Set<string>();
+  const assignmentEnabledTeacherClasses = profile.teacherProfile
+    ? teacherClasses.filter((klass) => enabledTeacherClassIds.has(klass.id))
+    : [];
 
   return dataResponse({
     assignmentType,
     documents,
     archivedDocuments,
-    teacherClasses,
+    teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
   });
 }

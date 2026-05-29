@@ -117,8 +117,8 @@ async function postSubmitDocument(params: {
   );
 }
 
-test.describe.serial('Teacher/class pilot feature rollout', () => {
-  test('allows a targeted pilot teacher/class while hiding and blocking the same controls for a non-pilot class', async ({
+test.describe.serial('Teacher feature access rollout', () => {
+  test('allows a targeted pilot teacher while hiding and blocking the same controls for a non-pilot teacher', async ({
     page,
     e2eContext,
     helpers,
@@ -151,18 +151,18 @@ test.describe.serial('Teacher/class pilot feature rollout', () => {
       await setPilotFeatureAccessTarget({
         prisma,
         featureKey: 'assignments',
-        targetKind: 'class',
-        targetId: e2eContext.classId,
+        targetKind: 'teacher',
+        targetId: e2eContext.teacherProfileId,
         enabled: true,
-        note: 'E2E pilot rollout class target',
+        note: 'E2E pilot rollout teacher target',
       });
       await setPilotFeatureAccessTarget({
         prisma,
         featureKey: 'document_submission_grading',
-        targetKind: 'class',
-        targetId: e2eContext.classId,
+        targetKind: 'teacher',
+        targetId: e2eContext.teacherProfileId,
         enabled: true,
-        note: 'E2E pilot rollout class target',
+        note: 'E2E pilot rollout teacher target',
       });
 
       await authenticateAs({
@@ -200,9 +200,9 @@ test.describe.serial('Teacher/class pilot feature rollout', () => {
       await expect
         .soft(page.getByRole('tab', { name: /assignments/i }))
         .toHaveCount(0);
-      await expect.soft(
-        page.getByRole('button', { name: /create new assignment/i })
-      ).toHaveCount(0);
+      await expect
+        .soft(page.getByRole('button', { name: /create new assignment/i }))
+        .toHaveCount(0);
 
       const nonPilotCreateResponse = await postCreateAssignment({
         page,
@@ -248,9 +248,9 @@ test.describe.serial('Teacher/class pilot feature rollout', () => {
       await expect
         .soft(page.getByRole('tab', { name: /assignments/i }))
         .toHaveCount(0);
-      await expect.soft(
-        page.getByText(`Non-pilot assignment ${suffix}`)
-      ).toHaveCount(0);
+      await expect
+        .soft(page.getByText(`Non-pilot assignment ${suffix}`))
+        .toHaveCount(0);
 
       await page.goto(`/app/documents/${nonPilot.documentId}`);
       await page.waitForLoadState('networkidle');

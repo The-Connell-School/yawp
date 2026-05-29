@@ -1,11 +1,13 @@
 type SchoolScopedClass = {
   id?: string | null;
   schoolId: string | null;
+  school?: { organizationId?: string | null } | null;
   teachers?: Array<{ id: string | null }>;
 };
 
 type DocumentSubmissionClassScope = {
   schoolId: string | null;
+  organizationId?: string | null;
   classId?: string | null;
   teacherProfileIds: string[];
 };
@@ -31,6 +33,7 @@ export function getDocumentSubmissionSchoolIds(
 
 export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
   schoolIds: string[];
+  organizationIds: string[];
   classIds: string[];
   teacherProfileIds: string[];
   classScopes: DocumentSubmissionClassScope[];
@@ -43,11 +46,13 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
 
     return {
       schoolIds: distinctIds([assignmentClass.schoolId]),
+      organizationIds: distinctIds([assignmentClass.school?.organizationId]),
       classIds: distinctIds([assignmentClass.id]),
       teacherProfileIds,
       classScopes: [
         {
           schoolId: assignmentClass.schoolId,
+          organizationId: assignmentClass.school?.organizationId,
           classId: assignmentClass.id,
           teacherProfileIds,
         },
@@ -59,6 +64,9 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
 
   return {
     schoolIds: distinctIds(classes.map((klass) => klass.schoolId)),
+    organizationIds: distinctIds(
+      classes.map((klass) => klass.school?.organizationId)
+    ),
     classIds: distinctIds(classes.map((klass) => klass.id)),
     teacherProfileIds: distinctIds(
       classes.flatMap((klass) =>
@@ -67,6 +75,7 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
     ),
     classScopes: classes.map((klass) => ({
       schoolId: klass.schoolId,
+      organizationId: klass.school?.organizationId,
       classId: klass.id,
       teacherProfileIds: distinctIds(
         (klass.teachers ?? []).map((teacher) => teacher.id)
