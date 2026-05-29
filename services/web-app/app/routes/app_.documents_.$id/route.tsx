@@ -75,6 +75,8 @@ import {
   partitionSubmissionsByArchive,
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -195,6 +197,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          apHistorySnapshot: true,
           class: {
             select: {
               id: true,
@@ -408,6 +411,11 @@ export default function Route() {
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
+  const apHistorySnapshot = isApHistorySnapshot(
+    data.doc.assignment?.apHistorySnapshot
+  )
+    ? data.doc.assignment.apHistorySnapshot
+    : null;
 
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
@@ -603,6 +611,9 @@ export default function Route() {
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
+        {apHistorySnapshot ? (
+          <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
+        ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">
             <Button
@@ -825,7 +836,7 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {data.doc.assignment ? (
+        {data.doc.assignment && !apHistorySnapshot ? (
           <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
