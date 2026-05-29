@@ -167,9 +167,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await expect(page.getByTestId('ap-history-context-pill')).toContainText(
         'DBQ · APUSH'
       );
+      await expect(page.getByTestId('assignment-prompt-strip')).toContainText(
+        dbqEntry.prompt
+      );
       await expect(
         page.getByText(dbqEntry.prompt, { exact: true })
-      ).toHaveCount(0);
+      ).toHaveCount(1);
       await expect(
         page.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();

@@ -93,6 +93,7 @@ mock.module('./hooks/use-document-submit', () => ({
 }));
 
 const {
+  AssignmentPromptStrip,
   getRenderableApHistorySnapshot,
   loader,
   shouldRenderDbqWorkspace,
@@ -312,6 +313,26 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(html).not.toContain('Planning');
     expect(html).not.toContain('prototype');
     expect(html).not.toContain('No persistence');
+  });
+
+  test('renders the AP History prompt in a shared compact assignment strip', () => {
+    const html = renderToStaticMarkup(
+      createElement(AssignmentPromptStrip, {
+        label: 'DBQ · APUSH',
+        title: 'AP History Essay',
+        prompt: apHistorySnapshot.prompt,
+        metadata: ['Period 3', 'Causation', '1 source'],
+      })
+    );
+
+    expect(html).toContain('data-testid="assignment-prompt-strip"');
+    expect(html).toContain('Assignment Prompt');
+    expect(html).toContain('DBQ · APUSH');
+    expect(html).toContain('AP History Essay');
+    expect(html).toContain('Evaluate the extent');
+    expect(html).toContain('Period 3');
+    expect(html).toContain('Causation');
+    expect(html).toContain('1 source');
   });
 
   test('renders AP History source content inside a bounded scroll area', () => {
