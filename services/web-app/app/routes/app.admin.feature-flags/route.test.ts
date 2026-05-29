@@ -285,7 +285,41 @@ describe('admin feature flags route', () => {
       expiresAt: '2026-06-01T00:00:00.000Z',
       note: null,
     });
-    expect(data.pilotTargetRows).toHaveLength(4);
+    expect(data.pilotTargetRows).toContainEqual({
+      featureKey: 'ap_history_essay',
+      featureLabel: 'AP History Essay',
+      targetKind: 'teacher',
+      targetId: 'teacher-1',
+      targetLabel: 'Ada Teacher',
+      targetDetail: 'ada@example.com - Alpha Org',
+      featureAccessTargetId: null,
+      enabled: false,
+      expiresAt: null,
+      note: null,
+    });
+    expect(data.pilotTargetRows).toHaveLength(6);
+    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith({
+      where: {
+        featureKey: {
+          in: [
+            'assignments',
+            'document_submission_grading',
+            'ap_history_essay',
+          ],
+        },
+        targetKind: { in: ['teacher', 'class'] },
+      },
+      select: {
+        id: true,
+        featureKey: true,
+        targetKind: true,
+        targetId: true,
+        enabled: true,
+        expiresAt: true,
+        note: true,
+      },
+      orderBy: [{ featureKey: 'asc' }, { targetKind: 'asc' }],
+    });
   });
 
   test('action toggles an organization target through the flag helper', async () => {
@@ -377,6 +411,46 @@ describe('admin feature flags route', () => {
         expiresAt: null,
       },
       update: { enabled: false, updatedAt: expect.any(Date) },
+    });
+  });
+
+  test('action accepts an AP History pilot target', async () => {
+    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    const body = new URLSearchParams({
+      intent: 'toggle-pilot-target',
+      featureKey: 'ap_history_essay',
+      targetKind: 'teacher',
+      targetId: 'teacher-1',
+      enabled: 'true',
+    });
+
+    const result = await action({
+      request: new Request('https://x.test/app/admin/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+      params: {},
+      context: {} as never,
+    });
+
+    expect((result as { data: any }).data.success).toBe(true);
+    expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
+      where: {
+        featureKey_targetKind_targetId: {
+          featureKey: 'ap_history_essay',
+          targetKind: 'teacher',
+          targetId: 'teacher-1',
+        },
+      },
+      create: {
+        featureKey: 'ap_history_essay',
+        targetKind: 'teacher',
+        targetId: 'teacher-1',
+        enabled: true,
+        expiresAt: null,
+      },
+      update: { enabled: true, expiresAt: null, updatedAt: expect.any(Date) },
     });
   });
 

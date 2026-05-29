@@ -21,12 +21,13 @@ export const FEATURE_FLAGS = {
 export const PILOT_FEATURE_KEYS = {
   ASSIGNMENTS: 'assignments',
   DOCUMENT_SUBMISSION_GRADING: 'document_submission_grading',
+  AP_HISTORY_ESSAY: 'ap_history_essay',
 } as const;
 
 type PilotFeatureKey =
   (typeof PILOT_FEATURE_KEYS)[keyof typeof PILOT_FEATURE_KEYS];
 
-type FeatureAccessTargetKind = 'teacher' | 'class';
+type FeatureAccessTargetKind = 'organization' | 'school' | 'teacher' | 'class';
 
 type FeatureAccessTargetInput = {
   kind: FeatureAccessTargetKind;
@@ -327,6 +328,27 @@ export async function getAssignmentsEnabledClassIdsForContext({
   return classFlags
     .filter((klass) => klass.enabled)
     .map((klass) => klass.id);
+}
+
+export async function isApHistoryEssayEnabledForContext({
+  organizationId,
+  schoolIds,
+  teacherProfileId,
+  teacherProfileIds,
+  classIds,
+}: {
+  organizationId: string | null | undefined;
+  schoolIds?: Array<string | null | undefined>;
+  teacherProfileId?: string | null;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  return isPilotFeatureEnabledForTargets(PILOT_FEATURE_KEYS.AP_HISTORY_ESSAY, [
+    { kind: 'organization', ids: [organizationId] },
+    { kind: 'school', ids: schoolIds ?? [] },
+    { kind: 'teacher', ids: [teacherProfileId, ...(teacherProfileIds ?? [])] },
+    { kind: 'class', ids: classIds ?? [] },
+  ]);
 }
 
 export async function isDocumentSubmissionEnabledForScope({

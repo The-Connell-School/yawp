@@ -60,7 +60,10 @@ type LoaderData = ReturnType<typeof useLoaderData<typeof loader>>;
 type FlagData = LoaderData['flags'][number];
 type PilotTargetRow = LoaderData['pilotTargetRows'][number];
 type TargetOption = OrganizationOption | SchoolOption;
-type PilotFeatureKey = 'assignments' | 'document_submission_grading';
+type PilotFeatureKey =
+  | 'assignments'
+  | 'document_submission_grading'
+  | 'ap_history_essay';
 type PilotTargetKind = 'teacher' | 'class';
 type PilotTargetOption = {
   kind: PilotTargetKind;
@@ -75,6 +78,7 @@ const PILOT_FEATURES: Array<{ key: PilotFeatureKey; label: string }> = [
     key: 'document_submission_grading',
     label: 'Document submission grading',
   },
+  { key: 'ap_history_essay', label: 'AP History Essay' },
 ];
 
 function getRegisteredFeatureFlags(): RegisteredFeatureFlag[] {
