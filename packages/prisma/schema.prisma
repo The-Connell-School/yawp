@@ -34,6 +34,7 @@ model AssignmentType {
   title                   String
   description             String?
   position                Int
+  systemKey               String?                      @unique
   archivedAt              DateTime?                    @db.Timestamptz(6)
   ownerOrgId              String?
   ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
@@ -44,10 +45,12 @@ model AssignmentType {
   assignmentModules       AssignmentModule[]
   assignments             Assignment[]
   documents               Document[]
+  apHistoryLibraryEntries ApHistoryPromptLibraryEntry[]
 
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
   @@index([archivedAt])
+  @@index([systemKey])
 }
 
 model Assignment {
@@ -62,11 +65,59 @@ model Assignment {
   prompt           String
   tutorContext     String?
   dueDate          DateTime?      @db.Timestamptz(6)
+  apHistorySnapshot Json?
   documents        Document[]
 
   @@index([classId, createdAt(sort: Desc)])
   @@index([assignmentTypeId])
   @@index([dueDate])
+}
+
+model ApHistoryPromptLibraryEntry {
+  id                     String                         @id @default(cuid())
+  createdAt              DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey            String                         @unique
+  assignmentTypeId       String
+  assignmentType         AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  course                 String
+  essayType              String
+  title                  String
+  prompt                 String
+  period                 String
+  periodNumber           Int
+  reasoningSkill         String
+  difficulty             String
+  skillEmphasis          String?
+  defaultTimeMode        String                         @default("untimed")
+  defaultDurationMinutes Int
+  provenanceUrl          String?
+  archivedAt             DateTime?                      @db.Timestamptz(6)
+  sources                ApHistoryPromptLibrarySource[]
+
+  @@index([assignmentTypeId, essayType])
+  @@index([course, periodNumber])
+  @@index([archivedAt])
+}
+
+model ApHistoryPromptLibrarySource {
+  id                   String                      @id @default(cuid())
+  createdAt            DateTime                    @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                    @default(now()) @updatedAt @db.Timestamptz(6)
+  externalKey          String                      @unique
+  promptLibraryEntryId String
+  promptLibraryEntry   ApHistoryPromptLibraryEntry @relation(fields: [promptLibraryEntryId], references: [id], onDelete: Cascade)
+  position             Int
+  title                String
+  attribution          String
+  body                 String
+  caption              String?
+  mediaType            String                      @default("text")
+  imageUrl             String?
+  imageAlt             String?
+  provenanceUrl        String?
+
+  @@index([promptLibraryEntryId, position])
 }
 
 model AssignmentTypeImage {
