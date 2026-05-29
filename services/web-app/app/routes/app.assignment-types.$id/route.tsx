@@ -29,9 +29,16 @@ import {
   createDocumentForAssignmentType,
   DocumentCreationError,
 } from '~/domain/documents.server';
+import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import {
+  isApHistoryEssayEnabledForContext,
+  isAssignmentsEnabledForContext,
+} from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -294,6 +301,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isDailyPages =
     assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const isApHistory =
+    assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
     profile.teacherProfile && isDailyPages
       ? {
@@ -306,6 +315,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: ALL_PROMPTS.length,
         }
       : null;
+  let apHistoryLibrary = null;
+  if (profile.teacherProfile && isApHistory) {
+    const classIds = teacherClasses.map((klass) => klass.id);
+    const [assignmentsEnabled, apHistoryEnabled] = await Promise.all([
+      isAssignmentsEnabledForContext({
+        organizationId: profile.organization.id,
+        teacherProfileId: profile.teacherProfile.id,
+        classIds,
+      }),
+      isApHistoryEssayEnabledForContext({
+        organizationId: profile.organization.id,
+        teacherProfileId: profile.teacherProfile.id,
+        classIds,
+      }),
+    ]);
+
+    if (assignmentsEnabled && apHistoryEnabled) {
+      apHistoryLibrary = {
+        entries: await listApHistoryLibraryEntries(assignmentType.id),
+      };
+    }
+  }
 
   return dataResponse({
     assignmentType,
@@ -313,6 +344,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     archivedDocuments,
     teacherClasses,
     promptLibrary,
+    apHistoryLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -378,6 +410,12 @@ export default function AppAssignmentTypesIdRoute() {
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
+  const [apHistoryEntry, setApHistoryEntry] = useState<{
+    externalKey: string;
+    title: string;
+    prompt: string;
+    essayType: string;
+  } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
 
   return (
@@ -410,6 +448,7 @@ export default function AppAssignmentTypesIdRoute() {
                     disabled={data.teacherClasses.length === 0}
                     onSelect={() => {
                       setLibraryPrompt('');
+                      setApHistoryEntry(null);
                       setIsAssignmentSheetOpen(true);
                     }}
                   >
@@ -423,6 +462,7 @@ export default function AppAssignmentTypesIdRoute() {
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                apHistoryEntry={apHistoryEntry}
               />
             </>
           ) : (
@@ -480,7 +520,20 @@ export default function AppAssignmentTypesIdRoute() {
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.apHistoryLibrary ? (
+          <div className="pb-6">
+            <ApHistoryLibrary
+              entries={data.apHistoryLibrary.entries}
+              onSelectEntry={(entry) => {
+                setApHistoryEntry(entry);
+                setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
               }}
             />

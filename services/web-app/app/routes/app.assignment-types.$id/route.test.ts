@@ -10,12 +10,17 @@ const prisma = {
   class: {
     findMany: mock(),
   },
+  apHistoryPromptLibraryEntry: {
+    findMany: mock(),
+  },
 };
 
 const requireUserId = mock();
 const requireProfile = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
+const isAssignmentsEnabledForContext = mock();
+const isApHistoryEssayEnabledForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -29,6 +34,10 @@ mock.module('~/domain/documents.server', () => ({
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
+mock.module('~/utils/feature-flags.server', () => ({
+  isAssignmentsEnabledForContext,
+  isApHistoryEssayEnabledForContext,
+}));
 
 const { action, loader } = await import('./route');
 
@@ -36,6 +45,7 @@ function makeAssignmentType(overrides: Record<string, unknown> = {}) {
   return {
     id: 'at-1',
     title: 'Daily Pages',
+    systemKey: null,
     description: 'Daily writing',
     archivedAt: null,
     image: null,
@@ -121,9 +131,12 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.document.findMany.mockReset();
     prisma.class.findMany.mockReset();
+    prisma.apHistoryPromptLibraryEntry.findMany.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
     redirectWithToast.mockReset();
+    isAssignmentsEnabledForContext.mockReset();
+    isApHistoryEssayEnabledForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -136,6 +149,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', grade: '9th', period: '1st', title: null },
     ]);
+    prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
+    isAssignmentsEnabledForContext.mockResolvedValue(true);
+    isApHistoryEssayEnabledForContext.mockResolvedValue(true);
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -185,5 +201,88 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     } as never)) as any;
 
     expect(otherTypeResponse.data.promptLibrary).toBeNull();
+  });
+
+  test('provides AP History library entries for teachers when assignments and AP History are enabled', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(
+      makeAssignmentType({
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      })
+    );
+    prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([
+      {
+        id: 'entry-1',
+        externalKey: 'apush-dbq-period-3',
+        title: 'Revolutionary Ideals DBQ',
+        prompt: 'Evaluate the extent to which revolutionary ideals changed American society.',
+        essayType: 'dbq',
+        period: 'Period 3: 1754-1800',
+        periodNumber: 3,
+        reasoningSkill: 'Causation',
+        difficulty: 'medium',
+        sources: [{ id: 'source-1' }, { id: 'source-2' }],
+      },
+    ]);
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/assignment-types/ap-history-type'
+      ),
+      params: { id: 'ap-history-type' },
+    } as never)) as any;
+
+    expect(response.data.promptLibrary).toBeNull();
+    expect(response.data.apHistoryLibrary.entries).toHaveLength(1);
+    expect(response.data.apHistoryLibrary.entries[0]).toMatchObject({
+      externalKey: 'apush-dbq-period-3',
+      title: 'Revolutionary Ideals DBQ',
+      essayType: 'dbq',
+    });
+    expect(isAssignmentsEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+  });
+
+  test('omits AP History library when AP feature access is disabled', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(
+      makeAssignmentType({
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      })
+    );
+    isApHistoryEssayEnabledForContext.mockResolvedValue(false);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.apHistoryLibrary).toBeNull();
+    expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
+  });
+
+  test('omits AP History library for non-AP assignment types', async () => {
+    prisma.assignmentType.findFirst.mockResolvedValue(
+      makeAssignmentType({ title: 'Rhetorical Analysis', systemKey: null })
+    );
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.apHistoryLibrary).toBeNull();
+    expect(isAssignmentsEnabledForContext).not.toHaveBeenCalled();
+    expect(isApHistoryEssayEnabledForContext).not.toHaveBeenCalled();
+    expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
 });
