@@ -97,14 +97,16 @@ describe('production deployment contract', () => {
 });
 
 describe('PR preview deployment contract', () => {
-  test('preview workflow deploys every same-repo pull request through preview forge', () => {
+  test('preview workflow deploys every same-repo pull request through preview environments', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
+    expect(previewWorkflow).toContain('name: PR preview');
     expect(previewWorkflow).toContain('pull_request');
     expect(previewWorkflow).toContain('types: [opened, synchronize, reopened, closed]');
     expect(previewWorkflow).toContain("github.event.pull_request.head.repo.full_name == github.repository");
     expect(previewWorkflow).toContain('scripts/preview-forge/deploy.sh');
     expect(previewWorkflow).toContain('scripts/preview-forge/destroy.sh');
+    expect(previewWorkflow).not.toContain('Preview Forge');
   });
 
   test('preview workflow no longer uses App Runner, Terraform, ECR pushes, or slash-command previews', () => {
@@ -117,7 +119,83 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
   });
 
-  test('preview forge polls health quickly once containers are starting', () => {
+  test('preview deploy clones per-PR databases from a shared production dump template', () => {
+    const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
+    const templateIndex = deployScript.indexOf('ensure_template_database');
+    const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
+    const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const webStartIndex = deployScript.indexOf('start_or_refresh_web');
+
+    expect(deployScript).toContain('PREVIEW_DB_DUMP_S3_URI');
+    expect(deployScript).toContain('stream_preview_dump()');
+    expect(deployScript).toContain('aws sts get-caller-identity');
+    expect(deployScript).toContain('aws s3 cp "$DUMP_URI" -');
+    expect(deployScript).toContain('PREVIEW_DB_TEMPLATE_DB');
+    expect(deployScript).toContain('yawp-preview-db');
+    expect(deployScript).toContain('preview-postgres');
+    expect(deployScript).toContain('Restoring production dump into template database');
+    expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
+    expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
+    expect(deployScript).not.toContain('seed-overlay.ts');
+    expect(templateIndex).toBeGreaterThan(-1);
+    expect(cloneIndex).toBeGreaterThan(-1);
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(webStartIndex).toBeGreaterThan(-1);
+    expect(templateIndex).toBeLessThan(cloneIndex);
+    expect(cloneIndex).toBeLessThan(migrateIndex);
+    expect(migrateIndex).toBeLessThan(webStartIndex);
+  });
+
+  test('preview deploy caches tooling work but still refreshes web containers', () => {
+    const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
+
+    expect(deployScript).toContain('compute_tooling_fingerprint()');
+    expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
+    expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
+    expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
+    expect(deployScript).not.toContain('Web container already running; relying on bind-mounted source update.');
+  });
+
+  test('preview containers cannot use EC2 metadata credentials', () => {
+    const compose = readRepoFile('scripts/preview-forge/render-compose.mjs');
+
+    expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
+  });
+
+  test('preview cleanup removes closed PR resources and is scheduled', () => {
+    const cleanupScript = readRepoFile('scripts/preview-forge/cleanup.sh');
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(cleanupScript).toContain('OPEN_PR_NUMBERS');
+    expect(cleanupScript).toContain('PREVIEW_FORGE_TTL_HOURS');
+    expect(cleanupScript).toContain('dropdb -U postgres --if-exists "$database_name"');
+    expect(cleanupScript).toContain('docker volume rm "${project}_${project}-postgres-data"');
+    expect(previewWorkflow).toContain('schedule:');
+    expect(previewWorkflow).toContain('bash -s < scripts/preview-forge/cleanup.sh');
+  });
+
+  test('preview workflow passes dump location and login credentials to remote deploy', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
+    expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_EMAIL');
+    expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_PASSWORD');
+    expect(previewWorkflow).toContain('shell_quote()');
+    expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
+    expect(previewWorkflow).toContain('PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")');
+    expect(previewWorkflow).toContain('PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")');
+  });
+
+  test('preview workflow does not require runner AWS credentials for dump restores', () => {
+    const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
+
+    expect(previewWorkflow).not.toContain('aws-actions/configure-aws-credentials');
+    expect(previewWorkflow).not.toContain('secrets.AWS_ACCESS_KEY_ID');
+    expect(previewWorkflow).not.toContain('secrets.AWS_SECRET_ACCESS_KEY');
+    expect(previewWorkflow).not.toContain('aws s3 presign');
+  });
+
+  test('preview deploy polls health quickly once containers are starting', () => {
     const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
 
     expect(deployScript).toContain('curl -fsS --connect-timeout 1 --max-time 2 "$health_url"');
@@ -126,7 +204,7 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).not.toContain('sleep 2');
   });
 
-  test('preview forge verifies seeded login before reporting the preview URL', () => {
+  test('preview deploy verifies login before reporting the preview URL', () => {
     const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
     const loginSmokeIndex = deployScript.indexOf('smoke-login.mjs');
     const previewUrlIndex = deployScript.indexOf('echo "PREVIEW_URL=$URL"');
@@ -136,14 +214,14 @@ describe('PR preview deployment contract', () => {
     expect(loginSmokeIndex).toBeLessThan(previewUrlIndex);
   });
 
-  test('preview forge restarts the web container after source syncs', () => {
+  test('preview deploy restarts the web container after source syncs', () => {
     const deployScript = readRepoFile('scripts/preview-forge/deploy.sh');
-    const stopIndex = deployScript.indexOf('"${compose[@]}" stop web');
-    const toolboxIndex = deployScript.indexOf('"${compose[@]}" run --rm toolbox');
+    const toolboxIndex = deployScript.indexOf('run_tooling_if_needed');
+    const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
-    expect(stopIndex).toBeGreaterThan(-1);
     expect(toolboxIndex).toBeGreaterThan(-1);
-    expect(stopIndex).toBeLessThan(toolboxIndex);
+    expect(webStartIndex).toBeGreaterThan(-1);
+    expect(toolboxIndex).toBeLessThan(webStartIndex);
     expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
   });
 
@@ -154,11 +232,35 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain("--exclude 'services/web-app/.vite'");
   });
 
-  test('preview comment describes the seeded login smoke', () => {
+  test('preview host bootstrap installs AWS CLI for production dump restores', () => {
+    const bootstrapScript = readRepoFile('scripts/preview-forge/bootstrap-host.sh');
+
+    expect(bootstrapScript).toContain('awscli');
+  });
+
+  test('preview host bootstrap blocks container access to instance metadata', () => {
+    const bootstrapScript = readRepoFile('scripts/preview-forge/bootstrap-host.sh');
+
+    expect(bootstrapScript).toContain('DOCKER-USER');
+    expect(bootstrapScript).toContain('169.254.169.254/32');
+    expect(bootstrapScript).toContain('169.254.170.2/32');
+  });
+
+  test('preview GitHub config can publish dump location and login smoke secrets', () => {
+    const configScript = readRepoFile('scripts/github-preview-config.sh');
+
+    expect(configScript).toContain('gh_var PREVIEW_DB_DUMP_S3_URI');
+    expect(configScript).toContain('gh_sec PREVIEW_LOGIN_EMAIL');
+    expect(configScript).toContain('gh_sec PREVIEW_LOGIN_PASSWORD');
+  });
+
+  test('preview comment describes production data and login smoke', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
     expect(previewWorkflow).toContain(
-      '- **Smoke:** `scripts/preview-forge/deploy.sh` healthcheck + seeded login',
+      '- **Data:** cloned from the shared production-dump template into an isolated PR database',
     );
+    expect(previewWorkflow).toContain('- **Smoke:** healthcheck + login');
+    expect(previewWorkflow).not.toContain('seed overlay');
   });
 });

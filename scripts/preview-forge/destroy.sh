@@ -11,5 +11,10 @@ else
   docker compose -p "$COMPOSE_PROJECT" down -v --remove-orphans || true
 fi
 
+if docker inspect preview-postgres >/dev/null 2>&1; then
+  docker exec preview-postgres dropdb -U postgres --if-exists "$DATABASE_NAME" || true
+fi
+
+docker volume rm "${COMPOSE_PROJECT}_${COMPOSE_PROJECT}-postgres-data" >/dev/null 2>&1 || true
 rm -rf "$PREVIEW_DIR"
 echo "Destroyed $SLUG"

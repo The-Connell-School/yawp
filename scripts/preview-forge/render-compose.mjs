@@ -40,6 +40,7 @@ export function renderPreviewCompose({
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
+      AWS_EC2_METADATA_DISABLED: "true"
       SESSION_SECRET: ${q(optionalEnv('PREVIEW_SESSION_SECRET', 'preview-session-secret'))}
       INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
@@ -64,9 +65,8 @@ export function renderPreviewCompose({
 ${fastVolumes}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - preview-forge
 `
       : `  toolbox:
     profiles: ["tools"]
@@ -78,22 +78,18 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - preview-forge
 `;
   const webService =
     env.runtime === 'fast'
       ? `  web:
     image: oven/bun:1.3.1
     working_dir: /app
-    command: bash -lc "rm -rf services/web-app/.react-router services/web-app/.vite && bun install --ignore-scripts && bun prisma generate && cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
+    command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
 `
       : `  web:
     build:
@@ -104,27 +100,10 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
 `;
 
   return `name: ${env.composeProject}
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: yawp_preview
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d yawp_preview"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-    volumes:
-      - ${env.composeProject}-postgres-data:/var/lib/postgresql/data
-
 ${toolboxService}
 ${webService}    labels:
       - "traefik.enable=true"
@@ -138,7 +117,6 @@ ${webService}    labels:
       - preview-forge${directPortBlock}
 
 volumes:
-  ${env.composeProject}-postgres-data:
   ${env.composeProject}-node-modules:
   ${env.composeProject}-web-node-modules:
 

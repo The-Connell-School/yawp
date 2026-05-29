@@ -5,16 +5,18 @@ ROOT="${PREVIEW_FORGE_ROOT:-/srv/yawp-preview-forge}"
 ACME_EMAIL="${PREVIEW_FORGE_ACME_EMAIL:-}"
 
 if command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y docker git rsync nodejs
+  sudo dnf install -y docker git rsync nodejs awscli || sudo dnf install -y docker git rsync nodejs awscli2
 elif command -v yum >/dev/null 2>&1; then
-  sudo yum install -y docker git rsync nodejs
+  sudo yum install -y docker git rsync nodejs awscli
 elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update -y
-  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs ca-certificates curl
+  sudo apt-get install -y docker.io docker-compose-plugin git rsync nodejs ca-certificates curl awscli
 else
-  echo "Install Docker, Docker Compose v2, git, rsync, and Node before running this script." >&2
+  echo "Install Docker, Docker Compose v2, git, rsync, Node, and AWS CLI before running this script." >&2
   exit 1
 fi
+
+command -v aws >/dev/null 2>&1 || { echo "AWS CLI is required to restore preview production dumps from S3." >&2; exit 1; }
 
 if ! docker compose version >/dev/null 2>&1; then
   sudo mkdir -p /usr/local/lib/docker/cli-plugins
@@ -28,6 +30,45 @@ sudo systemctl enable --now docker
 sudo mkdir -p "$ROOT/traefik/letsencrypt" "$ROOT/previews" "$ROOT/sources"
 sudo chown -R "$USER":"$USER" "$ROOT"
 docker network inspect preview-forge >/dev/null 2>&1 || docker network create preview-forge >/dev/null
+
+if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
+  sudo iptables -C DOCKER-USER -d 169.254.169.254/32 -j REJECT 2>/dev/null || \
+    sudo iptables -I DOCKER-USER -d 169.254.169.254/32 -j REJECT
+  sudo iptables -C DOCKER-USER -d 169.254.170.2/32 -j REJECT 2>/dev/null || \
+    sudo iptables -I DOCKER-USER -d 169.254.170.2/32 -j REJECT
+fi
+
+if command -v ip6tables >/dev/null 2>&1 && sudo ip6tables -S DOCKER-USER >/dev/null 2>&1; then
+  sudo ip6tables -C DOCKER-USER -d fd00:ec2::254/128 -j REJECT 2>/dev/null || \
+    sudo ip6tables -I DOCKER-USER -d fd00:ec2::254/128 -j REJECT
+fi
+
+sudo mkdir -p "$ROOT/postgres"
+sudo chown -R "$USER":"$USER" "$ROOT/postgres"
+cat > "$ROOT/postgres/docker-compose.yml" <<YAML
+services:
+  postgres:
+    image: postgres:16
+    container_name: preview-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PREVIEW_DB_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
+    volumes:
+      - preview-postgres-data:/var/lib/postgresql/data
+    networks:
+      - preview-forge
+
+volumes:
+  preview-postgres-data:
+
+networks:
+  preview-forge:
+    external: true
+YAML
+
+docker compose -f "$ROOT/postgres/docker-compose.yml" up -d
 
 cat > "$ROOT/traefik/docker-compose.yml" <<YAML
 services:
@@ -59,4 +100,4 @@ YAML
 
 docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
 
-echo "Preview Forge host ready at $ROOT"
+echo "Preview environment host ready at $ROOT"
