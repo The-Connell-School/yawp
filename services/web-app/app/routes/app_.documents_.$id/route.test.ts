@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
-const apHistorySnapshot = {
+const apHistorySnapshot: ApHistorySnapshot = {
   schemaVersion: 1,
   libraryEntryId: 'apush-dbq-period-3',
   course: 'apush',
@@ -89,7 +92,14 @@ mock.module('./hooks/use-document-submit', () => ({
   useDocumentSubmit: () => ({ isSubmitting: false }),
 }));
 
-const { loader } = await import('./route');
+const {
+  getRenderableApHistorySnapshot,
+  loader,
+  shouldShowGenericAssignmentPrompt,
+} = await import('./route');
+const { ApHistoryAssignmentPanel } = await import(
+  './ap-history-assignment-panel'
+);
 
 function makeDocument({ includeSnapshot }: { includeSnapshot: boolean }) {
   return {
@@ -204,5 +214,66 @@ describe('app_.documents_.$id loader', () => {
     expect(response.data.doc.assignment.apHistorySnapshot).toEqual(
       apHistorySnapshot
     );
+  });
+});
+
+describe('app_.documents_.$id AP History assignment rendering', () => {
+  test('uses the AP History snapshot instead of the generic assignment prompt when snapshot is valid', () => {
+    const assignment = {
+      title: 'Revolutionary Ideals DBQ',
+      prompt: 'Generic assignment prompt',
+      apHistorySnapshot,
+    };
+
+    const renderableSnapshot = getRenderableApHistorySnapshot(assignment);
+
+    expect(renderableSnapshot).toEqual(apHistorySnapshot);
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
+    ).toBe(false);
+  });
+
+  test('falls back to the generic assignment prompt when AP History snapshot is invalid', () => {
+    const assignment = {
+      title: 'Revolutionary Ideals DBQ',
+      prompt: 'Generic assignment prompt',
+      apHistorySnapshot: {
+        ...apHistorySnapshot,
+        schemaVersion: 999,
+      },
+    };
+
+    const renderableSnapshot = getRenderableApHistorySnapshot(assignment);
+
+    expect(renderableSnapshot).toBeNull();
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
+    ).toBe(true);
+  });
+
+  test('keeps ordinary non-AP assignments on the generic assignment prompt', () => {
+    const assignment = {
+      title: 'Literary Analysis',
+      prompt: 'Analyze the passage.',
+      apHistorySnapshot: null,
+    };
+
+    const renderableSnapshot = getRenderableApHistorySnapshot(assignment);
+
+    expect(renderableSnapshot).toBeNull();
+    expect(
+      shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
+    ).toBe(true);
+  });
+
+  test('renders AP History source content inside a bounded scroll area', () => {
+    const html = renderToStaticMarkup(
+      createElement(ApHistoryAssignmentPanel, { snapshot: apHistorySnapshot })
+    );
+
+    expect(html).toContain('Evaluate the extent');
+    expect(html).toContain('Source 1');
+    expect(html).toContain('max-h-');
+    expect(html).toContain('overflow-y-auto');
   });
 });

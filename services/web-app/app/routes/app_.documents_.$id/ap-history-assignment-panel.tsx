@@ -1,8 +1,8 @@
 import { Badge } from '~/components/ui/badge';
-import { parseApHistorySnapshot } from '~/domain/ap-history/schema';
+import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
 type Props = {
-  snapshot: unknown;
+  snapshot: ApHistorySnapshot;
 };
 
 function titleCase(value: string) {
@@ -13,8 +13,7 @@ function titleCase(value: string) {
     .join(' ');
 }
 
-export function ApHistoryAssignmentPanel({ snapshot: rawSnapshot }: Props) {
-  const snapshot = parseApHistorySnapshot(rawSnapshot);
+export function ApHistoryAssignmentPanel({ snapshot }: Props) {
   const sourceCount = snapshot.sources.length;
 
   return (
@@ -54,7 +53,7 @@ export function ApHistoryAssignmentPanel({ snapshot: rawSnapshot }: Props) {
             <summary className="cursor-pointer text-sm font-medium text-foreground marker:text-muted-foreground">
               {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
             </summary>
-            <div className="mt-2 grid gap-2">
+            <div className="mt-2 grid max-h-[min(20rem,35vh)] gap-2 overflow-y-auto pr-1">
               {snapshot.sources.map((source) => (
                 <section
                   key={`${source.position}-${source.externalKey}`}
