@@ -22,9 +22,11 @@ test.describe.serial('AP History library-first assignment flow', () => {
   }) => {
     const prisma = createE2EPrismaClient();
     const title = `E2E AP History DBQ ${Date.now()}`;
-    let firstSource:
-      | { externalKey: string; title: string; body: string }
-      | null = null;
+    let firstSource: {
+      externalKey: string;
+      title: string;
+      body: string;
+    } | null = null;
     const mutatedPrompt = `${dbqEntry.prompt} MUTATED LIVE LIBRARY ROW`;
     const mutatedSourceTitle = 'Mutated live library source';
     const mutatedSourceBody = 'This mutated source should not appear.';
@@ -179,10 +181,45 @@ test.describe.serial('AP History library-first assignment flow', () => {
         page.getByText(mutatedSourceBody, { exact: true })
       ).toHaveCount(0);
       await expect(
-        page.getByText(
-          `${dbqEntry.sourceCount} sources · click a thumbnail`,
-          { exact: true }
-        )
+        page.getByText(`${dbqEntry.sourceCount} sources · click a thumbnail`, {
+          exact: true,
+        })
+      ).toBeVisible();
+      await expect(page.getByTestId('ap-history-timing-pill')).toContainText(
+        'Untimed'
+      );
+      await expect(
+        page.getByRole('separator', { name: 'Resize tutor panel' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('separator', { name: 'Resize document sidebar' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('separator', { name: 'Resize sources vs editor' })
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Your essay' })
+      ).toHaveCount(0);
+      await expect(page.getByTestId('document-editor-surface')).toBeVisible();
+
+      const rightRail = page.getByRole('complementary', {
+        name: 'Document resources',
+      });
+      await expect(rightRail).toBeVisible();
+      await expect(
+        rightRail.getByRole('button', { name: 'Documents' })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(
+        rightRail.getByRole('heading', { name: firstSource!.title })
+      ).toBeVisible();
+      await rightRail.getByRole('button', { name: 'Comments' }).click();
+      await expect(
+        rightRail.getByRole('button', { name: 'Comments' })
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(rightRail.getByText('No comments yet.')).toBeVisible();
+      await rightRail.getByRole('button', { name: 'Documents' }).click();
+      await expect(
+        rightRail.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
     } finally {
       await prisma.apHistoryPromptLibraryEntry.updateMany({
@@ -203,7 +240,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
         },
         select: { id: true },
       });
-      const assignmentIds = createdAssignments.map((assignment) => assignment.id);
+      const assignmentIds = createdAssignments.map(
+        (assignment) => assignment.id
+      );
       if (assignmentIds.length > 0) {
         await prisma.document.deleteMany({
           where: { assignmentId: { in: assignmentIds } },

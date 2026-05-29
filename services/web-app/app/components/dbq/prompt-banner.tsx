@@ -13,9 +13,11 @@ function fmt(ms: number): string {
 export function PromptBanner({
   state,
   showSubmit = true,
+  showTimeControls = true,
 }: {
   state: DbqState;
   showSubmit?: boolean;
+  showTimeControls?: boolean;
 }) {
   const {
     prompt,
@@ -45,34 +47,36 @@ export function PromptBanner({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className="inline-flex rounded-full border bg-muted/40 p-0.5">
-          <button
-            type="button"
-            onClick={() => setTimeMode('untimed')}
-            className={cn(
-              'rounded-full px-2.5 py-0.5 text-[11px] transition',
-              timeMode === 'untimed'
-                ? 'bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Untimed
-          </button>
-          <button
-            type="button"
-            onClick={() => setTimeMode('timed')}
-            className={cn(
-              'rounded-full px-2.5 py-0.5 text-[11px] transition',
-              timeMode === 'timed'
-                ? 'bg-background shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            Timed · {durationMinutes}m
-          </button>
-        </div>
+        {showTimeControls ? (
+          <div className="inline-flex rounded-full border bg-muted/40 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTimeMode('untimed')}
+              className={cn(
+                'rounded-full px-2.5 py-0.5 text-[11px] transition',
+                timeMode === 'untimed'
+                  ? 'bg-background shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Untimed
+            </button>
+            <button
+              type="button"
+              onClick={() => setTimeMode('timed')}
+              className={cn(
+                'rounded-full px-2.5 py-0.5 text-[11px] transition',
+                timeMode === 'timed'
+                  ? 'bg-background shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Timed · {durationMinutes}m
+            </button>
+          </div>
+        ) : null}
 
-        {timeMode === 'timed' ? (
+        {showTimeControls && timeMode === 'timed' ? (
           <div className="flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5">
             <Clock
               size={13}

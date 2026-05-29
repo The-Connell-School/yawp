@@ -14,6 +14,7 @@ type Props = {
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   autoFocusReplyCommentId?: string | null;
+  showCollapseControl?: boolean;
 };
 
 type ExtendedProps = Props & { className?: string };
@@ -25,6 +26,7 @@ export const Comments = ({
   onCommentRemoved,
   onResponseAdded,
   autoFocusReplyCommentId,
+  showCollapseControl = true,
 }: ExtendedProps) => {
   const user = useUser();
   const fetcher = useFetchers().find(
@@ -74,6 +76,7 @@ export const Comments = ({
           documentId: '',
         }
       : [];
+  const isExpanded = showCollapseControl ? commentsExpanded : true;
 
   return (
     <div
@@ -82,25 +85,27 @@ export const Comments = ({
         className
       )}
     >
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setCommentsExpanded(!commentsExpanded)}
-        className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
-      >
-        {commentsExpanded ? (
-          <MessageCircleOff size={18} />
-        ) : (
-          <MessageCircle size={18} />
-        )}
-        <span className="ml-2">
-          {commentsExpanded ? 'Hide' : 'Show'} Comments
-        </span>
-      </Button>
+      {showCollapseControl ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCommentsExpanded(!commentsExpanded)}
+          className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
+        >
+          {commentsExpanded ? (
+            <MessageCircleOff size={18} />
+          ) : (
+            <MessageCircle size={18} />
+          )}
+          <span className="ml-2">
+            {commentsExpanded ? 'Hide' : 'Show'} Comments
+          </span>
+        </Button>
+      ) : null}
       <div
         className={cn(
           'no-scrollbar flex grow flex-col gap-2 transition-all duration-300',
-          commentsExpanded
+          isExpanded
             ? 'max-h-full p-2 overflow-scroll'
             : 'max-h-0 overflow-hidden'
         )}
