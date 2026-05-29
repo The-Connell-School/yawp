@@ -49,6 +49,11 @@ import {
   Send,
   User,
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Filter,
+  X,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
@@ -56,8 +61,10 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatGrade } from '~/domain/grading/gradeMath';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import {
@@ -624,6 +631,12 @@ type TabValue =
   | 'paste-activity'
   | 'students';
 
+type SortDirection = 'asc' | 'desc';
+type AssignmentSort = {
+  key: 'title' | 'dueDate';
+  direction: SortDirection;
+};
+
 export default function ClassDetailRoute() {
   const outlet = useOutlet();
   if (outlet) return outlet;
@@ -650,6 +663,15 @@ function ClassDetailPage() {
   >(new Set());
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
+  const [studentNameSortDirection, setStudentNameSortDirection] =
+    useState<SortDirection>('asc');
+  const [assignmentSort, setAssignmentSort] = useState<AssignmentSort>({
+    key: 'title',
+    direction: 'asc',
+  });
+  const [selectedAssignmentTypeIds, setSelectedAssignmentTypeIds] = useState<
+    Set<string>
+  >(new Set());
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     {
       id: string;
@@ -708,23 +730,33 @@ function ClassDetailPage() {
   }) =>
     Boolean(
       submission.gradedAt ||
-        submission.score ||
-        submission.feedback ||
-        submission.overallComment ||
-        submission.letterGrade ||
-        submission.numericPercentage !== null ||
-        (submission.rubricScores &&
-          typeof submission.rubricScores === 'object' &&
-          Object.keys(submission.rubricScores as Record<string, unknown>)
-            .length > 0)
+      submission.score ||
+      submission.feedback ||
+      submission.overallComment ||
+      submission.letterGrade ||
+      submission.numericPercentage !== null ||
+      (submission.rubricScores &&
+        typeof submission.rubricScores === 'object' &&
+        Object.keys(submission.rubricScores as Record<string, unknown>).length >
+          0)
     );
 
   const students = data.klass.students;
   const allSubmissions = useMemo(() => data.submissions, [data.submissions]);
+  const collator = useMemo(
+    () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
+    []
+  );
+
   // Reset pagination when tab changes
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
-  }, [activeTab]);
+  }, [
+    activeTab,
+    assignmentSort,
+    selectedAssignmentTypeIds,
+    studentNameSortDirection,
+  ]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
@@ -874,6 +906,70 @@ function ClassDetailPage() {
     ? (data.profiles.find((p) => p.id === selectedProfileId)?.documents ?? [])
     : [];
 
+  const sortedStudents = useMemo(() => {
+    const direction = studentNameSortDirection === 'asc' ? 1 : -1;
+    return [...students].sort((a, b) => {
+      const aName = a.profile.user.name || a.profile.user.email;
+      const bName = b.profile.user.name || b.profile.user.email;
+      const primary = collator.compare(aName, bName);
+      if (primary !== 0) return primary * direction;
+      return collator.compare(a.profile.user.email, b.profile.user.email);
+    });
+  }, [collator, studentNameSortDirection, students]);
+
+  const assignmentTypeOptions = useMemo(() => {
+    const typesById = new Map<string, { id: string; title: string }>();
+    for (const assignment of data.assignments) {
+      typesById.set(assignment.assignmentType.id, assignment.assignmentType);
+    }
+    return Array.from(typesById.values()).sort((a, b) =>
+      collator.compare(a.title, b.title)
+    );
+  }, [collator, data.assignments]);
+
+  const hasAssignmentTypeFilter = selectedAssignmentTypeIds.size > 0;
+
+  const sortedFilteredAssignments = useMemo(() => {
+    const visibleAssignments = hasAssignmentTypeFilter
+      ? data.assignments.filter((assignment) =>
+          selectedAssignmentTypeIds.has(assignment.assignmentType.id)
+        )
+      : data.assignments;
+
+    return [...visibleAssignments].sort((a, b) => {
+      const titleCompare = collator.compare(
+        a.title || 'Untitled Assignment',
+        b.title || 'Untitled Assignment'
+      );
+      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : null;
+      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : null;
+      const bothHaveDueDates = aDue !== null && bDue !== null;
+      const direction = assignmentSort.direction === 'asc' ? 1 : -1;
+
+      if (assignmentSort.key === 'title') {
+        if (titleCompare !== 0) return titleCompare * direction;
+        if (bothHaveDueDates && aDue !== bDue) return aDue - bDue;
+        if (aDue === null && bDue !== null) return 1;
+        if (aDue !== null && bDue === null) return -1;
+        return collator.compare(a.id, b.id);
+      }
+
+      if (bothHaveDueDates && aDue !== bDue) {
+        return (aDue - bDue) * direction;
+      }
+      if (aDue === null && bDue !== null) return 1;
+      if (aDue !== null && bDue === null) return -1;
+      if (titleCompare !== 0) return titleCompare;
+      return collator.compare(a.id, b.id);
+    });
+  }, [
+    assignmentSort,
+    collator,
+    data.assignments,
+    hasAssignmentTypeFilter,
+    selectedAssignmentTypeIds,
+  ]);
+
   // Get current tab data and paginate it
   const currentTabData = useMemo(() => {
     switch (activeTab) {
@@ -886,11 +982,11 @@ function ClassDetailPage() {
       case 'released':
         return filteredReleasedDocuments;
       case 'assignments':
-        return data.assignments;
+        return sortedFilteredAssignments;
       case 'paste-activity':
         return data.pasteAlerts;
       case 'students':
-        return students;
+        return sortedStudents;
       default:
         return [];
     }
@@ -900,9 +996,9 @@ function ClassDetailPage() {
     filteredUngradedDocuments,
     filteredGradedUnreleasedDocuments,
     filteredReleasedDocuments,
-    data.assignments,
     data.pasteAlerts,
-    students,
+    sortedFilteredAssignments,
+    sortedStudents,
   ]) as any[];
 
   const paginatedData = useMemo(() => {
@@ -928,6 +1024,39 @@ function ClassDetailPage() {
     navigate(`?${next.toString()}`);
   };
 
+  const toggleStudentNameSort = () => {
+    setStudentNameSortDirection((current) =>
+      current === 'asc' ? 'desc' : 'asc'
+    );
+  };
+
+  const toggleAssignmentSort = (key: AssignmentSort['key']) => {
+    setAssignmentSort((current) => ({
+      key,
+      direction:
+        current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  const toggleAssignmentTypeFilter = (assignmentTypeId: string) => {
+    setSelectedAssignmentTypeIds((current) => {
+      const allTypeIds = assignmentTypeOptions.map((type) => type.id);
+      const next = current.size === 0 ? new Set(allTypeIds) : new Set(current);
+
+      if (next.has(assignmentTypeId)) {
+        next.delete(assignmentTypeId);
+      } else {
+        next.add(assignmentTypeId);
+      }
+
+      return next.size === allTypeIds.length ? new Set() : next;
+    });
+  };
+
+  const clearAssignmentTypeFilter = () => {
+    setSelectedAssignmentTypeIds(new Set());
+  };
+
   const handlePaginationChange = (skip: number, take: number) => {
     setPagination({ skip, take });
   };
@@ -942,11 +1071,25 @@ function ClassDetailPage() {
             {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
             {activeTab === 'graded' && 'No grades ready to release.'}
             {activeTab === 'released' && 'No released documents yet.'}
-            {activeTab === 'assignments' && 'No assignments yet.'}
+            {activeTab === 'assignments' &&
+              (hasAssignmentTypeFilter
+                ? 'No assignments match this filter.'
+                : 'No assignments yet.')}
             {activeTab === 'paste-activity' &&
               'No copy/paste activity detected yet.'}
             {activeTab === 'students' && 'No students in this class yet.'}
           </p>
+          {activeTab === 'assignments' && hasAssignmentTypeFilter ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={clearAssignmentTypeFilter}
+            >
+              Clear filter
+            </Button>
+          ) : null}
         </div>
       );
     }
@@ -1215,13 +1358,115 @@ function ClassDetailPage() {
 
     if (activeTab === 'assignments') {
       return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
+        <div className="space-y-3 rounded-lg bg-muted/50 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  disabled={assignmentTypeOptions.length === 0}
+                  aria-label="Filter assignment types"
+                >
+                  <Filter className="h-4 w-4" />
+                  Type
+                  {hasAssignmentTypeFilter ? (
+                    <span className="rounded border px-1.5 text-xs">
+                      {selectedAssignmentTypeIds.size}
+                    </span>
+                  ) : null}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Assignment Type</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {assignmentTypeOptions.map((type) => (
+                  <DropdownMenuCheckboxItem
+                    key={type.id}
+                    checked={
+                      !hasAssignmentTypeFilter ||
+                      selectedAssignmentTypeIds.has(type.id)
+                    }
+                    onCheckedChange={() => toggleAssignmentTypeFilter(type.id)}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {type.title}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {hasAssignmentTypeFilter ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2"
+                aria-label="Clear assignment type filter"
+                onClick={clearAssignmentTypeFilter}
+              >
+                <X className="h-4 w-4" />
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          <Table aria-label="Assignments">
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
+                <TableHead>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 gap-2 px-2"
+                    aria-label={`Sort assignments by title ${
+                      assignmentSort.key === 'title' &&
+                      assignmentSort.direction === 'asc'
+                        ? 'descending'
+                        : 'ascending'
+                    }`}
+                    onClick={() => toggleAssignmentSort('title')}
+                  >
+                    Title
+                    {assignmentSort.key === 'title' ? (
+                      assignmentSort.direction === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 opacity-50" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>Assignment Type</TableHead>
-                <TableHead>Due Date</TableHead>
+                <TableHead>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 gap-2 px-2"
+                    aria-label={`Sort assignments by due date ${
+                      assignmentSort.key === 'dueDate' &&
+                      assignmentSort.direction === 'asc'
+                        ? 'descending'
+                        : 'ascending'
+                    }`}
+                    onClick={() => toggleAssignmentSort('dueDate')}
+                  >
+                    Due Date
+                    {assignmentSort.key === 'dueDate' ? (
+                      assignmentSort.direction === 'asc' ? (
+                        <ArrowUp className="h-4 w-4" />
+                      ) : (
+                        <ArrowDown className="h-4 w-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="h-4 w-4 opacity-50" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>In Progress</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead>Graded</TableHead>
@@ -1450,10 +1695,30 @@ function ClassDetailPage() {
     if (activeTab === 'students') {
       return (
         <div className="rounded-lg bg-muted/50">
-          <Table>
+          <Table aria-label="Students">
             <TableHeader>
               <TableRow>
-                <TableHead>Student Name</TableHead>
+                <TableHead>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-2 h-8 gap-2 px-2"
+                    aria-label={`Sort students by name ${
+                      studentNameSortDirection === 'asc'
+                        ? 'descending'
+                        : 'ascending'
+                    }`}
+                    onClick={toggleStudentNameSort}
+                  >
+                    Student Name
+                    {studentNameSortDirection === 'asc' ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Documents</TableHead>
                 <TableHead>Action</TableHead>
