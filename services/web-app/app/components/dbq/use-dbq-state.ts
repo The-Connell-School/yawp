@@ -26,7 +26,7 @@ export type DbqState = {
   annotations: SourceAnnotation[];
   addAnnotation: (sourceId: string, text: string) => void;
   removeAnnotation: (id: string) => void;
-  // Timer (single 60-minute combined clock for DBQ).
+  // Timer.
   durationMinutes: number;
   msRemaining: number;
   timerRunning: boolean;
@@ -49,8 +49,10 @@ function makeId(prefix: string): string {
 export function useDbqState(
   prompt: DbqPrompt,
   initialTimeMode?: TimeMode,
-  durationMinutes = 60
+  durationMinutes = 60,
+  options: { submitOnTimerEnd?: boolean } = {}
 ): DbqState {
+  const submitOnTimerEnd = options.submitOnTimerEnd ?? true;
   const totalMs = durationMinutes * 60 * 1000;
   const [view, setView] = useState<View>('drafting');
   const [timeMode, setTimeMode] = useState<TimeMode>(initialTimeMode ?? 'untimed');
@@ -84,13 +86,15 @@ export function useDbqState(
     return () => window.clearInterval(interval);
   }, [timerRunning, timeMode]);
 
-  // Auto-submit when the clock expires.
+  // Auto-submit only in the standalone prototype textarea flow.
   useEffect(() => {
     if (timeMode === 'timed' && msRemaining === 0 && view === 'drafting') {
-      setView('submitted');
       setTimerRunning(false);
+      if (submitOnTimerEnd) {
+        setView('submitted');
+      }
     }
-  }, [timeMode, msRemaining, view]);
+  }, [timeMode, msRemaining, submitOnTimerEnd, view]);
 
   // Detector → tutor message bridge: whenever a new flag appears, post a tutor card.
   useEffect(() => {

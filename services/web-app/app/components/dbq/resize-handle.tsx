@@ -42,12 +42,29 @@ export function ResizeHandle({
     [orientation, onDrag]
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const step = e.shiftKey ? 40 : 10;
+      const keyDelta: Record<string, number> =
+        orientation === 'vertical'
+          ? { ArrowLeft: -step, ArrowRight: step }
+          : { ArrowUp: -step, ArrowDown: step };
+      const delta = keyDelta[e.key];
+      if (!delta) return;
+      e.preventDefault();
+      onDrag(delta);
+    },
+    [orientation, onDrag]
+  );
+
   return (
     <div
       role="separator"
       aria-orientation={orientation}
       aria-label={ariaLabel}
+      tabIndex={0}
       onMouseDown={handleMouseDown}
+      onKeyDown={handleKeyDown}
       onDoubleClick={() => onDrag(0)}
       className={cn(
         'group relative shrink-0 select-none bg-border transition-colors',

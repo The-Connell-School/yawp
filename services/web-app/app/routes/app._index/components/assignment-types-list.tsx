@@ -4,6 +4,22 @@ import { Button } from '~/components/ui/button';
 import type { AssignmentTypeRow, TeacherClassOption } from '../route';
 import { DashboardCreateAssignmentSheet } from './dashboard-create-assignment-sheet';
 
+const DASHBOARD_GENERIC_ASSIGNMENT_EXCLUDED_SYSTEM_KEYS = new Set([
+  'ap_history_essay',
+]);
+
+export function getDashboardCreatableAssignmentTypes(
+  assignmentTypes: AssignmentTypeRow[]
+) {
+  return assignmentTypes.filter(
+    (assignmentType) =>
+      !assignmentType.systemKey ||
+      !DASHBOARD_GENERIC_ASSIGNMENT_EXCLUDED_SYSTEM_KEYS.has(
+        assignmentType.systemKey
+      )
+  );
+}
+
 export function AssignmentTypesList({
   assignmentTypes,
   teacherClasses,
@@ -12,7 +28,10 @@ export function AssignmentTypesList({
   teacherClasses: TeacherClassOption[];
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const canCreate = assignmentTypes.length > 0 && teacherClasses.length > 0;
+  const creatableAssignmentTypes =
+    getDashboardCreatableAssignmentTypes(assignmentTypes);
+  const canCreate =
+    creatableAssignmentTypes.length > 0 && teacherClasses.length > 0;
 
   return (
     <div>
@@ -59,7 +78,7 @@ export function AssignmentTypesList({
       <DashboardCreateAssignmentSheet
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-        assignmentTypes={assignmentTypes}
+        assignmentTypes={creatableAssignmentTypes}
         teacherClasses={teacherClasses}
       />
     </div>

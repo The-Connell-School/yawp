@@ -24,16 +24,26 @@ type Props = {
   prompt?: DbqPrompt;
   initialTimeMode?: TimeMode;
   durationMinutes?: number;
+  tutor?: React.ReactNode;
   editor?: React.ReactNode;
+  comments?: React.ReactNode;
 };
 
 export function DbqAssignmentScreen({
   prompt,
   initialTimeMode,
   durationMinutes,
+  tutor,
   editor,
+  comments,
 }: Props = {}) {
-  const state = useDbqState(prompt ?? sampleDbq, initialTimeMode, durationMinutes);
+  const isProductionDocument = Boolean(editor);
+  const state = useDbqState(
+    prompt ?? sampleDbq,
+    initialTimeMode,
+    durationMinutes,
+    { submitOnTimerEnd: !isProductionDocument }
+  );
 
   const [tutorCollapsed, setTutorCollapsed] = useState(false);
   const [tutorWidth, setTutorWidth] = useState(320);
@@ -59,22 +69,25 @@ export function DbqAssignmentScreen({
           <>
             <div
               style={{ width: `${tutorWidth}px` }}
-              className="min-h-0 shrink-0 border-r"
+              className="hidden min-h-0 shrink-0 border-r lg:block"
             >
-              <TutorChatStripe
-                state={state}
-                onCollapse={() => setTutorCollapsed(true)}
-              />
+              {tutor ?? (
+                <TutorChatStripe
+                  state={state}
+                  onCollapse={() => setTutorCollapsed(true)}
+                />
+              )}
             </div>
             <ResizeHandle
               onDrag={handleTutorDrag}
               ariaLabel="Resize tutor panel"
+              className="hidden lg:block"
             />
           </>
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <PromptBanner state={state} />
+          <PromptBanner state={state} showSubmit={!editor} />
 
           {state.view === 'drafting' ? (
             <DraftingPane
@@ -84,18 +97,19 @@ export function DbqAssignmentScreen({
               onSplitDrag={handleSplitDrag}
               splitContainerRef={splitContainerRef}
               editor={editor}
+              allowLocalDraftTools={!isProductionDocument}
             />
           ) : (
             <SubmittedView state={state} />
           )}
         </div>
+
+        {comments ? (
+          <aside className="hidden min-h-0 w-80 shrink-0 border-l bg-background xl:block">
+            {comments}
+          </aside>
+        ) : null}
       </div>
-      <footer className="shrink-0 border-t bg-muted/20 px-3 py-1 text-[10px] text-muted-foreground">
-        Prototype — student drafting surface for the AP History essay
-        AssignmentType. Stacked on PR #115. No persistence, no backend. Drag
-        the dividers to resize; click the maximize icons in the column headers
-        to snap.
-      </footer>
     </div>
   );
 }
@@ -107,11 +121,13 @@ function DraftingPane({
   onSplitDrag,
   splitContainerRef,
   editor,
+  allowLocalDraftTools,
 }: {
   state: DbqState;
   splitPct: number;
   setSplitPct: (n: number) => void;
   editor?: React.ReactNode;
+  allowLocalDraftTools: boolean;
   onSplitDrag: (dx: number) => void;
   splitContainerRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -138,6 +154,7 @@ function DraftingPane({
           state={state}
           isMaximized={isReadMaxed}
           onToggleMaximize={toggleReadMax}
+          allowSourceTools={allowLocalDraftTools}
         />
       </div>
 
@@ -152,6 +169,7 @@ function DraftingPane({
           isMaximized={isWriteMaxed}
           onToggleMaximize={toggleWriteMax}
           editor={editor}
+          allowDraftTools={allowLocalDraftTools}
         />
       </div>
     </div>

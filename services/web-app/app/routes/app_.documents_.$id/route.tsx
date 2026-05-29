@@ -896,25 +896,54 @@ export default function Route() {
           </div>
         ) : null}
         {showDbqWorkspace ? (
-          <DbqLayout
-            snapshot={apHistorySnapshot}
-            editor={
-              <DocumentEditor
-                docId={data.doc.id}
-                serverHtml={editorServerHtml}
-                serverText={editorServerText}
-                serverUpdatedAt={data.doc.updatedAt}
-                initialRevision={data.doc.revision}
-                isEditable={isEditorEditable}
-                onBridgeReady={(b) => {
-                  editorBridgeRef.current = b;
-                }}
-                onSyncStatusChange={setSyncStatus}
-                onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) => commentsState.addComment(c as any)}
-              />
-            }
-          />
+          <CommentsSelectionProvider>
+            <DbqLayout
+              snapshot={apHistorySnapshot}
+              tutor={
+                <Tutor
+                  className="h-full border-r-0 md:w-full"
+                  docId={data.doc.id}
+                  cms={(tutor.cms ?? data.currentCms) as any}
+                  nextCmId={data.nextCmId}
+                  hasPreviousCms={tutorHasPreviousCms}
+                  isSessionLocked={auth.isLocked}
+                  beforeRespond={handleTutorBeforeRespond}
+                  onCmsUpdate={tutor.updateCms}
+                  getCurrentDocumentText={() =>
+                    editorBridgeRef.current?.getContent().text ??
+                    data.doc.text ??
+                    ''
+                  }
+                />
+              }
+              editor={
+                <DocumentEditor
+                  docId={data.doc.id}
+                  serverHtml={editorServerHtml}
+                  serverText={editorServerText}
+                  serverUpdatedAt={data.doc.updatedAt}
+                  initialRevision={data.doc.revision}
+                  isEditable={isEditorEditable}
+                  onBridgeReady={(b) => {
+                    editorBridgeRef.current = b;
+                  }}
+                  onSyncStatusChange={setSyncStatus}
+                  onSubmittableContentChange={handleSubmittableContentChange}
+                  onCommentCreated={(c) => commentsState.addComment(c as any)}
+                />
+              }
+              comments={
+                <Comments
+                  className="md:w-full"
+                  comments={visibleComments as any}
+                  readOnly={!isDocumentEditable}
+                  onCommentRemoved={commentsState.removeComment}
+                  onResponseAdded={commentsState.addResponse}
+                  autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                />
+              }
+            />
+          </CommentsSelectionProvider>
         ) : (
           <>
             <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
