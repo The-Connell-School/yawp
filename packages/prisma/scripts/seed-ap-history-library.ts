@@ -73,7 +73,6 @@ async function seedApHistoryLibrary() {
     update: {
       ...ASSIGNMENT_TYPE_DATA,
       archivedAt: null,
-      ownerOrgId: org.id,
     },
     create: {
       ...ASSIGNMENT_TYPE_DATA,

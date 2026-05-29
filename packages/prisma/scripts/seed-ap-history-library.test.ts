@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
+import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
   test('exports the two MVP entries', () => {
@@ -48,5 +49,20 @@ describe('AP History library seed data', () => {
         expect(position).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+describe('AP History assignment type seed behavior', () => {
+  test('assignment type update path preserves existing ownerOrgId', () => {
+    const seedScript = readFileSync(
+      new URL('./seed-ap-history-library.ts', import.meta.url),
+      'utf8'
+    );
+    const updatePayload = seedScript.match(
+      /update:\s*\{[\s\S]*?\.\.\.ASSIGNMENT_TYPE_DATA,[\s\S]*?\},/
+    )?.[0];
+
+    expect(updatePayload).toBeDefined();
+    expect(updatePayload).not.toContain('ownerOrgId');
   });
 });
