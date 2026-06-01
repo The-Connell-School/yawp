@@ -82,6 +82,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         ENV: getEnv(),
         bannerWarning: null,
+        impersonation: { isReadOnly: false, impersonatorUserId: null },
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
@@ -89,8 +90,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const cookieHeader = request.headers.get('Cookie');
-  const { getSessionExpirationDate, getUserId, logout, sessionKey } =
-    await import('./utils/auth.server.ts');
+  const {
+    getImpersonationState,
+    getSessionExpirationDate,
+    getUserId,
+    logout,
+    sessionKey,
+  } = await import('./utils/auth.server.ts');
   const userId = await time(() => getUserId(request), {
     timings,
     type: 'getUserId',
@@ -142,6 +148,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profileId = await getProfileId(request);
   const profile =
     user?.profiles.find((p) => p.id === profileId) ?? user?.profiles[0];
+  const impersonation = await getImpersonationState(request);
 
   return data(
     {
@@ -160,6 +167,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         : request.url.includes('localhost')
           ? 'localhost'
           : null,
+      impersonation,
       toast,
     },
     {

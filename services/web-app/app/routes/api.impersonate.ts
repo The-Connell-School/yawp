@@ -1,12 +1,20 @@
+import { redirect, type ActionFunctionArgs } from 'react-router';
 import {
-  data as dataResponse,
-  redirect,
-  type ActionFunctionArgs,
-} from 'react-router';
-import { getSessionExpirationDate, sessionKey } from '~/utils/auth.server.js';
+  getSessionExpirationDate,
+  getUserId,
+  impersonationModeKey,
+  impersonatorUserIdKey,
+  readOnlyImpersonationMode,
+  requireMutableRequest,
+  sessionKey,
+} from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server.js';
 import { setProfileId } from '~/cookies/profile-id.server';
+
+function errorResponse(error: string, status: number) {
+  return Response.json({ error }, { status });
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -14,11 +22,27 @@ export async function action({ request }: ActionFunctionArgs) {
   const secretToken = formData.get('secretToken');
 
   if (typeof userIdOrEmail !== 'string' || typeof secretToken !== 'string') {
-    return dataResponse({ error: 'Invalid input' }, { status: 400 });
+    return errorResponse('Invalid input', 400);
   }
 
   if (secretToken !== process.env.INTERNAL_COMMAND_TOKEN) {
-    return dataResponse({ error: 'Invalid secret token' }, { status: 401 });
+    return errorResponse('Invalid secret token', 401);
+  }
+
+  await requireMutableRequest(request);
+
+  const actorUserId = await getUserId(request);
+  if (!actorUserId) {
+    return errorResponse('Authentication required', 401);
+  }
+
+  const superAdmin = await prisma.user.findFirst({
+    where: { id: actorUserId, isSuperAdmin: true },
+    select: { id: true },
+  });
+
+  if (!superAdmin) {
+    return errorResponse('Super admin required', 403);
   }
 
   try {
@@ -29,7 +53,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     if (!user) {
-      return dataResponse({ error: 'User not found' }, { status: 404 });
+      return errorResponse('User not found', 404);
     }
 
     const session = await prisma.session.create({
@@ -49,6 +73,8 @@ export async function action({ request }: ActionFunctionArgs) {
       request.headers.get('cookie')
     );
     authSession.set(sessionKey, session.id);
+    authSession.set(impersonationModeKey, readOnlyImpersonationMode);
+    authSession.set(impersonatorUserIdKey, actorUserId);
 
     return redirect('/app', {
       headers: {
@@ -61,6 +87,6 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
   } catch (error) {
-    return dataResponse({ error: 'Authentication failed' }, { status: 401 });
+    return errorResponse('Authentication failed', 401);
   }
 }

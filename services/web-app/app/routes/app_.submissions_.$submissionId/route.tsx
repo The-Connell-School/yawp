@@ -128,6 +128,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
+                  school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
                 },
               },
@@ -146,6 +147,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
                 select: {
                   id: true,
                   schoolId: true,
+                  school: { select: { organizationId: true } },
                   teachers: { select: { id: true } },
                 },
               },
@@ -175,8 +177,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isOwner = submission.document.profile.id === profile.id;
 
   // Teacher detection: profile has a teacherProfile linked to student's class
-  const isTeacher = !isOwner
-    ? !!(await prisma.teacherProfile.findFirst({
+  const teacherProfile = !isOwner
+    ? await prisma.teacherProfile.findFirst({
         where: {
           profileId: profile.id,
           classes: {
@@ -190,15 +192,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
         select: { id: true },
-      }))
-    : false;
+      })
+    : null;
+  const isTeacher = Boolean(teacherProfile);
 
   const isAdmin = user?.isAdmin ?? false;
   const isDocumentSubmissionEnabled =
     !isOwner && (isTeacher || isAdmin)
-      ? await isDocumentSubmissionEnabledForScope(
-          getDocumentSubmissionScope(submission.document)
-        )
+      ? await isDocumentSubmissionEnabledForScope({
+          ...getDocumentSubmissionScope(submission.document),
+          actorTeacherProfileId: teacherProfile?.id ?? null,
+        })
       : true;
 
   if (isOwner && editParam) {

@@ -411,15 +411,16 @@ model TeacherProfile {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @default(now()) @db.Timestamptz(6)
-  email     String    @unique
-  name      String?
-  password  Password?
-  sessions  Session[]
-  profiles  Profile[]
-  isAdmin   Boolean   @default(false)
+  id           String    @id @default(cuid())
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  email        String    @unique
+  name         String?
+  password     Password?
+  sessions     Session[]
+  profiles     Profile[]
+  isAdmin      Boolean   @default(false)
+  isSuperAdmin Boolean   @default(false)
 }
 
 model Invitation {
