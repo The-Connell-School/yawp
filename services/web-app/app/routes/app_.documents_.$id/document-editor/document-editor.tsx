@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -9,9 +9,7 @@ import type { SyncStatus } from '~/utils/sync-service';
 import { Editor } from './editor';
 import type { EditorBridge } from './use-editor-sync';
 
-const PROMPT_MIN_HEIGHT = 72;
-const PROMPT_DEFAULT_HEIGHT = 128;
-const PROMPT_MAX_HEIGHT = 220;
+const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
 
 type AssignmentPrompt = {
   title: string | null;
@@ -115,51 +113,6 @@ function AssignmentPromptBanner({
     `assignmentPromptCollapsed-${docId}`,
     false
   );
-  const [storedPromptHeight, setStoredPromptHeight] = useLocalStorage(
-    `assignmentPromptHeight-${docId}`,
-    PROMPT_DEFAULT_HEIGHT
-  );
-  const promptHeight = Math.min(
-    PROMPT_MAX_HEIGHT,
-    Math.max(PROMPT_MIN_HEIGHT, storedPromptHeight)
-  );
-  const dragStartRef = useRef<{ y: number; height: number } | null>(null);
-
-  const resizePrompt = useCallback((event: PointerEvent) => {
-    const start = dragStartRef.current;
-    if (!start) return;
-
-    const nextHeight = Math.min(
-      PROMPT_MAX_HEIGHT,
-      Math.max(PROMPT_MIN_HEIGHT, start.height + event.clientY - start.y)
-    );
-    setStoredPromptHeight(nextHeight);
-  }, [setStoredPromptHeight]);
-
-  const stopResize = useCallback(() => {
-    dragStartRef.current = null;
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    window.removeEventListener('pointermove', resizePrompt);
-    window.removeEventListener('pointerup', stopResize);
-  }, [resizePrompt]);
-
-  useEffect(() => stopResize, [stopResize]);
-
-  const startResize = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      dragStartRef.current = {
-        y: event.clientY,
-        height: promptHeight,
-      };
-      document.body.style.cursor = 'ns-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('pointermove', resizePrompt);
-      window.addEventListener('pointerup', stopResize);
-    },
-    [promptHeight, resizePrompt, stopResize]
-  );
 
   if (!assignment?.prompt?.trim()) return null;
 
@@ -204,22 +157,12 @@ function AssignmentPromptBanner({
         {!isCollapsed ? (
           <div
             className="mt-2 overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
-            style={{ height: promptHeight }}
+            style={{ maxHeight: PROMPT_EXPANDED_MAX_HEIGHT }}
           >
             {assignment.prompt}
           </div>
         ) : null}
       </div>
-      {!isCollapsed ? (
-        <button
-          type="button"
-          aria-label="Resize assignment prompt"
-          className="flex h-3 w-full cursor-ns-resize items-center justify-center border-t border-amber-200 text-yellow-800/70 hover:bg-amber-100"
-          onPointerDown={startResize}
-        >
-          <GripHorizontal className="h-3 w-3" />
-        </button>
-      ) : null}
     </div>
   );
 }

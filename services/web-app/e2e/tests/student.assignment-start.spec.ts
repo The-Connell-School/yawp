@@ -9,6 +9,7 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
     e2eContext,
     helpers,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
     const prisma = createE2EPrismaClient();
     try {
       await setAssignmentsForOrganization({
@@ -18,12 +19,20 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
       });
 
       const uniquePromptMarker = `E2E assignment prompt ${Date.now()}`;
+      const longPrompt = [
+        `${uniquePromptMarker}: Write a 500-word rhetorical analysis of a speech of your choosing.`,
+        ...Array.from(
+          { length: 80 },
+          (_, index) =>
+            `Requirement ${index + 1}: Anchor the analysis in specific evidence from the speech.`
+        ),
+      ].join('\n');
       const assignment = await prisma.assignment.create({
         data: {
           classId: e2eContext.classId,
           assignmentTypeId: e2eContext.assignmentTypeId,
           title: 'E2E Rhetorical Analysis',
-          prompt: `${uniquePromptMarker}: Write a 500-word rhetorical analysis of a speech of your choosing.`,
+          prompt: longPrompt,
         },
         select: { id: true },
       });
@@ -50,6 +59,23 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         await expect(promptPanel).toBeVisible();
         await expect(promptPanel).toContainText(uniquePromptMarker);
         await expect(promptPanel).toContainText('E2E Rhetorical Analysis');
+        const promptBody = promptPanel
+          .locator('div')
+          .filter({ hasText: uniquePromptMarker })
+          .last();
+        const promptBodyBox = await promptBody.boundingBox();
+        expect(promptBodyBox).not.toBeNull();
+        if (!promptBodyBox) throw new Error('Missing assignment prompt body');
+        const expandedPromptMaxHeight = (900 - 56) / 2;
+        expect(promptBodyBox.height).toBeGreaterThan(
+          expandedPromptMaxHeight - 24
+        );
+        expect(promptBodyBox.height).toBeLessThanOrEqual(
+          expandedPromptMaxHeight + 2
+        );
+        await expect(
+          page.getByRole('button', { name: /resize assignment prompt/i })
+        ).toHaveCount(0);
 
         const promptBox = await promptPanel.boundingBox();
         const editorBox = await page
