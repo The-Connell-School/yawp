@@ -21,6 +21,14 @@ describe('isLocalDatabaseUrl', () => {
     ).toBe(true);
   });
 
+  test('treats shared preview Postgres hostname as local non-TLS Postgres', () => {
+    expect(
+      isLocalDatabaseUrl(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_143',
+      ),
+    ).toBe(true);
+  });
+
   test('does not treat RDS URLs as local', () => {
     expect(
       isLocalDatabaseUrl(
