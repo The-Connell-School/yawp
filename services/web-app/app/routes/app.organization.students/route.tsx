@@ -74,6 +74,8 @@ const BulkStudentsSchema = z.object({
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
+const looksLikeEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+
 const parseStudentRows = (raw: string) => {
   const lines = raw
     .split(/\r?\n/)
@@ -89,14 +91,26 @@ const parseStudentRows = (raw: string) => {
   const invalidLines: number[] = [];
 
   lines.forEach((line, index) => {
-    const parts = line.split(',');
+    const parts = line.split(',').map((part) => part.trim());
+
+    if (parts.length === 1) {
+      const email = parts[0] ?? '';
+      if (!looksLikeEmail(email)) {
+        invalidLines.push(index + 1);
+        return;
+      }
+
+      entries.push({ name: '', email, password: '', line: index + 1 });
+      return;
+    }
+
     if (parts.length < 3) {
       invalidLines.push(index + 1);
       return;
     }
 
-    const name = parts[0]?.trim() ?? '';
-    const email = parts[1]?.trim() ?? '';
+    const name = parts[0] ?? '';
+    const email = parts[1] ?? '';
     const password = parts.slice(2).join(',').trim();
 
     if (!name || !email || !password) {
@@ -116,7 +130,7 @@ const createOrEnrollStudent = async (
 ) => {
   const email = normalizeEmail(input.email);
   const name = input.name.trim();
-  const password = input.password;
+  const password = input.password.trim();
   const classId = input.classId;
 
   const existingUser = await prisma.user.findUnique({
@@ -170,6 +184,14 @@ const createOrEnrollStudent = async (
     });
 
     return { success: true, email };
+  }
+
+  if (!name || !password) {
+    return {
+      success: false,
+      email,
+      error: 'Name and password are required to create a new student account.',
+    };
   }
 
   const hashedPassword = await getPasswordHash(password);

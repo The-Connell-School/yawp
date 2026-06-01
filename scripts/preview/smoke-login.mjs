@@ -2,9 +2,6 @@ import http from 'node:http';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 
-const DEFAULT_EMAIL = 'teacher.e2e@yawp.test';
-const DEFAULT_PASSWORD = 'teacher-e2e-password';
-
 function request(url, { method = 'GET', body, headers = {} } = {}) {
   const target = new URL(url);
   const client = target.protocol === 'https:' ? https : http;
@@ -77,10 +74,11 @@ async function getWithRedirects(url, { cookie, maxRedirects = 3 } = {}) {
 
 export async function runLoginSmoke({
   baseUrl,
-  email = DEFAULT_EMAIL,
-  password = DEFAULT_PASSWORD,
+  email,
+  password,
 } = {}) {
   if (!baseUrl) throw new Error('baseUrl is required');
+  if (!email || !password) throw new Error('email and password are required');
 
   const form = new URLSearchParams({
     email,
@@ -118,8 +116,8 @@ export async function runLoginSmoke({
 
 async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
-  const email = process.env.PREVIEW_LOGIN_EMAIL || DEFAULT_EMAIL;
-  const password = process.env.PREVIEW_LOGIN_PASSWORD || DEFAULT_PASSWORD;
+  const email = process.env.PREVIEW_LOGIN_EMAIL;
+  const password = process.env.PREVIEW_LOGIN_PASSWORD;
 
   try {
     await runLoginSmoke({ baseUrl, email, password });

@@ -111,7 +111,7 @@ export async function action({ request }: ActionFunctionArgs) {
     },
     select: {
       id: true,
-      school: { select: { organizationId: true } },
+      school: { select: { id: true, organizationId: true } },
     },
   });
 
@@ -126,6 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
     classes.map((klass) =>
       isAssignmentsEnabledForContext({
         organizationId: klass.school.organizationId,
+        schoolId: klass.school.id,
         teacherProfileId: profile.teacherProfile!.id,
         classIds: [klass.id],
       })

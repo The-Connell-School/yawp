@@ -58,7 +58,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       grade: true,
       period: true,
-      school: { select: { id: true, name: true } },
+      school: { select: { id: true, name: true, organizationId: true } },
     },
   });
   if (!klass) throw new Response('Not Found', { status: 404 });
@@ -83,6 +83,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
     {
       schoolIds: [klass.school?.id],
+      organizationIds: [klass.school?.organizationId],
       teacherProfileIds: [profile.teacherProfile.id],
       classIds: [klass.id],
     }

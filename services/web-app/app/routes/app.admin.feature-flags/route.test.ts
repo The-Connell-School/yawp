@@ -211,7 +211,7 @@ describe('admin feature flags route', () => {
     ]);
   });
 
-  test('loader returns teacher and class pilot target rows for pilot features', async () => {
+  test('loader returns teacher school and organization access rows for pilot features', async () => {
     prisma.featureAccessTarget.findMany.mockResolvedValue([
       {
         id: 'fat-assignments-teacher',
@@ -223,19 +223,19 @@ describe('admin feature flags route', () => {
         note: 'spring pilot',
       },
       {
-        id: 'fat-doc-class',
+        id: 'fat-doc-school',
         featureKey: 'document_submission_grading',
-        targetKind: 'class',
-        targetId: 'class-1',
+        targetKind: 'school',
+        targetId: 'school-1',
         enabled: false,
         expiresAt: new Date('2026-06-01T00:00:00.000Z'),
         note: null,
       },
       {
-        id: 'fat-expired-assignments-class',
+        id: 'fat-expired-assignments-org',
         featureKey: 'assignments',
-        targetKind: 'class',
-        targetId: 'class-1',
+        targetKind: 'organization',
+        targetId: 'org-2',
         enabled: true,
         expiresAt: new Date('2020-01-01T00:00:00.000Z'),
         note: 'expired pilot',
@@ -264,11 +264,11 @@ describe('admin feature flags route', () => {
     expect(data.pilotTargetRows).toContainEqual({
       featureKey: 'assignments',
       featureLabel: 'Assignments',
-      targetKind: 'class',
-      targetId: 'class-1',
-      targetLabel: 'English 9',
-      targetDetail: 'ENG-1 - Grade 9 - Period 1 - Alpha School - Alpha Org',
-      featureAccessTargetId: 'fat-expired-assignments-class',
+      targetKind: 'organization',
+      targetId: 'org-2',
+      targetLabel: 'Beta Org',
+      targetDetail: 'Organization',
+      featureAccessTargetId: 'fat-expired-assignments-org',
       enabled: false,
       expiresAt: '2020-01-01T00:00:00.000Z',
       note: 'expired pilot',
@@ -276,16 +276,32 @@ describe('admin feature flags route', () => {
     expect(data.pilotTargetRows).toContainEqual({
       featureKey: 'document_submission_grading',
       featureLabel: 'Document submission grading',
-      targetKind: 'class',
-      targetId: 'class-1',
-      targetLabel: 'English 9',
-      targetDetail: 'ENG-1 - Grade 9 - Period 1 - Alpha School - Alpha Org',
-      featureAccessTargetId: 'fat-doc-class',
+      targetKind: 'school',
+      targetId: 'school-1',
+      targetLabel: 'Alpha School',
+      targetDetail: 'ALPHA - Alpha Org',
+      featureAccessTargetId: 'fat-doc-school',
       enabled: false,
       expiresAt: '2026-06-01T00:00:00.000Z',
       note: null,
     });
-    expect(data.pilotTargetRows).toHaveLength(4);
+    expect(data.pilotTargetRows).toHaveLength(8);
+    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith({
+      where: {
+        featureKey: { in: ['assignments', 'document_submission_grading'] },
+        targetKind: { in: ['teacher', 'school', 'organization'] },
+      },
+      select: {
+        id: true,
+        featureKey: true,
+        targetKind: true,
+        targetId: true,
+        enabled: true,
+        expiresAt: true,
+        note: true,
+      },
+      orderBy: [{ featureKey: 'asc' }, { targetKind: 'asc' }],
+    });
   });
 
   test('action toggles an organization target through the flag helper', async () => {
@@ -340,7 +356,7 @@ describe('admin feature flags route', () => {
     );
   });
 
-  test('action upserts a teacher or class pilot target', async () => {
+  test('action upserts a teacher pilot target', async () => {
     prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
     const body = new URLSearchParams({
       intent: 'toggle-pilot-target',
@@ -380,7 +396,113 @@ describe('admin feature flags route', () => {
     });
   });
 
-  test('action clears expiry when re-enabling a teacher or class pilot target', async () => {
+  test('action upserts a school pilot target', async () => {
+    prisma.school.findUnique.mockResolvedValue({ id: 'school-1' });
+    const body = new URLSearchParams({
+      intent: 'toggle-pilot-target',
+      featureKey: 'document_submission_grading',
+      targetKind: 'school',
+      targetId: 'school-1',
+      enabled: 'true',
+    });
+
+    const result = await action({
+      request: new Request('https://x.test/app/admin/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+      params: {},
+      context: {} as never,
+    });
+
+    expect((result as { data: any }).data.success).toBe(true);
+    expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
+      where: {
+        featureKey_targetKind_targetId: {
+          featureKey: 'document_submission_grading',
+          targetKind: 'school',
+          targetId: 'school-1',
+        },
+      },
+      create: {
+        featureKey: 'document_submission_grading',
+        targetKind: 'school',
+        targetId: 'school-1',
+        enabled: true,
+        expiresAt: null,
+      },
+      update: { enabled: true, expiresAt: null, updatedAt: expect.any(Date) },
+    });
+  });
+
+  test('action upserts an organization pilot target', async () => {
+    prisma.organization.findUnique.mockResolvedValue({ id: 'org-1' });
+    const body = new URLSearchParams({
+      intent: 'toggle-pilot-target',
+      featureKey: 'assignments',
+      targetKind: 'organization',
+      targetId: 'org-1',
+      enabled: 'true',
+    });
+
+    const result = await action({
+      request: new Request('https://x.test/app/admin/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+      params: {},
+      context: {} as never,
+    });
+
+    expect((result as { data: any }).data.success).toBe(true);
+    expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
+      where: {
+        featureKey_targetKind_targetId: {
+          featureKey: 'assignments',
+          targetKind: 'organization',
+          targetId: 'org-1',
+        },
+      },
+      create: {
+        featureKey: 'assignments',
+        targetKind: 'organization',
+        targetId: 'org-1',
+        enabled: true,
+        expiresAt: null,
+      },
+      update: { enabled: true, expiresAt: null, updatedAt: expect.any(Date) },
+    });
+  });
+
+  test('action rejects class pilot targets in the admin contract', async () => {
+    const body = new URLSearchParams({
+      intent: 'toggle-pilot-target',
+      featureKey: 'assignments',
+      targetKind: 'class',
+      targetId: 'class-1',
+      enabled: 'true',
+    });
+
+    const result = await action({
+      request: new Request('https://x.test/app/admin/feature-flags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      }),
+      params: {},
+      context: {} as never,
+    });
+
+    expect((result as { init: { status: number } }).init.status).toBe(400);
+    expect((result as { data: any }).data.error).toBe(
+      'Invalid pilot target kind.'
+    );
+    expect(prisma.featureAccessTarget.upsert).not.toHaveBeenCalled();
+  });
+
+  test('action clears expiry when re-enabling a teacher pilot target', async () => {
     prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
     const body = new URLSearchParams({
       intent: 'toggle-pilot-target',

@@ -26,7 +26,7 @@ export const PILOT_FEATURE_KEYS = {
 type PilotFeatureKey =
   (typeof PILOT_FEATURE_KEYS)[keyof typeof PILOT_FEATURE_KEYS];
 
-type FeatureAccessTargetKind = 'teacher' | 'class';
+type FeatureAccessTargetKind = 'organization' | 'school' | 'teacher' | 'class';
 
 type FeatureAccessTargetInput = {
   kind: FeatureAccessTargetKind;
@@ -214,6 +214,25 @@ function distinctIds(ids: Array<string | null | undefined>): string[] {
   return Array.from(new Set(ids.filter((id): id is string => Boolean(id))));
 }
 
+function buildFeatureAccessTargets({
+  organizationIds,
+  schoolIds,
+  teacherProfileIds,
+  classIds,
+}: {
+  organizationIds?: Array<string | null | undefined>;
+  schoolIds?: Array<string | null | undefined>;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): FeatureAccessTargetInput[] {
+  return [
+    { kind: 'organization', ids: organizationIds ?? [] },
+    { kind: 'school', ids: schoolIds ?? [] },
+    { kind: 'teacher', ids: teacherProfileIds ?? [] },
+    { kind: 'class', ids: classIds ?? [] },
+  ];
+}
+
 async function isPilotFeatureEnabledForTargets(
   featureKey: PilotFeatureKey,
   targets: FeatureAccessTargetInput[]
@@ -256,45 +275,173 @@ export async function isAssignmentsEnabledForOrganization(
 
 export async function isAssignmentsEnabledForContext({
   organizationId,
+  organizationIds,
+  schoolId,
+  schoolIds,
   teacherProfileId,
   teacherProfileIds,
   classIds,
 }: {
   organizationId: string | null | undefined;
+  organizationIds?: Array<string | null | undefined>;
+  schoolId?: string | null;
+  schoolIds?: Array<string | null | undefined>;
   teacherProfileId?: string | null;
   teacherProfileIds?: Array<string | null | undefined>;
   classIds?: Array<string | null | undefined>;
 }): Promise<boolean> {
-  const organizationEnabled =
-    await isAssignmentsEnabledForOrganization(organizationId);
-  if (organizationEnabled) return true;
+  const scopedOrganizationIds = distinctIds([
+    organizationId,
+    ...(organizationIds ?? []),
+  ]);
 
-  const distinctClassIds = distinctIds(classIds ?? []);
-  if (distinctClassIds.length > 0) {
-    const classFlags = await Promise.all(
-      distinctClassIds.map((classId) =>
-        isPilotFeatureEnabledForTargets(PILOT_FEATURE_KEYS.ASSIGNMENTS, [
-          { kind: 'class', ids: [classId] },
-        ])
-      )
-    );
-    return classFlags.every(Boolean);
+  const organizationFlags = await Promise.all(
+    scopedOrganizationIds.map((scopedOrganizationId) =>
+      isAssignmentsEnabledForOrganization(scopedOrganizationId)
+    )
+  );
+  if (organizationFlags.some(Boolean)) return true;
+
+  return isPilotFeatureEnabledForTargets(
+    PILOT_FEATURE_KEYS.ASSIGNMENTS,
+    buildFeatureAccessTargets({
+      organizationIds: scopedOrganizationIds,
+      schoolIds: [schoolId, ...(schoolIds ?? [])],
+      teacherProfileIds: [teacherProfileId, ...(teacherProfileIds ?? [])],
+      classIds,
+    })
+  );
+}
+
+async function isClassAssignmentsEnabledForContext({
+  fallbackOrganizationId,
+  fallbackTeacherProfileIds,
+  klass,
+}: {
+  fallbackOrganizationId: string | null | undefined;
+  fallbackTeacherProfileIds: Array<string | null | undefined>;
+  klass: {
+    id: string;
+    organizationId?: string | null | undefined;
+    schoolId?: string | null | undefined;
+    teacherProfileIds?: Array<string | null | undefined>;
+  };
+}): Promise<boolean> {
+  const classTeacherProfileIds =
+    klass.teacherProfileIds && klass.teacherProfileIds.length > 0
+      ? klass.teacherProfileIds
+      : fallbackTeacherProfileIds;
+
+  return isAssignmentsEnabledForContext({
+    organizationId: klass.organizationId ?? fallbackOrganizationId,
+    schoolId: klass.schoolId,
+    teacherProfileIds: classTeacherProfileIds,
+    classIds: [klass.id],
+  });
+}
+
+async function isDocumentSubmissionSchoolAllowlistEnabled(): Promise<{
+  globalEnabled: boolean;
+  enabledSchoolIds: Set<string>;
+}> {
+  const globalEnabled = await getFeatureFlag(FEATURE_FLAGS.DOCUMENT_SUBMISSION);
+  if (globalEnabled) {
+    return { globalEnabled: true, enabledSchoolIds: new Set() };
   }
 
-  return isPilotFeatureEnabledForTargets(PILOT_FEATURE_KEYS.ASSIGNMENTS, [
-    { kind: 'teacher', ids: [teacherProfileId, ...(teacherProfileIds ?? [])] },
-  ]);
+  return {
+    globalEnabled: false,
+    enabledSchoolIds:
+      (await getTargetedFeatureFlagIds('documentSubmission')) ?? new Set(),
+  };
+}
+
+function isSchoolAllowlisted(
+  schoolId: string | null | undefined,
+  enabledSchoolIds: Set<string>
+): boolean {
+  return Boolean(schoolId && enabledSchoolIds.has(schoolId));
+}
+
+async function isDocumentSubmissionPilotEnabledForTargets({
+  organizationIds,
+  schoolIds,
+  teacherProfileIds,
+  classIds,
+}: {
+  organizationIds?: Array<string | null | undefined>;
+  schoolIds?: Array<string | null | undefined>;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  return isPilotFeatureEnabledForTargets(
+    PILOT_FEATURE_KEYS.DOCUMENT_SUBMISSION_GRADING,
+    buildFeatureAccessTargets({
+      organizationIds,
+      schoolIds,
+      teacherProfileIds,
+      classIds,
+    })
+  );
+}
+
+async function isDocumentSubmissionClassScopeEnabled(
+  classScope: {
+    organizationId?: string | null | undefined;
+    schoolId: string | null | undefined;
+    classId?: string | null | undefined;
+    teacherProfileIds?: Array<string | null | undefined>;
+  },
+  enabledSchoolIds: Set<string>,
+  actorTeacherProfileId?: string | null
+): Promise<boolean> {
+  if (isSchoolAllowlisted(classScope.schoolId, enabledSchoolIds)) return true;
+
+  return isDocumentSubmissionPilotEnabledForTargets({
+    organizationIds: [classScope.organizationId],
+    schoolIds: [classScope.schoolId],
+    teacherProfileIds: actorTeacherProfileId
+      ? [actorTeacherProfileId]
+      : (classScope.teacherProfileIds ?? []),
+    classIds: [classScope.classId],
+  });
+}
+
+async function isAnyDocumentSubmissionClassScopeEnabled(
+  classScopes: Array<{
+    organizationId?: string | null | undefined;
+    schoolId: string | null | undefined;
+    classId?: string | null | undefined;
+    teacherProfileIds?: Array<string | null | undefined>;
+  }>,
+  enabledSchoolIds: Set<string>,
+  actorTeacherProfileId?: string | null
+): Promise<boolean> {
+  for (const classScope of classScopes) {
+    const enabled = await isDocumentSubmissionClassScopeEnabled(
+      classScope,
+      enabledSchoolIds,
+      actorTeacherProfileId
+    );
+    if (enabled) return true;
+  }
+
+  return false;
 }
 
 export async function getAssignmentsEnabledClassIdsForContext({
   organizationId,
+  teacherProfileId,
+  teacherProfileIds,
   classes,
 }: {
   organizationId: string | null | undefined;
   teacherProfileId?: string | null;
+  teacherProfileIds?: Array<string | null | undefined>;
   classes: Array<{
     id: string | null | undefined;
     organizationId?: string | null | undefined;
+    schoolId?: string | null | undefined;
     teacherProfileIds?: Array<string | null | undefined>;
   }>;
 }): Promise<string[]> {
@@ -311,78 +458,73 @@ export async function getAssignmentsEnabledClassIdsForContext({
 
   const classFlags = await Promise.all(
     distinctClasses.map(async (klass) => {
-      const classOrganizationId = klass.organizationId ?? organizationId;
-      const organizationEnabled =
-        await isAssignmentsEnabledForOrganization(classOrganizationId);
-      if (organizationEnabled) return { id: klass.id, enabled: true };
-
-      const enabled = await isPilotFeatureEnabledForTargets(
-        PILOT_FEATURE_KEYS.ASSIGNMENTS,
-        [{ kind: 'class', ids: [klass.id] }]
-      );
+      const enabled = await isClassAssignmentsEnabledForContext({
+        fallbackOrganizationId: organizationId,
+        fallbackTeacherProfileIds: [
+          teacherProfileId,
+          ...(teacherProfileIds ?? []),
+        ],
+        klass,
+      });
       return { id: klass.id, enabled };
     })
   );
 
-  return classFlags
-    .filter((klass) => klass.enabled)
-    .map((klass) => klass.id);
+  return classFlags.filter((klass) => klass.enabled).map((klass) => klass.id);
 }
 
 export async function isDocumentSubmissionEnabledForScope({
   schoolIds,
+  organizationIds,
   teacherProfileIds,
   classIds,
   classScopes,
+  actorTeacherProfileId,
 }: {
   schoolIds: Array<string | null | undefined>;
+  organizationIds?: Array<string | null | undefined>;
   teacherProfileIds?: Array<string | null | undefined>;
   classIds?: Array<string | null | undefined>;
   classScopes?: Array<{
+    organizationId?: string | null | undefined;
     schoolId: string | null | undefined;
     classId?: string | null | undefined;
     teacherProfileIds?: Array<string | null | undefined>;
   }>;
+  actorTeacherProfileId?: string | null;
 }): Promise<boolean> {
-  const schoolsEnabled = await isDocumentSubmissionEnabledForSchools(schoolIds);
-  if (schoolsEnabled) return true;
+  const { globalEnabled, enabledSchoolIds } =
+    await isDocumentSubmissionSchoolAllowlistEnabled();
+  if (globalEnabled) return true;
 
   if (classScopes && classScopes.length > 0) {
-    const classScopeFlags = await Promise.all(
-      classScopes.map(async (classScope) => {
-        const schoolEnabled = await isDocumentSubmissionEnabledForSchools([
-          classScope.schoolId,
-        ]);
-        if (schoolEnabled) return true;
-
-        return isPilotFeatureEnabledForTargets(
-          PILOT_FEATURE_KEYS.DOCUMENT_SUBMISSION_GRADING,
-          [{ kind: 'class', ids: [classScope.classId] }]
-        );
-      })
-    );
-
-    return classScopeFlags.every(Boolean);
-  }
-
-  const distinctClassIds = distinctIds(classIds ?? []);
-  if (distinctClassIds.length > 0) {
-    const classFlags = await Promise.all(
-      distinctClassIds.map((classId) =>
-        isPilotFeatureEnabledForTargets(
-          PILOT_FEATURE_KEYS.DOCUMENT_SUBMISSION_GRADING,
-          [{ kind: 'class', ids: [classId] }]
+    const actorScopedClassScopes = actorTeacherProfileId
+      ? classScopes.filter((classScope) =>
+          (classScope.teacherProfileIds ?? []).includes(actorTeacherProfileId)
         )
-      )
-    );
+      : classScopes;
 
-    return classFlags.every(Boolean);
+    return isAnyDocumentSubmissionClassScopeEnabled(
+      actorScopedClassScopes,
+      enabledSchoolIds,
+      actorTeacherProfileId
+    );
   }
 
-  return isPilotFeatureEnabledForTargets(
-    PILOT_FEATURE_KEYS.DOCUMENT_SUBMISSION_GRADING,
-    [{ kind: 'teacher', ids: teacherProfileIds ?? [] }]
-  );
+  if (
+    schoolIds.some((schoolId) =>
+      isSchoolAllowlisted(schoolId, enabledSchoolIds)
+    )
+  ) {
+    return true;
+  }
+
+  return isDocumentSubmissionPilotEnabledForTargets({
+    organizationIds,
+    schoolIds,
+    teacherProfileIds,
+    classIds,
+  });
 }
 
 export async function isReleasedGradesOrganizationEnabledForOrganization(

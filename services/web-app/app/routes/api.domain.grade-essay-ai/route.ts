@@ -47,8 +47,9 @@ const AiCategorySchema = z.object({
   comment: z.string().min(1),
 });
 
-const AiCategoriesSchema = z.array(AiCategorySchema).superRefine(
-  (categories, ctx) => {
+const AiCategoriesSchema = z
+  .array(AiCategorySchema)
+  .superRefine((categories, ctx) => {
     if (categories.length !== rubricKeys.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -76,8 +77,7 @@ const AiCategoriesSchema = z.array(AiCategorySchema).superRefine(
         });
       }
     }
-  }
-);
+  });
 
 const AiResponseSchema = z.object({
   categories: AiCategoriesSchema,
@@ -129,6 +129,7 @@ export async function action({ request }: ActionFunctionArgs) {
               select: {
                 id: true,
                 schoolId: true,
+                school: { select: { organizationId: true } },
                 teachers: { select: { id: true } },
               },
             },
@@ -140,6 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
               select: {
                 id: true,
                 schoolId: true,
+                school: { select: { organizationId: true } },
                 teachers: { select: { id: true } },
               },
             },
@@ -194,11 +196,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (
-    isGradingOwnDocument(actor.profileId, submission.document.profileId)
-  ) {
+  if (isGradingOwnDocument(actor.profileId, submission.document.profileId)) {
     return dataResponse(
-      { success: false, message: 'You cannot run AI grading on your own submission.' },
+      {
+        success: false,
+        message: 'You cannot run AI grading on your own submission.',
+      },
       { status: 403 }
     );
   }
@@ -214,9 +217,10 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
-    getDocumentSubmissionScope(submission.document)
-  );
+  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
+    ...getDocumentSubmissionScope(submission.document),
+    actorTeacherProfileId: actor.teacherProfileId,
+  });
   if (!isSubmissionEnabled) {
     return redirectWithToast('/app/my-classes', {
       description: 'Grading is currently disabled for this school.',
@@ -360,12 +364,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const extractCategories = (
     value: unknown
   ): z.infer<typeof AiCategoriesSchema> | null => {
-    const categoriesCandidate =
-      Array.isArray(value)
-        ? value
-        : value && typeof value === 'object'
-          ? (value as { categories?: unknown }).categories
-          : null;
+    const categoriesCandidate = Array.isArray(value)
+      ? value
+      : value && typeof value === 'object'
+        ? (value as { categories?: unknown }).categories
+        : null;
     const parsedCategories = AiCategoriesSchema.safeParse(categoriesCandidate);
     return parsedCategories.success ? parsedCategories.data : null;
   };

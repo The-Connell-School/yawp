@@ -16,6 +16,7 @@ const requireUserId = mock();
 const requireProfile = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
+const getAssignmentsEnabledClassIdsForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -28,6 +29,9 @@ mock.module('~/domain/documents.server', () => ({
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
+}));
+mock.module('~/utils/feature-flags.server', () => ({
+  getAssignmentsEnabledClassIdsForContext,
 }));
 
 const { action, loader } = await import('./route');
@@ -80,11 +84,11 @@ describe('app.assignment-types.$id action', () => {
     } as never);
 
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
-        where: {
-          archivedAt: null,
-          id: 'at-1',
-          organizationAssignments: {
-            some: { organizationId: 'org-1' },
+      where: {
+        archivedAt: null,
+        id: 'at-1',
+        organizationAssignments: {
+          some: { organizationId: 'org-1' },
         },
       },
       select: { id: true },
@@ -124,6 +128,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     requireUserId.mockReset();
     requireProfile.mockReset();
     redirectWithToast.mockReset();
+    getAssignmentsEnabledClassIdsForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -134,8 +139,16 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.assignmentType.findFirst.mockResolvedValue(makeAssignmentType());
     prisma.document.findMany.mockResolvedValue([]);
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', grade: '9th', period: '1st', title: null },
+      {
+        id: 'class-1',
+        grade: '9th',
+        period: '1st',
+        title: null,
+        school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
     ]);
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -154,6 +167,62 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     expect(response.data.promptLibrary.facets.textsOrUnits).toContain(
       'Macbeth'
     );
+  });
+
+  test('filters teacher classes to assignment-enabled classes', async () => {
+    prisma.class.findMany.mockResolvedValueOnce([
+      {
+        id: 'class-1',
+        grade: '9th',
+        period: '1st',
+        title: null,
+        school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
+      {
+        id: 'class-2',
+        grade: '10th',
+        period: '2nd',
+        title: 'Enabled section',
+        school: { id: 'school-2', organizationId: 'org-2' },
+        teachers: [{ id: 'teacher-2' }],
+      },
+    ]);
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValueOnce(['class-2']);
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.teacherClasses).toEqual([
+      {
+        id: 'class-2',
+        grade: '10th',
+        period: '2nd',
+        title: 'Enabled section',
+        school: { id: 'school-2', organizationId: 'org-2' },
+        teachers: [{ id: 'teacher-2' }],
+      },
+    ]);
+    expect(getAssignmentsEnabledClassIdsForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classes: [
+        {
+          id: 'class-1',
+          organizationId: 'org-1',
+          schoolId: 'school-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+        {
+          id: 'class-2',
+          organizationId: 'org-2',
+          schoolId: 'school-2',
+          teacherProfileIds: ['teacher-2'],
+        },
+      ],
+    });
   });
 
   test('omits prompt library for student profiles and other assignment types', async () => {
