@@ -217,6 +217,13 @@ run_tooling_if_needed() {
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 
+reset_preview_login_password() {
+  "${compose[@]}" run --rm \
+    -e PREVIEW_LOGIN_EMAIL \
+    -e PREVIEW_LOGIN_PASSWORD \
+    toolbox bash -lc 'bun run packages/prisma/scripts/preview-login-password-reset.ts'
+}
+
 remove_legacy_project_postgres() {
   docker rm -f "${COMPOSE_PROJECT}-postgres-1" >/dev/null 2>&1 || true
   docker volume rm "${COMPOSE_PROJECT}_${COMPOSE_PROJECT}-postgres-data" >/dev/null 2>&1 || true
@@ -231,6 +238,7 @@ ensure_shared_postgres
 ensure_template_database
 ensure_preview_database
 run_tooling_if_needed
+reset_preview_login_password
 start_or_refresh_web() {
   refresh_web_container_if_needed
 }
