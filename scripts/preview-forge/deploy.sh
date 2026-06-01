@@ -5,6 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 export SOURCE_DIR
 
+source "$SCRIPT_DIR/tooling-artifacts.sh"
+
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 
 DATABASE_NAME="yawp_pr_${PR_NUMBER}"
@@ -195,10 +197,17 @@ run_tooling_if_needed() {
     previous_fingerprint="$(<"$TOOLING_FINGERPRINT_FILE")"
   fi
 
-  if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" ]]; then
+  local missing_artifacts
+  missing_artifacts="$(preview_missing_tooling_artifacts "$SOURCE_DIR" | awk 'BEGIN { first = 1 } { if (!first) printf ", "; printf "%s", $0; first = 0 }')"
+
+  if [[ "$DATABASE_CREATED" == "0" && "$fingerprint" == "$previous_fingerprint" && -z "$missing_artifacts" ]]; then
     echo "Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate."
     TOOLING_CHANGED=0
     return 0
+  fi
+
+  if [[ -n "$missing_artifacts" ]]; then
+    echo "Preview tooling artifacts missing ($missing_artifacts); running install/generate/migrate."
   fi
 
   if [[ "$RUNTIME" == "production" ]]; then
