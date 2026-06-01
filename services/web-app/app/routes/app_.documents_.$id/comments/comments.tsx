@@ -11,6 +11,7 @@ import { useCommentsSelection } from './selection-context';
 type Props = {
   comments: CommentType[];
   readOnly?: boolean;
+  showCollapsibleHeader?: boolean;
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   autoFocusReplyCommentId?: string | null;
@@ -21,6 +22,7 @@ type ExtendedProps = Props & { className?: string };
 export const Comments = ({
   comments,
   readOnly = false,
+  showCollapsibleHeader = true,
   className,
   onCommentRemoved,
   onResponseAdded,
@@ -74,33 +76,36 @@ export const Comments = ({
           documentId: '',
         }
       : [];
+  const isExpanded = showCollapsibleHeader ? commentsExpanded : true;
 
   return (
     <div
       className={cn(
-        'no-scrollbar h-full w-full overflow-y-scroll md:w-3/5',
+        'no-scrollbar h-full w-full overflow-y-scroll',
         className
       )}
     >
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setCommentsExpanded(!commentsExpanded)}
-        className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
-      >
-        {commentsExpanded ? (
-          <MessageCircleOff size={18} />
-        ) : (
-          <MessageCircle size={18} />
-        )}
-        <span className="ml-2">
-          {commentsExpanded ? 'Hide' : 'Show'} Comments
-        </span>
-      </Button>
+      {showCollapsibleHeader ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCommentsExpanded(!commentsExpanded)}
+          className="w-full flex items-center justify-center py-2 rounded-none h-[41px] border-b"
+        >
+          {commentsExpanded ? (
+            <MessageCircleOff size={18} />
+          ) : (
+            <MessageCircle size={18} />
+          )}
+          <span className="ml-2">
+            {commentsExpanded ? 'Hide' : 'Show'} Comments
+          </span>
+        </Button>
+      ) : null}
       <div
         className={cn(
           'no-scrollbar flex grow flex-col gap-2 transition-all duration-300',
-          commentsExpanded
+          isExpanded
             ? 'max-h-full p-2 overflow-scroll'
             : 'max-h-0 overflow-hidden'
         )}

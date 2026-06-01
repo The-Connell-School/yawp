@@ -51,8 +51,8 @@ import {
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
 } from '~/utils/feature-flags.server';
-import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
+import { DocumentSidePanel } from './comments/document-side-panel';
 import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
@@ -61,7 +61,6 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
-import { formatDateOnly } from '~/utils/date-only';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -830,28 +829,6 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {data.doc.assignment ? (
-          <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info-outlined" size="sm">
-                  Assignment Prompt
-                </Badge>
-                <span className="text-sm font-medium">
-                  {data.doc.assignment.title?.trim() || 'Untitled Assignment'}
-                </span>
-                {data.doc.assignment.dueDate ? (
-                  <span className="text-xs text-muted-foreground">
-                    Due {formatDateOnly(data.doc.assignment.dueDate)}
-                  </span>
-                ) : null}
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-foreground/90">
-                {data.doc.assignment.prompt}
-              </p>
-            </div>
-          </div>
-        ) : null}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">
@@ -900,7 +877,8 @@ export default function Route() {
               />
             )}
             {isMobile && tab !== 'comments' ? null : (
-              <Comments
+              <DocumentSidePanel
+                assignment={data.doc.assignment}
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
                 onCommentRemoved={commentsState.removeComment}

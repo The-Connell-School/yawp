@@ -46,6 +46,25 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
 
         await helpers.waitForEditorReady();
 
+        const sidePanel = page.getByTestId('document-side-panel');
+        await expect(sidePanel).toBeVisible();
+
+        const promptTab = sidePanel.getByRole('tab', { name: /prompt/i });
+        const commentsTab = sidePanel.getByRole('tab', { name: /comments/i });
+        await expect(promptTab).toHaveAttribute('aria-selected', 'true');
+
+        const promptPanel = page.getByTestId('assignment-prompt-panel');
+        await expect(promptPanel).toBeVisible();
+        await expect(promptPanel).toContainText(uniquePromptMarker);
+        await expect(promptPanel).toContainText('E2E Rhetorical Analysis');
+        const promptPanelClass = await promptPanel.getAttribute('class');
+        expect(promptPanelClass ?? '').not.toMatch(/bg-(amber|yellow)-/);
+
+        await commentsTab.click();
+        await expect(commentsTab).toHaveAttribute('aria-selected', 'true');
+        await expect(page.getByText('No comments yet.')).toBeVisible();
+        await expect(promptPanel).toBeHidden();
+
         const createdDoc = await prisma.document.findUnique({
           where: { id: documentId as string },
           select: { id: true, assignmentId: true, profileId: true },
