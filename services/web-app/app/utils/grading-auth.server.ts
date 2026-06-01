@@ -4,13 +4,12 @@ import { prisma } from '~/utils/db.server';
 
 export type GradingActor = {
   profileId: string;
+  teacherProfileId: string | null;
   isTeacher: boolean;
   isAdmin: boolean;
 };
 
-export async function getGradingActor(
-  request: Request
-): Promise<GradingActor> {
+export async function getGradingActor(request: Request): Promise<GradingActor> {
   const userId = await requireUserId(request);
   const [profile, user] = await Promise.all([
     requireProfile(request, userId),
@@ -22,6 +21,7 @@ export async function getGradingActor(
 
   return {
     profileId: profile.id,
+    teacherProfileId: profile.teacherProfile?.id ?? null,
     isTeacher: Boolean(profile.teacherProfile),
     isAdmin: Boolean(user?.isAdmin),
   };

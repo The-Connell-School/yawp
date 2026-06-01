@@ -67,6 +67,7 @@ describe('api.domain.submit-document', () => {
           {
             id: 'class-1',
             schoolId: 'school-1',
+            school: { organizationId: 'org-1' },
             teachers: [{ id: 'teacher-1' }],
           },
         ],
@@ -113,11 +114,13 @@ describe('api.domain.submit-document', () => {
     expect(response.data.success).toBe(true);
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['school-1'],
+      organizationIds: ['org-1'],
       classIds: ['class-1'],
       teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'school-1',
+          organizationId: 'org-1',
           classId: 'class-1',
           teacherProfileIds: ['teacher-1'],
         },
@@ -137,6 +140,7 @@ describe('api.domain.submit-document', () => {
         class: {
           id: 'assignment-class',
           schoolId: 'assignment-school',
+          school: { organizationId: 'assignment-org' },
           teachers: [{ id: 'assignment-teacher' }],
         },
       },
@@ -162,11 +166,13 @@ describe('api.domain.submit-document', () => {
     expect(response.data.success).toBe(true);
     expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
       schoolIds: ['assignment-school'],
+      organizationIds: ['assignment-org'],
       classIds: ['assignment-class'],
       teacherProfileIds: ['assignment-teacher'],
       classScopes: [
         {
           schoolId: 'assignment-school',
+          organizationId: 'assignment-org',
           classId: 'assignment-class',
           teacherProfileIds: ['assignment-teacher'],
         },
@@ -191,25 +197,29 @@ describe('api.domain.submit-document', () => {
 
     expect(response.data.success).toBe(true);
     expect(prisma.documentWriteJournal.create).toHaveBeenCalledTimes(1);
-    expect(prisma.documentWriteJournal.create.mock.calls[0]?.[0]).toMatchObject({
-      data: {
-        eventType: 'document.submit',
-        source: 'submit-document',
-        status: 'pending',
-        documentId: 'doc-1',
-        title: 'Essay',
-        html: '<p>Draft</p>',
-        text: 'Draft',
-        baseRevision: 4,
-      },
-    });
+    expect(prisma.documentWriteJournal.create.mock.calls[0]?.[0]).toMatchObject(
+      {
+        data: {
+          eventType: 'document.submit',
+          source: 'submit-document',
+          status: 'pending',
+          documentId: 'doc-1',
+          title: 'Essay',
+          html: '<p>Draft</p>',
+          text: 'Draft',
+          baseRevision: 4,
+        },
+      }
+    );
     expect(prisma.documentWriteJournal.update).toHaveBeenCalledTimes(1);
-    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject({
-      where: { id: 'journal-1' },
-      data: {
-        status: 'accepted',
-        resultingRevision: 4,
-      },
-    });
+    expect(prisma.documentWriteJournal.update.mock.calls[0]?.[0]).toMatchObject(
+      {
+        where: { id: 'journal-1' },
+        data: {
+          status: 'accepted',
+          resultingRevision: 4,
+        },
+      }
+    );
   });
 });

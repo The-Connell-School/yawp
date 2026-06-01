@@ -64,6 +64,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
             select: {
               id: true,
               schoolId: true,
+              school: { select: { organizationId: true } },
               teachers: { select: { id: true } },
             },
           },
@@ -75,6 +76,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
             select: {
               id: true,
               schoolId: true,
+              school: { select: { organizationId: true } },
               teachers: { select: { id: true } },
             },
           },
@@ -137,27 +139,28 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   });
 
   try {
-    const { submission: createdSubmission, document: finalDocument } = await prisma.$transaction(async (tx) => {
-      const submission = await tx.submission.create({
-        data: {
-          documentId: document.id,
-          title: data.title || (document.title ?? ''),
-          html,
-          text,
-          submittedAt: now,
-        },
-        select: { id: true, title: true, submittedAt: true },
-      });
+    const { submission: createdSubmission, document: finalDocument } =
+      await prisma.$transaction(async (tx) => {
+        const submission = await tx.submission.create({
+          data: {
+            documentId: document.id,
+            title: data.title || (document.title ?? ''),
+            html,
+            text,
+            submittedAt: now,
+          },
+          select: { id: true, title: true, submittedAt: true },
+        });
 
-      const doc = await tx.document.update({
-        where: { id: document.id },
-        data: {
-          updatedAt: now,
-        },
-      });
+        const doc = await tx.document.update({
+          where: { id: document.id },
+          data: {
+            updatedAt: now,
+          },
+        });
 
-      return { submission, document: doc };
-    });
+        return { submission, document: doc };
+      });
 
     await prisma.documentWriteJournal.update({
       where: { id: journal.id },

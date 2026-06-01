@@ -1,5 +1,11 @@
 # Teacher/Class Pilot Rollout Runbook
 
+> Superseded for new rollouts by
+> `docs/superpowers/runbooks/2026-05-28-feature-access-contract-runbook.md`.
+> Class `FeatureAccessTarget` rows are now legacy compatibility only. New
+> `assignments` and `document_submission_grading` access should be managed at
+> teacher, school, or organization scope.
+
 **Branch:** `codex/teacher-class-feature-rollouts`
 **Scope:** Amanda Metcalfe pilot for `assignments` and `document_submission_grading`
 **Production DB access:** `docs/superpowers/runbooks/production-db-access.md`
@@ -9,15 +15,15 @@ existing org/school `Setting` allowlists active.
 
 ## Pilot Targets
 
-| Target | ID |
-| --- | --- |
-| Teacher profile | `cmocwzzzl03gg0ql73gbzi22v` |
-| Teacher email | `ametcalfe@bhm.k12.al.us` |
-| Organization | GEAR UP Achieve, `cmm93f0zd007z0qjtuwksa3d2` |
-| School | Parker High School, `cmocwvqk303g00ql7d9igjzp5` |
-| Class | `cmocwxinl03g20ql77u0fd51c` |
-| Class | `cmocwy6vp03g50ql71ioy202o` |
-| Class | `cmocwytnm03g80ql7weubpkbr` |
+| Target          | ID                                              |
+| --------------- | ----------------------------------------------- |
+| Teacher profile | `cmocwzzzl03gg0ql73gbzi22v`                     |
+| Teacher email   | `ametcalfe@bhm.k12.al.us`                       |
+| Organization    | GEAR UP Achieve, `cmm93f0zd007z0qjtuwksa3d2`    |
+| School          | Parker High School, `cmocwvqk303g00ql7d9igjzp5` |
+| Class           | `cmocwxinl03g20ql77u0fd51c`                     |
+| Class           | `cmocwy6vp03g50ql71ioy202o`                     |
+| Class           | `cmocwytnm03g80ql7weubpkbr`                     |
 
 Enabled feature keys:
 

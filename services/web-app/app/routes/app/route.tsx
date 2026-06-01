@@ -10,6 +10,7 @@ import {
   redirect,
   useFetcher,
   useRevalidator,
+  useRouteLoaderData,
 } from 'react-router';
 import {
   CogIcon,
@@ -66,6 +67,7 @@ import {
   isDocumentRoutePath,
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
+import type { Route as RootRoute } from '../../+types/root';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -124,6 +126,10 @@ const EditNameSchema = z.object({
 export default function Route() {
   const location = useLocation();
   const user = useUser();
+  const rootData =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
+  const isReadOnlyImpersonation =
+    rootData?.impersonation?.isReadOnly ?? false;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
 
@@ -300,6 +306,13 @@ export default function Route() {
                   size="icon-sm"
                   variant="ghost"
                   className="opacity-40 hover:opacity-100"
+                  aria-label="Edit name"
+                  disabled={isReadOnlyImpersonation}
+                  title={
+                    isReadOnlyImpersonation
+                      ? 'Read-only impersonation active'
+                      : 'Edit name'
+                  }
                   onClick={() => setIsEditNameOpen(true)}
                 >
                   <Pencil size={14} />
@@ -370,6 +383,12 @@ export default function Route() {
         }
         {...swipeEvents}
       >
+        {isReadOnlyImpersonation ? (
+          <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
+            Read-only impersonation active. You can navigate the app, but
+            creates, edits, and deletes are disabled.
+          </div>
+        ) : null}
         {/* Mobile top menu */}
         <div
           className={cn(
