@@ -330,6 +330,26 @@ describe('PR preview deployment contract', () => {
     expect(loginSmokeIndex).toBeLessThan(previewUrlIndex);
   });
 
+  test('preview deploy resets the configured preview login password before smoke', () => {
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
+    const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const resetIndex = deployScript.indexOf(
+      'bun run packages/prisma/scripts/preview-login-password-reset.ts',
+    );
+    const webStartIndex = deployScript.indexOf('start_or_refresh_web');
+    const smokeIndex = deployScript.indexOf('smoke-login.mjs');
+
+    expect(deployScript).toContain('PREVIEW_LOGIN_EMAIL');
+    expect(deployScript).toContain('PREVIEW_LOGIN_PASSWORD');
+    expect(resetIndex).toBeGreaterThan(-1);
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(webStartIndex).toBeGreaterThan(-1);
+    expect(smokeIndex).toBeGreaterThan(-1);
+    expect(migrateIndex).toBeLessThan(resetIndex);
+    expect(resetIndex).toBeLessThan(webStartIndex);
+    expect(resetIndex).toBeLessThan(smokeIndex);
+  });
+
   test('preview deploy restarts the web container after source syncs', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const toolboxIndex = deployScript.indexOf('run_tooling_if_needed');
