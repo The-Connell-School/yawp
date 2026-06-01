@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, GripHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocalStorage } from 'usehooks-ts';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { formatDateOnly } from '~/utils/date-only';
@@ -80,7 +81,7 @@ export function DocumentEditor({
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
-      <AssignmentPromptBanner assignment={assignment} />
+      <AssignmentPromptBanner docId={docId} assignment={assignment} />
       <div className="min-h-0 flex-1 overflow-hidden">
         {!hydrated ? (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
@@ -104,12 +105,24 @@ export function DocumentEditor({
 }
 
 function AssignmentPromptBanner({
+  docId,
   assignment,
 }: {
+  docId: string;
   assignment?: AssignmentPrompt | null;
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [promptHeight, setPromptHeight] = useState(PROMPT_DEFAULT_HEIGHT);
+  const [isCollapsed, setIsCollapsed] = useLocalStorage(
+    `assignmentPromptCollapsed-${docId}`,
+    false
+  );
+  const [storedPromptHeight, setStoredPromptHeight] = useLocalStorage(
+    `assignmentPromptHeight-${docId}`,
+    PROMPT_DEFAULT_HEIGHT
+  );
+  const promptHeight = Math.min(
+    PROMPT_MAX_HEIGHT,
+    Math.max(PROMPT_MIN_HEIGHT, storedPromptHeight)
+  );
   const dragStartRef = useRef<{ y: number; height: number } | null>(null);
 
   const resizePrompt = useCallback((event: PointerEvent) => {
@@ -120,8 +133,8 @@ function AssignmentPromptBanner({
       PROMPT_MAX_HEIGHT,
       Math.max(PROMPT_MIN_HEIGHT, start.height + event.clientY - start.y)
     );
-    setPromptHeight(nextHeight);
-  }, []);
+    setStoredPromptHeight(nextHeight);
+  }, [setStoredPromptHeight]);
 
   const stopResize = useCallback(() => {
     dragStartRef.current = null;

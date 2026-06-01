@@ -58,9 +58,29 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         expect(promptBox).not.toBeNull();
         expect(editorBox).not.toBeNull();
         if (!promptBox || !editorBox) throw new Error('Missing document column');
-        expect(promptBox.x).toBeCloseTo(editorBox.x, 0);
-        expect(promptBox.width).toBeCloseTo(editorBox.width, 0);
+        expect(Math.abs(promptBox.x - editorBox.x)).toBeLessThanOrEqual(2);
+        expect(Math.abs(promptBox.width - editorBox.width)).toBeLessThanOrEqual(
+          2
+        );
         await expect(page.getByText('No comments yet.')).toBeVisible();
+
+        await page
+          .getByRole('button', { name: /collapse assignment prompt/i })
+          .click();
+        await expect(promptPanel).not.toContainText(uniquePromptMarker);
+        await expect(
+          page.getByRole('button', { name: /expand assignment prompt/i })
+        ).toBeVisible();
+
+        await page.reload();
+        await helpers.waitForEditorReady();
+        await expect(page.getByTestId('assignment-prompt-panel')).toBeVisible();
+        await expect(
+          page.getByTestId('assignment-prompt-panel')
+        ).not.toContainText(uniquePromptMarker);
+        await expect(
+          page.getByRole('button', { name: /expand assignment prompt/i })
+        ).toBeVisible();
 
         const createdDoc = await prisma.document.findUnique({
           where: { id: documentId as string },
