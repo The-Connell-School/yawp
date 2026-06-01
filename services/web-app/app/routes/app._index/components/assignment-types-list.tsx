@@ -3,6 +3,15 @@ import { Link } from 'react-router';
 import { Button } from '~/components/ui/button';
 import type { AssignmentTypeRow, TeacherClassOption } from '../route';
 import { DashboardCreateAssignmentSheet } from './dashboard-create-assignment-sheet';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+
+export function getGenericAssignmentTypes(
+  assignmentTypes: AssignmentTypeRow[]
+) {
+  return assignmentTypes.filter(
+    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
+}
 
 export function AssignmentTypesList({
   assignmentTypes,
@@ -12,7 +21,9 @@ export function AssignmentTypesList({
   teacherClasses: TeacherClassOption[];
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const canCreate = assignmentTypes.length > 0 && teacherClasses.length > 0;
+  const genericAssignmentTypes = getGenericAssignmentTypes(assignmentTypes);
+  const canCreate =
+    genericAssignmentTypes.length > 0 && teacherClasses.length > 0;
 
   return (
     <div>
@@ -59,7 +70,7 @@ export function AssignmentTypesList({
       <DashboardCreateAssignmentSheet
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-        assignmentTypes={assignmentTypes}
+        assignmentTypes={genericAssignmentTypes}
         teacherClasses={teacherClasses}
       />
     </div>

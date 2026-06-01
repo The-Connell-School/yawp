@@ -72,8 +72,8 @@ describe('api.assignments.create', () => {
       teacherProfile: { id: 'teacher-1' },
     });
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { organizationId: 'org-1' } },
-      { id: 'class-2', school: { organizationId: 'org-1' } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+      { id: 'class-2', school: { id: 'school-2', organizationId: 'org-1' } },
     ]);
     prisma.assignmentType.findFirst.mockResolvedValue({
       id: 'at-1',
@@ -183,11 +183,13 @@ describe('api.assignments.create', () => {
     expect(isAssignmentsEnabledForContext).toHaveBeenCalledTimes(2);
     expect(isAssignmentsEnabledForContext).toHaveBeenNthCalledWith(1, {
       organizationId: 'org-1',
+      schoolId: 'school-1',
       teacherProfileId: 'teacher-1',
       classIds: ['class-1'],
     });
     expect(isAssignmentsEnabledForContext).toHaveBeenNthCalledWith(2, {
       organizationId: 'org-1',
+      schoolId: 'school-2',
       teacherProfileId: 'teacher-1',
       classIds: ['class-2'],
     });
@@ -311,6 +313,67 @@ describe('api.assignments.create', () => {
             schemaVersion: 1,
             libraryEntryId: 'apush-dbq-new-deal-federal-power',
             essayType: 'dbq',
+          }),
+        }),
+      ],
+    });
+  });
+
+  test('creates AP History assignments when AP access is school-scoped', async () => {
+    const libraryEntry = {
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      title: 'New Deal and Federal Power DBQ',
+      prompt:
+        'Evaluate the extent to which the New Deal changed the role of the federal government.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    };
+    prisma.class.findMany.mockResolvedValue([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'ap-type-1',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
+      libraryEntry,
+    );
+    isApHistoryEssayEnabledForContext.mockImplementation(
+      async ({ schoolIds }) => schoolIds?.includes('school-1') ?? false
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'ap-type-1',
+        classIds: ['class-1'],
+        apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      schoolIds: ['school-1'],
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          classId: 'class-1',
+          assignmentTypeId: 'ap-type-1',
+          prompt: libraryEntry.prompt,
+          apHistorySnapshot: expect.objectContaining({
+            libraryEntryId: 'apush-dbq-new-deal-federal-power',
           }),
         }),
       ],

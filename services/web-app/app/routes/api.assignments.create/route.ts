@@ -166,6 +166,7 @@ export async function action({ request }: ActionFunctionArgs) {
       classes.map((klass) =>
         isApHistoryEssayEnabledForContext({
           organizationId: klass.school.organizationId,
+          schoolIds: [klass.school.id],
           teacherProfileId: profile.teacherProfile!.id,
           classIds: [klass.id],
         })

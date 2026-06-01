@@ -27,6 +27,7 @@ import { TeacherTrainingsList } from './components/teacher-trainings-list';
 export type AssignmentTypeRow = {
   id: string;
   title: string;
+  systemKey?: string | null;
   image?: { id: string } | null;
 };
 
@@ -195,7 +196,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
           some: { organizationId: profile.organization.id },
         },
       },
-      select: { image: { select: { id: true } }, id: true, title: true },
+      select: {
+        image: { select: { id: true } },
+        id: true,
+        title: true,
+        systemKey: true,
+      },
       orderBy: { position: 'asc' },
     }),
     prisma.document.findMany({
