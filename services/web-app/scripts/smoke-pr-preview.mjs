@@ -1,5 +1,5 @@
 /**
- * PR preview smoke (Playwright). CI sets PREVIEW_BASE_URL after Preview Forge is up.
+ * PR preview smoke (Playwright). CI sets PREVIEW_BASE_URL after the preview environment is up.
  *
  *   PREVIEW_BASE_URL=https://pr-123.preview.yawp.school bun run scripts/smoke-pr-preview.mjs
  *

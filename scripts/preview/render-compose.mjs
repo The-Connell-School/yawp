@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { buildPreviewForgeEnv } from './preview-env.mjs';
+import { buildPreviewEnv } from './preview-env.mjs';
 
 function q(value) {
   return JSON.stringify(String(value));
@@ -11,14 +11,14 @@ function optionalEnv(name, fallback = '') {
 
 export function renderPreviewCompose({
   prNumber = process.env.PR_NUMBER,
-  domain = process.env.PREVIEW_FORGE_DOMAIN,
-  root = process.env.PREVIEW_FORGE_ROOT,
+  domain = process.env.PREVIEW_DOMAIN,
+  root = process.env.PREVIEW_ROOT,
   sourceDir = process.env.SOURCE_DIR,
-  directPort = process.env.PREVIEW_FORGE_DIRECT_PORT,
-  enableTls = process.env.PREVIEW_FORGE_TLS !== 'false',
-  runtime = process.env.PREVIEW_FORGE_RUNTIME || 'fast',
+  directPort = process.env.PREVIEW_DIRECT_PORT,
+  enableTls = process.env.PREVIEW_TLS !== 'false',
+  runtime = process.env.PREVIEW_RUNTIME || 'fast',
 } = {}) {
-  const env = buildPreviewForgeEnv({
+  const env = buildPreviewEnv({
     prNumber,
     domain,
     root,
@@ -40,6 +40,7 @@ export function renderPreviewCompose({
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
+      AWS_EC2_METADATA_DISABLED: "true"
       SESSION_SECRET: ${q(optionalEnv('PREVIEW_SESSION_SECRET', 'preview-session-secret'))}
       INTERNAL_COMMAND_TOKEN: ${q(optionalEnv('PREVIEW_INTERNAL_COMMAND_TOKEN', 'preview-internal-token'))}
       HONEYPOT_SECRET: ${q(optionalEnv('PREVIEW_HONEYPOT_SECRET', 'preview-honeypot-secret'))}
@@ -64,9 +65,8 @@ export function renderPreviewCompose({
 ${fastVolumes}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - preview
 `
       : `  toolbox:
     profiles: ["tools"]
@@ -78,22 +78,18 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    networks:
+      - preview
 `;
   const webService =
     env.runtime === 'fast'
       ? `  web:
     image: oven/bun:1.3.1
     working_dir: /app
-    command: bash -lc "rm -rf services/web-app/.react-router services/web-app/.vite && bun install --ignore-scripts && bun prisma generate && cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
+    command: bash -lc "cd services/web-app && bun run dev -- --host 0.0.0.0 --port 8080"
 ${fastVolumes}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
 `
       : `  web:
     build:
@@ -104,46 +100,28 @@ ${commonEnvironment}
         DATABASE_URL: ${q(env.databaseUrl)}
     environment:
 ${commonEnvironment}
-    depends_on:
-      postgres:
-        condition: service_healthy
 `;
 
   return `name: ${env.composeProject}
 services:
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: yawp_preview
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d yawp_preview"]
-      interval: 2s
-      timeout: 2s
-      retries: 30
-    volumes:
-      - ${env.composeProject}-postgres-data:/var/lib/postgresql/data
-
 ${toolboxService}
 ${webService}    labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=preview-forge"
+      - "traefik.docker.network=preview"
       - ${q(`traefik.http.routers.${routerBase}-http.rule=Host(\`${env.hostname}\`)`)}
       - ${q(`traefik.http.routers.${routerBase}-http.entrypoints=web`)}
       - ${q(`traefik.http.routers.${routerBase}-http.service=${routerBase}`)}${tlsLabels}
       - ${q(`traefik.http.services.${routerBase}.loadbalancer.server.port=8080`)}
     networks:
       - default
-      - preview-forge${directPortBlock}
+      - preview${directPortBlock}
 
 volumes:
-  ${env.composeProject}-postgres-data:
   ${env.composeProject}-node-modules:
   ${env.composeProject}-web-node-modules:
 
 networks:
-  preview-forge:
+  preview:
     external: true
 `;
 }
