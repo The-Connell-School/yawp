@@ -1,5 +1,6 @@
 import { data as dataResponse, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { z } from 'zod';
+import { Prisma } from '@app/prisma';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
@@ -88,21 +89,27 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    let sourcePassagesJson = null;
+    let sourcePassagesJson: Prisma.InputJsonValue | typeof Prisma.JsonNull =
+      Prisma.JsonNull;
     if (parsed.data.sourcePassages) {
       try {
-        sourcePassagesJson = parseFirstJsonValue(parsed.data.sourcePassages);
+        const value = parseFirstJsonValue(parsed.data.sourcePassages);
+        sourcePassagesJson =
+          value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
       } catch {
-        sourcePassagesJson = null;
+        sourcePassagesJson = Prisma.JsonNull;
       }
     }
 
-    let tagsJson = null;
+    let tagsJson: Prisma.InputJsonValue | typeof Prisma.JsonNull =
+      Prisma.JsonNull;
     if (parsed.data.tags) {
       try {
-        tagsJson = parseFirstJsonValue(parsed.data.tags);
+        const value = parseFirstJsonValue(parsed.data.tags);
+        tagsJson =
+          value === null ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
       } catch {
-        tagsJson = null;
+        tagsJson = Prisma.JsonNull;
       }
     }
 
