@@ -51,8 +51,8 @@ import {
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
 } from '~/utils/feature-flags.server';
+import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
-import { DocumentSidePanel } from './comments/document-side-panel';
 import { DocumentEditor } from './document-editor/document-editor';
 import type { EditorBridge } from './document-editor/use-editor-sync';
 import { Tutor } from './tutor/tutor';
@@ -863,6 +863,7 @@ export default function Route() {
             {isMobile && tab !== 'editor' ? null : (
               <DocumentEditor
                 docId={data.doc.id}
+                assignment={data.doc.assignment}
                 serverHtml={editorServerHtml}
                 serverText={editorServerText}
                 serverUpdatedAt={data.doc.updatedAt}
@@ -877,8 +878,8 @@ export default function Route() {
               />
             )}
             {isMobile && tab !== 'comments' ? null : (
-              <DocumentSidePanel
-                assignment={data.doc.assignment}
+              <Comments
+                className="md:w-3/5"
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
                 onCommentRemoved={commentsState.removeComment}
