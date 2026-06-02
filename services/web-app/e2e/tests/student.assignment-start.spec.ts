@@ -100,6 +100,19 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
           .getByRole('button', { name: /collapse assignment prompt/i })
           .click();
         await expect(promptPanel).not.toContainText(uniquePromptMarker);
+        const collapsedPromptBox = await promptPanel.boundingBox();
+        const tutorHeaderBox = await page
+          .getByTestId('tutor-module-header')
+          .boundingBox();
+        expect(collapsedPromptBox).not.toBeNull();
+        expect(tutorHeaderBox).not.toBeNull();
+        if (!collapsedPromptBox) throw new Error('Missing collapsed prompt panel');
+        if (!tutorHeaderBox) throw new Error('Missing tutor module header');
+        expect(Math.abs(collapsedPromptBox.y - tutorHeaderBox.y)).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(collapsedPromptBox.height - tutorHeaderBox.height)
+        ).toBeLessThanOrEqual(1);
+        expect(collapsedPromptBox.height).toBeLessThanOrEqual(42);
         await expect(
           page.getByRole('button', { name: /expand assignment prompt/i })
         ).toBeVisible();

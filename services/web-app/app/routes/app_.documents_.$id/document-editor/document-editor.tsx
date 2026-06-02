@@ -156,16 +156,16 @@ function AssignmentPromptBanner({
           )}
         </Button>
       </div>
-      <div className="px-6 pb-2">
-        {!isCollapsed ? (
+      {!isCollapsed ? (
+        <div className="px-6 pb-2">
           <div
             className="overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
             style={{ maxHeight: PROMPT_EXPANDED_MAX_HEIGHT }}
           >
             {assignment.prompt}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

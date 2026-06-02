@@ -237,6 +237,7 @@ export const Tutor = ({
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',
           cms.assignmentModule.isSelfGuided ? '' : 'border-b'
         )}
+        data-testid="tutor-module-header"
       >
         <div className="flex h-[32px] w-full items-center gap-1">
           <div className="flex flex-grow items-center gap-2">
