@@ -93,6 +93,7 @@ mock.module('./hooks/use-document-submit', () => ({
 }));
 
 const {
+  getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
   loader,
   shouldShowGenericAssignmentPrompt,
@@ -231,6 +232,9 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(
       shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
     ).toBe(false);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, renderableSnapshot)
+    ).toBeNull();
   });
 
   test('falls back to the generic assignment prompt when AP History snapshot is invalid', () => {
@@ -249,6 +253,9 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(
       shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
     ).toBe(true);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, renderableSnapshot)
+    ).toBe(assignment);
   });
 
   test('keeps ordinary non-AP assignments on the generic assignment prompt', () => {
@@ -264,6 +271,9 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(
       shouldShowGenericAssignmentPrompt(assignment, renderableSnapshot)
     ).toBe(true);
+    expect(
+      getGenericAssignmentPromptForEditor(assignment, renderableSnapshot)
+    ).toBe(assignment);
   });
 
   test('renders AP History source content inside a bounded scroll area', () => {

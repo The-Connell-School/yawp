@@ -61,7 +61,6 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
-import { formatDateOnly } from '~/utils/date-only';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -415,6 +414,15 @@ export function shouldShowGenericAssignmentPrompt(
   return Boolean(assignment && !apHistorySnapshot);
 }
 
+export function getGenericAssignmentPromptForEditor<T>(
+  assignment: T,
+  apHistorySnapshot: ApHistorySnapshot | null
+): T | null {
+  return shouldShowGenericAssignmentPrompt(assignment, apHistorySnapshot)
+    ? assignment
+    : null;
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
@@ -439,7 +447,7 @@ export default function Route() {
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
   const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
-  const showGenericAssignmentPrompt = shouldShowGenericAssignmentPrompt(
+  const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
     apHistorySnapshot
   );
@@ -863,28 +871,6 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {assignment && showGenericAssignmentPrompt ? (
-          <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info-outlined" size="sm">
-                  Assignment Prompt
-                </Badge>
-                <span className="text-sm font-medium">
-                  {assignment.title?.trim() || 'Untitled Assignment'}
-                </span>
-                {assignment.dueDate ? (
-                  <span className="text-xs text-muted-foreground">
-                    Due {formatDateOnly(assignment.dueDate)}
-                  </span>
-                ) : null}
-              </div>
-              <p className="whitespace-pre-wrap text-sm text-foreground/90">
-                {assignment.prompt}
-              </p>
-            </div>
-          </div>
-        ) : null}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">
@@ -919,6 +905,7 @@ export default function Route() {
             {isMobile && tab !== 'editor' ? null : (
               <DocumentEditor
                 docId={data.doc.id}
+                assignment={editorAssignmentPrompt}
                 serverHtml={editorServerHtml}
                 serverText={editorServerText}
                 serverUpdatedAt={data.doc.updatedAt}
@@ -934,6 +921,7 @@ export default function Route() {
             )}
             {isMobile && tab !== 'comments' ? null : (
               <Comments
+                className="md:w-3/5"
                 comments={visibleComments as any}
                 readOnly={!isDocumentEditable}
                 onCommentRemoved={commentsState.removeComment}
