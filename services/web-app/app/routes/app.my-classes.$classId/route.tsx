@@ -81,6 +81,7 @@ import {
   studentModuleSessionSingleSelect,
 } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -156,10 +157,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         some: { organizationId: profile.organization.id },
       },
     },
-    select: { id: true },
+    select: { id: true, systemKey: true },
   });
   const allowedAssignmentTypeIds = new Set(
-    allowedAssignmentTypes.map((type) => type.id)
+    allowedAssignmentTypes
+      .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+      .map((type) => type.id)
   );
 
   const formData = await request.formData();
@@ -254,8 +257,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    let existingAssignment: { id: string; assignmentTypeId: string } | null =
-      null;
+    let existingAssignment: {
+      id: string;
+      assignmentTypeId: string;
+      assignmentType: { systemKey: string | null };
+    } | null = null;
     if (intent === 'update-assignment') {
       if (!assignmentId) {
         return dataResponse(
@@ -266,7 +272,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
       existingAssignment = await prisma.assignment.findFirst({
         where: { id: assignmentId, classId },
-        select: { id: true, assignmentTypeId: true },
+        select: {
+          id: true,
+          assignmentTypeId: true,
+          assignmentType: { select: { systemKey: true } },
+        },
       });
 
       if (!existingAssignment) {
@@ -275,6 +285,23 @@ export async function action({ request, params }: ActionFunctionArgs) {
           { status: 404 }
         );
       }
+    }
+
+    const selectedAssignmentType = allowedAssignmentTypes.find(
+      (type) => type.id === assignmentTypeId
+    );
+    if (
+      selectedAssignmentType?.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY ||
+      existingAssignment?.assignmentType.systemKey ===
+        AP_HISTORY_ASSIGNMENT_TYPE_KEY
+    ) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'Choose an APUSH prompt from the library first.',
+        },
+        { status: 400 }
+      );
     }
 
     const isPreservingCurrentArchivedType =
@@ -397,9 +424,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         some: { organizationId: profile.organization.id },
       },
     },
-    select: { id: true, title: true },
+    select: { id: true, title: true, systemKey: true },
     orderBy: { position: 'asc' },
   });
+  const genericAllowedAssignmentTypes = allowedAssignmentTypes.filter(
+    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
+  );
 
   const profiles = await prisma.profile.findMany({
     where: {
@@ -594,6 +624,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          systemKey: true,
         },
       },
       _count: {
@@ -609,7 +640,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     klass,
-    allowedAssignmentTypes,
+    allowedAssignmentTypes: genericAllowedAssignmentTypes,
     profiles,
     pasteAlerts,
     submissions,
@@ -1495,6 +1526,9 @@ function ClassDetailPage() {
                 const pasteCount = data.pasteAlerts.filter(
                   (a) => a.document.assignmentId === assignment.id
                 ).length;
+                const canEditAssignment =
+                  assignment.assignmentType.systemKey !==
+                  AP_HISTORY_ASSIGNMENT_TYPE_KEY;
                 return (
                   <TableRow key={assignment.id}>
                     <TableCell className="font-medium">
@@ -1579,17 +1613,19 @@ function ClassDetailPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          type="button"
-                          onClick={() => {
-                            setEditingAssignmentId(assignment.id);
-                            setIsAssignmentSheetOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
+                        {canEditAssignment ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            type="button"
+                            onClick={() => {
+                              setEditingAssignmentId(assignment.id);
+                              setIsAssignmentSheetOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                        ) : null}
                         <Form
                           method="post"
                           onSubmit={(event) => {

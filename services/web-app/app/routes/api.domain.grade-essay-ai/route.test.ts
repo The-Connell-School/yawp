@@ -81,6 +81,73 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const dbqSnapshot = {
+  schemaVersion: 1,
+  libraryEntryId: 'apush-dbq-reconstruction',
+  course: 'apush',
+  essayType: 'dbq',
+  prompt:
+    'Evaluate the extent to which Reconstruction changed political rights for African Americans.',
+  period: 'Period 5: 1844-1877',
+  periodNumber: 5,
+  reasoningSkill: 'Causation',
+  sources: [
+    {
+      externalKey: 'doc-1',
+      position: 1,
+      title: 'Fourteenth Amendment',
+      attribution: 'United States Constitution, 1868',
+      body: 'All persons born or naturalized in the United States are citizens.',
+      caption: null,
+      mediaType: 'text',
+      imageUrl: null,
+      imageAlt: null,
+      provenanceUrl: null,
+    },
+    {
+      externalKey: 'doc-2',
+      position: 2,
+      title: 'Freedmen Petition',
+      attribution: 'Petition from formerly enslaved people, 1865',
+      body: 'We ask for land and protection of our rights.',
+      caption: null,
+      mediaType: 'text',
+      imageUrl: null,
+      imageAlt: null,
+      provenanceUrl: null,
+    },
+  ],
+  rubric: {
+    rubricId: 'ap-history-dbq-2026',
+    totalPoints: 7,
+  },
+  timing: {
+    mode: 'timed',
+    durationMinutes: 60,
+  },
+};
+
+const leqSnapshot = {
+  schemaVersion: 1,
+  libraryEntryId: 'apush-leq-market-revolution',
+  course: 'apush',
+  essayType: 'leq',
+  prompt:
+    'Evaluate the extent to which the Market Revolution changed American society.',
+  period: 'Period 4: 1800-1848',
+  periodNumber: 4,
+  reasoningSkill: 'Continuity and Change',
+  sources: [],
+  rubric: {
+    rubricId: 'ap-history-leq-2026',
+    totalPoints: 6,
+  },
+  timing: {
+    mode: 'timed',
+    durationMinutes: 40,
+  },
+};
+
 describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
@@ -315,6 +382,369 @@ describe('api.domain.grade-essay-ai', () => {
     expect(payload.numericPercentage).toBe(77);
     expect(payload.letterGrade).toBe('C');
     expect(payload.score).toBe('77% (C)');
+  });
+
+  test('grades AP History DBQ submissions with AP rubric points and skips grammar pass', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-dbq-2026',
+        points: {
+          thesis: {
+            earned: true,
+            comment: 'The thesis makes a historically defensible claim.',
+          },
+          contextualization: {
+            earned: true,
+            comment: 'The essay places Reconstruction in the Civil War context.',
+          },
+          document_use_describes: {
+            earned: true,
+            comment: 'The essay accurately describes evidence from the documents.',
+          },
+          document_use_supports_argument: {
+            earned: false,
+            comment: 'The documents are not yet tied consistently to the argument.',
+          },
+          outside_evidence: {
+            earned: true,
+            comment: 'The essay uses the Freedmen Bureau as outside evidence.',
+          },
+          sourcing: {
+            earned: false,
+            comment: 'The essay needs clearer sourcing of document perspective.',
+          },
+          complexity: {
+            earned: false,
+            comment: 'The essay does not yet develop a complex argument.',
+          },
+        },
+        overallComment:
+          'Jordan, your DBQ establishes a defensible line of reasoning and should connect document evidence more directly to the argument.',
+      })
+    );
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-sub-1',
+        text: 'Reconstruction changed political rights through amendments and federal enforcement.',
+        document: {
+          id: 'ap-doc-1',
+          profileId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: dbqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          studentProfile: { classes: [] },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-sub-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
+    const firstCallArgs = getLLMCompletion.mock.calls[0]?.[0];
+    const system = firstCallArgs?.system;
+    const prompt = firstCallArgs?.messages?.[0]?.content;
+    expect(system).toContain('Return ONLY valid JSON with the schema');
+    expect(system).toContain('"rubricVersion": "ap-history-dbq-2026"');
+    expect(prompt).toContain('APUSH DBQ');
+    expect(prompt).toContain(dbqSnapshot.prompt);
+    expect(prompt).toContain('Period: Period 5: 1844-1877 (Period 5)');
+    expect(prompt).toContain('Reasoning skill: Causation');
+    expect(prompt).toContain('Rubric: ap-history-dbq-2026');
+    expect(prompt).toContain('Total points: 7');
+    expect(prompt).toContain('Document 1: Fourteenth Amendment');
+    expect(prompt).toContain(
+      'Body: All persons born or naturalized in the United States are citizens.'
+    );
+    expect(prompt).toContain(
+      'Reconstruction changed political rights through amendments and federal enforcement.'
+    );
+
+    expect(prisma.submission.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          document: expect.objectContaining({
+            select: expect.objectContaining({
+              assignment: {
+                select: expect.objectContaining({
+                  apHistorySnapshot: true,
+                }),
+              },
+            }),
+          }),
+        }),
+      })
+    );
+
+    expect(payload.success).toBe(true);
+    expect(payload.grammarIssues).toBeNull();
+    expect(payload.rubricScores).toEqual({
+      schemaVersion: 1,
+      rubricId: 'ap-history-dbq-2026',
+      totalPoints: 7,
+      earnedPoints: 4,
+      points: {
+        thesis: {
+          earned: true,
+          comment: 'The thesis makes a historically defensible claim.',
+        },
+        contextualization: {
+          earned: true,
+          comment: 'The essay places Reconstruction in the Civil War context.',
+        },
+        document_use_describes: {
+          earned: true,
+          comment: 'The essay accurately describes evidence from the documents.',
+        },
+        document_use_supports_argument: {
+          earned: false,
+          comment: 'The documents are not yet tied consistently to the argument.',
+        },
+        outside_evidence: {
+          earned: true,
+          comment: 'The essay uses the Freedmen Bureau as outside evidence.',
+        },
+        sourcing: {
+          earned: false,
+          comment: 'The essay needs clearer sourcing of document perspective.',
+        },
+        complexity: {
+          earned: false,
+          comment: 'The essay does not yet develop a complex argument.',
+        },
+      },
+    });
+    const updateData = prisma.submission.update.mock.calls[0]?.[0]?.data;
+    expect(updateData).toEqual(
+      expect.objectContaining({
+        rubricScores: payload.rubricScores,
+        aiMeta: expect.objectContaining({
+          rubricMode: 'ap_history',
+        }),
+      })
+    );
+    expect(Object.hasOwn(updateData, 'grammarIssues')).toBe(false);
+  });
+
+  test('grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-leq-2026',
+        points: {
+          thesis: {
+            earned: true,
+            comment: 'The thesis makes a defensible claim.',
+          },
+          contextualization: {
+            earned: true,
+            comment:
+              'The essay situates the Market Revolution in the early republic.',
+          },
+          evidence: {
+            earned: true,
+            comment: 'The essay uses specific evidence about canals and factories.',
+          },
+          analysis_reasoning: {
+            earned: true,
+            comment: 'The essay explains change over time.',
+          },
+          complexity: {
+            earned: 'true',
+            comment: 123,
+          },
+          document_use_describes: {
+            earned: true,
+            comment: 'This DBQ-only point must not count or persist for LEQ.',
+          },
+          sourcing: {
+            earned: true,
+            comment: 'This DBQ-only point must not count or persist for LEQ.',
+          },
+        },
+        overallComment:
+          'Jordan, your LEQ uses evidence effectively and should develop more complexity.',
+      })
+    );
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-leq-sub-1',
+        text: 'The Market Revolution changed society through wage labor, transportation, and regional specialization.',
+        document: {
+          id: 'ap-leq-doc-1',
+          profileId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: leqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          studentProfile: { classes: [] },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-leq-sub-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    expect(payload.rubricScores).toEqual({
+      schemaVersion: 1,
+      rubricId: 'ap-history-leq-2026',
+      totalPoints: 6,
+      earnedPoints: 4,
+      points: {
+        thesis: {
+          earned: true,
+          comment: 'The thesis makes a defensible claim.',
+        },
+        contextualization: {
+          earned: true,
+          comment:
+            'The essay situates the Market Revolution in the early republic.',
+        },
+        evidence: {
+          earned: true,
+          comment: 'The essay uses specific evidence about canals and factories.',
+        },
+        analysis_reasoning: {
+          earned: true,
+          comment: 'The essay explains change over time.',
+        },
+        complexity: {
+          earned: false,
+          comment: '',
+        },
+        supporting_evidence: {
+          earned: false,
+          comment: '',
+        },
+      },
+    });
+    expect(
+      (payload.rubricScores as any).points.document_use_describes
+    ).toBeUndefined();
+    expect((payload.rubricScores as any).points.sourcing).toBeUndefined();
+  });
+
+  test('returns a 502 response when AP History output omits the points object', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-dbq-2026',
+        overallComment: 'Jordan, this AP response is missing point data.',
+      })
+    );
+
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-sub-malformed',
+        text: 'Reconstruction changed political rights through amendments.',
+        document: {
+          id: 'ap-doc-malformed',
+          profileId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: dbqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          studentProfile: { classes: [] },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-sub-malformed');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      init?: {
+        status?: number;
+      };
+      data: Record<string, unknown>;
+    };
+
+    expect(response.init?.status).toBe(502);
+    expect(response.data).toEqual({
+      success: false,
+      message: 'Grading Assistant returned malformed data. Please try again.',
+    });
+    expect(prisma.submission.update).not.toHaveBeenCalled();
+  });
+
+  test('lets AP History persistence failures throw normally after valid model output', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        rubricVersion: 'ap-history-dbq-2026',
+        points: {
+          thesis: { earned: true, comment: 'Defensible thesis.' },
+          contextualization: { earned: false, comment: 'Needs broader context.' },
+          document_use_describes: { earned: false, comment: 'Needs documents.' },
+          document_use_supports_argument: {
+            earned: false,
+            comment: 'Needs argument support.',
+          },
+          outside_evidence: { earned: false, comment: 'Needs outside evidence.' },
+          sourcing: { earned: false, comment: 'Needs sourcing.' },
+          complexity: { earned: false, comment: 'Needs complexity.' },
+        },
+        overallComment: 'Jordan, this DBQ has a defensible thesis.',
+      })
+    );
+    prisma.submission.update.mockRejectedValueOnce(new Error('database down'));
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'ap-sub-db-failure',
+        text: 'Reconstruction changed political rights through amendments.',
+        document: {
+          id: 'ap-doc-db-failure',
+          profileId: 'student-profile-1',
+          assignment: {
+            apHistorySnapshot: dbqSnapshot,
+            class: { schoolId: 'school-1' },
+          },
+          studentProfile: { classes: [] },
+          profile: { user: { name: 'Jordan Student' } },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'ap-sub-db-failure');
+
+    await expect(
+      action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any)
+    ).rejects.toThrow('database down');
   });
 
   test('repairs a top-level categories array response from the model', async () => {

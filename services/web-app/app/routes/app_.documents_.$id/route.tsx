@@ -75,6 +75,11 @@ import {
   partitionSubmissionsByArchive,
   versionLabelForActiveSubmission,
 } from '~/utils/submission-versions';
+import {
+  isApHistorySnapshot,
+  type ApHistorySnapshot,
+} from '~/domain/ap-history/schema';
+import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -195,6 +200,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           prompt: true,
           tutorContext: true,
           dueDate: true,
+          apHistorySnapshot: true,
           class: {
             select: {
               id: true,
@@ -391,6 +397,24 @@ type SubmissionRow = {
   archivedAt: string | Date | null;
 };
 
+type AssignmentWithApHistorySnapshot = {
+  apHistorySnapshot?: unknown;
+} | null;
+
+export function getRenderableApHistorySnapshot(
+  assignment: AssignmentWithApHistorySnapshot
+): ApHistorySnapshot | null {
+  const raw = assignment?.apHistorySnapshot;
+  return isApHistorySnapshot(raw) ? raw : null;
+}
+
+export function shouldShowGenericAssignmentPrompt(
+  assignment: unknown,
+  apHistorySnapshot: ApHistorySnapshot | null
+) {
+  return Boolean(assignment && !apHistorySnapshot);
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
@@ -413,6 +437,12 @@ export default function Route() {
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
+  const assignment = data.doc.assignment;
+  const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  const showGenericAssignmentPrompt = shouldShowGenericAssignmentPrompt(
+    assignment,
+    apHistorySnapshot
+  );
 
   // Merge server + optimistic submissions
   const submissions = useMemo(() => {
@@ -608,6 +638,9 @@ export default function Route() {
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
+        {apHistorySnapshot ? (
+          <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
+        ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
           <div className="flex items-center gap-4">
             <Button
@@ -830,7 +863,7 @@ export default function Route() {
             <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
           </div>
         </nav>
-        {data.doc.assignment ? (
+        {assignment && showGenericAssignmentPrompt ? (
           <div className="mx-auto w-full max-w-screen-2xl border-b bg-amber-50 px-3 py-3">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -838,16 +871,16 @@ export default function Route() {
                   Assignment Prompt
                 </Badge>
                 <span className="text-sm font-medium">
-                  {data.doc.assignment.title?.trim() || 'Untitled Assignment'}
+                  {assignment.title?.trim() || 'Untitled Assignment'}
                 </span>
-                {data.doc.assignment.dueDate ? (
+                {assignment.dueDate ? (
                   <span className="text-xs text-muted-foreground">
-                    Due {formatDateOnly(data.doc.assignment.dueDate)}
+                    Due {formatDateOnly(assignment.dueDate)}
                   </span>
                 ) : null}
               </div>
               <p className="whitespace-pre-wrap text-sm text-foreground/90">
-                {data.doc.assignment.prompt}
+                {assignment.prompt}
               </p>
             </div>
           </div>
@@ -866,7 +899,7 @@ export default function Route() {
           </TabsList>
         </Tabs>
         <CommentsSelectionProvider>
-          <div className="mx-auto flex h-full w-full max-w-screen-2xl overflow-hidden">
+          <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
             {isMobile && tab !== 'tutor' ? null : (
               <Tutor
                 docId={data.doc.id}

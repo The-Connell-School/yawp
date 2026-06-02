@@ -130,7 +130,7 @@ describe('class detail loader document visibility', () => {
           some: { organizationId: 'org-1' },
         },
       },
-      select: { id: true, title: true },
+      select: { id: true, title: true, systemKey: true },
       orderBy: { position: 'asc' },
     });
     expect(
@@ -173,10 +173,101 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
+  test('omits AP History from the generic class assignment picker', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([
+      { id: 'generic-type-1', title: 'Literary Analysis', systemKey: null },
+      {
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      },
+    ]);
+
+    const response = await loader({
+      request: new Request('https://example.test/app/my-classes/class-1'),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+    const data = (response as { data: any }).data;
+
+    expect(data.allowedAssignmentTypes).toEqual([
+      { id: 'generic-type-1', title: 'Literary Analysis', systemKey: null },
+    ]);
+  });
+
+  test('rejects generic class-page AP History assignment creation', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'ap-history-type');
+    form.set('prompt', 'Teacher-authored AP prompt');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Choose an APUSH prompt from the library first.',
+    });
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(prisma.assignment.create).not.toHaveBeenCalled();
+  });
+
+  test('rejects generic edits to AP History assignment snapshots', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'ap-history-type',
+        title: 'AP History Essay',
+        systemKey: 'ap_history_essay',
+      },
+    ]);
+    prisma.assignment.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      assignmentTypeId: 'ap-history-type',
+      assignmentType: { systemKey: 'ap_history_essay' },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'update-assignment');
+    form.set('assignmentId', 'assignment-1');
+    form.set('assignmentTypeId', 'ap-history-type');
+    form.set('prompt', 'Changed AP prompt');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Choose an APUSH prompt from the library first.',
+    });
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(prisma.assignment.update).not.toHaveBeenCalled();
+  });
+
   test('allows editing an assignment that keeps its archived assignment type', async () => {
     prisma.assignment.findFirst.mockResolvedValue({
       id: 'assignment-1',
       assignmentTypeId: 'archived-type-1',
+      assignmentType: { systemKey: null },
     });
 
     const form = new FormData();

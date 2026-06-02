@@ -1,8 +1,7 @@
 /* eslint-disable no-console */
-import {
-  createE2EPrismaClient,
-  type E2EPrismaClient,
-} from './prisma-client';
+import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
+import { setPilotFeatureAccessTarget } from './db-helpers';
+import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
 
 let prisma: E2EPrismaClient | null = null;
@@ -50,6 +49,9 @@ export type E2EContext = {
   teacherEmail: string;
   assignmentTypeId: string;
   dailyPagesAssignmentTypeId: string;
+  apHistoryAssignmentTypeId: string;
+  apHistoryDbqEntryKey: string;
+  apHistoryLeqEntryKey: string;
   teacherTrainingId: string;
   freshDocumentId: string;
   editedDocumentId: string;
@@ -214,6 +216,82 @@ export async function seedE2E(): Promise<E2EContext> {
             },
           },
         ],
+      },
+    },
+    select: { id: true },
+  });
+
+  const apHistoryDbqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
+    (entry) => entry.essayType === 'dbq'
+  );
+  const apHistoryLeqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
+    (entry) => entry.essayType === 'leq'
+  );
+
+  if (!apHistoryDbqEntry || !apHistoryLeqEntry) {
+    throw new Error('E2E AP History seed requires both DBQ and LEQ entries.');
+  }
+
+  const apHistoryAssignmentType = await prisma.assignmentType.create({
+    data: {
+      title: 'AP History Essay',
+      systemKey: 'ap_history_essay',
+      description: 'Curated APUSH DBQ and LEQ practice.',
+      position: 3,
+      ownerOrgId: org.id,
+      organizationAssignments: {
+        create: { organizationId: org.id },
+      },
+      assignmentModules: {
+        create: [
+          {
+            title: 'AP History Essay',
+            position: 1,
+            description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
+            instructions: {
+              create: [
+                {
+                  title: 'Write',
+                  prompt:
+                    'Use the selected APUSH prompt and source panel to draft your response.',
+                  position: 1,
+                  showChatButton: true,
+                },
+              ],
+            },
+          },
+        ],
+      },
+      apHistoryLibraryEntries: {
+        create: AP_HISTORY_LIBRARY_ENTRIES.map((entry) => ({
+          externalKey: entry.externalKey,
+          course: entry.course,
+          essayType: entry.essayType,
+          title: entry.title,
+          prompt: entry.prompt,
+          period: entry.period,
+          periodNumber: entry.periodNumber,
+          reasoningSkill: entry.reasoningSkill,
+          difficulty: entry.difficulty,
+          skillEmphasis: entry.skillEmphasis,
+          defaultTimeMode: entry.defaultTimeMode,
+          defaultDurationMinutes: entry.defaultDurationMinutes,
+          provenanceUrl: entry.provenanceUrl,
+          sources: {
+            create: entry.sources.map((source) => ({
+              externalKey: source.externalKey,
+              position: source.position,
+              title: source.title,
+              attribution: source.attribution,
+              body: source.body,
+              caption: source.caption,
+              mediaType: source.mediaType,
+              imageUrl: source.imageUrl,
+              imageAlt: source.imageAlt,
+              provenanceUrl: source.provenanceUrl,
+            })),
+          },
+        })),
       },
     },
     select: { id: true },
@@ -469,6 +547,14 @@ export async function seedE2E(): Promise<E2EContext> {
       valueType: 'string',
     },
   });
+  await setPilotFeatureAccessTarget({
+    prisma,
+    featureKey: 'ap_history_essay',
+    targetKind: 'teacher',
+    targetId: seededTeacherProfileId,
+    enabled: true,
+    note: 'E2E AP History library-first teacher access',
+  });
 
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.assignmentModuleSession.create({
@@ -496,6 +582,9 @@ export async function seedE2E(): Promise<E2EContext> {
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
+    apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
+    apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
+    apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
     teacherTrainingId: teacherTraining.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,
