@@ -146,4 +146,52 @@ describe('api.model.assignment-module-session.$id', () => {
       'i2'
     );
   });
+
+  test('increment advances by instruction position when fetched instructions are unordered', async () => {
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      ...baseCms,
+      assignmentModule: {
+        instructions: [
+          { id: 'i2', prompt: 'Second step', buttons: [], position: 2 },
+          { id: 'i1', prompt: 'First step', buttons: [], position: 1 },
+          { id: 'i3', prompt: 'Third step', buttons: [], position: 3 },
+        ],
+      },
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce(
+      updatedCmsShape
+    );
+    prisma.assignmentModuleSession.update.mockResolvedValue({
+      id: 'cms-1',
+      instructionsCompleted: 1,
+    });
+
+    const form = new FormData();
+    form.append('instructionsCompleted.increment', '1');
+    form.append('incrementButtonText', 'Ready');
+
+    const request = new Request(
+      'https://example.com/api/model/assignment-module-session/cms-1',
+      { method: 'POST', body: form }
+    );
+
+    await action({
+      request,
+      params: { id: 'cms-1' },
+    } as any);
+
+    const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
+    expect(updateCall[0].data.messages.createMany.data).toEqual([
+      {
+        content: 'Ready',
+        agent: 'user',
+        instructionId: 'i1',
+      },
+      {
+        content: 'Second step',
+        agent: 'assistant',
+        instructionId: 'i2',
+      },
+    ]);
+  });
 });
