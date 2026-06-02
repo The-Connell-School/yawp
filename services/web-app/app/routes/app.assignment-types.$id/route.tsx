@@ -29,10 +29,16 @@ import {
   createDocumentForAssignmentType,
   DocumentCreationError,
 } from '~/domain/documents.server';
+import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
+import {
+  getAssignmentsEnabledClassIdsForContext,
+  isApHistoryEssayEnabledForContext,
+} from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
+import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -300,6 +306,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const isDailyPages =
     assignmentType.title.trim().toLowerCase() === DAILY_PAGES_TITLE;
+  const isApHistory =
+    assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
     profile.teacherProfile && isDailyPages
       ? {
@@ -326,6 +334,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentEnabledTeacherClasses = profile.teacherProfile
     ? teacherClasses.filter((klass) => enabledTeacherClassIds.has(klass.id))
     : [];
+  let apHistoryLibrary = null;
+  if (profile.teacherProfile && isApHistory) {
+    const teacherProfileId = profile.teacherProfile.id;
+    const apClassEligibility = await Promise.all(
+      assignmentEnabledTeacherClasses.map(async (klass) => {
+        const apHistoryEnabled = await isApHistoryEssayEnabledForContext({
+          organizationId: profile.organization.id,
+          schoolIds: [klass.school.id],
+          teacherProfileId,
+          teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
+          classIds: [klass.id],
+        });
+
+        return apHistoryEnabled ? klass : null;
+      })
+    );
+    const apEligibleClasses = apClassEligibility.filter((klass) => klass != null);
+
+    if (apEligibleClasses.length > 0) {
+      apHistoryLibrary = {
+        entries: await listApHistoryLibraryEntries(assignmentType.id),
+        teacherClasses: apEligibleClasses,
+      };
+    }
+  }
 
   return dataResponse({
     assignmentType,
@@ -333,6 +366,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     archivedDocuments,
     teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
+    apHistoryLibrary,
   });
 }
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -346,13 +380,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
         some: { organizationId: profile.organization.id },
       },
     },
-    select: { id: true },
+    select: { id: true, systemKey: true },
   });
 
   if (!assignmentType) {
     return redirectWithToast('/app', {
       type: 'error',
       description: 'Assignment type not found',
+    });
+  }
+
+  if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    return redirectWithToast(`/app/assignment-types/${params.id}`, {
+      type: 'error',
+      description: 'Choose an APUSH prompt from the library first.',
     });
   }
 
@@ -398,7 +439,19 @@ export default function AppAssignmentTypesIdRoute() {
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [libraryPrompt, setLibraryPrompt] = useState('');
+  const [apHistoryEntry, setApHistoryEntry] = useState<{
+    externalKey: string;
+    title: string;
+    prompt: string;
+    essayType: string;
+  } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
+  const isApHistoryAssignmentType =
+    data.assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
+  const canCreateDirectDocument = !isApHistoryAssignmentType;
+  const assignmentSheetClasses = isApHistoryAssignmentType
+    ? (data.apHistoryLibrary?.teacherClasses ?? [])
+    : data.teacherClasses;
 
   return (
     <div className="no-scrollbar h-full w-full overflow-y-scroll">
@@ -412,40 +465,46 @@ export default function AppAssignmentTypesIdRoute() {
 
           {isTeacher ? (
             <>
-              <Form method="post" ref={docFormRef} className="hidden" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button type="button" className="w-fit">
-                    New <ChevronDownIcon className="ml-1 h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    disabled={!hasModules || isLoading}
-                    onSelect={() => docFormRef.current?.requestSubmit()}
-                  >
-                    Document
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={data.teacherClasses.length === 0}
-                    onSelect={() => {
-                      setLibraryPrompt('');
-                      setIsAssignmentSheetOpen(true);
-                    }}
-                  >
-                    Assignment
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {canCreateDirectDocument ? (
+                <>
+                  <Form method="post" ref={docFormRef} className="hidden" />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" className="w-fit">
+                        New <ChevronDownIcon className="ml-1 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        disabled={!hasModules || isLoading}
+                        onSelect={() => docFormRef.current?.requestSubmit()}
+                      >
+                        Document
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={data.teacherClasses.length === 0}
+                        onSelect={() => {
+                          setLibraryPrompt('');
+                          setApHistoryEntry(null);
+                          setIsAssignmentSheetOpen(true);
+                        }}
+                      >
+                        Assignment
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
-                teacherClasses={data.teacherClasses}
+                teacherClasses={assignmentSheetClasses}
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
+                apHistoryEntry={apHistoryEntry}
               />
             </>
-          ) : (
+          ) : canCreateDirectDocument ? (
             <Form method="post">
               <Button
                 type="submit"
@@ -456,7 +515,7 @@ export default function AppAssignmentTypesIdRoute() {
                 New <PlusIcon className="ml-1 h-5 w-5" />
               </Button>
             </Form>
-          )}
+          ) : null}
         </div>
         <div className="flex flex-col items-start gap-6 pb-6 sm:flex-row">
           {data.assignmentType.image ? (
@@ -500,7 +559,20 @@ export default function AppAssignmentTypesIdRoute() {
               optionCounts={data.promptLibrary.optionCounts}
               totalCount={data.promptLibrary.totalCount}
               onSelectPrompt={(prompt) => {
+                setApHistoryEntry(null);
                 setLibraryPrompt(prompt);
+                setIsAssignmentSheetOpen(true);
+              }}
+            />
+          </div>
+        ) : null}
+        {data.apHistoryLibrary ? (
+          <div className="pb-6">
+            <ApHistoryLibrary
+              entries={data.apHistoryLibrary.entries}
+              onSelectEntry={(entry) => {
+                setApHistoryEntry(entry);
+                setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
               }}
             />
@@ -552,10 +624,14 @@ export default function AppAssignmentTypesIdRoute() {
           <NoDataPlaceholder
             title="No documents"
             subtitle={
-              <>
-                Hit the <code className="px-1">New +</code> button above to
-                create your first document.
-              </>
+              canCreateDirectDocument ? (
+                <>
+                  Hit the <code className="px-1">New +</code> button above to
+                  create your first document.
+                </>
+              ) : (
+                'Choose a prompt from the APUSH library to create an assignment.'
+              )
             }
           />
         )}

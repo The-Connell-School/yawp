@@ -15,6 +15,7 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 const {
   getAssignmentsEnabledClassIdsForContext,
   getTargetedFeatureFlagIds,
+  isApHistoryEssayEnabledForContext,
   isAssignmentsEnabledForContext,
   isAssignmentsEnabledForOrganization,
   isDocumentSubmissionEnabledForScope,
@@ -353,6 +354,83 @@ describe('getAssignmentsEnabledClassIdsForContext', () => {
 
     expect(result).toEqual(['class-2', 'class-3']);
     expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('isApHistoryEssayEnabledForContext', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
+  });
+
+  test('returns true when an AP History pilot target matches any context scope', async () => {
+    prisma.featureAccessTarget.findFirst.mockResolvedValue({ id: 'fat-ap-1' });
+
+    const result = await isApHistoryEssayEnabledForContext({
+      organizationId: 'org-1',
+      schoolIds: ['school-1', 'school-2'],
+      teacherProfileId: 'teacher-1',
+      teacherProfileIds: ['teacher-2'],
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledWith({
+      where: {
+        featureKey: 'ap_history_essay',
+        enabled: true,
+        OR: [
+          { targetKind: 'organization', targetId: { in: ['org-1'] } },
+          {
+            targetKind: 'school',
+            targetId: { in: ['school-1', 'school-2'] },
+          },
+          {
+            targetKind: 'teacher',
+            targetId: { in: ['teacher-1', 'teacher-2'] },
+          },
+          { targetKind: 'class', targetId: { in: ['class-1'] } },
+        ],
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+
+  test('returns false when no AP History pilot target matches', async () => {
+    prisma.featureAccessTarget.findFirst.mockResolvedValue(null);
+
+    const result = await isApHistoryEssayEnabledForContext({
+      organizationId: 'org-1',
+      schoolIds: ['school-1'],
+      teacherProfileIds: ['teacher-1'],
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(false);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledWith({
+      where: {
+        featureKey: 'ap_history_essay',
+        enabled: true,
+        OR: [
+          { targetKind: 'organization', targetId: { in: ['org-1'] } },
+          { targetKind: 'school', targetId: { in: ['school-1'] } },
+          { targetKind: 'teacher', targetId: { in: ['teacher-1'] } },
+          { targetKind: 'class', targetId: { in: ['class-1'] } },
+        ],
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+        ],
+      },
+      select: { id: true },
+    });
   });
 });
 

@@ -10,6 +10,7 @@ const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
 const PILOT_FEATURE_KEYS = [
   'assignments',
   'document_submission_grading',
+  'ap_history_essay',
 ] as const;
 
 type PilotFeatureKey = (typeof PILOT_FEATURE_KEYS)[number];

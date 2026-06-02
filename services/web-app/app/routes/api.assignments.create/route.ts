@@ -1,7 +1,15 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import {
+  buildAssignmentCreateInputFromApHistoryEntry,
+  getApHistoryLibraryEntryForSnapshot,
+} from '~/domain/ap-history/library.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
+import {
+  isApHistoryEssayEnabledForContext,
+  isAssignmentsEnabledForContext,
+} from '~/utils/feature-flags.server';
 
 function parseDateOnlyToUtc(value: string): Date | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -53,12 +61,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
   const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
+  const apHistoryLibraryEntryIdRaw =
+    formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const tutorContext = tutorContextRaw.trim() || null;
   const dueDateInput = dueDateRaw.trim();
   const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
+  const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
 
   if (!assignmentTypeId) {
     return dataResponse(
@@ -69,12 +80,6 @@ export async function action({ request }: ActionFunctionArgs) {
   if (classIds.length === 0) {
     return dataResponse(
       { success: false, message: 'At least one class is required.' },
-      { status: 400 }
-    );
-  }
-  if (!prompt) {
-    return dataResponse(
-      { success: false, message: 'Prompt is required.' },
       { status: 400 }
     );
   }
@@ -136,7 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
         some: { organizationId: { in: organizationIds } },
       },
     },
-    select: { id: true },
+    select: { id: true, systemKey: true },
   });
 
   if (!assignmentType) {
@@ -145,6 +150,70 @@ export async function action({ request }: ActionFunctionArgs) {
         success: false,
         message: 'Selected assignment type is not available.',
       },
+      { status: 400 }
+    );
+  }
+
+  if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    if (!apHistoryLibraryEntryId) {
+      return dataResponse(
+        { success: false, message: 'AP History library entry is required.' },
+        { status: 400 }
+      );
+    }
+
+    const apHistoryFlags = await Promise.all(
+      classes.map((klass) =>
+        isApHistoryEssayEnabledForContext({
+          organizationId: klass.school.organizationId,
+          schoolIds: [klass.school.id],
+          teacherProfileId: profile.teacherProfile!.id,
+          classIds: [klass.id],
+        })
+      )
+    );
+    if (apHistoryFlags.some((enabled) => !enabled)) {
+      return dataResponse(
+        {
+          success: false,
+          message: 'AP History Essay is not enabled for one or more classes.',
+        },
+        { status: 403 }
+      );
+    }
+
+    const entry = await getApHistoryLibraryEntryForSnapshot({
+      assignmentTypeId: assignmentType.id,
+      externalKey: apHistoryLibraryEntryId,
+    });
+    if (!entry) {
+      return dataResponse(
+        { success: false, message: 'AP History library entry is unavailable.' },
+        { status: 400 }
+      );
+    }
+
+    await prisma.assignment.createMany({
+      data: classes.map((klass) =>
+        buildAssignmentCreateInputFromApHistoryEntry({
+          classId: klass.id,
+          assignmentTypeId: assignmentType.id,
+          title,
+          dueDate,
+          entry,
+        })
+      ),
+    });
+
+    return dataResponse({
+      success: true,
+      message: 'Assignments created successfully.',
+    });
+  }
+
+  if (!prompt) {
+    return dataResponse(
+      { success: false, message: 'Prompt is required.' },
       { status: 400 }
     );
   }
