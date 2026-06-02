@@ -59,6 +59,12 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         await expect(promptPanel).toBeVisible();
         await expect(promptPanel).toContainText(uniquePromptMarker);
         await expect(promptPanel).toContainText('E2E Rhetorical Analysis');
+        const promptHeaderBox = await page
+          .getByTestId('assignment-prompt-header')
+          .boundingBox();
+        expect(promptHeaderBox).not.toBeNull();
+        if (!promptHeaderBox) throw new Error('Missing assignment prompt header');
+        expect(promptHeaderBox.height).toBeLessThanOrEqual(40);
         const promptBody = promptPanel
           .locator('div')
           .filter({ hasText: uniquePromptMarker })

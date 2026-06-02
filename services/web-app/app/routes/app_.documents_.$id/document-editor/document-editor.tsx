@@ -121,42 +121,50 @@ function AssignmentPromptBanner({
       className="shrink-0 border-b bg-amber-50"
       data-testid="assignment-prompt-panel"
     >
-      <div className="px-3 py-2">
-        <div className="flex min-h-8 flex-wrap items-center gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <Badge variant="info-outlined" size="sm">
-              Assignment Prompt
-            </Badge>
-            <span className="min-w-0 truncate text-sm font-medium">
+      <div
+        className="flex items-center justify-between gap-3 py-1 pl-6 pr-2"
+        data-testid="assignment-prompt-header"
+      >
+        <div className="flex h-[32px] min-w-0 flex-1 items-center gap-3">
+          <Badge
+            variant="info-outlined"
+            size="sm"
+            className="h-6 shrink-0 px-2 text-[11px] leading-none"
+          >
+            Assignment Prompt
+          </Badge>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="min-w-0 truncate text-sm font-bold text-foreground">
               {assignment.title?.trim() || 'Untitled Assignment'}
             </span>
             {assignment.dueDate ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="shrink-0 text-xs text-muted-foreground">
                 Due {formatDateOnly(assignment.dueDate)}
               </span>
             ) : null}
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={
-              isCollapsed
-                ? 'Expand assignment prompt'
-                : 'Collapse assignment prompt'
-            }
-            onClick={() => setIsCollapsed((value) => !value)}
-          >
-            {isCollapsed ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronUp className="h-4 w-4" />
-            )}
-          </Button>
         </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="min-w-8"
+          aria-label={
+            isCollapsed ? 'Expand assignment prompt' : 'Collapse assignment prompt'
+          }
+          onClick={() => setIsCollapsed((value) => !value)}
+        >
+          {isCollapsed ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronUp className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      <div className="px-6 pb-2">
         {!isCollapsed ? (
           <div
-            className="mt-2 overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
+            className="overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90"
             style={{ maxHeight: PROMPT_EXPANDED_MAX_HEIGHT }}
           >
             {assignment.prompt}
