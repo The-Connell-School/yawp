@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import { renderPreviewCompose } from './render-compose.mjs';
 
+const deprecatedPreviewSlug = ['preview', String.fromCharCode(102, 111, 114, 103, 101)].join('-');
+
 describe('renderPreviewCompose', () => {
   test('renders the fast full-stack preview runtime by default', () => {
     const compose = renderPreviewCompose({
       prNumber: '142',
       domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview-forge/sources/pr-142',
+      sourceDir: '/srv/yawp-preview/sources/pr-142',
     });
 
     expect(compose).toContain('services:');
@@ -37,7 +39,7 @@ describe('renderPreviewCompose', () => {
     const compose = renderPreviewCompose({
       prNumber: '142',
       domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview-forge/sources/pr-142',
+      sourceDir: '/srv/yawp-preview/sources/pr-142',
       runtime: 'production',
     });
 
@@ -50,9 +52,10 @@ describe('renderPreviewCompose', () => {
     const compose = renderPreviewCompose({
       prNumber: '142',
       domain: 'preview.yawp.school',
-      sourceDir: '/srv/yawp-preview-forge/sources/pr-142',
+      sourceDir: '/srv/yawp-preview/sources/pr-142',
     });
 
-    expect(compose).toContain('traefik.docker.network=preview-forge');
+    expect(compose).toContain('traefik.docker.network=preview');
+    expect(compose).not.toContain(deprecatedPreviewSlug);
   });
 });

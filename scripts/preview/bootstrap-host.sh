@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${PREVIEW_FORGE_ROOT:-/srv/yawp-preview-forge}"
-ACME_EMAIL="${PREVIEW_FORGE_ACME_EMAIL:-}"
+ROOT="${PREVIEW_ROOT:-/srv/yawp-preview}"
+ACME_EMAIL="${PREVIEW_ACME_EMAIL:-}"
+POSTGRES_PROJECT="${PREVIEW_POSTGRES_PROJECT:-yawp-preview-db}"
 
 if command -v dnf >/dev/null 2>&1; then
   sudo dnf install -y docker git rsync nodejs awscli || sudo dnf install -y docker git rsync nodejs awscli2
@@ -29,7 +30,14 @@ fi
 sudo systemctl enable --now docker
 sudo mkdir -p "$ROOT/traefik/letsencrypt" "$ROOT/previews" "$ROOT/sources"
 sudo chown -R "$USER":"$USER" "$ROOT"
-docker network inspect preview-forge >/dev/null 2>&1 || docker network create preview-forge >/dev/null
+docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
+
+connect_container_to_preview_network() {
+  local container="$1"
+  if docker inspect "$container" >/dev/null 2>&1; then
+    docker network connect preview "$container" >/dev/null 2>&1 || true
+  fi
+}
 
 if sudo iptables -S DOCKER-USER >/dev/null 2>&1; then
   sudo iptables -C DOCKER-USER -d 169.254.169.254/32 -j REJECT 2>/dev/null || \
@@ -58,17 +66,18 @@ services:
     volumes:
       - preview-postgres-data:/var/lib/postgresql/data
     networks:
-      - preview-forge
+      - preview
 
 volumes:
   preview-postgres-data:
 
 networks:
-  preview-forge:
+  preview:
     external: true
 YAML
 
-docker compose -f "$ROOT/postgres/docker-compose.yml" up -d
+docker compose -p "$POSTGRES_PROJECT" -f "$ROOT/postgres/docker-compose.yml" up -d
+connect_container_to_preview_network preview-postgres
 
 cat > "$ROOT/traefik/docker-compose.yml" <<YAML
 services:
@@ -91,13 +100,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
     networks:
-      - preview-forge
+      - preview
 
 networks:
-  preview-forge:
+  preview:
     external: true
 YAML
 
 docker compose -f "$ROOT/traefik/docker-compose.yml" up -d
+connect_container_to_preview_network traefik-traefik-1
 
 echo "Preview environment host ready at $ROOT"

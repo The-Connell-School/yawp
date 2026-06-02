@@ -13,6 +13,57 @@ export const getSessionExpirationDate = () =>
   new Date(Date.now() + SESSION_EXPIRATION_TIME);
 
 export const sessionKey = 'sessionId';
+export const impersonationModeKey = 'impersonationMode';
+export const impersonatorUserIdKey = 'impersonatorUserId';
+export const readOnlyImpersonationMode = 'read-only';
+
+const mutationSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
+const readOnlyImpersonationAllowedMutationPaths = new Set([
+  '/auth/logout',
+  '/api/preferences/nav',
+  '/api/preferences/submitted-papers-filter',
+  '/api/profile-id',
+]);
+
+function isMutationRequest(request: Request) {
+  return !mutationSafeMethods.has(request.method.toUpperCase());
+}
+
+function isAllowedReadOnlyImpersonationMutation(request: Request) {
+  return readOnlyImpersonationAllowedMutationPaths.has(
+    new URL(request.url).pathname
+  );
+}
+
+export async function getImpersonationState(request: Request) {
+  const authSession = await authSessionStorage.getSession(
+    request.headers.get('cookie')
+  );
+  const impersonatorUserId = authSession.get(impersonatorUserIdKey);
+
+  return {
+    isReadOnly:
+      authSession.get(impersonationModeKey) === readOnlyImpersonationMode,
+    impersonatorUserId:
+      typeof impersonatorUserId === 'string' ? impersonatorUserId : null,
+  };
+}
+
+export async function requireMutableRequest(request: Request) {
+  if (!isMutationRequest(request)) return;
+  if (isAllowedReadOnlyImpersonationMutation(request)) return;
+
+  const impersonation = await getImpersonationState(request);
+  if (!impersonation.isReadOnly) return;
+
+  throw Response.json(
+    {
+      error: 'Read-only impersonation active',
+      message: 'This session can view the app but cannot make changes.',
+    },
+    { status: 403 }
+  );
+}
 
 export async function getUserId(request: Request) {
   const authSession = await authSessionStorage.getSession(
@@ -51,6 +102,7 @@ export async function requireUserId(
       .join('?');
     throw redirect(loginRedirect);
   }
+  await requireMutableRequest(request);
   return userId;
 }
 

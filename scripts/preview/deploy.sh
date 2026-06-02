@@ -23,7 +23,7 @@ DATABASE_CREATED=0
 mkdir -p "$PREVIEW_DIR" "$DB_COMPOSE_DIR"
 node "$SCRIPT_DIR/render-compose.mjs" > "$PREVIEW_DIR/docker-compose.yml"
 
-docker network inspect preview-forge >/dev/null 2>&1 || docker network create preview-forge >/dev/null
+docker network inspect preview >/dev/null 2>&1 || docker network create preview >/dev/null
 
 start_ms="$(date +%s%3N)"
 compose=(docker compose -p "$COMPOSE_PROJECT" -f "$PREVIEW_DIR/docker-compose.yml")
@@ -51,13 +51,13 @@ services:
     volumes:
       - preview-postgres-data:/var/lib/postgresql/data
     networks:
-      - preview-forge
+      - preview
 
 volumes:
   preview-postgres-data:
 
 networks:
-  preview-forge:
+  preview:
     external: true
 YAML
 }
@@ -88,9 +88,14 @@ wait_for_shared_postgres() {
   exit 1
 }
 
+connect_shared_postgres_to_preview_network() {
+  docker network connect preview "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
+}
+
 ensure_shared_postgres() {
   write_shared_postgres_compose
   "${db_compose[@]}" up -d
+  connect_shared_postgres_to_preview_network
   wait_for_shared_postgres
 }
 
@@ -240,8 +245,8 @@ start_or_refresh_web() {
 }
 start_or_refresh_web
 
-health_url="${PREVIEW_FORGE_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
-login_url="${PREVIEW_FORGE_LOGIN_URL:-${URL}}"
+health_url="${PREVIEW_HEALTHCHECK_URL:-${URL}/api/healthcheck}"
+login_url="${PREVIEW_LOGIN_URL:-${URL}}"
 if [[ -n "${DIRECT_PORT:-}" ]]; then
   health_url="http://127.0.0.1:${DIRECT_PORT}/api/healthcheck"
   login_url="http://127.0.0.1:${DIRECT_PORT}"

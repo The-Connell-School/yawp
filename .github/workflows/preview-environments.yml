@@ -27,24 +27,25 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      PREVIEW_FORGE_HOST: ${{ vars.PREVIEW_FORGE_HOST }}
-      PREVIEW_FORGE_DOMAIN: ${{ vars.PREVIEW_FORGE_DOMAIN }}
-      PREVIEW_FORGE_ROOT: ${{ vars.PREVIEW_FORGE_ROOT || '/srv/yawp-preview-forge' }}
-      PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
-      PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
-      PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
+      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
+      PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
+      PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
+      PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
+      PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.PREVIEW_LOGIN_PASSWORD }}
     steps:
       - name: Check preview environment configuration
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
-          test -n "$PREVIEW_FORGE_DOMAIN" || { echo "Missing repository variable PREVIEW_FORGE_DOMAIN"; exit 1; }
-          test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
+          test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
+          test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
           test -n "$PREVIEW_DB_DUMP_S3_URI" || { echo "Missing repository variable PREVIEW_DB_DUMP_S3_URI"; exit 1; }
           test -n "$PREVIEW_LOGIN_EMAIL" || { echo "Missing repository secret PREVIEW_LOGIN_EMAIL"; exit 1; }
           test -n "$PREVIEW_LOGIN_PASSWORD" || { echo "Missing repository secret PREVIEW_LOGIN_PASSWORD"; exit 1; }
@@ -54,21 +55,21 @@ jobs:
 
       - name: Prepare SSH
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_FORGE_SSH_PRIVATE_KEY" > ~/.ssh/preview_forge_key
-          chmod 600 ~/.ssh/preview_forge_key
-          ssh-keyscan -H "$PREVIEW_FORGE_HOST" >> ~/.ssh/known_hosts
+          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
+          chmod 600 ~/.ssh/preview_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Sync source to preview host
         run: |
           set -euo pipefail
-          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
-          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
-          ssh -i ~/.ssh/preview_forge_key "$ssh_target" "mkdir -p '$remote_source'"
+          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          ssh -i ~/.ssh/preview_key "$ssh_target" "mkdir -p '$remote_source'"
           rsync -az --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
@@ -77,7 +78,7 @@ jobs:
             --exclude 'services/web-app/.vite' \
             --exclude 'packages/prisma/generated' \
             --exclude '.worktrees' \
-            -e "ssh -i ~/.ssh/preview_forge_key" \
+            -e "ssh -i ~/.ssh/preview_key" \
             ./ "$ssh_target:$remote_source/"
 
       - name: Deploy preview
@@ -87,24 +88,25 @@ jobs:
           shell_quote() {
             printf '%q' "$1"
           }
-          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
-          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
           remote_env=(
             "PR_NUMBER=$(shell_quote "$PR_NUMBER")"
-            "PREVIEW_FORGE_DOMAIN=$(shell_quote "$PREVIEW_FORGE_DOMAIN")"
-            "PREVIEW_FORGE_ROOT=$(shell_quote "$PREVIEW_FORGE_ROOT")"
-            "PREVIEW_FORGE_TLS=$(shell_quote "$PREVIEW_FORGE_TLS")"
-            "PREVIEW_FORGE_RUNTIME=$(shell_quote "$PREVIEW_FORGE_RUNTIME")"
+            "PREVIEW_DOMAIN=$(shell_quote "$PREVIEW_DOMAIN")"
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
+            "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
+            "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
           )
-          ssh -i ~/.ssh/preview_forge_key "$ssh_target" \
-            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview-forge/deploy.sh" \
-            | tee /tmp/preview-forge-deploy.log
-          preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
-          elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-forge-deploy.log | tail -1)"
+          ssh -i ~/.ssh/preview_key "$ssh_target" \
+            "cd $(shell_quote "$remote_source") && ${remote_env[*]} bash scripts/preview/deploy.sh" \
+            | tee /tmp/preview-deploy.log
+          preview_url="$(awk -F= '/^PREVIEW_URL=/{print $2}' /tmp/preview-deploy.log | tail -1)"
+          elapsed_ms="$(awk -F= '/^PREVIEW_ELAPSED_MS=/{print $2}' /tmp/preview-deploy.log | tail -1)"
           test -n "$preview_url" || { echo "Deploy script did not print PREVIEW_URL"; exit 1; }
           echo "url=$preview_url" >> "$GITHUB_OUTPUT"
           echo "elapsed_ms=${elapsed_ms:-unknown}" >> "$GITHUB_OUTPUT"
@@ -134,44 +136,44 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      PREVIEW_FORGE_HOST: ${{ vars.PREVIEW_FORGE_HOST }}
-      PREVIEW_FORGE_DOMAIN: ${{ vars.PREVIEW_FORGE_DOMAIN }}
-      PREVIEW_FORGE_ROOT: ${{ vars.PREVIEW_FORGE_ROOT || '/srv/yawp-preview-forge' }}
-      PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
-      PREVIEW_FORGE_TLS: ${{ vars.PREVIEW_FORGE_TLS || 'true' }}
-      PREVIEW_FORGE_RUNTIME: ${{ vars.PREVIEW_FORGE_RUNTIME || 'fast' }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
+      PREVIEW_DOMAIN: ${{ vars.PREVIEW_DOMAIN }}
+      PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
+      PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
+      PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
+      PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
     steps:
       - name: Check preview environment configuration
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
-          test -n "$PREVIEW_FORGE_DOMAIN" || { echo "Missing repository variable PREVIEW_FORGE_DOMAIN"; exit 1; }
-          test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
+          test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
+          test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Prepare SSH
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_FORGE_SSH_PRIVATE_KEY" > ~/.ssh/preview_forge_key
-          chmod 600 ~/.ssh/preview_forge_key
-          ssh-keyscan -H "$PREVIEW_FORGE_HOST" >> ~/.ssh/known_hosts
+          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
+          chmod 600 ~/.ssh/preview_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Destroy preview
         run: |
           set -euo pipefail
-          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
-          remote_source="${PREVIEW_FORGE_ROOT}/sources/pr-${PR_NUMBER}"
-          ssh -i ~/.ssh/preview_forge_key "$ssh_target" "\
-            if test -x '$remote_source/scripts/preview-forge/destroy.sh'; then \
-              cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_FORGE_DOMAIN='$PREVIEW_FORGE_DOMAIN' PREVIEW_FORGE_ROOT='$PREVIEW_FORGE_ROOT' PREVIEW_FORGE_TLS='$PREVIEW_FORGE_TLS' PREVIEW_FORGE_RUNTIME='$PREVIEW_FORGE_RUNTIME' bash scripts/preview-forge/destroy.sh; \
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
+          remote_source="${PREVIEW_ROOT}/sources/pr-${PR_NUMBER}"
+          ssh -i ~/.ssh/preview_key "$ssh_target" "\
+            if test -x '$remote_source/scripts/preview/destroy.sh'; then \
+              cd '$remote_source' && PR_NUMBER='$PR_NUMBER' PREVIEW_DOMAIN='$PREVIEW_DOMAIN' PREVIEW_ROOT='$PREVIEW_ROOT' PREVIEW_TLS='$PREVIEW_TLS' PREVIEW_RUNTIME='$PREVIEW_RUNTIME' bash scripts/preview/destroy.sh; \
             else \
-              docker compose -p 'yawp-pr-${PR_NUMBER}' -f '${PREVIEW_FORGE_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml' down -v --remove-orphans || true; \
-              rm -rf '${PREVIEW_FORGE_ROOT}/previews/pr-${PR_NUMBER}'; \
+              docker compose -p 'yawp-pr-${PR_NUMBER}' -f '${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}/docker-compose.yml' down -v --remove-orphans || true; \
+              rm -rf '${PREVIEW_ROOT}/previews/pr-${PR_NUMBER}'; \
             fi"
 
   preview-cleanup:
@@ -179,32 +181,32 @@ jobs:
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     env:
-      PREVIEW_FORGE_HOST: ${{ vars.PREVIEW_FORGE_HOST }}
-      PREVIEW_FORGE_ROOT: ${{ vars.PREVIEW_FORGE_ROOT || '/srv/yawp-preview-forge' }}
-      PREVIEW_FORGE_SSH_USER: ${{ vars.PREVIEW_FORGE_SSH_USER || 'ec2-user' }}
-      PREVIEW_FORGE_TTL_HOURS: ${{ vars.PREVIEW_FORGE_TTL_HOURS || '72' }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST }}
+      PREVIEW_ROOT: ${{ vars.PREVIEW_ROOT || '/srv/yawp-preview' }}
+      PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
+      PREVIEW_TTL_HOURS: ${{ vars.PREVIEW_TTL_HOURS || '72' }}
     steps:
       - name: Check preview cleanup configuration
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$PREVIEW_FORGE_HOST" || { echo "Missing repository variable PREVIEW_FORGE_HOST"; exit 1; }
-          test -n "$PREVIEW_FORGE_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_FORGE_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
+          test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
 
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Prepare SSH
         env:
-          PREVIEW_FORGE_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_FORGE_SSH_PRIVATE_KEY }}
+          PREVIEW_SSH_PRIVATE_KEY: ${{ secrets.PREVIEW_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "$PREVIEW_FORGE_SSH_PRIVATE_KEY" > ~/.ssh/preview_forge_key
-          chmod 600 ~/.ssh/preview_forge_key
-          ssh-keyscan -H "$PREVIEW_FORGE_HOST" >> ~/.ssh/known_hosts
+          printf '%s\n' "$PREVIEW_SSH_PRIVATE_KEY" > ~/.ssh/preview_key
+          chmod 600 ~/.ssh/preview_key
+          ssh-keyscan -H "$PREVIEW_HOST" >> ~/.ssh/known_hosts
 
       - name: Clean stale previews
         env:
@@ -215,11 +217,11 @@ jobs:
             printf '%q' "$1"
           }
           open_pr_numbers="$(gh pr list --state open --limit 200 --json number --jq '.[].number' | tr '\n' ' ')"
-          ssh_target="${PREVIEW_FORGE_SSH_USER}@${PREVIEW_FORGE_HOST}"
+          ssh_target="${PREVIEW_SSH_USER}@${PREVIEW_HOST}"
           remote_env=(
-            "PREVIEW_FORGE_ROOT=$(shell_quote "$PREVIEW_FORGE_ROOT")"
-            "PREVIEW_FORGE_TTL_HOURS=$(shell_quote "$PREVIEW_FORGE_TTL_HOURS")"
+            "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
+            "PREVIEW_TTL_HOURS=$(shell_quote "$PREVIEW_TTL_HOURS")"
             "OPEN_PR_NUMBERS=$(shell_quote "$open_pr_numbers")"
           )
-          # Keep the cleanup script as a local redirect: bash -s < scripts/preview-forge/cleanup.sh
-          ssh -i ~/.ssh/preview_forge_key "$ssh_target" "${remote_env[*]} bash -s" < scripts/preview-forge/cleanup.sh
+          # Keep the cleanup script as a local redirect: bash -s < scripts/preview/cleanup.sh
+          ssh -i ~/.ssh/preview_key "$ssh_target" "${remote_env[*]} bash -s" < scripts/preview/cleanup.sh

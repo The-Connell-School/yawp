@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const scriptPath = path.resolve('scripts/preview-forge/tooling-artifacts.sh');
+const scriptPath = path.resolve('scripts/preview/tooling-artifacts.sh');
 
 async function makePreviewSource() {
   const sourceDir = await mkdtemp(path.join(tmpdir(), 'yawp-preview-artifacts-'));

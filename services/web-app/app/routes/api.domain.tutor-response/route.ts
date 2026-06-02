@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
+import { requireMutableRequest } from '~/utils/auth.server';
 import { buildTutorSystemPrompt } from './build-system-prompt';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
@@ -28,6 +29,8 @@ const READ_DOCUMENT_TOOL = {
 };
 
 export async function action({ request }: ActionFunctionArgs) {
+  await requireMutableRequest(request);
+
   try {
     const { error, data } = await parseFormData(request, POST);
     if (error) return validationError(error);

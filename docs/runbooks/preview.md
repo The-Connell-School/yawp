@@ -9,14 +9,14 @@ The target behavior is:
 - Each PR gets its own app container and database inside the shared preview Postgres container.
 - The shared template database restores the configured production database dump from S3 once; new PR databases clone that template, then apply newer Prisma migrations.
 - Deploys avoid ECR pushes and Terraform applies on the hot path.
-- The preview URL is `https://pr-<number>.$PREVIEW_FORGE_DOMAIN` when TLS is enabled.
-- The default runtime is `PREVIEW_FORGE_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_FORGE_RUNTIME=production` to use the production Dockerfile build path.
+- The preview URL is `https://pr-<number>.$PREVIEW_DOMAIN` when TLS is enabled.
+- The default runtime is `PREVIEW_RUNTIME=fast`: source is bind-mounted, Bun dependencies live in Docker volumes, React Router runs in dev mode, and warm deploys skip dependency install, Prisma generate, and migration work when the tooling fingerprint has not changed. The web container is still recreated after each source sync so the dev server starts from a clean process. Set `PREVIEW_RUNTIME=production` to use the production Dockerfile build path.
 
 ## Host Setup
 
 Provision an EC2 instance with enough CPU and disk for concurrent Docker builds. Start with at least `t3.large` or `c7i.large` and 120 GB gp3. The first host can live in the default VPC because the app stack is self-contained.
 
-Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-forge-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
+Attach an IAM instance profile that can read the configured production dump object. The current host uses `yawp-preview-host`, scoped to `s3:GetObject` on `arn:aws:s3:::yawp-preview-videos/production.dump` plus `s3:GetBucketLocation` and prefix-scoped `s3:ListBucket` on the bucket. The deploy script restores through the host AWS CLI when the shared template database does not exist. Preview app containers set `AWS_EC2_METADATA_DISABLED=true`, and host bootstrap adds Docker egress blocks for EC2 metadata addresses so app code cannot borrow the host role.
 
 Open inbound ports:
 
@@ -26,9 +26,9 @@ Open inbound ports:
 Then run:
 
 ```bash
-PREVIEW_FORGE_ROOT=/srv/yawp-preview-forge \
-PREVIEW_FORGE_ACME_EMAIL=ops@yawp.school \
-bash scripts/preview-forge/bootstrap-host.sh
+PREVIEW_ROOT=/srv/yawp-preview \
+PREVIEW_ACME_EMAIL=ops@yawp.school \
+bash scripts/preview/bootstrap-host.sh
 ```
 
 Point `*.preview.yawp.school` or the chosen wildcard domain at the host public IP.
@@ -36,8 +36,8 @@ Point `*.preview.yawp.school` or the chosen wildcard domain at the host public I
 For a temporary IP-based smoke host, use the dashed `sslip.io` form and disable TLS:
 
 ```bash
-PREVIEW_FORGE_DOMAIN=54-243-7-236.sslip.io
-PREVIEW_FORGE_TLS=false
+PREVIEW_DOMAIN=54-243-7-236.sslip.io
+PREVIEW_TLS=false
 ```
 
 ## GitHub Configuration
@@ -45,23 +45,24 @@ PREVIEW_FORGE_TLS=false
 Create an SSH deploy key for the host user and save the private key in GitHub:
 
 ```bash
-PREVIEW_FORGE_HOST=<host-or-ip> \
-PREVIEW_FORGE_DOMAIN=preview.yawp.school \
-PREVIEW_FORGE_SSH_USER=ec2-user \
-PREVIEW_FORGE_SSH_PRIVATE_KEY="$(cat ~/.ssh/yawp-preview-forge)" \
+PREVIEW_HOST=<host-or-ip> \
+PREVIEW_DOMAIN=preview.yawp.school \
+PREVIEW_SSH_USER=ec2-user \
+PREVIEW_SSH_PRIVATE_KEY="$(cat ~/.ssh/yawp-preview)" \
 ./scripts/github-preview-config.sh
 ```
 
 Required repository settings:
 
-- Variable `PREVIEW_FORGE_HOST`
-- Variable `PREVIEW_FORGE_DOMAIN`
-- Variable `PREVIEW_FORGE_ROOT`
-- Variable `PREVIEW_FORGE_SSH_USER`
-- Variable `PREVIEW_FORGE_TLS`
-- Variable `PREVIEW_FORGE_RUNTIME`
+- Variable `PREVIEW_HOST`
+- Variable `PREVIEW_DOMAIN`
+- Variable `PREVIEW_ROOT`
+- Variable `PREVIEW_SSH_USER`
+- Variable `PREVIEW_TLS`
+- Variable `PREVIEW_RUNTIME`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
-- Secret `PREVIEW_FORGE_SSH_PRIVATE_KEY`
+- Secret `PREVIEW_SSH_PRIVATE_KEY`
+- Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
 
@@ -71,19 +72,19 @@ Run the same deployment path locally with a direct port:
 
 ```bash
 PR_NUMBER=999 \
-PREVIEW_FORGE_DOMAIN=localhost \
-PREVIEW_FORGE_ROOT=/tmp/yawp-preview-forge \
-PREVIEW_FORGE_DIRECT_PORT=18080 \
-bash scripts/preview-forge/deploy.sh
+PREVIEW_DOMAIN=localhost \
+PREVIEW_ROOT=/tmp/yawp-preview \
+PREVIEW_DIRECT_PORT=18080 \
+bash scripts/preview/deploy.sh
 ```
 
 Destroy it with:
 
 ```bash
 PR_NUMBER=999 \
-PREVIEW_FORGE_DOMAIN=localhost \
-PREVIEW_FORGE_ROOT=/tmp/yawp-preview-forge \
-bash scripts/preview-forge/destroy.sh
+PREVIEW_DOMAIN=localhost \
+PREVIEW_ROOT=/tmp/yawp-preview \
+bash scripts/preview/destroy.sh
 ```
 
 Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSWORD`.
@@ -92,4 +93,4 @@ Login smoke credentials come from `PREVIEW_LOGIN_EMAIL` and `PREVIEW_LOGIN_PASSW
 
 The hot path deliberately keeps state on the host: Docker layer cache, Bun dependency volumes, the shared restored template database, and PR-scoped Postgres databases. The first build on a cold host is slower because it creates the shared Postgres container and restores the production dump. Subsequent PR creates clone the template database locally, and warm PR updates skip tooling work when package, Prisma, and migration inputs are unchanged. In `fast` runtime, the web container still restarts by default; the speedup comes from removing package install, Prisma generate, migration, dump restore, and cloud control-plane work from the warm path.
 
-Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_FORGE_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.
+Scheduled cleanup runs every six hours. It keeps open PRs, removes closed/stale preview directories after `PREVIEW_TTL_HOURS` hours, drops the matching `yawp_pr_<number>` database, and removes legacy per-PR Postgres volumes left by older previews.

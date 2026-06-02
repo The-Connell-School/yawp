@@ -2,6 +2,10 @@ import { redirect, type ActionFunctionArgs } from 'react-router';
 import {
   getSessionExpirationDate,
   getUserId,
+  impersonationModeKey,
+  impersonatorUserIdKey,
+  readOnlyImpersonationMode,
+  requireMutableRequest,
   sessionKey,
 } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
@@ -24,6 +28,8 @@ export async function action({ request }: ActionFunctionArgs) {
   if (secretToken !== process.env.INTERNAL_COMMAND_TOKEN) {
     return errorResponse('Invalid secret token', 401);
   }
+
+  await requireMutableRequest(request);
 
   const actorUserId = await getUserId(request);
   if (!actorUserId) {
@@ -67,6 +73,8 @@ export async function action({ request }: ActionFunctionArgs) {
       request.headers.get('cookie')
     );
     authSession.set(sessionKey, session.id);
+    authSession.set(impersonationModeKey, readOnlyImpersonationMode);
+    authSession.set(impersonatorUserIdKey, actorUserId);
 
     return redirect('/app', {
       headers: {
