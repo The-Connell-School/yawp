@@ -1,7 +1,6 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocalStorage } from 'usehooks-ts';
-import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { formatDateOnly } from '~/utils/date-only';
 import { documentStore } from '~/utils/document-store';
@@ -122,19 +121,15 @@ function AssignmentPromptBanner({
       data-testid="assignment-prompt-panel"
     >
       <div
-        className="flex items-center justify-between gap-3 py-1 pl-6 pr-2"
+        className="flex items-center justify-between gap-8 py-1 pl-4 pr-2"
         data-testid="assignment-prompt-header"
       >
-        <div className="flex h-[32px] min-w-0 flex-1 items-center gap-3">
-          <Badge
-            variant="info-outlined"
-            size="sm"
-            className="h-6 shrink-0 px-2 text-[11px] leading-none"
-          >
-            Assignment Prompt
-          </Badge>
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="min-w-0 truncate text-sm font-bold text-foreground">
+        <div className="flex h-[32px] w-full min-w-0 items-center gap-1">
+          <div className="flex min-w-0 flex-grow items-center gap-2">
+            <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-yellow-300 bg-yellow-100 px-3 text-sm font-bold leading-none text-yellow-900">
+              Assignment Prompt
+            </span>
+            <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
               {assignment.title?.trim() || 'Untitled Assignment'}
             </span>
             {assignment.dueDate ? (
@@ -146,7 +141,7 @@ function AssignmentPromptBanner({
         </div>
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon-sm"
           className="min-w-8"
           aria-label={
