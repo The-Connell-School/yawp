@@ -16,6 +16,26 @@ const validator = z.object({
   ]),
 });
 
+function sortInstructionsByPosition<T extends { position?: number | null }>(
+  instructions: T[]
+) {
+  return instructions
+    .map((instruction, index) => ({ instruction, index }))
+    .sort((a, b) => {
+      const aPosition = a.instruction.position;
+      const bPosition = b.instruction.position;
+      if (typeof aPosition === 'number' && typeof bPosition === 'number') {
+        return aPosition === bPosition
+          ? a.index - b.index
+          : aPosition - bPosition;
+      }
+      if (typeof aPosition === 'number') return -1;
+      if (typeof bPosition === 'number') return 1;
+      return a.index - b.index;
+    })
+    .map(({ instruction }) => instruction);
+}
+
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'Missing cms id');
   await requireUserId(request);
@@ -28,6 +48,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignmentModule: {
         include: {
           instructions: {
+            orderBy: { position: 'asc' },
             include: { buttons: { orderBy: { position: 'asc' } } },
           },
         },
@@ -42,7 +63,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const instructions = cms.assignmentModule.instructions;
+  const instructions = sortInstructionsByPosition(
+    cms.assignmentModule.instructions
+  );
   const instructionsLength = instructions.length;
   const currentInstruction = instructions[cms.instructionsCompleted];
   const nextInstructionRecord = instructions[cms.instructionsCompleted + 1];
