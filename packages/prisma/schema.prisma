@@ -32,6 +32,7 @@ model AssignmentType {
   createdAt               DateTime                     @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime                     @default(now()) @db.Timestamptz(6)
   title                   String
+  kind                    String?                      @unique
   description             String?
   position                Int
   archivedAt              DateTime?                    @db.Timestamptz(6)
@@ -41,6 +42,7 @@ model AssignmentType {
   ownerTeacher            Profile?                     @relation("AssignmentTypeOwner", fields: [ownerTeacherId], references: [id], onDelete: Cascade)
   image                   AssignmentTypeImage?
   organizationAssignments OrganizationAssignmentType[]
+  gradingAssistantLinks   AssignmentTypeGradingAssistant[]
   assignmentModules       AssignmentModule[]
   assignments             Assignment[]
   documents               Document[]
@@ -48,6 +50,7 @@ model AssignmentType {
   @@index([ownerOrgId])
   @@index([ownerTeacherId])
   @@index([archivedAt])
+  @@index([kind])
 }
 
 model Assignment {
@@ -311,6 +314,8 @@ model Profile {
   studentProfile           StudentProfile?
   teacherProfile           TeacherProfile?
   ownedAssignmentTypes     AssignmentType[]          @relation("AssignmentTypeOwner")
+  gradingAssistantTemplatesCreated GradingAssistantTemplate[] @relation("GradingAssistantTemplateCreatedBy")
+  gradingAssistantTemplatesUpdated GradingAssistantTemplate[] @relation("GradingAssistantTemplateUpdatedBy")
   isOwner                  Boolean                   @default(false)
 }
 
@@ -547,11 +552,75 @@ model Submission {
   documentId        String
   document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments          SubmissionComment[]
+  gradingAssistantRuns SubmissionGradingAssistantRun[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])
   @@index([gradedById])
   @@index([releasedAt])
+}
+
+model GradingAssistantTemplate {
+  id                      String                            @id @default(cuid())
+  createdAt               DateTime                          @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                          @default(now()) @updatedAt @db.Timestamptz(6)
+  name                    String
+  slug                    String                            @unique
+  status                  String                            @default("draft")
+  version                 Int                               @default(1)
+  assignmentTypeKind      String?
+  scoringScale            Json
+  rubricJson              Json
+  promptConfigJson        Json
+  outputSchemaJson        Json
+  calibrationNotes        String?
+  createdById             String?
+  createdBy               Profile?                          @relation("GradingAssistantTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById             String?
+  updatedBy               Profile?                          @relation("GradingAssistantTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignmentTypeLinks     AssignmentTypeGradingAssistant[]
+  submissionRuns          SubmissionGradingAssistantRun[]
+
+  @@index([status])
+  @@index([assignmentTypeKind])
+  @@index([createdById])
+  @@index([updatedById])
+}
+
+model AssignmentTypeGradingAssistant {
+  id                         String                   @id @default(cuid())
+  createdAt                  DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentTypeId           String
+  assignmentType             AssignmentType           @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  gradingAssistantTemplateId String
+  gradingAssistantTemplate   GradingAssistantTemplate @relation(fields: [gradingAssistantTemplateId], references: [id], onDelete: Restrict)
+  isDefault                  Boolean                  @default(true)
+  activeFrom                 DateTime                 @default(now()) @db.Timestamptz(6)
+  activeTo                   DateTime?                @db.Timestamptz(6)
+
+  @@index([assignmentTypeId, isDefault, activeFrom])
+  @@index([gradingAssistantTemplateId])
+  @@index([activeTo])
+}
+
+model SubmissionGradingAssistantRun {
+  id                         String                    @id @default(cuid())
+  createdAt                  DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                  DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  submissionId               String
+  submission                 Submission                @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  gradingAssistantTemplateId String?
+  gradingAssistantTemplate   GradingAssistantTemplate? @relation(fields: [gradingAssistantTemplateId], references: [id], onDelete: SetNull)
+  templateVersion            Int?
+  source                     String
+  model                      String?
+  status                     String
+  metadata                   Json?
+
+  @@index([submissionId, createdAt(sort: Desc)])
+  @@index([gradingAssistantTemplateId])
+  @@index([status])
 }
 
 model SubmissionComment {

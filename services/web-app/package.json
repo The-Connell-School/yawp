@@ -16,7 +16,7 @@
     "test": "bun test app/",
     "test:e2e": "bun run test:e2e:smoke",
     "test:e2e:prepare": "bun ./e2e/ensure-e2e-env.ts",
-    "test:e2e:smoke": "playwright test --project=chromium e2e/tests/auth.signin.spec.ts e2e/tests/auth.signup.student.spec.ts e2e/tests/admin.organization-assignment-types.spec.ts e2e/tests/admin.assignment-type-archive.spec.ts e2e/tests/teacher.dashboard-assignment-types.spec.ts e2e/tests/document-editor.spec.ts e2e/tests/document-regression.spec.ts e2e/tests/document-editor-invariants.spec.ts e2e/tests/document-local-first-persistence.spec.ts e2e/tests/teacher-class-pilot-rollout.spec.ts",
+    "test:e2e:smoke": "playwright test --project=chromium e2e/tests/auth.signin.spec.ts e2e/tests/auth.signup.student.spec.ts e2e/tests/admin.organization-assignment-types.spec.ts e2e/tests/admin.assignment-type-archive.spec.ts e2e/tests/admin.grading-assistants.spec.ts e2e/tests/teacher.grading-assistant-legacy.spec.ts e2e/tests/teacher.dashboard-assignment-types.spec.ts e2e/tests/document-editor.spec.ts e2e/tests/document-regression.spec.ts e2e/tests/document-editor-invariants.spec.ts e2e/tests/document-local-first-persistence.spec.ts e2e/tests/teacher-class-pilot-rollout.spec.ts",
     "test:e2e:full": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug"
