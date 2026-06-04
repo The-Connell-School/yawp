@@ -5,6 +5,7 @@ const prisma = {
   assignmentType: { findMany: mock() },
   class: { findMany: mock() },
   document: { findMany: mock(), count: mock() },
+  featureAccessTarget: { findMany: mock() },
   studentProfile: { findMany: mock() },
   teacherProfile: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
@@ -64,6 +65,7 @@ describe('app index loader assignments', () => {
       },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
+    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.document.count.mockResolvedValue(0);
     prisma.studentProfile.findMany.mockResolvedValue([]);
@@ -200,5 +202,73 @@ describe('app index loader assignments', () => {
       assignment: { classId: 'class-1' },
       submissions: { none: { archivedAt: null } },
     });
+  });
+
+  test('includes teacher-enabled assignment types that are not exposed org-wide', async () => {
+    requireProfile.mockResolvedValue({
+      id: 'teacher-profile-wrapper-1',
+      isOwner: false,
+      organization: { id: 'org-1' },
+      teacherProfile: { id: 'teacher-profile-1' },
+      studentProfile: null,
+    });
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?.school?.select?.organizationId) {
+        return [
+          {
+            id: 'class-1',
+            school: { id: 'school-1', organizationId: 'org-1' },
+          },
+        ];
+      }
+
+      return [
+        {
+          id: 'class-1',
+          grade: '9',
+          period: '1',
+          title: 'Pilot Class',
+          school: { name: 'Parker High School' },
+          _count: { students: 1, teachers: 1 },
+        },
+      ];
+    });
+    prisma.featureAccessTarget.findMany.mockResolvedValue([
+      {
+        featureKey: 'assignment_type:daily-pages-type',
+        targetKind: 'teacher',
+        targetId: 'teacher-profile-1',
+        enabled: true,
+      },
+    ]);
+    prisma.assignmentType.findMany.mockImplementation(async (args: any) => {
+      if (Array.isArray(args.where?.OR)) {
+        return [
+          {
+            id: 'daily-pages-type',
+            title: 'Daily Pages',
+            image: null,
+            organizationAssignments: [],
+          },
+        ];
+      }
+      return [];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.assignmentTypes).toEqual([
+      {
+        id: 'daily-pages-type',
+        title: 'Daily Pages',
+        image: null,
+      },
+    ]);
   });
 });

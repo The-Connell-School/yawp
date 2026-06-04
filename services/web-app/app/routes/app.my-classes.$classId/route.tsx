@@ -15,6 +15,7 @@ import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
+import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
@@ -140,7 +141,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: classId,
       teachers: { some: { id: profile.teacherProfile.id } },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      school: { select: { id: true, organizationId: true } },
+    },
   });
 
   if (!classAccess) {
@@ -150,13 +154,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
-    where: {
-      archivedAt: null,
-      organizationAssignments: {
-        some: { organizationId: profile.organization.id },
+  const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
+    id: string;
+    systemKey: string | null;
+  }>({
+    scopes: [
+      {
+        organizationId: classAccess.school.organizationId,
+        schoolId: classAccess.school.id,
+        teacherProfileId: profile.teacherProfile.id,
       },
-    },
+    ],
     select: { id: true, systemKey: true },
   });
   const allowedAssignmentTypeIds = new Set(
@@ -417,13 +425,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     legacyClassDocumentIds
   );
 
-  const allowedAssignmentTypes = await prisma.assignmentType.findMany({
-    where: {
-      archivedAt: null,
-      organizationAssignments: {
-        some: { organizationId: profile.organization.id },
+  const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
+    id: string;
+    title: string;
+    systemKey: string | null;
+  }>({
+    scopes: [
+      {
+        organizationId: klass.school.organizationId,
+        schoolId: klass.school.id,
+        teacherProfileId: profile.teacherProfile.id,
       },
-    },
+    ],
     select: { id: true, title: true, systemKey: true },
     orderBy: { position: 'asc' },
   });

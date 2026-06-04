@@ -31,6 +31,11 @@ import {
 } from '~/domain/documents.server';
 import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import {
+  getAvailableAssignmentTypesForScopes,
+  isAssignmentTypeAvailableForAnyScope,
+  type AssignmentTypeAccessScope,
+} from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -64,6 +69,45 @@ const SERIOUSNESS_ORDER: PromptSeriousness[] = [
   'heavy',
 ];
 const GRADE_ORDER: GradeBand[] = ['9', '10', '11', '12'];
+
+type AssignmentTypeDetailRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  systemKey: string | null;
+  image: { id: string } | null;
+  assignmentModules: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    position: number;
+  }>;
+};
+
+type TeacherClassScopeRow = {
+  id: string;
+  school: { id: string; organizationId: string };
+};
+
+function buildAssignmentTypeScopes({
+  organizationId,
+  teacherProfileId,
+  teacherClasses,
+}: {
+  organizationId: string;
+  teacherProfileId?: string | null;
+  teacherClasses: TeacherClassScopeRow[];
+}): AssignmentTypeAccessScope[] {
+  if (!teacherProfileId || teacherClasses.length === 0) {
+    return [{ organizationId, teacherProfileId }];
+  }
+
+  return teacherClasses.map((klass) => ({
+    organizationId: klass.school.organizationId,
+    schoolId: klass.school.id,
+    teacherProfileId,
+  }));
+}
 
 function buildFacets(prompts: LibraryPrompt[]): FacetValues {
   const themes = new Set<string>();
@@ -198,104 +242,115 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
 
-  const [assignmentType, documents, archivedDocuments, teacherClasses] =
-    await Promise.all([
-      prisma.assignmentType.findFirst({
-        where: {
-          id: params.id,
-          archivedAt: null,
-          organizationAssignments: {
-            some: { organizationId: profile.organization.id },
+  const [documents, archivedDocuments, teacherClasses] = await Promise.all([
+    prisma.document.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: {
+        profileId: profile.id,
+        deletedAt: null,
+        archivedAt: null,
+        assignmentModuleSessions: {
+          some: { assignmentModule: { assignmentTypeId: params.id } },
+        },
+      },
+      include: {
+        assignmentModuleSessions: {
+          take: 1,
+          orderBy: { assignmentModule: { position: 'desc' } },
+          include: { assignmentModule: true },
+        },
+        submissions: {
+          where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            score: true,
+            overallScore: true,
+            numericPercentage: true,
+            letterGrade: true,
+            releasedAt: true,
           },
         },
-        include: {
-          image: true,
-          assignmentModules: {
-            where: { deletedAt: null },
-            orderBy: { position: 'asc' },
+      },
+    }),
+    prisma.document.findMany({
+      orderBy: { archivedAt: 'desc' },
+      where: {
+        profileId: profile.id,
+        deletedAt: null,
+        archivedAt: { not: null },
+        assignmentModuleSessions: {
+          some: { assignmentModule: { assignmentTypeId: params.id } },
+        },
+      },
+      include: {
+        assignmentModuleSessions: {
+          take: 1,
+          orderBy: { assignmentModule: { position: 'desc' } },
+          include: { assignmentModule: true },
+        },
+        submissions: {
+          where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            score: true,
+            overallScore: true,
+            numericPercentage: true,
+            letterGrade: true,
+            releasedAt: true,
           },
         },
+      },
+    }),
+    profile.teacherProfile
+      ? prisma.class.findMany({
+          where: {
+            teachers: { some: { id: profile.teacherProfile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            grade: true,
+            period: true,
+            title: true,
+            school: { select: { id: true, organizationId: true } },
+            teachers: { select: { id: true } },
+          },
+          orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+        })
+      : [],
+  ]);
+
+  const assignmentTypes =
+    await getAvailableAssignmentTypesForScopes<AssignmentTypeDetailRow>({
+      scopes: buildAssignmentTypeScopes({
+        organizationId: profile.organization.id,
+        teacherProfileId: profile.teacherProfile?.id,
+        teacherClasses,
       }),
-      prisma.document.findMany({
-        orderBy: { createdAt: 'desc' },
-        where: {
-          profileId: profile.id,
-          deletedAt: null,
-          archivedAt: null,
-          assignmentModuleSessions: {
-            some: { assignmentModule: { assignmentTypeId: params.id } },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        systemKey: true,
+        image: { select: { id: true } },
+        assignmentModules: {
+          where: { deletedAt: null },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            position: true,
           },
+          orderBy: { position: 'asc' },
         },
-        include: {
-          assignmentModuleSessions: {
-            take: 1,
-            orderBy: { assignmentModule: { position: 'desc' } },
-            include: { assignmentModule: true },
-          },
-          submissions: {
-            where: { archivedAt: null },
-            orderBy: { submittedAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              score: true,
-              overallScore: true,
-              numericPercentage: true,
-              letterGrade: true,
-              releasedAt: true,
-            },
-          },
-        },
-      }),
-      prisma.document.findMany({
-        orderBy: { archivedAt: 'desc' },
-        where: {
-          profileId: profile.id,
-          deletedAt: null,
-          archivedAt: { not: null },
-          assignmentModuleSessions: {
-            some: { assignmentModule: { assignmentTypeId: params.id } },
-          },
-        },
-        include: {
-          assignmentModuleSessions: {
-            take: 1,
-            orderBy: { assignmentModule: { position: 'desc' } },
-            include: { assignmentModule: true },
-          },
-          submissions: {
-            where: { archivedAt: null },
-            orderBy: { submittedAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              score: true,
-              overallScore: true,
-              numericPercentage: true,
-              letterGrade: true,
-              releasedAt: true,
-            },
-          },
-        },
-      }),
-      profile.teacherProfile
-        ? prisma.class.findMany({
-            where: {
-              teachers: { some: { id: profile.teacherProfile.id } },
-              isArchived: false,
-            },
-            select: {
-              id: true,
-              grade: true,
-              period: true,
-              title: true,
-              school: { select: { id: true, organizationId: true } },
-              teachers: { select: { id: true } },
-            },
-            orderBy: [{ grade: 'asc' }, { period: 'asc' }],
-          })
-        : [],
-    ]);
+      },
+      orderBy: { position: 'asc' },
+    });
+  const assignmentType = assignmentTypes.find((type) => type.id === params.id);
 
   if (!assignmentType) {
     return redirectWithToast('/app', {
@@ -350,7 +405,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         return apHistoryEnabled ? klass : null;
       })
     );
-    const apEligibleClasses = apClassEligibility.filter((klass) => klass != null);
+    const apEligibleClasses = apClassEligibility.filter(
+      (klass) => klass != null
+    );
 
     if (apEligibleClasses.length > 0) {
       apHistoryLibrary = {
@@ -372,16 +429,37 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
-  const assignmentType = await prisma.assignmentType.findFirst({
-    where: {
-      id: params.id,
-      archivedAt: null,
-      organizationAssignments: {
-        some: { organizationId: profile.organization.id },
-      },
-    },
-    select: { id: true, systemKey: true },
-  });
+  const teacherClasses = profile.teacherProfile
+    ? await prisma.class.findMany({
+        where: {
+          teachers: { some: { id: profile.teacherProfile.id } },
+          isArchived: false,
+        },
+        select: {
+          id: true,
+          school: { select: { id: true, organizationId: true } },
+        },
+      })
+    : [];
+  const assignmentTypeAvailable = params.id
+    ? await isAssignmentTypeAvailableForAnyScope({
+        assignmentTypeId: params.id,
+        scopes: buildAssignmentTypeScopes({
+          organizationId: profile.organization.id,
+          teacherProfileId: profile.teacherProfile?.id,
+          teacherClasses,
+        }),
+      })
+    : false;
+  const assignmentType = assignmentTypeAvailable
+    ? await prisma.assignmentType.findFirst({
+        where: {
+          id: params.id,
+          archivedAt: null,
+        },
+        select: { id: true, systemKey: true },
+      })
+    : null;
 
   if (!assignmentType) {
     return redirectWithToast('/app', {
