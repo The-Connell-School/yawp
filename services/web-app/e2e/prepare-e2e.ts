@@ -164,6 +164,7 @@ function writeE2EEnv(e2eDir: string, databaseUrl: string) {
     AWS_S3_BUCKET_FOR_VIDEOS: process.env.AWS_S3_BUCKET_FOR_VIDEOS || 'e2e-bucket',
     AWS_S3_REGION_FOR_VIDEOS: process.env.AWS_S3_REGION_FOR_VIDEOS || 'us-east-1',
     E2E: 'true',
+    E2E_GRADE_ESSAY_AI_FIXTURE: 'true',
   };
 
   const lines = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);

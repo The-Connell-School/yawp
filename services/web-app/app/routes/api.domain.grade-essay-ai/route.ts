@@ -5,18 +5,21 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
-import { rubricCategories, rubricKeys } from '~/domain/grading/rubric';
 import {
-  gradingAssistantRubricInstructions,
-  gradingAssistantScoreScaleInstructions,
-} from '~/domain/grading/rubric-instructions';
-import {
-  computeWeightedPercentage,
   formatGrade,
   letterFromPercent,
+  scoreToPercent,
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
+import {
+  getTemplateInstructions,
+  getTemplateRubricCategories,
+  getTemplateScoreBounds,
+  getTemplateScoringType,
+  resolveGradingAssistantTemplateForAssignmentType,
+  type GradingRubricCategory,
+} from '~/domain/grading/grading-assistant-templates.server';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -41,50 +44,59 @@ const POST = z.object({
   submissionId: z.string().optional(),
 });
 
-const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
-
-const AiCategorySchema = z.object({
-  key: RubricKeySchema,
-  score: z.number().int().min(1).max(5),
-  comment: z.string().min(1),
-});
-
-const AiCategoriesSchema = z
-  .array(AiCategorySchema)
-  .superRefine((categories, ctx) => {
-    if (categories.length !== rubricKeys.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
-      });
-    }
-
-    const seen = new Set<string>();
-    for (const category of categories) {
-      if (seen.has(category.key)) {
+function buildAiSchemas({
+  rubricKeys,
+  minScore,
+  maxScore,
+}: {
+  rubricKeys: string[];
+  minScore: number;
+  maxScore: number;
+}) {
+  const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
+  const AiCategorySchema = z.object({
+    key: RubricKeySchema,
+    score: z.number().int().min(minScore).max(maxScore),
+    comment: z.string().min(1),
+  });
+  const AiCategoriesSchema = z
+    .array(AiCategorySchema)
+    .superRefine((categories, ctx) => {
+      if (categories.length !== rubricKeys.length) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: `Duplicate rubric category key: ${category.key}`,
+          message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
         });
-        continue;
       }
-      seen.add(category.key);
-    }
 
-    for (const key of rubricKeys) {
-      if (!seen.has(key)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Missing rubric category key: ${key}`,
-        });
+      const seen = new Set<string>();
+      for (const category of categories) {
+        if (seen.has(category.key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Duplicate rubric category key: ${category.key}`,
+          });
+          continue;
+        }
+        seen.add(category.key);
       }
-    }
+
+      for (const key of rubricKeys) {
+        if (!seen.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Missing rubric category key: ${key}`,
+          });
+        }
+      }
+    });
+  const AiResponseSchema = z.object({
+    categories: AiCategoriesSchema,
+    overallComment: z.string().min(1),
   });
 
-const AiResponseSchema = z.object({
-  categories: AiCategoriesSchema,
-  overallComment: z.string().min(1),
-});
+  return { AiCategoriesSchema, AiResponseSchema };
+}
 
 const AiOverallCommentSchema = z.object({
   overallComment: z.string().min(1),
@@ -192,6 +204,162 @@ Essay:
 ${essayText}`;
 }
 
+const e2eRubricFixtures: Record<string, { score: number; comment: string }> = {
+  thesis_and_content: {
+    score: 5,
+    comment: 'Legacy thesis feedback from deterministic E2E.',
+  },
+  organization_and_structure: {
+    score: 4,
+    comment: 'Legacy organization feedback from deterministic E2E.',
+  },
+  evidence_and_support: {
+    score: 3,
+    comment: 'Legacy evidence feedback from deterministic E2E.',
+  },
+  voice_and_style: {
+    score: 4,
+    comment: 'Legacy voice feedback from deterministic E2E.',
+  },
+  grammar_and_mechanics: {
+    score: 2,
+    comment: 'Legacy grammar feedback from deterministic E2E.',
+  },
+};
+
+function shouldUseE2EGradingFixture() {
+  return (
+    process.env.E2E === 'true' &&
+    process.env.E2E_GRADE_ESSAY_AI_FIXTURE === 'true' &&
+    !process.env.ANTHROPIC_API_KEY
+  );
+}
+
+function buildE2EGradingFixtureResponse({
+  rubricCategories,
+  minScore,
+  maxScore,
+  studentFirstName,
+}: {
+  rubricCategories: GradingRubricCategory[];
+  minScore: number;
+  maxScore: number;
+  studentFirstName: string;
+}) {
+  return JSON.stringify({
+    categories: rubricCategories.map((category) => {
+      const fixture = e2eRubricFixtures[category.key] ?? {
+        score: maxScore,
+        comment: `Deterministic E2E feedback for ${category.label}.`,
+      };
+      return {
+        key: category.key,
+        score: Math.max(minScore, Math.min(maxScore, fixture.score)),
+        comment: fixture.comment,
+      };
+    }),
+    overallComment: `${studentFirstName}, these legacy grading assistant suggestions still apply.`,
+  });
+}
+
+function computeWeightedPercentageForCategories({
+  rubricScores,
+  categories,
+}: {
+  rubricScores: Record<string, unknown> | null | undefined;
+  categories: GradingRubricCategory[];
+}) {
+  if (!rubricScores || typeof rubricScores !== 'object') return null;
+
+  let totalWeight = 0;
+  let weightedSum = 0;
+
+  for (const category of categories) {
+    const value = (rubricScores as Record<string, { score?: unknown }>)[
+      category.key
+    ];
+    const score = value?.score;
+    if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+    const percent = scoreToPercent(score);
+    if (percent === null) return null;
+    totalWeight += category.weight;
+    weightedSum += percent * category.weight;
+  }
+
+  if (totalWeight <= 0) return null;
+  return Math.round(weightedSum / totalWeight);
+}
+
+function computeGradeFields({
+  categories,
+  scoringType,
+}: {
+  categories: Array<{ score: number }>;
+  scoringType: string;
+}) {
+  const average =
+    categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
+
+  if (scoringType === 'act_writing_2_12') {
+    const composite = Math.max(2, Math.min(12, Math.round(average * 2)));
+    return {
+      overallScore: composite,
+      numericPercentage: null,
+      letterGrade: null,
+      score: `${composite}/12`,
+    };
+  }
+
+  return null;
+}
+
+function computeLegacyGradeFields({
+  categories,
+  rubricScores,
+  rubricCategories,
+}: {
+  categories: Array<{ score: number }>;
+  rubricScores: Record<string, Prisma.InputJsonValue>;
+  rubricCategories: GradingRubricCategory[];
+}) {
+  const average =
+    categories.reduce((sum, item) => sum + item.score, 0) / categories.length;
+  const overallScore = Math.round(average);
+  const numericPercentage = computeWeightedPercentageForCategories({
+    rubricScores: rubricScores as unknown as Record<string, unknown>,
+    categories: rubricCategories,
+  });
+  const letterGrade =
+    numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
+  const score = formatGrade(numericPercentage, letterGrade);
+
+  return { overallScore, numericPercentage, letterGrade, score };
+}
+
+function buildDynamicGradeFields({
+  categories,
+  rubricScores,
+  scoringType,
+  rubricCategories,
+}: {
+  categories: Array<{ score: number }>;
+  rubricScores: Record<string, Prisma.InputJsonValue>;
+  scoringType: string;
+  rubricCategories: GradingRubricCategory[];
+}) {
+  const nonLegacy = computeGradeFields({
+    categories,
+    scoringType,
+  });
+  if (nonLegacy) return nonLegacy;
+
+  return computeLegacyGradeFields({
+    categories,
+    rubricScores,
+    rubricCategories,
+  });
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
@@ -223,6 +391,14 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         profileId: true,
+        assignmentTypeId: true,
+        assignmentType: {
+          select: {
+            id: true,
+            kind: true,
+            title: true,
+          },
+        },
         assignment: {
           select: {
             apHistorySnapshot: true,
@@ -329,6 +505,29 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
+  const resolvedGradingAssistant =
+    await resolveGradingAssistantTemplateForAssignmentType({
+      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+    });
+  const gradingAssistantTemplate = resolvedGradingAssistant.template;
+  const rubricCategories = getTemplateRubricCategories(
+    gradingAssistantTemplate
+  );
+  const rubricKeys = rubricCategories.map((category) => category.key);
+  const { minScore, maxScore } = getTemplateScoreBounds(
+    gradingAssistantTemplate
+  );
+  const scoringType = getTemplateScoringType(gradingAssistantTemplate);
+  const { rubricInstructions, scoreInstructions, systemInstructions } =
+    getTemplateInstructions(gradingAssistantTemplate);
+  const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
+    rubricKeys,
+    minScore,
+    maxScore,
+  });
+
   const rubricText = rubricCategories
     .map(
       (item) =>
@@ -340,6 +539,7 @@ export async function action({ request }: ActionFunctionArgs) {
     submission.document.profile?.user?.name
   );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const useE2EFixture = shouldUseE2EGradingFixture();
 
   const apHistorySnapshotCandidate =
     submission.document.assignment?.apHistorySnapshot;
@@ -462,21 +662,33 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const system = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": 1-5, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers 1-5.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${gradingAssistantScoreScaleInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const templateSystemInstructions = systemInstructions
+    ? `${systemInstructions}\n\n`
+    : '';
+  const system = `${templateSystemInstructions}You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${gradingAssistantRubricInstructions}\n\nEssay:\n${submission.text}`;
+  const userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
 
   let responseText = '';
 
-  try {
-    responseText = await getLLMCompletion({
-      model,
-      system,
-      messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: 900,
+  if (useE2EFixture) {
+    responseText = buildE2EGradingFixtureResponse({
+      rubricCategories,
+      minScore,
+      maxScore,
+      studentFirstName,
     });
-  } catch (error) {
-    throw error;
+  } else {
+    try {
+      responseText = await getLLMCompletion({
+        model,
+        system,
+        messages: [{ role: 'user', content: userPrompt }],
+        maxTokens: 900,
+      });
+    } catch (error) {
+      throw error;
+    }
   }
 
   const buildAiResponseFromCategories = async (
@@ -540,7 +752,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
     const repairedResponseText = await getLLMCompletion({
       model,
-      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": 1-5, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
+      system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
         {
           role: 'user',
@@ -589,22 +801,21 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     return acc;
   }, {});
 
-  const average =
-    parsed.categories.reduce((sum, item) => sum + item.score, 0) /
-    parsed.categories.length;
-  const overallScore = Math.round(average);
   const overallComment = parsed.overallComment;
-
-  const numericPercentage = computeWeightedPercentage(
-    rubricScores as unknown as Record<string, unknown>
-  );
-  const letterGrade =
-    numericPercentage !== null ? letterFromPercent(numericPercentage) : null;
-  const score = formatGrade(numericPercentage, letterGrade);
+  const { overallScore, numericPercentage, letterGrade, score } =
+    buildDynamicGradeFields({
+      categories: parsed.categories,
+      rubricScores,
+      scoringType,
+      rubricCategories,
+    });
 
   const grammarAndMechanicsScore =
-    parsed.categories.find((item) => item.key === 'grammar_and_mechanics')
-      ?.score ?? null;
+    parsed.categories.find(
+      (item) =>
+        item.key === 'grammar_and_mechanics' ||
+        item.key === 'language_use_and_conventions'
+    )?.score ?? null;
 
   let grammarIssues: Prisma.InputJsonValue | null = null;
   const parseGrammarIssuesFromResponseText = (responseText: string) => {
@@ -642,51 +853,68 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       })),
     }) satisfies Prisma.InputJsonValue;
 
-  try {
-    const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
+  if (useE2EFixture) {
+    grammarIssues = buildGrammarIssuesPayload(
+      parseGrammarIssuesPayload(
+        {
+          issues: [
+            {
+              excerpt: 'Reading expands our vocabulary',
+              kind: 'error',
+              message: 'Use a more precise verb in this sentence.',
+            },
+          ],
+        },
+        { sourceText: submission.text }
+      )
+    );
+  } else {
+    try {
+      const grammarSystem = `You are the Grammar/Usage Checker.\nReturn ONLY valid JSON with the schema:\n{\n  \"issues\": [{\n    \"excerpt\": string,\n    \"occurrence\"?: number,\n    \"kind\": \"error\"|\"style\",\n    \"ruleNumber\"?: number,\n    \"rule\"?: string,\n    \"message\": string\n  }]\n}\nRules:\n- Highlight the smallest exact excerpt that demonstrates the issue (max 120 characters).\n- If the excerpt appears multiple times, set occurrence to the 1-based match index.\n- Keep message brief (1-2 sentences). State the rule plainly; do not offer to fix it for the student.\n- Focus on essentials: usage, composition, comma/semicolon rules, and omit needless words.\n\nComma rules:\n(1) In a series of three or more terms with a single conjunction, use a comma after each term except the last.\n(2) Enclose parenthetic expressions between commas.\n(3) Do not join independent clauses with a comma (comma splice); use a semicolon, conjunction, or separate sentences.\nSemicolon rule:\nUse a semicolon to join closely related independent clauses.\n\nStyle:\n(10) Omit needless words.`;
 
-    const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
+      const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
 
-    let grammarResponseText = await getLLMCompletion({
-      model,
-      system: grammarSystem,
-      messages: [{ role: 'user', content: grammarUserPrompt }],
-      maxTokens: 1600,
-      temperature: 0.2,
-      metadata: { feature: 'grading', kind: 'grammar-issues' },
-    });
-    let parsedGrammarIssues =
-      parseGrammarIssuesFromResponseText(grammarResponseText);
-
-    if (
-      parsedGrammarIssues.length === 0 &&
-      grammarAndMechanicsScore !== null &&
-      grammarAndMechanicsScore <= 4
-    ) {
-      grammarResponseText = await getLLMCompletion({
+      let grammarResponseText = await getLLMCompletion({
         model,
         system: grammarSystem,
-        messages: [
-          {
-            role: 'user',
-            content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
-          },
-        ],
+        messages: [{ role: 'user', content: grammarUserPrompt }],
         maxTokens: 1600,
         temperature: 0.2,
-        metadata: {
-          feature: 'grading',
-          kind: 'grammar-issues',
-          retry: 'schema-repair',
-        },
+        metadata: { feature: 'grading', kind: 'grammar-issues' },
       });
-      parsedGrammarIssues =
+      let parsedGrammarIssues =
         parseGrammarIssuesFromResponseText(grammarResponseText);
-    }
 
-    grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
-  } catch {
-    grammarIssues = null;
+      if (
+        parsedGrammarIssues.length === 0 &&
+        grammarAndMechanicsScore !== null &&
+        grammarAndMechanicsScore <= 4
+      ) {
+        grammarResponseText = await getLLMCompletion({
+          model,
+          system: grammarSystem,
+          messages: [
+            {
+              role: 'user',
+              content: `Essay:\n${submission.text}\n\nReturn 8-12 issues using the exact schema. Do not include markdown.`,
+            },
+          ],
+          maxTokens: 1600,
+          temperature: 0.2,
+          metadata: {
+            feature: 'grading',
+            kind: 'grammar-issues',
+            retry: 'schema-repair',
+          },
+        });
+        parsedGrammarIssues =
+          parseGrammarIssuesFromResponseText(grammarResponseText);
+      }
+
+      grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
+    } catch {
+      grammarIssues = null;
+    }
   }
 
   // Write AI grading results directly to the Submission
@@ -704,11 +932,36 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       aiMeta: {
         model,
         gradedAt: now.toISOString(),
+        gradingAssistantTemplateId: gradingAssistantTemplate.id,
+        gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
+        gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+        gradingAssistantSource: resolvedGradingAssistant.source,
+        assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
         ? { gradedAt: now, gradedById: actor.profileId }
         : {}),
       updatedAt: now,
+    },
+  });
+
+  await prisma.submissionGradingAssistantRun.create({
+    data: {
+      submissionId: submission.id,
+      gradingAssistantTemplateId: gradingAssistantTemplate.id,
+      templateVersion: gradingAssistantTemplate.version,
+      source: resolvedGradingAssistant.source,
+      model,
+      status: 'succeeded',
+      metadata: {
+        gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+        assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        scoringType,
+        rubricKeys,
+        gradedAt: now.toISOString(),
+      } satisfies Prisma.InputJsonValue,
     },
   });
 

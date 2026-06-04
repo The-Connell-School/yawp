@@ -15,6 +15,7 @@ import {
   GraduationCap,
   ScrollText,
   ToggleLeft,
+  Bot,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -38,6 +39,11 @@ const tabs = [
     label: 'Assignment Types',
     to: '/app/admin/assignment-types',
     icon: <Book size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Grading Assistants',
+    to: '/app/admin/grading-assistants',
+    icon: <Bot size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Teacher Courses',
