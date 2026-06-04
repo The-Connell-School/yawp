@@ -7,6 +7,9 @@ const prisma = {
   assignmentType: {
     findFirst: mock(),
   },
+  featureAccessTarget: {
+    findMany: mock(),
+  },
   apHistoryPromptLibraryEntry: {
     findFirst: mock(),
   },
@@ -55,10 +58,23 @@ function responseStatus(response: any) {
   return response.status ?? response.init?.status;
 }
 
+function mockAssignmentTypeAvailable({
+  id = 'at-1',
+  systemKey = 'generic_essay',
+  organizationId = 'org-1',
+} = {}) {
+  prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
+    args.select?.organizationAssignments
+      ? { id, organizationAssignments: [{ organizationId }] }
+      : { id, systemKey }
+  );
+}
+
 describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
     prisma.assignmentType.findFirst.mockReset();
+    prisma.featureAccessTarget.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     prisma.assignment.createMany.mockReset();
     requireUserId.mockReset();
@@ -75,10 +91,8 @@ describe('api.assignments.create', () => {
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
       { id: 'class-2', school: { id: 'school-2', organizationId: 'org-1' } },
     ]);
-    prisma.assignmentType.findFirst.mockResolvedValue({
-      id: 'at-1',
-      systemKey: 'generic_essay',
-    });
+    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    mockAssignmentTypeAvailable();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     prisma.assignment.createMany.mockResolvedValue({ count: 2 });
     isAssignmentsEnabledForContext.mockResolvedValue(true);
@@ -110,13 +124,19 @@ describe('api.assignments.create', () => {
         }),
       })
     );
-    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
+    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(1, {
+      where: { id: 'at-1', archivedAt: null },
+      select: {
+        id: true,
+        organizationAssignments: {
+          select: { organizationId: true },
+        },
+      },
+    });
+    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
       where: {
         id: 'at-1',
         archivedAt: null,
-        organizationAssignments: {
-          some: { organizationId: { in: ['org-1'] } },
-        },
       },
       select: { id: true, systemKey: true },
     });
@@ -213,12 +233,18 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
+      where: { id: 'at-forbidden', archivedAt: null },
+      select: {
+        id: true,
+        organizationAssignments: {
+          select: { organizationId: true },
+        },
+      },
+    });
+    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'at-forbidden',
         archivedAt: null,
-        organizationAssignments: {
-          some: { organizationId: { in: ['org-1'] } },
-        },
       },
       select: { id: true, systemKey: true },
     });
@@ -253,12 +279,12 @@ describe('api.assignments.create', () => {
         },
       ],
     };
-    prisma.assignmentType.findFirst.mockResolvedValue({
+    mockAssignmentTypeAvailable({
       id: 'ap-type-1',
       systemKey: 'ap_history_essay',
     });
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
-      libraryEntry,
+      libraryEntry
     );
 
     const response = await action({
@@ -337,12 +363,12 @@ describe('api.assignments.create', () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
-    prisma.assignmentType.findFirst.mockResolvedValue({
+    mockAssignmentTypeAvailable({
       id: 'ap-type-1',
       systemKey: 'ap_history_essay',
     });
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(
-      libraryEntry,
+      libraryEntry
     );
     isApHistoryEssayEnabledForContext.mockImplementation(
       async ({ schoolIds }) => schoolIds?.includes('school-1') ?? false
@@ -381,12 +407,12 @@ describe('api.assignments.create', () => {
   });
 
   test('rejects AP History assignment creation when AP access is disabled', async () => {
-    prisma.assignmentType.findFirst.mockResolvedValue({
+    mockAssignmentTypeAvailable({
       id: 'ap-type-1',
       systemKey: 'ap_history_essay',
     });
-    isApHistoryEssayEnabledForContext.mockImplementation(async ({ classIds }) =>
-      !classIds?.includes('class-2')
+    isApHistoryEssayEnabledForContext.mockImplementation(
+      async ({ classIds }) => !classIds?.includes('class-2')
     );
 
     const response = await action({
@@ -404,7 +430,7 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(403);
     expect(body.message).toBe(
-      'AP History Essay is not enabled for one or more classes.',
+      'AP History Essay is not enabled for one or more classes.'
     );
     expect(prisma.assignment.createMany).not.toHaveBeenCalled();
   });
@@ -413,7 +439,7 @@ describe('api.assignments.create', () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', school: { organizationId: 'org-1' } },
     ]);
-    prisma.assignmentType.findFirst.mockResolvedValue({
+    mockAssignmentTypeAvailable({
       id: 'ap-type-1',
       systemKey: 'ap_history_essay',
     });
@@ -439,7 +465,7 @@ describe('api.assignments.create', () => {
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', school: { organizationId: 'org-1' } },
     ]);
-    prisma.assignmentType.findFirst.mockResolvedValue({
+    mockAssignmentTypeAvailable({
       id: 'ap-type-1',
       systemKey: 'ap_history_essay',
     });

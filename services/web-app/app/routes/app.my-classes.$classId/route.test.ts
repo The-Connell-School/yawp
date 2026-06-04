@@ -4,6 +4,7 @@ const prisma = {
   class: { findFirst: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
+  featureAccessTarget: { findMany: mock() },
   profile: { findMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
@@ -87,6 +88,7 @@ describe('class detail loader document visibility', () => {
       { documentId: 'legacy-doc-2' },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
+    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.profile.findMany.mockResolvedValue([]);
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
@@ -123,14 +125,33 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
+    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          featureKey: { startsWith: 'assignment_type:' },
+          targetId: { in: ['org-1', 'school-1', 'teacher-1'] },
+        }),
+      })
+    );
     expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
       where: {
         archivedAt: null,
+        OR: [
+          {
+            organizationAssignments: {
+              some: { organizationId: { in: ['org-1'] } },
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        systemKey: true,
         organizationAssignments: {
-          some: { organizationId: 'org-1' },
+          select: { organizationId: true },
         },
       },
-      select: { id: true, title: true, systemKey: true },
       orderBy: { position: 'asc' },
     });
     expect(
@@ -175,11 +196,17 @@ describe('class detail loader document visibility', () => {
 
   test('omits AP History from the generic class assignment picker', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([
-      { id: 'generic-type-1', title: 'Literary Analysis', systemKey: null },
+      {
+        id: 'generic-type-1',
+        title: 'Literary Analysis',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
       {
         id: 'ap-history-type',
         title: 'AP History Essay',
         systemKey: 'ap_history_essay',
+        organizationAssignments: [{ organizationId: 'org-1' }],
       },
     ]);
 
@@ -201,6 +228,7 @@ describe('class detail loader document visibility', () => {
         id: 'ap-history-type',
         title: 'AP History Essay',
         systemKey: 'ap_history_essay',
+        organizationAssignments: [{ organizationId: 'org-1' }],
       },
     ]);
 
@@ -232,6 +260,7 @@ describe('class detail loader document visibility', () => {
         id: 'ap-history-type',
         title: 'AP History Essay',
         systemKey: 'ap_history_essay',
+        organizationAssignments: [{ organizationId: 'org-1' }],
       },
     ]);
     prisma.assignment.findFirst.mockResolvedValue({

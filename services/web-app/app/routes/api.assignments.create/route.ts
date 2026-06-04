@@ -4,6 +4,7 @@ import {
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -129,22 +130,23 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const organizationIds = Array.from(
-    new Set(classes.map((klass) => klass.school.organizationId))
-  );
-
+  const assignmentTypeAvailable = await isAssignmentTypeAvailableForEveryScope({
+    assignmentTypeId,
+    scopes: classes.map((klass) => ({
+      organizationId: klass.school.organizationId,
+      schoolId: klass.school.id,
+      teacherProfileId: profile.teacherProfile!.id,
+    })),
+  });
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {
       id: assignmentTypeId,
       archivedAt: null,
-      organizationAssignments: {
-        some: { organizationId: { in: organizationIds } },
-      },
     },
     select: { id: true, systemKey: true },
   });
 
-  if (!assignmentType) {
+  if (!assignmentTypeAvailable || !assignmentType) {
     return dataResponse(
       {
         success: false,

@@ -7,6 +7,7 @@ import { Form, Link, useLoaderData, useSearchParams } from 'react-router';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
+import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
@@ -76,13 +77,13 @@ function hasMeaningfulGrade(grade: {
 }) {
   return Boolean(
     grade.score ||
-      grade.feedback ||
-      grade.overallComment ||
-      grade.letterGrade ||
-      grade.numericPercentage !== null ||
-      (grade.rubricScores &&
-        typeof grade.rubricScores === 'object' &&
-        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
+    grade.feedback ||
+    grade.overallComment ||
+    grade.letterGrade ||
+    grade.numericPercentage !== null ||
+    (grade.rubricScores &&
+      typeof grade.rubricScores === 'object' &&
+      Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
   );
 }
 
@@ -124,33 +125,55 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
+  const teacherAssignmentClassScopes = profile.teacherProfile
+    ? await prisma.class
+        .findMany({
+          where: {
+            teachers: { some: { id: profile.teacherProfile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            school: { select: { id: true, organizationId: true } },
+          },
+        })
+        .then((classes) =>
+          classes.map((klass) => ({
+            id: klass.id,
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+            teacherProfileId: profile.teacherProfile!.id,
+          }))
+        )
+    : [];
   const teacherAssignmentClassIds = profile.teacherProfile
     ? await getAssignmentsEnabledClassIdsForContext({
         organizationId: profile.organization.id,
         teacherProfileId: profile.teacherProfile.id,
-        classes: await prisma.class
-          .findMany({
-            where: {
-              teachers: { some: { id: profile.teacherProfile.id } },
-              isArchived: false,
-            },
-            select: {
-              id: true,
-              school: { select: { id: true, organizationId: true } },
-            },
-          })
-          .then((classes) =>
-            classes.map((klass) => ({
-              id: klass.id,
-              organizationId: klass.school.organizationId,
-              schoolId: klass.school.id,
-            }))
-          ),
+        classes: teacherAssignmentClassScopes.map((scope) => ({
+          id: scope.id,
+          organizationId: scope.organizationId,
+          schoolId: scope.schoolId,
+        })),
       })
     : [];
   const assignmentsEnabled =
     studentAssignmentClassIds.length > 0 ||
     teacherAssignmentClassIds.length > 0;
+  const teacherAssignmentTypeScopes = profile.teacherProfile
+    ? teacherAssignmentClassScopes.length > 0
+      ? teacherAssignmentClassScopes.map((scope) => ({
+          organizationId: scope.organizationId,
+          schoolId: scope.schoolId,
+          teacherProfileId: scope.teacherProfileId,
+        }))
+      : [
+          {
+            organizationId: profile.organization.id,
+            teacherProfileId: profile.teacherProfile.id,
+          },
+        ]
+    : [];
 
   const url = new URL(request.url);
   if (
@@ -189,21 +212,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignments,
     teacherAssignments,
   ] = await Promise.all([
-    prisma.assignmentType.findMany({
-      where: {
-        archivedAt: null,
-        organizationAssignments: {
-          some: { organizationId: profile.organization.id },
-        },
-      },
-      select: {
-        image: { select: { id: true } },
-        id: true,
-        title: true,
-        systemKey: true,
-      },
-      orderBy: { position: 'asc' },
-    }),
+    profile.teacherProfile
+      ? getAvailableAssignmentTypesForScopes<AssignmentTypeRow>({
+          scopes: teacherAssignmentTypeScopes,
+          select: {
+            image: { select: { id: true } },
+            id: true,
+            title: true,
+            systemKey: true,
+          },
+          orderBy: { position: 'asc' },
+        })
+      : prisma.assignmentType.findMany({
+          where: {
+            archivedAt: null,
+            organizationAssignments: {
+              some: { organizationId: profile.organization.id },
+            },
+          },
+          select: {
+            image: { select: { id: true } },
+            id: true,
+            title: true,
+            systemKey: true,
+          },
+          orderBy: { position: 'asc' },
+        }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
       where: { profileId: profile.id, deletedAt: null, archivedAt: null },
