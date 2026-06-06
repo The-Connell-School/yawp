@@ -29,6 +29,21 @@ test.describe.serial('Admin grading assistants', () => {
       await page.getByRole('button', { name: 'Create Draft' }).click();
       await expect(page.getByText(templateName)).toBeVisible();
 
+      const updatedTemplateName = `${templateName} Edited`;
+      const templateRow = page.getByRole('row', {
+        name: new RegExp(templateName),
+      });
+      await templateRow.getByRole('button', { name: 'Edit' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Grading Assistant Template' })
+      ).toBeVisible();
+      await page.getByLabel('Name').fill(updatedTemplateName);
+      await page
+        .getByLabel('Calibration Notes')
+        .fill('E2E edited calibration.');
+      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await expect(page.getByText(updatedTemplateName)).toBeVisible();
+
       await page.goto(
         `/app/admin/assignment-types/${e2eContext.assignmentTypeId}`
       );
