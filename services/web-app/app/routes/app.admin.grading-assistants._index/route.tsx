@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Link2,
+  Pencil,
   Plus,
 } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -40,6 +41,12 @@ import { requireAdmin, requireProfile, requireUserId } from '~/utils/auth.server
 import { prisma } from '~/utils/db.server';
 
 const ALLOWED_TEMPLATE_STATUSES = new Set(['draft', 'active', 'archived']);
+
+const DEFAULT_SCORING_SCALE_JSON =
+  '{\n  "type": "weighted_1_5",\n  "minScore": 1,\n  "maxScore": 5\n}';
+const DEFAULT_RUBRIC_JSON = '{\n  "categories": []\n}';
+const DEFAULT_PROMPT_CONFIG_JSON = '{\n  "systemInstructions": ""\n}';
+const DEFAULT_OUTPUT_SCHEMA_JSON = '{\n  "schemaVersion": 1\n}';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -132,6 +139,34 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ status: 'success' });
   }
 
+  if (intent === 'updateTemplate') {
+    const templateId = requireString(formData, 'templateId');
+    const name = requireString(formData, 'name');
+    const slug = requireString(formData, 'slug');
+    const assignmentTypeKind =
+      formData.get('assignmentTypeKind')?.toString().trim() || null;
+    const calibrationNotes =
+      formData.get('calibrationNotes')?.toString().trim() || null;
+
+    await prisma.gradingAssistantTemplate.update({
+      where: { id: templateId },
+      data: {
+        name,
+        slug,
+        assignmentTypeKind,
+        scoringScale: parseJsonField(formData, 'scoringScale'),
+        rubricJson: parseJsonField(formData, 'rubricJson'),
+        promptConfigJson: parseJsonField(formData, 'promptConfigJson'),
+        outputSchemaJson: parseJsonField(formData, 'outputSchemaJson'),
+        calibrationNotes,
+        version: { increment: 1 },
+        updatedById: profile.id,
+      },
+    });
+
+    return dataResponse({ status: 'success' });
+  }
+
   if (intent === 'setStatus') {
     const templateId = requireString(formData, 'templateId');
     const status = requireString(formData, 'status');
@@ -168,10 +203,14 @@ export default function GradingAssistantsRoute() {
   const { templates, assignmentTypes } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<
+    (typeof templates)[number] | null
+  >(null);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data) {
       setIsSheetOpen(false);
+      setEditingTemplate(null);
     }
   }, [fetcher.state, fetcher.data]);
 
@@ -215,22 +254,22 @@ export default function GradingAssistantsRoute() {
               <JsonTextarea
                 id="scoringScale"
                 label="Scoring Scale JSON"
-                defaultValue={'{\n  "type": "weighted_1_5",\n  "minScore": 1,\n  "maxScore": 5\n}'}
+                defaultValue={DEFAULT_SCORING_SCALE_JSON}
               />
               <JsonTextarea
                 id="rubricJson"
                 label="Rubric JSON"
-                defaultValue={'{\n  "categories": []\n}'}
+                defaultValue={DEFAULT_RUBRIC_JSON}
               />
               <JsonTextarea
                 id="promptConfigJson"
                 label="Prompt Config JSON"
-                defaultValue={'{\n  "systemInstructions": ""\n}'}
+                defaultValue={DEFAULT_PROMPT_CONFIG_JSON}
               />
               <JsonTextarea
                 id="outputSchemaJson"
                 label="Output Schema JSON"
-                defaultValue={'{\n  "schemaVersion": 1\n}'}
+                defaultValue={DEFAULT_OUTPUT_SCHEMA_JSON}
               />
               <div className="space-y-2">
                 <Label htmlFor="calibrationNotes">Calibration Notes</Label>
@@ -243,6 +282,102 @@ export default function GradingAssistantsRoute() {
           </SheetContent>
         </Sheet>
       </div>
+
+      {editingTemplate && (
+        <Sheet
+          open={editingTemplate != null}
+          onOpenChange={(open) => {
+            if (!open) setEditingTemplate(null);
+          }}
+        >
+          <SheetContent className="overflow-y-auto sm:max-w-xl">
+            <SheetHeader>
+              <SheetTitle>Edit Grading Assistant Template</SheetTitle>
+            </SheetHeader>
+            <fetcher.Form
+              key={editingTemplate.id}
+              method="post"
+              className="mt-4 space-y-4"
+            >
+              <input type="hidden" name="intent" value="updateTemplate" />
+              <input
+                type="hidden"
+                name="templateId"
+                value={editingTemplate.id}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name</Label>
+                <Input
+                  id="edit-name"
+                  name="name"
+                  defaultValue={editingTemplate.name}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-slug">Slug</Label>
+                <Input
+                  id="edit-slug"
+                  name="slug"
+                  defaultValue={editingTemplate.slug}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-assignmentTypeKind">
+                  Assignment Type Kind
+                </Label>
+                <Input
+                  id="edit-assignmentTypeKind"
+                  name="assignmentTypeKind"
+                  defaultValue={editingTemplate.assignmentTypeKind ?? ''}
+                />
+              </div>
+              <JsonTextarea
+                id="edit-scoringScale"
+                name="scoringScale"
+                label="Scoring Scale JSON"
+                defaultValue={formatJsonField(editingTemplate.scoringScale)}
+              />
+              <JsonTextarea
+                id="edit-rubricJson"
+                name="rubricJson"
+                label="Rubric JSON"
+                defaultValue={formatJsonField(editingTemplate.rubricJson)}
+              />
+              <JsonTextarea
+                id="edit-promptConfigJson"
+                name="promptConfigJson"
+                label="Prompt Config JSON"
+                defaultValue={formatJsonField(editingTemplate.promptConfigJson)}
+              />
+              <JsonTextarea
+                id="edit-outputSchemaJson"
+                name="outputSchemaJson"
+                label="Output Schema JSON"
+                defaultValue={formatJsonField(editingTemplate.outputSchemaJson)}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="edit-calibrationNotes">
+                  Calibration Notes
+                </Label>
+                <Textarea
+                  id="edit-calibrationNotes"
+                  name="calibrationNotes"
+                  defaultValue={editingTemplate.calibrationNotes ?? ''}
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={fetcher.state !== 'idle'}
+                className="w-full"
+              >
+                {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </fetcher.Form>
+          </SheetContent>
+        </Sheet>
+      )}
 
       {/* Coverage summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -356,7 +491,13 @@ export default function GradingAssistantsRoute() {
                 return (
                   <TableRow key={template.id}>
                     <TableCell className="font-medium">
-                      <div>{template.name}</div>
+                      <button
+                        type="button"
+                        className="text-left hover:underline"
+                        onClick={() => setEditingTemplate(template)}
+                      >
+                        {template.name}
+                      </button>
                       <div className="text-xs text-muted-foreground font-mono">{template.slug}</div>
                     </TableCell>
                     <TableCell>{statusBadge(template.status)}</TableCell>
@@ -374,6 +515,15 @@ export default function GradingAssistantsRoute() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingTemplate(template)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </Button>
                         {template.status !== 'active' && (
                           <TemplateStatusButton
                             templateId={template.id}
@@ -425,10 +575,12 @@ function coverageReason(assignmentType: {
 
 function JsonTextarea({
   id,
+  name = id,
   label,
   defaultValue,
 }: {
   id: string;
+  name?: string;
   label: string;
   defaultValue: string;
 }) {
@@ -437,7 +589,7 @@ function JsonTextarea({
       <Label htmlFor={id}>{label}</Label>
       <Textarea
         id={id}
-        name={id}
+        name={name}
         defaultValue={defaultValue}
         rows={6}
         className="font-mono text-xs"
@@ -445,6 +597,10 @@ function JsonTextarea({
       />
     </div>
   );
+}
+
+function formatJsonField(value: unknown) {
+  return JSON.stringify(value ?? {}, null, 2);
 }
 
 function TemplateStatusButton({

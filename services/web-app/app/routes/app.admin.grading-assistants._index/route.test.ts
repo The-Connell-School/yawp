@@ -102,4 +102,38 @@ describe('admin grading assistant templates action', () => {
       data: expect.objectContaining({ status: 'archived' }),
     });
   });
+
+  test('updates template fields and increments the template version', async () => {
+    await action({
+      request: postForm({
+        intent: 'updateTemplate',
+        templateId: 'template-1',
+        name: 'Updated ACT Writing grader',
+        slug: 'updated-act-writing',
+        assignmentTypeKind: 'act_writing',
+        rubricJson: JSON.stringify({ categories: [{ key: 'ideas' }] }),
+        promptConfigJson: JSON.stringify({ systemInstructions: 'Updated.' }),
+        scoringScale: JSON.stringify({ type: 'act_writing_2_12' }),
+        outputSchemaJson: JSON.stringify({ schemaVersion: 2 }),
+        calibrationNotes: 'Updated calibration.',
+      }),
+      params: {},
+    } as any);
+
+    expect(prisma.gradingAssistantTemplate.update).toHaveBeenCalledWith({
+      where: { id: 'template-1' },
+      data: expect.objectContaining({
+        name: 'Updated ACT Writing grader',
+        slug: 'updated-act-writing',
+        assignmentTypeKind: 'act_writing',
+        rubricJson: { categories: [{ key: 'ideas' }] },
+        promptConfigJson: { systemInstructions: 'Updated.' },
+        scoringScale: { type: 'act_writing_2_12' },
+        outputSchemaJson: { schemaVersion: 2 },
+        calibrationNotes: 'Updated calibration.',
+        version: { increment: 1 },
+        updatedById: 'profile-1',
+      }),
+    });
+  });
 });
