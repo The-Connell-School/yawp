@@ -1,0 +1,159 @@
+import { rubricCategories } from './rubric';
+
+export type RubricDisplayCategory = {
+  key: string;
+  label: string;
+  description: string;
+  weight: number;
+};
+
+export type RubricDisplayConfig = {
+  categories: RubricDisplayCategory[];
+  minScore: number;
+  maxScore: number;
+  scoringType: string;
+};
+
+export type RubricScore = {
+  score: number;
+  comment: string;
+  isAi?: boolean;
+};
+
+export const legacyRubricDisplayConfig: RubricDisplayConfig = {
+  categories: rubricCategories.map((category) => ({
+    key: category.key,
+    label: category.label,
+    description: category.description,
+    weight: category.weight,
+  })),
+  minScore: 1,
+  maxScore: 5,
+  scoringType: 'weighted_1_5',
+};
+
+const legacyScoreLabels: Record<number, string> = {
+  1: 'Needs Improvement',
+  2: 'Developing',
+  3: 'Proficient',
+  4: 'Strong',
+  5: 'Exemplary',
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function normalizeRubricDisplayConfig(
+  raw: unknown
+): RubricDisplayConfig {
+  if (!isRecord(raw)) return legacyRubricDisplayConfig;
+
+  const categories = Array.isArray(raw.categories)
+    ? raw.categories
+        .map((category) => {
+          if (!isRecord(category)) return null;
+          const key = typeof category.key === 'string' ? category.key : null;
+          const label =
+            typeof category.label === 'string' ? category.label : null;
+          const description =
+            typeof category.description === 'string'
+              ? category.description
+              : '';
+          const weight =
+            typeof category.weight === 'number' &&
+            Number.isFinite(category.weight)
+              ? category.weight
+              : 0;
+          if (!key || !label) return null;
+          return { key, label, description, weight };
+        })
+        .filter(
+          (category): category is RubricDisplayCategory => category !== null
+        )
+    : [];
+
+  if (categories.length === 0) return legacyRubricDisplayConfig;
+
+  const minScore =
+    typeof raw.minScore === 'number' && Number.isFinite(raw.minScore)
+      ? Math.round(raw.minScore)
+      : legacyRubricDisplayConfig.minScore;
+  const maxScore =
+    typeof raw.maxScore === 'number' && Number.isFinite(raw.maxScore)
+      ? Math.round(raw.maxScore)
+      : legacyRubricDisplayConfig.maxScore;
+  const scoringType =
+    typeof raw.scoringType === 'string'
+      ? raw.scoringType
+      : legacyRubricDisplayConfig.scoringType;
+
+  return {
+    categories,
+    minScore: Math.min(minScore, maxScore),
+    maxScore: Math.max(minScore, maxScore),
+    scoringType,
+  };
+}
+
+export function buildEmptyRubricScores(
+  categories: RubricDisplayCategory[]
+): Record<string, RubricScore> {
+  return categories.reduce<Record<string, RubricScore>>((acc, item) => {
+    acc[item.key] = { score: 0, comment: '' };
+    return acc;
+  }, {});
+}
+
+export function normalizeRubricScoresForCategories({
+  raw,
+  categories,
+  minScore,
+  maxScore,
+}: {
+  raw: unknown;
+  categories: RubricDisplayCategory[];
+  minScore: number;
+  maxScore: number;
+}): Record<string, RubricScore> {
+  const normalized = buildEmptyRubricScores(categories);
+  if (!isRecord(raw)) return normalized;
+
+  for (const item of categories) {
+    const candidate = raw[item.key];
+    if (!isRecord(candidate)) continue;
+
+    const scoreValue = candidate.score;
+    const commentValue = candidate.comment;
+
+    const roundedScore =
+      typeof scoreValue === 'number' && Number.isFinite(scoreValue)
+        ? Math.round(scoreValue)
+        : 0;
+
+    normalized[item.key] = {
+      score:
+        roundedScore > 0
+          ? Math.max(minScore, Math.min(maxScore, roundedScore))
+          : 0,
+      comment: typeof commentValue === 'string' ? commentValue : '',
+      isAi: Boolean(candidate.isAi),
+    };
+  }
+
+  return normalized;
+}
+
+export function buildScoreOptions(minScore: number, maxScore: number) {
+  return Array.from(
+    { length: Math.max(0, maxScore - minScore + 1) },
+    (_, index) => minScore + index
+  ).map((score) => {
+    const suffix =
+      maxScore === 5 && minScore === 1 ? legacyScoreLabels[score] : null;
+    return {
+      value: score.toString(),
+      label: suffix ? `${score} - ${suffix}` : score.toString(),
+    };
+  });
+}

@@ -1,5 +1,3 @@
-import { rubricCategories } from '~/domain/grading/rubric';
-
 type RubricScore = { score: number; comment: string };
 
 /**
@@ -14,8 +12,7 @@ export function hasGradingDraftToReplace(
   if (grammarIssueCount > 0) return true;
   if (overallComment.trim().length > 0) return true;
   if (numericPercentage.trim() !== '') return true;
-  for (const item of rubricCategories) {
-    const r = rubricScores[item.key];
+  for (const r of Object.values(rubricScores)) {
     if (!r) continue;
     if (r.score > 0) return true;
     if (r.comment.trim().length > 0) return true;

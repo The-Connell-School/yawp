@@ -19,9 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { rubricCategories } from '~/domain/grading/rubric';
 import {
-  computeWeightedPercentage,
+  buildEmptyRubricScores,
+  buildScoreOptions,
+  legacyRubricDisplayConfig,
+  normalizeRubricDisplayConfig,
+  normalizeRubricScoresForCategories,
+  type RubricDisplayConfig,
+  type RubricScore,
+} from '~/domain/grading/rubric-display';
+import {
+  computeWeightedPercentageForCategories,
   formatGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
@@ -34,53 +42,9 @@ import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
 
-type RubricScore = {
-  score: number;
-  comment: string;
-  isAi?: boolean;
-};
-
-const scoreOptions = [
-  { value: '1', label: '1 - Needs Improvement' },
-  { value: '2', label: '2 - Developing' },
-  { value: '3', label: '3 - Proficient' },
-  { value: '4', label: '4 - Strong' },
-  { value: '5', label: '5 - Exemplary' },
-];
-
-const buildEmptyRubric = () =>
-  rubricCategories.reduce<Record<string, RubricScore>>((acc, item) => {
-    acc[item.key] = { score: 0, comment: '' };
-    return acc;
-  }, {});
-
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function normalizeRubricScores(raw: unknown): Record<string, RubricScore> {
-  const normalized = buildEmptyRubric();
-  if (!raw || typeof raw !== 'object') return normalized;
-
-  for (const item of rubricCategories) {
-    const candidate = (raw as Record<string, unknown>)[item.key];
-    if (!candidate || typeof candidate !== 'object') continue;
-
-    const scoreValue = (candidate as { score?: unknown }).score;
-    const commentValue = (candidate as { comment?: unknown }).comment;
-
-    normalized[item.key] = {
-      score:
-        typeof scoreValue === 'number' && Number.isFinite(scoreValue)
-          ? Math.max(0, Math.min(5, Math.round(scoreValue)))
-          : 0,
-      comment: typeof commentValue === 'string' ? commentValue : '',
-      isAi: Boolean((candidate as { isAi?: unknown }).isAi),
-    };
-  }
-
-  return normalized;
 }
 
 function formatExcerpt(excerpt: string, maxChars = 90) {
@@ -99,6 +63,7 @@ export function TeacherGradingPanel({
   onRemoveGrammarIssue,
   onGrammarIssuesChange,
   onAiGradingComplete,
+  rubricConfig,
 }: {
   documentId: string;
   submissionId: string | null;
@@ -126,15 +91,25 @@ export function TeacherGradingPanel({
     score: string | null;
     overallComment: string | null;
     rubricScores: unknown;
+    rubricConfig?: RubricDisplayConfig | null;
   }) => void;
+  rubricConfig?: RubricDisplayConfig | null;
 }) {
   const aiFetcher = useFetcher();
   const targetSubmissionId = existingGrade?.id ?? submissionId;
   const { save: autoSave, status: autoSaveStatus } = useUpdateSubmission(
     targetSubmissionId ?? ''
   );
+  const propRubricConfig = useMemo(
+    () => normalizeRubricDisplayConfig(rubricConfig),
+    [rubricConfig]
+  );
+  const [activeRubricConfig, setActiveRubricConfig] =
+    useState<RubricDisplayConfig>(propRubricConfig);
   const [rubricScores, setRubricScores] =
-    useState<Record<string, RubricScore>>(buildEmptyRubric());
+    useState<Record<string, RubricScore>>(
+      buildEmptyRubricScores(propRubricConfig.categories)
+    );
   const [overallComment, setOverallComment] = useState('');
   const [numericPercentage, setNumericPercentage] = useState('');
   const [hasManualPercentOverride, setHasManualPercentOverride] =
@@ -145,15 +120,23 @@ export function TeacherGradingPanel({
   const recalcResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const lastInitializationKeyRef = useRef<string | null>(null);
   const [recalcUiState, setRecalcUiState] = useState<
     'idle' | 'loading' | 'done'
   >('idle');
+  const scoreOptions = useMemo(
+    () =>
+      buildScoreOptions(activeRubricConfig.minScore, activeRubricConfig.maxScore),
+    [activeRubricConfig.maxScore, activeRubricConfig.minScore]
+  );
 
   const computedNumericPercentage = useMemo(() => {
-    return computeWeightedPercentage(
-      rubricScores as unknown as Record<string, unknown>
+    if (activeRubricConfig.scoringType !== 'weighted_1_5') return null;
+    return computeWeightedPercentageForCategories(
+      rubricScores as unknown as Record<string, unknown>,
+      activeRubricConfig.categories
     );
-  }, [rubricScores]);
+  }, [activeRubricConfig, rubricScores]);
 
   const resolvedNumericPercentage = useMemo(() => {
     if (numericPercentage === '') return null;
@@ -170,9 +153,11 @@ export function TeacherGradingPanel({
         resolvedNumericPercentage === null
           ? null
           : letterFromPercent(resolvedNumericPercentage)
-      ) || '—'
+      ) ||
+      existingGrade?.score ||
+      '—'
     );
-  }, [resolvedNumericPercentage]);
+  }, [existingGrade?.score, resolvedNumericPercentage]);
   const gradeBadgeClassName =
     'border-purple-300 bg-purple-100 text-purple-800 hover:!bg-purple-100 hover:!text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:!bg-purple-950/40 dark:hover:!text-purple-200';
   const isGenerating = aiFetcher.state !== 'idle';
@@ -192,10 +177,38 @@ export function TeacherGradingPanel({
   const onAiGradingCompleteRef = useRef(onAiGradingComplete);
   onAiGradingCompleteRef.current = onAiGradingComplete;
 
+  const initializationKey = useMemo(
+    () =>
+      JSON.stringify({
+        submissionId,
+        existingGrade: existingGrade
+          ? {
+              id: existingGrade.id,
+              score: existingGrade.score,
+              feedback: existingGrade.feedback,
+              rubricScores: existingGrade.rubricScores,
+              overallComment: existingGrade.overallComment,
+              numericPercentage: existingGrade.numericPercentage,
+              letterGrade: existingGrade.letterGrade,
+            }
+          : null,
+        rubricConfig: propRubricConfig,
+      }),
+    [existingGrade, propRubricConfig, submissionId]
+  );
+
   useEffect(() => {
+    if (lastInitializationKeyRef.current === initializationKey) return;
+    lastInitializationKeyRef.current = initializationKey;
+
     let initialOverallComment = '';
     let initialNumericPercentage = '';
-    let initialRubricScores = buildEmptyRubric();
+    let initialRubricScores = buildEmptyRubricScores(
+      propRubricConfig.categories
+    );
+
+    setActiveRubricConfig(propRubricConfig);
+    setHasManualPercentOverride(false);
 
     if (existingGrade) {
       initialOverallComment =
@@ -207,13 +220,18 @@ export function TeacherGradingPanel({
         initialNumericPercentage = initialNormalizedPercent.toString();
         setHasManualPercentOverride(true);
       }
-      initialRubricScores = normalizeRubricScores(existingGrade.rubricScores);
+      initialRubricScores = normalizeRubricScoresForCategories({
+        raw: existingGrade.rubricScores,
+        categories: propRubricConfig.categories,
+        minScore: propRubricConfig.minScore,
+        maxScore: propRubricConfig.maxScore,
+      });
     }
 
     setOverallComment(initialOverallComment);
     setNumericPercentage(initialNumericPercentage);
     setRubricScores(initialRubricScores);
-  }, [existingGrade, submissionId]);
+  }, [existingGrade, initializationKey, propRubricConfig]);
 
   useEffect(() => {
     if (!hasManualPercentOverride && computedNumericPercentage !== null) {
@@ -225,7 +243,18 @@ export function TeacherGradingPanel({
     if (!aiFetcher.data?.success || aiFetcher.state !== 'idle') return;
 
     const d = aiFetcher.data;
-    setRubricScores(normalizeRubricScores(d.rubricScores));
+    const nextRubricConfig = normalizeRubricDisplayConfig(
+      d.rubricConfig ?? legacyRubricDisplayConfig
+    );
+    setActiveRubricConfig(nextRubricConfig);
+    setRubricScores(
+      normalizeRubricScoresForCategories({
+        raw: d.rubricScores,
+        categories: nextRubricConfig.categories,
+        minScore: nextRubricConfig.minScore,
+        maxScore: nextRubricConfig.maxScore,
+      })
+    );
     if (typeof d.overallComment === 'string') {
       setOverallComment(d.overallComment);
     }
@@ -242,8 +271,13 @@ export function TeacherGradingPanel({
       overallComment:
         typeof d.overallComment === 'string' ? d.overallComment : null,
       rubricScores: d.rubricScores ?? null,
+      rubricConfig: nextRubricConfig,
     });
-  }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
+  }, [
+    aiFetcher.data,
+    aiFetcher.state,
+    onGrammarIssuesChange,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -273,9 +307,10 @@ export function TeacherGradingPanel({
     const effectivePercentStr = overridePercent ?? numericPercentage;
     const effectiveGrammarIssues = overrideGrammarIssues ?? grammarIssues;
 
-    const rawPercent = Number(effectivePercentStr);
+    const trimmedPercent = effectivePercentStr.trim();
+    const rawPercent = Number(trimmedPercent);
     const percent =
-      Number.isFinite(rawPercent)
+      trimmedPercent !== '' && Number.isFinite(rawPercent)
         ? Math.max(0, Math.min(100, Math.round(rawPercent)))
         : null;
     const letter = percent === null ? null : letterFromPercent(percent);
@@ -289,6 +324,9 @@ export function TeacherGradingPanel({
     if (percent !== null) payload.numericPercentage = percent;
     if (letter) payload.letterGrade = letter;
     if (percent !== null) payload.score = formatGrade(percent, letter) ?? '';
+    if (percent === null && existingGrade?.score) {
+      payload.score = existingGrade.score;
+    }
 
     void autoSave(payload);
   };
@@ -436,7 +474,7 @@ export function TeacherGradingPanel({
                 setNumericPercentage(e.target.value);
                 setHasManualPercentOverride(true);
               }}
-              onBlur={() => saveAll()}
+              onBlur={(e) => saveAll(undefined, undefined, e.currentTarget.value)}
             />
             <Button
               type="button"
@@ -472,7 +510,7 @@ export function TeacherGradingPanel({
             value={overallComment}
             disabled={isGenerating}
             onChange={(e) => setOverallComment(e.target.value)}
-            onBlur={() => saveAll()}
+            onBlur={(e) => saveAll(undefined, e.currentTarget.value)}
             rows={4}
             placeholder="Write overall feedback..."
           />
@@ -481,15 +519,30 @@ export function TeacherGradingPanel({
         <div className="space-y-3">
           <div className="text-sm font-medium">Rubric</div>
           <Accordion type="multiple" className="w-full rounded-lg bg-white">
-            {rubricCategories.map((item) => {
+            {activeRubricConfig.categories.map((item) => {
               const current = rubricScores[item.key] || {
                 score: 0,
                 comment: '',
               };
+              const applyScoreChange = (value: string) => {
+                const newRubric = {
+                  ...rubricScores,
+                  [item.key]: {
+                    ...rubricScores[item.key],
+                    score: Number(value),
+                    isAi: false,
+                  },
+                };
+                setRubricScores(newRubric);
+                // Auto-save on select change (selects don't fire blur)
+                saveAll(newRubric);
+              };
               const scoreLabel = current.score
-                ? `${current.score}/5`
+                ? `${current.score}/${activeRubricConfig.maxScore}`
                 : 'Not scored';
-              const isGrammarCategory = item.key === 'grammar_and_mechanics';
+              const isGrammarCategory =
+                item.key === 'grammar_and_mechanics' ||
+                item.key === 'language_use_and_conventions';
               const shownGrammarCount = grammarIssues.filter(
                 (issue) => !hiddenGrammarIssueIds.includes(issue.id)
               ).length;
@@ -515,19 +568,7 @@ export function TeacherGradingPanel({
                     <Select
                       value={current.score ? current.score.toString() : ''}
                       disabled={isGenerating}
-                      onValueChange={(value) => {
-                        const newRubric = {
-                          ...rubricScores,
-                          [item.key]: {
-                            ...rubricScores[item.key],
-                            score: Number(value),
-                            isAi: false,
-                          },
-                        };
-                        setRubricScores(newRubric);
-                        // Auto-save on select change (selects don't fire blur)
-                        saveAll(newRubric);
-                      }}
+                      onValueChange={applyScoreChange}
                     >
                       <SelectTrigger
                         className="w-full"
@@ -557,7 +598,18 @@ export function TeacherGradingPanel({
                           },
                         }))
                       }
-                      onBlur={() => saveAll()}
+                      onBlur={(e) => {
+                        const newRubric = {
+                          ...rubricScores,
+                          [item.key]: {
+                            ...rubricScores[item.key],
+                            comment: e.currentTarget.value,
+                            isAi: false,
+                          },
+                        };
+                        setRubricScores(newRubric);
+                        saveAll(newRubric);
+                      }}
                       placeholder="Enter category feedback..."
                       rows={4}
                     />

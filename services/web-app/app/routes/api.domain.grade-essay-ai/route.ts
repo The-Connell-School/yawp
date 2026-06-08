@@ -520,6 +520,12 @@ export async function action({ request }: ActionFunctionArgs) {
     gradingAssistantTemplate
   );
   const scoringType = getTemplateScoringType(gradingAssistantTemplate);
+  const rubricConfig = {
+    categories: rubricCategories,
+    minScore,
+    maxScore,
+    scoringType,
+  };
   const { rubricInstructions, scoreInstructions, systemInstructions } =
     getTemplateInstructions(gradingAssistantTemplate);
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
@@ -975,5 +981,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     letterGrade,
     score,
     grammarIssues,
+    rubricConfig,
   });
 }
