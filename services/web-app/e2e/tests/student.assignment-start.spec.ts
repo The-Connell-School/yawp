@@ -63,7 +63,8 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
           .getByTestId('assignment-prompt-header')
           .boundingBox();
         expect(promptHeaderBox).not.toBeNull();
-        if (!promptHeaderBox) throw new Error('Missing assignment prompt header');
+        if (!promptHeaderBox)
+          throw new Error('Missing assignment prompt header');
         expect(promptHeaderBox.height).toBeLessThanOrEqual(40);
         const promptBody = promptPanel
           .locator('div')
@@ -89,7 +90,8 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
           .boundingBox();
         expect(promptBox).not.toBeNull();
         expect(editorBox).not.toBeNull();
-        if (!promptBox || !editorBox) throw new Error('Missing document column');
+        if (!promptBox || !editorBox)
+          throw new Error('Missing document column');
         expect(Math.abs(promptBox.x - editorBox.x)).toBeLessThanOrEqual(2);
         expect(Math.abs(promptBox.width - editorBox.width)).toBeLessThanOrEqual(
           2
@@ -106,9 +108,12 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
           .boundingBox();
         expect(collapsedPromptBox).not.toBeNull();
         expect(tutorHeaderBox).not.toBeNull();
-        if (!collapsedPromptBox) throw new Error('Missing collapsed prompt panel');
+        if (!collapsedPromptBox)
+          throw new Error('Missing collapsed prompt panel');
         if (!tutorHeaderBox) throw new Error('Missing tutor module header');
-        expect(Math.abs(collapsedPromptBox.y - tutorHeaderBox.y)).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(collapsedPromptBox.y - tutorHeaderBox.y)
+        ).toBeLessThanOrEqual(1);
         expect(
           Math.abs(collapsedPromptBox.height - tutorHeaderBox.height)
         ).toBeLessThanOrEqual(1);
@@ -158,13 +163,21 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         await expect(page).toHaveURL(/cmsIdx=1/);
         await expect(page.getByText('E2E Module 2')).toBeVisible();
 
+        await helpers.openDocument(documentId as string);
+        await expect(page).not.toHaveURL(/cmsIdx=1/);
+        await expect(page.getByText('E2E Module 2')).toBeVisible();
+
         const afterNextSessions = await prisma.assignmentModuleSession.count({
           where: { documentId: documentId as string },
         });
         expect(afterNextSessions).toBe(assignmentModules.length);
 
         await page.getByTestId('tutor-previous-module').click();
-        await expect(page).not.toHaveURL(/cmsIdx=1/);
+        await expect(page).toHaveURL(/cmsIdx=0/);
+        await expect(page.getByText('E2E Module 1')).toBeVisible();
+
+        await helpers.openDocument(documentId as string);
+        await expect(page).not.toHaveURL(/cmsIdx=0/);
         await expect(page.getByText('E2E Module 1')).toBeVisible();
 
         await helpers.typeInEditor('My opening paragraph for the assignment.');

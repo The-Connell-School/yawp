@@ -26,6 +26,7 @@ type Props = {
   beforeRespond?: () => Promise<boolean>;
   isSessionLocked?: boolean;
   onCmsUpdate?: (cms: any) => void;
+  cmsIdx?: number;
   cms: {
     assignmentModuleId?: string;
     assignmentModule: {
@@ -59,6 +60,7 @@ export const Tutor = ({
   beforeRespond,
   isSessionLocked = false,
   onCmsUpdate,
+  cmsIdx: resolvedCmsIdx,
 }: Props) => {
   const [messagesExpanded, setMessagesExpanded] = useLocalStorage(
     `doc-${docId}-tutor-messages-expanded`,
@@ -74,7 +76,8 @@ export const Tutor = ({
   const messagesRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
+  const urlCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
+  const cmsIdx = resolvedCmsIdx ?? urlCmsIdx;
 
   const finishedCms =
     cms.instructionsCompleted === cms.assignmentModule.instructions.length;
@@ -93,10 +96,10 @@ export const Tutor = ({
   const navigateToCmsIdx = useCallback(
     (nextIdx: number | undefined) => {
       const params = new URLSearchParams(searchParams);
-      if (nextIdx === undefined || nextIdx === 0) {
+      if (nextIdx === undefined) {
         params.delete('cmsIdx');
       } else {
-        params.set('cmsIdx', String(nextIdx));
+        params.set('cmsIdx', String(Math.max(0, nextIdx)));
       }
       const query = params.toString();
       navigate(`/app/documents/${docId}${query ? `?${query}` : ''}`, {
@@ -104,6 +107,48 @@ export const Tutor = ({
       });
     },
     [docId, navigate, searchParams]
+  );
+
+  const activateCmsIdx = useCallback(
+    async (nextIdx: number | undefined) => {
+      if (nextIdx === undefined) {
+        navigateToCmsIdx(nextIdx);
+        return;
+      }
+
+      const targetIdx = Math.max(0, nextIdx);
+      const targetModuleId =
+        cms.assignmentModule.assignmentType?.assignmentModules[targetIdx]?.id;
+
+      if (targetModuleId) {
+        const formData = new FormData();
+        formData.append('assignmentModuleId', targetModuleId);
+        formData.append('documentId', docId);
+
+        try {
+          const res = await fetch('/api/model/assignment-module-session', {
+            method: 'POST',
+            body: formData,
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json?.cms) {
+              onCmsUpdate?.(json.cms);
+            }
+          }
+        } catch {
+          // Keep explicit URL navigation available if the recency write fails.
+        }
+      }
+
+      navigateToCmsIdx(targetIdx);
+    },
+    [
+      cms.assignmentModule.assignmentType?.assignmentModules,
+      docId,
+      navigateToCmsIdx,
+      onCmsUpdate,
+    ]
   );
 
   const respond = useCallback(
@@ -250,7 +295,7 @@ export const Tutor = ({
                 onClick={() =>
                   !isSessionLocked &&
                   prevCmsIdx !== undefined &&
-                  navigateToCmsIdx(prevCmsIdx)
+                  void activateCmsIdx(prevCmsIdx)
                 }
               >
                 <ChevronLeftIcon size={20} />
@@ -373,7 +418,7 @@ export const Tutor = ({
         >
           {hasPreviousCms ? (
             <Button
-              onClick={() => navigateToCmsIdx(prevCmsIdx)}
+              onClick={() => void activateCmsIdx(prevCmsIdx)}
               variant="secondary"
             >
               <ArrowLeftIcon size={18} className="mr-2" /> Back

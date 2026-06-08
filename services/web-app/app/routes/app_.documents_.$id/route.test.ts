@@ -47,6 +47,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireProfile = mock();
+const requireMutableRequest = mock();
 const redirectWithToast = mock();
 const isAssignmentsEnabledForContext = mock();
 const isDocumentSubmissionEnabledForScope = mock();
@@ -55,6 +56,7 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireProfile,
+  requireMutableRequest,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
@@ -98,11 +100,65 @@ const {
   loader,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
-const { ApHistoryAssignmentPanel } = await import(
-  './ap-history-assignment-panel'
-);
+const { ApHistoryAssignmentPanel } =
+  await import('./ap-history-assignment-panel');
 
-function makeDocument({ includeSnapshot }: { includeSnapshot: boolean }) {
+const assignmentModules = [
+  { id: 'module-prewriting', position: 1 },
+  { id: 'module-drafting', position: 2 },
+  { id: 'module-revising', position: 3 },
+];
+
+function makeModuleSession({
+  id,
+  moduleId,
+  position,
+  instructionsCompleted,
+  instructionCount = 1,
+  isSelfGuided = false,
+}: {
+  id: string;
+  moduleId: string;
+  position: number;
+  instructionsCompleted: number;
+  instructionCount?: number;
+  isSelfGuided?: boolean;
+}) {
+  return {
+    id,
+    createdAt: new Date('2026-05-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+    assignmentModuleId: moduleId,
+    instructionsCompleted,
+    assignmentModule: {
+      id: moduleId,
+      position,
+      title: `Module ${position}`,
+      isSelfGuided,
+      instructions: Array.from({ length: instructionCount }, (_, index) => ({
+        id: `instruction-${moduleId}-${index + 1}`,
+        title: `Instruction ${position}.${index + 1}`,
+        prompt: `Prompt ${position}.${index + 1}`,
+        position: index + 1,
+        showChatButton: true,
+        showNextButton: true,
+        buttons: [],
+      })),
+      assignmentType: {
+        assignmentModules,
+      },
+    },
+    messages: [],
+  };
+}
+
+function makeDocument({
+  includeSnapshot,
+  assignmentModuleSessions,
+}: {
+  includeSnapshot: boolean;
+  assignmentModuleSessions?: ReturnType<typeof makeModuleSession>[];
+}) {
   return {
     id: 'doc-1',
     createdAt: new Date('2026-05-01T00:00:00.000Z'),
@@ -142,20 +198,13 @@ function makeDocument({ includeSnapshot }: { includeSnapshot: boolean }) {
       userId: 'user-1',
       user: { name: 'Student One' },
     },
-    assignmentModuleSessions: [
-      {
+    assignmentModuleSessions: assignmentModuleSessions ?? [
+      makeModuleSession({
         id: 'cms-1',
-        assignmentModuleId: 'module-1',
-        assignmentModule: {
-          id: 'module-1',
-          position: 1,
-          instructions: [],
-          assignmentType: {
-            assignmentModules: [{ id: 'module-1', position: 1 }],
-          },
-        },
-        messages: [],
-      },
+        moduleId: 'module-1',
+        position: 1,
+        instructionsCompleted: 0,
+      }),
     ],
     comments: [],
   };
@@ -168,11 +217,13 @@ describe('app_.documents_.$id loader', () => {
     prisma.documentRevision.create.mockReset();
     requireUserId.mockReset();
     requireProfile.mockReset();
+    requireMutableRequest.mockReset();
     redirectWithToast.mockReset();
     isAssignmentsEnabledForContext.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
+    requireMutableRequest.mockResolvedValue(undefined);
     requireProfile.mockResolvedValue({
       id: 'profile-1',
       teacherProfile: null,
@@ -215,6 +266,76 @@ describe('app_.documents_.$id loader', () => {
     expect(response.data.doc.assignment.apHistorySnapshot).toEqual(
       apHistorySnapshot
     );
+  });
+
+  test('resumes the first incomplete tutor module when reopening without cmsIdx', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce(
+      makeDocument({
+        includeSnapshot: true,
+        assignmentModuleSessions: [
+          makeModuleSession({
+            id: 'cms-prewriting',
+            moduleId: 'module-prewriting',
+            position: 1,
+            instructionsCompleted: 1,
+          }),
+          makeModuleSession({
+            id: 'cms-drafting',
+            moduleId: 'module-drafting',
+            position: 2,
+            instructionsCompleted: 0,
+          }),
+          makeModuleSession({
+            id: 'cms-revising',
+            moduleId: 'module-revising',
+            position: 3,
+            instructionsCompleted: 0,
+          }),
+        ],
+      })
+    );
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/documents/doc-1'),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(response.data.currentCms.id).toBe('cms-drafting');
+    expect(response.data.currentCmsIdx).toBe(1);
+    expect(response.data.hasPreviousCms).toBe(true);
+  });
+
+  test('keeps an untouched empty first module selected when reopening without cmsIdx', async () => {
+    prisma.document.findFirst.mockResolvedValueOnce(
+      makeDocument({
+        includeSnapshot: true,
+        assignmentModuleSessions: [
+          makeModuleSession({
+            id: 'cms-prewriting',
+            moduleId: 'module-prewriting',
+            position: 1,
+            instructionsCompleted: 0,
+            instructionCount: 0,
+            isSelfGuided: true,
+          }),
+          makeModuleSession({
+            id: 'cms-drafting',
+            moduleId: 'module-drafting',
+            position: 2,
+            instructionsCompleted: 0,
+          }),
+        ],
+      })
+    );
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/documents/doc-1'),
+      params: { id: 'doc-1' },
+    } as never)) as any;
+
+    expect(response.data.currentCms.id).toBe('cms-prewriting');
+    expect(response.data.currentCmsIdx).toBe(0);
+    expect(response.data.hasPreviousCms).toBe(false);
   });
 });
 
