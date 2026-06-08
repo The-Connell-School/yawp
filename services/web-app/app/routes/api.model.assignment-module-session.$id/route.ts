@@ -84,13 +84,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const clampedInstructionsCompleted =
     typeof data.instructionsCompleted === 'number'
-      ? Math.max(
-          0,
-          Math.min(data.instructionsCompleted, instructionsLength)
-        )
+      ? Math.max(0, Math.min(data.instructionsCompleted, instructionsLength))
       : undefined;
 
   const updateData: Record<string, unknown> = {
+    updatedAt: new Date(),
     ...omit(data, ['incrementButtonText']),
     ...(clampedInstructionsCompleted !== undefined
       ? { instructionsCompleted: clampedInstructionsCompleted }

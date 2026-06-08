@@ -120,6 +120,7 @@ export async function action({ request }: ActionFunctionArgs) {
     await prisma.assignmentModuleSession.update({
       where: { id: cms.id },
       data: {
+        updatedAt: new Date(),
         messages: {
           create: [
             {

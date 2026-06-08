@@ -137,6 +137,7 @@ describe('api.model.assignment-module-session.$id', () => {
     } as any);
 
     const updateCall = prisma.assignmentModuleSession.update.mock.calls[0];
+    expect(updateCall[0].data.updatedAt).toBeInstanceOf(Date);
     expect(updateCall[0].data.messages).toBeDefined();
     expect(updateCall[0].data.messages.createMany.data).toHaveLength(2);
     expect(updateCall[0].data.messages.createMany.data[0].instructionId).toBe(

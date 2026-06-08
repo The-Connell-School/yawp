@@ -139,13 +139,88 @@ function sortDocumentCommentsByMarkupOrder<
   });
 }
 
+type AssignmentModuleSessionResumeCandidate = {
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  instructionsCompleted: number;
+  assignmentModule?: {
+    position?: number | null;
+    instructions?: unknown[] | null;
+  } | null;
+};
+
+function dateTimeValue(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function wasSessionTouched(session: AssignmentModuleSessionResumeCandidate) {
+  const createdAt = dateTimeValue(session.createdAt);
+  const updatedAt = dateTimeValue(session.updatedAt);
+  return createdAt != null && updatedAt != null && updatedAt > createdAt;
+}
+
+function isSessionComplete(session: AssignmentModuleSessionResumeCandidate) {
+  const instructionCount = session.assignmentModule?.instructions?.length ?? 0;
+  return (
+    instructionCount > 0 && session.instructionsCompleted >= instructionCount
+  );
+}
+
+function resolveCurrentAssignmentModuleSession<
+  T extends AssignmentModuleSessionResumeCandidate,
+>(sessions: T[], explicitCmsIdx: number | null) {
+  if (explicitCmsIdx != null) {
+    const explicitIndex = explicitCmsIdx >= 0 ? explicitCmsIdx : 0;
+    const currentCms = sessions[explicitIndex] ?? sessions[0] ?? null;
+    return {
+      currentCms,
+      currentCmsIdx: currentCms ? sessions.indexOf(currentCms) : -1,
+    };
+  }
+
+  const touched = sessions
+    .map((session, index) => ({
+      session,
+      index,
+      updatedAt: dateTimeValue(session.updatedAt) ?? 0,
+      position: session.assignmentModule?.position ?? index,
+    }))
+    .filter(({ session }) => wasSessionTouched(session))
+    .sort(
+      (a, b) =>
+        b.updatedAt - a.updatedAt ||
+        b.position - a.position ||
+        b.index - a.index
+    );
+
+  if (touched[0]) {
+    return { currentCms: touched[0].session, currentCmsIdx: touched[0].index };
+  }
+
+  const firstIncompleteIndex = sessions.findIndex(
+    (session) => !isSessionComplete(session)
+  );
+  const resumeIndex =
+    firstIncompleteIndex >= 0 ? firstIncompleteIndex : sessions.length - 1;
+
+  return {
+    currentCms: resumeIndex >= 0 ? sessions[resumeIndex] : null,
+    currentCmsIdx: resumeIndex,
+  };
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
   const userId = await requireUserId(request);
   const profile = await requireProfile(request, userId);
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
-  const cmsIdx = parseInt(url.searchParams.get('cmsIdx') ?? '0') || 0;
+  const cmsIdxParam = url.searchParams.get('cmsIdx');
+  const explicitCmsIdx =
+    cmsIdxParam == null ? null : parseInt(cmsIdxParam, 10) || 0;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -315,11 +390,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
   const orderedModuleSessions = Array.from(moduleSessionsByModuleId.values());
 
-  let currentCms = orderedModuleSessions[cmsIdx];
-
-  if (!currentCms) {
-    currentCms = orderedModuleSessions[0];
-  }
+  const { currentCms, currentCmsIdx } = resolveCurrentAssignmentModuleSession(
+    orderedModuleSessions,
+    explicitCmsIdx
+  );
 
   if (!currentCms) {
     return redirectWithToast('/app', {
@@ -368,9 +442,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
     submissions,
     currentCms,
+    currentCmsIdx,
     nextCmId,
     shouldSaveVersion,
-    hasPreviousCms: cmsIdx > 0,
+    hasPreviousCms: currentCmsIdx > 0,
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
   });
@@ -439,7 +514,11 @@ export default function Route() {
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
-  const cmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
+  const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
+  const cmsIdx =
+    typeof data.currentCmsIdx === 'number' && data.currentCmsIdx >= 0
+      ? data.currentCmsIdx
+      : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
   const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
@@ -890,6 +969,7 @@ export default function Route() {
               <Tutor
                 docId={data.doc.id}
                 cms={(tutor.cms ?? data.currentCms) as any}
+                cmsIdx={cmsIdx}
                 nextCmId={data.nextCmId}
                 hasPreviousCms={tutorHasPreviousCms}
                 isSessionLocked={auth.isLocked}

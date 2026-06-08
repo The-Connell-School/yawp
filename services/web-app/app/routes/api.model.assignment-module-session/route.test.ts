@@ -20,6 +20,7 @@ const prisma = {
   assignmentModuleSession: {
     findFirst: mock(),
     create: mock(),
+    update: mock(),
     findUnique: mock(),
   },
 };
@@ -57,6 +58,7 @@ describe('api.model.assignment-module-session', () => {
     prisma.assignmentModule.findUnique.mockReset();
     prisma.assignmentModuleSession.findFirst.mockReset();
     prisma.assignmentModuleSession.create.mockReset();
+    prisma.assignmentModuleSession.update.mockReset();
     prisma.assignmentModuleSession.findUnique.mockReset();
     requireUserId.mockReset();
 
@@ -72,6 +74,9 @@ describe('api.model.assignment-module-session', () => {
 
   test('returns an existing document/module session instead of creating a duplicate', async () => {
     prisma.assignmentModuleSession.findFirst.mockResolvedValue({
+      id: 'cms-existing',
+    });
+    prisma.assignmentModuleSession.update.mockResolvedValue({
       id: 'cms-existing',
     });
     prisma.assignmentModuleSession.findUnique.mockResolvedValue(existingCms);
@@ -99,6 +104,32 @@ describe('api.model.assignment-module-session', () => {
     );
   });
 
+  test('touches an existing document module session when it becomes active', async () => {
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue({
+      id: 'cms-existing',
+    });
+    prisma.assignmentModuleSession.update.mockResolvedValue({
+      id: 'cms-existing',
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue(existingCms);
+
+    const response = await action({
+      request: requestFor({
+        documentId: 'document-1',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.cms.id).toBe('cms-existing');
+    expect(prisma.assignmentModuleSession.update).toHaveBeenCalledWith({
+      where: { id: 'cms-existing' },
+      data: { updatedAt: expect.any(Date) },
+    });
+    expect(prisma.assignmentModuleSession.create).not.toHaveBeenCalled();
+  });
+
   test('creates the session when no document/module session exists', async () => {
     prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
     prisma.assignmentModuleSession.create.mockResolvedValue({
@@ -120,5 +151,35 @@ describe('api.model.assignment-module-session', () => {
     const body = await readBody(response);
     expect(body.cms.id).toBe('cms-created');
     expect(prisma.assignmentModuleSession.create).toHaveBeenCalledTimes(1);
+  });
+
+  test('touches a newly created document module session when it becomes active', async () => {
+    prisma.assignmentModuleSession.findFirst.mockResolvedValue(null);
+    prisma.assignmentModuleSession.create.mockResolvedValue({
+      id: 'cms-created',
+    });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValue({
+      ...existingCms,
+      id: 'cms-created',
+    });
+
+    const response = await action({
+      request: requestFor({
+        documentId: 'document-1',
+        assignmentModuleId: 'module-1',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.cms.id).toBe('cms-created');
+    expect(prisma.assignmentModuleSession.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        documentId: 'document-1',
+        assignmentModuleId: 'module-1',
+        instructionsCompleted: 0,
+        updatedAt: expect.any(Date),
+      }),
+    });
   });
 });

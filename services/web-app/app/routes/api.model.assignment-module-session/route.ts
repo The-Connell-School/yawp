@@ -78,17 +78,25 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   if (existing) {
+    const touched = await prisma.assignmentModuleSession.update({
+      where: { id: existing.id },
+      data: { updatedAt: new Date() },
+    });
     const cms = await prisma.assignmentModuleSession.findUnique({
       where: { id: existing.id },
       include: cmsInclude(),
     });
-    return dataResponse({ created: existing, cms });
+    return dataResponse({ created: touched, cms });
   }
 
   const firstInstruction = assignmentModule.instructions[0];
+  const createdAt = new Date();
+  const updatedAt = new Date(createdAt.getTime() + 1);
   const created = await prisma.assignmentModuleSession.create({
     data: {
       ...data,
+      createdAt,
+      updatedAt,
       instructionsCompleted: 0,
       assignmentModuleId: assignmentModule.id,
       ...(firstInstruction && {
