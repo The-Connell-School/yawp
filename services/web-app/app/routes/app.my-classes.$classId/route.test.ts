@@ -22,6 +22,7 @@ const requireProfile = mock();
 const getSubmittedPapersFilter = mock();
 const isDocumentSubmissionEnabledForScope = mock();
 const isAssignmentsEnabledForContext = mock();
+const isAssignmentCreationStandardizationEnabledForContext = mock();
 const isReleasedGradesOrganizationEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
@@ -40,6 +41,7 @@ mock.module('~/utils/cookies.server', () => ({
 mock.module('~/utils/feature-flags.server', () => ({
   isDocumentSubmissionEnabledForScope,
   isAssignmentsEnabledForContext,
+  isAssignmentCreationStandardizationEnabledForContext,
   isReleasedGradesOrganizationEnabledForOrganization,
 }));
 
@@ -63,6 +65,7 @@ describe('class detail loader document visibility', () => {
     getSubmittedPapersFilter.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
     isAssignmentsEnabledForContext.mockReset();
+    isAssignmentCreationStandardizationEnabledForContext.mockReset();
     isReleasedGradesOrganizationEnabledForOrganization.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
@@ -100,6 +103,7 @@ describe('class detail loader document visibility', () => {
     getSubmittedPapersFilter.mockResolvedValue('all');
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     isAssignmentsEnabledForContext.mockResolvedValue(true);
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
     isReleasedGradesOrganizationEnabledForOrganization.mockResolvedValue(false);
   });
 
@@ -297,6 +301,7 @@ describe('class detail loader document visibility', () => {
       id: 'assignment-1',
       assignmentTypeId: 'archived-type-1',
       assignmentType: { systemKey: null },
+      tutorContext: 'Legacy tutor guidance',
     });
 
     const form = new FormData();
@@ -321,10 +326,124 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'archived-type-1',
         title: null,
         prompt: 'Updated prompt',
+        tutorContext: 'Legacy tutor guidance',
+        dueDate: null,
+        submitForGrade: true,
+        pointValue: 100,
+      },
+    });
+  });
+
+  test('creates a standardized class assignment with grading intent and no tutor context', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('tutorContext', 'Do not persist this teacher-authored prompt.');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '25');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(prisma.assignment.create).toHaveBeenCalledWith({
+      data: {
+        classId: 'class-1',
+        assignmentTypeId: 'at-1',
+        title: null,
+        prompt: 'Prompt',
         tutorContext: null,
+        dueDate: null,
+        submitForGrade: true,
+        pointValue: 25,
+      },
+    });
+  });
+
+  test('keeps legacy class assignment tutor context when standardization is disabled', async () => {
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('tutorContext', 'Legacy tutor context.');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({ success: true });
+    expect(prisma.assignment.create).toHaveBeenCalledWith({
+      data: {
+        classId: 'class-1',
+        assignmentTypeId: 'at-1',
+        title: null,
+        prompt: 'Prompt',
+        tutorContext: 'Legacy tutor context.',
         dueDate: null,
       },
     });
+  });
+
+  test('rejects invalid class assignment point values', async () => {
+    prisma.assignmentType.findMany.mockResolvedValue([
+      {
+        id: 'at-1',
+        systemKey: null,
+        organizationAssignments: [{ organizationId: 'org-1' }],
+      },
+    ]);
+
+    const form = new FormData();
+    form.set('intent', 'create-assignment');
+    form.set('assignmentTypeId', 'at-1');
+    form.set('prompt', 'Prompt');
+    form.set('submitForGrade', 'true');
+    form.set('pointValue', '0');
+
+    const response = await action({
+      request: new Request('https://example.test/app/my-classes/class-1', {
+        method: 'POST',
+        body: form,
+      }),
+      params: { classId: 'class-1' },
+      context: {} as never,
+    });
+
+    expect(response.data).toMatchObject({
+      success: false,
+      message: 'Point value must be a positive whole number no greater than 1000.',
+    });
+    expect(response.init).toMatchObject({ status: 400 });
+    expect(prisma.assignment.create).not.toHaveBeenCalled();
   });
 
   test('rejects creating an assignment from an archived assignment type', async () => {

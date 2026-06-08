@@ -13,10 +13,12 @@ import {
 } from 'react-router';
 import { Link } from 'react-router';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { prisma } from '~/utils/db.server.js';
 import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  isAssignmentCreationStandardizationEnabledForContext,
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
   isReleasedGradesOrganizationEnabledForOrganization,
@@ -59,7 +61,10 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
-import { formatGrade } from '~/domain/grading/gradeMath';
+import {
+  formatAssignmentGrade,
+  formatGrade,
+} from '~/domain/grading/gradeMath';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -181,27 +186,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     intent === 'create-assignment' ||
     intent === 'update-assignment'
   ) {
-    const classWithOrg = await prisma.class.findFirst({
-      where: {
-        id: classId,
-        teachers: { some: { id: profile.teacherProfile.id } },
-      },
-      select: {
-        id: true,
-        school: { select: { id: true, organizationId: true } },
-      },
-    });
-    if (!classWithOrg) {
-      return dataResponse(
-        { success: false, message: 'Class not found.' },
-        { status: 404 }
-      );
-    }
     const assignmentsEnabled = await isAssignmentsEnabledForContext({
-      organizationId: classWithOrg.school.organizationId,
-      schoolId: classWithOrg.school.id,
+      organizationId: classAccess.school.organizationId,
+      schoolId: classAccess.school.id,
       teacherProfileId: profile.teacherProfile.id,
-      classIds: [classWithOrg.id],
+      classIds: [classAccess.id],
     });
     if (!assignmentsEnabled) {
       return dataResponse(
@@ -255,7 +244,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
-    const tutorContext = tutorContextRaw.trim() || null;
+    const legacyTutorContext = tutorContextRaw.trim() || null;
     const dueDateInput = dueDateRaw.trim();
     const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
@@ -269,6 +258,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: string;
       assignmentTypeId: string;
       assignmentType: { systemKey: string | null };
+      tutorContext: string | null;
     } | null = null;
     if (intent === 'update-assignment') {
       if (!assignmentId) {
@@ -284,6 +274,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: true,
           assignmentTypeId: true,
           assignmentType: { select: { systemKey: true } },
+          tutorContext: true,
         },
       });
 
@@ -341,6 +332,24 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
+    const assignmentCreationStandardizationEnabled =
+      await isAssignmentCreationStandardizationEnabledForContext({
+        organizationId: classAccess.school.organizationId,
+        schoolId: classAccess.school.id,
+        teacherProfileId: profile.teacherProfile.id,
+        classIds: [classId],
+      });
+
+    const gradingIntent = assignmentCreationStandardizationEnabled
+      ? parseAssignmentGradingIntent(formData)
+      : null;
+    if (gradingIntent && !gradingIntent.success) {
+      return dataResponse(
+        { success: false, message: gradingIntent.message },
+        { status: 400 }
+      );
+    }
+
     if (intent === 'create-assignment') {
       await prisma.assignment.create({
         data: {
@@ -348,8 +357,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentTypeId,
           title,
           prompt,
-          tutorContext,
+          tutorContext: assignmentCreationStandardizationEnabled
+            ? null
+            : legacyTutorContext,
           dueDate,
+          ...(gradingIntent?.success
+            ? {
+                submitForGrade: gradingIntent.data.submitForGrade,
+                pointValue: gradingIntent.data.pointValue,
+              }
+            : {}),
         },
       });
 
@@ -365,8 +382,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId,
         title,
         prompt,
-        tutorContext,
+        tutorContext: assignmentCreationStandardizationEnabled
+          ? existingAssignment!.tutorContext
+          : legacyTutorContext,
         dueDate,
+        ...(gradingIntent?.success
+          ? {
+              submitForGrade: gradingIntent.data.submitForGrade,
+              pointValue: gradingIntent.data.pointValue,
+            }
+          : {}),
       },
     });
 
@@ -513,6 +538,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isDocumentSubmissionEnabled,
     assignmentsEnabled,
     releasedGradesEnabled,
+    assignmentCreationStandardizationEnabled,
   ] = await Promise.all([
     isDocumentSubmissionEnabledForScope({
       schoolIds: [klass.school?.id],
@@ -529,6 +555,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isReleasedGradesOrganizationEnabledForOrganization(
       klass.school?.organizationId
     ),
+    isAssignmentCreationStandardizationEnabledForContext({
+      organizationId: klass.school?.organizationId,
+      schoolId: klass.school?.id,
+      teacherProfileId: profile.teacherProfile.id,
+      classIds: [klass.id],
+    }),
   ]);
 
   // Get all submissions for this class
@@ -566,6 +598,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               id: true,
               title: true,
+              submitForGrade: true,
+              pointValue: true,
             },
           },
           profile: {
@@ -631,6 +665,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       prompt: true,
       tutorContext: true,
+      submitForGrade: true,
+      pointValue: true,
       dueDate: true,
       assignmentTypeId: true,
       assignmentType: {
@@ -660,6 +696,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     inProgressDocuments,
     assignments,
     assignmentsEnabled,
+    assignmentCreationStandardizationEnabled,
     submittedPapersFilter,
     isDocumentSubmissionEnabled,
     releasedGradesEnabled,
@@ -861,11 +898,13 @@ function ClassDetailPage() {
   // Get unreleased grades for release functionality
   const unreleasedGrades = useMemo(() => {
     return filteredGradedUnreleasedDocuments.map((submission) => {
-      const gradeDisplay =
-        formatGrade(
-          submission.numericPercentage ?? null,
-          submission.letterGrade ?? null
-        ) || submission.score;
+      const gradeDisplay = formatAssignmentGrade({
+        submitForGrade: submission.document.assignment?.submitForGrade,
+        numericPercentage: submission.numericPercentage ?? null,
+        letterGrade: submission.letterGrade ?? null,
+        pointValue: submission.document.assignment?.pointValue ?? null,
+        score: submission.score,
+      });
       return {
         id: submission.id,
         score: gradeDisplay,
@@ -1277,12 +1316,15 @@ function ClassDetailPage() {
             <TableBody>
               {paginatedData.map((submission) => {
                 const gradeDisplay =
-                  formatGrade(
-                    submission.numericPercentage ?? null,
-                    submission.letterGrade ?? null
-                  ) ||
-                  submission.score ||
-                  '—';
+                  formatAssignmentGrade({
+                    submitForGrade:
+                      submission.document.assignment?.submitForGrade,
+                    numericPercentage: submission.numericPercentage ?? null,
+                    letterGrade: submission.letterGrade ?? null,
+                    pointValue:
+                      submission.document.assignment?.pointValue ?? null,
+                    score: submission.score,
+                  }) || '—';
                 return (
                   <TableRow key={submission.id}>
                     <TableCell>
@@ -1353,12 +1395,15 @@ function ClassDetailPage() {
             <TableBody>
               {paginatedData.map((submission) => {
                 const gradeDisplay =
-                  formatGrade(
-                    submission.numericPercentage ?? null,
-                    submission.letterGrade ?? null
-                  ) ||
-                  submission.score ||
-                  '—';
+                  formatAssignmentGrade({
+                    submitForGrade:
+                      submission.document.assignment?.submitForGrade,
+                    numericPercentage: submission.numericPercentage ?? null,
+                    letterGrade: submission.letterGrade ?? null,
+                    pointValue:
+                      submission.document.assignment?.pointValue ?? null,
+                    score: submission.score,
+                  }) || '—';
                 return (
                   <TableRow key={submission.id}>
                     <TableCell className="font-medium">
@@ -1896,41 +1941,50 @@ function ClassDetailPage() {
                                 </p>
                               ) : (
                                 <div className="space-y-1">
-                                  {studentGraded.map((sub) => (
-                                    <div
-                                      key={sub.id}
-                                      className="flex items-center justify-between text-sm"
-                                    >
-                                      <div className="min-w-0">
-                                        <Link
-                                          to={`/app/submissions/${sub.id}?${
-                                            data.isDocumentSubmissionEnabled
-                                              ? 'edit=1&'
-                                              : ''
-                                          }exitTo=${encodedClassDetailExitTo}`}
-                                          className="text-primary hover:underline truncate block"
-                                        >
-                                          {sub.title}
-                                        </Link>
-                                        {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {sub.document.assignment.title}
-                                          </span>
-                                        )}
+                                  {studentGraded.map((sub) => {
+                                    const gradeDisplay = formatAssignmentGrade({
+                                      submitForGrade:
+                                        sub.document.assignment?.submitForGrade,
+                                      numericPercentage:
+                                        sub.numericPercentage ?? null,
+                                      letterGrade: sub.letterGrade ?? null,
+                                      pointValue:
+                                        sub.document.assignment?.pointValue ??
+                                        null,
+                                    });
+
+                                    return (
+                                      <div
+                                        key={sub.id}
+                                        className="flex items-center justify-between text-sm"
+                                      >
+                                        <div className="min-w-0">
+                                          <Link
+                                            to={`/app/submissions/${sub.id}?${
+                                              data.isDocumentSubmissionEnabled
+                                                ? 'edit=1&'
+                                                : ''
+                                            }exitTo=${encodedClassDetailExitTo}`}
+                                            className="text-primary hover:underline truncate block"
+                                          >
+                                            {sub.title}
+                                          </Link>
+                                          {sub.document.assignment && (
+                                            <span className="text-xs text-muted-foreground">
+                                              {sub.document.assignment.title}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-2 shrink-0">
+                                          {gradeDisplay ? (
+                                            <Badge variant="secondary">
+                                              {gradeDisplay}
+                                            </Badge>
+                                          ) : null}
+                                        </div>
                                       </div>
-                                      <div className="flex items-center gap-2 ml-2 shrink-0">
-                                        {(sub.letterGrade ||
-                                          sub.numericPercentage != null) && (
-                                          <Badge variant="secondary">
-                                            {formatGrade(
-                                              sub.numericPercentage ?? null,
-                                              sub.letterGrade ?? null
-                                            )}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -2153,7 +2207,16 @@ function ClassDetailPage() {
 
       <AssignmentSheet
         classId={data.klass.id}
+        classOption={{
+          id: data.klass.id,
+          grade: data.klass.grade,
+          period: data.klass.period,
+          title: data.klass.title,
+        }}
         allowedAssignmentTypes={data.allowedAssignmentTypes}
+        assignmentCreationStandardizationEnabled={
+          data.assignmentCreationStandardizationEnabled
+        }
         open={isAssignmentSheetOpen}
         onOpenChange={(open) => {
           setIsAssignmentSheetOpen(open);

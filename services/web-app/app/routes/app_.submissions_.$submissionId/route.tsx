@@ -32,7 +32,12 @@ import { prisma } from '~/utils/db.server';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { formatGrade, letterFromPercent } from '~/domain/grading/gradeMath';
+import {
+  formatAssignmentGrade,
+  formatGrade,
+  formatPointGrade,
+  letterFromPercent,
+} from '~/domain/grading/gradeMath';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -124,6 +129,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           assignment: {
             select: {
+              submitForGrade: true,
+              pointValue: true,
               class: {
                 select: {
                   id: true,
@@ -324,10 +331,19 @@ export default function SubmissionRoute() {
     teacherGradeUi?.numericPercentage ?? submission.numericPercentage ?? null;
   const effectiveLetterGrade =
     teacherGradeUi?.letterGrade ?? submission.letterGrade ?? null;
+  const assignmentIsSubmittedForGrade =
+    submission.document.assignment?.submitForGrade !== false;
   const gradeDisplay =
-    formatGrade(effectiveNumericPct, effectiveLetterGrade) ||
-    (teacherGradeUi?.score ?? submission.score) ||
-    (submission.overallScore ? `${submission.overallScore}/5` : null);
+    formatAssignmentGrade({
+      submitForGrade: submission.document.assignment?.submitForGrade,
+      numericPercentage: effectiveNumericPct,
+      letterGrade: effectiveLetterGrade,
+      pointValue: submission.document.assignment?.pointValue ?? null,
+      score: teacherGradeUi?.score ?? submission.score,
+    }) ||
+    (assignmentIsSubmittedForGrade && submission.overallScore
+      ? `${submission.overallScore}/5`
+      : null);
 
   // ── Status badge (reflects optimistic save / release) ─────────────
   const statusLabel = isOwner
@@ -1075,6 +1091,12 @@ function ViewPanel({
     letterGrade: string | null;
     overallComment: string | null;
     rubricScores: unknown;
+    document?: {
+      assignment?: {
+        submitForGrade: boolean;
+        pointValue: number | null;
+      } | null;
+    };
   };
 }) {
   const rawRubric = (submission.rubricScores ?? {}) as Record<
@@ -1092,7 +1114,16 @@ function ViewPanel({
         : undefined;
     return { key, score, comment };
   });
-  const hasGrade = submission.numericPercentage != null;
+  const hasGrade =
+    submission.document?.assignment?.submitForGrade !== false &&
+    submission.numericPercentage != null;
+  const pointGrade =
+    submission.document?.assignment?.submitForGrade === false
+      ? null
+      : formatPointGrade(
+          submission.numericPercentage,
+          submission.document?.assignment?.pointValue ?? null
+        );
 
   return (
     <div className="p-4 space-y-4">
@@ -1103,9 +1134,17 @@ function ViewPanel({
               Overall Grade
             </h3>
             <p className="text-2xl font-semibold">
-              {submission.numericPercentage}%
-              {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
+              {pointGrade ??
+                `${submission.numericPercentage}%${
+                  submission.letterGrade ? ` (${submission.letterGrade})` : ''
+                }`}
             </p>
+            {pointGrade ? (
+              <p className="text-sm text-muted-foreground">
+                {submission.numericPercentage}%
+                {submission.letterGrade ? ` (${submission.letterGrade})` : ''}
+              </p>
+            ) : null}
           </div>
           {submission.overallComment ? (
             <div>

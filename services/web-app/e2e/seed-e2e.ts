@@ -666,6 +666,13 @@ export async function seedE2E(): Promise<E2EContext> {
     enabled: true,
     note: 'E2E AP History library-first teacher access',
   });
+  await prisma.setting.create({
+    data: {
+      name: 'feature_assignment_creation_standardization',
+      value: 'true',
+      valueType: 'boolean',
+    },
+  });
 
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.assignmentModuleSession.create({

@@ -22,6 +22,7 @@ const requireUserId = mock();
 const requireProfile = mock();
 const isAssignmentsEnabledForContext = mock();
 const isApHistoryEssayEnabledForContext = mock();
+const isAssignmentCreationStandardizationEnabledForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -31,6 +32,7 @@ mock.module('~/utils/auth.server', () => ({
 mock.module('~/utils/feature-flags.server', () => ({
   isAssignmentsEnabledForContext,
   isApHistoryEssayEnabledForContext,
+  isAssignmentCreationStandardizationEnabledForContext,
 }));
 
 const { action } = await import('./route');
@@ -81,6 +83,7 @@ describe('api.assignments.create', () => {
     requireProfile.mockReset();
     isAssignmentsEnabledForContext.mockReset();
     isApHistoryEssayEnabledForContext.mockReset();
+    isAssignmentCreationStandardizationEnabledForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -97,9 +100,10 @@ describe('api.assignments.create', () => {
     prisma.assignment.createMany.mockResolvedValue({ count: 2 });
     isAssignmentsEnabledForContext.mockResolvedValue(true);
     isApHistoryEssayEnabledForContext.mockResolvedValue(true);
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
   });
 
-  test('creates one assignment per selected teacher-owned class', async () => {
+  test('creates one standardized assignment per selected teacher-owned class', async () => {
     const response = await action({
       request: requestFor({
         intent: 'create-assignment',
@@ -147,20 +151,118 @@ describe('api.assignments.create', () => {
           assignmentTypeId: 'at-1',
           title: 'Essay',
           prompt: 'Write the essay.',
+          tutorContext: null,
+          submitForGrade: true,
+          pointValue: 100,
         }),
         expect.objectContaining({
           classId: 'class-2',
           assignmentTypeId: 'at-1',
           title: 'Essay',
           prompt: 'Write the essay.',
+          tutorContext: null,
+          submitForGrade: true,
+          pointValue: 100,
         }),
       ],
     });
   });
 
+  test('keeps legacy tutor context behavior when standardization is not enabled', async () => {
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        tutorContext: 'Legacy context.',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          classId: 'class-1',
+          tutorContext: 'Legacy context.',
+        }),
+        expect.objectContaining({
+          classId: 'class-2',
+          tutorContext: 'Legacy context.',
+        }),
+      ],
+    });
+    const firstAssignment =
+      prisma.assignment.createMany.mock.calls[0][0].data[0];
+    expect(firstAssignment).not.toHaveProperty('submitForGrade');
+    expect(firstAssignment).not.toHaveProperty('pointValue');
+  });
+
+  test('creates ungraded assignments without a point value', async () => {
+    prisma.class.findMany.mockResolvedValueOnce([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the reflection.',
+        submitForGrade: 'false',
+        pointValue: '',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          classId: 'class-1',
+          tutorContext: null,
+          submitForGrade: false,
+          pointValue: null,
+        }),
+      ],
+    });
+  });
+
+  test('rejects invalid graded point values before creating assignments', async () => {
+    prisma.class.findMany.mockResolvedValueOnce([
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+    ]);
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        submitForGrade: 'true',
+        pointValue: '1001',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(false);
+    expect(responseStatus(response)).toBe(400);
+    expect(body.message).toBe(
+      'Point value must be a positive whole number no greater than 1000.'
+    );
+    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+  });
+
   test('rejects unowned classes', async () => {
     prisma.class.findMany.mockResolvedValue([
-      { id: 'class-1', school: { organizationId: 'org-1' } },
+      { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
     ]);
 
     const response = await action({
@@ -208,6 +310,51 @@ describe('api.assignments.create', () => {
       classIds: ['class-1'],
     });
     expect(isAssignmentsEnabledForContext).toHaveBeenNthCalledWith(2, {
+      organizationId: 'org-1',
+      schoolId: 'school-2',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-2'],
+    });
+    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+  });
+
+  test('rejects mixed standardization and legacy classes in the same create request', async () => {
+    isAssignmentCreationStandardizationEnabledForContext.mockImplementation(
+      async ({ classIds }) => classIds?.includes('class-1')
+    );
+
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        submitForGrade: 'true',
+        pointValue: '25',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(false);
+    expect(responseStatus(response)).toBe(403);
+    expect(body.message).toBe(
+      'Assignment creation standardization is not enabled for one or more classes.'
+    );
+    expect(
+      isAssignmentCreationStandardizationEnabledForContext
+    ).toHaveBeenCalledTimes(2);
+    expect(
+      isAssignmentCreationStandardizationEnabledForContext
+    ).toHaveBeenNthCalledWith(1, {
+      organizationId: 'org-1',
+      schoolId: 'school-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+    expect(
+      isAssignmentCreationStandardizationEnabledForContext
+    ).toHaveBeenNthCalledWith(2, {
       organizationId: 'org-1',
       schoolId: 'school-2',
       teacherProfileId: 'teacher-1',

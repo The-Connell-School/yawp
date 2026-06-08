@@ -13,9 +13,11 @@ const prisma = {
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
+  getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
   getTargetedFeatureFlagIds,
   isApHistoryEssayEnabledForContext,
+  isAssignmentCreationStandardizationEnabledForContext,
   isAssignmentsEnabledForContext,
   isAssignmentsEnabledForOrganization,
   isDocumentSubmissionEnabledForScope,
@@ -195,6 +197,69 @@ describe('isAssignmentsEnabledForContext', () => {
         featureKey: 'assignments',
         enabled: true,
         OR: [{ targetKind: 'organization', targetId: { in: ['org-1'] } }],
+        AND: [
+          {
+            OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+          },
+        ],
+      },
+      select: { id: true },
+    });
+  });
+});
+
+describe('isAssignmentCreationStandardizationEnabledForContext', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
+  });
+
+  test('uses the global assignment creation standardization flag first', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'true',
+      valueType: 'boolean',
+    });
+
+    const result = await isAssignmentCreationStandardizationEnabledForContext({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.setting.findUnique).toHaveBeenCalledWith({
+      where: { name: 'feature_assignment_creation_standardization' },
+      select: { value: true, valueType: true },
+    });
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('falls back to feature-access targets when the global flag is off', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'false',
+      valueType: 'boolean',
+    });
+    prisma.featureAccessTarget.findFirst.mockResolvedValue({ id: 'fat-1' });
+
+    const result = await isAssignmentCreationStandardizationEnabledForContext({
+      organizationId: 'org-1',
+      schoolId: 'school-1',
+      teacherProfileId: 'teacher-1',
+      classIds: ['class-1'],
+    });
+
+    expect(result).toBe(true);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledWith({
+      where: {
+        featureKey: 'assignment_creation_standardization',
+        enabled: true,
+        OR: [
+          { targetKind: 'organization', targetId: { in: ['org-1'] } },
+          { targetKind: 'school', targetId: { in: ['school-1'] } },
+          { targetKind: 'teacher', targetId: { in: ['teacher-1'] } },
+          { targetKind: 'class', targetId: { in: ['class-1'] } },
+        ],
         AND: [
           {
             OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
@@ -431,6 +496,57 @@ describe('isApHistoryEssayEnabledForContext', () => {
       },
       select: { id: true },
     });
+  });
+});
+
+describe('getAssignmentCreationStandardizationEnabledClassIdsForContext', () => {
+  beforeEach(() => {
+    prisma.setting.findUnique.mockReset();
+    prisma.setting.upsert.mockReset();
+    prisma.featureAccessTarget.findFirst.mockReset();
+  });
+
+  test('returns every class when the global standardization flag is enabled', async () => {
+    prisma.setting.findUnique.mockResolvedValue({
+      value: 'true',
+      valueType: 'boolean',
+    });
+
+    const result =
+      await getAssignmentCreationStandardizationEnabledClassIdsForContext({
+        organizationId: 'org-1',
+        teacherProfileId: 'teacher-1',
+        classes: [{ id: 'class-1' }, { id: 'class-2' }],
+      });
+
+    expect(result).toEqual(['class-1', 'class-2']);
+    expect(prisma.featureAccessTarget.findFirst).not.toHaveBeenCalled();
+  });
+
+  test('filters mixed standardization and legacy classes per class', async () => {
+    prisma.setting.findUnique.mockResolvedValue(null);
+    prisma.featureAccessTarget.findFirst.mockImplementation(
+      async ({ where }) =>
+        where.OR.some(
+          (target: { targetKind: string; targetId: { in: string[] } }) =>
+            target.targetKind === 'class' &&
+            target.targetId.in.includes('class-1')
+        )
+          ? { id: 'fat-class-1' }
+          : null
+    );
+
+    const result =
+      await getAssignmentCreationStandardizationEnabledClassIdsForContext({
+        organizationId: 'org-1',
+        classes: [
+          { id: 'class-1', teacherProfileIds: ['teacher-1'] },
+          { id: 'class-2', teacherProfileIds: ['teacher-2'] },
+        ],
+      });
+
+    expect(result).toEqual(['class-1']);
+    expect(prisma.featureAccessTarget.findFirst).toHaveBeenCalledTimes(2);
   });
 });
 

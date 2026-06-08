@@ -14,12 +14,15 @@ export const FEATURE_FLAGS = {
   DOCUMENT_SUBMISSION: 'document_submission_enabled',
   DOCUMENT_SUBMISSION_SCHOOL_IDS: 'document_submission_enabled_school_ids',
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
+  ASSIGNMENT_CREATION_STANDARDIZATION:
+    'feature_assignment_creation_standardization',
   RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
     'released_grades_organization_enabled_org_ids',
 } as const;
 
 export const PILOT_FEATURE_KEYS = {
   ASSIGNMENTS: 'assignments',
+  ASSIGNMENT_CREATION_STANDARDIZATION: 'assignment_creation_standardization',
   DOCUMENT_SUBMISSION_GRADING: 'document_submission_grading',
   AP_HISTORY_ESSAY: 'ap_history_essay',
 } as const;
@@ -314,6 +317,71 @@ export async function isAssignmentsEnabledForContext({
   );
 }
 
+export async function isAssignmentCreationStandardizationEnabledForContext({
+  organizationId,
+  organizationIds,
+  schoolId,
+  schoolIds,
+  teacherProfileId,
+  teacherProfileIds,
+  classIds,
+}: {
+  organizationId: string | null | undefined;
+  organizationIds?: Array<string | null | undefined>;
+  schoolId?: string | null;
+  schoolIds?: Array<string | null | undefined>;
+  teacherProfileId?: string | null;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classIds?: Array<string | null | undefined>;
+}): Promise<boolean> {
+  const globalEnabled = await getFeatureFlag(
+    FEATURE_FLAGS.ASSIGNMENT_CREATION_STANDARDIZATION
+  );
+  if (globalEnabled) return true;
+
+  const scopedOrganizationIds = distinctIds([
+    organizationId,
+    ...(organizationIds ?? []),
+  ]);
+
+  return isPilotFeatureEnabledForTargets(
+    PILOT_FEATURE_KEYS.ASSIGNMENT_CREATION_STANDARDIZATION,
+    buildFeatureAccessTargets({
+      organizationIds: scopedOrganizationIds,
+      schoolIds: [schoolId, ...(schoolIds ?? [])],
+      teacherProfileIds: [teacherProfileId, ...(teacherProfileIds ?? [])],
+      classIds,
+    })
+  );
+}
+
+async function isClassAssignmentCreationStandardizationEnabledForContext({
+  fallbackOrganizationId,
+  fallbackTeacherProfileIds,
+  klass,
+}: {
+  fallbackOrganizationId: string | null | undefined;
+  fallbackTeacherProfileIds: Array<string | null | undefined>;
+  klass: {
+    id: string;
+    organizationId?: string | null | undefined;
+    schoolId?: string | null | undefined;
+    teacherProfileIds?: Array<string | null | undefined>;
+  };
+}): Promise<boolean> {
+  const classTeacherProfileIds =
+    klass.teacherProfileIds && klass.teacherProfileIds.length > 0
+      ? klass.teacherProfileIds
+      : fallbackTeacherProfileIds;
+
+  return isAssignmentCreationStandardizationEnabledForContext({
+    organizationId: klass.organizationId ?? fallbackOrganizationId,
+    schoolId: klass.schoolId,
+    teacherProfileIds: classTeacherProfileIds,
+    classIds: [klass.id],
+  });
+}
+
 async function isClassAssignmentsEnabledForContext({
   fallbackOrganizationId,
   fallbackTeacherProfileIds,
@@ -467,6 +535,51 @@ export async function getAssignmentsEnabledClassIdsForContext({
         ],
         klass,
       });
+      return { id: klass.id, enabled };
+    })
+  );
+
+  return classFlags.filter((klass) => klass.enabled).map((klass) => klass.id);
+}
+
+export async function getAssignmentCreationStandardizationEnabledClassIdsForContext({
+  organizationId,
+  teacherProfileId,
+  teacherProfileIds,
+  classes,
+}: {
+  organizationId: string | null | undefined;
+  teacherProfileId?: string | null;
+  teacherProfileIds?: Array<string | null | undefined>;
+  classes: Array<{
+    id: string | null | undefined;
+    organizationId?: string | null | undefined;
+    schoolId?: string | null | undefined;
+    teacherProfileIds?: Array<string | null | undefined>;
+  }>;
+}): Promise<string[]> {
+  const distinctClasses = Array.from(
+    new Map(
+      classes
+        .filter((klass): klass is (typeof classes)[number] & { id: string } =>
+          Boolean(klass.id)
+        )
+        .map((klass) => [klass.id, klass])
+    ).values()
+  );
+  if (distinctClasses.length === 0) return [];
+
+  const classFlags = await Promise.all(
+    distinctClasses.map(async (klass) => {
+      const enabled =
+        await isClassAssignmentCreationStandardizationEnabledForContext({
+          fallbackOrganizationId: organizationId,
+          fallbackTeacherProfileIds: [
+            teacherProfileId,
+            ...(teacherProfileIds ?? []),
+          ],
+          klass,
+        });
       return { id: klass.id, enabled };
     })
   );

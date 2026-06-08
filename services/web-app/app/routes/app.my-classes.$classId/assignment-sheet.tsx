@@ -8,6 +8,7 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
+import { Checkbox } from '~/components/ui/checkbox';
 import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
@@ -18,6 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  AssignmentCreationSheet,
+  type AssignmentCreationClassOption,
+} from '~/components/assignments/assignment-creation-sheet';
 import { toDateInputValue } from '~/utils/date-only';
 
 type AssignmentRecord = {
@@ -25,6 +30,8 @@ type AssignmentRecord = {
   title: string | null;
   prompt: string;
   tutorContext: string | null;
+  submitForGrade: boolean;
+  pointValue: number | null;
   dueDate: Date | string | null;
   assignmentTypeId: string;
   assignmentType: { id: string; title: string };
@@ -32,25 +39,62 @@ type AssignmentRecord = {
 
 type AssignmentSheetProps = {
   classId: string;
+  classOption?: AssignmentCreationClassOption;
   allowedAssignmentTypes: { id: string; title: string }[];
+  assignmentCreationStandardizationEnabled: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentRecord | null;
 };
 
 export function AssignmentSheet({
+  editingAssignment,
+  ...props
+}: AssignmentSheetProps) {
+  if (!editingAssignment) {
+    return (
+      <AssignmentCreationSheet
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+        entryPoint="class"
+        fixedClassId={props.classId}
+        assignmentTypes={props.allowedAssignmentTypes}
+        teacherClasses={[
+          props.classOption ?? { id: props.classId, name: 'Current class' },
+        ]}
+        assignmentCreationStandardizationEnabled={
+          props.assignmentCreationStandardizationEnabled
+        }
+      />
+    );
+  }
+
+  return <AssignmentEditSheet {...props} editingAssignment={editingAssignment} />;
+}
+
+type AssignmentEditSheetProps = Omit<
+  AssignmentSheetProps,
+  'editingAssignment'
+> & {
+  editingAssignment: AssignmentRecord;
+};
+
+function AssignmentEditSheet({
   classId,
   allowedAssignmentTypes,
+  assignmentCreationStandardizationEnabled,
   open,
   onOpenChange,
   editingAssignment,
-}: AssignmentSheetProps) {
+}: AssignmentEditSheetProps) {
   const fetcher = useFetcher<any>();
   const extractFetcher = useFetcher<any>();
   const [title, setTitle] = useState('');
   const [assignmentTypeId, setAssignmentTypeId] = useState('');
   const [prompt, setPrompt] = useState('');
   const [tutorContext, setTutorContext] = useState('');
+  const [submitForGrade, setSubmitForGrade] = useState(true);
+  const [pointValue, setPointValue] = useState('100');
   const [dueDate, setDueDate] = useState('');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -96,6 +140,8 @@ export function AssignmentSheet({
     );
     setPrompt(editingAssignment?.prompt ?? '');
     setTutorContext(editingAssignment?.tutorContext ?? '');
+    setSubmitForGrade(editingAssignment?.submitForGrade ?? true);
+    setPointValue((editingAssignment?.pointValue ?? 100).toString());
     setDueDate(toDateInputValue(editingAssignment?.dueDate));
     setPromptMode('manual');
     setPdfFile(null);
@@ -110,10 +156,13 @@ export function AssignmentSheet({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (typeof extractFetcher.data.tutorContext === 'string') {
+    if (
+      !assignmentCreationStandardizationEnabled &&
+      typeof extractFetcher.data.tutorContext === 'string'
+    ) {
       setTutorContext(extractFetcher.data.tutorContext);
     }
-  }, [extractFetcher.data]);
+  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -139,7 +188,7 @@ export function AssignmentSheet({
         <SheetHeader>
           <SheetTitle>{isEditing ? 'Edit Assignment' : 'New Assignment'}</SheetTitle>
           <SheetDescription>
-            Configure the assignment prompt, tutor context, and due date.
+            Configure the assignment prompt, grading, and due date.
           </SheetDescription>
         </SheetHeader>
 
@@ -246,18 +295,74 @@ export function AssignmentSheet({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="assignment-tutor-context">Tutor Context (optional)</Label>
-            <Textarea
-              id="assignment-tutor-context"
-              name="tutorContext"
-              value={tutorContext}
-              onChange={(event) => setTutorContext(event.target.value)}
-              rows={6}
-              placeholder="Guidance for the tutor system prompt..."
-              disabled={isSaving}
-            />
-          </div>
+          {assignmentCreationStandardizationEnabled ? (
+            <>
+              <div className="space-y-3 rounded-md border p-3">
+                <input type="hidden" name="submitForGrade" value="false" />
+                <div className="flex items-start gap-2.5">
+                  <Checkbox
+                    id="assignment-submit-for-grade"
+                    name="submitForGrade"
+                    value="true"
+                    checked={submitForGrade}
+                    onCheckedChange={(checked) =>
+                      setSubmitForGrade(checked === true)
+                    }
+                    disabled={isSaving}
+                  />
+                  <div className="space-y-1">
+                    <Label
+                      htmlFor="assignment-submit-for-grade"
+                      className="cursor-pointer font-normal"
+                    >
+                      Submit for grade
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Students can submit this assignment for a recorded grade.
+                    </p>
+                  </div>
+                </div>
+
+                {submitForGrade ? (
+                  <div className="space-y-2 pl-6">
+                    <Label htmlFor="assignment-point-value">Point value</Label>
+                    <Input
+                      id="assignment-point-value"
+                      name="pointValue"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      step={1}
+                      inputMode="numeric"
+                      value={pointValue}
+                      onChange={(event) => setPointValue(event.target.value)}
+                      disabled={isSaving}
+                      required
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {!submitForGrade ? (
+                <input type="hidden" name="pointValue" value="" />
+              ) : null}
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="assignment-tutor-context">
+                Tutor Context (optional)
+              </Label>
+              <Textarea
+                id="assignment-tutor-context"
+                name="tutorContext"
+                value={tutorContext}
+                onChange={(event) => setTutorContext(event.target.value)}
+                rows={6}
+                placeholder="Guidance for the tutor system prompt..."
+                disabled={isSaving}
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="assignment-due-date">Due Date (optional)</Label>
@@ -282,7 +387,18 @@ export function AssignmentSheet({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSaving || isExtracting || !assignmentTypeId}>
+            <Button
+              type="submit"
+              disabled={
+                isSaving ||
+                isExtracting ||
+                !assignmentTypeId ||
+                !prompt.trim() ||
+                (assignmentCreationStandardizationEnabled &&
+                  submitForGrade &&
+                  !pointValue.trim())
+              }
+            >
               {isSaving
                 ? isEditing
                   ? 'Saving...'

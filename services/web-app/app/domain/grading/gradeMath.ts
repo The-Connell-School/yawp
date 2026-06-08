@@ -23,6 +23,47 @@ export function formatGrade(percent: number | null, letter?: string | null) {
   return `${percent}% (${resolvedLetter})`;
 }
 
+export function formatPointGrade(
+  percent: number | null | undefined,
+  pointValue: number | null | undefined
+) {
+  if (percent === null || percent === undefined) return null;
+  if (
+    pointValue === null ||
+    pointValue === undefined ||
+    !Number.isFinite(pointValue) ||
+    pointValue <= 0
+  ) {
+    return null;
+  }
+
+  const earned = Math.round((percent / 100) * pointValue);
+  return `${earned} / ${pointValue}`;
+}
+
+export function formatAssignmentGrade({
+  submitForGrade,
+  numericPercentage,
+  letterGrade,
+  pointValue,
+  score,
+}: {
+  submitForGrade: boolean | null | undefined;
+  numericPercentage: number | null | undefined;
+  letterGrade?: string | null;
+  pointValue: number | null | undefined;
+  score?: string | null;
+}) {
+  if (submitForGrade === false) return null;
+
+  return (
+    formatPointGrade(numericPercentage, pointValue) ||
+    formatGrade(numericPercentage ?? null, letterGrade ?? null) ||
+    score ||
+    null
+  );
+}
+
 type RubricScoreValue = {
   score: number;
   comment?: string;
@@ -60,4 +101,3 @@ export function computeWeightedPercentage(
   if (totalWeight <= 0) return null;
   return Math.round(weightedSum / totalWeight);
 }
-

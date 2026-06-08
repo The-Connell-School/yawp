@@ -9,6 +9,7 @@ const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
   'released_grades_organization_enabled_org_ids';
 const PILOT_FEATURE_KEYS = [
   'assignments',
+  'assignment_creation_standardization',
   'document_submission_grading',
   'ap_history_essay',
 ] as const;

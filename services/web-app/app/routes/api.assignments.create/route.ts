@@ -7,7 +7,9 @@ import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import {
+  isAssignmentCreationStandardizationEnabledForContext,
   isApHistoryEssayEnabledForContext,
   isAssignmentsEnabledForContext,
 } from '~/utils/feature-flags.server';
@@ -67,7 +69,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
-  const tutorContext = tutorContextRaw.trim() || null;
+  const legacyTutorContext = tutorContextRaw.trim() || null;
   const dueDateInput = dueDateRaw.trim();
   const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
@@ -130,6 +132,43 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const standardizationFlags = await Promise.all(
+    classes.map((klass) =>
+      isAssignmentCreationStandardizationEnabledForContext({
+        organizationId: klass.school.organizationId,
+        schoolId: klass.school.id,
+        teacherProfileId: profile.teacherProfile!.id,
+        classIds: [klass.id],
+      })
+    )
+  );
+  const standardizedClassCount = standardizationFlags.filter(Boolean).length;
+  const assignmentCreationStandardizationEnabled =
+    standardizedClassCount === classes.length;
+  if (
+    standardizedClassCount > 0 &&
+    !assignmentCreationStandardizationEnabled
+  ) {
+    return dataResponse(
+      {
+        success: false,
+        message:
+          'Assignment creation standardization is not enabled for one or more classes.',
+      },
+      { status: 403 }
+    );
+  }
+
+  const gradingIntent = assignmentCreationStandardizationEnabled
+    ? parseAssignmentGradingIntent(formData)
+    : null;
+  if (gradingIntent && !gradingIntent.success) {
+    return dataResponse(
+      { success: false, message: gradingIntent.message },
+      { status: 400 }
+    );
+  }
+
   const assignmentTypeAvailable = await isAssignmentTypeAvailableForEveryScope({
     assignmentTypeId,
     scopes: classes.map((klass) => ({
@@ -138,6 +177,7 @@ export async function action({ request }: ActionFunctionArgs) {
       teacherProfileId: profile.teacherProfile!.id,
     })),
   });
+
   const assignmentType = await prisma.assignmentType.findFirst({
     where: {
       id: assignmentTypeId,
@@ -226,8 +266,16 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
-      tutorContext,
+      tutorContext: assignmentCreationStandardizationEnabled
+        ? null
+        : legacyTutorContext,
       dueDate,
+      ...(gradingIntent?.success
+        ? {
+            submitForGrade: gradingIntent.data.submitForGrade,
+            pointValue: gradingIntent.data.pointValue,
+          }
+        : {}),
     })),
   });
 

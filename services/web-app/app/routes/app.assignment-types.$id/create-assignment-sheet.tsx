@@ -1,16 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useFetcher } from 'react-router';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '~/components/ui/sheet';
+import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { Button } from '~/components/ui/button';
-import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
-import { Textarea } from '~/components/ui/textarea';
+import { Label } from '~/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -18,6 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
 
 type TeacherClass = {
   id: string;
@@ -28,7 +28,9 @@ type TeacherClass = {
 
 type Props = {
   assignmentTypeId: string;
+  assignmentTypeTitle: string;
   teacherClasses: TeacherClass[];
+  assignmentCreationStandardizationEnabled: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
@@ -46,7 +48,9 @@ function classLabel(klass: TeacherClass) {
 
 export function CreateAssignmentSheet({
   assignmentTypeId,
+  assignmentTypeTitle,
   teacherClasses,
+  assignmentCreationStandardizationEnabled,
   open,
   onOpenChange,
   initialPrompt = '',
@@ -57,21 +61,16 @@ export function CreateAssignmentSheet({
     teacherClasses[0]?.id ?? ''
   );
   const [title, setTitle] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [tutorContext, setTutorContext] = useState('');
   const [dueDate, setDueDate] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
-  const isApHistoryAssignment = apHistoryEntry != null;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !apHistoryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-    setPrompt(apHistoryEntry ? '' : initialPrompt);
-    setTutorContext('');
     setDueDate('');
-  }, [open, teacherClasses, initialPrompt, apHistoryEntry]);
+  }, [open, teacherClasses, apHistoryEntry]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -79,13 +78,30 @@ export function CreateAssignmentSheet({
     }
   }, [fetcher.state, fetcher.data, onOpenChange]);
 
+  if (!apHistoryEntry) {
+    return (
+      <AssignmentCreationSheet
+        open={open}
+        onOpenChange={onOpenChange}
+        entryPoint="assignment-type"
+        fixedAssignmentTypeId={assignmentTypeId}
+        assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
+        teacherClasses={teacherClasses}
+        assignmentCreationStandardizationEnabled={
+          assignmentCreationStandardizationEnabled
+        }
+        initialPrompt={initialPrompt}
+      />
+    );
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>New Assignment</SheetTitle>
           <SheetDescription>
-            Create an assignment for one of your classes.
+            Create an APUSH assignment from the selected prompt.
           </SheetDescription>
         </SheetHeader>
 
@@ -101,13 +117,11 @@ export function CreateAssignmentSheet({
             name="assignmentTypeId"
             value={assignmentTypeId}
           />
-          {apHistoryEntry ? (
-            <input
-              type="hidden"
-              name="apHistoryLibraryEntryId"
-              value={apHistoryEntry.externalKey}
-            />
-          ) : null}
+          <input
+            type="hidden"
+            name="apHistoryLibraryEntryId"
+            value={apHistoryEntry.externalKey}
+          />
 
           <div className="space-y-2">
             <Label>Class</Label>
@@ -136,56 +150,23 @@ export function CreateAssignmentSheet({
               name="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Rhetorical Analysis Essay"
+              placeholder="e.g., Revolutionary Ideals DBQ"
               disabled={isSaving}
             />
           </div>
 
-          {apHistoryEntry ? (
-            <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <Label>Selected APUSH Prompt</Label>
-                <span className="text-xs font-medium uppercase text-muted-foreground">
-                  {apHistoryEntry.essayType}
-                </span>
-              </div>
-              <h3 className="text-base font-semibold">
-                {apHistoryEntry.title}
-              </h3>
-              <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-                {apHistoryEntry.prompt}
-              </p>
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <Label>Selected APUSH Prompt</Label>
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                {apHistoryEntry.essayType}
+              </span>
             </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="cs-prompt">Prompt</Label>
-                <Textarea
-                  id="cs-prompt"
-                  name="prompt"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={8}
-                  placeholder="Paste or type the full assignment prompt for students…"
-                  disabled={isSaving}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="cs-tutor">Tutor Context (optional)</Label>
-                <Textarea
-                  id="cs-tutor"
-                  name="tutorContext"
-                  value={tutorContext}
-                  onChange={(e) => setTutorContext(e.target.value)}
-                  rows={4}
-                  placeholder="Guidance for the tutor system prompt…"
-                  disabled={isSaving}
-                />
-              </div>
-            </>
-          )}
+            <h3 className="text-base font-semibold">{apHistoryEntry.title}</h3>
+            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+              {apHistoryEntry.prompt}
+            </p>
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="cs-due">Due Date (optional)</Label>
@@ -214,14 +195,7 @@ export function CreateAssignmentSheet({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={
-                isSaving ||
-                !selectedClassId ||
-                (!isApHistoryAssignment && !prompt.trim())
-              }
-            >
+            <Button type="submit" disabled={isSaving || !selectedClassId}>
               {isSaving ? 'Creating…' : 'Create Assignment'}
             </Button>
           </div>

@@ -15,6 +15,7 @@ const prisma = {
 const requireUserId = mock();
 const requireProfile = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
+const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -27,6 +28,7 @@ mock.module('~/utils/auth.server', () => ({
   requireProfile,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
+  getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
 }));
 
@@ -40,6 +42,7 @@ describe('app index loader assignments', () => {
     requireUserId.mockReset();
     requireProfile.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -76,6 +79,9 @@ describe('app index loader assignments', () => {
     prisma.teacherTraining.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
+      []
+    );
   });
 
   test('fetches student dashboard assignments only for enabled pilot classes', async () => {
@@ -121,30 +127,38 @@ describe('app index loader assignments', () => {
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.school?.select?.organizationId) {
+      if (args.select?.grade) {
         return [
-          { id: 'class-1', school: { organizationId: 'org-1' } },
-          { id: 'class-2', school: { organizationId: 'org-1' } },
+          {
+            id: 'class-1',
+            grade: '9',
+            period: '1',
+            title: 'Pilot Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1 },
+          },
+          {
+            id: 'class-2',
+            grade: '9',
+            period: '2',
+            title: 'Non-Pilot Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1 },
+          },
         ];
       }
 
       return [
-        {
-          id: 'class-1',
-          grade: '9',
-          period: '1',
-          title: 'Pilot Class',
-          school: { name: 'Parker High School' },
-          _count: { students: 1, teachers: 1 },
-        },
-        {
-          id: 'class-2',
-          grade: '9',
-          period: '2',
-          title: 'Non-Pilot Class',
-          school: { name: 'Parker High School' },
-          _count: { students: 1, teachers: 1 },
-        },
+        { id: 'class-1', school: { organizationId: 'org-1' } },
+        { id: 'class-2', school: { organizationId: 'org-1' } },
       ];
     });
 
@@ -270,5 +284,87 @@ describe('app index loader assignments', () => {
         image: null,
       },
     ]);
+  });
+
+  test('scopes standardized dashboard assignment creation to standardized classes', async () => {
+    requireProfile.mockResolvedValue({
+      id: 'teacher-profile-wrapper-1',
+      isOwner: false,
+      organization: { id: 'org-1' },
+      teacherProfile: { id: 'teacher-profile-1' },
+      studentProfile: null,
+    });
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([
+      'class-1',
+      'class-2',
+    ]);
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
+      ['class-2']
+    );
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?.grade) {
+        return [
+          {
+            id: 'class-1',
+            grade: '9',
+            period: '1',
+            title: 'Legacy Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1 },
+          },
+          {
+            id: 'class-2',
+            grade: '9',
+            period: '2',
+            title: 'Standardized Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1 },
+          },
+        ];
+      }
+
+      return [
+        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
+        { id: 'class-2', school: { id: 'school-1', organizationId: 'org-1' } },
+      ];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.assignmentCreationStandardizationEnabled).toBe(true);
+    expect(data.teacherClassOptions).toEqual([
+      { id: 'class-2', name: 'Standardized Class' },
+    ]);
+    expect(
+      getAssignmentCreationStandardizationEnabledClassIdsForContext
+    ).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-profile-1',
+      classes: [
+        {
+          id: 'class-1',
+          organizationId: 'org-1',
+          schoolId: 'school-1',
+        },
+        {
+          id: 'class-2',
+          organizationId: 'org-1',
+          schoolId: 'school-1',
+        },
+      ],
+    });
   });
 });

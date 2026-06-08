@@ -67,6 +67,8 @@ model Assignment {
   title            String?
   prompt           String
   tutorContext     String?
+  submitForGrade   Boolean        @default(true)
+  pointValue       Int?           @default(100)
   dueDate          DateTime?      @db.Timestamptz(6)
   apHistorySnapshot Json?
   documents        Document[]

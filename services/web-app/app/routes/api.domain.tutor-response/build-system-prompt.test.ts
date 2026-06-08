@@ -30,6 +30,12 @@ describe('buildTutorSystemPrompt', () => {
     expect(result.toLowerCase()).toContain("student's own writing");
   });
 
+  it('ignores assignment tutor context for normal tutor prompts', () => {
+    const result = buildTutorSystemPrompt(base);
+
+    expect(result).not.toContain('This assignment is a persuasive essay.');
+  });
+
   it('drops undefined / null parts cleanly', () => {
     const result = buildTutorSystemPrompt({
       tutorInstructions: undefined,

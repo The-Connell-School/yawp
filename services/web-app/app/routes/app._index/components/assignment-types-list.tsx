@@ -16,9 +16,11 @@ export function getGenericAssignmentTypes(
 export function AssignmentTypesList({
   assignmentTypes,
   teacherClasses,
+  assignmentCreationStandardizationEnabled,
 }: {
   assignmentTypes: AssignmentTypeRow[];
   teacherClasses: TeacherClassOption[];
+  assignmentCreationStandardizationEnabled: boolean;
 }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const genericAssignmentTypes = getGenericAssignmentTypes(assignmentTypes);
@@ -72,6 +74,9 @@ export function AssignmentTypesList({
         onOpenChange={setIsCreateOpen}
         assignmentTypes={genericAssignmentTypes}
         teacherClasses={teacherClasses}
+        assignmentCreationStandardizationEnabled={
+          assignmentCreationStandardizationEnabled
+        }
       />
     </div>
   );

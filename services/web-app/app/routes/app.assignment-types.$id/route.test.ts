@@ -25,6 +25,7 @@ const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const isApHistoryEssayEnabledForContext = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
+const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -39,6 +40,7 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
+  getAssignmentCreationStandardizationEnabledClassIdsForContext,
   isApHistoryEssayEnabledForContext,
   getAssignmentsEnabledClassIdsForContext,
 }));
@@ -197,6 +199,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     redirectWithToast.mockReset();
     isApHistoryEssayEnabledForContext.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -222,6 +225,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
     isApHistoryEssayEnabledForContext.mockResolvedValue(true);
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
+      ['class-1']
+    );
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -279,6 +285,71 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
       },
     ]);
     expect(getAssignmentsEnabledClassIdsForContext).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      teacherProfileId: 'teacher-1',
+      classes: [
+        {
+          id: 'class-1',
+          organizationId: 'org-1',
+          schoolId: 'school-1',
+          teacherProfileIds: ['teacher-1'],
+        },
+        {
+          id: 'class-2',
+          organizationId: 'org-2',
+          schoolId: 'school-2',
+          teacherProfileIds: ['teacher-2'],
+        },
+      ],
+    });
+  });
+
+  test('filters teacher classes to standardized classes when standardization is partially enabled', async () => {
+    prisma.class.findMany.mockResolvedValueOnce([
+      {
+        id: 'class-1',
+        grade: '9th',
+        period: '1st',
+        title: 'Legacy section',
+        school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
+      {
+        id: 'class-2',
+        grade: '10th',
+        period: '2nd',
+        title: 'Standardized section',
+        school: { id: 'school-2', organizationId: 'org-2' },
+        teachers: [{ id: 'teacher-2' }],
+      },
+    ]);
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValueOnce([
+      'class-1',
+      'class-2',
+    ]);
+    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValueOnce(
+      ['class-2']
+    );
+
+    const response = (await loader({
+      request: new Request('https://example.test/app/assignment-types/at-1'),
+      params: { id: 'at-1' },
+    } as never)) as any;
+
+    expect(response.data.assignmentCreationStandardizationEnabled).toBe(true);
+    expect(response.data.teacherClasses).toEqual([
+      {
+        id: 'class-2',
+        grade: '10th',
+        period: '2nd',
+        title: 'Standardized section',
+        school: { id: 'school-2', organizationId: 'org-2' },
+        teachers: [{ id: 'teacher-2' }],
+      },
+    ]);
+    expect(
+      getAssignmentCreationStandardizationEnabledClassIdsForContext
+    ).toHaveBeenCalledWith({
       organizationId: 'org-1',
       teacherProfileId: 'teacher-1',
       classes: [

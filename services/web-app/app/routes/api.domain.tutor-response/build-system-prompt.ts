@@ -16,7 +16,7 @@ const DOCUMENT_TOOL_INSTRUCTION =
 export const buildTutorSystemPrompt = ({
   tutorInstructions,
   instructionTutorInstructions,
-  assignmentTutorContext,
+  assignmentTutorContext: _assignmentTutorContext,
 }: {
   tutorInstructions: string | null | undefined;
   instructionTutorInstructions: string | null | undefined;
@@ -25,7 +25,6 @@ export const buildTutorSystemPrompt = ({
   return [
     tutorInstructions,
     instructionTutorInstructions,
-    assignmentTutorContext,
     BEHIND_THE_SCENES_INSTRUCTION,
     DOCUMENT_TOOL_INSTRUCTION,
   ]

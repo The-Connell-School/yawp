@@ -10,7 +10,10 @@ import { useUser } from '~/hooks/useUser.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
-import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
+import {
+  getAssignmentCreationStandardizationEnabledClassIdsForContext,
+  getAssignmentsEnabledClassIdsForContext,
+} from '~/utils/feature-flags.server';
 import {
   Accordion,
   AccordionContent,
@@ -325,7 +328,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: true,
             period: true,
             title: true,
-            school: { select: { name: true } },
+            school: { select: { id: true, name: true, organizationId: true } },
             _count: { select: { students: true, teachers: true } },
           },
         })
@@ -522,6 +525,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: klass.id,
       name: klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
     }));
+  const standardizedTeacherClassIds = profile.teacherProfile
+    ? new Set(
+        await getAssignmentCreationStandardizationEnabledClassIdsForContext({
+          organizationId: profile.organization.id,
+          teacherProfileId: profile.teacherProfile.id,
+          classes: enabledTeacherClassesOrdered.map((klass) => ({
+            id: klass.id,
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+          })),
+        })
+      )
+    : new Set<string>();
+  const standardizedTeacherClassOptions = teacherClassOptions.filter((klass) =>
+    standardizedTeacherClassIds.has(klass.id)
+  );
+  const assignmentCreationStandardizationEnabled =
+    standardizedTeacherClassOptions.length > 0;
+  const teacherClassOptionsForCreate = assignmentCreationStandardizationEnabled
+    ? standardizedTeacherClassOptions
+    : teacherClassOptions;
 
   return dataResponse({
     courses,
@@ -534,9 +558,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignments,
     teacherAssignments,
     assignmentsEnabled,
+    assignmentCreationStandardizationEnabled,
     assignmentTypes: courses,
     coursesGlance,
-    teacherClassOptions,
+    teacherClassOptions: teacherClassOptionsForCreate,
   });
 }
 
@@ -571,6 +596,9 @@ export default function AppRoute() {
           <AssignmentTypesList
             assignmentTypes={data.assignmentTypes}
             teacherClasses={data.teacherClassOptions}
+            assignmentCreationStandardizationEnabled={
+              data.assignmentCreationStandardizationEnabled
+            }
           />
           <TeacherTrainingsList teacherTrainings={data.teacherTrainings} />
           <TeacherAssignmentsList assignments={data.teacherAssignments} />

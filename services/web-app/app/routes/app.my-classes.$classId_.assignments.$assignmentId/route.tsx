@@ -23,6 +23,7 @@ import {
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
 import { formatDateOnly } from '~/utils/date-only';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
@@ -69,6 +70,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       id: true,
       title: true,
       dueDate: true,
+      submitForGrade: true,
+      pointValue: true,
       assignmentType: { select: { title: true } },
     },
   });
@@ -596,7 +599,13 @@ export default function AssignmentSubmissionsRoute() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        {sub.score ?? sub.letterGrade ?? (
+                        {formatAssignmentGrade({
+                          submitForGrade: assignment.submitForGrade,
+                          numericPercentage: sub.numericPercentage ?? null,
+                          letterGrade: sub.letterGrade ?? null,
+                          pointValue: assignment.pointValue,
+                          score: sub.score,
+                        }) ?? (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
@@ -646,7 +655,13 @@ export default function AssignmentSubmissionsRoute() {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        {sub.score ?? sub.letterGrade ?? (
+                        {formatAssignmentGrade({
+                          submitForGrade: assignment.submitForGrade,
+                          numericPercentage: sub.numericPercentage ?? null,
+                          letterGrade: sub.letterGrade ?? null,
+                          pointValue: assignment.pointValue,
+                          score: sub.score,
+                        }) ?? (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>

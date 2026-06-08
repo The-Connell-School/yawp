@@ -39,6 +39,7 @@ import {
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
+  getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
   isApHistoryEssayEnabledForContext,
 } from '~/utils/feature-flags.server';
@@ -389,6 +390,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentEnabledTeacherClasses = profile.teacherProfile
     ? teacherClasses.filter((klass) => enabledTeacherClassIds.has(klass.id))
     : [];
+  const standardizedTeacherClassIds = profile.teacherProfile
+    ? new Set(
+        await getAssignmentCreationStandardizationEnabledClassIdsForContext({
+          organizationId: profile.organization.id,
+          teacherProfileId: profile.teacherProfile.id,
+          classes: assignmentEnabledTeacherClasses.map((klass) => ({
+            id: klass.id,
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
+            teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
+          })),
+        })
+      )
+    : new Set<string>();
+  const standardizedTeacherClasses = assignmentEnabledTeacherClasses.filter(
+    (klass) => standardizedTeacherClassIds.has(klass.id)
+  );
+  const assignmentCreationStandardizationEnabled =
+    standardizedTeacherClasses.length > 0;
   let apHistoryLibrary = null;
   if (profile.teacherProfile && isApHistory) {
     const teacherProfileId = profile.teacherProfile.id;
@@ -421,7 +441,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentType,
     documents,
     archivedDocuments,
-    teacherClasses: assignmentEnabledTeacherClasses,
+    teacherClasses: isApHistory
+      ? assignmentEnabledTeacherClasses
+      : assignmentCreationStandardizationEnabled
+      ? standardizedTeacherClasses
+      : assignmentEnabledTeacherClasses,
+    assignmentCreationStandardizationEnabled,
     promptLibrary,
     apHistoryLibrary,
   });
@@ -575,7 +600,11 @@ export default function AppAssignmentTypesIdRoute() {
               ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
+                assignmentTypeTitle={data.assignmentType.title}
                 teacherClasses={assignmentSheetClasses}
+                assignmentCreationStandardizationEnabled={
+                  data.assignmentCreationStandardizationEnabled
+                }
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}
