@@ -94,6 +94,14 @@ function controlById(id: string) {
   return control as HTMLElement;
 }
 
+function buttonByLabel(label: string) {
+  const button = document.querySelector<HTMLButtonElement>(
+    `button[aria-label="${label}"]`
+  );
+  expect(button).not.toBeNull();
+  return button!;
+}
+
 function isChecked(control: HTMLElement) {
   return (
     control.getAttribute('data-state') === 'checked' ||
@@ -170,6 +178,10 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Submit for grade');
       expectText('Point value');
+      expectText('Grading assistant strictness');
+      expectText('Beginner');
+      expectText('Intermediate');
+      expectText('Advanced');
       expectText('Due Date (optional)');
       expectNoText('Tutor Context');
 
@@ -186,8 +198,21 @@ describe('AssignmentCreationSheetContent', () => {
       const submitForGrade = controlById('assignment-create-submit-for-grade');
       expect(isChecked(submitForGrade)).toBe(true);
       expect(inputByName('pointValue').value).toBe('100');
+      expect(inputByName('gradingAssistantStrictnessLevel').value).toBe(
+        'intermediate'
+      );
     }
   );
+
+  it('shows Brian Connell requested grading assistant strictness help text', () => {
+    root = renderSheet().root;
+
+    expect(
+      buttonByLabel('Grading assistant strictness help').getAttribute('title')
+    ).toBe(
+      'Use beginner level for younger students or at the beginning of the year, and increase for older students or upper level classes or to increase standards as the year progresses. You can always change this during the act of grading.'
+    );
+  });
 
   it('submits selected class ids for bulk create entry points', () => {
     root = renderSheet({

@@ -4,8 +4,11 @@ import {
   AP_HISTORY_ASSIGNMENT_TYPE_KEY,
   buildApHistorySnapshot,
 } from './schema';
+import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
 
-export async function findApHistoryAssignmentTypeForOrg(organizationId: string) {
+export async function findApHistoryAssignmentTypeForOrg(
+  organizationId: string
+) {
   return prisma.assignmentType.findFirst({
     where: {
       systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
@@ -44,6 +47,7 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
   assignmentTypeId: string;
   title: string | null;
   dueDate: Date | null;
+  gradingAssistantStrictnessLevel: GradingAssistantStrictnessLevel;
   entry: NonNullable<
     Awaited<ReturnType<typeof getApHistoryLibraryEntryForSnapshot>>
   >;
@@ -56,6 +60,7 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
     prompt: snapshot.prompt,
     tutorContext: null,
     dueDate: params.dueDate,
+    gradingAssistantStrictnessLevel: params.gradingAssistantStrictnessLevel,
     apHistorySnapshot: snapshot as Prisma.InputJsonValue,
   };
 }

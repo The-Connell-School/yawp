@@ -240,7 +240,9 @@ describe('api.domain.grade-essay-ai', () => {
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
-    expect(prisma.assignmentTypeGradingAssistant.findFirst).toHaveBeenCalledWith(
+    expect(
+      prisma.assignmentTypeGradingAssistant.findFirst
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           assignmentTypeId: 'assignment-type-legacy',
@@ -249,11 +251,14 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       })
     );
-    expect(prisma.submission.update.mock.calls[0]?.[0].data.aiMeta).toMatchObject({
+    expect(
+      prisma.submission.update.mock.calls[0]?.[0].data.aiMeta
+    ).toMatchObject({
       gradingAssistantTemplateId: 'gait_thesis_current_v1',
       gradingAssistantTemplateVersion: 1,
       gradingAssistantTemplateSlug: 'thesis-driven-essay-current',
       gradingAssistantSource: 'legacy-fallback',
+      gradingAssistantStrictnessLevel: 'intermediate',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentTypeKind: null,
     });
@@ -265,6 +270,12 @@ describe('api.domain.grade-essay-ai', () => {
       templateVersion: 1,
       source: 'legacy-fallback',
       status: 'succeeded',
+    });
+    expect(
+      prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0].data
+        .metadata
+    ).toMatchObject({
+      gradingAssistantStrictnessLevel: 'intermediate',
     });
   });
 
@@ -487,7 +498,10 @@ describe('api.domain.grade-essay-ai', () => {
             kind: 'act_writing',
             title: 'Renamed ACT demo title',
           },
-          assignment: { class: { schoolId: 'school-1' } },
+          assignment: {
+            gradingAssistantStrictnessLevel: 'advanced',
+            class: { schoolId: 'school-1' },
+          },
           studentProfile: { classes: [] },
           profile: { user: { name: 'Jordan Student' } },
         },
@@ -512,6 +526,10 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(payload.success).toBe(true);
     expect(prompt).toContain('ACT Writing');
+    expect(prompt).toContain('Grading assistant strictness: Advanced');
+    expect(prompt).toContain(
+      'Hold the student to an advanced standard for this rubric'
+    );
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
     expect(Object.keys(payload.rubricScores ?? {})).toEqual([
@@ -525,6 +543,7 @@ describe('api.domain.grade-essay-ai', () => {
       gradingAssistantTemplateVersion: 3,
       gradingAssistantTemplateSlug: 'act-writing-four-domain',
       gradingAssistantSource: 'linked',
+      gradingAssistantStrictnessLevel: 'advanced',
     });
     expect(runCall.data).toMatchObject({
       submissionId: 'sub-act',
@@ -533,6 +552,98 @@ describe('api.domain.grade-essay-ai', () => {
       source: 'linked',
       status: 'succeeded',
     });
+    expect(runCall.data.metadata).toMatchObject({
+      gradingAssistantStrictnessLevel: 'advanced',
+    });
+  });
+
+  test('sends each grading assistant strictness level to the model and audit trail', async () => {
+    const cases = [
+      {
+        level: 'beginner',
+        label: 'Beginner',
+        promptText: 'Use beginner calibration.',
+      },
+      {
+        level: 'intermediate',
+        label: 'Intermediate',
+        promptText: 'Use intermediate calibration.',
+      },
+      {
+        level: 'advanced',
+        label: 'Advanced',
+        promptText: 'Use advanced calibration.',
+      },
+    ] as const;
+
+    for (const strictnessCase of cases) {
+      getLLMCompletion.mockReset();
+      prisma.submission.findFirst.mockReset();
+      prisma.submission.update.mockReset();
+      prisma.submissionGradingAssistantRun.create.mockReset();
+      prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue(null);
+      prisma.submission.update.mockResolvedValue({
+        id: `sub-${strictnessCase.level}`,
+      });
+      prisma.submissionGradingAssistantRun.create.mockResolvedValue({
+        id: `ga-run-${strictnessCase.level}`,
+      });
+      getLLMCompletion
+        .mockResolvedValueOnce(buildRubricResponseJson())
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+      prisma.submission.findFirst.mockResolvedValue(
+        mockSubmission({
+          id: `sub-${strictnessCase.level}`,
+          document: {
+            id: `doc-${strictnessCase.level}`,
+            profileId: 'student-profile-1',
+            assignmentTypeId: 'assignment-type-legacy',
+            assignmentType: {
+              id: 'assignment-type-legacy',
+              kind: null,
+              title: 'Critical Essay',
+            },
+            assignment: {
+              id: `assignment-${strictnessCase.level}`,
+              gradingAssistantStrictnessLevel: strictnessCase.level,
+              class: { schoolId: 'school-1' },
+            },
+            studentProfile: { classes: [] },
+            profile: { user: { name: 'Jordan Student' } },
+          },
+        })
+      );
+
+      const form = new FormData();
+      form.append('submissionId', `sub-${strictnessCase.level}`);
+
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      const prompt =
+        getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+      const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+      const runCall =
+        prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0];
+
+      expect(payload.success).toBe(true);
+      expect(prompt).toContain(
+        `Grading assistant strictness: ${strictnessCase.label}`
+      );
+      expect(prompt).toContain(strictnessCase.promptText);
+      expect(updateCall.data.aiMeta).toMatchObject({
+        gradingAssistantStrictnessLevel: strictnessCase.level,
+      });
+      expect(runCall.data.metadata).toMatchObject({
+        assignmentId: `assignment-${strictnessCase.level}`,
+        gradingAssistantStrictnessLevel: strictnessCase.level,
+      });
+    }
   });
 
   test('returns numeric percentage using the updated category weights', async () => {
@@ -591,15 +702,18 @@ describe('api.domain.grade-essay-ai', () => {
           },
           contextualization: {
             earned: true,
-            comment: 'The essay places Reconstruction in the Civil War context.',
+            comment:
+              'The essay places Reconstruction in the Civil War context.',
           },
           document_use_describes: {
             earned: true,
-            comment: 'The essay accurately describes evidence from the documents.',
+            comment:
+              'The essay accurately describes evidence from the documents.',
           },
           document_use_supports_argument: {
             earned: false,
-            comment: 'The documents are not yet tied consistently to the argument.',
+            comment:
+              'The documents are not yet tied consistently to the argument.',
           },
           outside_evidence: {
             earned: true,
@@ -607,7 +721,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           sourcing: {
             earned: false,
-            comment: 'The essay needs clearer sourcing of document perspective.',
+            comment:
+              'The essay needs clearer sourcing of document perspective.',
           },
           complexity: {
             earned: false,
@@ -701,11 +816,13 @@ describe('api.domain.grade-essay-ai', () => {
         },
         document_use_describes: {
           earned: true,
-          comment: 'The essay accurately describes evidence from the documents.',
+          comment:
+            'The essay accurately describes evidence from the documents.',
         },
         document_use_supports_argument: {
           earned: false,
-          comment: 'The documents are not yet tied consistently to the argument.',
+          comment:
+            'The documents are not yet tied consistently to the argument.',
         },
         outside_evidence: {
           earned: true,
@@ -750,7 +867,8 @@ describe('api.domain.grade-essay-ai', () => {
           },
           evidence: {
             earned: true,
-            comment: 'The essay uses specific evidence about canals and factories.',
+            comment:
+              'The essay uses specific evidence about canals and factories.',
           },
           analysis_reasoning: {
             earned: true,
@@ -820,7 +938,8 @@ describe('api.domain.grade-essay-ai', () => {
         },
         evidence: {
           earned: true,
-          comment: 'The essay uses specific evidence about canals and factories.',
+          comment:
+            'The essay uses specific evidence about canals and factories.',
         },
         analysis_reasoning: {
           earned: true,
@@ -898,13 +1017,22 @@ describe('api.domain.grade-essay-ai', () => {
         rubricVersion: 'ap-history-dbq-2026',
         points: {
           thesis: { earned: true, comment: 'Defensible thesis.' },
-          contextualization: { earned: false, comment: 'Needs broader context.' },
-          document_use_describes: { earned: false, comment: 'Needs documents.' },
+          contextualization: {
+            earned: false,
+            comment: 'Needs broader context.',
+          },
+          document_use_describes: {
+            earned: false,
+            comment: 'Needs documents.',
+          },
           document_use_supports_argument: {
             earned: false,
             comment: 'Needs argument support.',
           },
-          outside_evidence: { earned: false, comment: 'Needs outside evidence.' },
+          outside_evidence: {
+            earned: false,
+            comment: 'Needs outside evidence.',
+          },
           sourcing: { earned: false, comment: 'Needs sourcing.' },
           complexity: { earned: false, comment: 'Needs complexity.' },
         },

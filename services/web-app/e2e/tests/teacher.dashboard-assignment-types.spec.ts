@@ -19,6 +19,12 @@ async function expectStandardizedAssignmentForm(page: Page) {
     dialog.getByRole('checkbox', { name: /submit for grade/i })
   ).toBeChecked();
   await expect(dialog.getByLabel(/point value/i)).toHaveValue('100');
+  await expect(
+    dialog.getByText('Grading assistant strictness', { exact: true })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Intermediate' })
+  ).toHaveAttribute('aria-pressed', 'true');
 }
 
 async function expectCreatedAssignment(params: {
@@ -27,6 +33,7 @@ async function expectCreatedAssignment(params: {
   prompt: string;
   title: string;
   pointValue: number;
+  gradingAssistantStrictnessLevel?: string;
 }) {
   const prisma = createE2EPrismaClient();
   try {
@@ -42,12 +49,16 @@ async function expectCreatedAssignment(params: {
         tutorContext: true,
         submitForGrade: true,
         pointValue: true,
+        gradingAssistantStrictnessLevel: true,
       },
     });
     expect(created?.title).toBe(params.title);
     expect(created?.tutorContext).toBeNull();
     expect(created?.submitForGrade).toBe(true);
     expect(created?.pointValue).toBe(params.pointValue);
+    expect(created?.gradingAssistantStrictnessLevel).toBe(
+      params.gradingAssistantStrictnessLevel ?? 'intermediate'
+    );
   } finally {
     await prisma.$disconnect();
   }
@@ -180,6 +191,16 @@ test.describe.serial('Teacher dashboard assignment types', () => {
     const prompt = `Dashboard E2E prompt ${Date.now()}`;
     await page.getByRole('button', { name: 'Create Assignment' }).click();
     await expectStandardizedAssignmentForm(page);
+    const dialog = page.getByRole('dialog');
+    await dialog
+      .getByRole('button', { name: 'Grading assistant strictness help' })
+      .click();
+    await expect(
+      dialog.getByText(
+        'Use beginner level for younger students or at the beginning of the year, and increase for older students or upper level classes or to increase standards as the year progresses. You can always change this during the act of grading.'
+      )
+    ).toBeVisible();
+    await dialog.getByRole('button', { name: 'Advanced' }).click();
     await page.getByLabel(CLASS_LABEL).check();
     await page.getByLabel('Title (optional)').fill(title);
     await page.getByLabel('Prompt').fill(prompt);
@@ -196,6 +217,7 @@ test.describe.serial('Teacher dashboard assignment types', () => {
       prompt,
       title,
       pointValue: 25,
+      gradingAssistantStrictnessLevel: 'advanced',
     });
   });
 

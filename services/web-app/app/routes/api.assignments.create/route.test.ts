@@ -100,7 +100,9 @@ describe('api.assignments.create', () => {
     prisma.assignment.createMany.mockResolvedValue({ count: 2 });
     isAssignmentsEnabledForContext.mockResolvedValue(true);
     isApHistoryEssayEnabledForContext.mockResolvedValue(true);
-    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(
+      true
+    );
   });
 
   test('creates one standardized assignment per selected teacher-owned class', async () => {
@@ -168,8 +170,84 @@ describe('api.assignments.create', () => {
     });
   });
 
+  test('persists the selected grading assistant strictness level on created assignments', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        gradingAssistantStrictnessLevel: 'advanced',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    const assignments = prisma.assignment.createMany.mock.calls[0][0].data;
+    expect(assignments).toHaveLength(2);
+    expect(assignments[0]).toMatchObject({
+      classId: 'class-1',
+      gradingAssistantStrictnessLevel: 'advanced',
+    });
+    expect(assignments[1]).toMatchObject({
+      classId: 'class-2',
+      gradingAssistantStrictnessLevel: 'advanced',
+    });
+  });
+
+  test('defaults assignment grading assistant strictness to intermediate', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    const assignments = prisma.assignment.createMany.mock.calls[0][0].data;
+    expect(assignments).toHaveLength(2);
+    expect(assignments[0]).toMatchObject({
+      classId: 'class-1',
+      gradingAssistantStrictnessLevel: 'intermediate',
+    });
+    expect(assignments[1]).toMatchObject({
+      classId: 'class-2',
+      gradingAssistantStrictnessLevel: 'intermediate',
+    });
+  });
+
+  test('rejects invalid grading assistant strictness levels', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        gradingAssistantStrictnessLevel: 'punitive',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+  });
+
   test('keeps legacy tutor context behavior when standardization is not enabled', async () => {
-    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
+    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(
+      false
+    );
 
     const response = await action({
       request: requestFor({

@@ -4,6 +4,10 @@ import {
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { requireProfile, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
@@ -66,6 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
+  const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
@@ -73,6 +78,9 @@ export async function action({ request }: ActionFunctionArgs) {
   const dueDateInput = dueDateRaw.trim();
   const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
+  const gradingAssistantStrictnessLevel = strictnessRaw
+    ? parseGradingAssistantStrictnessLevel(strictnessRaw)
+    : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
 
   if (!assignmentTypeId) {
     return dataResponse(
@@ -89,6 +97,15 @@ export async function action({ request }: ActionFunctionArgs) {
   if (dueDateInput && !dueDate) {
     return dataResponse(
       { success: false, message: 'Due date is invalid.' },
+      { status: 400 }
+    );
+  }
+  if (!gradingAssistantStrictnessLevel) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading assistant strictness level is invalid.',
+      },
       { status: 400 }
     );
   }
@@ -145,10 +162,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const standardizedClassCount = standardizationFlags.filter(Boolean).length;
   const assignmentCreationStandardizationEnabled =
     standardizedClassCount === classes.length;
-  if (
-    standardizedClassCount > 0 &&
-    !assignmentCreationStandardizationEnabled
-  ) {
+  if (standardizedClassCount > 0 && !assignmentCreationStandardizationEnabled) {
     return dataResponse(
       {
         success: false,
@@ -243,6 +257,7 @@ export async function action({ request }: ActionFunctionArgs) {
           title,
           dueDate,
           entry,
+          gradingAssistantStrictnessLevel,
         })
       ),
     });
@@ -270,6 +285,7 @@ export async function action({ request }: ActionFunctionArgs) {
         ? null
         : legacyTutorContext,
       dueDate,
+      gradingAssistantStrictnessLevel,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,

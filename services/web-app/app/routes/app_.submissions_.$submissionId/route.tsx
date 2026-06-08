@@ -222,6 +222,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               submitForGrade: true,
               pointValue: true,
+              gradingAssistantStrictnessLevel: true,
               class: {
                 select: {
                   id: true,
@@ -999,13 +1000,17 @@ export default function SubmissionRoute() {
                     grammarIssues={grammarIssues}
                     hiddenGrammarIssueIds={hiddenGrammarIssueIds}
                     onToggleGrammarIssue={toggleGrammarIssueVisibility}
-                  onRemoveGrammarIssue={handleRemoveGrammarIssue}
-                  onGrammarIssuesChange={handleGrammarIssuesChange}
-                  onAiGradingComplete={handleAiGradingComplete}
-                  rubricConfig={
-                    teacherGradeUi?.rubricConfig ?? submission.rubricConfig
-                  }
-                />
+                    onRemoveGrammarIssue={handleRemoveGrammarIssue}
+                    onGrammarIssuesChange={handleGrammarIssuesChange}
+                    onAiGradingComplete={handleAiGradingComplete}
+                    rubricConfig={
+                      teacherGradeUi?.rubricConfig ?? submission.rubricConfig
+                    }
+                    initialGradingAssistantStrictnessLevel={
+                      submission.document.assignment
+                        ?.gradingAssistantStrictnessLevel
+                    }
+                  />
                 ) : (
                   <ViewPanel submission={submissionForView} />
                 )}

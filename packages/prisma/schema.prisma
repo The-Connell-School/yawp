@@ -69,6 +69,7 @@ model Assignment {
   tutorContext     String?
   submitForGrade   Boolean        @default(true)
   pointValue       Int?           @default(100)
+  gradingAssistantStrictnessLevel String         @default("intermediate")
   dueDate          DateTime?      @db.Timestamptz(6)
   apHistorySnapshot Json?
   documents        Document[]

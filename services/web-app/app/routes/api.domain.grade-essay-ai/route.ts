@@ -20,6 +20,12 @@ import {
   resolveGradingAssistantTemplateForAssignmentType,
   type GradingRubricCategory,
 } from '~/domain/grading/grading-assistant-templates.server';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  getGradingAssistantStrictnessInstructions,
+  getGradingAssistantStrictnessLabel,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -42,6 +48,7 @@ import {
 const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
+  gradingAssistantStrictnessLevel: z.string().optional(),
 });
 
 function buildAiSchemas({
@@ -179,7 +186,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -401,6 +410,8 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         assignment: {
           select: {
+            id: true,
+            gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
             class: {
               select: {
@@ -512,6 +523,30 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
     });
   const gradingAssistantTemplate = resolvedGradingAssistant.template;
+  const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
+    ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
+    : null;
+  if (data.gradingAssistantStrictnessLevel && !requestedStrictnessLevel) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading assistant strictness level is invalid.',
+      },
+      { status: 400 }
+    );
+  }
+  const assignmentStrictnessLevel = parseGradingAssistantStrictnessLevel(
+    submission.document.assignment?.gradingAssistantStrictnessLevel
+  );
+  const gradingAssistantStrictnessLevel =
+    requestedStrictnessLevel ??
+    assignmentStrictnessLevel ??
+    DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
+    gradingAssistantStrictnessLevel
+  );
+  const gradingAssistantStrictnessInstructions =
+    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
   const rubricCategories = getTemplateRubricCategories(
     gradingAssistantTemplate
   );
@@ -646,6 +681,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         aiMeta: {
           model,
           rubricMode: 'ap_history',
+          gradingAssistantStrictnessLevel,
           gradedAt: now.toISOString(),
         } satisfies Prisma.InputJsonValue,
         ...(!submission.gradedAt
@@ -673,7 +709,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     : '';
   const system = `${templateSystemInstructions}You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+  const userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\nGrading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
 
   let responseText = '';
 
@@ -942,6 +978,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
         gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
         gradingAssistantSource: resolvedGradingAssistant.source,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       } satisfies Prisma.InputJsonValue,
@@ -962,7 +999,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       status: 'succeeded',
       metadata: {
         gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         scoringType,
         rubricKeys,
@@ -982,5 +1021,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     score,
     grammarIssues,
     rubricConfig,
+    gradingAssistantStrictnessLevel,
   });
 }
