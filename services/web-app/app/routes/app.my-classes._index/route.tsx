@@ -55,7 +55,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         period: true,
         title: true,
         code: true,
-        cardGradientKey: true,
         school: { select: { id: true, name: true } },
         _count: { select: { students: true, assignments: true } },
       },

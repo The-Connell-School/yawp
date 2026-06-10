@@ -2,16 +2,14 @@ import { ClipboardCheck, Pencil, Send, Users } from 'lucide-react';
 import { Link } from 'react-router';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { ClassArt } from '~/components/class-art';
 import { Tooltip } from '~/components/ui/tooltip';
-import { classCardGradientClass } from '~/utils/class-card-gradient';
-import { cn } from '~/utils/misc';
 
 export type TeacherClassCardData = {
   id: string;
   grade: string;
   period: string;
   title: string | null;
-  cardGradientKey: string;
   school: { id: string; name: string } | null;
   _count: { students: number; assignments: number };
   stats?: {
@@ -42,34 +40,28 @@ export function TeacherClassCard({
   const gradedUnreleasedCount = klass.stats?.gradedUnreleasedCount ?? 0;
 
   return (
-    <div className="group flex min-h-full flex-col overflow-hidden rounded-lg border bg-muted transition-shadow hover:shadow">
+    <div className="group flex min-h-full flex-col overflow-hidden rounded-lg border bg-background transition-shadow hover:shadow">
       <Link
         to={`/app/my-classes/${klass.id}`}
         className="flex min-h-full flex-1 flex-col"
       >
-        <div
-          className={cn(
-            'relative h-32 w-full',
-            classCardGradientClass(klass.cardGradientKey, klass.id)
-          )}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
-          <div className="absolute bottom-3 left-3 right-3">
-            <p className="text-sm font-medium text-white/90">
-              {klass.school?.name}
-            </p>
-            <h4 className="text-lg font-semibold text-white drop-shadow">
+        <div className="h-32 w-full border-b">
+          <ClassArt seed={klass.id} />
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 p-4">
+          <div>
+            {klass.school?.name ? (
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {klass.school.name}
+              </p>
+            ) : null}
+            <h4 className="mt-0.5 text-base font-semibold text-foreground">
               {formatTeacherClassLabel(klass)}
             </h4>
           </div>
-        </div>
 
-        <div className="flex flex-1 flex-col gap-3 p-3">
-          <p className="line-clamp-2 text-sm text-muted-foreground">
-            {klass.title || 'Class roster and assignments'}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="mt-auto flex flex-wrap items-center gap-2">
             <Badge variant="secondary" size="sm" className="gap-1">
               <Users className="h-3 w-3" />
               {klass._count.students}

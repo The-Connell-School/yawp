@@ -253,7 +253,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: true,
             period: true,
             title: true,
-            cardGradientKey: true,
             school: { select: { id: true, name: true, organizationId: true } },
             _count: { select: { students: true, teachers: true, assignments: true } },
           },
@@ -390,7 +389,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: klass.grade,
             period: klass.period,
             title: klass.title,
-            cardGradientKey: klass.cardGradientKey,
             school: klass.school,
             _count: {
               students: klass._count.students,

@@ -136,14 +136,13 @@ describe('app index loader assignments', () => {
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.cardGradientKey) {
+      if (args.select?._count) {
         return [
           {
             id: 'class-1',
             grade: '9',
             period: '1',
             title: 'Pilot Class',
-            cardGradientKey: 'indigo-purple-pink',
             school: {
               id: 'school-1',
               name: 'Parker High School',
@@ -156,7 +155,6 @@ describe('app index loader assignments', () => {
             grade: '9',
             period: '2',
             title: 'Non-Pilot Class',
-            cardGradientKey: 'cyan-blue-indigo',
             school: {
               id: 'school-1',
               name: 'Parker High School',
@@ -206,12 +204,10 @@ describe('app index loader assignments', () => {
     expect(data.teacherClassCards[0]).toMatchObject({
       id: 'class-1',
       title: 'Pilot Class',
-      cardGradientKey: 'indigo-purple-pink',
     });
     expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
       title: 'Non-Pilot Class',
-      cardGradientKey: 'cyan-blue-indigo',
     });
     expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
@@ -226,14 +222,13 @@ describe('app index loader assignments', () => {
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.cardGradientKey) {
+      if (args.select?._count) {
         return [
           {
             id: 'class-1',
             grade: '9',
             period: '1',
             title: 'Pilot Class',
-            cardGradientKey: 'indigo-purple-pink',
             school: {
               id: 'school-1',
               name: 'Parker High School',
@@ -305,7 +300,7 @@ describe('app index loader assignments', () => {
       ['class-2']
     );
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.cardGradientKey) {
+      if (args.select?._count) {
         return [
           {
             id: 'class-1',
