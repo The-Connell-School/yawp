@@ -39,19 +39,22 @@ test.describe.serial('Admin assignment type archive', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app');
+      await page.goto('/app/assignments');
       await expect(
-        page.getByRole('heading', { name: 'Assignment Types' })
+        page.getByRole('heading', { name: 'Assignments' })
       ).toBeVisible();
+      // The archived type no longer appears as a browsable type...
       await expect(page.getByRole('link', { name: 'E2E Course' })).toHaveCount(0);
-
-      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
+      // ...but existing assignments keep their archived type label.
       await expect(page.getByText('E2E Class Assignment')).toBeVisible();
-      await expect(page.getByText('E2E Course')).toBeVisible();
+      await expect(page.getByText('E2E Course').first()).toBeVisible();
 
-      await page.getByRole('button', { name: /New Assignment/ }).click();
+      await page
+        .getByRole('button', { name: /New Assignment/ })
+        .first()
+        .click();
       await expect(page.getByRole('dialog')).toBeVisible();
-      await page.getByRole('dialog').locator('[role="combobox"]').click();
+      await page.getByRole('dialog').locator('[role="combobox"]').first().click();
       await expect(page.getByRole('option', { name: 'E2E Course' })).toHaveCount(0);
 
       await page.context().clearCookies();
@@ -68,7 +71,7 @@ test.describe.serial('Admin assignment type archive', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app');
+      await page.goto('/app/assignments');
       await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
     } finally {
       await prisma.assignmentType.update({

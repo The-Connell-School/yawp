@@ -285,9 +285,11 @@ export default function AssignmentSubmissionsRoute() {
     navigate(`?status=${newStatus}`);
   };
 
+  // 'submitted' stays as the URL param for old links; the teacher-facing
+  // lifecycle calls this state Needs Grading.
   const statusLabel: Record<StatusFilter, string> = {
     'in-progress': 'In Progress',
-    submitted: 'Submitted',
+    submitted: 'Needs Grading',
     graded: 'Graded',
     released: 'Released',
   };
@@ -448,7 +450,7 @@ export default function AssignmentSubmissionsRoute() {
                     </TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Submission</TableHead>
-                    <TableHead>Submitted</TableHead>
+                    <TableHead>Submitted at</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>

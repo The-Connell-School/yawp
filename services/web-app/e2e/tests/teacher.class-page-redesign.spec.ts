@@ -1,4 +1,5 @@
 import { test, expect } from '../test-setup';
+import { createE2EPrismaClient } from '../prisma-client';
 
 test.describe.serial('Teacher class page redesign', () => {
   test('shows only Students and Documents tabs, defaulting to Students', async ({
@@ -67,28 +68,73 @@ test.describe.serial('Teacher class page redesign', () => {
     e2eContext,
     signIn,
   }) => {
-    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
-    await page.waitForLoadState('networkidle');
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    let documentId = '';
 
-    const table = page.getByRole('table', { name: /class documents/i });
-    await expect(table).toBeVisible();
+    try {
+      // Earlier suites may grade the seeded submitted document, so provide a
+      // guaranteed needs-grading row of our own.
+      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
+        where: { profileId: e2eContext.profileId },
+        select: { id: true },
+      });
+      const document = await prisma.document.create({
+        data: {
+          title: `Lifecycle needs grading ${suffix}`,
+          text: 'Lifecycle spec body',
+          html: '<p>Lifecycle spec body</p>',
+          profile: { connect: { id: e2eContext.profileId } },
+          studentProfile: { connect: { id: studentProfile.id } },
+          assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
+          submissions: {
+            create: {
+              title: `Lifecycle needs grading ${suffix}`,
+              text: 'Lifecycle spec body',
+              html: '<p>Lifecycle spec body</p>',
+              submittedAt: new Date(),
+            },
+          },
+        },
+        select: { id: true },
+      });
+      documentId = document.id;
 
-    // Seeded data covers the full lifecycle.
-    await expect(table.getByText('In Progress').first()).toBeVisible();
-    await expect(table.getByText('Needs Grading').first()).toBeVisible();
-    await expect(table.getByText(/^Graded/).first()).toBeVisible();
-    await expect(table.getByText(/^Released/).first()).toBeVisible();
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.waitForLoadState('networkidle');
 
-    // The retired wording must not survive.
-    await expect(table.getByText('Draft', { exact: true })).toHaveCount(0);
-    await expect(table.getByText('Submitted', { exact: true })).toHaveCount(0);
+      const table = page.getByRole('table', { name: /class documents/i });
+      await expect(table).toBeVisible();
 
-    // Status filter narrows rows.
-    await page.getByTestId('class-documents-status-filter').click();
-    await page.getByRole('option', { name: 'Needs Grading' }).click();
-    await expect(table.getByText('Needs Grading').first()).toBeVisible();
-    await expect(table.getByText(/^Released/)).toHaveCount(0);
+      // Seeded + local data cover the full lifecycle.
+      await expect(table.getByText('In Progress').first()).toBeVisible();
+      await expect(table.getByText('Needs Grading').first()).toBeVisible();
+      await expect(table.getByText(/^Graded/).first()).toBeVisible();
+      await expect(table.getByText(/^Released/).first()).toBeVisible();
+
+      // The retired wording must not survive.
+      await expect(table.getByText('Draft', { exact: true })).toHaveCount(0);
+      await expect(table.getByText('Submitted', { exact: true })).toHaveCount(
+        0
+      );
+
+      // Status filter narrows rows.
+      await page.getByTestId('class-documents-status-filter').click();
+      await page.getByRole('option', { name: 'Needs Grading' }).click();
+      await expect(table.getByText('Needs Grading').first()).toBeVisible();
+      await expect(table.getByText(/^Released/)).toHaveCount(0);
+    } finally {
+      if (documentId) {
+        await prisma.submission
+          .deleteMany({ where: { documentId } })
+          .catch(() => {});
+        await prisma.document
+          .delete({ where: { id: documentId } })
+          .catch(() => {});
+      }
+      await prisma.$disconnect();
+    }
   });
 
   test('view details routes by document state', async ({
@@ -96,30 +142,74 @@ test.describe.serial('Teacher class page redesign', () => {
     e2eContext,
     signIn,
   }) => {
-    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
-    await page.waitForLoadState('networkidle');
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const submittedTitle = `Redesign submitted ${suffix}`;
+    const inProgressTitle = `Redesign in progress ${suffix}`;
+    const documentIds: string[] = [];
 
-    const submittedRow = page.getByRole('row', {
-      name: /E2E Essay submission title/,
-    });
-    const submittedHref = await submittedRow
-      .getByRole('link', { name: /view details/i })
-      .getAttribute('href');
-    expect(submittedHref).toMatch(/\/app\/submissions\//);
+    try {
+      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
+        where: { profileId: e2eContext.profileId },
+        select: { id: true },
+      });
+      const baseData = {
+        text: 'Redesign spec body',
+        html: '<p>Redesign spec body</p>',
+        profile: { connect: { id: e2eContext.profileId } },
+        studentProfile: { connect: { id: studentProfile.id } },
+        assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
+      };
+      const submittedDoc = await prisma.document.create({
+        data: {
+          ...baseData,
+          title: submittedTitle,
+          submissions: {
+            create: {
+              title: submittedTitle,
+              text: 'Redesign spec body',
+              html: '<p>Redesign spec body</p>',
+              submittedAt: new Date(),
+            },
+          },
+        },
+        select: { id: true },
+      });
+      documentIds.push(submittedDoc.id);
+      const inProgressDoc = await prisma.document.create({
+        data: { ...baseData, title: inProgressTitle },
+        select: { id: true },
+      });
+      documentIds.push(inProgressDoc.id);
 
-    await page.getByTestId('class-documents-status-filter').click();
-    await page.getByRole('option', { name: 'In Progress' }).click();
-    await page.waitForURL(/status=in-progress/);
-    const filteredTable = page.getByRole('table', {
-      name: /class documents/i,
-    });
-    await expect(filteredTable.getByText('Needs Grading')).toHaveCount(0);
-    const inProgressHref = await page
-      .getByRole('link', { name: /view details/i })
-      .first()
-      .getAttribute('href');
-    expect(inProgressHref).toMatch(/\/app\/documents\//);
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.waitForLoadState('networkidle');
+
+      const submittedRow = page.getByRole('row', {
+        name: new RegExp(submittedTitle),
+      });
+      const submittedHref = await submittedRow
+        .getByRole('link', { name: /view details/i })
+        .getAttribute('href');
+      expect(submittedHref).toMatch(/\/app\/submissions\//);
+
+      const inProgressRow = page.getByRole('row', {
+        name: new RegExp(inProgressTitle),
+      });
+      const inProgressHref = await inProgressRow
+        .getByRole('link', { name: /view details/i })
+        .getAttribute('href');
+      expect(inProgressHref).toMatch(/\/app\/documents\//);
+    } finally {
+      await prisma.submission
+        .deleteMany({ where: { documentId: { in: documentIds } } })
+        .catch(() => {});
+      await prisma.document
+        .deleteMany({ where: { id: { in: documentIds } } })
+        .catch(() => {});
+      await prisma.$disconnect();
+    }
   });
 
   test('release grades flow is reachable from the documents tab', async ({
