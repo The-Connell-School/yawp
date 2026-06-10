@@ -14,6 +14,7 @@ import {
 } from 'react-router';
 import {
   CogIcon,
+  FileText,
   GaugeIcon,
   GraduationCap,
   LockIcon,
@@ -97,6 +98,12 @@ const LINKS: {
     to: '/app/my-classes',
     label: 'My Classes',
     icon: <Users size={20} />,
+    requires: (user) => !!user.selectedProfile?.teacherProfile,
+  },
+  {
+    to: '/app/student-work',
+    label: 'Student Work',
+    icon: <FileText size={20} />,
     requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {

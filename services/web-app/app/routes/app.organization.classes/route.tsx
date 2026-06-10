@@ -63,6 +63,7 @@ import {
   SelectValue,
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
+import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -299,6 +300,7 @@ export async function action({ request }: ActionFunctionArgs) {
           period,
           title,
           code,
+          cardGradientKey: generateClassCardGradientKey(code),
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
           },

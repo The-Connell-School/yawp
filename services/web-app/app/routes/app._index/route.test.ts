@@ -16,6 +16,7 @@ const requireUserId = mock();
 const requireProfile = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
 const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
+const getTeacherClassCardStats = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -31,6 +32,9 @@ mock.module('~/utils/feature-flags.server', () => ({
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
 }));
+mock.module('~/utils/teacher-class-card-stats.server', () => ({
+  getTeacherClassCardStats,
+}));
 
 const { loader } = await import('./route');
 
@@ -43,6 +47,11 @@ describe('app index loader assignments', () => {
     requireProfile.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
+    getTeacherClassCardStats.mockReset();
+    getTeacherClassCardStats.mockResolvedValue({
+      ungradedCount: 0,
+      gradedUnreleasedCount: 0,
+    });
 
     requireUserId.mockResolvedValue('user-1');
     requireProfile.mockResolvedValue({
@@ -127,31 +136,33 @@ describe('app index loader assignments', () => {
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.grade) {
+      if (args.select?.cardGradientKey) {
         return [
           {
             id: 'class-1',
             grade: '9',
             period: '1',
             title: 'Pilot Class',
+            cardGradientKey: 'indigo-purple-pink',
             school: {
               id: 'school-1',
               name: 'Parker High School',
               organizationId: 'org-1',
             },
-            _count: { students: 1, teachers: 1 },
+            _count: { students: 1, teachers: 1, assignments: 2 },
           },
           {
             id: 'class-2',
             grade: '9',
             period: '2',
             title: 'Non-Pilot Class',
+            cardGradientKey: 'cyan-blue-indigo',
             school: {
               id: 'school-1',
               name: 'Parker High School',
               organizationId: 'org-1',
             },
-            _count: { students: 1, teachers: 1 },
+            _count: { students: 1, teachers: 1, assignments: 0 },
           },
         ];
       }
@@ -191,31 +202,18 @@ describe('app index loader assignments', () => {
     expect(
       data.teacherClasses.map((klass: { id: string }) => klass.id)
     ).toEqual(['class-1', 'class-2']);
-    expect(data.coursesGlance).toHaveLength(2);
-    expect(data.coursesGlance[0].id).toBe('class-1');
-    expect(data.coursesGlance[1]).toMatchObject({
+    expect(data.teacherClassCards).toHaveLength(2);
+    expect(data.teacherClassCards[0]).toMatchObject({
+      id: 'class-1',
+      title: 'Pilot Class',
+      cardGradientKey: 'indigo-purple-pink',
+    });
+    expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
-      name: 'Non-Pilot Class',
-      inProgress: 0,
-      submitted: 0,
-      graded: 0,
-      released: 0,
+      title: 'Non-Pilot Class',
+      cardGradientKey: 'cyan-blue-indigo',
     });
-    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.submission.findMany.mock.calls[0][0].where).toEqual({
-      archivedAt: null,
-      document: {
-        deletedAt: null,
-        assignment: { classId: 'class-1' },
-      },
-    });
-    expect(prisma.document.count).toHaveBeenCalledTimes(1);
-    expect(prisma.document.count.mock.calls[0][0].where).toEqual({
-      deletedAt: null,
-      archivedAt: null,
-      assignment: { classId: 'class-1' },
-      submissions: { none: { archivedAt: null } },
-    });
+    expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
 
   test('includes teacher-enabled assignment types that are not exposed org-wide', async () => {
@@ -228,11 +226,20 @@ describe('app index loader assignments', () => {
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.school?.select?.organizationId) {
+      if (args.select?.cardGradientKey) {
         return [
           {
             id: 'class-1',
-            school: { id: 'school-1', organizationId: 'org-1' },
+            grade: '9',
+            period: '1',
+            title: 'Pilot Class',
+            cardGradientKey: 'indigo-purple-pink',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, assignments: 1 },
           },
         ];
       }
@@ -240,11 +247,7 @@ describe('app index loader assignments', () => {
       return [
         {
           id: 'class-1',
-          grade: '9',
-          period: '1',
-          title: 'Pilot Class',
-          school: { name: 'Parker High School' },
-          _count: { students: 1, teachers: 1 },
+          school: { id: 'school-1', organizationId: 'org-1' },
         },
       ];
     });
@@ -302,7 +305,7 @@ describe('app index loader assignments', () => {
       ['class-2']
     );
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.grade) {
+      if (args.select?.cardGradientKey) {
         return [
           {
             id: 'class-1',

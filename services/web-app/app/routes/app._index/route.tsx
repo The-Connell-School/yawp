@@ -23,25 +23,17 @@ import {
 import { Badge } from '~/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { formatDateOnly } from '~/utils/date-only';
+import type { TeacherClassCardData } from '~/components/teacher-class-card';
+import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { AssignmentTypesList } from './components/assignment-types-list';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherAssignmentsList } from './components/teacher-assignments-list';
-import { TeacherTrainingsList } from './components/teacher-trainings-list';
 
 export type AssignmentTypeRow = {
   id: string;
   title: string;
   systemKey?: string | null;
   image?: { id: string } | null;
-};
-
-export type CourseGlanceRow = {
-  id: string;
-  name: string;
-  inProgress: number;
-  submitted: number;
-  graded: number;
-  released: number;
 };
 
 export type TeacherClassOption = {
@@ -69,26 +61,6 @@ export type TeacherAssignmentRow = {
     documents: number;
   };
 };
-
-function hasMeaningfulGrade(grade: {
-  score: string | null;
-  feedback: string | null;
-  rubricScores?: unknown | null;
-  overallComment?: string | null;
-  numericPercentage?: number | null;
-  letterGrade?: string | null;
-}) {
-  return Boolean(
-    grade.score ||
-    grade.feedback ||
-    grade.overallComment ||
-    grade.letterGrade ||
-    grade.numericPercentage !== null ||
-    (grade.rubricScores &&
-      typeof grade.rubricScores === 'object' &&
-      Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
-  );
-}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -187,29 +159,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
-  let teacherTrainingWhere:
-    | { assignedTeachers: { some: { id: string } } }
-    | undefined = undefined;
-  if (profile.teacherProfile) {
-    const assignmentCounts = await prisma.teacherProfile.findUnique({
-      where: { id: profile.teacherProfile.id },
-      select: { _count: { select: { assignedTeacherTrainings: true } } },
-    });
-    const hasAssignedCourses =
-      (assignmentCounts?._count.assignedTeacherTrainings ?? 0) > 0;
-    if (hasAssignedCourses) {
-      teacherTrainingWhere = {
-        assignedTeachers: { some: { id: profile.teacherProfile.id } },
-      };
-    }
-  }
-
   const [
     courses,
     documents,
     archivedDocuments,
     studentProfiles,
-    teacherTrainings,
     teacherClasses,
     teacherSchoolCount,
     assignments,
@@ -287,35 +241,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       include: { profile: { include: { documents: true } } },
     }),
-    // Fetch teacher courses if user has teacher profile
-    profile?.teacherProfile
-      ? prisma.teacherTraining.findMany({
-          where: teacherTrainingWhere,
-          select: {
-            image: { select: { id: true } },
-            id: true,
-            title: true,
-            description: true,
-            teacherTrainingModules: {
-              select: {
-                id: true,
-                title: true,
-                videoDuration: true,
-                teacherTrainingModuleSessions: {
-                  where: {
-                    teacherProfileId: profile.teacherProfile.id,
-                  },
-                  select: {
-                    videoTimestamp: true,
-                  },
-                },
-              },
-              orderBy: { position: 'asc' },
-            },
-          },
-          orderBy: { position: 'asc' },
-        })
-      : [],
     // Teacher classes and recent ordering
     profile?.teacherProfile
       ? prisma.class.findMany({
@@ -328,8 +253,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: true,
             period: true,
             title: true,
+            cardGradientKey: true,
             school: { select: { id: true, name: true, organizationId: true } },
-            _count: { select: { students: true, teachers: true } },
+            _count: { select: { students: true, teachers: true, assignments: true } },
           },
         })
       : [],
@@ -455,66 +381,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
       )
     : [];
 
-  const coursesGlance: CourseGlanceRow[] = profile.teacherProfile
+  const teacherClassCards: TeacherClassCardData[] = profile.teacherProfile
     ? await Promise.all(
         teacherClassesOrdered.map(async (klass) => {
-          if (!teacherAssignmentClassIds.includes(klass.id)) {
-            return {
-              id: klass.id,
-              name:
-                klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
-              inProgress: 0,
-              submitted: 0,
-              graded: 0,
-              released: 0,
-            };
-          }
-
-          const [submissions, inProgressCount] = await Promise.all([
-            prisma.submission.findMany({
-              where: {
-                archivedAt: null,
-                document: {
-                  deletedAt: null,
-                  assignment: { classId: klass.id },
-                },
-              },
-              select: {
-                score: true,
-                feedback: true,
-                rubricScores: true,
-                overallComment: true,
-                numericPercentage: true,
-                letterGrade: true,
-                releasedAt: true,
-              },
-            }),
-            prisma.document.count({
-              where: {
-                deletedAt: null,
-                archivedAt: null,
-                assignment: { classId: klass.id },
-                submissions: { none: { archivedAt: null } },
-              },
-            }),
-          ]);
-
+          const stats = await getTeacherClassCardStats(klass.id);
           return {
             id: klass.id,
-            name:
-              klass.title || `Grade ${klass.grade} • Period ${klass.period}`,
-            inProgress: inProgressCount,
-            submitted: submissions.filter(
-              (submission) =>
-                !hasMeaningfulGrade(submission) && !submission.releasedAt
-            ).length,
-            graded: submissions.filter(
-              (submission) =>
-                hasMeaningfulGrade(submission) && !submission.releasedAt
-            ).length,
-            released: submissions.filter(
-              (submission) => submission.releasedAt !== null
-            ).length,
+            grade: klass.grade,
+            period: klass.period,
+            title: klass.title,
+            cardGradientKey: klass.cardGradientKey,
+            school: klass.school,
+            _count: {
+              students: klass._count.students,
+              assignments: klass._count.assignments,
+            },
+            stats,
           };
         })
       )
@@ -552,7 +434,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     documents,
     archivedDocuments,
     studentProfiles,
-    teacherTrainings,
     teacherClasses: teacherClassesOrdered,
     teacherSchoolCount,
     assignments,
@@ -560,7 +441,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     assignmentsEnabled,
     assignmentCreationStandardizationEnabled,
     assignmentTypes: courses,
-    coursesGlance,
+    teacherClassCards,
     teacherClassOptions: teacherClassOptionsForCreate,
   });
 }
@@ -587,12 +468,13 @@ export default function AppRoute() {
             <div className="flex flex-col">
               <h2>Welcome, {user.name}!</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-                Your assignment types and class progress, all in one place.
+                Your classes and assignment types in one place.
               </p>
             </div>
           </div>
         </div>
         <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
+          <ClassesAtAGlance classes={data.teacherClassCards} />
           <AssignmentTypesList
             assignmentTypes={data.assignmentTypes}
             teacherClasses={data.teacherClassOptions}
@@ -600,9 +482,7 @@ export default function AppRoute() {
               data.assignmentCreationStandardizationEnabled
             }
           />
-          <TeacherTrainingsList teacherTrainings={data.teacherTrainings} />
           <TeacherAssignmentsList assignments={data.teacherAssignments} />
-          <ClassesAtAGlance courses={data.coursesGlance} />
         </div>
       </section>
     );

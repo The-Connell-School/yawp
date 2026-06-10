@@ -15,8 +15,9 @@ model Class {
   schoolYear  String           @default("2024-2025")
   period      String
   grade       String
-  title       String?
-  isArchived  Boolean          @default(false)
+  title           String?
+  cardGradientKey String           @default("indigo-purple-pink")
+  isArchived      Boolean          @default(false)
   students    StudentProfile[]
   teachers    TeacherProfile[]
   schoolId    String

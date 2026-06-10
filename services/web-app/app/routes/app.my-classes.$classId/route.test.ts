@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  class: { findFirst: mock() },
+  class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
   featureAccessTarget: { findMany: mock() },
+  teacherProfile: { findUnique: mock() },
   profile: { findMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
@@ -86,12 +87,14 @@ describe('class detail loader document visibility', () => {
       },
       students: [],
     });
+    prisma.class.findMany.mockResolvedValue([]);
     prisma.documentClassForensic.findMany.mockResolvedValue([
       { documentId: 'legacy-doc-1' },
       { documentId: 'legacy-doc-2' },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.teacherProfile.findUnique.mockResolvedValue({ schools: [] });
     prisma.profile.findMany.mockResolvedValue([]);
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);

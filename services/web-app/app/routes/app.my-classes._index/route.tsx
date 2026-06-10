@@ -1,32 +1,36 @@
-import { User, ClipboardCheck, Send } from 'lucide-react';
-import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { redirect } from 'react-router';
+import { Plus, User } from 'lucide-react';
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  data as dataResponse,
+  redirect,
+} from 'react-router';
 import { Link, useLoaderData, useSearchParams } from 'react-router';
+import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
-import { Tooltip } from '~/components/ui/tooltip';
+import {
+  ClassManageSheet,
+  type ClassManageRow,
+} from '~/components/class-manage-sheet';
+import {
+  TeacherClassCard,
+  type TeacherClassCardData,
+} from '~/components/teacher-class-card';
 import { requireProfile, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
+import { generateClassCode } from '~/utils/class';
+import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
+import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 
-function hasMeaningfulGrade(grade: {
-  score: string | null;
-  feedback: string | null;
-  rubricScores?: unknown | null;
-  overallComment?: string | null;
-  numericPercentage?: number | null;
-  letterGrade?: string | null;
-}) {
-  return Boolean(
-    grade.score ||
-      grade.feedback ||
-      grade.overallComment ||
-      grade.letterGrade ||
-      grade.numericPercentage !== null ||
-      (grade.rubricScores &&
-        typeof grade.rubricScores === 'object' &&
-        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
-  );
+type ClassRow = TeacherClassCardData & ClassManageRow;
+
+async function getTeacherSchoolIds(teacherProfileId: string) {
+  const teacher = await prisma.teacherProfile.findUnique({
+    where: { id: teacherProfileId },
+    select: { schools: { select: { id: true } } },
+  });
+  return new Set(teacher?.schools.map((school) => school.id) ?? []);
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -37,7 +41,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect('/app');
   }
 
-  const [classes, teacher] = await Promise.all([
+  const [classes, teacherSchools] = await Promise.all([
     prisma.class.findMany({
       where: {
         teachers: { some: { id: profile.teacherProfile.id } },
@@ -45,11 +49,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       select: {
         id: true,
+        schoolId: true,
+        schoolYear: true,
         grade: true,
         period: true,
         title: true,
+        code: true,
+        cardGradientKey: true,
         school: { select: { id: true, name: true } },
-        _count: { select: { students: true, teachers: true } },
+        _count: { select: { students: true, assignments: true } },
       },
       orderBy: [
         { school: { name: 'asc' } },
@@ -59,53 +67,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
     prisma.teacherProfile.findUnique({
       where: { id: profile.teacherProfile.id },
-      select: { schools: { select: { id: true } } },
+      select: {
+        schools: {
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        },
+      },
     }),
   ]);
 
-  // Get document stats for each class
   const classStats = await Promise.all(
-    classes.map(async (klass: (typeof classes)[number]) => {
-      const submissions = await prisma.submission.findMany({
-        where: {
-          document: {
-            is: {
-              deletedAt: null,
-              assignment: {
-                classId: klass.id,
-              },
-            },
-          },
-        },
-        select: {
-          score: true,
-          feedback: true,
-          rubricScores: true,
-          overallComment: true,
-          numericPercentage: true,
-          letterGrade: true,
-          releasedAt: true,
-          gradedAt: true,
-        },
-      });
-
-      const ungradedCount = submissions.filter((submission) => {
-        return !hasMeaningfulGrade(submission) && !submission.releasedAt;
-      }).length;
-
-      const gradedUnreleasedCount = submissions.filter((submission) => {
-        return hasMeaningfulGrade(submission) && !submission.releasedAt;
-      }).length;
-
-      return {
-        classId: klass.id,
-        ungradedCount,
-        gradedUnreleasedCount,
-      };
-    })
+    classes.map(async (klass) => ({
+      classId: klass.id,
+      ...(await getTeacherClassCardStats(klass.id)),
+    }))
   );
 
-  const teacherSchoolCount = teacher?.schools.length ?? 0;
   const schools = Array.from(
     new Map(
       classes
@@ -122,31 +99,194 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     classes: classesWithStats,
-    teacherSchoolCount,
+    teacherSchoolCount: teacherSchools?.schools.length ?? 0,
     schools,
+    manageSchools: teacherSchools?.schools ?? [],
   });
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  const profile = await requireProfile(request, userId);
+
+  if (!profile.teacherProfile) {
+    return dataResponse({ error: 'Only teachers can manage classes.' }, { status: 403 });
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get('intent')?.toString();
+  const allowedSchoolIds = await getTeacherSchoolIds(profile.teacherProfile.id);
+
+  if (intent === 'create-class') {
+    const schoolId = formData.get('schoolId') as string;
+    const schoolYear = formData.get('schoolYear') as string;
+    const grade = formData.get('grade') as string;
+    const period = formData.get('period') as string;
+    const title = (formData.get('title') as string)?.trim() || null;
+    let code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+
+    if (!schoolId || !schoolYear || !grade || !period) {
+      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
+    }
+
+    if (!allowedSchoolIds.has(schoolId)) {
+      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
+    }
+
+    if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
+      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
+    }
+
+    if (!code) code = generateClassCode();
+
+    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
+      return dataResponse(
+        { error: 'Code must be 3-10 alphanumeric characters.' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await prisma.class.create({
+        data: {
+          schoolId,
+          schoolYear,
+          grade,
+          period,
+          title,
+          code,
+          cardGradientKey: generateClassCardGradientKey(code),
+          teachers: { connect: [{ id: profile.teacherProfile.id }] },
+        },
+      });
+      return dataResponse({ success: true });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        return dataResponse(
+          { error: 'Class code already in use. Choose a different code.' },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
+  if (intent === 'edit-class') {
+    const classId = formData.get('classId') as string;
+    const schoolId = formData.get('schoolId') as string;
+    const schoolYear = formData.get('schoolYear') as string;
+    const grade = formData.get('grade') as string;
+    const period = formData.get('period') as string;
+    const title = (formData.get('title') as string)?.trim() || null;
+    const code = (formData.get('code') as string)?.trim().toUpperCase() || '';
+
+    if (!classId || !schoolId || !schoolYear || !grade || !period || !code) {
+      return dataResponse({ error: 'All required fields must be filled.' }, { status: 400 });
+    }
+
+    if (!allowedSchoolIds.has(schoolId)) {
+      return dataResponse({ error: 'Invalid school for your account.' }, { status: 400 });
+    }
+
+    if (!/^\d{4}-\d{4}$/.test(schoolYear)) {
+      return dataResponse({ error: 'School year must be YYYY-YYYY.' }, { status: 400 });
+    }
+
+    if (!/^[A-Z0-9]{3,10}$/.test(code)) {
+      return dataResponse(
+        { error: 'Code must be 3-10 alphanumeric characters.' },
+        { status: 400 }
+      );
+    }
+
+    const existingClass = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        teachers: { some: { id: profile.teacherProfile.id } },
+      },
+      select: {
+        teachers: { select: { id: true } },
+      },
+    });
+
+    if (!existingClass) {
+      return dataResponse({ error: 'Class not found.' }, { status: 404 });
+    }
+
+    try {
+      await prisma.class.update({
+        where: { id: classId },
+        data: {
+          schoolId,
+          schoolYear,
+          grade,
+          period,
+          title,
+          code,
+          teachers: {
+            set: existingClass.teachers.map((teacher) => ({ id: teacher.id })),
+          },
+        },
+      });
+      return dataResponse({ success: true });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        return dataResponse(
+          { error: 'Class code already in use. Choose a different code.' },
+          { status: 400 }
+        );
+      }
+      throw error;
+    }
+  }
+
+  return dataResponse({ error: 'Unknown action.' }, { status: 400 });
 }
 
 export default function MyClassesRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
+
+  const filteredClasses = data.classes.filter((klass) =>
+    selectedSchoolId === 'all' ? true : klass.school?.id === selectedSchoolId
+  );
+
+  const openCreate = () => {
+    setEditingClass(null);
+    setSheetOpen(true);
+  };
+
+  const openEdit = (klass: ClassRow) => {
+    setEditingClass(klass);
+    setSheetOpen(true);
+  };
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>My Classes</h2>
-            <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[400px]">
-              Classes you are assigned to. Creation is managed by admins.
-            </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2>My Classes</h2>
+              <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
+                Your classes at a glance. Open a class to manage students and
+                assignments.
+              </p>
+            </div>
+            <Button size="sm" onClick={openCreate} className="shrink-0">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Class
+            </Button>
           </div>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-screen-lg px-3 py-3 pb-24 sm:px-5">
+
+      <div className="mx-auto w-full min-w-0 max-w-screen-lg px-3 py-4 pb-24 sm:px-5">
         {data.schools.length > 1 ? (
-          <div className="mb-4">
+          <div className="mb-4 min-w-0">
             <Tabs
               value={selectedSchoolId}
               onValueChange={(value) => {
@@ -159,130 +299,52 @@ export default function MyClassesRoute() {
                 setSearchParams(next, { replace: true });
               }}
             >
-              <TabsList>
-                <TabsTrigger value="all">All schools</TabsTrigger>
-                {data.schools.map((s) => (
-                  <TabsTrigger key={s.id} value={s.id}>
-                    {s.name}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div className="overflow-x-auto no-scrollbar">
+                <TabsList className="inline-flex h-auto w-max max-w-none flex-nowrap justify-start">
+                  <TabsTrigger value="all">All schools</TabsTrigger>
+                  {data.schools.map((s) => (
+                    <TabsTrigger key={s.id} value={s.id}>
+                      {s.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
             </Tabs>
           </div>
         ) : null}
-        {data.classes.length ? (
-          <div className="flex flex-col gap-2.5">
-            {data.classes
-              .filter((klass) =>
-                selectedSchoolId === 'all'
-                  ? true
-                  : klass.school?.id === selectedSchoolId
-              )
-              .map((klass) => (
-                <div
-                  key={klass.id}
-                  className="flex items-center gap-3 rounded-lg border bg-card p-3.5"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-semibold text-base">
-                      Grade {klass.grade} • Period {klass.period}
-                      {klass.title && (
-                        <span className="font-normal text-muted-foreground">
-                          {' '}
-                          — {klass.title}
-                        </span>
-                      )}
-                    </h4>
-                    <div className="flex items-center gap-2 mt-1">
-                      {klass.school?.name && (
-                        <span className="text-xs text-muted-foreground">
-                          {klass.school.name}
-                        </span>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className="flex items-center gap-1 h-5 px-1.5"
-                      >
-                        <User className="w-3 h-3" />
-                        <span className="text-xs">{klass._count.students}</span>
-                      </Badge>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const ungradedCount = klass.stats?.ungradedCount ?? 0;
-                      if (ungradedCount <= 0) return null;
-                      return (
-                        <Tooltip
-                          text={`${ungradedCount} submission${ungradedCount === 1 ? '' : 's'} to grade`}
-                        >
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-orange-50 dark:bg-orange-950/20">
-                            <ClipboardCheck className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                            <span className="text-sm font-semibold text-orange-600 dark:text-orange-400">
-                              {ungradedCount}
-                            </span>
-                          </div>
-                        </Tooltip>
-                      );
-                    })()}
-                    {(() => {
-                      const gradedUnreleasedCount =
-                        klass.stats?.gradedUnreleasedCount ?? 0;
-                      if (gradedUnreleasedCount <= 0) return null;
-                      return (
-                        <Tooltip
-                          text={`${gradedUnreleasedCount} graded submission${gradedUnreleasedCount === 1 ? '' : 's'} ready to release`}
-                        >
-                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-50 dark:bg-blue-950/20">
-                            <Send className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                              {gradedUnreleasedCount}
-                            </span>
-                          </div>
-                        </Tooltip>
-                      );
-                    })()}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <Button asChild size="sm" variant="default" className="h-8">
-                      <Link to={`/app/my-classes/${klass.id}`}>Open</Link>
-                    </Button>
-                    {(klass.stats?.ungradedCount ?? 0) > 0 && (
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className="h-8"
-                      >
-                        <Link to={`/app/my-classes/${klass.id}?tab=to-grade`}>
-                          Grade
-                        </Link>
-                      </Button>
-                    )}
-                    {(klass.stats?.gradedUnreleasedCount ?? 0) > 0 && (
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        className="h-8"
-                      >
-                        <Link to={`/app/my-classes/${klass.id}?tab=to-release`}>
-                          Release
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
+        {filteredClasses.length ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredClasses.map((klass) => (
+              <TeacherClassCard
+                key={klass.id}
+                klass={klass}
+                showManageActions
+                onEdit={() => openEdit(klass)}
+              />
+            ))}
           </div>
         ) : (
-          <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
-            <p>No classes assigned yet.</p>
+          <div className="rounded-lg border border-dashed py-12 text-center">
+            <User className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="font-medium">No classes yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create your first class to get started.
+            </p>
+            <Button size="sm" className="mt-4" onClick={openCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Class
+            </Button>
           </div>
         )}
       </div>
+
+      <ClassManageSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        editingClass={editingClass}
+        schools={data.manageSchools}
+      />
     </section>
   );
 }
