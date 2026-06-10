@@ -13,6 +13,7 @@ import {
   useRouteLoaderData,
 } from 'react-router';
 import {
+  ClipboardList,
   CogIcon,
   FileText,
   GaugeIcon,
@@ -104,6 +105,12 @@ const LINKS: {
     to: '/app/student-work',
     label: 'Student Work',
     icon: <FileText size={20} />,
+    requires: (user) => !!user.selectedProfile?.teacherProfile,
+  },
+  {
+    to: '/app/assignments',
+    label: 'Assignments',
+    icon: <ClipboardList size={20} />,
     requires: (user) => !!user.selectedProfile?.teacherProfile,
   },
   {

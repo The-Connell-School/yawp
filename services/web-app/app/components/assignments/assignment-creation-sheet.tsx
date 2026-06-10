@@ -66,7 +66,10 @@ export type AssignmentCreationSheetProps = {
   assignmentCreationStandardizationEnabled: boolean;
   fixedAssignmentTypeId?: string;
   fixedClassId?: string;
+  initialTitle?: string;
   initialPrompt?: string;
+  initialTutorContext?: string;
+  initialDueDate?: string;
   emptyClassesMessage?: string;
 };
 
@@ -122,7 +125,10 @@ export function AssignmentCreationSheetContent({
   assignmentCreationStandardizationEnabled,
   fixedAssignmentTypeId,
   fixedClassId,
+  initialTitle = '',
   initialPrompt = '',
+  initialTutorContext = '',
+  initialDueDate = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   createFetcher,
   extractFetcher,
@@ -203,19 +209,22 @@ export function AssignmentCreationSheetContent({
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
     setSelectedClassIds(initialClassIds(fixedClassId));
-    setTitle('');
+    setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setTutorContext('');
+    setTutorContext(initialTutorContext);
     setSubmitForGrade(true);
     setPointValue('100');
-    setDueDate('');
+    setDueDate(initialDueDate);
     setPromptMode('manual');
     setPdfFile(null);
   }, [
     assignmentTypes,
     fixedAssignmentTypeId,
     fixedClassId,
+    initialDueDate,
     initialPrompt,
+    initialTitle,
+    initialTutorContext,
     open,
     teacherClasses,
   ]);
