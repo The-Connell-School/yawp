@@ -1,24 +1,5 @@
 import { prisma } from '~/utils/db.server';
-
-function hasMeaningfulGrade(grade: {
-  score: string | null;
-  feedback: string | null;
-  rubricScores?: unknown | null;
-  overallComment?: string | null;
-  numericPercentage?: number | null;
-  letterGrade?: string | null;
-}) {
-  return Boolean(
-    grade.score ||
-      grade.feedback ||
-      grade.overallComment ||
-      grade.letterGrade ||
-      grade.numericPercentage !== null ||
-      (grade.rubricScores &&
-        typeof grade.rubricScores === 'object' &&
-        Object.keys(grade.rubricScores as Record<string, unknown>).length > 0)
-  );
-}
+import { hasMeaningfulGrade } from '~/utils/teacher-document-status';
 
 export async function getTeacherClassCardStats(classId: string) {
   const submissions = await prisma.submission.findMany({
