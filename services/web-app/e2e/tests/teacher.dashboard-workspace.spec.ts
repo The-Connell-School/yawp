@@ -128,8 +128,8 @@ async function deleteAssignmentsAndClass(params: {
   }
 }
 
-test.describe.serial('Teacher dashboard assignment types', () => {
-  test('renders assignment types, class status, detail navigation, and dashboard assignment creation', async ({
+test.describe.serial('Teacher dashboard workspace', () => {
+  test('presents classes first with Assignments and Grading entry points', async ({
     page,
     e2eContext,
     signIn,
@@ -138,68 +138,43 @@ test.describe.serial('Teacher dashboard assignment types', () => {
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
+    // Classes first.
+    const classesGrid = page.getByTestId('teacher-classes-grid');
+    await expect(classesGrid).toBeVisible();
+    await expect(
+      classesGrid.getByRole('heading', { name: 'My Classes' })
+    ).toBeVisible();
+    await expect(classesGrid.getByText(CLASS_LABEL)).toBeVisible();
+
+    // Workspace entry points below.
+    const workspaceCards = page.getByTestId('teacher-workspace-cards');
+    await expect(
+      workspaceCards.getByRole('heading', { name: 'Assignments' })
+    ).toBeVisible();
+    await expect(
+      workspaceCards.getByRole('heading', { name: 'Grading' })
+    ).toBeVisible();
+    await expect(
+      workspaceCards.getByRole('link', { name: /assignments/i })
+    ).toHaveAttribute('href', '/app/assignments');
+    await expect(
+      workspaceCards.getByRole('link', { name: /grading/i })
+    ).toHaveAttribute('href', /\/app\/student-work/);
+
+    // Retired dashboard sections stay gone.
     await expect(
       page.getByRole('heading', { name: 'Assignment Types' })
-    ).toBeVisible();
-    await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole('heading', { name: "Teacher's Lounge" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: /E2E Teacher Lounge/ })
-    ).toHaveAttribute(
-      'href',
-      `/app/teacher-trainings/${e2eContext.teacherTrainingId}`
-    );
-    await expect(
-      page.getByRole('heading', { name: 'Classes at a Glance' })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: /Grade 9th .* Period 1st/ })
-    ).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'E2E Course' })
-    ).toHaveAttribute(
-      'href',
-      `/app/assignment-types/${e2eContext.assignmentTypeId}`
-    );
+    ).toHaveCount(0);
 
-    await page.getByRole('link', { name: 'E2E Course' }).click();
-    await page.waitForURL(
-      `**/app/assignment-types/${e2eContext.assignmentTypeId}`
-    );
-    await expect(
-      page.getByRole('heading', { name: 'E2E Course' })
-    ).toBeVisible();
-    await expect(page.getByRole('button', { name: /^New/ })).toBeVisible();
-
-    await page.getByRole('link', { name: /Back to dashboard/i }).click();
-    await page.waitForURL('**/app');
-
-    const title = `Dashboard E2E Assignment ${Date.now()}`;
-    const prompt = `Dashboard E2E prompt ${Date.now()}`;
-    await page.getByRole('button', { name: 'Create Assignment' }).click();
-    await expectStandardizedAssignmentForm(page);
-    await page.getByLabel(CLASS_LABEL).check();
-    await page.getByLabel('Title (optional)').fill(title);
-    await page.getByLabel('Prompt').fill(prompt);
-    await page.getByLabel(/point value/i).fill('25');
-    await page.getByRole('button', { name: 'Create Assignment' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(
-      page.getByTestId('teacher-assignments-list').getByText(title)
-    ).toBeVisible();
-
-    await expectCreatedAssignment({
-      classId: e2eContext.classId,
-      assignmentTypeId: e2eContext.assignmentTypeId,
-      prompt,
-      title,
-      pointValue: 25,
-    });
+    // Clicking a class card opens the class.
+    await classesGrid.getByText(CLASS_LABEL).first().click();
+    await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`);
   });
 
-  test('creates one assignment record for each selected dashboard class', async ({
+  test('creates one assignment record for each selected class from the Assignments page', async ({
     page,
     e2eContext,
     signIn,
@@ -212,11 +187,14 @@ test.describe.serial('Teacher dashboard assignment types', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app');
-      await expect(page.getByTestId('app._index')).toBeVisible();
+      await page.goto('/app/assignments');
+      await page.waitForLoadState('networkidle');
 
       const prompt = `Multi-Class E2E prompt ${Date.now()}`;
-      await page.getByRole('button', { name: 'Create Assignment' }).click();
+      await page
+        .getByRole('button', { name: /new assignment/i })
+        .first()
+        .click();
       await expectStandardizedAssignmentForm(page);
       await page.getByLabel(CLASS_LABEL).check();
       await page.getByLabel(secondClass.title!).check();
@@ -270,43 +248,6 @@ test.describe.serial('Teacher dashboard assignment types', () => {
       prompt,
       title,
       pointValue: 40,
-    });
-  });
-
-  test('creates an assignment from the class page shared form', async ({
-    page,
-    e2eContext,
-    signIn,
-  }) => {
-    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=assignments`);
-    await expect(
-      page.getByRole('button', { name: /Create New Assignment/i })
-    ).toBeVisible();
-
-    const title = `Class Page E2E Assignment ${Date.now()}`;
-    const prompt = `Class Page E2E prompt ${Date.now()}`;
-    await page.getByRole('button', { name: /Create New Assignment/i }).click();
-    await expectStandardizedAssignmentForm(page);
-    await expect(
-      page.getByRole('checkbox', { name: CLASS_LABEL })
-    ).toBeChecked();
-    await expect(
-      page.getByRole('checkbox', { name: CLASS_LABEL })
-    ).toBeDisabled();
-    await page.getByLabel('Title (optional)').fill(title);
-    await page.getByLabel('Prompt').fill(prompt);
-    await page.getByLabel(/point value/i).fill('55');
-    await page.getByRole('button', { name: 'Create Assignment' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByText(title)).toBeVisible();
-
-    await expectCreatedAssignment({
-      classId: e2eContext.classId,
-      assignmentTypeId: e2eContext.assignmentTypeId,
-      prompt,
-      title,
-      pointValue: 55,
     });
   });
 });

@@ -394,6 +394,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: type.id,
       title: type.title,
     })),
+    browseAssignmentTypes: allowedAssignmentTypes.map((type) => ({
+      id: type.id,
+      title: type.title,
+    })),
     assignmentsEnabled,
     assignmentCreationStandardizationEnabled,
   });
@@ -596,7 +600,7 @@ export default function AssignmentsRoute() {
               </div>
             ) : (
               <div className="overflow-hidden rounded-lg border">
-                <Table aria-label="Assignments">
+                <Table aria-label="Assignments" containerClassName="rounded-none border-0 shadow-none">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Title</TableHead>
@@ -714,6 +718,25 @@ export default function AssignmentsRoute() {
                 </Table>
               </div>
             )}
+
+            {data.browseAssignmentTypes.length > 0 ? (
+              <div className="mt-2">
+                <p className="mb-2 text-sm font-medium text-muted-foreground">
+                  Assignment Types
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {data.browseAssignmentTypes.map((type) => (
+                    <Link
+                      key={type.id}
+                      to={`/app/assignment-types/${type.id}`}
+                      className="rounded-md border bg-background px-2.5 py-1 text-sm text-foreground transition-colors hover:bg-muted"
+                    >
+                      {type.title}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </div>

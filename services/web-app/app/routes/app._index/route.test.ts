@@ -187,16 +187,6 @@ describe('app index loader assignments', () => {
         { id: 'class-2', organizationId: 'org-1' },
       ],
     });
-    expect(prisma.assignment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          class: expect.objectContaining({ id: { in: ['class-1'] } }),
-        }),
-      })
-    );
-    expect(data.teacherClassOptions).toEqual([
-      { id: 'class-1', name: 'Pilot Class' },
-    ]);
     expect(
       data.teacherClasses.map((klass: { id: string }) => klass.id)
     ).toEqual(['class-1', 'class-2']);
@@ -212,7 +202,7 @@ describe('app index loader assignments', () => {
     expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
 
-  test('includes teacher-enabled assignment types that are not exposed org-wide', async () => {
+  test('skips the assignment-type catalog fetch for teachers', async () => {
     requireProfile.mockResolvedValue({
       id: 'teacher-profile-wrapper-1',
       isOwner: false,
@@ -246,27 +236,6 @@ describe('app index loader assignments', () => {
         },
       ];
     });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      {
-        featureKey: 'assignment_type:daily-pages-type',
-        targetKind: 'teacher',
-        targetId: 'teacher-profile-1',
-        enabled: true,
-      },
-    ]);
-    prisma.assignmentType.findMany.mockImplementation(async (args: any) => {
-      if (Array.isArray(args.where?.OR)) {
-        return [
-          {
-            id: 'daily-pages-type',
-            title: 'Daily Pages',
-            image: null,
-            organizationAssignments: [],
-          },
-        ];
-      }
-      return [];
-    });
 
     const response = await loader({
       request: new Request('https://example.test/app'),
@@ -275,94 +244,11 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentTypes).toEqual([
-      {
-        id: 'daily-pages-type',
-        title: 'Daily Pages',
-        image: null,
-      },
-    ]);
+    // The dashboard no longer renders assignment types or assignment lists for
+    // teachers; that workflow lives on /app/assignments.
+    expect(data.courses).toEqual([]);
+    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
   });
 
-  test('scopes standardized dashboard assignment creation to standardized classes', async () => {
-    requireProfile.mockResolvedValue({
-      id: 'teacher-profile-wrapper-1',
-      isOwner: false,
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-profile-1' },
-      studentProfile: null,
-    });
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([
-      'class-1',
-      'class-2',
-    ]);
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
-      ['class-2']
-    );
-    prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?._count) {
-        return [
-          {
-            id: 'class-1',
-            grade: '9',
-            period: '1',
-            title: 'Legacy Class',
-            school: {
-              id: 'school-1',
-              name: 'Parker High School',
-              organizationId: 'org-1',
-            },
-            _count: { students: 1, teachers: 1 },
-          },
-          {
-            id: 'class-2',
-            grade: '9',
-            period: '2',
-            title: 'Standardized Class',
-            school: {
-              id: 'school-1',
-              name: 'Parker High School',
-              organizationId: 'org-1',
-            },
-            _count: { students: 1, teachers: 1 },
-          },
-        ];
-      }
-
-      return [
-        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
-        { id: 'class-2', school: { id: 'school-1', organizationId: 'org-1' } },
-      ];
-    });
-
-    const response = await loader({
-      request: new Request('https://example.test/app'),
-      params: {},
-      context: {} as never,
-    } as any);
-    const data = (response as { data: any }).data;
-
-    expect(data.assignmentCreationStandardizationEnabled).toBe(true);
-    expect(data.teacherClassOptions).toEqual([
-      { id: 'class-2', name: 'Standardized Class' },
-    ]);
-    expect(
-      getAssignmentCreationStandardizationEnabledClassIdsForContext
-    ).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      teacherProfileId: 'teacher-profile-1',
-      classes: [
-        {
-          id: 'class-1',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-        },
-        {
-          id: 'class-2',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-        },
-      ],
-    });
-  });
 });
