@@ -132,41 +132,6 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
-    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          featureKey: { startsWith: 'assignment_type:' },
-          targetId: { in: ['org-1', 'school-1', 'teacher-1'] },
-        }),
-      })
-    );
-    expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
-      where: {
-        archivedAt: null,
-        OR: [
-          {
-            organizationAssignments: {
-              some: { organizationId: { in: ['org-1'] } },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        title: true,
-        systemKey: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
-      },
-      orderBy: { position: 'asc' },
-    });
-    expect(
-      prisma.profile.findMany.mock.calls[0][0].select.documents.where
-    ).toEqual(expectedScope);
-    expect(prisma.pasteAlert.findMany.mock.calls[0][0].where.document).toEqual(
-      expectedScope
-    );
     expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
       is: {
         ...expectedScope,
@@ -201,32 +166,17 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('omits AP History from the generic class assignment picker', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
-      {
-        id: 'generic-type-1',
-        title: 'Literary Analysis',
-        systemKey: null,
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-      {
-        id: 'ap-history-type',
-        title: 'AP History Essay',
-        systemKey: 'ap_history_essay',
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-    ]);
-
+  test('redirects the retired assignments tab to the teacher Assignments page', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/my-classes/class-1'),
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=assignments'
+      ),
       params: { classId: 'class-1' },
       context: {} as never,
     });
-    const data = (response as { data: any }).data;
 
-    expect(data.allowedAssignmentTypes).toEqual([
-      { id: 'generic-type-1', title: 'Literary Analysis', systemKey: null },
-    ]);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/app/assignments');
   });
 
   test('rejects generic class-page AP History assignment creation', async () => {

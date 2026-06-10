@@ -89,7 +89,7 @@ test.describe.serial('Teacher class sorting and filtering', () => {
 
       const studentsTable = page.getByRole('table', { name: 'Students' });
       const studentHeaders = studentsTable.locator('thead th');
-      await expect(studentHeaders).toHaveCount(4);
+      await expect(studentHeaders).toHaveCount(5);
       for (const header of await studentHeaders.all()) {
         await expect(header).toHaveCSS('white-space', 'nowrap');
       }
@@ -110,57 +110,30 @@ test.describe.serial('Teacher class sorting and filtering', () => {
         'Zoe Carter'
       );
 
-      await page.getByRole('tab', { name: /assignments/i }).click();
+      // Assignment management now lives on the teacher-level Assignments page,
+      // filtered by class and Assignment Type.
+      await page.goto(`/app/assignments?class=${klass.id}`);
+      await page.waitForLoadState('networkidle');
 
       const assignmentsTable = page.getByRole('table', {
         name: 'Assignments',
       });
-      const assignmentsPanel = assignmentsTable.locator(
-        'xpath=ancestor::div[.//button[contains(., "Type")] and .//table[@aria-label="Assignments"]][1]'
-      );
-      await expect(assignmentsPanel).toHaveCSS(
-        'background-color',
-        'rgba(0, 0, 0, 0)'
-      );
-      await expect(assignmentsPanel).toHaveCSS('padding-top', '0px');
-      await expect(assignmentsPanel).toHaveCSS('padding-right', '0px');
-      await expect(assignmentsPanel).toHaveCSS('padding-bottom', '0px');
-      await expect(assignmentsPanel).toHaveCSS('padding-left', '0px');
+      await expect(assignmentsTable.locator('tbody tr')).toHaveCount(3);
+      await expect(assignmentsTable.getByText('Alpha Daily Pages')).toBeVisible();
+      await expect(assignmentsTable.getByText('Beta Essay')).toBeVisible();
+      await expect(assignmentsTable.getByText('Zeta Essay')).toBeVisible();
 
-      const assignmentHeaders = assignmentsTable.locator('thead th');
-      await expect(assignmentHeaders).toHaveCount(9);
-      for (const header of await assignmentHeaders.all()) {
-        await expect(header).toHaveCSS('white-space', 'nowrap');
-      }
-      await expect(assignmentsTable.locator('tbody tr').nth(0)).toContainText(
-        'Alpha Daily Pages'
+      await page.goto(
+        `/app/assignments?class=${klass.id}&type=${e2eContext.dailyPagesAssignmentTypeId}`
       );
-      await expect(assignmentsTable.locator('tbody tr').nth(1)).toContainText(
-        'Beta Essay'
-      );
-
-      await page
-        .getByRole('button', { name: /sort assignments by due date/i })
-        .click();
-      await expect(assignmentsTable.locator('tbody tr').nth(0)).toContainText(
-        'Beta Essay'
-      );
-
-      await page
-        .getByRole('button', { name: /filter assignment types/i })
-        .click();
-      await page.getByRole('menuitemcheckbox', { name: 'E2E Course' }).click();
-      await page.keyboard.press('Escape');
-
+      await page.waitForLoadState('networkidle');
       await expect(assignmentsTable.locator('tbody tr')).toHaveCount(1);
       await expect(assignmentsTable.locator('tbody tr').first()).toContainText(
         'Alpha Daily Pages'
       );
 
-      await page
-        .getByRole('button', { name: /clear assignment type filter/i })
-        .click();
-      await expect(assignmentsTable.locator('tbody tr')).toHaveCount(3);
+      await page.getByRole('button', { name: /^clear$/i }).click();
+      await expect(assignmentsTable.locator('tbody tr').first()).toBeVisible();
     } finally {
       if (classId) {
         await prisma.assignment.deleteMany({ where: { classId } });

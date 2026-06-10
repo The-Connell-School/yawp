@@ -21,7 +21,6 @@ import {
 } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { prisma } from '~/utils/db.server.js';
-import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
   isAssignmentCreationStandardizationEnabledForContext,
@@ -37,7 +36,6 @@ import {
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import { StudentArchiveCell } from '~/components/student-archive-cell';
 import {
   Table,
   TableBody,
@@ -56,39 +54,24 @@ import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from './release-grades-sheet';
 import {
-  FileText,
   Files,
   ClipboardCheck,
   Send,
   User,
-  AlertCircle,
   ArrowDown,
   ArrowUp,
-  ArrowUpDown,
-  Filter,
   ArrowRightLeft,
   ChevronDown,
   ChevronRight,
   Pencil,
   Plus,
   UserMinus,
-  X,
+  Users,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
-import {
-  formatAssignmentGrade,
-  formatGrade,
-} from '~/domain/grading/gradeMath';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import {
   Select,
   SelectContent,
@@ -96,15 +79,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { AssignmentSheet } from './assignment-sheet';
-import { formatDateOnly } from '~/utils/date-only';
-import {
-  studentModuleSessionListSelect,
-  studentModuleSessionSingleSelect,
-} from './module-session-select.server';
+import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { classCardGradientClass } from '~/utils/class-card-gradient';
+import { ClassArt } from '~/components/class-art';
+import {
+  TEACHER_DOCUMENT_STATUSES,
+  TEACHER_DOCUMENT_STATUS_BADGE_CLASSES,
+  TEACHER_DOCUMENT_STATUS_LABELS,
+  getTeacherDocumentStatus,
+  hasMeaningfulGrade,
+  type TeacherDocumentStatus,
+} from '~/utils/teacher-document-status';
 import { cn } from '~/utils/misc';
 import { useTable } from '~/hooks/useTable';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -647,6 +633,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
   const classId = params.classId!;
 
+  // Assignment management moved to the teacher-level Assignments surface.
+  if (new URL(request.url).searchParams.get('tab') === 'assignments') {
+    return redirect('/app/assignments');
+  }
+
   const [klass, manageSchools] = await Promise.all([
     prisma.class.findFirst({
     where: {
@@ -661,7 +652,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       grade: true,
       period: true,
       title: true,
-      cardGradientKey: true,
       school: { select: { id: true, name: true, organizationId: true } },
       students: {
         select: {
@@ -697,118 +687,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     legacyClassDocumentIds
   );
 
-  const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
-    id: string;
-    title: string;
-    systemKey: string | null;
-  }>({
-    scopes: [
-      {
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileId: profile.teacherProfile.id,
-      },
-    ],
-    select: { id: true, title: true, systemKey: true },
-    orderBy: { position: 'asc' },
-  });
-  const genericAllowedAssignmentTypes = allowedAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-  );
-
-  const profiles = await prisma.profile.findMany({
-    where: {
-      studentProfile: {
-        classes: { some: { id: classId } },
-      },
-    },
-    select: {
-      id: true,
-      user: { select: { name: true, email: true } },
-      documents: {
-        where: classDocumentScope,
-        select: {
-          id: true,
-          title: true,
-          createdAt: true,
-          updatedAt: true,
-          html: true,
-          text: true,
-          assignmentModuleSessions: studentModuleSessionListSelect,
-          _count: {
-            select: {
-              pasteAlerts: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Get recent paste alerts for this class
-  const pasteAlerts = await prisma.pasteAlert.findMany({
-    where: {
-      document: classDocumentScope,
-    },
-    select: {
-      id: true,
-      createdAt: true,
-      textLength: true,
-      content: true,
-      document: {
-        select: {
-          id: true,
-          title: true,
-          assignmentId: true,
-        },
-      },
-      profile: {
-        select: {
-          id: true,
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    take: 50, // Limit to most recent 50 alerts
-  });
-
   // Check feature flags
-  const [
-    isDocumentSubmissionEnabled,
-    assignmentsEnabled,
-    releasedGradesEnabled,
-    assignmentCreationStandardizationEnabled,
-  ] = await Promise.all([
-    isDocumentSubmissionEnabledForScope({
-      schoolIds: [klass.school?.id],
-      organizationIds: [klass.school?.organizationId],
-      teacherProfileIds: [profile.teacherProfile.id],
-      classIds: [klass.id],
-    }),
-    isAssignmentsEnabledForContext({
-      organizationId: klass.school?.organizationId,
-      schoolId: klass.school?.id,
-      teacherProfileId: profile.teacherProfile.id,
-      classIds: [klass.id],
-    }),
-    isReleasedGradesOrganizationEnabledForOrganization(
-      klass.school?.organizationId
-    ),
-    isAssignmentCreationStandardizationEnabledForContext({
-      organizationId: klass.school?.organizationId,
-      schoolId: klass.school?.id,
-      teacherProfileId: profile.teacherProfile.id,
-      classIds: [klass.id],
-    }),
-  ]);
+  const [isDocumentSubmissionEnabled, assignmentsEnabled, releasedGradesEnabled] =
+    await Promise.all([
+      isDocumentSubmissionEnabledForScope({
+        schoolIds: [klass.school?.id],
+        organizationIds: [klass.school?.organizationId],
+        teacherProfileIds: [profile.teacherProfile.id],
+        classIds: [klass.id],
+      }),
+      isAssignmentsEnabledForContext({
+        organizationId: klass.school?.organizationId,
+        schoolId: klass.school?.id,
+        teacherProfileId: profile.teacherProfile.id,
+        classIds: [klass.id],
+      }),
+      isReleasedGradesOrganizationEnabledForOrganization(
+        klass.school?.organizationId
+      ),
+    ]);
 
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
@@ -934,8 +831,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
   });
 
-  const submittedPapersFilter = await getSubmittedPapersFilter(request);
-
   const teacherClasses = await prisma.class.findMany({
     where: {
       teachers: { some: { id: profile.teacherProfile.id } },
@@ -954,15 +849,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     klass,
-    allowedAssignmentTypes: genericAllowedAssignmentTypes,
-    profiles,
-    pasteAlerts,
     submissions,
     inProgressDocuments,
     assignments,
     assignmentsEnabled,
-    assignmentCreationStandardizationEnabled,
-    submittedPapersFilter,
     isDocumentSubmissionEnabled,
     releasedGradesEnabled,
     manageSchools: manageSchools?.schools ?? [],
@@ -970,15 +860,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type TabValue =
-  | 'in-progress'
-  | 'to-grade'
-  | 'graded'
-  | 'released'
-  | 'assignments'
-  | 'paste-activity'
-  | 'students'
-  | 'documents';
+type TabValue = 'students' | 'documents';
 
 type ClassDocumentSubmission = {
   id: string;
@@ -1022,10 +904,6 @@ type ClassDocumentGroup = {
 };
 
 type SortDirection = 'asc' | 'desc';
-type AssignmentSort = {
-  key: 'title' | 'dueDate';
-  direction: SortDirection;
-};
 
 export default function ClassDetailRoute() {
   const outlet = useOutlet();
@@ -1044,16 +922,6 @@ function ClassDetailPage() {
   const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
   const [isMoveStudentsSheetOpen, setIsMoveStudentsSheetOpen] = useState(false);
   const [moveTargetClassId, setMoveTargetClassId] = useState('');
-  const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
-  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
-    null
-  );
-  const [selectedPasteContent, setSelectedPasteContent] = useState<
-    string | null
-  >(null);
-  const [selectedGradedDocuments, setSelectedGradedDocuments] = useState<
-    Set<string>
-  >(new Set());
   const [collapsedDocumentGroups, setCollapsedDocumentGroups] = useState<
     Set<string>
   >(new Set());
@@ -1061,13 +929,6 @@ function ClassDetailPage() {
     useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
-  const [assignmentSort, setAssignmentSort] = useState<AssignmentSort>({
-    key: 'title',
-    direction: 'asc',
-  });
-  const [selectedAssignmentTypeIds, setSelectedAssignmentTypeIds] = useState<
-    Set<string>
-  >(new Set());
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     {
       id: string;
@@ -1103,7 +964,7 @@ function ClassDetailPage() {
   };
 
   const assignmentsEnabled = data.assignmentsEnabled === true;
-  const validTabs: TabValue[] = ['students', 'documents', 'assignments'];
+  const validTabs: TabValue[] = ['students', 'documents'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
@@ -1118,37 +979,19 @@ function ClassDetailPage() {
       ? assignmentFilterParam
       : 'all';
   const studentFilterParam = searchParams.get('studentId') ?? 'all';
+  const statusFilterParam = searchParams.get('status') ?? 'all';
+  const statusFilter: TeacherDocumentStatus | 'all' =
+    TEACHER_DOCUMENT_STATUSES.includes(
+      statusFilterParam as TeacherDocumentStatus
+    )
+      ? (statusFilterParam as TeacherDocumentStatus)
+      : 'all';
   const documentGroupParam = searchParams.get('documentGroup') ?? 'none';
   const documentGroupMode: DocumentGroupMode =
     documentGroupParam === 'student' || documentGroupParam === 'assignment'
       ? documentGroupParam
       : 'none';
-  const editingAssignment =
-    data.assignments.find(
-      (assignment) => assignment.id === editingAssignmentId
-    ) ?? null;
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const hasMeaningfulGrade = (submission: {
-    score: string | null;
-    feedback: string | null;
-    rubricScores?: unknown | null;
-    overallComment?: string | null;
-    numericPercentage?: number | null;
-    letterGrade?: string | null;
-    gradedAt?: Date | string | null;
-  }) =>
-    Boolean(
-      submission.gradedAt ||
-      submission.score ||
-      submission.feedback ||
-      submission.overallComment ||
-      submission.letterGrade ||
-      submission.numericPercentage !== null ||
-      (submission.rubricScores &&
-        typeof submission.rubricScores === 'object' &&
-        Object.keys(submission.rubricScores as Record<string, unknown>).length >
-          0)
-    );
 
   const students = data.klass.students;
   const selectedStudentFilter =
@@ -1167,11 +1010,10 @@ function ClassDetailPage() {
     setPagination({ skip: 0, take: 20 });
   }, [
     activeTab,
-    assignmentSort,
-    selectedAssignmentTypeIds,
     studentNameSortDirection,
     selectedStudentFilter,
     selectedAssignmentId,
+    statusFilter,
     documentGroupMode,
   ]);
 
@@ -1181,6 +1023,7 @@ function ClassDetailPage() {
     documentGroupMode,
     selectedStudentFilter,
     selectedAssignmentId,
+    statusFilter,
   ]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
@@ -1207,36 +1050,12 @@ function ClassDetailPage() {
   const matchesSelectedAssignment = (assignmentId?: string | null) =>
     selectedAssignmentId === 'all' || assignmentId === selectedAssignmentId;
 
-  const filteredInProgressDocuments = useMemo(
-    () =>
-      data.inProgressDocuments.filter((document) =>
-        matchesSelectedAssignment(document.assignment?.id)
-      ),
-    [data.inProgressDocuments, selectedAssignmentId]
-  );
-
-  const filteredUngradedDocuments = useMemo(
-    () =>
-      ungradedDocuments.filter((submission) =>
-        matchesSelectedAssignment(submission.document.assignment?.id)
-      ),
-    [ungradedDocuments, selectedAssignmentId]
-  );
-
   const filteredGradedUnreleasedDocuments = useMemo(
     () =>
       gradedUnreleasedDocuments.filter((submission) =>
         matchesSelectedAssignment(submission.document.assignment?.id)
       ),
     [gradedUnreleasedDocuments, selectedAssignmentId]
-  );
-
-  const filteredReleasedDocuments = useMemo(
-    () =>
-      releasedDocuments.filter((submission) =>
-        matchesSelectedAssignment(submission.document.assignment?.id)
-      ),
-    [releasedDocuments, selectedAssignmentId]
   );
 
   // Get unreleased grades for release functionality
@@ -1263,11 +1082,7 @@ function ClassDetailPage() {
     });
   }, [filteredGradedUnreleasedDocuments]);
 
-  const unreleasedGradesBySubmissionId = useMemo(() => {
-    return new Map(unreleasedGrades.map((grade) => [grade.id, grade]));
-  }, [unreleasedGrades]);
-
-  // Handle URL param for to-release action
+  // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'to-release') {
@@ -1275,7 +1090,7 @@ function ClassDetailPage() {
         setReleaseGradesForSheet(unreleasedGrades);
         setIsReleaseGradesSheetOpen(true);
         const next = new URLSearchParams(searchParams);
-        next.set('tab', 'graded');
+        next.set('tab', 'documents');
         navigate(`?${next.toString()}`, { replace: true });
       }
     }
@@ -1283,49 +1098,13 @@ function ClassDetailPage() {
 
   // Handle successful release
   const handleGradingSuccess = () => {
-    setSelectedGradedDocuments(new Set());
     setReleaseGradesForSheet([]);
     window.location.reload();
   };
 
-  const toggleGradedDocumentSelection = (docId: string) => {
-    const newSelection = new Set(selectedGradedDocuments);
-    if (newSelection.has(docId)) {
-      newSelection.delete(docId);
-    } else {
-      newSelection.add(docId);
-    }
-    setSelectedGradedDocuments(newSelection);
-  };
-
-  const toggleAllGradedDocuments = () => {
-    const submissionIds = filteredGradedUnreleasedDocuments.map((d) => d.id);
-    if (submissionIds.every((id) => selectedGradedDocuments.has(id))) {
-      const newSelection = new Set(selectedGradedDocuments);
-      submissionIds.forEach((id) => newSelection.delete(id));
-      setSelectedGradedDocuments(newSelection);
-    } else {
-      const newSelection = new Set(selectedGradedDocuments);
-      submissionIds.forEach((id) => newSelection.add(id));
-      setSelectedGradedDocuments(newSelection);
-    }
-  };
-
-  const selectedUnreleasedGrades = useMemo(() => {
-    return Array.from(selectedGradedDocuments)
-      .map((submissionId) => unreleasedGradesBySubmissionId.get(submissionId))
-      .filter((grade): grade is (typeof unreleasedGrades)[number] => !!grade);
-  }, [selectedGradedDocuments, unreleasedGradesBySubmissionId]);
-
-  const canReleaseSelected = selectedUnreleasedGrades.length > 0;
-
-  const openReleaseSheetForMode = (mode: 'all' | 'selected') => {
-    if (mode === 'selected') {
-      if (!canReleaseSelected) return;
-      setReleaseGradesForSheet(selectedUnreleasedGrades);
-    } else {
-      setReleaseGradesForSheet(unreleasedGrades);
-    }
+  const openReleaseSheet = () => {
+    if (unreleasedGrades.length === 0) return;
+    setReleaseGradesForSheet(unreleasedGrades);
     setIsReleaseGradesSheetOpen(true);
   };
 
@@ -1402,9 +1181,17 @@ function ClassDetailPage() {
     return classDocuments.filter(
       (document) =>
         matchesSelectedStudentProfile(document.profile.id) &&
-        matchesSelectedAssignment(document.assignment?.id)
+        matchesSelectedAssignment(document.assignment?.id) &&
+        (statusFilter === 'all' ||
+          getTeacherDocumentStatus(document.latestSubmission) === statusFilter)
     );
-  }, [classDocuments, selectedAssignmentId, selectedStudentFilter, students]);
+  }, [
+    classDocuments,
+    selectedAssignmentId,
+    selectedStudentFilter,
+    statusFilter,
+    students,
+  ]);
 
   const classDocumentGroups = useMemo((): ClassDocumentGroup[] => {
     const sortedDocuments = [...filteredClassDocuments].sort(
@@ -1473,74 +1260,9 @@ function ClassDetailPage() {
     setSelectedStudentIds,
   ]);
 
-  const assignmentTypeOptions = useMemo(() => {
-    const typesById = new Map<string, { id: string; title: string }>();
-    for (const assignment of data.assignments) {
-      typesById.set(assignment.assignmentType.id, assignment.assignmentType);
-    }
-    return Array.from(typesById.values()).sort((a, b) =>
-      collator.compare(a.title, b.title)
-    );
-  }, [collator, data.assignments]);
-
-  const hasAssignmentTypeFilter = selectedAssignmentTypeIds.size > 0;
-
-  const sortedFilteredAssignments = useMemo(() => {
-    const visibleAssignments = hasAssignmentTypeFilter
-      ? data.assignments.filter((assignment) =>
-          selectedAssignmentTypeIds.has(assignment.assignmentType.id)
-        )
-      : data.assignments;
-
-    return [...visibleAssignments].sort((a, b) => {
-      const titleCompare = collator.compare(
-        a.title || 'Untitled Assignment',
-        b.title || 'Untitled Assignment'
-      );
-      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : null;
-      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : null;
-      const bothHaveDueDates = aDue !== null && bDue !== null;
-      const direction = assignmentSort.direction === 'asc' ? 1 : -1;
-
-      if (assignmentSort.key === 'title') {
-        if (titleCompare !== 0) return titleCompare * direction;
-        if (bothHaveDueDates && aDue !== bDue) return aDue - bDue;
-        if (aDue === null && bDue !== null) return 1;
-        if (aDue !== null && bDue === null) return -1;
-        return collator.compare(a.id, b.id);
-      }
-
-      if (bothHaveDueDates && aDue !== bDue) {
-        return (aDue - bDue) * direction;
-      }
-      if (aDue === null && bDue !== null) return 1;
-      if (aDue !== null && bDue === null) return -1;
-      if (titleCompare !== 0) return titleCompare;
-      return collator.compare(a.id, b.id);
-    });
-  }, [
-    assignmentSort,
-    collator,
-    data.assignments,
-    hasAssignmentTypeFilter,
-    selectedAssignmentTypeIds,
-  ]);
-
   // Get current tab data and paginate it
   const currentTabData = useMemo(() => {
     switch (activeTab) {
-      case 'in-progress':
-        return filteredInProgressDocuments;
-      case 'to-grade':
-        return filteredUngradedDocuments;
-      case 'graded':
-        return filteredGradedUnreleasedDocuments;
-      case 'released':
-        return filteredReleasedDocuments;
-      case 'assignments':
-        return sortedFilteredAssignments;
-      case 'paste-activity':
-        return data.pasteAlerts;
       case 'students':
         return sortedStudents;
       case 'documents':
@@ -1548,17 +1270,7 @@ function ClassDetailPage() {
       default:
         return [];
     }
-  }, [
-    activeTab,
-    filteredInProgressDocuments,
-    filteredUngradedDocuments,
-    filteredGradedUnreleasedDocuments,
-    filteredReleasedDocuments,
-    data.pasteAlerts,
-    sortedFilteredAssignments,
-    sortedStudents,
-    filteredClassDocuments,
-  ]) as any[];
+  }, [activeTab, sortedStudents, filteredClassDocuments]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1610,6 +1322,16 @@ function ClassDetailPage() {
     navigate(`?${next.toString()}`);
   };
 
+  const handleStatusFilterChange = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === 'all') {
+      next.delete('status');
+    } else {
+      next.set('status', value);
+    }
+    navigate(`?${next.toString()}`);
+  };
+
   const getClassDocumentDetailLink = (document: ClassDocumentRow) => {
     if (document.latestSubmission) {
       return `/app/submissions/${document.latestSubmission.id}?${
@@ -1635,36 +1357,17 @@ function ClassDetailPage() {
   };
 
   const getClassDocumentStatus = (document: ClassDocumentRow) => {
-    const latestSubmission = document.latestSubmission;
-    if (!latestSubmission) {
-      return {
-        label: 'Draft',
-        badgeClassName: '',
-        variant: 'secondary' as const,
-      };
-    }
-    if (latestSubmission.releasedAt) {
-      const grade = getClassDocumentGradeDisplay(document);
-      return {
-        label: grade ? `Released · ${grade}` : 'Released',
-        badgeClassName:
-          'bg-green-100 text-green-700 border-green-200 hover:bg-green-100',
-        variant: 'secondary' as const,
-      };
-    }
-    if (hasMeaningfulGrade(latestSubmission)) {
-      const grade = getClassDocumentGradeDisplay(document);
-      return {
-        label: grade ? `Graded · ${grade}` : 'Graded',
-        badgeClassName:
-          'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100',
-        variant: 'secondary' as const,
-      };
-    }
+    const status = getTeacherDocumentStatus(document.latestSubmission);
+    const grade =
+      status === 'graded' || status === 'released'
+        ? getClassDocumentGradeDisplay(document)
+        : null;
+
     return {
-      label: 'Submitted',
-      badgeClassName:
-        'bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100',
+      label: grade
+        ? `${TEACHER_DOCUMENT_STATUS_LABELS[status]} · ${grade}`
+        : TEACHER_DOCUMENT_STATUS_LABELS[status],
+      badgeClassName: TEACHER_DOCUMENT_STATUS_BADGE_CLASSES[status],
       variant: 'secondary' as const,
     };
   };
@@ -1740,700 +1443,17 @@ function ClassDetailPage() {
     );
   };
 
-  const toggleAssignmentSort = (key: AssignmentSort['key']) => {
-    setAssignmentSort((current) => ({
-      key,
-      direction:
-        current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const toggleAssignmentTypeFilter = (assignmentTypeId: string) => {
-    setSelectedAssignmentTypeIds((current) => {
-      const allTypeIds = assignmentTypeOptions.map((type) => type.id);
-      const next = current.size === 0 ? new Set(allTypeIds) : new Set(current);
-
-      if (next.has(assignmentTypeId)) {
-        next.delete(assignmentTypeId);
-      } else {
-        next.add(assignmentTypeId);
-      }
-
-      return next.size === allTypeIds.length ? new Set() : next;
-    });
-  };
-
-  const clearAssignmentTypeFilter = () => {
-    setSelectedAssignmentTypeIds(new Set());
-  };
-
   const handlePaginationChange = (skip: number, take: number) => {
     setPagination({ skip, take });
   };
 
   // Render table based on active tab
   const renderTable = () => {
-    if (
-      paginatedData.length === 0 &&
-      activeTab !== 'students' &&
-      activeTab !== 'documents'
-    ) {
-      return (
-        <div className="text-center text-muted-foreground py-8">
-          <p>
-            {activeTab === 'in-progress' && 'No in-progress documents.'}
-            {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
-            {activeTab === 'graded' && 'No grades ready to release.'}
-            {activeTab === 'released' && 'No released documents yet.'}
-            {activeTab === 'assignments' &&
-              (hasAssignmentTypeFilter
-                ? 'No assignments match this filter.'
-                : 'No assignments yet.')}
-            {activeTab === 'paste-activity' &&
-              'No copy/paste activity detected yet.'}
-          </p>
-          {activeTab === 'assignments' && hasAssignmentTypeFilter ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={clearAssignmentTypeFilter}
-            >
-              Clear filter
-            </Button>
-          ) : null}
-        </div>
-      );
-    }
-
-    if (activeTab === 'in-progress') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Document</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Course Module</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell className="font-medium">
-                    {doc.profile.user.name || doc.profile.user.email}
-                  </TableCell>
-                  <TableCell>{getDraftDisplayTitle(doc)}</TableCell>
-                  {assignmentsEnabled && (
-                    <TableCell className="text-muted-foreground">
-                      {doc.assignment?.title || '—'}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground">
-                    {doc.assignmentModuleSessions[0]?.assignmentModule.title ||
-                      '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {timeAgo(new Date(doc.updatedAt))}
-                  </TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                      >
-                        View
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'to-grade') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Course Module</TableHead>
-                <TableHead>Student archive</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => (
-                <TableRow key={submission.id}>
-                  <TableCell className="font-medium">
-                    {submission.document.profile.user.name ||
-                      submission.document.profile.user.email}
-                  </TableCell>
-                  <TableCell>{submission.title}</TableCell>
-                  {assignmentsEnabled && (
-                    <TableCell className="text-muted-foreground">
-                      {submission.document.assignment?.title || '—'}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground">
-                    {submission.document.assignmentModuleSessions[0]
-                      ?.assignmentModule.title || '—'}
-                  </TableCell>
-                  <TableCell>
-                    <StudentArchiveCell archivedAt={submission.archivedAt} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {timeAgo(
-                      new Date(submission.submittedAt ?? submission.createdAt)
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        to={`/app/submissions/${submission.id}?${
-                          data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                        }exitTo=${encodedClassDetailExitTo}`}
-                      >
-                        View
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'graded') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={
-                      filteredGradedUnreleasedDocuments.length > 0 &&
-                      filteredGradedUnreleasedDocuments.every((d) =>
-                        selectedGradedDocuments.has(d.id)
-                      )
-                    }
-                    onCheckedChange={toggleAllGradedDocuments}
-                    aria-label="Select all graded documents"
-                  />
-                </TableHead>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Student archive</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Graded</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => {
-                const gradeDisplay =
-                  formatAssignmentGrade({
-                    submitForGrade:
-                      submission.document.assignment?.submitForGrade,
-                    numericPercentage: submission.numericPercentage ?? null,
-                    letterGrade: submission.letterGrade ?? null,
-                    pointValue:
-                      submission.document.assignment?.pointValue ?? null,
-                    score: submission.score,
-                  }) || '—';
-                return (
-                  <TableRow key={submission.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedGradedDocuments.has(submission.id)}
-                        onCheckedChange={() =>
-                          toggleGradedDocumentSelection(submission.id)
-                        }
-                        aria-label={`Select graded ${submission.title}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {submission.document.profile.user.name ||
-                        submission.document.profile.user.email}
-                    </TableCell>
-                    <TableCell>{submission.title}</TableCell>
-                    {assignmentsEnabled && (
-                      <TableCell className="text-muted-foreground">
-                        {submission.document.assignment?.title || '—'}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <StudentArchiveCell archivedAt={submission.archivedAt} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{gradeDisplay}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(
-                        new Date(submission.gradedAt ?? submission.createdAt)
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/submissions/${submission.id}?${
-                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'released') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Student archive</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Released</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => {
-                const gradeDisplay =
-                  formatAssignmentGrade({
-                    submitForGrade:
-                      submission.document.assignment?.submitForGrade,
-                    numericPercentage: submission.numericPercentage ?? null,
-                    letterGrade: submission.letterGrade ?? null,
-                    pointValue:
-                      submission.document.assignment?.pointValue ?? null,
-                    score: submission.score,
-                  }) || '—';
-                return (
-                  <TableRow key={submission.id}>
-                    <TableCell className="font-medium">
-                      {submission.document.profile.user.name ||
-                        submission.document.profile.user.email}
-                    </TableCell>
-                    <TableCell>{submission.title}</TableCell>
-                    {assignmentsEnabled && (
-                      <TableCell className="text-muted-foreground">
-                        {submission.document.assignment?.title || '—'}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <StudentArchiveCell archivedAt={submission.archivedAt} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{gradeDisplay}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(submission.releasedAt!))}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/submissions/${submission.id}?${
-                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'assignments') {
-      return (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  disabled={assignmentTypeOptions.length === 0}
-                  aria-label="Filter assignment types"
-                >
-                  <Filter className="h-4 w-4" />
-                  Type
-                  {hasAssignmentTypeFilter ? (
-                    <span className="rounded border px-1.5 text-xs">
-                      {selectedAssignmentTypeIds.size}
-                    </span>
-                  ) : null}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>Assignment Type</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {assignmentTypeOptions.map((type) => (
-                  <DropdownMenuCheckboxItem
-                    key={type.id}
-                    checked={
-                      !hasAssignmentTypeFilter ||
-                      selectedAssignmentTypeIds.has(type.id)
-                    }
-                    onCheckedChange={() => toggleAssignmentTypeFilter(type.id)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {type.title}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {hasAssignmentTypeFilter ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                aria-label="Clear assignment type filter"
-                onClick={clearAssignmentTypeFilter}
-              >
-                <X className="h-4 w-4" />
-                Clear
-              </Button>
-            ) : null}
-            </div>
-            {assignmentsEnabled ? (
-              <Button
-                size="sm"
-                type="button"
-                onClick={() => {
-                  setEditingAssignmentId(null);
-                  setIsAssignmentSheetOpen(true);
-                }}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Create New Assignment
-              </Button>
-            ) : null}
-          </div>
-          <Table aria-label="Assignments">
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort assignments by title ${
-                      assignmentSort.key === 'title' &&
-                      assignmentSort.direction === 'asc'
-                        ? 'descending'
-                        : 'ascending'
-                    }`}
-                    onClick={() => toggleAssignmentSort('title')}
-                  >
-                    Title
-                    {assignmentSort.key === 'title' ? (
-                      assignmentSort.direction === 'asc' ? (
-                        <ArrowUp className="h-4 w-4" />
-                      ) : (
-                        <ArrowDown className="h-4 w-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 opacity-50" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>Assignment Type</TableHead>
-                <TableHead>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort assignments by due date ${
-                      assignmentSort.key === 'dueDate' &&
-                      assignmentSort.direction === 'asc'
-                        ? 'descending'
-                        : 'ascending'
-                    }`}
-                    onClick={() => toggleAssignmentSort('dueDate')}
-                  >
-                    Due Date
-                    {assignmentSort.key === 'dueDate' ? (
-                      assignmentSort.direction === 'asc' ? (
-                        <ArrowUp className="h-4 w-4" />
-                      ) : (
-                        <ArrowDown className="h-4 w-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 opacity-50" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>In Progress</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Graded</TableHead>
-                <TableHead>Released</TableHead>
-                <TableHead>Copy &amp; Paste</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((assignment) => {
-                const assignmentSubmissions = allSubmissions.filter(
-                  (s) => s.document.assignment?.id === assignment.id
-                );
-                const inProgressCount = data.inProgressDocuments.filter(
-                  (doc) => doc.assignment?.id === assignment.id
-                ).length;
-                const submittedCount = assignmentSubmissions.filter(
-                  (s) => !hasMeaningfulGrade(s) && !s.releasedAt
-                ).length;
-                const gradedCount = assignmentSubmissions.filter(
-                  (s) => hasMeaningfulGrade(s) && !s.releasedAt
-                ).length;
-                const releasedCount = assignmentSubmissions.filter(
-                  (s) => !!s.releasedAt
-                ).length;
-                const pasteCount = data.pasteAlerts.filter(
-                  (a) => a.document.assignmentId === assignment.id
-                ).length;
-                const canEditAssignment =
-                  assignment.assignmentType.systemKey !==
-                  AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-                return (
-                  <TableRow key={assignment.id}>
-                    <TableCell className="font-medium">
-                      {assignment.title || 'Untitled Assignment'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.assignmentType.title}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.dueDate
-                        ? formatDateOnly(assignment.dueDate)
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=in-progress`}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-secondary/80"
-                        >
-                          {inProgressCount}
-                        </Badge>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=submitted`}
-                      >
-                        {submittedCount > 0 ? (
-                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-200 cursor-pointer">
-                            {submittedCount}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="cursor-pointer hover:bg-secondary/80"
-                          >
-                            {submittedCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=graded`}
-                      >
-                        {gradedCount > 0 ? (
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 cursor-pointer">
-                            {gradedCount}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="cursor-pointer hover:bg-secondary/80"
-                          >
-                            {gradedCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=released`}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-secondary/80"
-                        >
-                          {releasedCount}
-                        </Badge>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {pasteCount > 0 ? (
-                        <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-                          {pasteCount}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{pasteCount}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {canEditAssignment ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            type="button"
-                            onClick={() => {
-                              setEditingAssignmentId(assignment.id);
-                              setIsAssignmentSheetOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        <Form
-                          method="post"
-                          onSubmit={(event) => {
-                            if (
-                              !window.confirm(
-                                'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
-                              )
-                            ) {
-                              event.preventDefault();
-                            }
-                          }}
-                        >
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="delete-assignment"
-                          />
-                          <input
-                            type="hidden"
-                            name="assignmentId"
-                            value={assignment.id}
-                          />
-                          <Button size="sm" variant="destructive" type="submit">
-                            Delete
-                          </Button>
-                        </Form>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'paste-activity') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Document</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead className="text-right">Characters</TableHead>
-                <TableHead>Content</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((alert) => {
-                const truncatedContent = alert.content
-                  ? alert.content.length > 100
-                    ? alert.content.substring(0, 100) + '...'
-                    : alert.content
-                  : null;
-                return (
-                  <TableRow key={alert.id}>
-                    <TableCell className="font-medium">
-                      {alert.profile.user.name || alert.profile.user.email}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/documents/${alert.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                        className="text-primary hover:underline"
-                      >
-                        {alert.document.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(alert.createdAt))}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="secondary">
-                        {alert.textLength.toLocaleString()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {truncatedContent ? (
-                        <button
-                          onClick={() =>
-                            setSelectedPasteContent(alert.content || null)
-                          }
-                          className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
-                          title="Click to view full content"
-                        >
-                          {truncatedContent}
-                        </button>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
     if (activeTab === 'documents') {
       const hasDocumentFilters =
-        selectedStudentFilter !== 'all' || selectedAssignmentId !== 'all';
+        selectedStudentFilter !== 'all' ||
+        selectedAssignmentId !== 'all' ||
+        statusFilter !== 'all';
       const showStudentColumn = documentGroupMode !== 'student';
       const showAssignmentColumn =
         assignmentsEnabled && documentGroupMode !== 'assignment';
@@ -2458,8 +1478,8 @@ function ClassDetailPage() {
               <TableHead>Document</TableHead>
               {showAssignmentColumn ? <TableHead>Assignment</TableHead> : null}
               <TableHead>Status</TableHead>
-              <TableHead>Submitted</TableHead>
-              <TableHead>Graded</TableHead>
+              <TableHead>Submitted at</TableHead>
+              <TableHead>Graded at</TableHead>
               <TableHead>Last edited</TableHead>
               <TableHead className="pr-4">Action</TableHead>
             </TableRow>
@@ -2509,6 +1529,25 @@ function ClassDetailPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select
+                value={statusFilter}
+                onValueChange={handleStatusFilterChange}
+              >
+                <SelectTrigger
+                  className="w-[180px]"
+                  data-testid="class-documents-status-filter"
+                >
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {TEACHER_DOCUMENT_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {TEACHER_DOCUMENT_STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {hasDocumentFilters ? (
                 <Button
                   type="button"
@@ -2518,6 +1557,7 @@ function ClassDetailPage() {
                     const next = new URLSearchParams(searchParams);
                     next.delete('studentId');
                     next.delete('assignmentId');
+                    next.delete('status');
                     navigate(`?${next.toString()}`);
                   }}
                 >
@@ -2525,19 +1565,32 @@ function ClassDetailPage() {
                 </Button>
               ) : null}
             </div>
-            <Select
-              value={documentGroupMode}
-              onValueChange={handleDocumentGroupChange}
-            >
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="No grouping" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No grouping</SelectItem>
-                <SelectItem value="student">Group by student</SelectItem>
-                <SelectItem value="assignment">Group by assignment</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              {data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  data-testid="class-release-grades-open"
+                  onClick={openReleaseSheet}
+                >
+                  <Send className="mr-2 h-4 w-4" />
+                  Release grades ({unreleasedGrades.length})
+                </Button>
+              ) : null}
+              <Select
+                value={documentGroupMode}
+                onValueChange={handleDocumentGroupChange}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="No grouping" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No grouping</SelectItem>
+                  <SelectItem value="student">Group by student</SelectItem>
+                  <SelectItem value="assignment">Group by assignment</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {filteredClassDocuments.length === 0 ? (
@@ -2914,58 +1967,83 @@ function ClassDetailPage() {
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm">
+        <div className="mb-4">
+          <Button asChild variant="ghost" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            type="button"
-            onClick={() => setIsClassEditSheetOpen(true)}
-          >
-            <Pencil className="mr-1 h-3.5 w-3.5" />
-            Edit Class
-          </Button>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-lg border">
-          <div
-            className={cn(
-              'relative h-32 w-full',
-              classCardGradientClass(
-                data.klass.cardGradientKey,
-                data.klass.id
-              )
-            )}
-          >
-            <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
-            <div className="absolute bottom-3 left-3 right-3">
-              {data.klass.school?.name ? (
-                <p className="text-sm font-medium text-white/90">
-                  {data.klass.school.name}
+        <div
+          data-testid="class-detail-header"
+          className="mb-6 overflow-hidden rounded-lg border"
+        >
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="hidden h-16 w-24 shrink-0 overflow-hidden rounded-md border sm:block">
+                <ClassArt seed={data.klass.id} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-semibold">
+                  Grade {data.klass.grade} • Period {data.klass.period}
+                  {data.klass.title ? ` — ${data.klass.title}` : ''}
+                </h3>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                  {data.klass.school?.name ? (
+                    <span>{data.klass.school.name}</span>
+                  ) : null}
+                  <span>{data.klass.schoolYear}</span>
+                  <Badge variant="outline" size="sm" className="font-mono">
+                    {data.klass.code}
+                  </Badge>
                 </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" size="sm" className="gap-1">
+                    <Users className="h-3 w-3" />
+                    {students.length} student{students.length === 1 ? '' : 's'}
+                  </Badge>
+                  <Badge variant="secondary" size="sm" className="gap-1">
+                    <Files className="h-3 w-3" />
+                    {classDocuments.length} document
+                    {classDocuments.length === 1 ? '' : 's'}
+                  </Badge>
+                  {ungradedDocuments.length > 0 ? (
+                    <Badge className="gap-1 border-orange-200 bg-orange-100 text-orange-700">
+                      <ClipboardCheck className="h-3 w-3" />
+                      {ungradedDocuments.length} to grade
+                    </Badge>
+                  ) : null}
+                  {releasedDocuments.length > 0 ? (
+                    <Badge className="gap-1 border-green-200 bg-green-100 text-green-700">
+                      <Send className="h-3 w-3" />
+                      {releasedDocuments.length} released
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+              <Button
+                size="sm"
+                variant="outline"
+                type="button"
+                onClick={() => setIsClassEditSheetOpen(true)}
+              >
+                <Pencil className="mr-1 h-3.5 w-3.5" />
+                Edit Class
+              </Button>
+              {data.releasedGradesEnabled ? (
+                <Link
+                  to={`/app/my-classes/${data.klass.id}/released-grades`}
+                  className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  Released grades →
+                </Link>
               ) : null}
-              <h3 className="text-lg font-semibold text-white drop-shadow">
-                Grade {data.klass.grade} • Period {data.klass.period}
-                {data.klass.title ? ` — ${data.klass.title}` : ''}
-              </h3>
             </div>
           </div>
         </div>
-
-        {data.releasedGradesEnabled ? (
-          <div className="mb-6">
-            <Link
-              to={`/app/my-classes/${data.klass.id}/released-grades`}
-              className="text-sm underline"
-            >
-              Released grades →
-            </Link>
-          </div>
-        ) : null}
 
         {/* Tabs and Table */}
         <Tabs
@@ -2974,13 +2052,13 @@ function ClassDetailPage() {
           className="w-full"
         >
           <div>
-            <TabsList className="grid h-auto w-full grid-cols-3">
+            <TabsList className="grid h-auto w-full grid-cols-2">
                 <TabsTrigger
                   value="students"
                   className="flex h-auto items-center justify-center gap-2 py-2"
                 >
                   <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">Students</span>
+                  <span>Students</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                     {students.length}
                   </span>
@@ -2990,19 +2068,9 @@ function ClassDetailPage() {
                   className="flex h-auto items-center justify-center gap-2 py-2"
                 >
                   <Files className="w-4 h-4" />
-                  <span className="hidden sm:inline">Documents</span>
+                  <span>Documents</span>
                   <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
                     {classDocuments.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="assignments"
-                  className="flex h-auto items-center justify-center gap-2 py-2"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Assignments</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {data.assignments.length}
                   </span>
                 </TabsTrigger>
               </TabsList>
@@ -3031,42 +2099,6 @@ function ClassDetailPage() {
         schools={data.manageSchools}
         onSuccess={() => revalidator.revalidate()}
       />
-
-      <AssignmentSheet
-        classId={data.klass.id}
-        classOption={{
-          id: data.klass.id,
-          grade: data.klass.grade,
-          period: data.klass.period,
-          title: data.klass.title,
-        }}
-        allowedAssignmentTypes={data.allowedAssignmentTypes}
-        assignmentCreationStandardizationEnabled={
-          data.assignmentCreationStandardizationEnabled
-        }
-        open={isAssignmentSheetOpen}
-        onOpenChange={(open) => {
-          setIsAssignmentSheetOpen(open);
-          if (!open) setEditingAssignmentId(null);
-        }}
-        editingAssignment={editingAssignment}
-      />
-
-      <Sheet
-        open={selectedPasteContent !== null}
-        onOpenChange={(open) => !open && setSelectedPasteContent(null)}
-      >
-        <SheetContent className="w-full sm:max-w-2xl">
-          <SheetHeader>
-            <SheetTitle>Pasted Content</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 h-[calc(100vh-8rem)] overflow-y-auto">
-            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted p-4 rounded-lg">
-              {selectedPasteContent || ''}
-            </pre>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {data.isDocumentSubmissionEnabled ? (
         <ReleaseGradesSheet

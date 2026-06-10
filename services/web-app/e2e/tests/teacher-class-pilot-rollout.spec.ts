@@ -170,13 +170,10 @@ test.describe.serial('Teacher feature access rollout', () => {
         prisma,
         userId: e2eContext.teacherUserId,
       });
-      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
-      await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(
-        1
-      );
       await expect(
-        page.getByRole('button', { name: /create new assignment/i })
+        page.getByRole('button', { name: /new assignment/i }).first()
       ).toBeVisible();
 
       const pilotCreateResponse = await postCreateAssignment({
@@ -195,13 +192,13 @@ test.describe.serial('Teacher feature access rollout', () => {
         prisma,
         userId: nonPilot.teacherUserId,
       });
-      await page.goto(`/app/my-classes/${nonPilot.classId}`);
+      await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
       await expect
-        .soft(page.getByRole('tab', { name: /assignments/i }))
-        .toHaveCount(0);
+        .soft(page.getByText('Assignments are not enabled', { exact: true }))
+        .toBeVisible();
       await expect
-        .soft(page.getByRole('button', { name: /create new assignment/i }))
+        .soft(page.getByRole('button', { name: /new assignment/i }))
         .toHaveCount(0);
 
       const nonPilotCreateResponse = await postCreateAssignment({
