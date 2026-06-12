@@ -25,18 +25,23 @@ already has via the cream background + terracotta primary + serif accents).
   from Wikimedia Commons / museum open-access collections), bundled as static
   assets. No live external API calls at request time.
 - **Selection**: deterministic by class id, same approach as today's
-  `generateClassArt` (hash → pick artwork + crop region + treatment). A given
-  class always renders the same band.
-- **Treatments**: three candidate visual treatments to "taste" before picking
-  one (or a per-class mix):
-  - **A — Postcard/plate**: natural color, shown inset within a cream card
-    with a generous margin/border, like a plate in a book.
-  - **B — Duotone wash**: artwork mapped into the app's cream→terracotta→
-    charcoal range via an SVG/CSS duotone filter, so every piece feels
-    branded regardless of its original palette.
-  - **C — Crop + scrim**: a tighter, more abstract crop at full saturation
-    with a subtle edge gradient for legibility — closest to "just a part of a
-    piece of artwork."
+  `generateClassArt` (hash → pick artwork + crop variant). A given class
+  always renders the same band.
+- **Treatment — chosen: D, natural full bleed.** Original colors,
+  edge-to-edge — no inset frame/border, no duotone filter, no vignette/scrim.
+  The artwork itself is the entire band; only the crop (`background-position`/
+  `background-size`) varies per class.
+  - Considered and not chosen: **A — Postcard/plate** (inset frame felt like
+    "outlining" the art), **B — Duotone wash** (lost too much of each piece's
+    original character), **C — Crop + scrim** (felt over-cropped/zoomed with
+    an unnecessary vignette).
+- **Content guideline — no nudity.** This is a school app; figure studies,
+  classical nudes, etc. are excluded from the curated library regardless of
+  artistic merit or public-domain status. Favor landscapes, ukiyo-e and other
+  woodblock prints, abstract/geometric work, botanical and scientific
+  illustration, textile/pattern design, and architectural or still-life
+  subjects — all of which also tend to have calm, evenly-composed regions that
+  crop well full-bleed without an awkward focal point landing at the edge.
 
 ## POC scope
 
@@ -60,11 +65,37 @@ its build/test pipeline:
 - Each artwork credited (artist, title, source, license) in the POC for
   reference.
 
-## Out of scope (follow-up work, after tasting)
+## Production scope (next)
 
-- Picking the final treatment(s) and building the production selection/crop
-  algorithm (seed → artwork + crop + treatment).
-- Expanding the curated library to full size and handling attribution in the
-  product UI.
-- Wiring the chosen treatment into `ClassArt`/`TeacherClassCard` and the class
-  detail header, with tests per `AGENTS.md`.
+- **Library**: ship v1 with the 5 POC pieces (Hokusai ×2, Van Gogh, Hilma af
+  Klint, William Morris — all already checked against the no-nudity guideline
+  and proven under treatment D). For each piece, pre-curate 3–4
+  `background-position`/`background-size` crop variants by eye (not random),
+  so every combination looks intentional. 5 artworks × ~3–4 variants gives
+  15–20 distinct headers — plenty of variety for v1. Adding more artworks
+  later is just appending data.
+- **Selection**: deterministic by class id, same `hashSeed`/`mulberry32`
+  approach as today's `generateClassArt` — hash → (artwork index, crop variant
+  index). Same class id always renders the same result.
+- **Component**: replace the inline `<svg>` render in
+  `app/components/class-art.tsx` (and the spec-generation logic in
+  `app/utils/class-art.ts`) with a `<div>` using
+  `background-image`/`background-position`/`background-size`, used in
+  `TeacherClassCard`'s art band and the class detail header strip.
+- **Assets**: bundled as static files (e.g.
+  `services/web-app/public/class-art/*.jpg`), sized for the band footprint
+  (~800px wide, ~100–150KB — matching the POC images).
+- **Attribution**: quiet credit via `title`/`aria-label` on the band
+  ("Artist — Title, public domain") — available on hover / to screen readers,
+  not visually intrusive.
+- **Testing** (per `AGENTS.md`): unit tests for the new selection function
+  (deterministic per class id, indices stay in bounds); update existing
+  e2e/unit assertions that check for `svg[data-testid="class-art"]` and "no
+  `bg-gradient-to-br`" since the render output changes from inline SVG to a
+  styled `<div>` with a background image.
+
+## Out of scope
+
+- Expanding the curated library beyond the initial 5 artworks (easy follow-up
+  once the pattern is in place).
+- A teacher-facing picker/override UI for artwork selection.
