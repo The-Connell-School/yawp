@@ -15,6 +15,10 @@ test.describe.serial('Teacher class cards with procedural art', () => {
       .first();
     await expect(card).toBeVisible();
     await expect(card.getByTestId('class-art')).toBeVisible();
+    await expect(card.getByTestId('class-art')).toHaveCSS(
+      'background-image',
+      /\/img\/class-art\//
+    );
     await expect(card.getByText(/Grade 9th .* Period 1st/)).toBeVisible();
 
     const gradientCount = await page

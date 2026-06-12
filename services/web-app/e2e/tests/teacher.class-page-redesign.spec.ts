@@ -40,6 +40,10 @@ test.describe.serial('Teacher class page redesign', () => {
       header.getByRole('button', { name: /edit class/i })
     ).toBeVisible();
     await expect(header.getByTestId('class-art')).toBeVisible();
+    await expect(header.getByTestId('class-art')).toHaveCSS(
+      'background-image',
+      /\/img\/class-art\//
+    );
     await expect(
       page.getByRole('link', { name: /back to my classes/i })
     ).toBeVisible();
