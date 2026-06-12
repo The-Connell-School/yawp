@@ -99,3 +99,26 @@ its build/test pipeline:
 - Expanding the curated library beyond the initial 5 artworks (easy follow-up
   once the pattern is in place).
 - A teacher-facing picker/override UI for artwork selection.
+
+## Addendum (2026-06-12): Persisted per-class assignment + backfill
+
+The "deterministic by class id" selection above (`generateClassArt`,
+hash → pool index) remains as a **fallback** for classes without a persisted
+assignment (un-backfilled rows, e2e fixtures), but is no longer the primary
+mechanism. Instead:
+
+- The 5 artworks × 3 crop variants flatten into a single 15-item
+  `CLASS_ART_POOL`, addressed by index (`CLASS_ART_POOL_SIZE = 15`).
+- `Class` gets a nullable `classArtIndex Int?` column, assigned once at class
+  creation and never changed afterward.
+- **Goal: a teacher shouldn't see repeat artwork across their classes until
+  all 15 combinations have been used.** At creation time, the new class's
+  index is chosen to avoid the `classArtIndex` values of that teacher's (or
+  teachers', for multi-teacher classes) most recently created classes — up to
+  the last 14 — falling back to the full pool once all 15 have been used
+  recently. This guarantees a rotation through every combination before any
+  repeats, per teacher.
+- A one-time backfill script assigns `classArtIndex` to existing classes
+  using the same per-teacher rotation logic, processed in `createdAt` order.
+- `ClassArt` reads `classArtIndex` when present (`getClassArtByIndex`) and
+  falls back to `generateClassArt(seed)` when `null`.
