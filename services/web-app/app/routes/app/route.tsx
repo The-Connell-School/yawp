@@ -1,7 +1,6 @@
 import {
   Form,
   Link,
-  NavLink,
   Outlet,
   data,
   useLocation,
@@ -12,19 +11,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import {
-  ClipboardList,
-  CogIcon,
-  FileText,
-  GaugeIcon,
-  GraduationCap,
-  LockIcon,
-  MonitorPlay,
-  Settings2,
-  UserIcon,
-  Users,
-  Pencil,
-} from 'lucide-react';
+import { Settings2, Pencil } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -70,6 +57,10 @@ import {
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
+import {
+  FLAT_SIDEBAR_SECTIONS,
+  SidebarNavLinks,
+} from './sidebar-nav';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -78,64 +69,29 @@ export const NavExpandedContext = createContext({
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
-type RequiresFn = (
-  user: ReturnType<typeof useUser>
-) => boolean | null | undefined;
-
-const LINKS: {
-  to: string;
-  label: string;
-  end?: boolean;
-  icon: React.ReactNode;
-  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
-}[] = [
-  {
-    to: '/app',
-    label: 'Dashboard',
-    end: true,
-    icon: <GaugeIcon size={20} />,
-  },
-  {
-    to: '/app/my-classes',
-    label: 'My Classes',
-    icon: <Users size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/student-work',
-    label: 'Student Work',
-    icon: <FileText size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/assignments',
-    label: 'Assignments',
-    icon: <ClipboardList size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/teacher-trainings',
-    label: "Teacher's Lounge",
-    icon: <MonitorPlay size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/organization',
-    label: 'Organization',
-    icon: <CogIcon size={20} />,
-    requires: (user) => user.selectedProfile?.isOwner,
-  },
-  {
-    to: '/app/admin',
-    label: 'Admin',
-    icon: <LockIcon size={20} />,
-    requires: (user) => user.isAdmin,
-  },
-];
-
 const EditNameSchema = z.object({
   name: NameSchema,
 });
+
+function normalizePathname(pathname: string) {
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+function isAppNavLinkActive(linkTo: string, pathname: string) {
+  const normalized = normalizePathname(pathname);
+
+  if (linkTo === '/app') {
+    return normalized === '/app';
+  }
+
+  return (
+    normalized === linkTo ||
+    normalized.startsWith(`${linkTo}/`)
+  );
+}
 
 export default function Route() {
   const location = useLocation();
@@ -257,50 +213,14 @@ export default function Route() {
             <XIcon />
           </Button>
         </div>
-        <div className="grid gap-1 p-3">
-          {LINKS.filter(
-            (link) =>
-              !link.requires ||
-              (typeof link.requires === 'object'
-                ? 'OR' in link.requires
-                  ? link.requires.OR.some((r) => r(user))
-                  : link.requires.AND.every((r) => r(user))
-                : link.requires(user))
-          ).map((link) => (
-            <NavLink
-              key={link.to}
-              className={({ isActive }) =>
-                cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
-                  {
-                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary font-bold':
-                      isActive,
-                    'py-2': !navExpanded,
-                  }
-                )
-              }
-              to={link.to}
-              end={link.end}
-            >
-              {link.icon ? (
-                navExpanded ? (
-                  link.icon
-                ) : (
-                  <Tooltip
-                    key={link.to}
-                    text={link.label}
-                    open={navExpanded ? false : undefined}
-                    contentProps={{ side: 'right' }}
-                  >
-                    {link.icon}
-                  </Tooltip>
-                )
-              ) : null}
-              {navExpanded ? (
-                <span className="w-full">{link.label}</span>
-              ) : null}
-            </NavLink>
-          ))}
+        <div className="p-3">
+          <SidebarNavLinks
+            sections={FLAT_SIDEBAR_SECTIONS}
+            user={user}
+            navExpanded={navExpanded}
+            pathname={location.pathname}
+            isAppNavLinkActive={isAppNavLinkActive}
+          />
         </div>
         <div className="flex flex-grow flex-col justify-end">
           <Popover>
