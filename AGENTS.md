@@ -33,3 +33,9 @@ development, imports, migrations, deploys, or emergency repair.
 HQ should pull or summarize from Central Station when needed. Do not keep HQ
 manually synchronized as a parallel PM store unless Bryant explicitly asks for a
 local HQ update.
+
+3. Commit code changes autonomously in small atomic commits.
+    - After every coherent change (including micro changes), run `git add` and `git commit` yourself.
+    - Prefer many small commits over one large commit so changes are easy to cherry-pick or revert.
+    - Briefly note what you committed; do not end responses with copy-paste git commands.
+    - Do not push unless Bryant asks.
