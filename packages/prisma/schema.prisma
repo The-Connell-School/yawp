@@ -7,42 +7,47 @@ datasource db {
   provider = "postgresql"
 }
 
+enum MembershipRole {
+  TEACHER
+  STUDENT
+}
+
 model Class {
-  id          String           @id @default(cuid())
-  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime         @default(now()) @db.Timestamptz(6)
-  code        String
-  schoolYear  String           @default("2024-2025")
-  period      String
-  grade       String
-  title           String?
-  cardGradientKey String           @default("indigo-purple-pink")
-  classArtIndex   Int?
-  isArchived      Boolean          @default(false)
-  students    StudentProfile[]
-  teachers    TeacherProfile[]
-  schoolId    String
-  school      School           @relation(fields: [schoolId], references: [id])
-  assignments Assignment[]
+  id               String            @id @default(cuid())
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime          @default(now()) @db.Timestamptz(6)
+  code             String
+  schoolYear       String            @default("2024-2025")
+  period           String
+  grade            String
+  title            String?
+  cardGradientKey  String            @default("indigo-purple-pink")
+  classArtIndex    Int?
+  isArchived       Boolean           @default(false)
+  students         OrgMembership[]   @relation("ClassStudents")
+  teachers         OrgMembership[]   @relation("ClassTeachers")
+  schoolId         String
+  school           School            @relation(fields: [schoolId], references: [id])
+  classAssignments ClassAssignment[]
 
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
 }
 
 model AssignmentType {
-  id                      String                       @id @default(cuid())
-  createdAt               DateTime                     @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime                     @default(now()) @db.Timestamptz(6)
+  id                      String                           @id @default(cuid())
+  createdAt               DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                         @default(now()) @db.Timestamptz(6)
   title                   String
-  kind                    String?                      @unique
+  kind                    String?                          @unique
   description             String?
   position                Int
-  systemKey               String?                      @unique
-  archivedAt              DateTime?                    @db.Timestamptz(6)
+  systemKey               String?                          @unique
+  archivedAt              DateTime?                        @db.Timestamptz(6)
   ownerOrgId              String?
-  ownerOrg                Organization?                @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
-  ownerTeacherId          String?
-  ownerTeacher            Profile?                     @relation("AssignmentTypeOwner", fields: [ownerTeacherId], references: [id], onDelete: Cascade)
+  ownerOrg                Organization?                    @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerMembershipId       String?
+  ownerMembership         OrgMembership?                   @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   image                   AssignmentTypeImage?
   organizationAssignments OrganizationAssignmentType[]
   gradingAssistantLinks   AssignmentTypeGradingAssistant[]
@@ -52,32 +57,42 @@ model AssignmentType {
   apHistoryLibraryEntries ApHistoryPromptLibraryEntry[]
 
   @@index([ownerOrgId])
-  @@index([ownerTeacherId])
+  @@index([ownerMembershipId])
   @@index([archivedAt])
   @@index([systemKey])
   @@index([kind])
 }
 
 model Assignment {
-  id               String         @id @default(cuid())
-  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime       @default(now()) @db.Timestamptz(6)
-  classId          String
-  class            Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
-  assignmentTypeId String
-  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  title            String?
-  prompt           String
-  tutorContext     String?
-  submitForGrade   Boolean        @default(true)
-  pointValue       Int?           @default(100)
-  dueDate          DateTime?      @db.Timestamptz(6)
+  id                String             @id @default(cuid())
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @default(now()) @db.Timestamptz(6)
+  assignmentTypeId  String
+  assignmentType    AssignmentType     @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  title             String?
+  prompt            String
+  tutorContext      String?
+  submitForGrade    Boolean            @default(true)
+  pointValue        Int?               @default(100)
   apHistorySnapshot Json?
-  documents        Document[]
+  classAssignments  ClassAssignment[]
+  documents         Document[]
 
-  @@index([classId, createdAt(sort: Desc)])
   @@index([assignmentTypeId])
-  @@index([dueDate])
+}
+
+model ClassAssignment {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId      String
+  class        Class      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  documents    Document[]
+
+  @@unique([assignmentId, classId])
+  @@index([classId, createdAt(sort: Desc)])
 }
 
 model ApHistoryPromptLibraryEntry {
@@ -216,14 +231,14 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
-  profile                  Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId                String
-  studentProfileId         String
-  studentProfile           StudentProfile            @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId             String
   assignmentTypeId         String
   assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?
   assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  classAssignmentId        String?
+  classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -232,8 +247,9 @@ model Document {
   submissions              Submission[]
 
   @@index([assignmentId])
+  @@index([classAssignmentId])
   @@index([assignmentTypeId])
-  @@index([studentProfileId])
+  @@index([membershipId])
 }
 
 model DocumentClassForensic {
@@ -261,16 +277,16 @@ model ClassStudentCourseForensic {
 }
 
 model DocumentComment {
-  id          String                    @id @default(cuid())
-  createdAt   DateTime                  @default(now()) @db.Timestamptz(6)
-  archivedAt  DateTime?                 @db.Timestamptz(6)
-  content     String
-  highlightId String?
-  documentId  String
-  document    Document                  @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  profile     Profile                   @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  profileId   String
-  responses   DocumentCommentResponse[]
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  archivedAt   DateTime?                 @db.Timestamptz(6)
+  content      String
+  highlightId  String?
+  documentId   String
+  document     Document                  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membership   OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membershipId String
+  responses    DocumentCommentResponse[]
 }
 
 model DocumentCommentResponse {
@@ -279,8 +295,8 @@ model DocumentCommentResponse {
   content         String
   commentId       String
   documentComment DocumentComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  profileId       String
-  profile         Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  membershipId    String
+  membership      OrgMembership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 }
 
 model DocumentRevision {
@@ -305,7 +321,7 @@ model DocumentWriteJournal {
   requestId         String?
   traceId           String?
   userId            String?
-  profileId         String?
+  membershipId      String?
   sessionId         String?
   editorSessionId   String?
   clientSeq         Int?
@@ -335,7 +351,7 @@ model Organization {
   accessExpiresAt           DateTime?                    @db.Timestamptz(6)
   numOfStudentSeats         Int                          @default(10)
   numOfTeacherSeats         Int                          @default(10)
-  profiles                  Profile[]
+  memberships               OrgMembership[]
   invitations               Invitation[]
   schools                   School[]
   assignmentTypes           AssignmentType[]
@@ -353,25 +369,37 @@ model OrganizationAssignmentType {
   @@index([assignmentTypeId])
 }
 
-model Profile {
-  id                       String                    @id @default(cuid())
-  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
-  organizationId           String
-  organization             Organization              @relation(fields: [organizationId], references: [id])
-  userId                   String
-  user                     User                      @relation(fields: [userId], references: [id])
-  documents                Document[]
-  documentComments         DocumentComment[]
-  documentCommentResponses DocumentCommentResponse[]
-  pasteAlerts              PasteAlert[]
-  submissionsGraded        Submission[]              @relation("SubmissionGradedBy")
-  submissionComments       SubmissionComment[]       @relation("SubmissionCommentProfile")
-  studentProfile           StudentProfile?
-  teacherProfile           TeacherProfile?
-  ownedAssignmentTypes     AssignmentType[]          @relation("AssignmentTypeOwner")
-  gradingAssistantTemplatesCreated GradingAssistantTemplate[] @relation("GradingAssistantTemplateCreatedBy")
-  gradingAssistantTemplatesUpdated GradingAssistantTemplate[] @relation("GradingAssistantTemplateUpdatedBy")
-  isOwner                  Boolean                   @default(false)
+model OrgMembership {
+  id                               String                         @id @default(cuid())
+  createdAt                        DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                           String
+  user                             User                           @relation(fields: [userId], references: [id])
+  organizationId                   String
+  organization                     Organization                   @relation(fields: [organizationId], references: [id])
+  role                             MembershipRole
+  isOrgOwner                       Boolean                        @default(false)
+  isActive                         Boolean                        @default(true)
+  school                           String?
+  schoolTeacher                    String?
+  grade                            String?
+  period                           String?
+  documents                        Document[]
+  documentComments                 DocumentComment[]
+  documentCommentResponses         DocumentCommentResponse[]
+  pasteAlerts                      PasteAlert[]
+  submissionsGraded                Submission[]                   @relation("SubmissionGradedBy")
+  submissionComments               SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes             AssignmentType[]               @relation("AssignmentTypeOwner")
+  gradingAssistantTemplatesCreated GradingAssistantTemplate[]     @relation("GradingAssistantTemplateCreatedBy")
+  gradingAssistantTemplatesUpdated GradingAssistantTemplate[]     @relation("GradingAssistantTemplateUpdatedBy")
+  classesAsTeacher                 Class[]                        @relation("ClassTeachers")
+  classesAsStudent                 Class[]                        @relation("ClassStudents")
+  schools                          School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions    TeacherTrainingModuleSession[]
+  assignedTeacherTrainings         TeacherTraining[]              @relation("TeacherTrainingAssignments")
+
+  @@unique([userId, organizationId])
+  @@map("OrgMembership")
 }
 
 model Password {
@@ -381,15 +409,15 @@ model Password {
 }
 
 model School {
-  id             String           @id @default(cuid())
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime         @default(now()) @db.Timestamptz(6)
+  id             String          @id @default(cuid())
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @default(now()) @db.Timestamptz(6)
   name           String
-  code           String           @unique
+  code           String          @unique
   organizationId String
-  organization   Organization     @relation(fields: [organizationId], references: [id])
+  organization   Organization    @relation(fields: [organizationId], references: [id])
   classes        Class[]
-  teachers       TeacherProfile[]
+  teachers       OrgMembership[] @relation("SchoolTeachers")
   invitations    Invitation[]
 }
 
@@ -431,44 +459,19 @@ model FeatureAccessTarget {
   @@index([expiresAt])
 }
 
-model StudentProfile {
-  id            String     @id @default(cuid())
-  createdAt     DateTime   @default(now()) @db.Timestamptz(6)
-  school        String?
-  schoolTeacher String?
-  grade         String?
-  period        String?
-  profileId     String     @unique
-  profile       Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classes       Class[]
-  documents     Document[]
-}
-
-model TeacherProfile {
-  id                            String                         @id @default(cuid())
-  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
-  isActive                      Boolean                        @default(true)
-  profileId                     String                         @unique
-  profile                       Profile                        @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
-  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  classes                       Class[]
-  schools                       School[]
-}
-
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id           String    @id @default(cuid())
-  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
-  email        String    @unique
+  id           String          @id @default(cuid())
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @default(now()) @db.Timestamptz(6)
+  email        String          @unique
   name         String?
   password     Password?
   sessions     Session[]
-  profiles     Profile[]
-  isAdmin      Boolean   @default(false)
-  isSuperAdmin Boolean   @default(false)
+  memberships  OrgMembership[]
+  isAdmin      Boolean         @default(false)
+  isSuperAdmin Boolean         @default(false)
 }
 
 model Invitation {
@@ -501,7 +504,7 @@ model TeacherTraining {
   image                  TeacherTrainingImage?
   teacherTrainingModules TeacherTrainingModule[]
   resources              TeacherTrainingResource[]
-  assignedTeachers       TeacherProfile[]          @relation("TeacherTrainingAssignments")
+  assignedTeachers       OrgMembership[]           @relation("TeacherTrainingAssignments")
 }
 
 model TeacherTrainingImage {
@@ -560,87 +563,87 @@ model TeacherTrainingModuleSession {
   deletedAt               DateTime?             @db.Timestamptz(6)
   videoTimestamp          Int                   @default(0) // Last watched timestamp in seconds
   teacherTrainingModuleId String
-  teacherProfileId        String
+  membershipId            String
   teacherTrainingModule   TeacherTrainingModule @relation(fields: [teacherTrainingModuleId], references: [id], onDelete: Cascade)
-  teacherProfile          TeacherProfile        @relation(fields: [teacherProfileId], references: [id], onDelete: Cascade)
+  membership              OrgMembership         @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
-  @@unique([teacherTrainingModuleId, teacherProfileId])
+  @@unique([teacherTrainingModuleId, membershipId])
 }
 
 model PasteAlert {
-  id         String   @id @default(cuid())
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  textLength Int
-  content    String?
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  profileId  String
-  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  textLength   Int
+  content      String?
+  documentId   String
+  document     Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@index([documentId, createdAt(sort: Desc)])
-  @@index([profileId, createdAt(sort: Desc)])
+  @@index([membershipId, createdAt(sort: Desc)])
 }
 
 model Submission {
-  id                String              @id @default(cuid())
-  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime            @default(now()) @db.Timestamptz(6)
-  title             String
-  text              String
-  html              String
-  submittedAt       DateTime            @db.Timestamptz(6)
-  score             String?
-  feedback          String?
-  rubricScores      Json?
-  overallScore      Int?
-  overallComment    String?
-  numericPercentage Int?
-  letterGrade       String?
-  grammarIssues     Json?
-  promptConfig      Json?
-  aiMeta            Json?
-  gradedAt          DateTime?           @db.Timestamptz(6)
-  gradedById        String?
-  gradedBy          Profile?            @relation("SubmissionGradedBy", fields: [gradedById], references: [id], onDelete: SetNull)
-  releasedAt        DateTime?           @db.Timestamptz(6)
+  id                    String                          @id @default(cuid())
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                        @default(now()) @db.Timestamptz(6)
+  title                 String
+  text                  String
+  html                  String
+  submittedAt           DateTime                        @db.Timestamptz(6)
+  score                 String?
+  feedback              String?
+  rubricScores          Json?
+  overallScore          Int?
+  overallComment        String?
+  numericPercentage     Int?
+  letterGrade           String?
+  grammarIssues         Json?
+  promptConfig          Json?
+  aiMeta                Json?
+  gradedAt              DateTime?                       @db.Timestamptz(6)
+  gradedByMembershipId  String?
+  gradedBy              OrgMembership?                  @relation("SubmissionGradedBy", fields: [gradedByMembershipId], references: [id], onDelete: SetNull)
+  releasedAt            DateTime?                       @db.Timestamptz(6)
   /// When set, hidden from the student's active submission list (teachers unaffected).
-  archivedAt        DateTime?           @db.Timestamptz(6)
-  documentId        String
-  document          Document            @relation(fields: [documentId], references: [id], onDelete: Restrict)
-  comments          SubmissionComment[]
-  gradingAssistantRuns SubmissionGradingAssistantRun[]
+  archivedAt            DateTime?                       @db.Timestamptz(6)
+  documentId            String
+  document              Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  comments              SubmissionComment[]
+  gradingAssistantRuns  SubmissionGradingAssistantRun[]
 
   @@index([documentId, submittedAt(sort: Desc)])
   @@index([documentId, archivedAt])
-  @@index([gradedById])
+  @@index([gradedByMembershipId])
   @@index([releasedAt])
 }
 
 model GradingAssistantTemplate {
-  id                      String                            @id @default(cuid())
-  createdAt               DateTime                          @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime                          @default(now()) @updatedAt @db.Timestamptz(6)
+  id                      String                           @id @default(cuid())
+  createdAt               DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
   name                    String
-  slug                    String                            @unique
-  status                  String                            @default("draft")
-  version                 Int                               @default(1)
+  slug                    String                           @unique
+  status                  String                           @default("draft")
+  version                 Int                              @default(1)
   assignmentTypeKind      String?
   scoringScale            Json
   rubricJson              Json
   promptConfigJson        Json
   outputSchemaJson        Json
   calibrationNotes        String?
-  createdById             String?
-  createdBy               Profile?                          @relation("GradingAssistantTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedById             String?
-  updatedBy               Profile?                          @relation("GradingAssistantTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdByMembershipId   String?
+  createdBy               OrgMembership?                   @relation("GradingAssistantTemplateCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  updatedByMembershipId   String?
+  updatedBy               OrgMembership?                   @relation("GradingAssistantTemplateUpdatedBy", fields: [updatedByMembershipId], references: [id], onDelete: SetNull)
   assignmentTypeLinks     AssignmentTypeGradingAssistant[]
   submissionRuns          SubmissionGradingAssistantRun[]
 
   @@index([status])
   @@index([assignmentTypeKind])
-  @@index([createdById])
-  @@index([updatedById])
+  @@index([createdByMembershipId])
+  @@index([updatedByMembershipId])
 }
 
 model AssignmentTypeGradingAssistant {
@@ -680,19 +683,19 @@ model SubmissionGradingAssistantRun {
 }
 
 model SubmissionComment {
-  id           String     @id @default(cuid())
-  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime   @default(now()) @db.Timestamptz(6)
+  id           String        @id @default(cuid())
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @db.Timestamptz(6)
   content      String
   excerpt      String?
-  occurrence   Int        @default(1)
+  occurrence   Int           @default(1)
   submissionId String
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  profileId    String
-  profile      Profile    @relation("SubmissionCommentProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  submission   Submission    @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  membershipId String
+  membership   OrgMembership @relation("SubmissionCommentProfile", fields: [membershipId], references: [id], onDelete: Cascade)
 
   @@index([submissionId, createdAt(sort: Desc)])
-  @@index([profileId])
+  @@index([membershipId])
 }
 
 model LegacyGradeRedirect {
