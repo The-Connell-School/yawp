@@ -1,4 +1,9 @@
 /* eslint-disable no-console */
+/**
+ * PRE-MIGRATION ONLY — validates Profile / TeacherProfile / StudentProfile invariants
+ * before the OrgMembership cutover. After migration, Profile tables are dropped;
+ * use org-membership-postcheck (when added) instead of running this script live.
+ */
 import { createPrismaClient } from './local-dev/connection';
 
 export type PrecheckInput = {

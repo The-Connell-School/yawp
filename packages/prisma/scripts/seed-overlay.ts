@@ -55,13 +55,13 @@ export type E2EContext = {
   userEmail: string;
   adminUserId: string;
   adminEmail: string;
-  profileId: string;
+  membershipId: string;
   assignmentTypeId: string;
   documentId: string;
   classId: string;
   classCode: string;
   schoolId: string;
-  teacherProfileId: string;
+  teacherMembershipId: string;
   teacherName: string;
   teacherEmail: string;
 };
@@ -101,6 +101,33 @@ async function upsertUser(
   });
 }
 
+async function ensureMembership(params: {
+  userId: string;
+  organizationId: string;
+  role: 'TEACHER' | 'STUDENT';
+  isOrgOwner?: boolean;
+}) {
+  const existing = await prisma.orgMembership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: params.userId,
+        organizationId: params.organizationId,
+      },
+    },
+  });
+  if (existing) {
+    return existing;
+  }
+  return prisma.orgMembership.create({
+    data: {
+      userId: params.userId,
+      organizationId: params.organizationId,
+      role: params.role,
+      isOrgOwner: params.isOrgOwner ?? false,
+    },
+  });
+}
+
 export async function seedOverlay(): Promise<E2EContext> {
   console.log('🌱 Running seed overlay (test users on top of production data)...');
 
@@ -121,7 +148,7 @@ export async function seedOverlay(): Promise<E2EContext> {
     });
   }
 
-  // 3. Teacher user + profile
+  // 3. Teacher user + membership
   const teacherEmail = 'teacher.e2e@yawp.test';
   const teacherName = 'Mrs Test Teacher';
   const teacherUser = await upsertUser({
@@ -129,34 +156,17 @@ export async function seedOverlay(): Promise<E2EContext> {
     name: teacherName,
     password: 'teacher-e2e-password',
   });
-  let teacherProfile = await prisma.profile.findFirst({
-    where: { userId: teacherUser.id, organizationId: org.id },
-    include: { teacherProfile: true },
+  const teacherMembership = await ensureMembership({
+    userId: teacherUser.id,
+    organizationId: org.id,
+    role: 'TEACHER',
+    isOrgOwner: true,
   });
-  if (!teacherProfile) {
-    teacherProfile = await prisma.profile.create({
-      data: {
-        userId: teacherUser.id,
-        organizationId: org.id,
-        isOwner: true,
-        teacherProfile: { create: {} },
-      },
-      include: { teacherProfile: true },
-    });
-  }
-  if (!teacherProfile.teacherProfile) {
-    await prisma.teacherProfile.create({ data: { profileId: teacherProfile.id } });
-    teacherProfile = await prisma.profile.findUniqueOrThrow({
-      where: { id: teacherProfile.id },
-      include: { teacherProfile: true },
-    });
-  }
-  const teacherProfileId = teacherProfile.teacherProfile!.id;
-  // Link teacher to school
-  await prisma.teacherProfile.update({
-    where: { id: teacherProfileId },
-    data: { schools: { connect: { id: school.id } } },
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "_SchoolTeachers" ("A", "B")
+    VALUES (${school.id}, ${teacherMembership.id})
+    ON CONFLICT DO NOTHING
+  `;
 
   // 4. Class
   let klass = await prisma.class.findFirst({
@@ -170,63 +180,41 @@ export async function seedOverlay(): Promise<E2EContext> {
         period: '1st',
         grade: '9th',
         schoolId: school.id,
-        teachers: { connect: { id: teacherProfileId } },
+        teachers: { connect: { id: teacherMembership.id } },
       },
     });
   }
 
-  // 5. Student user
+  // 5. Student user + membership
   const studentUser = await upsertUser({
     email: 'jdoe@brock.software',
     name: 'John Doe',
     password: 'johndoe',
   });
-  let studentProfileRecord = await prisma.profile.findFirst({
-    where: { userId: studentUser.id, organizationId: org.id },
-    include: { studentProfile: true },
+  const studentMembership = await ensureMembership({
+    userId: studentUser.id,
+    organizationId: org.id,
+    role: 'STUDENT',
+    isOrgOwner: false,
   });
-  if (!studentProfileRecord) {
-    studentProfileRecord = await prisma.profile.create({
-      data: {
-        userId: studentUser.id,
-        organizationId: org.id,
-        isOwner: false,
-      },
-      include: { studentProfile: true },
-    });
-  }
-  if (!studentProfileRecord.studentProfile) {
-    await prisma.studentProfile.create({
-      data: {
-        profileId: studentProfileRecord.id,
-        classes: { connect: { id: klass.id } },
-      },
-    });
-    studentProfileRecord = await prisma.profile.findUniqueOrThrow({
-      where: { id: studentProfileRecord.id },
-      include: { studentProfile: true },
-    });
-  }
+  await prisma.orgMembership.update({
+    where: { id: studentMembership.id },
+    data: { classesAsStudent: { connect: { id: klass.id } } },
+  });
 
-  // 6. Admin user
+  // 6. Admin user + membership
   const adminUser = await upsertUser({
     email: 'admin.e2e@yawp.test',
     name: 'Admin E2E',
     password: 'admin-e2e-password',
     isAdmin: true,
   });
-  let adminProfile = await prisma.profile.findFirst({
-    where: { userId: adminUser.id, organizationId: org.id },
+  await ensureMembership({
+    userId: adminUser.id,
+    organizationId: org.id,
+    role: 'TEACHER',
+    isOrgOwner: true,
   });
-  if (!adminProfile) {
-    adminProfile = await prisma.profile.create({
-      data: {
-        userId: adminUser.id,
-        organizationId: org.id,
-        isOwner: true,
-      },
-    });
-  }
 
   // 7. Smoke test users (for preview environments)
   for (const u of [
@@ -238,37 +226,22 @@ export async function seedOverlay(): Promise<E2EContext> {
   }
 
   // 7b. Preview smoke uses teacher@fake.test — production data may already have that user without a
-  // TeacherProfile; without it login lands on /no-profile instead of /app.
+  // teacher membership; without it login lands on /no-profile instead of /app.
   const smokeTeacherUser = await prisma.user.findUnique({
     where: { email: 'teacher@fake.test' },
   });
   if (smokeTeacherUser) {
-    let smokeTeacherProfile = await prisma.profile.findFirst({
-      where: { userId: smokeTeacherUser.id, organizationId: org.id },
-      include: { teacherProfile: true },
+    const smokeTeacherMembership = await ensureMembership({
+      userId: smokeTeacherUser.id,
+      organizationId: org.id,
+      role: 'TEACHER',
+      isOrgOwner: true,
     });
-    if (!smokeTeacherProfile) {
-      smokeTeacherProfile = await prisma.profile.create({
-        data: {
-          userId: smokeTeacherUser.id,
-          organizationId: org.id,
-          isOwner: true,
-          teacherProfile: { create: {} },
-        },
-        include: { teacherProfile: true },
-      });
-    }
-    if (!smokeTeacherProfile.teacherProfile) {
-      await prisma.teacherProfile.create({ data: { profileId: smokeTeacherProfile.id } });
-      smokeTeacherProfile = await prisma.profile.findUniqueOrThrow({
-        where: { id: smokeTeacherProfile.id },
-        include: { teacherProfile: true },
-      });
-    }
-    await prisma.teacherProfile.update({
-      where: { id: smokeTeacherProfile.teacherProfile!.id },
-      data: { schools: { connect: { id: school.id } } },
-    });
+    await prisma.$executeRaw`
+      INSERT INTO "_SchoolTeachers" ("A", "B")
+      VALUES (${school.id}, ${smokeTeacherMembership.id})
+      ON CONFLICT DO NOTHING
+    `;
   }
 
   // 8. Assignment type with modules + instructions (formerly StudentCourse)
@@ -323,26 +296,35 @@ export async function seedOverlay(): Promise<E2EContext> {
     update: {},
   });
 
-  // 9. Class assignment linking the class to the assignment type (formerly ClassStudentCourse)
-  let assignment = await prisma.assignment.findFirst({
-    where: { classId: klass.id, assignmentTypeId: assignmentType.id },
-    select: { id: true },
+  // 9. Class assignment linking the class to the assignment type
+  let classAssignment = await prisma.classAssignment.findFirst({
+    where: {
+      classId: klass.id,
+      assignment: { assignmentTypeId: assignmentType.id },
+    },
+    select: { id: true, assignmentId: true },
   });
-  if (!assignment) {
-    assignment = await prisma.assignment.create({
+  if (!classAssignment) {
+    const assignment = await prisma.assignment.create({
       data: {
-        classId: klass.id,
         assignmentTypeId: assignmentType.id,
         title: 'E2E Class Assignment',
         prompt: 'E2E prompt for class assignment.',
       },
       select: { id: true },
     });
+    classAssignment = await prisma.classAssignment.create({
+      data: {
+        classId: klass.id,
+        assignmentId: assignment.id,
+      },
+      select: { id: true, assignmentId: true },
+    });
   }
 
   // 10. Document
   let document = await prisma.document.findFirst({
-    where: { profileId: studentProfileRecord.id, title: 'E2E Doc' },
+    where: { membershipId: studentMembership.id, title: 'E2E Doc' },
     select: { id: true },
   });
   if (!document) {
@@ -351,10 +333,10 @@ export async function seedOverlay(): Promise<E2EContext> {
         title: 'E2E Doc',
         text: 'This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.',
         html: '<p>This are a practice essay with grammar mistake. I went to the store, I buyed milk and bread. The students was excited for writing.</p>',
-        profileId: studentProfileRecord.id,
-        studentProfileId: studentProfileRecord.studentProfile!.id,
+        membershipId: studentMembership.id,
         assignmentTypeId: assignmentType.id,
-        assignmentId: assignment.id,
+        assignmentId: classAssignment.assignmentId,
+        classAssignmentId: classAssignment.id,
       },
       select: { id: true },
     });
@@ -387,13 +369,13 @@ export async function seedOverlay(): Promise<E2EContext> {
     userEmail: studentUser.email,
     adminUserId: adminUser.id,
     adminEmail: adminUser.email,
-    profileId: studentProfileRecord.id,
+    membershipId: studentMembership.id,
     assignmentTypeId: assignmentType.id,
     documentId: document.id,
     classId: klass.id,
     classCode: CLASS_CODE,
     schoolId: school.id,
-    teacherProfileId,
+    teacherMembershipId: teacherMembership.id,
     teacherName,
     teacherEmail,
   };

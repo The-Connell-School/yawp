@@ -24,15 +24,13 @@ const klass = await prisma.class.findUniqueOrThrow({
   select: { id: true, grade: true, period: true },
 });
 
-const profile = await prisma.profile.findFirstOrThrow({
+const membership = await prisma.orgMembership.findFirstOrThrow({
   where: {
     user: { email: studentEmail },
-    studentProfile: { classes: { some: { id: klass.id } } },
+    role: 'STUDENT',
+    classesAsStudent: { some: { id: klass.id } },
   },
-  select: {
-    id: true,
-    studentProfile: { select: { id: true } },
-  },
+  select: { id: true },
 });
 
 const assignmentType = await prisma.assignmentType.findFirstOrThrow({
@@ -42,12 +40,19 @@ const assignmentType = await prisma.assignmentType.findFirstOrThrow({
 
 const assignment = await prisma.assignment.create({
   data: {
-    classId: klass.id,
     assignmentTypeId: assignmentType.id,
     title: `Stress Test Assignment ${Date.now().toString(36)}`,
     prompt: 'Stress-test prompt: write a short response.',
   },
   select: { id: true, title: true },
+});
+
+const classAssignment = await prisma.classAssignment.create({
+  data: {
+    assignmentId: assignment.id,
+    classId: klass.id,
+  },
+  select: { id: true },
 });
 
 for (let index = 0; index < count; index++) {
@@ -58,10 +63,10 @@ for (let index = 0; index < count; index++) {
       title: `Stress Doc ${String(index + 1).padStart(2, '0')}`,
       text: body,
       html: `<p>${body}</p>`,
-      profile: { connect: { id: profile.id } },
-      studentProfile: { connect: { id: profile.studentProfile!.id } },
-      assignmentType: { connect: { id: assignmentType.id } },
-      assignment: { connect: { id: assignment.id } },
+      membershipId: membership.id,
+      assignmentTypeId: assignmentType.id,
+      assignmentId: assignment.id,
+      classAssignmentId: classAssignment.id,
       submissions: {
         create: {
           title: `Stress Submission ${String(index + 1).padStart(2, '0')}`,

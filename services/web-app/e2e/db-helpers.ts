@@ -357,10 +357,11 @@ export async function createTeacherClassPilotFixture(params: {
     throw new Error(`Teacher membership not created for ${teacherEmail}`);
   }
 
-  await prisma.orgMembership.update({
-    where: { id: teacherMembershipId },
-    data: { schools: { connect: { id: schoolId } } },
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "_SchoolTeachers" ("A", "B")
+    VALUES (${schoolId}, ${teacherMembershipId})
+    ON CONFLICT DO NOTHING
+  `;
 
   const klass = await prisma.class.create({
     data: {
