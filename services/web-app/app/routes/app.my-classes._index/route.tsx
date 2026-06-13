@@ -22,6 +22,7 @@ import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
+import { pickClassArtIndexForTeachers } from '~/utils/class-art-assignment.server';
 
 type ClassRow = TeacherClassCardData & ClassManageRow;
 
@@ -155,6 +156,9 @@ export async function action({ request }: ActionFunctionArgs) {
           title,
           code,
           cardGradientKey: generateClassCardGradientKey(code),
+          classArtIndex: await pickClassArtIndexForTeachers([
+            profile.teacherProfile.id,
+          ]),
           teachers: { connect: [{ id: profile.teacherProfile.id }] },
         },
       });

@@ -64,6 +64,7 @@ import {
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
+import { pickClassArtIndexForTeachers } from '~/utils/class-art-assignment.server';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -301,6 +302,7 @@ export async function action({ request }: ActionFunctionArgs) {
           title,
           code,
           cardGradientKey: generateClassCardGradientKey(code),
+          classArtIndex: await pickClassArtIndexForTeachers(teacherIds),
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
           },
