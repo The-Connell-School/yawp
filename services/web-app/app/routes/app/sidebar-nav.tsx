@@ -15,7 +15,8 @@ import type { useUser } from '~/hooks/useUser';
 type User = ReturnType<typeof useUser>;
 
 type RequiresFn = (
-  user: User
+  user: User,
+  studentPreviewActive?: boolean
 ) => boolean | null | undefined;
 
 export type SidebarNavLink = {
@@ -34,7 +35,8 @@ export type SidebarNavSection = {
   links: SidebarNavLink[];
 };
 
-const teacher = (user: User) => user.selectedMembership?.role === 'TEACHER';
+const teacher = (user: User, studentPreviewActive = false) =>
+  user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
 
@@ -97,28 +99,35 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
   },
 ];
 
-function linkIsVisible(link: SidebarNavLink, user: User) {
+function linkIsVisible(
+  link: SidebarNavLink,
+  user: User,
+  studentPreviewActive = false
+) {
   if (!link.requires) return true;
 
   if (typeof link.requires === 'function') {
-    return link.requires(user);
+    return link.requires(user, studentPreviewActive);
   }
 
   if ('OR' in link.requires) {
-    return link.requires.OR.some((rule) => rule(user));
+    return link.requires.OR.some((rule) => rule(user, studentPreviewActive));
   }
 
-  return link.requires.AND.every((rule) => rule(user));
+  return link.requires.AND.every((rule) => rule(user, studentPreviewActive));
 }
 
 export function getVisibleSidebarSections(
   sections: SidebarNavSection[],
-  user: User
+  user: User,
+  studentPreviewActive = false
 ) {
   return sections
     .map((section) => ({
       ...section,
-      links: section.links.filter((link) => linkIsVisible(link, user)),
+      links: section.links.filter((link) =>
+        linkIsVisible(link, user, studentPreviewActive)
+      ),
     }))
     .filter((section) => section.links.length > 0);
 }
@@ -130,6 +139,7 @@ type SidebarNavLinksProps = {
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
   forceFullNavigation?: boolean;
+  studentPreviewActive?: boolean;
 };
 
 export function SidebarNavLinks({
@@ -139,8 +149,13 @@ export function SidebarNavLinks({
   pathname,
   isAppNavLinkActive,
   forceFullNavigation = false,
+  studentPreviewActive = false,
 }: SidebarNavLinksProps) {
-  const visibleSections = getVisibleSidebarSections(sections, user);
+  const visibleSections = getVisibleSidebarSections(
+    sections,
+    user,
+    studentPreviewActive
+  );
 
   return (
     <>

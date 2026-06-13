@@ -3,11 +3,16 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useLoaderData, useSearchParams } from 'react-router';
+import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
+import type { Route as RootRoute } from '../../+types/root';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
+import {
+  getStudentPreviewState,
+  shouldUseStudentExperience,
+} from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
@@ -35,9 +40,14 @@ export type AssignmentTypeRow = {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
+  const preview = await getStudentPreviewState(request);
+  const useStudentExperience = shouldUseStudentExperience({
+    membershipRole: profile.role,
+    previewActive: preview.active,
+  });
 
   const studentClassCount =
-    profile.role === 'STUDENT'
+    useStudentExperience
       ? ((
           await prisma.orgMembership.findUnique({
             where: { id: profile.id },
@@ -47,7 +57,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : 0;
 
   const isStudentOnlyWithNoClasses =
-    profile.role === 'STUDENT' &&
+    useStudentExperience &&
     !profile.isOrgOwner &&
     studentClassCount === 0;
 
@@ -57,7 +67,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Determine which class IDs this student belongs to (for assignment fetching).
   let studentAssignmentClassIds: string[] = [];
-  if (profile.role === "STUDENT") {
+  if (useStudentExperience) {
     const studentClasses = await prisma.class.findMany({
       where: {
         students: { some: { id: profile.id } },
@@ -79,7 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  const teacherAssignmentClassScopes = profile.role === "TEACHER"
+  const teacherAssignmentClassScopes = !useStudentExperience
     ? await prisma.class
         .findMany({
           where: {
@@ -100,7 +110,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const teacherAssignmentClassIds = profile.role === "TEACHER"
+  const teacherAssignmentClassIds = !useStudentExperience
     ? await getAssignmentsEnabledClassIdsForContext({
         organizationId: profile.organization.id,
         teacherProfileId: profile.id,
@@ -118,7 +128,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   if (
     !assignmentsEnabled &&
-    profile.role === "STUDENT" &&
+    useStudentExperience &&
     url.searchParams.get('tab') === 'assignments'
   ) {
     return redirect('/app');
@@ -126,7 +136,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
-    profile.role === "TEACHER"
+    !useStudentExperience
       ? ([] as AssignmentTypeRow[])
       : prisma.assignmentType.findMany({
           where: {
@@ -184,7 +194,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
     }),
     // Teacher classes and recent ordering
-    profile.role === 'TEACHER'
+    !useStudentExperience
       ? prisma.class.findMany({
           where: {
             teachers: { some: { id: profile.id } },
@@ -202,7 +212,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           },
         })
       : [],
-    profile.role === "STUDENT" && assignmentsEnabled
+    useStudentExperience && assignmentsEnabled
       ? prisma.classAssignment.findMany({
           where: {
             classId: { in: studentAssignmentClassIds },
@@ -239,7 +249,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Surface the six most recently active teacher classes on the dashboard.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   let recentActiveClassIds: string[] = [];
-  if (profile.role === "TEACHER" && teacherClasses.length > 0) {
+  if (!useStudentExperience && teacherClasses.length > 0) {
     recentActiveClassIds = await getTeacherRecentActiveClassIds({
       teacherClassIds: teacherClasses.map((klass) => klass.id),
     });
@@ -255,7 +265,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       );
   }
 
-  const teacherClassStatsById = profile.role === "TEACHER"
+  const teacherClassStatsById = !useStudentExperience
     ? new Map(
         await Promise.all(
           teacherClasses.map(async (klass) => [
@@ -275,7 +285,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }
       >();
 
-  const teacherClassCards: TeacherClassCardData[] = profile.role === "TEACHER"
+  const teacherClassCards: TeacherClassCardData[] = !useStudentExperience
     ? teacherClassesOrdered.map((klass) => {
         const classStats = teacherClassStatsById.get(klass.id);
         return {
@@ -294,7 +304,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       })
     : [];
 
-  const teacherWorkspaceClassStats = profile.role === "TEACHER"
+  const teacherWorkspaceClassStats = !useStudentExperience
     ? teacherClasses.map((klass) => {
         const classStats = teacherClassStatsById.get(klass.id);
         return {
@@ -306,7 +316,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     : [];
 
   const teacherAssignmentTypes =
-    profile.role === "TEACHER" &&
+    !useStudentExperience &&
     assignmentsEnabled &&
     teacherAssignmentClassScopes.length > 0
       ? await getAvailableAssignmentTypesForScopes<AssignmentTypeRow>({
@@ -338,8 +348,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AppRoute() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
+  const rootData =
+    useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const [searchParams, setSearchParams] = useSearchParams();
-  const isTeacher = user.selectedMembership?.role === 'TEACHER';
+  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
+  const isTeacher =
+    user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
   const assignmentsEnabled = data.assignmentsEnabled ?? false;
   const currentStudentTab =
     assignmentsEnabled && searchParams.get('tab') === 'assignments'

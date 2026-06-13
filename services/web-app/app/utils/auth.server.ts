@@ -45,19 +45,20 @@ export const impersonatorUserIdKey = 'impersonatorUserId';
 export const readOnlyImpersonationMode = 'read-only';
 
 const mutationSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
-const readOnlyImpersonationAllowedMutationPaths = new Set([
+const readOnlySessionAllowedMutationPaths = new Set([
   '/auth/logout',
   '/api/preferences/nav',
   '/api/preferences/submitted-papers-filter',
   '/api/membership-id',
+  '/api/student-preview',
 ]);
 
 function isMutationRequest(request: Request) {
   return !mutationSafeMethods.has(request.method.toUpperCase());
 }
 
-function isAllowedReadOnlyImpersonationMutation(request: Request) {
-  return readOnlyImpersonationAllowedMutationPaths.has(
+function isAllowedReadOnlySessionMutation(request: Request) {
+  return readOnlySessionAllowedMutationPaths.has(
     new URL(request.url).pathname
   );
 }
@@ -78,18 +79,31 @@ export async function getImpersonationState(request: Request) {
 
 export async function requireMutableRequest(request: Request) {
   if (!isMutationRequest(request)) return;
-  if (isAllowedReadOnlyImpersonationMutation(request)) return;
+  if (isAllowedReadOnlySessionMutation(request)) return;
 
   const impersonation = await getImpersonationState(request);
-  if (!impersonation.isReadOnly) return;
+  if (impersonation.isReadOnly) {
+    throw Response.json(
+      {
+        error: 'Read-only impersonation active',
+        message: 'This session can view the app but cannot make changes.',
+      },
+      { status: 403 }
+    );
+  }
 
-  throw Response.json(
-    {
-      error: 'Read-only impersonation active',
-      message: 'This session can view the app but cannot make changes.',
-    },
-    { status: 403 }
-  );
+  const { getStudentPreviewState } = await import('./student-preview.server.ts');
+  const preview = await getStudentPreviewState(request);
+  if (preview.active) {
+    throw Response.json(
+      {
+        error: 'Student preview active',
+        message:
+          'This session can view student pages but cannot make changes.',
+      },
+      { status: 403 }
+    );
+  }
 }
 
 export async function getUserId(request: Request) {

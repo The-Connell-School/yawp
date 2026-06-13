@@ -11,7 +11,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Pencil } from 'lucide-react';
+import { Settings2, Pencil, Eye, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -100,6 +100,9 @@ export default function Route() {
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation =
     rootData?.impersonation?.isReadOnly ?? false;
+  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
+  const canToggleStudentPreview =
+    user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
 
@@ -225,6 +228,7 @@ export default function Route() {
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
             forceFullNavigation={isClassDetailRoute}
+            studentPreviewActive={studentPreviewActive}
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
@@ -291,6 +295,40 @@ export default function Route() {
                   })}
                 </div>
               ) : null}
+              {canToggleStudentPreview ? (
+                <div className="border-b p-1">
+                  <Form method="POST" action="/api/student-preview">
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value={studentPreviewActive ? 'end' : 'start'}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant={studentPreviewActive ? 'secondary' : 'ghost'}
+                      className="w-full justify-start gap-2 rounded-lg px-3 py-2"
+                      disabled={isReadOnlyImpersonation}
+                      title={
+                        isReadOnlyImpersonation
+                          ? 'Read-only impersonation active'
+                          : studentPreviewActive
+                            ? 'Exit student preview'
+                            : 'View the app as a student (read-only)'
+                      }
+                    >
+                      {studentPreviewActive ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                      {studentPreviewActive
+                        ? 'Exit student preview'
+                        : 'View as student'}
+                    </Button>
+                  </Form>
+                </div>
+              ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">
                 <Button
                   type="submit"
@@ -326,6 +364,11 @@ export default function Route() {
           <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
             Read-only impersonation active. You can navigate the app, but
             creates, edits, and deletes are disabled.
+          </div>
+        ) : null}
+        {studentPreviewActive ? (
+          <div className="border-b border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-900">
+            Student preview active. You are viewing student pages read-only.
           </div>
         ) : null}
         {/* Mobile top menu */}
