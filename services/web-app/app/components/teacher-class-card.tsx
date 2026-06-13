@@ -10,6 +10,7 @@ export type TeacherClassCardData = {
   grade: string;
   period: string;
   title: string | null;
+  classArtIndex: number | null;
   school: { id: string; name: string } | null;
   _count: { students: number; assignments: number };
   stats?: {
