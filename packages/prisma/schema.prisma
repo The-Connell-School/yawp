@@ -17,6 +17,7 @@ model Class {
   grade       String
   title           String?
   cardGradientKey String           @default("indigo-purple-pink")
+  classArtIndex   Int?
   isArchived      Boolean          @default(false)
   students    StudentProfile[]
   teachers    TeacherProfile[]
