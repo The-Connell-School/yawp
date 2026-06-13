@@ -1,7 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
@@ -20,9 +20,9 @@ function safeText(value: string | undefined): string {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     return dataResponse(
       {
         success: false,
@@ -82,7 +82,7 @@ export async function action({ request }: ActionFunctionArgs) {
       id: classId,
       teachers: {
         some: {
-          id: profile.teacherProfile.id,
+          id: profile.id,
         },
       },
     },
@@ -102,7 +102,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const assignmentsEnabled = await isAssignmentsEnabledForContext({
     organizationId: classAccess.school.organizationId,
     schoolId: classAccess.school.id,
-    teacherProfileId: profile.teacherProfile.id,
+    teacherProfileId: profile.id,
     classIds: [classAccess.id],
   });
   if (!assignmentsEnabled) {

@@ -14,17 +14,12 @@ test.describe.serial('Teacher class page document titles', () => {
     let documentId = '';
 
     try {
-      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
-      });
       const document = await prisma.document.create({
         data: {
           title: documentTitle,
           text: 'Essay column body',
           html: '<p>Essay column body</p>',
-          profile: { connect: { id: e2eContext.profileId } },
-          studentProfile: { connect: { id: studentProfile.id } },
+          membership: { connect: { id: e2eContext.membershipId } },
           assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
           submissions: {
             create: {

@@ -44,7 +44,7 @@ describe('api.domain.release-grades', () => {
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
-      profileId: 'teacher-profile-1',
+      membershipId: 'teacher-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -64,7 +64,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
@@ -112,9 +112,9 @@ describe('api.domain.release-grades', () => {
       {
         id: 'legacy-sub-1',
         document: {
-          assignment: null,
-          studentProfile: {
-            classes: [
+          classAssignment: null,
+          membership: {
+            classesAsStudent: [
               {
                 id: 'legacy-class-1',
                 schoolId: 'scranton-prep-school',
@@ -163,7 +163,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'pilot-submission',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
@@ -176,7 +176,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'non-pilot-submission',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-2',
               schoolId: 'school-2',
@@ -277,7 +277,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
@@ -318,7 +318,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-1',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-1',
               schoolId: 'school-1',
@@ -330,7 +330,7 @@ describe('api.domain.release-grades', () => {
       {
         id: 'sub-2',
         document: {
-          assignment: {
+          classAssignment: {
             class: {
               id: 'class-1',
               schoolId: 'school-1',

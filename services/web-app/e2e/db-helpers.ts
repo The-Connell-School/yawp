@@ -5,8 +5,6 @@ import bcrypt from 'bcryptjs';
 const DOCUMENT_SUBMISSION_FLAG = 'document_submission_enabled';
 const DOCUMENT_SUBMISSION_SCHOOL_IDS = 'document_submission_enabled_school_ids';
 const ASSIGNMENTS_ENABLED_ORG_IDS = 'assignments_enabled_org_ids';
-const RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS =
-  'released_grades_organization_enabled_org_ids';
 const PILOT_FEATURE_KEYS = [
   'assignments',
   'assignment_creation_standardization',
@@ -21,6 +19,37 @@ function createPassword(password: string) {
   return {
     hash: bcrypt.hashSync(password, 10),
   };
+}
+
+export async function createDeployedAssignment(params: {
+  prisma: E2EPrismaClient;
+  classId: string;
+  assignmentTypeId: string;
+  title?: string | null;
+  prompt: string;
+  tutorContext?: string | null;
+  submitForGrade?: boolean;
+  pointValue?: number | null;
+}) {
+  const assignment = await params.prisma.assignment.create({
+    data: {
+      assignmentTypeId: params.assignmentTypeId,
+      title: params.title ?? null,
+      prompt: params.prompt,
+      tutorContext: params.tutorContext ?? null,
+      ...(params.submitForGrade !== undefined
+        ? { submitForGrade: params.submitForGrade }
+        : {}),
+      ...(params.pointValue !== undefined ? { pointValue: params.pointValue } : {}),
+    },
+  });
+  const classAssignment = await params.prisma.classAssignment.create({
+    data: {
+      assignmentId: assignment.id,
+      classId: params.classId,
+    },
+  });
+  return { assignment, classAssignment };
 }
 
 function parseIdList(value: string | null | undefined) {
@@ -156,38 +185,6 @@ export async function setPilotFeatureAccessTarget(params: {
   });
 }
 
-export async function setReleasedGradesOrganizationForOrganization(params: {
-  prisma: E2EPrismaClient;
-  organizationId: string;
-  enabled: boolean;
-}) {
-  const { prisma, organizationId, enabled } = params;
-  const existing = await prisma.setting.findUnique({
-    where: { name: RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS },
-    select: { value: true },
-  });
-  const orgIds = parseIdList(existing?.value);
-  if (enabled) {
-    orgIds.add(organizationId);
-  } else {
-    orgIds.delete(organizationId);
-  }
-  await prisma.setting.upsert({
-    where: { name: RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS },
-    create: {
-      name: RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS,
-      description:
-        'Organization IDs allowed to use the released-grades organization view',
-      value: Array.from(orgIds).join(','),
-      valueType: 'string',
-    },
-    update: {
-      value: Array.from(orgIds).join(','),
-      valueType: 'string',
-    },
-  });
-}
-
 export async function invalidateUserSessions(params: {
   prisma: E2EPrismaClient;
   userId: string;
@@ -303,30 +300,27 @@ export async function assignTeacherToClass(params: {
   const teacher = await prisma.user.findUnique({
     where: { email: teacherEmail },
     select: {
-      profiles: {
-        select: {
-          teacherProfile: { select: { id: true } },
-        },
+      memberships: {
+        where: { role: 'TEACHER' },
+        select: { id: true },
       },
     },
   });
 
-  const teacherProfileId = teacher?.profiles.find(
-    (profile) => profile.teacherProfile?.id
-  )?.teacherProfile?.id;
+  const teacherMembershipId = teacher?.memberships[0]?.id;
 
-  if (!teacherProfileId) {
-    throw new Error(`Teacher profile not found for ${teacherEmail}`);
+  if (!teacherMembershipId) {
+    throw new Error(`Teacher membership not found for ${teacherEmail}`);
   }
 
   await prisma.class.update({
     where: { id: classId },
     data: {
-      teachers: { connect: { id: teacherProfileId } },
+      teachers: { connect: { id: teacherMembershipId } },
     },
   });
 
-  return teacherProfileId;
+  return teacherMembershipId;
 }
 
 export async function createTeacherClassPilotFixture(params: {
@@ -348,23 +342,23 @@ export async function createTeacherClassPilotFixture(params: {
       email: teacherEmail,
       name: `Teacher ${normalizedSuffix}`,
       password: { create: createPassword(teacherPassword) },
-      profiles: {
+      memberships: {
         create: {
           organizationId,
-          isOwner: false,
-          teacherProfile: { create: {} },
+          isOrgOwner: false,
+          role: 'TEACHER',
         },
       },
     },
-    include: { profiles: { include: { teacherProfile: true } } },
+    include: { memberships: true },
   });
-  const teacherProfileId = teacher.profiles[0].teacherProfile?.id;
-  if (!teacherProfileId) {
-    throw new Error(`Teacher profile not created for ${teacherEmail}`);
+  const teacherMembershipId = teacher.memberships[0]?.id;
+  if (!teacherMembershipId) {
+    throw new Error(`Teacher membership not created for ${teacherEmail}`);
   }
 
-  await prisma.teacherProfile.update({
-    where: { id: teacherProfileId },
+  await prisma.orgMembership.update({
+    where: { id: teacherMembershipId },
     data: { schools: { connect: { id: schoolId } } },
   });
 
@@ -376,7 +370,7 @@ export async function createTeacherClassPilotFixture(params: {
       grade: '10th',
       title: `Non-pilot ${normalizedSuffix}`,
       schoolId,
-      teachers: { connect: { id: teacherProfileId } },
+      teachers: { connect: { id: teacherMembershipId } },
     },
     select: { id: true },
   });
@@ -386,31 +380,28 @@ export async function createTeacherClassPilotFixture(params: {
       email: studentEmail,
       name: `Student ${normalizedSuffix}`,
       password: { create: createPassword(studentPassword) },
-      profiles: {
+      memberships: {
         create: {
           organizationId,
-          isOwner: false,
+          isOrgOwner: false,
+          role: 'STUDENT',
+          classesAsStudent: { connect: { id: klass.id } },
         },
       },
     },
-    include: { profiles: true },
+    include: { memberships: true },
   });
-  const studentProfile = await prisma.studentProfile.create({
-    data: {
-      profileId: student.profiles[0].id,
-      classes: { connect: { id: klass.id } },
-    },
-    select: { id: true },
-  });
+  const studentMembershipId = student.memberships[0]?.id;
+  if (!studentMembershipId) {
+    throw new Error(`Student membership not created for ${studentEmail}`);
+  }
 
-  const assignment = await prisma.assignment.create({
-    data: {
-      classId: klass.id,
-      assignmentTypeId,
-      title: `Non-pilot assignment ${normalizedSuffix}`,
-      prompt: 'This assignment should not be available without pilot access.',
-    },
-    select: { id: true },
+  const { assignment, classAssignment } = await createDeployedAssignment({
+    prisma,
+    classId: klass.id,
+    assignmentTypeId,
+    title: `Non-pilot assignment ${normalizedSuffix}`,
+    prompt: 'This assignment should not be available without pilot access.',
   });
 
   const documentText = `Non-pilot submitted essay ${normalizedSuffix}. This text is long enough to submit.`;
@@ -419,10 +410,10 @@ export async function createTeacherClassPilotFixture(params: {
       title: `Non-pilot document ${normalizedSuffix}`,
       text: documentText,
       html: `<p>${documentText}</p>`,
-      profileId: student.profiles[0].id,
-      studentProfileId: studentProfile.id,
+      membershipId: studentMembershipId,
       assignmentTypeId,
       assignmentId: assignment.id,
+      classAssignmentId: classAssignment.id,
     },
     select: { id: true },
   });
@@ -456,12 +447,12 @@ export async function createTeacherClassPilotFixture(params: {
   return {
     teacherEmail,
     teacherPassword,
-    teacherProfileId,
+    teacherMembershipId,
     teacherUserId: teacher.id,
     studentEmail,
     studentPassword,
     studentUserId: student.id,
-    studentProfileId: studentProfile.id,
+    studentMembershipId,
     classId: klass.id,
     assignmentId: assignment.id,
     documentId: document.id,

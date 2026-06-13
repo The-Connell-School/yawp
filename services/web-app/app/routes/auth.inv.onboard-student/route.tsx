@@ -87,7 +87,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       period: true,
       school: { select: { name: true, organizationId: true } },
       teachers: {
-        select: { profile: { select: { user: { select: { name: true } } } } },
+        select: { user: { select: { name: true } } },
       },
     },
     orderBy: [
@@ -222,7 +222,7 @@ export default function Route() {
                   value: klass.id,
                   label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
                     klass.teachers
-                      .map((t) => t.profile.user.name)
+                      .map((t) => t.user.name)
                       .filter(Boolean)
                       .join(', ') || 'Teacher'
                   }`,

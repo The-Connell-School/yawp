@@ -30,24 +30,31 @@ async function expectCreatedAssignment(params: {
 }) {
   const prisma = createE2EPrismaClient();
   try {
-    const created = await prisma.assignment.findFirst({
+    const created = await prisma.classAssignment.findFirst({
       where: {
         classId: params.classId,
-        assignmentTypeId: params.assignmentTypeId,
-        prompt: params.prompt,
+        assignment: {
+          assignmentTypeId: params.assignmentTypeId,
+          prompt: params.prompt,
+          title: params.title,
+        },
       },
       select: {
-        id: true,
-        title: true,
-        tutorContext: true,
-        submitForGrade: true,
-        pointValue: true,
+        assignment: {
+          select: {
+            id: true,
+            title: true,
+            tutorContext: true,
+            submitForGrade: true,
+            pointValue: true,
+          },
+        },
       },
     });
-    expect(created?.title).toBe(params.title);
-    expect(created?.tutorContext).toBeNull();
-    expect(created?.submitForGrade).toBe(true);
-    expect(created?.pointValue).toBe(params.pointValue);
+    expect(created?.assignment.title).toBe(params.title);
+    expect(created?.assignment.tutorContext).toBeNull();
+    expect(created?.assignment.submitForGrade).toBe(true);
+    expect(created?.assignment.pointValue).toBe(params.pointValue);
   } finally {
     await prisma.$disconnect();
   }
@@ -55,7 +62,7 @@ async function expectCreatedAssignment(params: {
 
 async function createSecondTeacherClass(params: {
   schoolId: string;
-  teacherProfileId: string;
+  teacherMembershipId: string;
 }) {
   const prisma = createE2EPrismaClient();
   try {
@@ -67,7 +74,7 @@ async function createSecondTeacherClass(params: {
         grade: '10th',
         title: 'E2E Multi-Class Proof',
         schoolId: params.schoolId,
-        teachers: { connect: { id: params.teacherProfileId } },
+        teachers: { connect: { id: params.teacherMembershipId } },
       },
       select: { id: true, title: true },
     });
@@ -85,28 +92,35 @@ async function expectCreatedAssignmentsForClasses(params: {
 }) {
   const prisma = createE2EPrismaClient();
   try {
-    const created = await prisma.assignment.findMany({
+    const created = await prisma.classAssignment.findMany({
       where: {
-        assignmentTypeId: params.assignmentTypeId,
-        prompt: params.prompt,
-        title: params.title,
+        classId: { in: params.classIds },
+        assignment: {
+          assignmentTypeId: params.assignmentTypeId,
+          prompt: params.prompt,
+          title: params.title,
+        },
       },
       select: {
         classId: true,
-        tutorContext: true,
-        submitForGrade: true,
-        pointValue: true,
+        assignment: {
+          select: {
+            tutorContext: true,
+            submitForGrade: true,
+            pointValue: true,
+          },
+        },
       },
       orderBy: { classId: 'asc' },
     });
 
-    expect(created.map((assignment) => assignment.classId).sort()).toEqual(
+    expect(created.map((deployment) => deployment.classId).sort()).toEqual(
       [...params.classIds].sort()
     );
-    for (const assignment of created) {
-      expect(assignment.tutorContext).toBeNull();
-      expect(assignment.submitForGrade).toBe(true);
-      expect(assignment.pointValue).toBe(params.pointValue);
+    for (const deployment of created) {
+      expect(deployment.assignment.tutorContext).toBeNull();
+      expect(deployment.assignment.submitForGrade).toBe(true);
+      expect(deployment.assignment.pointValue).toBe(params.pointValue);
     }
   } finally {
     await prisma.$disconnect();
@@ -146,20 +160,24 @@ test.describe.serial('Teacher dashboard workspace', () => {
     ).toBeVisible();
     await expect(classesGrid.getByText(CLASS_LABEL)).toBeVisible();
 
-    // Workspace entry points below.
-    const workspaceCards = page.getByTestId('teacher-workspace-cards');
+    const assignmentsGrid = page.getByTestId('teacher-assignments-grid');
     await expect(
-      workspaceCards.getByRole('heading', { name: 'Assignments' })
+      assignmentsGrid.getByRole('heading', { name: 'Assignments' })
     ).toBeVisible();
     await expect(
-      workspaceCards.getByRole('heading', { name: 'Grading' })
+      assignmentsGrid.getByRole('link', { name: /new assignment/i })
+    ).toHaveAttribute('href', '/app/assignments?create=1');
+
+    const gradingGrid = page.getByTestId('teacher-grading-grid');
+    await expect(
+      gradingGrid.getByRole('heading', { name: 'Grading' })
     ).toBeVisible();
     await expect(
-      workspaceCards.getByRole('link', { name: /assignments/i })
-    ).toHaveAttribute('href', '/app/assignments');
-    await expect(
-      workspaceCards.getByRole('link', { name: /grading/i })
-    ).toHaveAttribute('href', /\/app\/student-work/);
+      page.getByTestId('teacher-workspace-cards')
+    ).toHaveAttribute(
+      'href',
+      '/app/student-work?status=needs-grading&group=student'
+    );
 
     // Retired dashboard sections stay gone.
     await expect(
@@ -172,6 +190,38 @@ test.describe.serial('Teacher dashboard workspace', () => {
     // Clicking a class card opens the class.
     await classesGrid.getByText(CLASS_LABEL).first().click();
     await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`);
+
+    await expect(
+      page.getByRole('link', { name: 'Dashboard' })
+    ).not.toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('link', { name: 'My Classes' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+  });
+
+  test('only highlights My Classes after visiting grading from the dashboard', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('teacher-workspace-cards').click();
+    await page.waitForURL(/\/app\/student-work/);
+
+    await page.getByRole('link', { name: 'My Classes' }).click();
+    await page.waitForURL('**/app/my-classes**');
+
+    await expect(
+      page.getByRole('link', { name: 'Dashboard' })
+    ).not.toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('link', { name: 'My Classes' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
   });
 
   test('creates one assignment record for each selected class from the Assignments page', async ({
@@ -181,7 +231,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
   }) => {
     const secondClass = await createSecondTeacherClass({
       schoolId: e2eContext.schoolId,
-      teacherProfileId: e2eContext.teacherProfileId,
+      teacherMembershipId: e2eContext.teacherMembershipId,
     });
     const title = `Multi-Class E2E Assignment ${Date.now()}`;
 

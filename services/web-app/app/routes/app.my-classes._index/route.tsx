@@ -17,7 +17,7 @@ import {
   TeacherClassCard,
   type TeacherClassCardData,
 } from '~/components/teacher-class-card';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
@@ -26,9 +26,9 @@ import { pickClassArtIndexForTeachers } from '~/utils/class-art-assignment.serve
 
 type ClassRow = TeacherClassCardData & ClassManageRow;
 
-async function getTeacherSchoolIds(teacherProfileId: string) {
-  const teacher = await prisma.teacherProfile.findUnique({
-    where: { id: teacherProfileId },
+async function getTeacherSchoolIds(membershipId: string) {
+  const teacher = await prisma.orgMembership.findUnique({
+    where: { id: membershipId, role: 'TEACHER' },
     select: { schools: { select: { id: true } } },
   });
   return new Set(teacher?.schools.map((school) => school.id) ?? []);
@@ -36,16 +36,16 @@ async function getTeacherSchoolIds(teacherProfileId: string) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     return redirect('/app');
   }
 
   const [classes, teacherSchools] = await Promise.all([
     prisma.class.findMany({
       where: {
-        teachers: { some: { id: profile.teacherProfile.id } },
+        teachers: { some: { id: profile.id } },
         isArchived: false,
       },
       select: {
@@ -58,7 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         code: true,
         classArtIndex: true,
         school: { select: { id: true, name: true } },
-        _count: { select: { students: true, assignments: true } },
+        _count: { select: { students: true, classAssignments: true } },
       },
       orderBy: [
         { school: { name: 'asc' } },
@@ -66,8 +66,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         { period: 'asc' },
       ],
     }),
-    prisma.teacherProfile.findUnique({
-      where: { id: profile.teacherProfile.id },
+    prisma.orgMembership.findUnique({
+      where: { id: profile.id, role: 'TEACHER' },
       select: {
         schools: {
           select: { id: true, name: true },
@@ -95,7 +95,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const classesWithStats = classes.map((klass) => {
     const stats = classStats.find((s) => s.classId === klass.id);
-    return { ...klass, stats };
+    return {
+      ...klass,
+      stats,
+      _count: {
+        students: klass._count.students,
+        assignments: klass._count.classAssignments,
+      },
+    };
   });
 
   return dataResponse({
@@ -108,15 +115,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     return dataResponse({ error: 'Only teachers can manage classes.' }, { status: 403 });
   }
 
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
-  const allowedSchoolIds = await getTeacherSchoolIds(profile.teacherProfile.id);
+  const allowedSchoolIds = await getTeacherSchoolIds(profile.id);
 
   if (intent === 'create-class') {
     const schoolId = formData.get('schoolId') as string;
@@ -158,9 +165,9 @@ export async function action({ request }: ActionFunctionArgs) {
           code,
           cardGradientKey: generateClassCardGradientKey(code),
           classArtIndex: await pickClassArtIndexForTeachers([
-            profile.teacherProfile.id,
+            profile.id,
           ]),
-          teachers: { connect: [{ id: profile.teacherProfile.id }] },
+          teachers: { connect: [{ id: profile.id }] },
         },
       });
       return dataResponse({ success: true });
@@ -206,7 +213,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const existingClass = await prisma.class.findFirst({
       where: {
         id: classId,
-        teachers: { some: { id: profile.teacherProfile.id } },
+        teachers: { some: { id: profile.id } },
       },
       select: {
         teachers: { select: { id: true } },

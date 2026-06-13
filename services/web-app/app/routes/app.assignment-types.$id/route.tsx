@@ -36,7 +36,7 @@ import {
   isAssignmentTypeAvailableForAnyScope,
   type AssignmentTypeAccessScope,
 } from '~/utils/assignment-type-access.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
@@ -241,13 +241,13 @@ function applyFilters(
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
   const [documents, archivedDocuments, teacherClasses] = await Promise.all([
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
       where: {
-        profileId: profile.id,
+        membershipId: profile.id,
         deletedAt: null,
         archivedAt: null,
         assignmentModuleSessions: {
@@ -278,7 +278,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     prisma.document.findMany({
       orderBy: { archivedAt: 'desc' },
       where: {
-        profileId: profile.id,
+        membershipId: profile.id,
         deletedAt: null,
         archivedAt: { not: null },
         assignmentModuleSessions: {
@@ -306,10 +306,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.teacherProfile
+    profile.role === "TEACHER"
       ? prisma.class.findMany({
           where: {
-            teachers: { some: { id: profile.teacherProfile.id } },
+            teachers: { some: { id: profile.id } },
             isArchived: false,
           },
           select: {
@@ -329,7 +329,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     await getAvailableAssignmentTypesForScopes<AssignmentTypeDetailRow>({
       scopes: buildAssignmentTypeScopes({
         organizationId: profile.organization.id,
-        teacherProfileId: profile.teacherProfile?.id,
+        teacherProfileId: profile.id,
         teacherClasses,
       }),
       select: {
@@ -365,7 +365,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
-    profile.teacherProfile && isDailyPages
+    profile.role === "TEACHER" && isDailyPages
       ? {
           prompts: applyFilters(ALL_PROMPTS, readFilters(new URL(request.url))),
           facets: ALL_FACETS,
@@ -373,11 +373,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: ALL_PROMPTS.length,
         }
       : null;
-  const enabledTeacherClassIds = profile.teacherProfile
+  const enabledTeacherClassIds = profile.role === "TEACHER"
     ? new Set(
         await getAssignmentsEnabledClassIdsForContext({
           organizationId: profile.organization.id,
-          teacherProfileId: profile.teacherProfile.id,
+          teacherProfileId: profile.id,
           classes: teacherClasses.map((klass) => ({
             id: klass.id,
             organizationId: klass.school.organizationId,
@@ -387,14 +387,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         })
       )
     : new Set<string>();
-  const assignmentEnabledTeacherClasses = profile.teacherProfile
+  const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
     ? teacherClasses.filter((klass) => enabledTeacherClassIds.has(klass.id))
     : [];
-  const standardizedTeacherClassIds = profile.teacherProfile
+  const standardizedTeacherClassIds = profile.role === "TEACHER"
     ? new Set(
         await getAssignmentCreationStandardizationEnabledClassIdsForContext({
           organizationId: profile.organization.id,
-          teacherProfileId: profile.teacherProfile.id,
+          teacherProfileId: profile.id,
           classes: assignmentEnabledTeacherClasses.map((klass) => ({
             id: klass.id,
             organizationId: klass.school.organizationId,
@@ -410,8 +410,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentCreationStandardizationEnabled =
     standardizedTeacherClasses.length > 0;
   let apHistoryLibrary = null;
-  if (profile.teacherProfile && isApHistory) {
-    const teacherProfileId = profile.teacherProfile.id;
+  if (profile.role === "TEACHER" && isApHistory) {
+    const teacherProfileId = profile.id;
     const apClassEligibility = await Promise.all(
       assignmentEnabledTeacherClasses.map(async (klass) => {
         const apHistoryEnabled = await isApHistoryEssayEnabledForContext({
@@ -453,11 +453,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  const teacherClasses = profile.teacherProfile
+  const profile = await requireMembership(request, userId);
+  const teacherClasses = profile.role === "TEACHER"
     ? await prisma.class.findMany({
         where: {
-          teachers: { some: { id: profile.teacherProfile.id } },
+          teachers: { some: { id: profile.id } },
           isArchived: false,
         },
         select: {
@@ -471,7 +471,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId: params.id,
         scopes: buildAssignmentTypeScopes({
           organizationId: profile.organization.id,
-          teacherProfileId: profile.teacherProfile?.id,
+          teacherProfileId: profile.id,
           teacherClasses,
         }),
       })
@@ -503,7 +503,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
-      profileId: profile.id,
+      membershipId: profile.id,
       assignmentTypeId: assignmentType.id,
     });
     documentId = created.documentId;
@@ -535,7 +535,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AppAssignmentTypesIdRoute() {
   const user = useUser();
   const data = useLoaderData<typeof loader>();
-  const isTeacher = !!user.selectedProfile?.teacherProfile;
+  const isTeacher = user.selectedMembership?.role === 'TEACHER';
   const hasModules = data.assignmentType.assignmentModules.length > 0;
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';

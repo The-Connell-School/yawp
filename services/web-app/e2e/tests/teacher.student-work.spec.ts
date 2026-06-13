@@ -2,24 +2,19 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 async function createSubmittedDocument(params: {
-  profileId: string;
+  membershipId: string;
   assignmentTypeId: string;
   documentTitle: string;
   submissionTitle: string;
 }) {
   const prisma = createE2EPrismaClient();
   try {
-    const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-      where: { profileId: params.profileId },
-      select: { id: true },
-    });
     return await prisma.document.create({
       data: {
         title: params.documentTitle,
         text: 'Student work spec body',
         html: '<p>Student work spec body</p>',
-        profile: { connect: { id: params.profileId } },
-        studentProfile: { connect: { id: studentProfile.id } },
+        membership: { connect: { id: params.membershipId } },
         assignmentType: { connect: { id: params.assignmentTypeId } },
         submissions: {
           create: {
@@ -56,7 +51,7 @@ test.describe.serial('Teacher Student Work page', () => {
     const suffix = Date.now().toString(36);
     const submissionTitle = `Student work submission ${suffix}`;
     const document = await createSubmittedDocument({
-      profileId: e2eContext.profileId,
+      membershipId: e2eContext.membershipId,
       assignmentTypeId: e2eContext.assignmentTypeId,
       documentTitle: `Student work doc ${suffix}`,
       submissionTitle,
@@ -118,7 +113,7 @@ test.describe.serial('Teacher Student Work page', () => {
     const suffix = Date.now().toString(36);
     const submissionTitle = `Searchable submission ${suffix}`;
     const document = await createSubmittedDocument({
-      profileId: e2eContext.profileId,
+      membershipId: e2eContext.membershipId,
       assignmentTypeId: e2eContext.assignmentTypeId,
       documentTitle: `Searchable doc ${suffix}`,
       submissionTitle,
@@ -147,7 +142,7 @@ test.describe.serial('Teacher Student Work page', () => {
     const suffix = Date.now().toString(36);
     const submissionTitle = `Returnable submission ${suffix}`;
     const document = await createSubmittedDocument({
-      profileId: e2eContext.profileId,
+      membershipId: e2eContext.membershipId,
       assignmentTypeId: e2eContext.assignmentTypeId,
       documentTitle: `Returnable doc ${suffix}`,
       submissionTitle,
@@ -160,7 +155,7 @@ test.describe.serial('Teacher Student Work page', () => {
 
       const row = page.getByRole('row', { name: new RegExp(submissionTitle) });
       const openHref = await row
-        .getByRole('link', { name: /open/i })
+        .getByRole('link', { name: /view details/i })
         .getAttribute('href');
       expect(openHref).toMatch(/\/app\/submissions\//);
       expect(openHref).toContain('edit=1');

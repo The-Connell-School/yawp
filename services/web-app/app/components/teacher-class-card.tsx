@@ -1,9 +1,7 @@
-import { ClipboardCheck, Pencil, Send, Users } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { Link } from 'react-router';
-import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { ClassArt } from '~/components/class-art';
-import { Tooltip } from '~/components/ui/tooltip';
 
 export type TeacherClassCardData = {
   id: string;
@@ -37,63 +35,51 @@ export function TeacherClassCard({
   showManageActions?: boolean;
   onEdit?: () => void;
 }) {
-  const ungradedCount = klass.stats?.ungradedCount ?? 0;
-  const gradedUnreleasedCount = klass.stats?.gradedUnreleasedCount ?? 0;
-
   return (
-    <div className="group flex min-h-full flex-col overflow-hidden rounded-lg border bg-background transition-shadow hover:shadow">
+    <div className="group flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
       <Link
         to={`/app/my-classes/${klass.id}`}
         className="flex min-h-full flex-1 flex-col"
       >
-        <div className="h-32 w-full border-b">
-          <ClassArt seed={klass.id} />
+        <div className="h-32 w-full border-b border-black/5">
+          <ClassArt seed={klass.id} classArtIndex={klass.classArtIndex} />
         </div>
 
         <div className="flex flex-1 flex-col gap-3 p-4">
           <div>
             {klass.school?.name ? (
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="font-mono text-[0.625rem] font-medium uppercase tracking-wide text-muted-foreground">
                 {klass.school.name}
               </p>
             ) : null}
-            <h4 className="mt-0.5 text-base font-semibold text-foreground">
+            <h4 className="mt-1 text-balance text-base font-semibold tracking-tight text-foreground">
               {formatTeacherClassLabel(klass)}
             </h4>
           </div>
+        </div>
 
-          <div className="mt-auto flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" size="sm" className="gap-1">
-              <Users className="h-3 w-3" />
+        <div className="mt-auto grid grid-cols-2 divide-x divide-black/5 border-t border-black/5">
+          <div className="flex flex-col gap-0.5 px-4 py-3">
+            <p className="text-xl font-semibold tabular-nums text-foreground">
               {klass._count.students}
-            </Badge>
-            <Badge variant="outline" size="sm">
-              {klass._count.assignments} assignments
-            </Badge>
-            {ungradedCount > 0 ? (
-              <Tooltip
-                text={`${ungradedCount} submission${ungradedCount === 1 ? '' : 's'} to grade`}
-              >
-                <Badge className="gap-1 border-orange-200 bg-orange-100 text-orange-700">
-                  <ClipboardCheck className="h-3 w-3" />
-                  {ungradedCount}
-                </Badge>
-              </Tooltip>
-            ) : null}
-            {gradedUnreleasedCount > 0 ? (
-              <Tooltip text={`${gradedUnreleasedCount} ready to release`}>
-                <Badge className="gap-1 border-blue-200 bg-blue-100 text-blue-700">
-                  <Send className="h-3 w-3" />
-                  {gradedUnreleasedCount}
-                </Badge>
-              </Tooltip>
-            ) : null}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {klass._count.students === 1 ? 'Student' : 'Students'}
+            </p>
+          </div>
+          <div className="flex flex-col gap-0.5 px-4 py-3">
+            <p className="text-xl font-semibold tabular-nums text-foreground">
+              {klass._count.assignments}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {klass._count.assignments === 1 ? 'Assignment' : 'Assignments'}
+            </p>
           </div>
         </div>
       </Link>
 
       {showManageActions ? (
-        <div className="flex items-center gap-2 border-t px-3 py-2.5">
+        <div className="flex items-center gap-2 border-t border-black/5 px-3 py-2.5">
           <Button asChild size="sm" className="flex-1">
             <Link to={`/app/my-classes/${klass.id}`}>Open</Link>
           </Button>

@@ -1,7 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 const POST = z
@@ -21,9 +21,28 @@ const POST = z
     path: ['excerpt'],
   });
 
+function teacherDocumentAccessWhere(membershipId: string) {
+  return {
+    OR: [
+      {
+        classAssignment: {
+          class: { teachers: { some: { id: membershipId } } },
+        },
+      },
+      {
+        membership: {
+          classesAsStudent: {
+            some: { teachers: { some: { id: membershipId } } },
+          },
+        },
+      },
+    ],
+  };
+}
+
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -33,21 +52,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const { error, data } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  // Verify the submission exists and the user is a teacher of the class (or admin)
   const submission = await prisma.submission.findFirst({
     where: {
       id: data.submissionId,
       document: {
         is: {
           deletedAt: null,
-          profileId: { not: profile.id },
-          ...(isAdmin
-            ? {}
-            : {
-                class: {
-                  teachers: { some: { profileId: profile.id } },
-                },
-              }),
+          membershipId: { not: profile.id },
+          ...(isAdmin ? {} : teacherDocumentAccessWhere(profile.id)),
         },
       },
     },
@@ -67,14 +79,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const created = await prisma.submissionComment.create({
     data: {
       submission: { connect: { id: submission.id } },
-      profile: { connect: { id: profile.id } },
+      membership: { connect: { id: profile.id } },
       content: data.content,
       occurrence: data.occurrence,
       ...(data.excerpt != null &&
         data.excerpt !== '' && { excerpt: data.excerpt }),
     },
     include: {
-      profile: {
+      membership: {
         include: { user: { select: { name: true, email: true } } },
       },
     },

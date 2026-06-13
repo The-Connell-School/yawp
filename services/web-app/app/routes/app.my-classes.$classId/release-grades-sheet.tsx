@@ -27,7 +27,7 @@ type SubmissionWithDocument = {
   document: {
     id: string;
     title: string;
-    profile: {
+    membership: {
       user: {
         name: string | null;
         email: string;
@@ -111,8 +111,8 @@ export function ReleaseGradesSheet({
                 {grades.map((grade) => (
                   <TableRow key={grade.id}>
                     <TableCell className="font-medium">
-                      {grade.document.profile.user.name ||
-                        grade.document.profile.user.email}
+                      {grade.document.membership.user.name ||
+                        grade.document.membership.user.email}
                     </TableCell>
                     <TableCell>{grade.document.title}</TableCell>
                     <TableCell>

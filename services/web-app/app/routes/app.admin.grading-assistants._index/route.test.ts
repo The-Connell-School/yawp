@@ -9,13 +9,13 @@ const prisma = {
 
 const requireAdmin = mock();
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 
 const { action } = await import('./route');
@@ -35,10 +35,10 @@ describe('admin grading assistant templates action', () => {
     prisma.gradingAssistantTemplate.update.mockReset();
     requireAdmin.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     requireAdmin.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({ id: 'profile-1' });
   });
 
   test('creates a draft template from JSON rubric and prompt config', async () => {
@@ -132,7 +132,7 @@ describe('admin grading assistant templates action', () => {
         outputSchemaJson: { schemaVersion: 2 },
         calibrationNotes: 'Updated calibration.',
         version: { increment: 1 },
-        updatedById: 'profile-1',
+        updatedByMembershipId: 'profile-1',
       }),
     });
   });

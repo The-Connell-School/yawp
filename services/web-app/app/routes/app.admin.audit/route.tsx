@@ -25,7 +25,7 @@ type TimelineEntry = {
   editorSessionId: string | null;
   documentId: string | null;
   userId: string | null;
-  profileId: string | null;
+  membershipId: string | null;
   success: boolean | null;
   status: string | null;
   failureReason: string | null;
@@ -98,7 +98,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : undefined;
 
   let matchedUserIds: string[] = [];
-  let matchedProfileIds: string[] = [];
+  let matchedMembershipIds: string[] = [];
 
   if (userOrEmail) {
     const users = await prisma.user.findMany({
@@ -114,24 +114,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
     matchedUserIds = users.map((u) => u.id);
 
-    const profiles = matchedUserIds.length
-      ? await prisma.profile.findMany({
+    const memberships = matchedUserIds.length
+      ? await prisma.orgMembership.findMany({
           where: { userId: { in: matchedUserIds } },
           select: { id: true },
           take: 300,
         })
       : [];
-    matchedProfileIds = profiles.map((p) => p.id);
+    matchedMembershipIds = memberships.map((membership) => membership.id);
   }
 
   const userFilter = userOrEmail
     ? {
         OR: [
           { userId: userOrEmail },
-          { profileId: userOrEmail },
+          { membershipId: userOrEmail },
           ...(matchedUserIds.length ? [{ userId: { in: matchedUserIds } }] : []),
-          ...(matchedProfileIds.length
-            ? [{ profileId: { in: matchedProfileIds } }]
+          ...(matchedMembershipIds.length
+            ? [{ membershipId: { in: matchedMembershipIds } }]
             : []),
         ],
       }
@@ -159,7 +159,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       editorSessionId: true,
       documentId: true,
       userId: true,
-      profileId: true,
+      membershipId: true,
       status: true,
       failureReason: true,
       clientSeq: true,
@@ -182,7 +182,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     editorSessionId: entry.editorSessionId,
     documentId: entry.documentId,
     userId: entry.userId,
-    profileId: entry.profileId,
+    membershipId: entry.membershipId,
     success:
       entry.status === 'accepted'
         ? true
@@ -301,7 +301,7 @@ function AuditItem({ item }: { item: TimelineEntry }) {
   const statusBadge =
     item.status ?? (isFailure ? 'failure' : isSuccess ? 'success' : null);
   const summaryLabel =
-    item.documentId ?? item.userId ?? item.profileId ?? null;
+    item.documentId ?? item.userId ?? item.membershipId ?? null;
 
   return (
     <div
@@ -385,8 +385,8 @@ function AuditItem({ item }: { item: TimelineEntry }) {
           {item.userId ? (
             <DetailRow label="User" value={item.userId} />
           ) : null}
-          {item.profileId ? (
-            <DetailRow label="Profile" value={item.profileId} />
+          {item.membershipId ? (
+            <DetailRow label="Membership" value={item.membershipId} />
           ) : null}
           {item.status ? (
             <DetailRow label="Write status" value={item.status} />

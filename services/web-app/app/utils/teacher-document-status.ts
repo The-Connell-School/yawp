@@ -56,7 +56,7 @@ export const TEACHER_DOCUMENT_STATUS_LABELS: Record<
 > = {
   'in-progress': 'In Progress',
   'needs-grading': 'Needs Grading',
-  graded: 'Graded',
+  graded: 'Needs Releasing',
   released: 'Released',
 };
 

@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { findSubmissionForTitleEdit } from '~/utils/submission-access.server';
 
@@ -21,7 +21,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No submission id provided');
 
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -41,7 +41,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     const submission = await findSubmissionForTitleEdit({
       submissionId: params.id,
-      profileId: profile.id,
+      membershipId: profile.id,
       isAdmin: Boolean(user?.isAdmin),
     });
 
@@ -80,7 +80,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       document: {
         is: {
           deletedAt: null,
-          profileId: profile.id,
+          membershipId: profile.id,
         },
       },
     },

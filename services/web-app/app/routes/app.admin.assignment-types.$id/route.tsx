@@ -104,23 +104,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         image: { select: { id: true } },
       },
     }),
-    prisma.teacherProfile.findMany({
-      where: { isActive: true },
+    prisma.orgMembership.findMany({
+      where: { role: 'TEACHER', isActive: true },
       select: {
         id: true,
-        profile: {
-          select: {
-            organizationId: true,
-            organization: { select: { name: true } },
-            user: { select: { email: true, name: true } },
-          },
-        },
+        organizationId: true,
+        organization: { select: { name: true } },
+        user: { select: { email: true, name: true } },
       },
       orderBy: {
-        profile: {
-          user: {
-            name: 'asc',
-          },
+        user: {
+          name: 'asc',
         },
       },
     }),
@@ -157,18 +151,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     (teacher) => {
       const target = targetsByTeacherId.get(teacher.id);
       const inheritedEnabled = organizationDefaultIds.has(
-        teacher.profile.organizationId
+        teacher.organizationId
       );
       const effectiveEnabled = target ? target.enabled : inheritedEnabled;
 
       return {
         teacherProfileId: teacher.id,
         teacherName:
-          teacher.profile.user.name ??
-          teacher.profile.user.email ??
+          teacher.user.name ??
+          teacher.user.email ??
           'Unnamed teacher',
-        teacherEmail: teacher.profile.user.email ?? '',
-        organizationName: teacher.profile.organization.name,
+        teacherEmail: teacher.user.email ?? '',
+        organizationName: teacher.organization.name,
         statusLabel: target
           ? `Teacher override: ${target.enabled ? 'enabled' : 'disabled'}`
           : inheritedEnabled
@@ -222,8 +216,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
         where: { id: assignmentTypeId },
         select: { id: true },
       }),
-      prisma.teacherProfile.findUnique({
-        where: { id: teacherProfileId },
+      prisma.orgMembership.findUnique({
+        where: { id: teacherProfileId, role: 'TEACHER' },
         select: { id: true },
       }),
     ]);

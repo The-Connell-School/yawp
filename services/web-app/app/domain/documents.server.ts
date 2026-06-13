@@ -3,9 +3,10 @@ import { prisma } from '~/utils/db.server';
 export class DocumentCreationError extends Error {}
 
 type CreateDocumentInput = {
-  profileId: string;
+  membershipId: string;
   assignmentTypeId: string;
   assignmentId?: string | null;
+  classAssignmentId?: string | null;
 };
 
 type CreatedDocument = {
@@ -39,44 +40,65 @@ export async function createDocumentForAssignmentType(
     throw new DocumentCreationError('No modules for this AssignmentType.');
   }
 
-  let studentProfile = await prisma.studentProfile.findUnique({
-    where: { profileId: input.profileId },
-    include: { classes: true },
-  });
+  if (input.assignmentId || input.classAssignmentId) {
+    const assignment = input.classAssignmentId
+      ? await prisma.classAssignment.findUnique({
+          where: { id: input.classAssignmentId },
+          select: {
+            assignmentId: true,
+            assignment: { select: { assignmentTypeId: true } },
+          },
+        })
+      : null;
 
-  if (!studentProfile) {
-    studentProfile = await prisma.studentProfile.create({
-      data: { profileId: input.profileId },
-      include: { classes: true },
-    });
-  }
+    if (input.classAssignmentId) {
+      if (!assignment) {
+        throw new DocumentCreationError(
+          `ClassAssignment ${input.classAssignmentId} not found`
+        );
+      }
+      if (assignment.assignment.assignmentTypeId !== input.assignmentTypeId) {
+        throw new DocumentCreationError(
+          `ClassAssignment assignment type does not match input.assignmentTypeId`
+        );
+      }
+      if (
+        input.assignmentId &&
+        input.assignmentId !== assignment.assignmentId
+      ) {
+        throw new DocumentCreationError(
+          'assignmentId does not match ClassAssignment.assignmentId'
+        );
+      }
+    }
 
-  if (input.assignmentId) {
-    const assignment = await prisma.assignment.findUnique({
-      where: { id: input.assignmentId },
+    const templateAssignment = await prisma.assignment.findUnique({
+      where: { id: input.assignmentId ?? assignment?.assignmentId },
       select: { assignmentTypeId: true },
     });
-    if (!assignment) {
+    if (!templateAssignment) {
       throw new DocumentCreationError(
-        `Assignment ${input.assignmentId} not found`
+        `Assignment ${input.assignmentId ?? assignment?.assignmentId} not found`
       );
     }
-    if (assignment.assignmentTypeId !== input.assignmentTypeId) {
+    if (templateAssignment.assignmentTypeId !== input.assignmentTypeId) {
       throw new DocumentCreationError(
-        `Assignment.assignmentTypeId (${assignment.assignmentTypeId}) does not match input.assignmentTypeId (${input.assignmentTypeId})`
+        `Assignment.assignmentTypeId (${templateAssignment.assignmentTypeId}) does not match input.assignmentTypeId (${input.assignmentTypeId})`
       );
     }
   }
 
   const document = await prisma.document.create({
     data: {
-      profileId: input.profileId,
-      studentProfileId: studentProfile.id,
+      membershipId: input.membershipId,
       text: '',
       html: '',
       title: '',
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
+      ...(input.classAssignmentId
+        ? { classAssignmentId: input.classAssignmentId }
+        : {}),
       assignmentModuleSessions: {
         create: assignmentModules.map((assignmentModule) => {
           const firstInstruction = assignmentModule.instructions[0];

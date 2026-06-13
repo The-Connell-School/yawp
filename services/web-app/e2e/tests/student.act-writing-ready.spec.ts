@@ -1,6 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setAssignmentsForOrganization } from '../db-helpers';
+import { setAssignmentsForOrganization, createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('ACT Writing Ready advancement', () => {
   test('Ready advances to the next ordered instruction without duplicating the opening prompt', async ({
@@ -79,14 +79,12 @@ test.describe.serial('ACT Writing Ready advancement', () => {
       });
       assignmentTypeId = assignmentType.id;
 
-      const assignment = await prisma.assignment.create({
-        data: {
-          classId: e2eContext.classId,
-          assignmentTypeId: assignmentType.id,
-          title: `ACT Writing Ready E2E ${suffix}`,
-          prompt: `ACT Writing prompt ${suffix}`,
-        },
-        select: { id: true },
+      const { assignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: assignmentType.id,
+        title: `ACT Writing Ready E2E ${suffix}`,
+        prompt: `ACT Writing prompt ${suffix}`,
       });
 
       await signIn(e2eContext.userEmail, 'johndoe');

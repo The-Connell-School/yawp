@@ -14,7 +14,7 @@ describe('grading auth helpers', () => {
   test('builds document class filters for current and legacy submissions', () => {
     expect(
       buildTeacherClassWhere({
-        profileId: 'teacher-profile-1',
+        membershipId: 'teacher-membership-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -26,19 +26,19 @@ describe('grading auth helpers', () => {
             class: {
               teachers: {
                 some: {
-                  profileId: 'teacher-profile-1',
+                  id: 'teacher-membership-1',
                 },
               },
             },
           },
         },
         {
-          studentProfile: {
-            classes: {
+          membership: {
+            classesAsStudent: {
               some: {
                 teachers: {
                   some: {
-                    profileId: 'teacher-profile-1',
+                    id: 'teacher-membership-1',
                   },
                 },
               },
@@ -52,7 +52,7 @@ describe('grading auth helpers', () => {
   test('does not add class filtering for admins', () => {
     expect(
       buildTeacherClassWhere({
-        profileId: 'admin-profile-1',
+        membershipId: 'admin-membership-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
@@ -63,7 +63,7 @@ describe('grading auth helpers', () => {
   test('allows teachers and admins to manage grades', () => {
     expect(
       canManageGrades({
-        profileId: 'teacher-profile-1',
+        membershipId: 'teacher-membership-1',
         teacherProfileId: 'teacher-1',
         isTeacher: true,
         isAdmin: false,
@@ -71,7 +71,7 @@ describe('grading auth helpers', () => {
     ).toBe(true);
     expect(
       canManageGrades({
-        profileId: 'admin-profile-1',
+        membershipId: 'admin-membership-1',
         teacherProfileId: null,
         isTeacher: false,
         isAdmin: true,
@@ -80,7 +80,7 @@ describe('grading auth helpers', () => {
   });
 
   test('prevents grading own document', () => {
-    expect(isGradingOwnDocument('profile-1', 'profile-1')).toBe(true);
-    expect(isGradingOwnDocument('profile-1', 'profile-2')).toBe(false);
+    expect(isGradingOwnDocument('membership-1', 'membership-1')).toBe(true);
+    expect(isGradingOwnDocument('membership-1', 'membership-2')).toBe(false);
   });
 });

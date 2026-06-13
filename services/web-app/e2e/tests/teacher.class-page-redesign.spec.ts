@@ -79,17 +79,12 @@ test.describe.serial('Teacher class page redesign', () => {
     try {
       // Earlier suites may grade the seeded submitted document, so provide a
       // guaranteed needs-grading row of our own.
-      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
-      });
       const document = await prisma.document.create({
         data: {
           title: `Lifecycle needs grading ${suffix}`,
           text: 'Lifecycle spec body',
           html: '<p>Lifecycle spec body</p>',
-          profile: { connect: { id: e2eContext.profileId } },
-          studentProfile: { connect: { id: studentProfile.id } },
+          membership: { connect: { id: e2eContext.membershipId } },
           assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
           submissions: {
             create: {
@@ -114,7 +109,7 @@ test.describe.serial('Teacher class page redesign', () => {
       // Seeded + local data cover the full lifecycle.
       await expect(table.getByText('In Progress').first()).toBeVisible();
       await expect(table.getByText('Needs Grading').first()).toBeVisible();
-      await expect(table.getByText(/^Graded/).first()).toBeVisible();
+      await expect(table.getByText(/^Needs Releasing/).first()).toBeVisible();
       await expect(table.getByText(/^Released/).first()).toBeVisible();
 
       // The retired wording must not survive.
@@ -124,8 +119,10 @@ test.describe.serial('Teacher class page redesign', () => {
       );
 
       // Status filter narrows rows.
-      await page.getByTestId('class-documents-status-filter').click();
-      await page.getByRole('option', { name: 'Needs Grading' }).click();
+      await page
+        .getByTestId('class-documents-status-chips')
+        .getByText(/Needs Grading/)
+        .click();
       await expect(table.getByText('Needs Grading').first()).toBeVisible();
       await expect(table.getByText(/^Released/)).toHaveCount(0);
     } finally {
@@ -153,15 +150,10 @@ test.describe.serial('Teacher class page redesign', () => {
     const documentIds: string[] = [];
 
     try {
-      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
-      });
       const baseData = {
         text: 'Redesign spec body',
         html: '<p>Redesign spec body</p>',
-        profile: { connect: { id: e2eContext.profileId } },
-        studentProfile: { connect: { id: studentProfile.id } },
+        membership: { connect: { id: e2eContext.membershipId } },
         assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
       };
       const submittedDoc = await prisma.document.create({
@@ -226,5 +218,164 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.getByTestId('class-release-grades-open')).toBeVisible();
+  });
+
+  test('documents tab can group by status', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('class-documents-group-filter').click();
+    await page.getByRole('option', { name: 'Group by status' }).click();
+
+    await expect(
+      page.getByRole('button', { name: /In Progress/i }).first()
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Needs Grading/i }).first()
+    ).toBeVisible();
+  });
+
+  test('add student flow checks email then sends an invite for new accounts', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const studentEmail = `class-invite-${Date.now()}@example.com`;
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto(`/app/my-classes/${e2eContext.classId}`);
+      await page.waitForLoadState('networkidle');
+
+      await page.getByRole('button', { name: /add student/i }).click();
+      await page.getByTestId('add-student-email-input').fill(studentEmail);
+      await page.getByTestId('add-student-next-button').click();
+
+      await expect(page.getByTestId('add-student-confirm-message')).toContainText(
+        "don't have an account in the system"
+      );
+      await expect(page.getByText(studentEmail)).toBeVisible();
+
+      await page.getByTestId('add-student-confirm-button').click();
+
+      await expect
+        .poll(
+          () =>
+            prisma.invitation.findUnique({
+              where: {
+                target_type: {
+                  target: studentEmail,
+                  type: 'onboard-student',
+                },
+              },
+            }),
+          { timeout: 5000, message: 'Invitation not created in time' }
+        )
+        .not.toBeNull();
+
+      const invitation = await prisma.invitation.findUnique({
+        where: {
+          target_type: { target: studentEmail, type: 'onboard-student' },
+        },
+      });
+
+      expect(JSON.parse(invitation?.metadata ?? '{}')).toEqual({
+        klassId: e2eContext.classId,
+      });
+    } finally {
+      await prisma.invitation
+        .deleteMany({ where: { target: studentEmail } })
+        .catch(() => {});
+      await prisma.$disconnect();
+    }
+  });
+
+  test('documents filters and grouping persist across reload', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+    await page.waitForLoadState('networkidle');
+
+    await page
+      .getByTestId('class-documents-status-chips')
+      .getByText(/Needs Grading/)
+      .click();
+    await page.getByTestId('class-documents-group-filter').click();
+    await page.getByRole('option', { name: 'Group by student' }).click();
+
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveURL(/status=needs-grading/);
+    await expect(page.getByTestId('class-documents-group-filter')).toContainText(
+      'Group by student'
+    );
+  });
+
+  test('collapsed document groups persist across reload', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('class-documents-group-filter').click();
+    await page.getByRole('option', { name: 'Group by status' }).click();
+
+    const inProgressGroup = page
+      .getByRole('button', { name: /In Progress/i })
+      .first();
+    await expect(inProgressGroup).toBeVisible();
+    await inProgressGroup.click();
+
+    await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+    await page.waitForLoadState('networkidle');
+
+    await expect(page.getByTestId('class-documents-group-filter')).toContainText(
+      'Group by status'
+    );
+    await expect(
+      page.locator('[data-state="closed"]').filter({
+        has: page.getByRole('button', { name: /^In Progress/i }),
+      })
+    ).toHaveCount(1);
+  });
+
+  test('sidebar navigation from class detail updates the page', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto(`/app/my-classes/${e2eContext.classId}`);
+    await page.waitForLoadState('networkidle');
+
+    await page
+      .locator('nav')
+      .getByRole('link', { name: 'Dashboard', exact: true })
+      .click();
+    await page.waitForURL(/\/app\/?$/);
+    await expect(page.getByTestId('app._index')).toBeVisible();
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
+
+    await page.goto(`/app/my-classes/${e2eContext.classId}`);
+    await page
+      .locator('nav')
+      .getByRole('link', { name: 'Documents', exact: true })
+      .click();
+    await page.waitForURL(/\/app\/student-work/);
+    await expect(page.getByRole('heading', { name: /student work/i })).toBeVisible();
+    await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
   });
 });

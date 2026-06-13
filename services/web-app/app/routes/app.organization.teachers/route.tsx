@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Checkbox } from '~/components/ui/checkbox';
-import { requireProfile, requireOwner } from '~/utils/auth.server';
+import { requireMembership, requireOwner } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { SearchInput } from '~/components/search-input';
@@ -43,53 +43,43 @@ import { normalizeEmail } from '~/utils/normalize-email';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
 
   const where = {
-    profile: {
-      organizationId: profile.organization.id,
-    },
+    organizationId: profile.organization.id,
+    role: 'TEACHER' as const,
     isActive: true,
     ...(q
       ? {
-          profile: {
-            organizationId: profile.organization.id,
-            user: {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' as const } },
-                { email: { contains: q, mode: 'insensitive' as const } },
-              ],
-            },
+          user: {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' as const } },
+              { email: { contains: q, mode: 'insensitive' as const } },
+            ],
           },
         }
       : {}),
   } as const;
 
-  const teachers = await prisma.teacherProfile.findMany({
+  const teachers = await prisma.orgMembership.findMany({
     where,
     include: {
-      profile: {
-        include: {
-          user: true,
-        },
-      },
+      user: true,
       assignedTeacherTrainings: {
         select: { id: true },
       },
       _count: {
         select: {
-          classes: true,
+          classesAsTeacher: true,
           assignedTeacherTrainings: true,
         },
       },
     },
     orderBy: {
-      profile: {
-        user: {
-          name: 'asc',
-        },
+      user: {
+        name: 'asc',
       },
     },
   });
@@ -104,7 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -119,10 +109,11 @@ export async function action({ request }: ActionFunctionArgs) {
       .map((v) => v.toString())
       .filter(Boolean);
 
-    const teacher = await prisma.teacherProfile.findFirst({
+    const teacher = await prisma.orgMembership.findFirst({
       where: {
         id: teacherId,
-        profile: { organizationId: profile.organization.id },
+        organizationId: profile.organization.id,
+        role: 'TEACHER',
       },
       select: { id: true },
     });
@@ -148,7 +139,7 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    await prisma.teacherProfile.update({
+    await prisma.orgMembership.update({
       where: { id: teacherId },
       data: {
         assignedTeacherTrainings: {
@@ -167,12 +158,11 @@ export async function action({ request }: ActionFunctionArgs) {
       return dataResponse({ error: 'No teachers selected' }, { status: 400 });
     }
 
-    const teachers = await prisma.teacherProfile.findMany({
+    const teachers = await prisma.orgMembership.findMany({
       where: {
         id: { in: teacherIds },
-        profile: {
-          organizationId: profile.organization.id,
-        },
+        organizationId: profile.organization.id,
+        role: 'TEACHER',
       },
     });
 
@@ -183,7 +173,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.teacherProfile.updateMany({
+    await prisma.orgMembership.updateMany({
       where: { id: { in: teacherIds } },
       data: { isActive: false },
     });
@@ -437,11 +427,11 @@ export default function OrganizationTeachersRoute() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">
-                          {teacher.profile.user.name || 'Not set'}
+                          {teacher.user.name || 'Not set'}
                         </TableCell>
-                        <TableCell>{teacher.profile.user.email}</TableCell>
+                        <TableCell>{teacher.user.email}</TableCell>
                         <TableCell>
-                          {teacher._count.classes}
+                          {teacher._count.classesAsTeacher}
                         </TableCell>
                         <TableCell>{teacher._count.assignedTeacherTrainings}</TableCell>
                         <TableCell className="pr-4">
@@ -587,14 +577,14 @@ function TeacherSheet({
           <div className="space-y-2">
             <Label>Teacher Name</Label>
             <div className="text-sm font-medium text-muted-foreground">
-              {editingTeacher.profile.user.name || 'Not set'}
+              {editingTeacher.user.name || 'Not set'}
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Email</Label>
             <div className="text-sm font-medium text-muted-foreground">
-              {editingTeacher.profile.user.email}
+              {editingTeacher.user.email}
             </div>
           </div>
 

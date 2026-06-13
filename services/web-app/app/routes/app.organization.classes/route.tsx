@@ -36,7 +36,7 @@ import { Pagination } from '~/components/table/pagination';
 import { cn } from '~/utils/misc';
 import { useFetcher } from 'react-router';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
-import { requireProfile, requireOwner } from '~/utils/auth.server';
+import { requireMembership, requireOwner } from '~/utils/auth.server';
 import {
   getOrganizationClassesTableCookie,
   setOrganizationClassesTableCookie,
@@ -106,7 +106,7 @@ const COLUMNS: CookieColumns = {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   const { sort, direction, skip, take } =
@@ -142,11 +142,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         school: true,
         teachers: {
           include: {
-            profile: {
-              include: {
-                user: true,
-              },
-            },
+            user: true,
           },
         },
         _count: {
@@ -165,25 +161,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { organizationId: profile.organization.id },
       orderBy: { name: 'asc' },
     }),
-    prisma.teacherProfile.findMany({
+    prisma.orgMembership.findMany({
       where: {
-        profile: {
-          organizationId: profile.organization.id,
-        },
+        organizationId: profile.organization.id,
+        role: 'TEACHER',
         isActive: true,
       },
       include: {
-        profile: {
-          include: {
-            user: true,
-          },
-        },
+        user: true,
       },
       orderBy: {
-        profile: {
-          user: {
-            name: 'asc',
-          },
+        user: {
+          name: 'asc',
         },
       },
     }),
@@ -201,7 +190,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -467,10 +456,11 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (applyTeachers && teacherIds.length > 0) {
-      const teachersOk = await prisma.teacherProfile.findMany({
+      const teachersOk = await prisma.orgMembership.findMany({
         where: {
           id: { in: teacherIds },
-          profile: { organizationId: profile.organization.id },
+          organizationId: profile.organization.id,
+          role: 'TEACHER',
         },
       });
       if (teachersOk.length !== teacherIds.length) {
@@ -1197,8 +1187,7 @@ function ClassSheet({
                         htmlFor={`teacher-${teacher.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        {teacher.profile.user.name ||
-                          teacher.profile.user.email}
+                        {teacher.user.name || teacher.user.email}
                       </Label>
                     </div>
                   ))
@@ -1251,7 +1240,7 @@ function BulkEditClassSheet({
   schools: { id: string; name: string }[];
   teachers: {
     id: string;
-    profile: { user: { name: string | null; email: string } };
+    user: { name: string | null; email: string };
   }[];
 }) {
   const fetcher = useFetcher({
@@ -1383,8 +1372,7 @@ function BulkEditClassSheet({
                         htmlFor={`bulk-teacher-${teacher.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        {teacher.profile.user.name ||
-                          teacher.profile.user.email}
+                        {teacher.user.name || teacher.user.email}
                       </Label>
                     </div>
                   ))

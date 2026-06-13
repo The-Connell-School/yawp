@@ -7,7 +7,7 @@ import {
 import { prisma } from '~/utils/db.server';
 
 export type GradingActor = {
-  profileId: string;
+  membershipId: string;
   teacherProfileId: string | null;
   isTeacher: boolean;
   isAdmin: boolean;
@@ -24,7 +24,7 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
   ]);
 
   return {
-    profileId: membership.id,
+    membershipId: membership.id,
     teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
     isTeacher: isTeacherMembership(membership),
     isAdmin: Boolean(user?.isAdmin),
@@ -46,19 +46,19 @@ export function buildTeacherClassWhere(
           class: {
             teachers: {
               some: {
-                profileId: actor.profileId,
+                id: actor.membershipId,
               },
             },
           },
         },
       },
       {
-        studentProfile: {
-          classes: {
+        membership: {
+          classesAsStudent: {
             some: {
               teachers: {
                 some: {
-                  profileId: actor.profileId,
+                  id: actor.membershipId,
                 },
               },
             },
@@ -71,8 +71,8 @@ export function buildTeacherClassWhere(
 
 /** Document owner must never use teacher grading flows on that submission, including admins. */
 export function isGradingOwnDocument(
-  actorProfileId: string,
-  documentProfileId: string
+  actorMembershipId: string,
+  documentMembershipId: string
 ): boolean {
-  return actorProfileId === documentProfileId;
+  return actorMembershipId === documentMembershipId;
 }

@@ -91,7 +91,7 @@ describe('status labels and badge classes', () => {
     expect(TEACHER_DOCUMENT_STATUS_LABELS).toEqual({
       'in-progress': 'In Progress',
       'needs-grading': 'Needs Grading',
-      graded: 'Graded',
+      graded: 'Needs Releasing',
       released: 'Released',
     });
   });

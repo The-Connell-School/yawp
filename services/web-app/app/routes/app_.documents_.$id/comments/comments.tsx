@@ -65,8 +65,8 @@ export const Comments = ({
   const optimisticComment: CommentType | [] =
     !readOnly && fetcher?.formData
       ? {
-          profile: user.selectedProfile as any,
-          profileId: user.selectedProfile!.id,
+          membership: user.selectedMembership as unknown as CommentType['membership'],
+          membershipId: user.selectedMembership!.id,
           id: 'optimistic-document-comment',
           createdAt: new Date(),
           content: fetcher.formData.get('content') as string,

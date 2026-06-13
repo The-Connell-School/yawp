@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { invariant } from '@epic-web/invariant';
 import { type LoaderFunctionArgs, data as dataResponse } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 function hashContent(html: string, text: string): string {
@@ -12,7 +12,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   invariant(params.id, 'No document id provided');
 
   const userId = await requireUserId(request);
-  await requireProfile(request, userId);
+  await requireMembership(request, userId);
 
   const url = new URL(request.url);
   const before = url.searchParams.get('before'); // ISO timestamp cursor

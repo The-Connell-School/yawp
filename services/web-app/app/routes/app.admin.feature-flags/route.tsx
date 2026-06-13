@@ -156,22 +156,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { name: { in: settingNames } },
       select: { name: true, value: true, valueType: true },
     }),
-    prisma.teacherProfile.findMany({
-      where: { isActive: true },
+    prisma.orgMembership.findMany({
+      where: { role: 'TEACHER', isActive: true },
       select: {
         id: true,
-        profile: {
-          select: {
-            organization: { select: { name: true } },
-            user: { select: { email: true, name: true } },
-          },
-        },
+        organization: { select: { name: true } },
+        user: { select: { email: true, name: true } },
       },
       orderBy: {
-        profile: {
-          user: {
-            name: 'asc',
-          },
+        user: {
+          name: 'asc',
         },
       },
     }),
@@ -226,12 +220,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         kind: 'teacher',
         id: teacher.id,
         label:
-          teacher.profile.user.name ??
-          teacher.profile.user.email ??
+          teacher.user.name ??
+          teacher.user.email ??
           'Unnamed teacher',
         detail: joinDetailParts([
-          teacher.profile.user.email,
-          teacher.profile.organization.name,
+          teacher.user.email,
+          teacher.organization.name,
         ]),
       })),
       schoolTargets: schools.map((school) => ({
@@ -277,8 +271,8 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (targetKind === 'teacher') {
-      const teacher = await prisma.teacherProfile.findUnique({
-        where: { id: targetId },
+      const teacher = await prisma.orgMembership.findUnique({
+        where: { id: targetId, role: 'TEACHER' },
         select: { id: true },
       });
       if (!teacher) {

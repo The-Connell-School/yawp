@@ -8,7 +8,7 @@ import {
 import { Form, useLoaderData, useSearchParams } from 'react-router';
 import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
-import { requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
@@ -23,22 +23,21 @@ const ClassSelectionSchema = z.object({
   classId: z.string().min(1, 'Class is required'),
 });
 
+async function connectMembershipToClass(membershipId: string, classId: string) {
+  await prisma.orgMembership.update({
+    where: { id: membershipId },
+    data: { classesAsStudent: { connect: { id: classId } } },
+  });
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
+  const membership = await requireMembership(request, userId);
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
-  const profile = await prisma.profile.findFirst({
-    where: { userId },
-    select: { id: true, organizationId: true },
-  });
-
-  if (!profile) {
-    throw new Error('Profile not found');
-  }
-
   if (!code) {
-    return data({ profile, classes: [], code: null });
+    return data({ membership, classes: [], code: null });
   }
 
   const classes = await prisma.class.findMany({
@@ -55,7 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       school: { select: { name: true } },
       teachers: {
         select: {
-          profile: { select: { user: { select: { name: true } } } },
+          user: { select: { name: true } },
         },
       },
     },
@@ -66,22 +65,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ],
   });
 
-  return data({ profile, classes, code });
+  return data({ membership, classes, code });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
+  const membership = await requireMembership(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');
-
-  const profile = await prisma.profile.findFirst({
-    where: { userId },
-    select: { id: true },
-  });
-
-  if (!profile) {
-    throw new Error('Profile not found');
-  }
 
   if (intent === 'validate-code') {
     const { error, data: codeData } = await parseFormData(formData, CodeSchema);
@@ -101,25 +92,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (classes.length === 1) {
-      const studentProfile = await prisma.studentProfile.findFirst({
-        where: { profileId: profile.id },
-      });
-
-      if (!studentProfile) {
-        await prisma.studentProfile.create({
-          data: {
-            profileId: profile.id,
-            classes: { connect: { id: classes[0]!.id } },
-          },
-        });
-      } else {
-        await prisma.studentProfile.update({
-          where: { id: studentProfile.id },
-          data: {
-            classes: { connect: { id: classes[0]!.id } },
-          },
-        });
-      }
+      await connectMembershipToClass(membership.id, classes[0]!.id);
 
       return redirectWithToast('/app', {
         title: 'Success',
@@ -151,25 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
       return validationError({ fieldErrors: { classId: 'Class not found' } });
     }
 
-    const studentProfile = await prisma.studentProfile.findFirst({
-      where: { profileId: profile.id },
-    });
-
-    if (!studentProfile) {
-      await prisma.studentProfile.create({
-        data: {
-          profileId: profile.id,
-          classes: { connect: { id: klass.id } },
-        },
-      });
-    } else {
-      await prisma.studentProfile.update({
-        where: { id: studentProfile.id },
-        data: {
-          classes: { connect: { id: klass.id } },
-        },
-      });
-    }
+    await connectMembershipToClass(membership.id, klass.id);
 
     return redirectWithToast('/app', {
       title: 'Success',
@@ -254,7 +209,7 @@ export default function Route() {
                 value: klass.id,
                 label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
                   klass.teachers
-                    .map((t) => t.profile.user.name)
+                    .map((t) => t.user.name)
                     .filter(Boolean)
                     .join(', ') || 'Teacher'
                 }`,
@@ -269,4 +224,3 @@ export default function Route() {
     </div>
   );
 }
-

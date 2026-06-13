@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
@@ -17,7 +17,7 @@ function hashString(value: string) {
 
 const actionImpl = async ({ request }: ActionFunctionArgs) => {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -33,17 +33,13 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
         ? {}
         : {
             OR: [
-              { profile: { id: profile.id } },
+              { membershipId: profile.id },
               {
-                profile: {
-                  studentProfile: {
-                    classes: {
-                      some: {
-                        teachers: {
-                          some: {
-                            profileId: profile.id,
-                          },
-                        },
+                membership: {
+                  classesAsStudent: {
+                    some: {
+                      teachers: {
+                        some: { id: profile.id },
                       },
                     },
                   },
@@ -58,7 +54,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       text: true,
       title: true,
       revision: true,
-      assignment: {
+      classAssignment: {
         select: {
           class: {
             select: {
@@ -70,9 +66,9 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
           },
         },
       },
-      studentProfile: {
+      membership: {
         select: {
-          classes: {
+          classesAsStudent: {
             select: {
               id: true,
               schoolId: true,
@@ -123,7 +119,7 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       source: 'submit-document',
       status: 'pending',
       userId,
-      profileId: profile.id,
+      membershipId: profile.id,
       documentId: document.id,
       title: document.title,
       html,

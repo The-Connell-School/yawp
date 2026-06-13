@@ -18,13 +18,13 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
   isDocumentSubmissionEnabledForScope,
@@ -48,11 +48,16 @@ describe('api.domain.submit-document', () => {
     prisma.documentWriteJournal.update.mockReset();
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({
+      id: 'profile-1',
+      role: 'STUDENT',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
     prisma.document.findFirst.mockResolvedValue({
       id: 'doc-1',
@@ -61,9 +66,9 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submissions: [],
       revision: 4,
-      assignment: null,
-      studentProfile: {
-        classes: [
+      classAssignment: null,
+      membership: {
+        classesAsStudent: [
           {
             id: 'class-1',
             schoolId: 'school-1',
@@ -136,7 +141,7 @@ describe('api.domain.submit-document', () => {
       title: 'Essay',
       submissions: [],
       revision: 4,
-      assignment: {
+      classAssignment: {
         class: {
           id: 'assignment-class',
           schoolId: 'assignment-school',
@@ -144,8 +149,10 @@ describe('api.domain.submit-document', () => {
           teachers: [{ id: 'assignment-teacher' }],
         },
       },
-      studentProfile: {
-        classes: [{ id: 'student-class', schoolId: 'student-school' }],
+      membership: {
+        classesAsStudent: [
+          { id: 'student-class', schoolId: 'student-school' },
+        ],
       },
     });
 

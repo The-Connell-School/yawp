@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
-import { setPilotFeatureAccessTarget } from './db-helpers';
+import { createDeployedAssignment, setPilotFeatureAccessTarget } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
 
@@ -42,9 +42,9 @@ export type E2EContext = {
   userEmail: string;
   adminUserId: string;
   adminEmail: string;
-  profileId: string;
+  membershipId: string;
   teacherUserId: string;
-  teacherProfileId: string;
+  teacherMembershipId: string;
   teacherName: string;
   teacherEmail: string;
   assignmentTypeId: string;
@@ -92,21 +92,20 @@ export async function seedE2E(): Promise<E2EContext> {
       email: seededTeacherEmail,
       name: seededTeacherName,
       password: { create: createPassword('teacher-e2e-password') },
-      profiles: {
+      memberships: {
         create: {
           organizationId: org.id,
-          isOwner: true,
-          teacherProfile: { create: {} },
+          isOrgOwner: true,
+          role: 'TEACHER',
         },
       },
     },
-    include: { profiles: { include: { teacherProfile: true } } },
+    include: { memberships: true },
   });
-  const seededTeacherProfileId = seededTeacher.profiles[0].teacherProfile
-    ?.id as string;
-  const seededTeacherProfile = seededTeacher.profiles[0];
-  await prisma.teacherProfile.update({
-    where: { id: seededTeacherProfileId },
+  const seededTeacherMembership = seededTeacher.memberships[0];
+  const seededTeacherMembershipId = seededTeacherMembership.id;
+  await prisma.orgMembership.update({
+    where: { id: seededTeacherMembershipId },
     data: { schools: { connect: { id: school.id } } },
   });
   const seededClass = await prisma.class.create({
@@ -116,7 +115,7 @@ export async function seedE2E(): Promise<E2EContext> {
       period: '1st',
       grade: '9th',
       schoolId: school.id,
-      teachers: { connect: { id: seededTeacherProfileId } },
+      teachers: { connect: { id: seededTeacherMembershipId } },
     },
     select: { id: true },
   });
@@ -127,14 +126,22 @@ export async function seedE2E(): Promise<E2EContext> {
       email: 'jdoe@brock.software',
       name: 'John Doe',
       password: { create: createPassword('johndoe') },
-      profiles: { create: [{ organizationId: org.id, isOwner: false }] },
+      memberships: {
+        create: [
+          { organizationId: org.id, isOrgOwner: false, role: 'STUDENT' as const },
+        ],
+      },
     },
     {
       email: 'admin.e2e@yawp.test',
       name: 'Admin E2E',
       isAdmin: true,
       password: { create: createPassword('admin-e2e-password') },
-      profiles: { create: [{ organizationId: org.id, isOwner: true }] },
+      memberships: {
+        create: [
+          { organizationId: org.id, isOrgOwner: true, role: 'TEACHER' as const },
+        ],
+      },
     },
   ];
 
@@ -149,15 +156,12 @@ export async function seedE2E(): Promise<E2EContext> {
   const adminUser = await prisma.user.findUniqueOrThrow({
     where: { email: 'admin.e2e@yawp.test' },
   });
-  const profile = await prisma.profile.findFirstOrThrow({
+  const membership = await prisma.orgMembership.findFirstOrThrow({
     where: { userId: user.id },
   });
-  // Create a StudentProfile to satisfy FK on AssignmentModuleSession
-  const studentProfile = await prisma.studentProfile.create({
-    data: {
-      profileId: profile.id,
-      classes: { connect: { id: seededClass.id } },
-    },
+  await prisma.orgMembership.update({
+    where: { id: membership.id },
+    data: { classesAsStudent: { connect: { id: seededClass.id } } },
   });
   const assignmentType = await prisma.assignmentType.create({
     data: {
@@ -408,6 +412,15 @@ export async function seedE2E(): Promise<E2EContext> {
     ],
   });
 
+  const { assignment: seededAssignment, classAssignment: seededClassAssignment } =
+    await createDeployedAssignment({
+      prisma,
+      classId: seededClass.id,
+      assignmentTypeId: assignmentType.id,
+      title: 'E2E Class Assignment',
+      prompt: 'E2E prompt for class assignment.',
+    });
+
   const teacherTraining = await prisma.teacherTraining.create({
     data: {
       title: 'E2E Teacher Lounge',
@@ -432,8 +445,7 @@ export async function seedE2E(): Promise<E2EContext> {
       title: 'Fresh Document',
       text: '',
       html: '<p></p>',
-      profileId: profile.id,
-      studentProfileId: studentProfile.id,
+      membershipId: membership.id,
       assignmentTypeId: assignmentType.id,
     },
     select: { id: true },
@@ -449,9 +461,10 @@ export async function seedE2E(): Promise<E2EContext> {
       text: editedDocText,
       html: editedDocHtml,
       revision: 2,
-      profileId: profile.id,
-      studentProfileId: studentProfile.id,
+      membershipId: membership.id,
       assignmentTypeId: assignmentType.id,
+      assignmentId: seededAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
     },
     select: { id: true },
   });
@@ -479,26 +492,16 @@ export async function seedE2E(): Promise<E2EContext> {
   const submittedDocTitle = 'E2E Document workspace title';
   const submittedSubmissionTitle = 'E2E Essay submission title';
   const submittedAt = new Date();
-  // Create an assignment so the document appears in the teacher's class view
-  const seededAssignment = await prisma.assignment.create({
-    data: {
-      classId: seededClass.id,
-      assignmentTypeId: assignmentType.id,
-      title: 'E2E Class Assignment',
-      prompt: 'E2E prompt for class assignment.',
-    },
-    select: { id: true },
-  });
   const submittedDoc = await prisma.document.create({
     data: {
       title: submittedDocTitle,
       text: submittedDocText,
       html: submittedDocHtml,
       revision: 3,
-      profileId: profile.id,
-      studentProfileId: studentProfile.id,
+      membershipId: membership.id,
       assignmentTypeId: assignmentType.id,
       assignmentId: seededAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
     },
     select: { id: true },
   });
@@ -536,9 +539,10 @@ export async function seedE2E(): Promise<E2EContext> {
       text: gradedDocText,
       html: gradedDocHtml,
       revision: 4,
-      profileId: profile.id,
-      studentProfileId: studentProfile.id,
+      membershipId: membership.id,
       assignmentTypeId: assignmentType.id,
+      assignmentId: seededAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
     },
     select: { id: true },
   });
@@ -549,7 +553,7 @@ export async function seedE2E(): Promise<E2EContext> {
       text: gradedDocText,
       title: gradedDocTitle,
       submittedAt: gradedSubmittedAt,
-      gradedById: seededTeacherProfile.id,
+      gradedByMembershipId: seededTeacherMembership.id,
       gradedAt: new Date(),
       numericPercentage: 77,
       letterGrade: 'C+',
@@ -579,7 +583,7 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.submissionComment.create({
     data: {
       submissionId: gradedSubmission.id,
-      profileId: seededTeacherProfile.id,
+      membershipId: seededTeacherMembership.id,
       content: 'Strong thesis statement in the opening sentence.',
       excerpt: 'Education is the foundation of society.',
       occurrence: 1,
@@ -588,7 +592,7 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.submissionComment.create({
     data: {
       submissionId: gradedSubmission.id,
-      profileId: seededTeacherProfile.id,
+      membershipId: seededTeacherMembership.id,
       content: 'Consider adding more specific examples to support your claims.',
       excerpt: 'students develop critical thinking skills',
       occurrence: 1,
@@ -605,9 +609,10 @@ export async function seedE2E(): Promise<E2EContext> {
       text: unreleasedDocText,
       html: unreleasedDocHtml,
       revision: 1,
-      profileId: profile.id,
-      studentProfileId: studentProfile.id,
+      membershipId: membership.id,
       assignmentTypeId: assignmentType.id,
+      assignmentId: seededAssignment.id,
+      classAssignmentId: seededClassAssignment.id,
     },
     select: { id: true },
   });
@@ -618,7 +623,7 @@ export async function seedE2E(): Promise<E2EContext> {
       text: unreleasedDocText,
       title: unreleasedDocTitle,
       submittedAt: new Date(),
-      gradedById: seededTeacherProfile.id,
+      gradedByMembershipId: seededTeacherMembership.id,
       gradedAt: new Date(),
       numericPercentage: 80,
       letterGrade: 'B',
@@ -629,7 +634,7 @@ export async function seedE2E(): Promise<E2EContext> {
   await prisma.submissionComment.create({
     data: {
       submissionId: unreleasedGradedSubmission.id,
-      profileId: seededTeacherProfile.id,
+      membershipId: seededTeacherMembership.id,
       content: 'Secret teacher note before release.',
       excerpt: 'The first sentence matters',
       occurrence: 1,
@@ -662,7 +667,7 @@ export async function seedE2E(): Promise<E2EContext> {
     prisma,
     featureKey: 'ap_history_essay',
     targetKind: 'teacher',
-    targetId: seededTeacherProfileId,
+    targetId: seededTeacherMembershipId,
     enabled: true,
     note: 'E2E AP History library-first teacher access',
   });
@@ -693,9 +698,9 @@ export async function seedE2E(): Promise<E2EContext> {
     userEmail: user.email,
     adminUserId: adminUser.id,
     adminEmail: adminUser.email,
-    profileId: profile.id,
+    membershipId: membership.id,
     teacherUserId: seededTeacher.id,
-    teacherProfileId: seededTeacherProfileId,
+    teacherMembershipId: seededTeacherMembershipId,
     teacherName: seededTeacherName,
     teacherEmail: seededTeacherEmail,
     assignmentTypeId: assignmentType.id,

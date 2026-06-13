@@ -7,7 +7,7 @@ export async function getTeacherClassCardStats(classId: string) {
       document: {
         is: {
           deletedAt: null,
-          assignment: { classId },
+          classAssignment: { classId },
         },
       },
     },

@@ -28,20 +28,20 @@ import {
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu';
 import { prisma } from '~/utils/db.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const assignmentCounts = await prisma.teacherProfile.findUnique({
-    where: { id: profile.teacherProfile.id },
+  const assignmentCounts = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
     select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
@@ -52,7 +52,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       where: {
         id: params.id,
         ...(hasAssignedCourses
-          ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+          ? { assignedTeachers: { some: { id: profile.id } } }
           : {}),
       },
       select: {
@@ -66,7 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             videoDuration: true,
             teacherTrainingModuleSessions: {
               where: {
-                teacherProfileId: profile.teacherProfile.id,
+                membershipId: profile.id,
               },
               select: {
                 id: true,
@@ -90,7 +90,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         teacherTrainingModuleSessions: {
           where: {
-            teacherProfileId: profile.teacherProfile.id,
+            membershipId: profile.id,
           },
           select: {
             id: true,
@@ -125,23 +125,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           videoLink: playbackUrl ?? null,
         }
       : currentModule,
-    teacherProfileId: profile.teacherProfile.id,
+    membershipId: profile.id,
     currentSession: currentModule.teacherTrainingModuleSessions[0] || null,
   });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const assignmentCounts = await prisma.teacherProfile.findUnique({
-    where: { id: profile.teacherProfile.id },
+  const assignmentCounts = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
     select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
@@ -151,7 +151,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     where: {
       id: params.id,
       ...(hasAssignedCourses
-        ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+        ? { assignedTeachers: { some: { id: profile.id } } }
         : {}),
     },
     select: { id: true },
@@ -171,9 +171,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
     const session = await prisma.teacherTrainingModuleSession.findUnique({
       where: {
-        teacherTrainingModuleId_teacherProfileId: {
+        teacherTrainingModuleId_membershipId: {
           teacherTrainingModuleId: params.moduleId!,
-          teacherProfileId: profile.teacherProfile.id,
+          membershipId: profile.id,
         },
       },
     });
@@ -181,7 +181,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       await prisma.teacherTrainingModuleSession.create({
         data: {
           teacherTrainingModuleId: params.moduleId!,
-          teacherProfileId: profile.teacherProfile.id,
+          membershipId: profile.id,
           videoTimestamp,
         },
       });
@@ -219,15 +219,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.teacherTrainingModuleSession.upsert({
       where: {
-        teacherTrainingModuleId_teacherProfileId: {
+        teacherTrainingModuleId_membershipId: {
           teacherTrainingModuleId: moduleId,
-          teacherProfileId: profile.teacherProfile.id,
+          membershipId: profile.id,
         },
       },
       update: { videoTimestamp: 0, updatedAt: new Date() },
       create: {
         teacherTrainingModuleId: moduleId,
-        teacherProfileId: profile.teacherProfile.id,
+        membershipId: profile.id,
         videoTimestamp: 0,
         updatedAt: new Date(),
       },

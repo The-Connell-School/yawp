@@ -9,20 +9,20 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
 import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const assignmentCounts = await prisma.teacherProfile.findUnique({
-    where: { id: profile.teacherProfile.id },
+  const assignmentCounts = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
     select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
@@ -32,7 +32,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     where: {
       id: params.id,
       ...(hasAssignedCourses
-        ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+        ? { assignedTeachers: { some: { id: profile.id } } }
         : {}),
     },
     include: {
@@ -48,7 +48,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
           teacherTrainingModuleSessions: {
             where: {
-              teacherProfileId: profile.teacherProfile.id,
+              membershipId: profile.id,
             },
             select: {
               id: true,

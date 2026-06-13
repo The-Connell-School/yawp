@@ -37,7 +37,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Textarea } from '~/components/ui/textarea';
-import { requireAdmin, requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireAdmin, requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 const ALLOWED_TEMPLATE_STATUSES = new Set(['draft', 'active', 'archived']);
@@ -107,7 +107,7 @@ function requireString(formData: FormData, name: string) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireAdmin(request);
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -131,8 +131,8 @@ export async function action({ request }: ActionFunctionArgs) {
         promptConfigJson: parseJsonField(formData, 'promptConfigJson'),
         outputSchemaJson: parseJsonField(formData, 'outputSchemaJson'),
         calibrationNotes,
-        createdById: profile.id,
-        updatedById: profile.id,
+        createdByMembershipId: profile.id,
+        updatedByMembershipId: profile.id,
       },
     });
 
@@ -160,7 +160,7 @@ export async function action({ request }: ActionFunctionArgs) {
         outputSchemaJson: parseJsonField(formData, 'outputSchemaJson'),
         calibrationNotes,
         version: { increment: 1 },
-        updatedById: profile.id,
+        updatedByMembershipId: profile.id,
       },
     });
 
@@ -176,7 +176,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     await prisma.gradingAssistantTemplate.update({
       where: { id: templateId },
-      data: { status, updatedById: profile.id },
+      data: { status, updatedByMembershipId: profile.id },
     });
 
     return dataResponse({ status: 'success' });

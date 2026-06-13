@@ -152,7 +152,7 @@ test.describe.serial('Teacher feature access rollout', () => {
         prisma,
         featureKey: 'assignments',
         targetKind: 'teacher',
-        targetId: e2eContext.teacherProfileId,
+        targetId: e2eContext.teacherMembershipId,
         enabled: true,
         note: 'E2E pilot rollout teacher target',
       });
@@ -160,7 +160,7 @@ test.describe.serial('Teacher feature access rollout', () => {
         prisma,
         featureKey: 'document_submission_grading',
         targetKind: 'teacher',
-        targetId: e2eContext.teacherProfileId,
+        targetId: e2eContext.teacherMembershipId,
         enabled: true,
         note: 'E2E pilot rollout teacher target',
       });

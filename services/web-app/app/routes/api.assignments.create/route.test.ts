@@ -13,26 +13,27 @@ const prisma = {
   apHistoryPromptLibraryEntry: {
     findFirst: mock(),
   },
-  assignment: {
-    createMany: mock(),
-  },
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const isAssignmentsEnabledForContext = mock();
 const isApHistoryEssayEnabledForContext = mock();
 const isAssignmentCreationStandardizationEnabledForContext = mock();
+const createAssignmentDeployedToClasses = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
   isAssignmentsEnabledForContext,
   isApHistoryEssayEnabledForContext,
   isAssignmentCreationStandardizationEnabledForContext,
+}));
+mock.module('~/utils/assignment-deployment.server', () => ({
+  createAssignmentDeployedToClasses,
 }));
 
 const { action } = await import('./route');
@@ -78,17 +79,18 @@ describe('api.assignments.create', () => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.featureAccessTarget.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
-    prisma.assignment.createMany.mockReset();
+    createAssignmentDeployedToClasses.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     isAssignmentsEnabledForContext.mockReset();
     isApHistoryEssayEnabledForContext.mockReset();
     isAssignmentCreationStandardizationEnabledForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
-      id: 'profile-1',
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findMany.mockResolvedValue([
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
@@ -97,7 +99,7 @@ describe('api.assignments.create', () => {
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     mockAssignmentTypeAvailable();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
-    prisma.assignment.createMany.mockResolvedValue({ count: 2 });
+    createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
     isAssignmentsEnabledForContext.mockResolvedValue(true);
     isApHistoryEssayEnabledForContext.mockResolvedValue(true);
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
@@ -112,7 +114,6 @@ describe('api.assignments.create', () => {
         prompt: 'Write the essay.',
         title: 'Essay',
         tutorContext: 'Help with structure.',
-        dueDate: '2026-05-20',
       }),
       params: {},
     } as any);
@@ -144,27 +145,16 @@ describe('api.assignments.create', () => {
       },
       select: { id: true, systemKey: true },
     });
-    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          classId: 'class-1',
-          assignmentTypeId: 'at-1',
-          title: 'Essay',
-          prompt: 'Write the essay.',
-          tutorContext: null,
-          submitForGrade: true,
-          pointValue: 100,
-        }),
-        expect.objectContaining({
-          classId: 'class-2',
-          assignmentTypeId: 'at-1',
-          title: 'Essay',
-          prompt: 'Write the essay.',
-          tutorContext: null,
-          submitForGrade: true,
-          pointValue: 100,
-        }),
-      ],
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        title: 'Essay',
+        prompt: 'Write the essay.',
+        tutorContext: null,
+        submitForGrade: true,
+        pointValue: 100,
+      }),
+      classIds: ['class-1', 'class-2'],
     });
   });
 
@@ -185,20 +175,14 @@ describe('api.assignments.create', () => {
 
     const body = await readBody(response);
     expect(body.success).toBe(true);
-    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          classId: 'class-1',
-          tutorContext: 'Legacy context.',
-        }),
-        expect.objectContaining({
-          classId: 'class-2',
-          tutorContext: 'Legacy context.',
-        }),
-      ],
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        tutorContext: 'Legacy context.',
+      }),
+      classIds: ['class-1', 'class-2'],
     });
-    const firstAssignment =
-      prisma.assignment.createMany.mock.calls[0][0].data[0];
+    const firstAssignment = createAssignmentDeployedToClasses.mock.calls[0][0].data;
     expect(firstAssignment).not.toHaveProperty('submitForGrade');
     expect(firstAssignment).not.toHaveProperty('pointValue');
   });
@@ -222,15 +206,13 @@ describe('api.assignments.create', () => {
 
     const body = await readBody(response);
     expect(body.success).toBe(true);
-    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          classId: 'class-1',
-          tutorContext: null,
-          submitForGrade: false,
-          pointValue: null,
-        }),
-      ],
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        tutorContext: null,
+        submitForGrade: false,
+        pointValue: null,
+      }),
+      classIds: ['class-1'],
     });
   });
 
@@ -257,7 +239,7 @@ describe('api.assignments.create', () => {
     expect(body.message).toBe(
       'Point value must be a positive whole number no greater than 1000.'
     );
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects unowned classes', async () => {
@@ -278,7 +260,7 @@ describe('api.assignments.create', () => {
     const body = await readBody(response);
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(404);
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects mixed pilot and non-pilot classes in the same create request', async () => {
@@ -315,7 +297,7 @@ describe('api.assignments.create', () => {
       teacherProfileId: 'teacher-1',
       classIds: ['class-2'],
     });
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects mixed standardization and legacy classes in the same create request', async () => {
@@ -360,7 +342,7 @@ describe('api.assignments.create', () => {
       teacherProfileId: 'teacher-1',
       classIds: ['class-2'],
     });
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects assignment types outside the teacher scope or archived', async () => {
@@ -395,7 +377,7 @@ describe('api.assignments.create', () => {
       },
       select: { id: true, systemKey: true },
     });
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('creates AP History assignments from a curated library entry snapshot', async () => {
@@ -441,7 +423,6 @@ describe('api.assignments.create', () => {
         classIds: ['class-1', 'class-2'],
         title: 'Unit 7 DBQ',
         apHistoryLibraryEntryId: 'apush-dbq-new-deal-federal-power',
-        dueDate: '2026-05-20',
       }),
       params: {},
     } as any);
@@ -458,37 +439,24 @@ describe('api.assignments.create', () => {
       },
       include: { sources: { orderBy: { position: 'asc' } } },
     });
-    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          classId: 'class-1',
-          assignmentTypeId: 'ap-type-1',
-          title: 'Unit 7 DBQ',
-          prompt: libraryEntry.prompt,
-          tutorContext: null,
-          dueDate: new Date(Date.UTC(2026, 4, 20)),
-          apHistorySnapshot: expect.objectContaining({
-            schemaVersion: 1,
-            libraryEntryId: 'apush-dbq-new-deal-federal-power',
-            essayType: 'dbq',
-            sources: [
-              expect.objectContaining({
-                body: 'The only thing we have to fear is fear itself.',
-              }),
-            ],
-          }),
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'ap-type-1',
+        title: 'Unit 7 DBQ',
+        prompt: libraryEntry.prompt,
+        tutorContext: null,
+        apHistorySnapshot: expect.objectContaining({
+          schemaVersion: 1,
+          libraryEntryId: 'apush-dbq-new-deal-federal-power',
+          essayType: 'dbq',
+          sources: [
+            expect.objectContaining({
+              body: 'The only thing we have to fear is fear itself.',
+            }),
+          ],
         }),
-        expect.objectContaining({
-          classId: 'class-2',
-          prompt: libraryEntry.prompt,
-          tutorContext: null,
-          apHistorySnapshot: expect.objectContaining({
-            schemaVersion: 1,
-            libraryEntryId: 'apush-dbq-new-deal-federal-power',
-            essayType: 'dbq',
-          }),
-        }),
-      ],
+      }),
+      classIds: ['class-1', 'class-2'],
     });
   });
 
@@ -539,17 +507,15 @@ describe('api.assignments.create', () => {
       teacherProfileId: 'teacher-1',
       classIds: ['class-1'],
     });
-    expect(prisma.assignment.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          classId: 'class-1',
-          assignmentTypeId: 'ap-type-1',
-          prompt: libraryEntry.prompt,
-          apHistorySnapshot: expect.objectContaining({
-            libraryEntryId: 'apush-dbq-new-deal-federal-power',
-          }),
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'ap-type-1',
+        prompt: libraryEntry.prompt,
+        apHistorySnapshot: expect.objectContaining({
+          libraryEntryId: 'apush-dbq-new-deal-federal-power',
         }),
-      ],
+      }),
+      classIds: ['class-1'],
     });
   });
 
@@ -579,7 +545,7 @@ describe('api.assignments.create', () => {
     expect(body.message).toBe(
       'AP History Essay is not enabled for one or more classes.'
     );
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects AP History assignment creation without a library entry id', async () => {
@@ -605,7 +571,7 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is required.');
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects unavailable AP History library entries', async () => {
@@ -633,6 +599,6 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
     expect(body.message).toBe('AP History library entry is unavailable.');
-    expect(prisma.assignment.createMany).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 });

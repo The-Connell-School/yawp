@@ -13,7 +13,7 @@ const PROMPT_EXPANDED_MAX_HEIGHT = 'calc(50vh - 28px)';
 type AssignmentPrompt = {
   title: string | null;
   prompt: string | null;
-  dueDate: string | Date | null;
+  dueDate?: string | Date | null;
 };
 
 type Props = {
@@ -132,11 +132,6 @@ function AssignmentPromptBanner({
             <span className="min-w-0 truncate text-sm font-bold text-foreground/80">
               {assignment.title?.trim() || 'Untitled Assignment'}
             </span>
-            {assignment.dueDate ? (
-              <span className="shrink-0 text-xs text-muted-foreground">
-                Due {formatDateOnly(assignment.dueDate)}
-              </span>
-            ) : null}
           </div>
         </div>
         <Button

@@ -3,7 +3,7 @@ import { type Prisma } from '@app/prisma';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const POST = z.object({
@@ -14,7 +14,7 @@ const POST = z.object({
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
   if (!profile) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
@@ -22,7 +22,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const where: Prisma.DocumentCommentWhereUniqueInput = {
     id: params.id,
-    profileId: profile.id,
+    membershipId: profile.id,
   };
 
   if (request.method === 'DELETE') {

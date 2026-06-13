@@ -40,22 +40,21 @@ export async function getApHistoryLibraryEntryForSnapshot(params: {
 }
 
 export function buildAssignmentCreateInputFromApHistoryEntry(params: {
-  classId: string;
   assignmentTypeId: string;
   title: string | null;
-  dueDate: Date | null;
   entry: NonNullable<
     Awaited<ReturnType<typeof getApHistoryLibraryEntryForSnapshot>>
   >;
-}): Prisma.AssignmentCreateManyInput {
+}): Omit<
+  Prisma.AssignmentUncheckedCreateInput,
+  'id' | 'createdAt' | 'updatedAt'
+> {
   const snapshot = buildApHistorySnapshot(params.entry);
   return {
-    classId: params.classId,
     assignmentTypeId: params.assignmentTypeId,
     title: params.title ?? params.entry.title,
     prompt: snapshot.prompt,
     tutorContext: null,
-    dueDate: params.dueDate,
     apHistorySnapshot: snapshot as Prisma.InputJsonValue,
   };
 }

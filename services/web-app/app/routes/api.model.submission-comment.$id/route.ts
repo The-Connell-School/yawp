@@ -1,12 +1,31 @@
 import { invariant } from '@epic-web/invariant';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+
+function teacherDocumentAccessWhere(membershipId: string) {
+  return {
+    OR: [
+      {
+        classAssignment: {
+          class: { teachers: { some: { id: membershipId } } },
+        },
+      },
+      {
+        membership: {
+          classesAsStudent: {
+            some: { teachers: { some: { id: membershipId } } },
+          },
+        },
+      },
+    ],
+  };
+}
 
 export async function action({ request, params }: ActionFunctionArgs) {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { isAdmin: true },
@@ -21,14 +40,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           document: {
             is: {
               deletedAt: null,
-              profileId: { not: profile.id },
-              ...(isAdmin
-                ? {}
-                : {
-                    class: {
-                      teachers: { some: { profileId: profile.id } },
-                    },
-                  }),
+              membershipId: { not: profile.id },
+              ...(isAdmin ? {} : teacherDocumentAccessWhere(profile.id)),
             },
           },
         },
@@ -49,7 +62,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ success: true, commentId: params.id }, { status: 200 });
   }
 
-  // POST — update comment content
   const formData = await request.formData();
   const content = formData.get('content')?.toString()?.trim();
   if (!content) {

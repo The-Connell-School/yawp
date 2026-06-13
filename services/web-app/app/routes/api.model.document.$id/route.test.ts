@@ -26,12 +26,12 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 
 const { action } = await import('./route');
@@ -51,10 +51,10 @@ describe('api.model.document.$id', () => {
     prisma.documentWriteJournal.create.mockReset();
     prisma.documentWriteJournal.update.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUniqueOrThrow.mockResolvedValue({ isAdmin: false });
     prisma.document.findUniqueOrThrow.mockResolvedValue({
       id: 'doc-1',

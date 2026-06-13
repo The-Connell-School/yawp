@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireOwner = mock(async () => ({ id: 'owner-user-1' }));
-const requireProfile = mock(async () => ({
+const requireMembership = mock(async () => ({
   organization: { id: 'org-1' },
 }));
 const getPasswordHash = mock(async (password: string) => `hashed:${password}`);
 
 mock.module('~/utils/auth.server', () => ({
   requireOwner,
-  requireProfile,
+  requireMembership,
   getPasswordHash,
 }));
 
@@ -19,11 +19,8 @@ const prisma = {
   user: {
     findUnique: mock(),
   },
-  studentProfile: {
+  orgMembership: {
     update: mock(),
-    create: mock(),
-  },
-  profile: {
     create: mock(),
   },
 };
@@ -48,13 +45,12 @@ const createBulkImportRequest = (students: string) => {
 describe('app.organization.students action', () => {
   beforeEach(() => {
     requireOwner.mockClear();
-    requireProfile.mockClear();
+    requireMembership.mockClear();
     getPasswordHash.mockClear();
     prisma.class.findFirst.mockReset();
     prisma.user.findUnique.mockReset();
-    prisma.studentProfile.update.mockReset();
-    prisma.studentProfile.create.mockReset();
-    prisma.profile.create.mockReset();
+    prisma.orgMembership.update.mockReset();
+    prisma.orgMembership.create.mockReset();
 
     prisma.class.findFirst.mockResolvedValue({ id: 'class-1' });
   });
@@ -62,15 +58,15 @@ describe('app.organization.students action', () => {
   test('bulk import enrolls an existing organization student from an email-only row', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      profiles: [
+      memberships: [
         {
-          id: 'profile-1',
-          organizationId: 'org-1',
-          studentProfile: { id: 'student-profile-1', classes: [] },
+          id: 'student-profile-1',
+          role: 'STUDENT',
+          classesAsStudent: [],
         },
       ],
     });
-    prisma.studentProfile.update.mockResolvedValue({ id: 'student-profile-1' });
+    prisma.orgMembership.update.mockResolvedValue({ id: 'student-profile-1' });
 
     const result = (await action({
       request: createBulkImportRequest('elijah.mayes@kalama.k12.wa.us'),
@@ -89,17 +85,17 @@ describe('app.organization.students action', () => {
     expect(result.data.results).toEqual([
       { success: true, email: 'elijah.mayes@kalama.k12.wa.us' },
     ]);
-    expect(prisma.studentProfile.update).toHaveBeenCalledWith({
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
       where: { id: 'student-profile-1' },
-      data: { classes: { connect: { id: 'class-1' } } },
+      data: { classesAsStudent: { connect: { id: 'class-1' } } },
     });
     expect(getPasswordHash).not.toHaveBeenCalled();
-    expect(prisma.profile.create).not.toHaveBeenCalled();
+    expect(prisma.orgMembership.create).not.toHaveBeenCalled();
   });
 
   test('bulk import still creates a new student from a name, email, password row', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
-    prisma.profile.create.mockResolvedValue({ id: 'profile-2' });
+    prisma.orgMembership.create.mockResolvedValue({ id: 'membership-2' });
 
     const result = (await action({
       request: createBulkImportRequest(
@@ -119,8 +115,9 @@ describe('app.organization.students action', () => {
       { success: true, email: 'maya.carter@example.com' },
     ]);
     expect(getPasswordHash).toHaveBeenCalledWith('starter123');
-    expect(prisma.profile.create).toHaveBeenCalledWith({
+    expect(prisma.orgMembership.create).toHaveBeenCalledWith({
       data: {
+        role: 'STUDENT',
         user: {
           create: {
             email: 'maya.carter@example.com',
@@ -129,7 +126,7 @@ describe('app.organization.students action', () => {
           },
         },
         organization: { connect: { id: 'org-1' } },
-        studentProfile: { create: { classes: { connect: { id: 'class-1' } } } },
+        classesAsStudent: { connect: { id: 'class-1' } },
       },
     });
   });

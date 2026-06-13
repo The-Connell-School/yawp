@@ -43,11 +43,17 @@ export async function action({ request }: ActionFunctionArgs) {
     select: {
       id: true,
       gradedAt: true,
-      gradedById: true,
+      gradedByMembershipId: true,
       document: {
         select: {
-          profileId: true,
+          membershipId: true,
           assignment: {
+            select: {
+              submitForGrade: true,
+              pointValue: true,
+            },
+          },
+          classAssignment: {
             select: {
               class: {
                 select: {
@@ -59,9 +65,9 @@ export async function action({ request }: ActionFunctionArgs) {
               },
             },
           },
-          studentProfile: {
+          membership: {
             select: {
-              classes: {
+              classesAsStudent: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -83,7 +89,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (isGradingOwnDocument(actor.profileId, submission.document.profileId)) {
+  if (
+    isGradingOwnDocument(
+      actor.membershipId,
+      submission.document.membershipId
+    )
+  ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
       { status: 403 }
@@ -91,7 +102,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const isSubmissionGradingEnabled = await isDocumentSubmissionEnabledForScope({
-    ...getDocumentSubmissionScope(submission.document),
+    ...getDocumentSubmissionScope({
+      classAssignment: submission.document.classAssignment,
+      membership: submission.document.membership,
+    }),
     actorTeacherProfileId: actor.teacherProfileId,
   });
   if (!isSubmissionGradingEnabled) {
@@ -134,7 +148,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Explicitly mark as graded when requested
   if (fields.markAsGraded && !submission.gradedAt) {
     data.gradedAt = new Date();
-    data.gradedById = actor.profileId;
+    data.gradedByMembershipId = actor.membershipId;
   }
 
   data.updatedAt = new Date();

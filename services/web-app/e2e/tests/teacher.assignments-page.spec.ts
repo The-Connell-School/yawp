@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { createDeployedAssignment } from '../db-helpers';
 
 async function createAssignment(params: {
   classId: string;
@@ -8,15 +9,14 @@ async function createAssignment(params: {
 }) {
   const prisma = createE2EPrismaClient();
   try {
-    return await prisma.assignment.create({
-      data: {
-        classId: params.classId,
-        assignmentTypeId: params.assignmentTypeId,
-        title: params.title,
-        prompt: `Prompt for ${params.title}`,
-      },
-      select: { id: true },
+    const { assignment } = await createDeployedAssignment({
+      prisma,
+      classId: params.classId,
+      assignmentTypeId: params.assignmentTypeId,
+      title: params.title,
+      prompt: `Prompt for ${params.title}`,
     });
+    return assignment;
   } finally {
     await prisma.$disconnect();
   }
@@ -89,11 +89,14 @@ test.describe.serial('Teacher Assignments page', () => {
 
       const prisma = createE2EPrismaClient();
       try {
-        const created = await prisma.assignment.findFirst({
-          where: { title, classId: e2eContext.classId },
-          select: { id: true, prompt: true },
+        const created = await prisma.classAssignment.findFirst({
+          where: {
+            classId: e2eContext.classId,
+            assignment: { title, prompt },
+          },
+          select: { assignment: { select: { id: true, prompt: true } } },
         });
-        expect(created?.prompt).toBe(prompt);
+        expect(created?.assignment.prompt).toBe(prompt);
       } finally {
         await prisma.$disconnect();
       }
@@ -182,28 +185,22 @@ test.describe.serial('Teacher Assignments page', () => {
     let documentId = '';
 
     try {
-      const assignment = await prisma.assignment.create({
-        data: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.assignmentTypeId,
-          title,
-          prompt: `Prompt for ${title}`,
-        },
-        select: { id: true },
-      });
-      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
+      const { assignment, classAssignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        title,
+        prompt: `Prompt for ${title}`,
       });
       const document = await prisma.document.create({
         data: {
           title: docTitle,
           text: 'Delete-safety document',
           html: '<p>Delete-safety document</p>',
-          profile: { connect: { id: e2eContext.profileId } },
-          studentProfile: { connect: { id: studentProfile.id } },
+          membership: { connect: { id: e2eContext.membershipId } },
           assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
           assignment: { connect: { id: assignment.id } },
+          classAssignment: { connect: { id: classAssignment.id } },
         },
         select: { id: true },
       });
@@ -227,10 +224,11 @@ test.describe.serial('Teacher Assignments page', () => {
       expect(remainingAssignment).toBeNull();
       const survivingDocument = await prisma.document.findUnique({
         where: { id: documentId },
-        select: { id: true, assignmentId: true },
+        select: { id: true, assignmentId: true, classAssignmentId: true },
       });
       expect(survivingDocument?.id).toBe(documentId);
       expect(survivingDocument?.assignmentId).toBeNull();
+      expect(survivingDocument?.classAssignmentId).toBeNull();
     } finally {
       if (documentId) {
         await prisma.document

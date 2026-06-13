@@ -10,23 +10,21 @@ import {
   useSearchParams,
   useFetcher,
   useNavigate,
-  useOutlet,
   useRevalidator,
 } from 'react-router';
 import { Link } from 'react-router';
-import {
-  getPasswordHash,
-  requireProfile,
-  requireUserId,
-} from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import {
+  createAssignmentDeployedToClasses,
+  deleteClassAssignmentDeployment,
+} from '~/utils/assignment-deployment.server';
+import {
   isAssignmentCreationStandardizationEnabledForContext,
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
-  isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Sheet,
@@ -45,7 +43,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ClassManageSheet,
   type ClassManageRow,
@@ -61,8 +59,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowRightLeft,
-  ChevronDown,
-  ChevronRight,
   Pencil,
   Plus,
   UserMinus,
@@ -81,16 +77,33 @@ import {
 } from '~/components/ui/select';
 import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { parseDocumentGroupMode } from './class-documents-grouping';
+import {
+  getStoredCollapsedDocumentGroups,
+  mergeClassDocumentsViewPreferences,
+  mergeStoredClassDocumentsSearchParams,
+  readClassDocumentsViewPreferences,
+  withStoredCollapsedDocumentGroups,
+} from './class-documents-view-preferences';
+import {
+  TeacherDocumentWorkPanel,
+  type TeacherDocumentWorkFilters,
+} from '~/components/teacher-document-work/teacher-document-work-panel';
+import {
+  parseDocumentWorkFilterIds,
+  serializeDocumentWorkFilterIds,
+} from '~/utils/teacher-document-work-filter-options';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { ClassArt } from '~/components/class-art';
 import {
   TEACHER_DOCUMENT_STATUSES,
-  TEACHER_DOCUMENT_STATUS_BADGE_CLASSES,
-  TEACHER_DOCUMENT_STATUS_LABELS,
-  getTeacherDocumentStatus,
   hasMeaningfulGrade,
   type TeacherDocumentStatus,
 } from '~/utils/teacher-document-status';
+import {
+  countTeacherDocumentWorkStatuses,
+  type TeacherDocumentWorkRow,
+} from '~/utils/teacher-document-work-utils';
 import { cn } from '~/utils/misc';
 import { useTable } from '~/hooks/useTable';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -98,31 +111,10 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { SheetDescription } from '~/components/ui/sheet';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '~/components/ui/collapsible';
-
-function parseDateOnlyToUtc(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-
-  if (
-    Number.isNaN(parsed.getTime()) ||
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
+  enrollExistingStudentInClass,
+  lookupStudentEmailForClass,
+  sendStudentClassInvite,
+} from './class-student-enrollment.server';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -137,16 +129,17 @@ export function getDraftDisplayTitle(document: {
   return 'Untitled draft';
 }
 
-async function getClassStudentProfiles(
+async function getClassStudentMemberships(
   classId: string,
-  studentProfileIds: string[],
+  membershipIds: string[],
   organizationId: string
 ) {
-  return prisma.studentProfile.findMany({
+  return prisma.orgMembership.findMany({
     where: {
-      id: { in: studentProfileIds },
-      classes: { some: { id: classId } },
-      profile: { organizationId },
+      id: { in: membershipIds },
+      role: 'STUDENT',
+      classesAsStudent: { some: { id: classId } },
+      organizationId,
     },
     select: { id: true },
   });
@@ -154,8 +147,8 @@ async function getClassStudentProfiles(
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  if (!profile.teacherProfile) {
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== "TEACHER") {
     return dataResponse(
       { success: false, message: 'Only teachers can manage assignments.' },
       { status: 403 }
@@ -173,7 +166,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const classAccess = await prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
     },
     select: {
       id: true,
@@ -196,7 +189,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       {
         organizationId: classAccess.school.organizationId,
         schoolId: classAccess.school.id,
-        teacherProfileId: profile.teacherProfile.id,
+        teacherProfileId: profile.id,
       },
     ],
     select: { id: true, systemKey: true },
@@ -218,7 +211,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentsEnabled = await isAssignmentsEnabledForContext({
       organizationId: classAccess.school.organizationId,
       schoolId: classAccess.school.id,
-      teacherProfileId: profile.teacherProfile.id,
+      teacherProfileId: profile.id,
       classIds: [classAccess.id],
     });
     if (!assignmentsEnabled) {
@@ -242,7 +235,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, classId },
+      where: {
+        id: assignmentId,
+        classAssignments: { some: { classId } },
+      },
       select: { id: true },
     });
 
@@ -253,9 +249,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.assignment.delete({
-      where: { id: assignment.id },
-    });
+    await deleteClassAssignmentDeployment({ assignmentId, classId });
 
     return dataResponse({
       success: true,
@@ -269,13 +263,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
-    const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
     const legacyTutorContext = tutorContextRaw.trim() || null;
-    const dueDateInput = dueDateRaw.trim();
-    const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -298,7 +289,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
 
       existingAssignment = await prisma.assignment.findFirst({
-        where: { id: assignmentId, classId },
+        where: {
+          id: assignmentId,
+          classAssignments: { some: { classId } },
+        },
         select: {
           id: true,
           assignmentTypeId: true,
@@ -354,18 +348,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (dueDateInput && !dueDate) {
-      return dataResponse(
-        { success: false, message: 'Due date is invalid.' },
-        { status: 400 }
-      );
-    }
 
     const assignmentCreationStandardizationEnabled =
       await isAssignmentCreationStandardizationEnabledForContext({
         organizationId: classAccess.school.organizationId,
         schoolId: classAccess.school.id,
-        teacherProfileId: profile.teacherProfile.id,
+        teacherProfileId: profile.id,
         classIds: [classId],
       });
 
@@ -380,16 +368,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (intent === 'create-assignment') {
-      await prisma.assignment.create({
+      await createAssignmentDeployedToClasses({
         data: {
-          classId,
           assignmentTypeId,
           title,
           prompt,
           tutorContext: assignmentCreationStandardizationEnabled
             ? null
             : legacyTutorContext,
-          dueDate,
           ...(gradingIntent?.success
             ? {
                 submitForGrade: gradingIntent.data.submitForGrade,
@@ -397,6 +383,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
               }
             : {}),
         },
+        classIds: [classId],
       });
 
       return dataResponse({
@@ -414,7 +401,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         tutorContext: assignmentCreationStandardizationEnabled
           ? existingAssignment!.tutorContext
           : legacyTutorContext,
-        dueDate,
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -430,102 +416,68 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
-  if (intent === 'add-student') {
-    const email = formData.get('email')?.toString().trim().toLowerCase();
-    const name = formData.get('name')?.toString().trim() || '';
-    const password = formData.get('password')?.toString().trim() || '';
-
-    if (!email) {
-      return dataResponse({ error: 'Email is required.' }, { status: 400 });
-    }
-
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        profiles: {
-          select: {
-            id: true,
-            organizationId: true,
-            studentProfile: {
-              select: {
-                id: true,
-                classes: {
-                  where: { id: classId },
-                  select: { id: true },
-                },
-              },
-            },
-          },
-        },
-      },
+  if (intent === 'lookup-student-email') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await lookupStudentEmailForClass({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
     });
 
-    if (existingUser) {
-      const orgProfile = existingUser.profiles.find(
-        (p) => p.organizationId === classAccess.school.organizationId
-      );
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
 
-      if (!orgProfile) {
-        return dataResponse(
-          { error: 'This user belongs to another organization.' },
-          { status: 400 }
-        );
-      }
+    if (result.status === 'needs_invite') {
+      return dataResponse({ needsInvite: true, email: result.email });
+    }
 
-      if (orgProfile.studentProfile) {
-        if (orgProfile.studentProfile.classes.length > 0) {
-          return dataResponse({
-            success: true,
-            message: 'Student is already in this class.',
-          });
-        }
-
-        await prisma.studentProfile.update({
-          where: { id: orgProfile.studentProfile.id },
-          data: { classes: { connect: { id: classId } } },
-        });
-
-        return dataResponse({ success: true });
-      }
-
-      await prisma.studentProfile.create({
-        data: {
-          profile: { connect: { id: orgProfile.id } },
-          classes: { connect: { id: classId } },
-        },
+    if (result.status === 'already_enrolled') {
+      return dataResponse({
+        alreadyEnrolled: true,
+        email: result.email,
+        message: result.message,
       });
-
-      return dataResponse({ success: true });
     }
 
-    if (!name || !password) {
-      return dataResponse(
-        {
-          error:
-            'Name and password are required to create a new student account.',
-        },
-        { status: 400 }
-      );
-    }
+    return dataResponse({ hasAccount: true, email: result.email });
+  }
 
-    const hashedPassword = await getPasswordHash(password);
-
-    await prisma.profile.create({
-      data: {
-        user: {
-          create: {
-            email,
-            name,
-            password: { create: { hash: hashedPassword } },
-          },
-        },
-        organization: { connect: { id: classAccess.school.organizationId } },
-        studentProfile: { create: { classes: { connect: { id: classId } } } },
-      },
+  if (intent === 'enroll-student') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await enrollExistingStudentInClass({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
     });
 
-    return dataResponse({ success: true });
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+
+    return dataResponse({
+      success: true,
+      message: result.message,
+    });
+  }
+
+  if (intent === 'invite-student') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await sendStudentClassInvite({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
+      request,
+    });
+
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+
+    return dataResponse({
+      success: true,
+      message: `Invitation sent to ${result.email}.`,
+    });
   }
 
   // Removes class enrollment only — student profiles and accounts stay intact.
@@ -536,7 +488,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse({ error: 'No students selected.' }, { status: 400 });
     }
 
-    const students = await getClassStudentProfiles(
+    const students = await getClassStudentMemberships(
       classId,
       studentProfileIds,
       classAccess.school.organizationId
@@ -550,9 +502,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     for (const student of students) {
-      await prisma.studentProfile.update({
+      await prisma.orgMembership.update({
         where: { id: student.id },
-        data: { classes: { disconnect: { id: classId } } },
+        data: { classesAsStudent: { disconnect: { id: classId } } },
       });
     }
 
@@ -582,7 +534,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       where: {
         id: targetClassId,
         isArchived: false,
-        teachers: { some: { id: profile.teacherProfile!.id } },
+        teachers: { some: { id: profile.id } },
       },
       select: { id: true },
     });
@@ -591,7 +543,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse({ error: 'Target class not found.' }, { status: 404 });
     }
 
-    const students = await getClassStudentProfiles(
+    const students = await getClassStudentMemberships(
       classId,
       studentProfileIds,
       classAccess.school.organizationId
@@ -605,10 +557,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     for (const student of students) {
-      await prisma.studentProfile.update({
+      await prisma.orgMembership.update({
         where: { id: student.id },
         data: {
-          classes: {
+          classesAsStudent: {
             disconnect: { id: classId },
             connect: { id: targetClassId },
           },
@@ -627,8 +579,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  if (!profile.teacherProfile) {
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== "TEACHER") {
     return redirect('/app');
   }
   const classId = params.classId!;
@@ -642,7 +594,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
     },
     select: {
       id: true,
@@ -652,20 +604,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       grade: true,
       period: true,
       title: true,
+      classArtIndex: true,
       school: { select: { id: true, name: true, organizationId: true } },
       students: {
         select: {
           id: true,
-          profile: {
-            select: { id: true, user: { select: { name: true, email: true } } },
-          },
+          user: { select: { name: true, email: true } },
         },
         orderBy: { createdAt: 'asc' },
       },
     },
   }),
-    prisma.teacherProfile.findUnique({
-      where: { id: profile.teacherProfile.id },
+    prisma.orgMembership.findUnique({
+      where: { id: profile.id },
       select: {
         schools: {
           select: { id: true, name: true },
@@ -682,29 +633,40 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: { documentId: true },
     })
   ).map((row) => row.documentId);
+
+  const url = new URL(request.url);
+  const studentProfileIdFilters = parseDocumentWorkFilterIds(
+    url.searchParams.get('studentId')
+  );
+  const studentProfileIdFilter =
+    studentProfileIdFilters.length === 1 ? studentProfileIdFilters[0] : null;
+  const enrolledStudent = studentProfileIdFilter
+    ? klass.students.find(
+        (student) => student.id === studentProfileIdFilter
+      )
+    : null;
   const classDocumentScope = buildClassDocumentScope(
     classId,
-    legacyClassDocumentIds
+    legacyClassDocumentIds,
+    enrolledStudent
+      ? { membershipId: enrolledStudent.id }
+      : undefined
   );
 
   // Check feature flags
-  const [isDocumentSubmissionEnabled, assignmentsEnabled, releasedGradesEnabled] =
-    await Promise.all([
+  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
       isDocumentSubmissionEnabledForScope({
         schoolIds: [klass.school?.id],
         organizationIds: [klass.school?.organizationId],
-        teacherProfileIds: [profile.teacherProfile.id],
+        teacherProfileIds: [profile.id],
         classIds: [klass.id],
       }),
       isAssignmentsEnabledForContext({
         organizationId: klass.school?.organizationId,
         schoolId: klass.school?.id,
-        teacherProfileId: profile.teacherProfile.id,
+        teacherProfileId: profile.id,
         classIds: [klass.id],
       }),
-      isReleasedGradesOrganizationEnabledForOrganization(
-        klass.school?.organizationId
-      ),
     ]);
 
   // Get all submissions for this class
@@ -746,7 +708,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               pointValue: true,
             },
           },
-          profile: {
+          membership: {
             select: {
               id: true,
               user: {
@@ -786,7 +748,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           pointValue: true,
         },
       },
-      profile: {
+      membership: {
         select: {
           id: true,
           user: {
@@ -804,22 +766,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const assignments = await prisma.assignment.findMany({
+  const classAssignments = await prisma.classAssignment.findMany({
     where: { classId },
     select: {
       id: true,
-      title: true,
-      prompt: true,
-      tutorContext: true,
-      submitForGrade: true,
-      pointValue: true,
-      dueDate: true,
-      assignmentTypeId: true,
-      assignmentType: {
+      assignment: {
         select: {
           id: true,
           title: true,
-          systemKey: true,
+          prompt: true,
+          tutorContext: true,
+          submitForGrade: true,
+          pointValue: true,
+          assignmentTypeId: true,
+          assignmentType: {
+            select: {
+              id: true,
+              title: true,
+              systemKey: true,
+            },
+          },
         },
       },
       _count: {
@@ -828,12 +794,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+    orderBy: [{ createdAt: 'desc' }],
   });
+
+  const assignments = classAssignments.map((classAssignment) => ({
+    id: classAssignment.assignment.id,
+    classAssignmentId: classAssignment.id,
+    title: classAssignment.assignment.title,
+    prompt: classAssignment.assignment.prompt,
+    tutorContext: classAssignment.assignment.tutorContext,
+    submitForGrade: classAssignment.assignment.submitForGrade,
+    pointValue: classAssignment.assignment.pointValue,
+    assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+    assignmentType: classAssignment.assignment.assignmentType,
+    _count: classAssignment._count,
+  }));
 
   const teacherClasses = await prisma.class.findMany({
     where: {
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
       isArchived: false,
       id: { not: classId },
     },
@@ -854,7 +833,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignments,
     assignmentsEnabled,
     isDocumentSubmissionEnabled,
-    releasedGradesEnabled,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
   });
@@ -881,7 +859,7 @@ type ClassDocumentRow = {
   id: string;
   title: string | null;
   updatedAt: Date;
-  profile: {
+  membership: {
     id: string;
     user: { name: string | null; email: string };
   };
@@ -895,31 +873,27 @@ type ClassDocumentRow = {
   latestSubmission: ClassDocumentSubmission | null;
 };
 
-type DocumentGroupMode = 'none' | 'student' | 'assignment';
-
-type ClassDocumentGroup = {
-  key: string;
-  label: string;
-  documents: ClassDocumentRow[];
-};
-
 type SortDirection = 'asc' | 'desc';
 
 export default function ClassDetailRoute() {
-  const outlet = useOutlet();
-  if (outlet) return outlet;
-
   return <ClassDetailPage />;
 }
 
 function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const revalidator = useRevalidator();
   const studentFetcher = useFetcher();
   const [isClassEditSheetOpen, setIsClassEditSheetOpen] = useState(false);
   const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
+  const [addStudentStep, setAddStudentStep] = useState<'email' | 'confirm'>(
+    'email'
+  );
+  const [addStudentEmail, setAddStudentEmail] = useState('');
+  const [addStudentConfirmAction, setAddStudentConfirmAction] = useState<
+    'enroll' | 'invite' | 'already_enrolled' | null
+  >(null);
   const [isMoveStudentsSheetOpen, setIsMoveStudentsSheetOpen] = useState(false);
   const [moveTargetClassId, setMoveTargetClassId] = useState('');
   const [collapsedDocumentGroups, setCollapsedDocumentGroups] = useState<
@@ -938,7 +912,7 @@ function ClassDetailPage() {
       document: {
         id: string;
         title: string;
-        profile: {
+        membership: {
           user: {
             name: string | null;
             email: string;
@@ -952,7 +926,6 @@ function ClassDetailPage() {
   const classDetailExitTo = classDetailSearch
     ? `${classDetailPath}?${classDetailSearch}`
     : classDetailPath;
-  const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
   const editingClass: ClassManageRow = {
     id: data.klass.id,
     schoolId: data.klass.schoolId,
@@ -970,15 +943,28 @@ function ClassDetailPage() {
     requestedTab && validTabs.includes(requestedTab)
       ? requestedTab
       : 'students';
-  const assignmentFilterParam = searchParams.get('assignmentId') ?? 'all';
-  const selectedAssignmentId =
-    assignmentFilterParam !== 'all' &&
-    data.assignments.some(
-      (assignment) => assignment.id === assignmentFilterParam
-    )
-      ? assignmentFilterParam
-      : 'all';
-  const studentFilterParam = searchParams.get('studentId') ?? 'all';
+  const classAssignmentFilterParam =
+    searchParams.get('classAssignmentId') ?? 'all';
+  const resolvedAssignmentFilterIds =
+    classAssignmentFilterParam !== 'all'
+      ? (() => {
+          const assignmentId = data.assignments.find(
+            (assignment) =>
+              assignment.classAssignmentId === classAssignmentFilterParam
+          )?.id;
+          return assignmentId ? [assignmentId] : [];
+        })()
+      : parseDocumentWorkFilterIds(searchParams.get('assignmentId'));
+  const students = data.klass.students;
+  const validAssignmentIds = new Set(data.assignments.map((assignment) => assignment.id));
+  const selectedAssignmentIds = resolvedAssignmentFilterIds.filter((assignmentId) =>
+    validAssignmentIds.has(assignmentId)
+  );
+  const documentFilterStudentIds = parseDocumentWorkFilterIds(
+    searchParams.get('studentId')
+  ).filter((studentId) =>
+    students.some((student) => student.id === studentId)
+  );
   const statusFilterParam = searchParams.get('status') ?? 'all';
   const statusFilter: TeacherDocumentStatus | 'all' =
     TEACHER_DOCUMENT_STATUSES.includes(
@@ -986,19 +972,12 @@ function ClassDetailPage() {
     )
       ? (statusFilterParam as TeacherDocumentStatus)
       : 'all';
-  const documentGroupParam = searchParams.get('documentGroup') ?? 'none';
-  const documentGroupMode: DocumentGroupMode =
-    documentGroupParam === 'student' || documentGroupParam === 'assignment'
-      ? documentGroupParam
-      : 'none';
+  const documentGroupMode = parseDocumentGroupMode(
+    searchParams.get('documentGroup')
+  );
   const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const hasHydratedDocumentPreferences = useRef(false);
 
-  const students = data.klass.students;
-  const selectedStudentFilter =
-    studentFilterParam !== 'all' &&
-    students.some((student) => student.id === studentFilterParam)
-      ? studentFilterParam
-      : 'all';
   const allSubmissions = useMemo(() => data.submissions, [data.submissions]);
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -1007,24 +986,56 @@ function ClassDetailPage() {
 
   // Reset pagination when tab changes
   useEffect(() => {
+    hasHydratedDocumentPreferences.current = false;
+  }, [data.klass.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'documents' || hasHydratedDocumentPreferences.current) {
+      return;
+    }
+
+    hasHydratedDocumentPreferences.current = true;
+    const merged = mergeStoredClassDocumentsSearchParams({
+      searchParams,
+      storedPreferences: readClassDocumentsViewPreferences(),
+    });
+
+    if (!merged.shouldReplace) {
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of merged.searchParams.entries()) {
+      next.set(key, value);
+    }
+    setSearchParams(next, { replace: true });
+  }, [activeTab, data.klass.id, searchParams, setSearchParams]);
+
+  useEffect(() => {
     setPagination({ skip: 0, take: 20 });
   }, [
     activeTab,
     studentNameSortDirection,
-    selectedStudentFilter,
-    selectedAssignmentId,
+    documentFilterStudentIds,
+    selectedAssignmentIds,
     statusFilter,
     documentGroupMode,
+    searchParams.get('q'),
   ]);
 
   useEffect(() => {
-    setCollapsedDocumentGroups(new Set());
-  }, [
-    documentGroupMode,
-    selectedStudentFilter,
-    selectedAssignmentId,
-    statusFilter,
-  ]);
+    if (documentGroupMode === 'none') {
+      setCollapsedDocumentGroups(new Set());
+      return;
+    }
+
+    setCollapsedDocumentGroups(
+      getStoredCollapsedDocumentGroups(
+        readClassDocumentsViewPreferences(),
+        documentGroupMode
+      )
+    );
+  }, [documentGroupMode]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
@@ -1048,14 +1059,15 @@ function ClassDetailPage() {
   }, [allSubmissions]);
 
   const matchesSelectedAssignment = (assignmentId?: string | null) =>
-    selectedAssignmentId === 'all' || assignmentId === selectedAssignmentId;
+    selectedAssignmentIds.length === 0 ||
+    (assignmentId ? selectedAssignmentIds.includes(assignmentId) : false);
 
   const filteredGradedUnreleasedDocuments = useMemo(
     () =>
       gradedUnreleasedDocuments.filter((submission) =>
         matchesSelectedAssignment(submission.document.assignment?.id)
       ),
-    [gradedUnreleasedDocuments, selectedAssignmentId]
+    [gradedUnreleasedDocuments, selectedAssignmentIds]
   );
 
   // Get unreleased grades for release functionality
@@ -1076,7 +1088,7 @@ function ClassDetailPage() {
         document: {
           id: submission.document.id,
           title: submission.title,
-          profile: submission.document.profile,
+          membership: submission.document.membership,
         },
       };
     });
@@ -1111,11 +1123,11 @@ function ClassDetailPage() {
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
-      const aName = a.profile.user.name || a.profile.user.email;
-      const bName = b.profile.user.name || b.profile.user.email;
+      const aName = a.user.name || a.user.email;
+      const bName = b.user.name || b.user.email;
       const primary = collator.compare(aName, bName);
       if (primary !== 0) return primary * direction;
-      return collator.compare(a.profile.user.email, b.profile.user.email);
+      return collator.compare(a.user.email, b.user.email);
     });
   }, [collator, studentNameSortDirection, students]);
 
@@ -1127,7 +1139,7 @@ function ClassDetailPage() {
         id: document.id,
         title: document.title,
         updatedAt: new Date(document.updatedAt),
-        profile: document.profile,
+        membership: document.membership,
         assignment: document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1140,7 +1152,7 @@ function ClassDetailPage() {
         id: submission.documentId,
         title: submission.document.title,
         updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
-        profile: submission.document.profile,
+        membership: submission.document.membership,
         assignment: submission.document.assignment,
         submissions: [],
         latestSubmission: null,
@@ -1171,67 +1183,41 @@ function ClassDetailPage() {
     );
   }, [allSubmissions, data.inProgressDocuments]);
 
-  const filteredClassDocuments = useMemo(() => {
-    const matchesSelectedStudentProfile = (profileId: string) => {
-      if (selectedStudentFilter === 'all') return true;
-      const student = students.find((s) => s.id === selectedStudentFilter);
-      return student?.profile.id === profileId;
-    };
+  const teacherDocumentWorkRows = useMemo((): TeacherDocumentWorkRow[] => {
+    return classDocuments.map((document) => ({
+      ...document,
+      resolvedClass: {
+        id: data.klass.id,
+        grade: data.klass.grade,
+        period: data.klass.period,
+        title: data.klass.title,
+      },
+      submissionCount: document.submissions.length,
+    }));
+  }, [classDocuments, data.klass]);
 
-    return classDocuments.filter(
-      (document) =>
-        matchesSelectedStudentProfile(document.profile.id) &&
-        matchesSelectedAssignment(document.assignment?.id) &&
-        (statusFilter === 'all' ||
-          getTeacherDocumentStatus(document.latestSubmission) === statusFilter)
-    );
-  }, [
-    classDocuments,
-    selectedAssignmentId,
-    selectedStudentFilter,
-    statusFilter,
-    students,
-  ]);
+  const documentWorkStatusCounts = useMemo(
+    () => countTeacherDocumentWorkStatuses(teacherDocumentWorkRows),
+    [teacherDocumentWorkRows]
+  );
 
-  const classDocumentGroups = useMemo((): ClassDocumentGroup[] => {
-    const sortedDocuments = [...filteredClassDocuments].sort(
-      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
-    );
-
-    if (documentGroupMode === 'none') {
-      return [
-        {
-          key: 'all',
-          label: '',
-          documents: sortedDocuments,
-        },
-      ];
-    }
-
-    const groups = new Map<string, ClassDocumentGroup>();
-
-    for (const document of sortedDocuments) {
-      const key =
-        documentGroupMode === 'student'
-          ? document.profile.id
-          : (document.assignment?.id ?? 'no-assignment');
-      const label =
-        documentGroupMode === 'student'
-          ? document.profile.user.name || document.profile.user.email
-          : document.assignment?.title || 'No assignment';
-
-      const existing = groups.get(key);
-      if (existing) {
-        existing.documents.push(document);
-      } else {
-        groups.set(key, { key, label, documents: [document] });
-      }
-    }
-
-    return Array.from(groups.values()).sort((a, b) =>
-      collator.compare(a.label, b.label)
-    );
-  }, [collator, documentGroupMode, filteredClassDocuments]);
+  const documentWorkFilters = useMemo(
+    (): TeacherDocumentWorkFilters => ({
+      studentIds: documentFilterStudentIds,
+      classIds: [],
+      assignmentIds: selectedAssignmentIds,
+      status: statusFilter,
+      group: documentGroupMode,
+      query: searchParams.get('q') ?? '',
+    }),
+    [
+      documentGroupMode,
+      searchParams,
+      selectedAssignmentIds,
+      documentFilterStudentIds,
+      statusFilter,
+    ]
+  );
 
   const {
     selected: selectedStudentIds,
@@ -1240,20 +1226,67 @@ function ClassDetailPage() {
     handleSelect: handleSelectStudent,
   } = useTable({ rows: sortedStudents });
 
+  const handleAddStudentSheetOpenChange = (open: boolean) => {
+    setIsAddStudentSheetOpen(open);
+    if (!open) {
+      setAddStudentStep('email');
+      setAddStudentEmail('');
+      setAddStudentConfirmAction(null);
+    }
+  };
+
   useEffect(() => {
+    if (studentFetcher.state !== 'idle' || !studentFetcher.data) {
+      return;
+    }
+
+    if (addStudentStep !== 'email') {
+      if (
+        'success' in studentFetcher.data &&
+        studentFetcher.data.success
+      ) {
+        setSelectedStudentIds([]);
+        setIsAddStudentSheetOpen(false);
+        setAddStudentStep('email');
+        setAddStudentEmail('');
+        setAddStudentConfirmAction(null);
+        setIsMoveStudentsSheetOpen(false);
+        setMoveTargetClassId('');
+        revalidator.revalidate();
+      }
+      return;
+    }
+
     if (
-      studentFetcher.state === 'idle' &&
-      studentFetcher.data &&
-      'success' in studentFetcher.data &&
-      studentFetcher.data.success
+      'needsInvite' in studentFetcher.data &&
+      studentFetcher.data.needsInvite
     ) {
-      setSelectedStudentIds([]);
-      setIsAddStudentSheetOpen(false);
-      setIsMoveStudentsSheetOpen(false);
-      setMoveTargetClassId('');
-      revalidator.revalidate();
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('invite');
+      setAddStudentStep('confirm');
+      return;
+    }
+
+    if (
+      'hasAccount' in studentFetcher.data &&
+      studentFetcher.data.hasAccount
+    ) {
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('enroll');
+      setAddStudentStep('confirm');
+      return;
+    }
+
+    if (
+      'alreadyEnrolled' in studentFetcher.data &&
+      studentFetcher.data.alreadyEnrolled
+    ) {
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('already_enrolled');
+      setAddStudentStep('confirm');
     }
   }, [
+    addStudentStep,
     studentFetcher.state,
     studentFetcher.data,
     revalidator,
@@ -1262,15 +1295,12 @@ function ClassDetailPage() {
 
   // Get current tab data and paginate it
   const currentTabData = useMemo(() => {
-    switch (activeTab) {
-      case 'students':
-        return sortedStudents;
-      case 'documents':
-        return filteredClassDocuments;
-      default:
-        return [];
+    if (activeTab === 'students') {
+      return sortedStudents;
     }
-  }, [activeTab, sortedStudents, filteredClassDocuments]) as any[];
+
+    return [];
+  }, [activeTab, sortedStudents]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1279,163 +1309,93 @@ function ClassDetailPage() {
     );
   }, [currentTabData, pagination.skip, pagination.take]) as any[];
 
+  const persistDocumentViewPreferences = (next: URLSearchParams) => {
+    mergeClassDocumentsViewPreferences(next);
+  };
+
+  const persistCollapsedDocumentGroups = (collapsedGroupKeys: Set<string>) => {
+    if (documentGroupMode === 'none') return;
+
+    mergeClassDocumentsViewPreferences(searchParams, {
+      collapsedGroups: withStoredCollapsedDocumentGroups(
+        readClassDocumentsViewPreferences(),
+        documentGroupMode,
+        collapsedGroupKeys
+      ).collapsedGroups,
+    });
+  };
+
+  const navigateWithDocumentPreferences = (next: URLSearchParams) => {
+    persistDocumentViewPreferences(next);
+    navigate(`?${next.toString()}`);
+  };
+
   const handleTabChange = (value: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', value);
     navigate(`?${next.toString()}`);
   };
 
-  const handleAssignmentFilterChange = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      next.delete('assignmentId');
-    } else {
-      next.set('assignmentId', value);
-    }
-    navigate(`?${next.toString()}`);
-  };
-
-  const handleStudentFilterChange = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      next.delete('studentId');
-    } else {
-      next.set('studentId', value);
-    }
-    navigate(`?${next.toString()}`);
-  };
-
-  const handleViewStudentDocuments = (studentProfileId: string) => {
+  const handleViewStudentDocuments = (profileId: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('tab', 'documents');
-    next.set('studentId', studentProfileId);
-    navigate(`?${next.toString()}`);
+    next.set('studentId', profileId);
+    navigateWithDocumentPreferences(next);
   };
 
-  const handleDocumentGroupChange = (value: string) => {
+  const handleDocumentWorkFiltersChange = (
+    updates: Partial<TeacherDocumentWorkFilters>
+  ) => {
     const next = new URLSearchParams(searchParams);
-    if (value === 'none') {
-      next.delete('documentGroup');
-    } else {
-      next.set('documentGroup', value);
-    }
-    navigate(`?${next.toString()}`);
-  };
 
-  const handleStatusFilterChange = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      next.delete('status');
-    } else {
-      next.set('status', value);
-    }
-    navigate(`?${next.toString()}`);
-  };
-
-  const getClassDocumentDetailLink = (document: ClassDocumentRow) => {
-    if (document.latestSubmission) {
-      return `/app/submissions/${document.latestSubmission.id}?${
-        data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-      }exitTo=${encodedClassDetailExitTo}`;
+    if ('studentIds' in updates) {
+      const serialized = serializeDocumentWorkFilterIds(updates.studentIds ?? []);
+      if (!serialized) {
+        next.delete('studentId');
+      } else {
+        next.set('studentId', serialized);
+      }
     }
 
-    return `/app/documents/${document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`;
-  };
-
-  const getClassDocumentGradeDisplay = (document: ClassDocumentRow) => {
-    const submission = document.latestSubmission;
-    if (!submission || !hasMeaningfulGrade(submission)) {
-      return null;
-    }
-
-    return formatAssignmentGrade({
-      submitForGrade: document.assignment?.submitForGrade,
-      numericPercentage: submission.numericPercentage ?? null,
-      letterGrade: submission.letterGrade ?? null,
-      pointValue: document.assignment?.pointValue ?? null,
-    });
-  };
-
-  const getClassDocumentStatus = (document: ClassDocumentRow) => {
-    const status = getTeacherDocumentStatus(document.latestSubmission);
-    const grade =
-      status === 'graded' || status === 'released'
-        ? getClassDocumentGradeDisplay(document)
-        : null;
-
-    return {
-      label: grade
-        ? `${TEACHER_DOCUMENT_STATUS_LABELS[status]} · ${grade}`
-        : TEACHER_DOCUMENT_STATUS_LABELS[status],
-      badgeClassName: TEACHER_DOCUMENT_STATUS_BADGE_CLASSES[status],
-      variant: 'secondary' as const,
-    };
-  };
-
-  const renderClassDocumentRows = (
-    documents: ClassDocumentRow[],
-    options: { showStudent: boolean; showAssignment: boolean }
-  ) =>
-    documents.map((document) => {
-      const status = getClassDocumentStatus(document);
-      const displayTitle =
-        document.latestSubmission?.title || getDraftDisplayTitle(document);
-      const latestSubmission = document.latestSubmission;
-
-      return (
-        <TableRow key={document.id}>
-          {options.showStudent ? (
-            <TableCell className="font-medium">
-              {document.profile.user.name || document.profile.user.email}
-            </TableCell>
-          ) : null}
-          <TableCell>{displayTitle}</TableCell>
-          {options.showAssignment && assignmentsEnabled ? (
-            <TableCell className="text-muted-foreground">
-              {document.assignment?.title || '—'}
-            </TableCell>
-          ) : null}
-          <TableCell>
-            <div className="flex items-center gap-2">
-              <Badge
-                variant={status.variant}
-                className={cn(
-                  status.badgeClassName,
-                  'shrink-0 whitespace-nowrap'
-                )}
-              >
-                {status.label}
-              </Badge>
-              {document.submissions.length >= 2 ? (
-                <span className="text-xs text-muted-foreground">
-                  v{document.submissions.length}
-                </span>
-              ) : null}
-            </div>
-          </TableCell>
-          <TableCell className="text-muted-foreground">
-            {latestSubmission
-              ? timeAgo(
-                  new Date(latestSubmission.submittedAt ?? latestSubmission.createdAt)
-                )
-              : '—'}
-          </TableCell>
-          <TableCell className="text-muted-foreground">
-            {latestSubmission?.gradedAt
-              ? timeAgo(new Date(latestSubmission.gradedAt))
-              : '—'}
-          </TableCell>
-          <TableCell className="text-muted-foreground">
-            {timeAgo(document.updatedAt)}
-          </TableCell>
-          <TableCell className="pr-4">
-            <Button asChild size="sm" variant="outline">
-              <Link to={getClassDocumentDetailLink(document)}>View details</Link>
-            </Button>
-          </TableCell>
-        </TableRow>
+    if ('assignmentIds' in updates) {
+      const serialized = serializeDocumentWorkFilterIds(
+        updates.assignmentIds ?? []
       );
-    });
+      if (!serialized) {
+        next.delete('assignmentId');
+        next.delete('classAssignmentId');
+      } else {
+        next.set('assignmentId', serialized);
+        next.delete('classAssignmentId');
+      }
+    }
+
+    if ('status' in updates) {
+      if (!updates.status || updates.status === 'all') {
+        next.delete('status');
+      } else {
+        next.set('status', updates.status);
+      }
+    }
+
+    if ('group' in updates) {
+      if (!updates.group || updates.group === 'none') {
+        next.delete('documentGroup');
+      } else {
+        next.set('documentGroup', updates.group);
+      }
+    }
+
+    if ('query' in updates) {
+      if (!updates.query?.trim()) {
+        next.delete('q');
+      } else {
+        next.set('q', updates.query.trim());
+      }
+    }
+
+    navigateWithDocumentPreferences(next);
+  };
 
   const toggleStudentNameSort = () => {
     setStudentNameSortDirection((current) =>
@@ -1450,213 +1410,61 @@ function ClassDetailPage() {
   // Render table based on active tab
   const renderTable = () => {
     if (activeTab === 'documents') {
-      const hasDocumentFilters =
-        selectedStudentFilter !== 'all' ||
-        selectedAssignmentId !== 'all' ||
-        statusFilter !== 'all';
-      const showStudentColumn = documentGroupMode !== 'student';
-      const showAssignmentColumn =
-        assignmentsEnabled && documentGroupMode !== 'assignment';
-      const documentsToRender =
-        documentGroupMode === 'none'
-          ? (paginatedData as ClassDocumentRow[])
-          : filteredClassDocuments;
-
-      const renderDocumentsTable = (
-        documents: ClassDocumentRow[],
-        nested = false
-      ) => (
-        <Table
-          aria-label="Class documents"
-          containerClassName={
-            nested ? 'rounded-none border-0 shadow-none' : undefined
-          }
-        >
-          <TableHeader>
-            <TableRow>
-              {showStudentColumn ? <TableHead>Student</TableHead> : null}
-              <TableHead>Document</TableHead>
-              {showAssignmentColumn ? <TableHead>Assignment</TableHead> : null}
-              <TableHead>Status</TableHead>
-              <TableHead>Submitted at</TableHead>
-              <TableHead>Graded at</TableHead>
-              <TableHead>Last edited</TableHead>
-              <TableHead className="pr-4">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {renderClassDocumentRows(documents, {
-              showStudent: showStudentColumn,
-              showAssignment: showAssignmentColumn,
-            })}
-          </TableBody>
-        </Table>
-      );
-
       return (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Select
-                value={selectedStudentFilter}
-                onValueChange={handleStudentFilterChange}
+        <TeacherDocumentWorkPanel
+          tableLabel="Class documents"
+          documents={teacherDocumentWorkRows}
+          statusCounts={documentWorkStatusCounts}
+          students={sortedStudents.map((student) => ({
+            id: student.id,
+            label: student.user.name || student.user.email,
+          }))}
+          assignments={data.assignments.map((assignment) => ({
+            id: assignment.id,
+            label: assignment.title ?? 'Untitled assignment',
+          }))}
+          assignmentsEnabled={assignmentsEnabled}
+          isDocumentSubmissionEnabled={data.isDocumentSubmissionEnabled}
+          exitTo={classDetailExitTo}
+          filters={documentWorkFilters}
+          onFiltersChange={handleDocumentWorkFiltersChange}
+          onClearFilters={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('studentId');
+            next.delete('assignmentId');
+            next.delete('status');
+            next.delete('q');
+            navigateWithDocumentPreferences(next);
+          }}
+          collapsedGroups={collapsedDocumentGroups}
+          onCollapsedGroupsChange={(next) => {
+            setCollapsedDocumentGroups(next);
+            persistCollapsedDocumentGroups(next);
+          }}
+          pagination={{
+            skip: pagination.skip,
+            take: pagination.take,
+            onChange: handlePaginationChange,
+          }}
+          headerActions={
+            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                data-testid="class-release-grades-open"
+                onClick={openReleaseSheet}
               >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="All students" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All students</SelectItem>
-                  {sortedStudents.map((student) => (
-                    <SelectItem key={student.id} value={student.id}>
-                      {student.profile.user.name || student.profile.user.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={selectedAssignmentId}
-                onValueChange={handleAssignmentFilterChange}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="All assignments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All assignments</SelectItem>
-                  {data.assignments.map((assignment) => (
-                    <SelectItem key={assignment.id} value={assignment.id}>
-                      {assignment.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={handleStatusFilterChange}
-              >
-                <SelectTrigger
-                  className="w-[180px]"
-                  data-testid="class-documents-status-filter"
-                >
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  {TEACHER_DOCUMENT_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {TEACHER_DOCUMENT_STATUS_LABELS[status]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {hasDocumentFilters ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const next = new URLSearchParams(searchParams);
-                    next.delete('studentId');
-                    next.delete('assignmentId');
-                    next.delete('status');
-                    navigate(`?${next.toString()}`);
-                  }}
-                >
-                  Clear filters
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  data-testid="class-release-grades-open"
-                  onClick={openReleaseSheet}
-                >
-                  <Send className="mr-2 h-4 w-4" />
-                  Release grades ({unreleasedGrades.length})
-                </Button>
-              ) : null}
-              <Select
-                value={documentGroupMode}
-                onValueChange={handleDocumentGroupChange}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="No grouping" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No grouping</SelectItem>
-                  <SelectItem value="student">Group by student</SelectItem>
-                  <SelectItem value="assignment">Group by assignment</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {filteredClassDocuments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
-              <span className="text-lg font-bold">No documents found</span>
-              <span className="text-sm text-muted-foreground">
-                {hasDocumentFilters
-                  ? 'Try adjusting your filters'
-                  : 'Student documents will appear here once work begins'}
-              </span>
-            </div>
-          ) : documentGroupMode === 'none' ? (
-            <div className="rounded-lg bg-muted/50">
-              {renderDocumentsTable(documentsToRender)}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {classDocumentGroups.map((group) => {
-                const isOpen = !collapsedDocumentGroups.has(group.key);
-
-                return (
-                  <Collapsible
-                    key={group.key}
-                    open={isOpen}
-                    onOpenChange={(open) => {
-                      setCollapsedDocumentGroups((current) => {
-                        const next = new Set(current);
-                        if (open) {
-                          next.delete(group.key);
-                        } else {
-                          next.add(group.key);
-                        }
-                        return next;
-                      });
-                    }}
-                    className="overflow-hidden rounded-lg border bg-background shadow-sm"
-                  >
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-3 border-b bg-muted/70 px-4 py-3 text-left transition-colors hover:bg-muted"
-                      >
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className="text-base font-semibold text-foreground">
-                          {group.label}
-                        </span>
-                        <Badge variant="secondary" className="ml-1">
-                          {group.documents.length}
-                        </Badge>
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <div className="bg-muted/50">
-                        {renderDocumentsTable(group.documents, true)}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                <Send className="mr-2 h-4 w-4" />
+                Release grades ({unreleasedGrades.length})
+              </Button>
+            ) : null
+          }
+          emptyMessageSecondary="Student documents will appear here once work begins"
+          testIds={{
+            statusChips: 'class-documents-status-chips',
+            groupSelect: 'class-documents-group-filter',
+          }}
+        />
       );
     }
 
@@ -1734,63 +1542,118 @@ function ClassDetailPage() {
 
           <Sheet
             open={isAddStudentSheetOpen}
-            onOpenChange={setIsAddStudentSheetOpen}
+            onOpenChange={handleAddStudentSheetOpenChange}
           >
             <SheetContent className="w-full sm:max-w-md overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>Add Student by Email</SheetTitle>
                 <p className="text-sm text-muted-foreground">
-                  Enrolls an existing student profile in this class. Name and
-                  password are only needed to create a brand-new account.
+                  {addStudentStep === 'email'
+                    ? 'Enter a student email to add them to this class.'
+                    : 'Review the next step before continuing.'}
                 </p>
               </SheetHeader>
-              <studentFetcher.Form method="post" className="mt-4 space-y-4">
-                <input type="hidden" name="intent" value="add-student" />
-                <div className="space-y-2">
-                  <Label htmlFor="add-student-email">Email</Label>
-                  <Input
-                    id="add-student-email"
-                    name="email"
-                    type="email"
-                    required
-                    autoComplete="off"
+              {addStudentStep === 'email' ? (
+                <studentFetcher.Form method="post" className="mt-4 space-y-4">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="lookup-student-email"
                   />
-                </div>
-                <div className="space-y-3 rounded-md border p-3">
-                  <p className="text-sm font-medium">New account only</p>
                   <div className="space-y-2">
-                    <Label htmlFor="add-student-name">Name</Label>
+                    <Label htmlFor="add-student-email">Email</Label>
                     <Input
-                      id="add-student-name"
-                      name="name"
+                      id="add-student-email"
+                      data-testid="add-student-email-input"
+                      name="email"
+                      type="email"
+                      required
                       autoComplete="off"
+                      value={addStudentEmail}
+                      onChange={(event) =>
+                        setAddStudentEmail(event.target.value)
+                      }
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="add-student-password">Password</Label>
-                    <Input
-                      id="add-student-password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                    />
-                  </div>
-                </div>
-                {studentFetcher.data &&
-                  'error' in studentFetcher.data &&
-                  studentFetcher.data.error && (
-                    <p className="text-sm text-red-600">
-                      {studentFetcher.data.error}
-                    </p>
+                  {studentFetcher.data &&
+                    'error' in studentFetcher.data &&
+                    studentFetcher.data.error && (
+                      <p className="text-sm text-red-600">
+                        {studentFetcher.data.error}
+                      </p>
+                    )}
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={studentIsLoading}
+                    data-testid="add-student-next-button"
+                  >
+                    {studentIsLoading ? 'Checking...' : 'Next'}
+                  </Button>
+                </studentFetcher.Form>
+              ) : (
+                <studentFetcher.Form method="post" className="mt-4 space-y-4">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value={
+                      addStudentConfirmAction === 'enroll'
+                        ? 'enroll-student'
+                        : 'invite-student'
+                    }
+                  />
+                  <input type="hidden" name="email" value={addStudentEmail} />
+                  <p
+                    className="text-sm"
+                    data-testid="add-student-confirm-message"
+                  >
+                    {addStudentConfirmAction === 'enroll'
+                      ? 'They have an account in the system. Are you ready to add them to the class?'
+                      : addStudentConfirmAction === 'invite'
+                        ? "They don't have an account in the system. Should I send them an invite?"
+                        : (studentFetcher.data &&
+                            'message' in studentFetcher.data &&
+                            studentFetcher.data.message) ||
+                          'This student is already in this class.'}
+                  </p>
+                  <p className="rounded-md border bg-muted/40 p-3 text-sm">
+                    {addStudentEmail}
+                  </p>
+                  {studentFetcher.data &&
+                    'error' in studentFetcher.data &&
+                    studentFetcher.data.error && (
+                      <p className="text-sm text-red-600">
+                        {studentFetcher.data.error}
+                      </p>
+                    )}
+                  {addStudentConfirmAction !== 'already_enrolled' && (
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={studentIsLoading}
+                      data-testid="add-student-confirm-button"
+                    >
+                      {studentIsLoading
+                        ? addStudentConfirmAction === 'enroll'
+                          ? 'Adding...'
+                          : 'Sending invite...'
+                        : 'Confirm'}
+                    </Button>
                   )}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={studentIsLoading}
-                >
-                  {studentIsLoading ? 'Adding...' : 'Add Student'}
-                </Button>
-              </studentFetcher.Form>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setAddStudentStep('email');
+                      setAddStudentConfirmAction(null);
+                    }}
+                    disabled={studentIsLoading}
+                  >
+                    Back
+                  </Button>
+                </studentFetcher.Form>
+              )}
             </SheetContent>
           </Sheet>
 
@@ -1911,12 +1774,12 @@ function ClassDetailPage() {
                   {paginatedData.map((s) => {
                     const studentDocumentCount =
                       data.inProgressDocuments.filter(
-                        (doc) => doc.profile.id === s.profile.id
+                        (doc) => doc.membership.id === s.id
                       ).length +
                       new Set(
                         allSubmissions
                           .filter(
-                            (sub) => sub.document.profile.id === s.profile.id
+                            (sub) => sub.document.membership.id === s.id
                           )
                           .map((sub) => sub.documentId)
                       ).size;
@@ -1930,10 +1793,10 @@ function ClassDetailPage() {
                           />
                         </TableCell>
                         <TableCell className="font-medium">
-                          {s.profile.user.name ?? 'Unnamed Student'}
+                          {s.user.name ?? 'Unnamed Student'}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {s.profile.user.email}
+                          {s.user.email}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">
@@ -1982,7 +1845,7 @@ function ClassDetailPage() {
           <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <div className="hidden h-16 w-24 shrink-0 overflow-hidden rounded-md border sm:block">
-                <ClassArt seed={data.klass.id} />
+                <ClassArt seed={data.klass.id} classArtIndex={data.klass.classArtIndex ?? null} />
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-lg font-semibold">
@@ -2009,13 +1872,21 @@ function ClassDetailPage() {
                     {classDocuments.length === 1 ? '' : 's'}
                   </Badge>
                   {ungradedDocuments.length > 0 ? (
-                    <Badge className="gap-1 border-orange-200 bg-orange-100 text-orange-700">
+                    <Badge
+                      variant="warning-soft"
+                      size="sm"
+                      className="pointer-events-none gap-1 hover:bg-orange-100 hover:text-orange-700"
+                    >
                       <ClipboardCheck className="h-3 w-3" />
                       {ungradedDocuments.length} to grade
                     </Badge>
                   ) : null}
                   {releasedDocuments.length > 0 ? (
-                    <Badge className="gap-1 border-green-200 bg-green-100 text-green-700">
+                    <Badge
+                      variant="outline"
+                      size="sm"
+                      className="pointer-events-none gap-1 border-green-200 bg-green-100 text-green-700 hover:bg-green-100 hover:text-green-700"
+                    >
                       <Send className="h-3 w-3" />
                       {releasedDocuments.length} released
                     </Badge>
@@ -2033,14 +1904,6 @@ function ClassDetailPage() {
                 <Pencil className="mr-1 h-3.5 w-3.5" />
                 Edit Class
               </Button>
-              {data.releasedGradesEnabled ? (
-                <Link
-                  to={`/app/my-classes/${data.klass.id}/released-grades`}
-                  className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-                >
-                  Released grades →
-                </Link>
-              ) : null}
             </div>
           </div>
         </div>
@@ -2076,8 +1939,7 @@ function ClassDetailPage() {
               </TabsList>
             <TabsContent value={activeTab} className="mt-4">
               <div>{renderTable()}</div>
-              {currentTabData.length > 0 &&
-                !(activeTab === 'documents' && documentGroupMode !== 'none') && (
+              {activeTab === 'students' && currentTabData.length > 0 && (
                 <div className="mt-4">
                   <Pagination
                     totalCount={currentTabData.length}

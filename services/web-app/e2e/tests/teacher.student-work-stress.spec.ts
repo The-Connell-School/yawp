@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { createDeployedAssignment } from '../db-helpers';
 
 const STRESS_COUNT = 50;
 
@@ -16,18 +17,12 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
     let assignmentId = '';
 
     try {
-      const studentProfile = await prisma.studentProfile.findFirstOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
-      });
-      const assignment = await prisma.assignment.create({
-        data: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.assignmentTypeId,
-          title: assignmentTitle,
-          prompt: 'Stress-test prompt.',
-        },
-        select: { id: true },
+      const { assignment, classAssignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        title: assignmentTitle,
+        prompt: 'Stress-test prompt.',
       });
       assignmentId = assignment.id;
 
@@ -38,10 +33,10 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
             title: `Stress Doc ${suffix} ${String(index + 1).padStart(2, '0')}`,
             text: body,
             html: `<p>${body}</p>`,
-            profile: { connect: { id: e2eContext.profileId } },
-            studentProfile: { connect: { id: studentProfile.id } },
+            membership: { connect: { id: e2eContext.membershipId } },
             assignmentType: { connect: { id: e2eContext.assignmentTypeId } },
             assignment: { connect: { id: assignment.id } },
+            classAssignment: { connect: { id: classAssignment.id } },
             submissions: {
               create: {
                 title: `Stress Submission ${suffix} ${String(index + 1).padStart(2, '0')}`,
@@ -78,7 +73,7 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
       );
       await page.waitForLoadState('networkidle');
       const classTable = page.getByRole('table', { name: /class documents/i });
-      await expect(classTable.getByText(/^Graded/).first()).toBeVisible();
+      await expect(classTable.getByText(/^Needs Releasing/).first()).toBeVisible();
       await expect(classTable.getByText(/^Released/)).toHaveCount(0);
 
       // Student Work grouped by student shows the volume in one group.

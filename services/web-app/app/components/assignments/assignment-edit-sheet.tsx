@@ -19,7 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { toDateInputValue } from '~/utils/date-only';
 
 export type AssignmentEditRecord = {
   id: string;
@@ -28,7 +27,6 @@ export type AssignmentEditRecord = {
   tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
-  dueDate: Date | string | null;
   assignmentTypeId: string;
   assignmentType: { id: string; title: string };
 };
@@ -62,7 +60,6 @@ export function AssignmentEditSheet({
   const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
-  const [dueDate, setDueDate] = useState('');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
 
@@ -105,7 +102,6 @@ export function AssignmentEditSheet({
     setTutorContext(editingAssignment.tutorContext ?? '');
     setSubmitForGrade(editingAssignment.submitForGrade ?? true);
     setPointValue((editingAssignment.pointValue ?? 100).toString());
-    setDueDate(toDateInputValue(editingAssignment.dueDate));
     setPromptMode('manual');
     setPdfFile(null);
   }, [editingAssignment, open]);
@@ -331,18 +327,6 @@ export function AssignmentEditSheet({
               />
             </div>
           )}
-
-          <div className="space-y-2">
-            <Label htmlFor="assignment-due-date">Due Date (optional)</Label>
-            <Input
-              id="assignment-due-date"
-              type="date"
-              name="dueDate"
-              value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
-              disabled={isSaving}
-            />
-          </div>
 
           {formError ? (
             <p className="text-sm text-destructive">{formError}</p>

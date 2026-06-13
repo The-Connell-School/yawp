@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('Teacher class sorting and filtering', () => {
   test('sorts students and filters assignment rows inside a class', async ({
@@ -25,7 +26,7 @@ test.describe.serial('Teacher class sorting and filtering', () => {
           grade: '9th',
           title: 'Sorting Filter QA',
           schoolId: e2eContext.schoolId,
-          teachers: { connect: { id: e2eContext.teacherProfileId } },
+          teachers: { connect: { id: e2eContext.teacherMembershipId } },
         },
         select: { id: true },
       });
@@ -42,14 +43,11 @@ test.describe.serial('Teacher class sorting and filtering', () => {
           data: {
             email: student.email,
             name: student.name,
-            profiles: {
+            memberships: {
               create: {
                 organizationId: e2eContext.organizationId,
-                studentProfile: {
-                  create: {
-                    classes: { connect: { id: klass.id } },
-                  },
-                },
+                role: 'STUDENT',
+                classesAsStudent: { connect: { id: klass.id } },
               },
             },
           },
@@ -57,31 +55,31 @@ test.describe.serial('Teacher class sorting and filtering', () => {
         expect(user.id).toBeTruthy();
       }
 
-      await prisma.assignment.createMany({
-        data: [
-          {
-            classId: klass.id,
-            assignmentTypeId: e2eContext.assignmentTypeId,
-            title: 'Zeta Essay',
-            prompt: 'Draft a short essay.',
-            dueDate: new Date('2026-05-20T00:00:00.000Z'),
-          },
-          {
-            classId: klass.id,
-            assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
-            title: 'Alpha Daily Pages',
-            prompt: 'Write a daily page.',
-            dueDate: new Date('2026-05-30T00:00:00.000Z'),
-          },
-          {
-            classId: klass.id,
-            assignmentTypeId: e2eContext.assignmentTypeId,
-            title: 'Beta Essay',
-            prompt: 'Draft another short essay.',
-            dueDate: new Date('2026-05-10T00:00:00.000Z'),
-          },
-        ],
-      });
+      for (const assignment of [
+        {
+          title: 'Zeta Essay',
+          prompt: 'Draft a short essay.',
+          assignmentTypeId: e2eContext.assignmentTypeId,
+        },
+        {
+          title: 'Alpha Daily Pages',
+          prompt: 'Write a daily page.',
+          assignmentTypeId: e2eContext.dailyPagesAssignmentTypeId,
+        },
+        {
+          title: 'Beta Essay',
+          prompt: 'Draft another short essay.',
+          assignmentTypeId: e2eContext.assignmentTypeId,
+        },
+      ]) {
+        await createDeployedAssignment({
+          prisma,
+          classId: klass.id,
+          assignmentTypeId: assignment.assignmentTypeId,
+          title: assignment.title,
+          prompt: assignment.prompt,
+        });
+      }
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(`/app/my-classes/${klass.id}`);
@@ -136,18 +134,14 @@ test.describe.serial('Teacher class sorting and filtering', () => {
       await expect(assignmentsTable.locator('tbody tr').first()).toBeVisible();
     } finally {
       if (classId) {
-        await prisma.assignment.deleteMany({ where: { classId } });
+        await prisma.assignment.deleteMany({
+          where: { classAssignments: { some: { classId } } },
+        });
         await prisma.class.delete({ where: { id: classId } }).catch(() => {});
       }
-      const profiles = await prisma.profile.findMany({
+      await prisma.orgMembership.deleteMany({
         where: { user: { email: { in: studentEmails } } },
-        select: { id: true },
       });
-      const profileIds = profiles.map((profile) => profile.id);
-      await prisma.studentProfile.deleteMany({
-        where: { profileId: { in: profileIds } },
-      });
-      await prisma.profile.deleteMany({ where: { id: { in: profileIds } } });
       await prisma.user.deleteMany({ where: { email: { in: studentEmails } } });
       await prisma.$disconnect();
     }

@@ -7,17 +7,19 @@ import {
 
 export function ClassesAtAGlance({
   classes,
+  totalClassCount,
 }: {
   classes: TeacherClassCardData[];
+  totalClassCount: number;
 }) {
   return (
     <div data-testid="teacher-classes-grid">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">My Classes</h2>
         <div className="flex items-center gap-2">
-          {classes.length > 0 ? (
+          {totalClassCount > 0 ? (
             <Badge variant="secondary" size="sm">
-              {classes.length}
+              {totalClassCount}
             </Badge>
           ) : null}
           <Link
@@ -32,7 +34,9 @@ export function ClassesAtAGlance({
       {classes.length === 0 ? (
         <div className="rounded-lg border border-dashed p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            No classes yet. Create one from My Classes.
+            {totalClassCount > 0
+              ? 'No recent student document activity yet. Open My Classes to see every class.'
+              : 'No classes yet. Create one from My Classes.'}
           </p>
         </div>
       ) : (

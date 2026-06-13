@@ -11,7 +11,7 @@ const prisma = {
     findMany: mock(),
     upsert: mock(),
   },
-  teacherProfile: {
+  orgMembership: {
     findMany: mock(),
     findUnique: mock(),
   },
@@ -27,19 +27,19 @@ const prisma = {
 
 const requireAdmin = mock();
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/auth.server.js', () => ({
   requireAdmin,
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 
 const { action: routeAction, loader: routeLoader } = await import('./route');
@@ -54,21 +54,21 @@ describe('admin assignment type detail action', () => {
     prisma.featureAccessTarget.deleteMany.mockReset();
     prisma.featureAccessTarget.findMany.mockReset();
     prisma.featureAccessTarget.upsert.mockReset();
-    prisma.teacherProfile.findMany.mockReset();
-    prisma.teacherProfile.findUnique.mockReset();
+    prisma.orgMembership.findMany.mockReset();
+    prisma.orgMembership.findUnique.mockReset();
     prisma.gradingAssistantTemplate.findMany.mockReset();
     prisma.gradingAssistantTemplate.findUnique.mockReset();
     prisma.assignmentTypeGradingAssistant.create.mockReset();
     prisma.assignmentTypeGradingAssistant.updateMany.mockReset();
     requireAdmin.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
     prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
-    prisma.teacherProfile.findMany.mockResolvedValue([]);
-    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    prisma.orgMembership.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.featureAccessTarget.upsert.mockResolvedValue({
       id: 'fat-1',
@@ -151,8 +151,8 @@ describe('admin assignment type detail action', () => {
       where: { id: 'at-1' },
       select: { id: true },
     });
-    expect(prisma.teacherProfile.findUnique).toHaveBeenCalledWith({
-      where: { id: 'teacher-1' },
+    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
+      where: { id: 'teacher-1', role: 'TEACHER' },
       select: { id: true },
     });
     expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
@@ -329,14 +329,12 @@ describe('admin assignment type detail action', () => {
       assignmentModules: [],
       image: null,
     });
-    prisma.teacherProfile.findMany.mockResolvedValue([
+    prisma.orgMembership.findMany.mockResolvedValue([
       {
         id: 'teacher-1',
-        profile: {
-          organizationId: 'org-1',
-          organization: { name: 'Connell School' },
-          user: { email: 'teacher@example.test', name: 'Test Teacher' },
-        },
+        organizationId: 'org-1',
+        organization: { name: 'Connell School' },
+        user: { email: 'teacher@example.test', name: 'Test Teacher' },
       },
     ]);
     prisma.featureAccessTarget.findMany.mockResolvedValue([

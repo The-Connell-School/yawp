@@ -1,6 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setAssignmentsForOrganization } from '../db-helpers';
+import { setAssignmentsForOrganization, createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('Student opens a teacher-created assignment', () => {
   test('assignment card renders on student dashboard and Start creates a document', async ({
@@ -27,14 +27,12 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
             `Requirement ${index + 1}: Anchor the analysis in specific evidence from the speech.`
         ),
       ].join('\n');
-      const assignment = await prisma.assignment.create({
-        data: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.assignmentTypeId,
-          title: 'E2E Rhetorical Analysis',
-          prompt: longPrompt,
-        },
-        select: { id: true },
+      const { assignment } = await createDeployedAssignment({
+        prisma,
+        classId: e2eContext.classId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        title: 'E2E Rhetorical Analysis',
+        prompt: longPrompt,
       });
 
       try {
@@ -134,11 +132,11 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
 
         const createdDoc = await prisma.document.findUnique({
           where: { id: documentId as string },
-          select: { id: true, assignmentId: true, profileId: true },
+          select: { id: true, assignmentId: true, membershipId: true },
         });
         expect(createdDoc).not.toBeNull();
         expect(createdDoc?.assignmentId).toBe(assignment.id);
-        expect(createdDoc?.profileId).toBe(e2eContext.profileId);
+        expect(createdDoc?.membershipId).toBe(e2eContext.membershipId);
 
         const assignmentModules = await prisma.assignmentModule.findMany({
           where: { assignmentTypeId: e2eContext.assignmentTypeId },

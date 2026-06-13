@@ -102,10 +102,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       skip,
       take,
       include: {
-        profiles: {
+        memberships: {
           include: {
-            studentProfile: true,
-            teacherProfile: true,
+            user: { select: { id: true } },
           },
         },
       },
@@ -118,8 +117,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       SELECT
         (SELECT COUNT(*) FROM "Organization")::int as total_organizations,
         (SELECT COUNT(*) FROM "Organization" WHERE "createdAt" > NOW() - INTERVAL '30 days')::int as active_organizations,
-        (SELECT COUNT(*) FROM "StudentProfile")::int as total_students,
-        (SELECT COUNT(*) FROM "TeacherProfile")::int as total_teachers
+        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'STUDENT')::int as total_students,
+        (SELECT COUNT(*) FROM "OrgMembership" WHERE role = 'TEACHER')::int as total_teachers
     `,
   ]);
 
@@ -415,20 +414,20 @@ export default function OrganizationsRoute() {
                     <TableCell>
                       {organization.createdAt.toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{organization.profiles.length}</TableCell>
+                    <TableCell>{organization.memberships.length}</TableCell>
                     <TableCell>
                       {
-                        organization.profiles.filter(
-                          (profile) =>
-                            profile.studentProfile && !profile.isOwner
+                        organization.memberships.filter(
+                          (membership) =>
+                            membership.role === 'STUDENT' && !membership.isOrgOwner
                         ).length
                       }{' '}
                       / {organization.numOfStudentSeats}
                     </TableCell>
                     <TableCell>
                       {
-                        organization.profiles.filter(
-                          (profile) => profile.teacherProfile
+                        organization.memberships.filter(
+                          (membership) => membership.role === 'TEACHER'
                         ).length
                       }{' '}
                       / {organization.numOfTeacherSeats}

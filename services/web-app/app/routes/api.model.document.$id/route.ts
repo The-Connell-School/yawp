@@ -3,7 +3,7 @@ import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const PUT = z.object({
@@ -31,7 +31,7 @@ function isRecordNotFoundError(error: unknown) {
 const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
   invariant(params.id, 'No id provided');
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const snapshotId = new URL(request.url).searchParams.get('snapshotId');
 
   let formData: FormData | null = null;
@@ -42,7 +42,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
 
     if (actionType === 'archive' || actionType === 'unarchive') {
       const updated = await prisma.document.update({
-        where: { id: params.id, profileId: profile.id },
+        where: { id: params.id, membershipId: profile.id },
         data: {
           archivedAt: actionType === 'archive' ? new Date() : null,
         },
@@ -57,7 +57,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
 
   if (request.method === 'DELETE') {
     const updated = await prisma.document.update({
-      where: { id: params.id, profileId: profile.id },
+      where: { id: params.id, membershipId: profile.id },
       data: { deletedAt: new Date() },
     });
 
@@ -105,7 +105,7 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
       source,
       status: 'pending',
       userId,
-      profileId: profile.id,
+      membershipId: profile.id,
       editorSessionId: data.editorSessionId ?? null,
       clientSeq: data.clientSeq ?? null,
       baseRevision: data.baseRevision ?? null,
@@ -201,9 +201,9 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           : {
               document: {
                 is: {
-                  assignment: {
+                  classAssignment: {
                     class: {
-                      teachers: { some: { profileId: profile.id } },
+                      teachers: { some: { id: profile.id } },
                     },
                   },
                 },
@@ -290,13 +290,11 @@ const actionImpl = async ({ request, params }: ActionFunctionArgs) => {
           ? {}
           : {
               OR: [
-                { profileId: profile.id },
+                { membershipId: profile.id },
                 {
-                  profile: {
-                    studentProfile: {
-                      classes: {
-                        some: { teachers: { some: { profileId: profile.id } } },
-                      },
+                  membership: {
+                    classesAsStudent: {
+                      some: { teachers: { some: { id: profile.id } } },
                     },
                   },
                 },

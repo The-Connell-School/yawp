@@ -2,7 +2,7 @@ import {
   type DocumentCommentResponse,
   type DocumentComment,
   type User,
-  Profile,
+  type OrgMembership,
 } from '@app/prisma';
 import { useFetcher } from 'react-router';
 import { useEffect, useRef, type MouseEvent } from 'react';
@@ -10,15 +10,16 @@ import { useCommentsSelection } from '../comments/selection-context';
 import { CheckIcon, TrashIcon } from '~/components/icons';
 import { RichTextarea } from '~/components/rich-textarea.js';
 import { Button } from '~/components/ui/button';
-import { UserImage } from '~/components/user-image';
 import { useUser } from '~/hooks/useUser';
 import { useDoubleCheck } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
 
 export type Comment = DocumentComment & {
-  profile: Omit<Profile, 'createdAt' | 'updatedAt'>;
+  membership: Omit<OrgMembership, 'createdAt' | 'updatedAt'>;
   responses: (DocumentCommentResponse & {
-    profile: Omit<Profile, 'createdAt' | 'updatedAt'> & { user: User };
+    membership: Omit<OrgMembership, 'createdAt' | 'updatedAt'> & {
+      user: User;
+    };
   })[];
 };
 
@@ -70,21 +71,38 @@ export const Comment = ({
     onResponseAdded,
   ]);
 
-  const isTeacherOfCommentUser =
-    user.selectedProfile?.teacherProfile?.profileId === comment.profileId;
-
   const optimisticData = createCommentResponseFetcher.formData;
-  const optimisticDocumentCommentResponse = optimisticData
-    ? [
+  const optimisticDocumentCommentResponse: Comment['responses'] = optimisticData
+    ? ([
         {
           id: 'unknown',
           createdAt: new Date(),
           content: optimisticData.get('content') as string,
           commentId: comment.id,
-          profileId: user.selectedProfile!.id,
-          profile: user.selectedProfile as any,
+          membershipId: user.selectedMembership!.id,
+          membership: {
+            id: user.selectedMembership!.id,
+            organizationId: '',
+            role: user.selectedMembership!.role,
+            isOrgOwner: user.selectedMembership!.isOrgOwner,
+            userId: user.id!,
+            isActive: true,
+            period: null,
+            school: null,
+            schoolTeacher: null,
+            grade: null,
+            user: {
+              id: user.id!,
+              name: user.name ?? null,
+              email: user.email!,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              isAdmin: user.isAdmin ?? false,
+              isSuperAdmin: false,
+            },
+          },
         },
-      ]
+      ] as Comment['responses'])
     : [];
 
   const reply = (content: string) =>
@@ -146,8 +164,7 @@ export const Comment = ({
             : comment.content}
         </p>
         {!readOnly &&
-        (comment.profileId === user.selectedProfile?.id ||
-          isTeacherOfCommentUser) ? (
+        comment.membershipId === user.selectedMembership?.id ? (
           <Button
             {...dc.getButtonProps({
               onClick: (event) => {
@@ -173,7 +190,7 @@ export const Comment = ({
               <div className="mt-1 flex items-center gap-2">
                 <div>
                   <p className="text-xs font-semibold">
-                    {response.profile?.user?.name ?? 'Unknown user'}
+                    {response.membership?.user?.name ?? 'Unknown user'}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {timeAgo(new Date(response.createdAt))}

@@ -42,14 +42,14 @@ describe('api.domain.update-submission', () => {
     buildTeacherClassWhere.mockReset();
 
     getGradingActor.mockResolvedValue({
-      profileId: 'teacher-1',
-      teacherProfileId: 'teacher-profile-1',
+      membershipId: 'teacher-1',
+      teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
     });
     canManageGrades.mockReturnValue(true);
     isGradingOwnDocument.mockImplementation(
-      (actorId: string, docProfileId: string) => actorId === docProfileId
+      (actorId: string, docMembershipId: string) => actorId === docMembershipId
     );
     buildTeacherClassWhere.mockReturnValue({});
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
@@ -59,17 +59,17 @@ describe('api.domain.update-submission', () => {
     buildTeacherClassWhere.mockReturnValue({
       OR: [
         {
-          assignment: {
+          classAssignment: {
             class: {
-              teachers: { some: { profileId: 'teacher-1' } },
+              teachers: { some: { id: 'teacher-1' } },
             },
           },
         },
         {
-          studentProfile: {
-            classes: {
+          membership: {
+            classesAsStudent: {
               some: {
-                teachers: { some: { profileId: 'teacher-1' } },
+                teachers: { some: { id: 'teacher-1' } },
               },
             },
           },
@@ -79,16 +79,23 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: new Date(),
-      gradedById: 'teacher-1',
+      gradedByMembershipId: 'teacher-1',
       document: {
-        profileId: 'student-1',
+        membershipId: 'student-1',
         assignment: {
+          submitForGrade: true,
+          pointValue: 100,
+        },
+        classAssignment: {
           class: {
             id: 'class-1',
             schoolId: 'school-1',
             school: { organizationId: 'org-1' },
-            teachers: [{ id: 'teacher-profile-1' }],
+            teachers: [{ id: 'teacher-1' }],
           },
+        },
+        membership: {
+          classesAsStudent: [],
         },
       },
     });
@@ -119,7 +126,7 @@ describe('api.domain.update-submission', () => {
               deletedAt: null,
               OR: expect.arrayContaining([
                 expect.objectContaining({
-                  studentProfile: expect.any(Object),
+                  membership: expect.any(Object),
                 }),
               ]),
             }),
@@ -131,16 +138,16 @@ describe('api.domain.update-submission', () => {
       schoolIds: ['school-1'],
       organizationIds: ['org-1'],
       classIds: ['class-1'],
-      teacherProfileIds: ['teacher-profile-1'],
+      teacherProfileIds: ['teacher-1'],
       classScopes: [
         {
           schoolId: 'school-1',
           organizationId: 'org-1',
           classId: 'class-1',
-          teacherProfileIds: ['teacher-profile-1'],
+          teacherProfileIds: ['teacher-1'],
         },
       ],
-      actorTeacherProfileId: 'teacher-profile-1',
+      actorTeacherProfileId: 'teacher-1',
     });
   });
 
@@ -157,11 +164,11 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: new Date(),
-      gradedById: 'teacher-1',
+      gradedByMembershipId: 'teacher-1',
       document: {
-        profileId: 'student-1',
+        membershipId: 'student-1',
         assignment: null,
-        studentProfile: { classes: [] },
+        membership: { classesAsStudent: [] },
       },
     });
     prisma.submission.update.mockResolvedValue({ id: 'sub-1', grammarIssues });
@@ -180,11 +187,11 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: null,
-      gradedById: null,
+      gradedByMembershipId: null,
       document: {
-        profileId: 'student-1',
+        membershipId: 'student-1',
         assignment: null,
-        studentProfile: { classes: [] },
+        membership: { classesAsStudent: [] },
       },
     });
     prisma.submission.update.mockResolvedValue({ id: 'sub-1', score: '90% A' });
@@ -199,7 +206,7 @@ describe('api.domain.update-submission', () => {
 
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeInstanceOf(Date);
-    expect(updateCall.data.gradedById).toBe('teacher-1');
+    expect(updateCall.data.gradedByMembershipId).toBe('teacher-1');
   });
 
   test('does not overwrite gradedAt on subsequent edits', async () => {
@@ -207,11 +214,11 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: existingGradedAt,
-      gradedById: 'teacher-1',
+      gradedByMembershipId: 'teacher-1',
       document: {
-        profileId: 'student-1',
+        membershipId: 'student-1',
         assignment: null,
-        studentProfile: { classes: [] },
+        membership: { classesAsStudent: [] },
       },
     });
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
@@ -222,7 +229,7 @@ describe('api.domain.update-submission', () => {
 
     const updateCall = prisma.submission.update.mock.calls[0]?.[0];
     expect(updateCall.data.gradedAt).toBeUndefined();
-    expect(updateCall.data.gradedById).toBeUndefined();
+    expect(updateCall.data.gradedByMembershipId).toBeUndefined();
   });
 
   test('rejects non-teachers', async () => {
@@ -239,11 +246,11 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: null,
-      gradedById: null,
+      gradedByMembershipId: null,
       document: {
-        profileId: 'teacher-1',
+        membershipId: 'teacher-1',
         assignment: null,
-        studentProfile: { classes: [] },
+        membership: { classesAsStudent: [] },
       },
     });
 
@@ -260,14 +267,14 @@ describe('api.domain.update-submission', () => {
     prisma.submission.findFirst.mockResolvedValue({
       id: 'sub-1',
       gradedAt: null,
-      gradedById: null,
+      gradedByMembershipId: null,
       document: {
-        profileId: 'student-1',
+        membershipId: 'student-1',
         assignment: {
           class: {
             id: 'class-1',
             schoolId: 'school-1',
-            teachers: [{ id: 'teacher-profile-1' }],
+            teachers: [{ id: 'teacher-1' }],
           },
         },
       },

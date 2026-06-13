@@ -6,21 +6,23 @@ import {
 } from './document-submission-scope.server';
 
 describe('getDocumentSubmissionSchoolIds', () => {
-  test('uses the assignment class school for assignment-backed documents', () => {
+  test('uses the class assignment class school for assignment-backed documents', () => {
     expect(
       getDocumentSubmissionSchoolIds({
-        assignment: { class: { schoolId: 'assignment-school' } },
-        studentProfile: { classes: [{ schoolId: 'student-school' }] },
+        classAssignment: { class: { schoolId: 'assignment-school' } },
+        membership: {
+          classesAsStudent: [{ schoolId: 'student-school' }],
+        },
       })
     ).toEqual(['assignment-school']);
   });
 
-  test('falls back to the student profile classes for practice documents', () => {
+  test('falls back to the student membership classes for practice documents', () => {
     expect(
       getDocumentSubmissionSchoolIds({
-        assignment: null,
-        studentProfile: {
-          classes: [{ schoolId: 'school-1' }, { schoolId: 'school-1' }],
+        classAssignment: null,
+        membership: {
+          classesAsStudent: [{ schoolId: 'school-1' }, { schoolId: 'school-1' }],
         },
       })
     ).toEqual(['school-1']);
@@ -29,18 +31,20 @@ describe('getDocumentSubmissionSchoolIds', () => {
   test('ignores missing school ids', () => {
     expect(
       getDocumentSubmissionSchoolIds({
-        assignment: null,
-        studentProfile: { classes: [{ schoolId: null }, { schoolId: '' }] },
+        classAssignment: null,
+        membership: {
+          classesAsStudent: [{ schoolId: null }, { schoolId: '' }],
+        },
       })
     ).toEqual([]);
   });
 });
 
 describe('getDocumentSubmissionScope', () => {
-  test('uses assignment class as the narrow scope when present', () => {
+  test('uses class assignment class as the narrow scope when present', () => {
     expect(
       getDocumentSubmissionScope({
-        assignment: {
+        classAssignment: {
           class: {
             id: 'assignment-class',
             schoolId: 'assignment-school',
@@ -48,8 +52,8 @@ describe('getDocumentSubmissionScope', () => {
             teachers: [{ id: 'teacher-1' }, { id: 'teacher-1' }],
           },
         },
-        studentProfile: {
-          classes: [
+        membership: {
+          classesAsStudent: [
             {
               id: 'student-class',
               schoolId: 'student-school',
@@ -77,9 +81,9 @@ describe('getDocumentSubmissionScope', () => {
   test('falls back to all student classes for practice documents', () => {
     expect(
       getDocumentSubmissionScope({
-        assignment: null,
-        studentProfile: {
-          classes: [
+        classAssignment: null,
+        membership: {
+          classesAsStudent: [
             {
               id: 'class-1',
               schoolId: 'school-1',

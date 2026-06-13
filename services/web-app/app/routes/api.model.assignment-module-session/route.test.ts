@@ -64,7 +64,7 @@ describe('api.model.assignment-module-session', () => {
 
     requireUserId.mockResolvedValue('user-1');
     prisma.document.findUnique.mockResolvedValue({
-      studentProfileId: 'student-profile-1',
+      membershipId: 'student-profile-1',
     });
     prisma.assignmentModule.findUnique.mockResolvedValue({
       id: 'module-1',

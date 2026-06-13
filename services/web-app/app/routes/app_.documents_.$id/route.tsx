@@ -44,7 +44,7 @@ import {
 } from '~/components/ui/popover';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useUser } from '~/hooks/useUser';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
@@ -215,7 +215,7 @@ function resolveCurrentAssignmentModuleSession<
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.id, 'No document id found');
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const url = new URL(request.url);
   const shouldSaveVersion = url.searchParams.get('ssv') === '1';
   const cmsIdxParam = url.searchParams.get('cmsIdx');
@@ -234,16 +234,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         ? {}
         : {
             OR: [
-              { profile: { id: profile.id } },
+              { membershipId: profile.id },
               {
-                profile: {
-                  studentProfile: {
-                    classes: {
-                      some: {
-                        teachers: {
-                          some: {
-                            profileId: profile.id,
-                          },
+                membership: {
+                  classesAsStudent: {
+                    some: {
+                      teachers: {
+                        some: {
+                          id: profile.id,
                         },
                       },
                     },
@@ -273,8 +271,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           title: true,
           prompt: true,
           tutorContext: true,
-          dueDate: true,
           apHistorySnapshot: true,
+        },
+      },
+      classAssignment: {
+        select: {
           class: {
             select: {
               id: true,
@@ -285,9 +286,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
-      studentProfile: {
+      membership: {
         select: {
-          classes: {
+          id: true,
+          userId: true,
+          user: { select: { name: true } },
+          classesAsStudent: {
             select: {
               id: true,
               schoolId: true,
@@ -309,7 +313,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
       revisions: { orderBy: { createdAt: 'desc' } },
-      profile: { include: { user: { select: { name: true } } } },
       assignmentModuleSessions: {
         orderBy: [
           { assignmentModule: { position: 'asc' } },
@@ -343,10 +346,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       comments: {
         include: {
-          profile: { include: { user: { select: { name: true } } } },
+          membership: { include: { user: { select: { name: true } } } },
           responses: {
             include: {
-              profile: { include: { user: { select: { name: true } } } },
+              membership: { include: { user: { select: { name: true } } } },
             },
           },
         },
@@ -414,8 +417,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-  const assignmentClass = doc.assignment?.class;
-  const documentSubmissionScope = getDocumentSubmissionScope(doc);
+  const assignmentClass = doc.classAssignment?.class;
+  const documentSubmissionScope = getDocumentSubmissionScope({
+    classAssignment: doc.classAssignment,
+    membership: doc.membership,
+  });
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
     isDocumentSubmissionEnabledForScope(documentSubmissionScope),
     isAssignmentsEnabledForContext({
@@ -423,7 +429,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         assignmentClass?.school?.organizationId ?? profile.organization.id,
       organizationIds: documentSubmissionScope.organizationIds,
       schoolIds: documentSubmissionScope.schoolIds,
-      teacherProfileId: profile.teacherProfile?.id,
+      teacherProfileId: profile.id,
       teacherProfileIds: documentSubmissionScope.teacherProfileIds,
       classIds: documentSubmissionScope.classIds,
     }),
@@ -521,7 +527,7 @@ export default function Route() {
       : fallbackCmsIdx;
   const explicitExitTarget = sanitizeExitTarget(searchParams.get('exitTo'));
   const tab = searchParams.get('tab') ?? 'tutor';
-  const isViewingAsTeacher = data.doc && user.id !== data.doc?.profile.userId;
+  const isViewingAsTeacher = data.doc && user.id !== data.doc?.membership.userId;
   // Owner or class teacher (loader); api.model.document allows both to persist edits.
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
@@ -624,7 +630,7 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
-  const studentName = data.doc.profile.user.name?.trim() || 'Unknown student';
+  const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
   const submitActionDisabled = isSubmitting || cannotSubmitEmpty;

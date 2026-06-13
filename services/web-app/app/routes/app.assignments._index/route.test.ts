@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   assignment: {
     findFirst: mock(),
+    findMany: mock(),
     update: mock(),
     delete: mock(),
+    deleteMany: mock(),
   },
   assignmentType: {
     findMany: mock(),
@@ -21,12 +23,12 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
 const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireProfile }));
+mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 mock.module('~/utils/feature-flags.server', () => ({
   getAssignmentsEnabledClassIdsForContext,
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
@@ -55,14 +57,17 @@ function responseStatus(response: any) {
 
 const ownedAssignment = {
   id: 'assignment-1',
-  classId: 'class-1',
   assignmentTypeId: 'at-1',
   tutorContext: null,
   assignmentType: { systemKey: 'generic_essay' },
-  class: {
-    id: 'class-1',
-    school: { id: 'school-1', organizationId: 'org-1' },
-  },
+  classAssignments: [
+    {
+      class: {
+        id: 'class-1',
+        school: { id: 'school-1', organizationId: 'org-1' },
+      },
+    },
+  ],
 };
 
 describe('app.assignments action', () => {
@@ -71,17 +76,42 @@ describe('app.assignments action', () => {
       for (const fn of Object.values(model)) fn.mockReset();
     }
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
-      id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.assignment.findFirst.mockResolvedValue(ownedAssignment);
+    prisma.assignment.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        classAssignments: [
+          {
+            class: {
+              id: 'class-1',
+              school: { id: 'school-1', organizationId: 'org-1' },
+            },
+          },
+        ],
+      },
+      {
+        id: 'assignment-2',
+        classAssignments: [
+          {
+            class: {
+              id: 'class-1',
+              school: { id: 'school-1', organizationId: 'org-1' },
+            },
+          },
+        ],
+      },
+    ]);
+    prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
       ['class-1']
@@ -97,10 +127,10 @@ describe('app.assignments action', () => {
   });
 
   test('rejects non-teachers', async () => {
-    requireProfile.mockResolvedValue({
+    requireMembership.mockResolvedValue({
       id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: null,
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
     });
 
     const response = await action({
@@ -130,10 +160,35 @@ describe('app.assignments action', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'assignment-x',
-          class: { teachers: { some: { id: 'teacher-1' } } },
+          classAssignments: {
+            some: {
+              class: { teachers: { some: { id: 'teacher-1' } } },
+            },
+          },
         }),
       })
     );
+  });
+
+  test('deletes multiple assignments in one action', async () => {
+    const form = new FormData();
+    form.append('intent', 'delete-assignments');
+    form.append('assignmentIds', 'assignment-1');
+    form.append('assignmentIds', 'assignment-2');
+
+    const response = await action({
+      request: new Request('https://example.com/app/assignments', {
+        method: 'POST',
+        body: form,
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(prisma.assignment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['assignment-1', 'assignment-2'] } },
+    });
   });
 
   test('deletes the assignment without touching documents', async () => {
@@ -164,7 +219,6 @@ describe('app.assignments action', () => {
         assignmentTypeId: 'at-1',
         title: 'Updated Title',
         prompt: 'Updated prompt.',
-        dueDate: '2026-06-15',
         submitForGrade: 'true',
         pointValue: '50',
       }),
