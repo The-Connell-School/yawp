@@ -8,14 +8,14 @@ import { prisma } from '~/utils/db.server.ts';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { verifyTOTP } from '~/utils/totp.server.ts';
 import { invitationCookieStorage } from '~/cookie-session-storages/invitation.server';
-import { setProfileId } from '~/cookies/profile-id.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   OwnerOnboardingMetadataSchema,
   StudentOnboardingMetadataSchema,
   TeacherOnboardingMetadataSchema,
 } from '~/utils/schemas/invitation';
-import type { Profile, User } from '@app/prisma';
+import type { OrgMembership } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
 
 const Schema = z.object({
@@ -133,22 +133,21 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
       include: {
-        profiles: {
+        memberships: {
           where: { organizationId: organizationId },
-          include: { teacherProfile: true },
         },
       },
     });
 
     if (existingUser) {
-      let profile: Profile;
-      if (existingUser.profiles.length > 0) {
-        if (existingUser.profiles[0].teacherProfile) {
+      let membership: OrgMembership;
+      if (existingUser.memberships.length > 0) {
+        if (existingUser.memberships[0].role === 'TEACHER') {
           return redirectWithToast(
             '/app',
             {
-              title: 'Teacher profile already exists',
-              description: 'Your teacher profile has already been created.',
+              title: 'Teacher membership already exists',
+              description: 'Your teacher membership has already been created.',
             },
             {
               headers: {
@@ -156,23 +155,23 @@ export async function action({ request }: ActionFunctionArgs) {
                   await invitationCookieStorage.destroySession(
                     invitationCookie
                   ),
-                  await setProfileId(existingUser.profiles[0].id),
+                  await setMembershipId(existingUser.memberships[0].id),
                 ].join(';'),
               },
             }
           );
         }
-        const profileToUpdate = existingUser.profiles[0];
-        profile = await prisma.profile.update({
-          where: { id: profileToUpdate.id },
-          data: { teacherProfile: { create: {} } },
+        const membershipToUpdate = existingUser.memberships[0];
+        membership = await prisma.orgMembership.update({
+          where: { id: membershipToUpdate.id },
+          data: { role: 'TEACHER' },
         });
       } else {
-        profile = await prisma.profile.create({
+        membership = await prisma.orgMembership.create({
           data: {
             user: { connect: { id: existingUser.id } },
             organization: { connect: { id: organizationId } },
-            teacherProfile: { create: {} },
+            role: 'TEACHER',
           },
         });
       }
@@ -188,7 +187,7 @@ export async function action({ request }: ActionFunctionArgs) {
           headers: {
             'set-cookie': [
               await invitationCookieStorage.destroySession(invitationCookie),
-              await setProfileId(profile.id),
+              await setMembershipId(membership.id),
             ].join(';'),
           },
         }
@@ -220,24 +219,25 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
       include: {
-        profiles: { where: { organizationId: organizationId } },
+        memberships: { where: { organizationId: organizationId } },
       },
     });
 
     if (existingUser) {
-      let profile: Profile;
-      if (existingUser.profiles.length > 0) {
-        const profileToUpdate = existingUser.profiles[0];
-        profile = await prisma.profile.update({
-          where: { id: profileToUpdate.id },
-          data: { isOwner: true },
+      let membership: OrgMembership;
+      if (existingUser.memberships.length > 0) {
+        const membershipToUpdate = existingUser.memberships[0];
+        membership = await prisma.orgMembership.update({
+          where: { id: membershipToUpdate.id },
+          data: { isOrgOwner: true },
         });
       } else {
-        profile = await prisma.profile.create({
+        membership = await prisma.orgMembership.create({
           data: {
             user: { connect: { id: existingUser.id } },
             organization: { connect: { id: organizationId } },
-            isOwner: true,
+            role: 'TEACHER',
+            isOrgOwner: true,
           },
         });
       }
@@ -253,7 +253,7 @@ export async function action({ request }: ActionFunctionArgs) {
           headers: {
             'set-cookie': [
               await invitationCookieStorage.destroySession(invitationCookie),
-              await setProfileId(profile.id),
+              await setMembershipId(membership.id),
             ].join(';'),
           },
         }

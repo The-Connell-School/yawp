@@ -25,7 +25,7 @@ import { invitationCookieStorage } from '~/cookie-session-storages/invitation.se
 import { validationError, parseFormData, useForm } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
-import { setProfileId } from '~/cookies/profile-id.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
 import { normalizeEmail } from '~/utils/normalize-email';
 
 export const Schema = z
@@ -78,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const hashedPassword = await getPasswordHash(data.password);
 
-  const profile = await prisma.profile.create({
+  const membership = await prisma.orgMembership.create({
     data: {
       user: {
         create: {
@@ -88,16 +88,15 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
       organization: { connect: { id: organizationId } },
-      teacherProfile: {
-        create: { schools: { connect: [{ id: data.schoolId }] } },
-      },
+      role: 'TEACHER',
+      schools: { connect: [{ id: data.schoolId }] },
     },
   });
 
   const session = await prisma.session.create({
     data: {
       expirationDate: getSessionExpirationDate(),
-      user: { connect: { id: profile.userId } },
+      user: { connect: { id: membership.userId } },
     },
     select: { id: true, expirationDate: true },
   });
@@ -118,7 +117,7 @@ export async function action({ request }: ActionFunctionArgs) {
             expires: session.expirationDate,
           }),
           await invitationCookieStorage.destroySession(invitationCookie),
-          await setProfileId(profile.id),
+          await setMembershipId(membership.id),
         ].join(';'),
       },
     }

@@ -1,5 +1,9 @@
 import type { Prisma } from '@app/prisma';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import {
+  isTeacherMembership,
+  requireMembership,
+  requireUserId,
+} from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
 export type GradingActor = {
@@ -11,8 +15,8 @@ export type GradingActor = {
 
 export async function getGradingActor(request: Request): Promise<GradingActor> {
   const userId = await requireUserId(request);
-  const [profile, user] = await Promise.all([
-    requireProfile(request, userId),
+  const [membership, user] = await Promise.all([
+    requireMembership(request, userId),
     prisma.user.findUnique({
       where: { id: userId },
       select: { isAdmin: true },
@@ -20,9 +24,9 @@ export async function getGradingActor(request: Request): Promise<GradingActor> {
   ]);
 
   return {
-    profileId: profile.id,
-    teacherProfileId: profile.teacherProfile?.id ?? null,
-    isTeacher: Boolean(profile.teacherProfile),
+    profileId: membership.id,
+    teacherProfileId: isTeacherMembership(membership) ? membership.id : null,
+    isTeacher: isTeacherMembership(membership),
     isAdmin: Boolean(user?.isAdmin),
   };
 }
@@ -38,7 +42,7 @@ export function buildTeacherClassWhere(
   return {
     OR: [
       {
-        assignment: {
+        classAssignment: {
           class: {
             teachers: {
               some: {

@@ -155,6 +155,10 @@ export default function Route() {
     );
   }, [location.hash, location.pathname, location.search]);
 
+  const isClassDetailRoute = /^\/app\/my-classes\/[^/]+/.test(
+    location.pathname
+  );
+
   return (
     <main
       className={cn(
@@ -220,6 +224,7 @@ export default function Route() {
             navExpanded={navExpanded}
             pathname={location.pathname}
             isAppNavLinkActive={isAppNavLinkActive}
+            forceFullNavigation={isClassDetailRoute}
           />
         </div>
         <div className="flex flex-grow flex-col justify-end">
@@ -252,21 +257,21 @@ export default function Route() {
                   <Pencil size={14} />
                 </Button>
               </div>
-              {/* Organization / Profile selector */}
-              {user.profiles?.length ? (
+              {/* Organization / Membership selector */}
+              {user.memberships?.length ? (
                 <div className="max-h-64 overflow-auto p-1 border-b space-y-1">
-                  {user.profiles.map((p) => {
-                    const isSelected = user.selectedProfile
-                      ? user.selectedProfile?.id === p.id
-                      : user.profiles?.[0]?.id === p.id;
+                  {user.memberships.map((m) => {
+                    const isSelected = user.selectedMembership
+                      ? user.selectedMembership?.id === m.id
+                      : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/profile-id" key={p.id}>
+                      <Form method="POST" action="/api/membership-id" key={m.id}>
                         <input
                           type="hidden"
                           name="intent"
-                          value="switch-profile"
+                          value="switch-membership"
                         />
-                        <input type="hidden" name="profileId" value={p.id} />
+                        <input type="hidden" name="membershipId" value={m.id} />
                         <Button
                           type="submit"
                           size="sm"
@@ -276,7 +281,7 @@ export default function Route() {
                         >
                           <span className="flex min-w-0 flex-col text-left">
                             <span className="truncate">
-                              {p.organization?.name ?? 'Organization'}
+                              {m.organization?.name ?? 'Organization'}
                             </span>
                           </span>
                           {isSelected ? <Check size={16} /> : null}
@@ -362,7 +367,7 @@ export default function Route() {
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >
-          <Outlet />
+          <Outlet key={location.pathname} />
         </NavExpandedContext.Provider>
       </div>
       <EditNameDialog

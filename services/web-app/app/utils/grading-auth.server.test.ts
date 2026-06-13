@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from 'bun:test';
 
 mock.module('~/utils/auth.server', () => ({
   requireAdmin: mock(),
-  requireProfile: mock(),
+  requireMembership: mock(),
   requireUserId: mock(),
 }));
 mock.module('~/utils/db.server', () => ({ prisma: {} }));
@@ -22,7 +22,7 @@ describe('grading auth helpers', () => {
     ).toEqual({
       OR: [
         {
-          assignment: {
+          classAssignment: {
             class: {
               teachers: {
                 some: {

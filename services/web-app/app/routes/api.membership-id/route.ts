@@ -3,30 +3,30 @@ import { requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { z } from 'zod';
 import { parseFormData, validationError } from '@rvf/react-router';
-import { setProfileId } from '~/cookies/profile-id.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method === 'POST') {
     const { error, data } = await parseFormData(
       request,
       z.object({
-        profileId: z.string(),
+        membershipId: z.string(),
       })
     );
     if (error) return validationError(error);
 
     const userId = await requireUserId(request);
 
-    const profile = await prisma.profile.findFirst({
-      where: { id: data.profileId, userId },
+    const membership = await prisma.orgMembership.findFirst({
+      where: { id: data.membershipId, userId },
       select: { id: true },
     });
 
     const redirectTo = request.headers.get('Referer') || '/app';
-    if (!profile) return redirect(redirectTo);
+    if (!membership) return redirect(redirectTo);
 
     return redirect(redirectTo, {
-      headers: { 'set-cookie': await setProfileId(profile.id) },
+      headers: { 'set-cookie': await setMembershipId(membership.id) },
     });
   }
 }

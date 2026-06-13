@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, NavLink } from 'react-router';
 import {
   ClipboardList,
   CogIcon,
@@ -34,8 +34,8 @@ export type SidebarNavSection = {
   links: SidebarNavLink[];
 };
 
-const teacher = (user: User) => !!user.selectedProfile?.teacherProfile;
-const owner = (user: User) => user.selectedProfile?.isOwner;
+const teacher = (user: User) => user.selectedMembership?.role === 'TEACHER';
+const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
 
 const icons = {
@@ -129,6 +129,7 @@ type SidebarNavLinksProps = {
   navExpanded: boolean;
   pathname: string;
   isAppNavLinkActive: (linkTo: string, pathname: string) => boolean;
+  forceFullNavigation?: boolean;
 };
 
 export function SidebarNavLinks({
@@ -137,6 +138,7 @@ export function SidebarNavLinks({
   navExpanded,
   pathname,
   isAppNavLinkActive,
+  forceFullNavigation = false,
 }: SidebarNavLinksProps) {
   const visibleSections = getVisibleSidebarSections(sections, user);
 
@@ -155,19 +157,59 @@ export function SidebarNavLinks({
           <div className="grid gap-1">
             {section.links.map((link) => {
               const isActive = isAppNavLinkActive(link.to, pathname);
+              const className = cn(
+                'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
+                {
+                  'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
+                    isActive,
+                  'py-2': !navExpanded,
+                }
+              );
+
+              if (forceFullNavigation) {
+                return (
+                  <Link
+                    key={link.to}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={className}
+                    reloadDocument
+                    to={link.to}
+                  >
+                    {link.icon ? (
+                      navExpanded ? (
+                        link.icon
+                      ) : (
+                        <Tooltip
+                          key={link.to}
+                          text={link.label}
+                          open={navExpanded ? false : undefined}
+                          contentProps={{ side: 'right' }}
+                        >
+                          {link.icon}
+                        </Tooltip>
+                      )
+                    ) : null}
+                    {navExpanded ? (
+                      <span className="w-full min-w-0">{link.label}</span>
+                    ) : null}
+                  </Link>
+                );
+              }
 
               return (
-                <Link
+                <NavLink
                   key={link.to}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={cn(
-                    'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                    {
-                      'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
-                        isActive,
-                      'py-2': !navExpanded,
-                    }
-                  )}
+                  end={link.end}
+                  className={({ isActive: navIsActive }) =>
+                    cn(
+                      'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
+                      {
+                        'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
+                          navIsActive,
+                        'py-2': !navExpanded,
+                      }
+                    )
+                  }
                   to={link.to}
                 >
                   {link.icon ? (
@@ -187,7 +229,7 @@ export function SidebarNavLinks({
                   {navExpanded ? (
                     <span className="w-full min-w-0">{link.label}</span>
                   ) : null}
-                </Link>
+                </NavLink>
               );
             })}
           </div>

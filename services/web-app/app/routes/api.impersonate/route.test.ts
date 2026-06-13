@@ -9,15 +9,15 @@ const prisma = {
     create: mock(),
     findUnique: mock(),
   },
-  profile: {
+  orgMembership: {
     findFirst: mock(),
   },
 };
 
 const commitSession = mock();
-const getProfileId = mock();
+const getMembershipId = mock();
 const getSession = mock();
-const setProfileId = mock();
+const setMembershipId = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/cookie-session-storages/authentication.server.js', () => ({
@@ -26,9 +26,9 @@ mock.module('~/cookie-session-storages/authentication.server.js', () => ({
     commitSession,
   },
 }));
-mock.module('~/cookies/profile-id.server', () => ({
-  getProfileId,
-  setProfileId,
+mock.module('~/cookies/membership-id.server', () => ({
+  getMembershipId,
+  setMembershipId,
 }));
 
 const { action } = await import('../api.impersonate');
@@ -71,11 +71,11 @@ describe('api.impersonate', () => {
     prisma.user.findFirstOrThrow.mockReset();
     prisma.session.create.mockReset();
     prisma.session.findUnique.mockReset();
-    prisma.profile.findFirst.mockReset();
+    prisma.orgMembership.findFirst.mockReset();
     getSession.mockReset();
     commitSession.mockReset();
-    getProfileId.mockReset();
-    setProfileId.mockReset();
+    getMembershipId.mockReset();
+    setMembershipId.mockReset();
 
     prisma.session.findUnique.mockResolvedValue({
       user: { id: 'operator-user' },
@@ -87,12 +87,12 @@ describe('api.impersonate', () => {
       expirationDate: new Date('2030-01-01T00:00:00.000Z'),
       userId: 'target-user',
     });
-    prisma.profile.findFirst.mockResolvedValue({ id: 'target-profile' });
+    prisma.orgMembership.findFirst.mockResolvedValue({ id: 'target-membership' });
     getSession.mockResolvedValue(
       authSession({ sessionId: 'operator-session' })
     );
     commitSession.mockResolvedValue('en_session=target-session; Path=/');
-    setProfileId.mockResolvedValue('profile-id=target-profile; Path=/');
+    setMembershipId.mockResolvedValue('membership-id=target-membership; Path=/');
   });
 
   test('rejects a valid token when the request is not authenticated', async () => {
@@ -205,6 +205,6 @@ describe('api.impersonate', () => {
       'operator-user'
     );
     expect(commitSession).toHaveBeenCalledTimes(1);
-    expect(setProfileId).toHaveBeenCalledWith('target-profile');
+    expect(setMembershipId).toHaveBeenCalledWith('target-membership');
   });
 });

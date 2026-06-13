@@ -33,7 +33,7 @@ import { getToast } from './utils/toast.server.ts';
 import type { Route } from './+types/root.ts';
 import posthog from 'posthog-js';
 import omit from 'lodash/omit';
-import { getProfileId } from './cookies/profile-id.server.ts';
+import { getMembershipId } from './cookies/membership-id.server.ts';
 
 export const links: LinksFunction = () => {
   return [
@@ -113,13 +113,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
               name: true,
               email: true,
               isAdmin: true,
-              profiles: {
+              memberships: {
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
-                  isOwner: true,
-                  teacherProfile: { select: { id: true, profileId: true } },
-                  studentProfile: { select: { id: true, profileId: true } },
+                  role: true,
+                  isOrgOwner: true,
                   organization: { select: { name: true } },
                 },
               },
@@ -145,14 +144,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const { toast, headers: toastHeaders } = await getToast(request);
   const navCookie = (await navStateCookie.parse(cookieHeader)) || {};
-  const profileId = await getProfileId(request);
-  const profile =
-    user?.profiles.find((p) => p.id === profileId) ?? user?.profiles[0];
+  const membershipId = await getMembershipId(request);
+  const membership =
+    user?.memberships.find((m) => m.id === membershipId) ??
+    user?.memberships[0];
   const impersonation = await getImpersonationState(request);
 
   return data(
     {
-      user: { ...user, selectedProfile: profile },
+      user: { ...user, selectedMembership: membership },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -283,9 +283,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         posthog.identify(data.user.id, {
           email: data.user.email,
           name: data.user.name,
-          profile_id: data.user.selectedProfile?.id,
+          membership_id: data.user.selectedMembership?.id,
           is_admin: data.user.isAdmin,
-          is_owner: data.user.selectedProfile?.isOwner,
+          is_owner: data.user.selectedMembership?.isOrgOwner,
           ...omit(data.user, ['id', 'email', 'name']),
         });
       }
