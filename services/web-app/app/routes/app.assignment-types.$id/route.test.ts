@@ -20,17 +20,23 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const isApHistoryEssayEnabledForContext = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
 const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
+const getAvailableAssignmentTypesForScopes = mock();
+
+const featureFlagsActual = await import('~/utils/feature-flags.server');
+const assignmentTypeAccessActual = await import(
+  '~/utils/assignment-type-access.server'
+);
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/domain/documents.server', () => ({
   createDocumentForAssignmentType,
@@ -40,9 +46,14 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
+  ...featureFlagsActual,
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
   isApHistoryEssayEnabledForContext,
   getAssignmentsEnabledClassIdsForContext,
+}));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  ...assignmentTypeAccessActual,
+  getAvailableAssignmentTypesForScopes,
 }));
 
 const { action, loader } = await import('./route');
@@ -95,14 +106,15 @@ describe('app.assignment-types.$id action', () => {
     prisma.class.findMany.mockReset();
     prisma.featureAccessTarget.findMany.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
+    requireMembership.mockResolvedValue({
       id: 'profile-1',
-      organization: { id: 'org-1' },
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findMany.mockResolvedValue([]);
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
@@ -136,7 +148,7 @@ describe('app.assignment-types.$id action', () => {
       select: { id: true, systemKey: true },
     });
     expect(createDocumentForAssignmentType).toHaveBeenCalledWith({
-      profileId: 'profile-1',
+      membershipId: 'profile-1',
       assignmentTypeId: 'at-1',
     });
   });
@@ -195,19 +207,20 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.featureAccessTarget.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findMany.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     redirectWithToast.mockReset();
     isApHistoryEssayEnabledForContext.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
-      id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(makeAssignmentType()),
     ]);
     prisma.document.findMany.mockResolvedValue([]);
@@ -370,10 +383,10 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('omits prompt library for student profiles and other assignment types', async () => {
-    requireProfile.mockResolvedValueOnce({
+    requireMembership.mockResolvedValueOnce({
       id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: null,
+      role: 'STUDENT',
+      organization: { id: 'org-1', name: 'Org' },
     });
 
     const studentResponse = (await loader({
@@ -383,12 +396,15 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
 
     expect(studentResponse.data.promptLibrary).toBeNull();
 
-    requireProfile.mockResolvedValueOnce({
-      id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValueOnce({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.assignmentType.findMany.mockResolvedValueOnce([
+      withOrganizationAssignment(makeAssignmentType({ title: 'E2E Course' })),
+    ]);
+    getAvailableAssignmentTypesForScopes.mockResolvedValueOnce([
       withOrganizationAssignment(makeAssignmentType({ title: 'E2E Course' })),
     ]);
 
@@ -401,7 +417,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('provides AP History library entries for teachers when assignments and AP History are enabled', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
           id: 'ap-history-type',
@@ -472,7 +488,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('provides AP History library for mixed class-scoped pilots using only eligible classes', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
           id: 'ap-history-type',
@@ -575,7 +591,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('omits AP History library when AP feature access is disabled', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
           title: 'AP History Essay',
@@ -595,7 +611,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('omits AP History library when no classes are eligible', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
           title: 'AP History Essay',
@@ -616,7 +632,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
   });
 
   test('omits AP History library for non-AP assignment types', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({ title: 'Rhetorical Analysis', systemKey: null })
       ),

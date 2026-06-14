@@ -65,8 +65,11 @@ export type AssignmentCreationSheetProps = {
   teacherClasses: AssignmentCreationClassOption[];
   assignmentCreationStandardizationEnabled: boolean;
   fixedAssignmentTypeId?: string;
+  initialAssignmentTypeId?: string;
   fixedClassId?: string;
+  initialTitle?: string;
   initialPrompt?: string;
+  initialTutorContext?: string;
   emptyClassesMessage?: string;
 };
 
@@ -87,11 +90,17 @@ export function assignmentCreationClassLabel(
   return 'Class';
 }
 
-function firstAssignmentTypeId(
+function initialAssignmentTypeSelection(
   assignmentTypes: AssignmentCreationAssignmentType[],
-  fixedAssignmentTypeId?: string
+  fixedAssignmentTypeId?: string,
+  initialAssignmentTypeId?: string
 ) {
-  return fixedAssignmentTypeId ?? assignmentTypes[0]?.id ?? '';
+  return (
+    fixedAssignmentTypeId ??
+    initialAssignmentTypeId ??
+    assignmentTypes[0]?.id ??
+    ''
+  );
 }
 
 function initialClassIds(fixedClassId?: string) {
@@ -121,15 +130,22 @@ export function AssignmentCreationSheetContent({
   teacherClasses,
   assignmentCreationStandardizationEnabled,
   fixedAssignmentTypeId,
+  initialAssignmentTypeId,
   fixedClassId,
+  initialTitle = '',
   initialPrompt = '',
+  initialTutorContext = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   createFetcher,
   extractFetcher,
   renderSheet = true,
 }: AssignmentCreationSheetContentProps) {
   const [selectedAssignmentTypeId, setSelectedAssignmentTypeId] = useState(
-    firstAssignmentTypeId(assignmentTypes, fixedAssignmentTypeId)
+    initialAssignmentTypeSelection(
+      assignmentTypes,
+      fixedAssignmentTypeId,
+      initialAssignmentTypeId
+    )
   );
   const [selectedClassId, setSelectedClassId] = useState(
     fixedClassId ?? teacherClasses[0]?.id ?? ''
@@ -142,7 +158,6 @@ export function AssignmentCreationSheetContent({
   const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
-  const [dueDate, setDueDate] = useState('');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const wasOpenRef = useRef(false);
@@ -199,23 +214,29 @@ export function AssignmentCreationSheetContent({
     wasOpenRef.current = true;
 
     setSelectedAssignmentTypeId(
-      firstAssignmentTypeId(assignmentTypes, fixedAssignmentTypeId)
+      initialAssignmentTypeSelection(
+        assignmentTypes,
+        fixedAssignmentTypeId,
+        initialAssignmentTypeId
+      )
     );
     setSelectedClassId(fixedClassId ?? teacherClasses[0]?.id ?? '');
     setSelectedClassIds(initialClassIds(fixedClassId));
-    setTitle('');
+    setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setTutorContext('');
+    setTutorContext(initialTutorContext);
     setSubmitForGrade(true);
     setPointValue('100');
-    setDueDate('');
     setPromptMode('manual');
     setPdfFile(null);
   }, [
     assignmentTypes,
     fixedAssignmentTypeId,
+    initialAssignmentTypeId,
     fixedClassId,
     initialPrompt,
+    initialTitle,
+    initialTutorContext,
     open,
     teacherClasses,
   ]);
@@ -528,20 +549,6 @@ export function AssignmentCreationSheetContent({
             />
           </div>
         )}
-
-        <div className="space-y-2">
-          <Label htmlFor="assignment-create-due-date">
-            Due Date (optional)
-          </Label>
-          <Input
-            id="assignment-create-due-date"
-            type="date"
-            name="dueDate"
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-            disabled={isSaving}
-          />
-        </div>
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>

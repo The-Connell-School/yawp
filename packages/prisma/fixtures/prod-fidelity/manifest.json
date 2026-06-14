@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "exportedAt": "2026-06-13T17:02:38.917Z",
+  "sourceDatabaseUrl": "postgresql://postgres:postgres@localhost:5432/yawp",
+  "counts": {
+    "gradingAssistantTemplates": 2,
+    "assignmentTypes": 9,
+    "assignmentTypeImages": 5,
+    "assignmentModules": 37,
+    "assignmentModuleInstructions": 48,
+    "assignmentModuleInstructionButtons": 47,
+    "assignmentTypeGradingAssistants": 0,
+    "teacherTrainings": 2,
+    "teacherTrainingImages": 2,
+    "teacherTrainingModules": 13,
+    "teacherTrainingModuleResources": 20,
+    "teacherTrainingResources": 0,
+    "apHistoryPromptLibraryEntries": 0,
+    "apHistoryPromptLibrarySources": 0
+  }
+}

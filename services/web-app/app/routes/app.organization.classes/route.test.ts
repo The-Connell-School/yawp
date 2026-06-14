@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireOwner = mock(async () => ({ id: 'user-1' }));
-const requireProfile = mock(async () => ({
+const requireMembership = mock(async () => ({
   organization: { id: 'org-1' },
 }));
 
 mock.module('~/utils/auth.server', () => ({
   requireOwner,
-  requireProfile,
+  requireMembership,
 }));
 
 const prisma = {
@@ -34,7 +34,7 @@ const { action } = await import('./route');
 describe('app.organization.classes action', () => {
   beforeEach(() => {
     requireOwner.mockClear();
-    requireProfile.mockClear();
+    requireMembership.mockClear();
     prisma.class.findMany.mockReset();
     prisma.class.update.mockReset();
     prisma.school.findFirst.mockReset();

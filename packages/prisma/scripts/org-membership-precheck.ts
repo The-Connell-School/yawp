@@ -1,0 +1,180 @@
+/* eslint-disable no-console */
+/**
+ * PRE-MIGRATION ONLY — validates Profile / TeacherProfile / StudentProfile invariants
+ * before the OrgMembership cutover. After migration, Profile tables are dropped;
+ * use org-membership-postcheck (when added) instead of running this script live.
+ */
+import { createPrismaClient } from './local-dev/connection';
+
+export type PrecheckInput = {
+  counts: Record<string, number>;
+  dualSubProfiles: Array<{ profileId: string; userId: string; organizationId: string }>;
+  documentMismatches: Array<{
+    documentId: string;
+    profileId: string;
+    studentProfileId: string;
+    expectedMembershipId: string;
+  }>;
+  orphanSubProfiles: Array<{ kind: 'teacher' | 'student'; id: string }>;
+  duplicateUserOrgProfiles: Array<{ userId: string; organizationId: string; count: number }>;
+  orphanProfilesWithoutSubProfiles: number;
+};
+
+export function buildPrecheckReport(input: PrecheckInput) {
+  const warnings = [
+    ...input.dualSubProfiles.map((row) => ({
+      kind: 'dual_sub_profile' as const,
+      row,
+      note: 'Migration assigns TEACHER role when both sub-profiles exist.',
+    })),
+    ...input.duplicateUserOrgProfiles.map((row) => ({
+      kind: 'duplicate_user_org' as const,
+      row,
+      note: 'Migration dedupes to one membership and archives extras in ProfileDuplicateForensic.',
+    })),
+    ...(input.orphanProfilesWithoutSubProfiles > 0
+      ? [
+          {
+            kind: 'orphan_profile_without_sub_profile' as const,
+            row: { count: input.orphanProfilesWithoutSubProfiles },
+            note: 'Migration archives and removes empty profiles in ProfileOrphanForensic.',
+          },
+        ]
+      : []),
+  ];
+  const blockers = [
+    ...input.documentMismatches.map((row) => ({ kind: 'document_mismatch' as const, row })),
+    ...input.orphanSubProfiles.map((row) => ({ kind: 'orphan_sub_profile' as const, row })),
+  ];
+  return { ok: blockers.length === 0, counts: input.counts, warnings, blockers };
+}
+
+async function rawCount(prisma: ReturnType<typeof createPrismaClient>, tableName: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+    `SELECT COUNT(*)::int AS count FROM "${tableName}"`
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function tableExists(
+  prisma: ReturnType<typeof createPrismaClient>,
+  tableName: string
+) {
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = ${tableName}
+    ) AS "exists"
+  `;
+  return rows[0]?.exists ?? false;
+}
+
+async function main() {
+  const prisma = createPrismaClient();
+  try {
+    if (!(await tableExists(prisma, 'Profile'))) {
+      console.error(
+        JSON.stringify(
+          {
+            ok: false,
+            error:
+              'Profile table not found. Database may already be migrated; use org-membership-postcheck or org-membership-staging-verify instead.',
+          },
+          null,
+          2
+        )
+      );
+      process.exit(1);
+    }
+
+    const [users, profiles, teacherProfiles, studentProfiles, documents, classes] =
+      await Promise.all([
+        rawCount(prisma, 'User'),
+        rawCount(prisma, 'Profile'),
+        rawCount(prisma, 'TeacherProfile'),
+        rawCount(prisma, 'StudentProfile'),
+        rawCount(prisma, 'Document'),
+        rawCount(prisma, 'Class'),
+      ]);
+
+    const dualSubProfiles = await prisma.$queryRaw<
+      Array<{ profileId: string; userId: string; organizationId: string }>
+    >`
+      SELECT p.id AS "profileId", p."userId", p."organizationId"
+      FROM "Profile" p
+      WHERE EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)
+        AND EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id)
+    `;
+
+    const documentMismatches = await prisma.$queryRaw<
+      Array<{
+        documentId: string;
+        profileId: string;
+        studentProfileId: string;
+        expectedMembershipId: string;
+      }>
+    >`
+      SELECT d.id AS "documentId", d."profileId", d."studentProfileId", sp."profileId" AS "expectedMembershipId"
+      FROM "Document" d
+      JOIN "StudentProfile" sp ON sp.id = d."studentProfileId"
+      WHERE d."profileId" <> sp."profileId"
+    `;
+
+    const orphanTeacherProfiles = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT tp.id FROM "TeacherProfile" tp
+      LEFT JOIN "Profile" p ON p.id = tp."profileId"
+      WHERE p.id IS NULL
+    `;
+    const orphanStudentProfiles = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT sp.id FROM "StudentProfile" sp
+      LEFT JOIN "Profile" p ON p.id = sp."profileId"
+      WHERE p.id IS NULL
+    `;
+    const orphanSubProfiles = [
+      ...orphanTeacherProfiles.map((row) => ({ kind: 'teacher' as const, id: row.id })),
+      ...orphanStudentProfiles.map((row) => ({ kind: 'student' as const, id: row.id })),
+    ];
+
+    const duplicateUserOrgProfiles = await prisma.$queryRaw<
+      Array<{ userId: string; organizationId: string; count: number }>
+    >`
+      SELECT "userId", "organizationId", COUNT(*)::int AS count
+      FROM "Profile"
+      GROUP BY 1, 2
+      HAVING COUNT(*) > 1
+    `;
+
+    const orphanProfilesWithoutSubProfiles = await prisma.$queryRaw<
+      Array<{ count: number }>
+    >`
+      SELECT COUNT(*)::int AS count
+      FROM "Profile" p
+      WHERE NOT EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)
+        AND NOT EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id)
+    `;
+
+    const report = buildPrecheckReport({
+      counts: { users, profiles, teacherProfiles, studentProfiles, documents, classes },
+      dualSubProfiles,
+      documentMismatches,
+      orphanSubProfiles,
+      duplicateUserOrgProfiles,
+      orphanProfilesWithoutSubProfiles:
+        orphanProfilesWithoutSubProfiles[0]?.count ?? 0,
+    });
+
+    console.log(JSON.stringify(report, null, 2));
+    if (!report.ok) process.exit(1);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

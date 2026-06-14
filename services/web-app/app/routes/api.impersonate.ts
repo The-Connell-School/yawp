@@ -10,7 +10,7 @@ import {
 } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server.js';
-import { setProfileId } from '~/cookies/profile-id.server';
+import { setMembershipId } from '~/cookies/membership-id.server';
 
 function errorResponse(error: string, status: number) {
   return Response.json({ error }, { status });
@@ -64,7 +64,7 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    const profile = await prisma.profile.findFirst({
+    const membership = await prisma.orgMembership.findFirst({
       where: { userId: user.id },
       select: { id: true },
     });
@@ -82,7 +82,7 @@ export async function action({ request }: ActionFunctionArgs) {
           await authSessionStorage.commitSession(authSession, {
             expires: session.expirationDate,
           }),
-          await setProfileId(profile?.id ?? ''),
+          await setMembershipId(membership?.id ?? ''),
         ].join(';'),
       },
     });

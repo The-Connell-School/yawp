@@ -1,12 +1,39 @@
-import { Prisma, type Password, type User } from '@app/prisma';
+import {
+  type MembershipRole,
+  Prisma,
+  type Password,
+  type User,
+} from '@app/prisma';
 import { redirect, data } from 'react-router';
 import bcrypt from 'bcryptjs';
 import { safeRedirect } from 'remix-utils/safe-redirect';
 import { prisma } from './db.server.ts';
 import { combineHeaders } from './misc.tsx';
 import { authSessionStorage } from '../cookie-session-storages/authentication.server.ts';
-import { getProfileId, setProfileId } from '~/cookies/profile-id.server';
+import {
+  getMembershipId,
+  setMembershipId,
+} from '~/cookies/membership-id.server';
 import { normalizeEmail } from './normalize-email';
+
+const membershipSelect = {
+  id: true,
+  role: true,
+  isOrgOwner: true,
+  organization: { select: { id: true, name: true } },
+} as const;
+
+export type RequiredMembership = Prisma.OrgMembershipGetPayload<{
+  select: typeof membershipSelect;
+}>;
+
+export function isTeacherMembership(membership: { role: MembershipRole }) {
+  return membership.role === 'TEACHER';
+}
+
+export function isStudentMembership(membership: { role: MembershipRole }) {
+  return membership.role === 'STUDENT';
+}
 
 export const SESSION_EXPIRATION_TIME = 1000 * 60 * 60 * 24 * 365 * 100;
 export const getSessionExpirationDate = () =>
@@ -18,19 +45,20 @@ export const impersonatorUserIdKey = 'impersonatorUserId';
 export const readOnlyImpersonationMode = 'read-only';
 
 const mutationSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
-const readOnlyImpersonationAllowedMutationPaths = new Set([
+const readOnlySessionAllowedMutationPaths = new Set([
   '/auth/logout',
   '/api/preferences/nav',
   '/api/preferences/submitted-papers-filter',
-  '/api/profile-id',
+  '/api/membership-id',
+  '/api/student-preview',
 ]);
 
 function isMutationRequest(request: Request) {
   return !mutationSafeMethods.has(request.method.toUpperCase());
 }
 
-function isAllowedReadOnlyImpersonationMutation(request: Request) {
-  return readOnlyImpersonationAllowedMutationPaths.has(
+function isAllowedReadOnlySessionMutation(request: Request) {
+  return readOnlySessionAllowedMutationPaths.has(
     new URL(request.url).pathname
   );
 }
@@ -51,18 +79,31 @@ export async function getImpersonationState(request: Request) {
 
 export async function requireMutableRequest(request: Request) {
   if (!isMutationRequest(request)) return;
-  if (isAllowedReadOnlyImpersonationMutation(request)) return;
+  if (isAllowedReadOnlySessionMutation(request)) return;
 
   const impersonation = await getImpersonationState(request);
-  if (!impersonation.isReadOnly) return;
+  if (impersonation.isReadOnly) {
+    throw Response.json(
+      {
+        error: 'Read-only impersonation active',
+        message: 'This session can view the app but cannot make changes.',
+      },
+      { status: 403 }
+    );
+  }
 
-  throw Response.json(
-    {
-      error: 'Read-only impersonation active',
-      message: 'This session can view the app but cannot make changes.',
-    },
-    { status: 403 }
-  );
+  const { getStudentPreviewState } = await import('./student-preview.server.ts');
+  const preview = await getStudentPreviewState(request);
+  if (preview.active) {
+    throw Response.json(
+      {
+        error: 'Student preview active',
+        message:
+          'This session can view student pages but cannot make changes.',
+      },
+      { status: 403 }
+    );
+  }
 }
 
 export async function getUserId(request: Request) {
@@ -106,47 +147,38 @@ export async function requireUserId(
   return userId;
 }
 
-export async function requireProfile(request: Request, userId: string) {
-  const profileId = await getProfileId(request);
+export async function requireMembership(
+  request: Request,
+  userId: string
+): Promise<RequiredMembership> {
+  const membershipId = await getMembershipId(request);
 
-  if (profileId) {
-    const profile = await prisma.profile.findUnique({
-      where: { id: profileId, userId },
-      select: {
-        id: true,
-        isOwner: true,
-        teacherProfile: true,
-        organization: { select: { id: true, name: true } },
-        studentProfile: { include: { classes: true } },
-      },
+  if (membershipId) {
+    const membership = await prisma.orgMembership.findUnique({
+      where: { id: membershipId, userId },
+      select: membershipSelect,
     });
 
-    if (!profile) {
-      throw redirect('/no-profile', {
-        headers: { 'set-cookie': await setProfileId('') },
+    if (!membership) {
+      throw redirect('/no-membership', {
+        headers: { 'set-cookie': await setMembershipId('') },
       });
     }
 
-    return profile;
-  } else {
-    const profile = await prisma.profile.findFirst({
-      where: { userId },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        isOwner: true,
-        teacherProfile: true,
-        organization: { select: { id: true, name: true } },
-        studentProfile: { include: { classes: true } },
-      },
-    });
-
-    if (!profile) {
-      throw redirect('/no-profile');
-    }
-
-    return profile;
+    return membership;
   }
+
+  const membership = await prisma.orgMembership.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: membershipSelect,
+  });
+
+  if (!membership) {
+    throw redirect('/no-membership');
+  }
+
+  return membership;
 }
 
 export async function requireAdmin(request: Request) {
@@ -175,9 +207,9 @@ export async function requireOwner(request: Request) {
   const user = await prisma.user.findFirst({
     select: {
       id: true,
-      profiles: { select: { id: true, isOwner: true } },
+      memberships: { select: { id: true, isOrgOwner: true } },
     },
-    where: { id: userId, profiles: { some: { isOwner: true } } },
+    where: { id: userId, memberships: { some: { isOrgOwner: true } } },
   });
 
   if (!user) {
@@ -278,27 +310,11 @@ export async function signup({
       email: normalizeEmail(email),
       name,
       password: { create: { hash: hashedPassword } },
-      profiles: {
+      memberships: {
         create: {
-          isOwner: false,
+          isOrgOwner: false,
+          role: 'STUDENT',
           organization: { connect: { id: 'default-org' } },
-          // TODO: Add classes
-          // studentProfile: {
-          //   create: {
-          //     class: {
-          //       connectOrCreate: {
-          //         where: { schoolId_period_grade: { schoolId, period, grade } },
-          //         create: {
-          //           id: 'default-class',
-          //           grade,
-          //           period,
-          //           school: { connect: { id: schoolId } },
-          //           teachers: { connect: { id: teacherId } },
-          //         },
-          //       },
-          //     },
-          //   },
-          // },
         },
       },
     },

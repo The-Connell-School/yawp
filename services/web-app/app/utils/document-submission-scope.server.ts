@@ -13,11 +13,11 @@ type DocumentSubmissionClassScope = {
 };
 
 type DocumentSubmissionScope = {
-  assignment?: {
+  classAssignment?: {
     class?: SchoolScopedClass | null;
   } | null;
-  studentProfile?: {
-    classes?: SchoolScopedClass[];
+  membership?: {
+    classesAsStudent?: SchoolScopedClass[];
   } | null;
 };
 
@@ -38,29 +38,29 @@ export function getDocumentSubmissionScope(document: DocumentSubmissionScope): {
   teacherProfileIds: string[];
   classScopes: DocumentSubmissionClassScope[];
 } {
-  const assignmentClass = document.assignment?.class;
-  if (assignmentClass) {
+  const deploymentClass = document.classAssignment?.class;
+  if (deploymentClass) {
     const teacherProfileIds = distinctIds(
-      assignmentClass.teachers?.map((teacher) => teacher.id) ?? []
+      deploymentClass.teachers?.map((teacher) => teacher.id) ?? []
     );
 
     return {
-      schoolIds: distinctIds([assignmentClass.schoolId]),
-      organizationIds: distinctIds([assignmentClass.school?.organizationId]),
-      classIds: distinctIds([assignmentClass.id]),
+      schoolIds: distinctIds([deploymentClass.schoolId]),
+      organizationIds: distinctIds([deploymentClass.school?.organizationId]),
+      classIds: distinctIds([deploymentClass.id]),
       teacherProfileIds,
       classScopes: [
         {
-          schoolId: assignmentClass.schoolId,
-          organizationId: assignmentClass.school?.organizationId,
-          classId: assignmentClass.id,
+          schoolId: deploymentClass.schoolId,
+          organizationId: deploymentClass.school?.organizationId,
+          classId: deploymentClass.id,
           teacherProfileIds,
         },
       ],
     };
   }
 
-  const classes = document.studentProfile?.classes ?? [];
+  const classes = document.membership?.classesAsStudent ?? [];
 
   return {
     schoolIds: distinctIds(classes.map((klass) => klass.schoolId)),

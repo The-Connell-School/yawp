@@ -1,26 +1,28 @@
+import {
+  buildClassAssignmentDocumentScope,
+  buildStudentClassDocumentsScope,
+} from '~/utils/class-assignment-scope.server';
+
 type ClassDocumentScope = {
   OR: Array<
-    | { assignment: { classId: string } }
-    | {
-        assignmentId: null;
-        studentProfile: { classes: { some: { id: string } } };
-      }
+    | ReturnType<typeof buildClassAssignmentDocumentScope>
+    | ReturnType<typeof buildStudentClassDocumentsScope>['OR'][number]
     | { id: { in: string[] } }
   >;
 };
 
 export function buildClassDocumentScope(
   classId: string,
-  legacyDocumentIds: string[]
+  legacyDocumentIds: string[],
+  options?: { membershipId?: string | null }
 ): ClassDocumentScope {
   const scope: ClassDocumentScope = {
-    OR: [
-      { assignment: { classId } },
-      {
-        assignmentId: null,
-        studentProfile: { classes: { some: { id: classId } } },
-      },
-    ],
+    OR: options?.membershipId
+      ? buildStudentClassDocumentsScope({
+          classId,
+          membershipId: options.membershipId,
+        }).OR
+      : [buildClassAssignmentDocumentScope(classId)],
   };
 
   if (legacyDocumentIds.length > 0) {

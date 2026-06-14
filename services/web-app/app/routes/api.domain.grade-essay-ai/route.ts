@@ -390,7 +390,7 @@ export async function action({ request }: ActionFunctionArgs) {
     document: {
       select: {
         id: true,
-        profileId: true,
+        membershipId: true,
         assignmentTypeId: true,
         assignmentType: {
           select: {
@@ -402,6 +402,10 @@ export async function action({ request }: ActionFunctionArgs) {
         assignment: {
           select: {
             apHistorySnapshot: true,
+          },
+        },
+        classAssignment: {
+          select: {
             class: {
               select: {
                 id: true,
@@ -412,9 +416,9 @@ export async function action({ request }: ActionFunctionArgs) {
             },
           },
         },
-        studentProfile: {
+        membership: {
           select: {
-            classes: {
+            classesAsStudent: {
               select: {
                 id: true,
                 schoolId: true,
@@ -422,10 +426,6 @@ export async function action({ request }: ActionFunctionArgs) {
                 teachers: { select: { id: true } },
               },
             },
-          },
-        },
-        profile: {
-          select: {
             user: { select: { name: true } },
           },
         },
@@ -464,7 +464,7 @@ export async function action({ request }: ActionFunctionArgs) {
     console.warn('grade-essay-ai submission not found', {
       submissionId: data.submissionId ?? null,
       documentId: data.documentId ?? null,
-      profileId: actor.profileId,
+      membershipId: actor.membershipId,
       isAdmin: actor.isAdmin,
     });
     return dataResponse(
@@ -473,7 +473,12 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (isGradingOwnDocument(actor.profileId, submission.document.profileId)) {
+  if (
+    isGradingOwnDocument(
+      actor.membershipId,
+      submission.document.membershipId
+    )
+  ) {
     return dataResponse(
       {
         success: false,
@@ -542,7 +547,7 @@ export async function action({ request }: ActionFunctionArgs) {
     .join('\n');
 
   const studentFirstName = firstNameFromFullName(
-    submission.document.profile?.user?.name
+    submission.document.membership?.user?.name
   );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const useE2EFixture = shouldUseE2EGradingFixture();
@@ -649,7 +654,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradedAt: now.toISOString(),
         } satisfies Prisma.InputJsonValue,
         ...(!submission.gradedAt
-          ? { gradedAt: now, gradedById: actor.profileId }
+          ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
           : {}),
         updatedAt: now,
       },
@@ -946,7 +951,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
-        ? { gradedAt: now, gradedById: actor.profileId }
+        ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
         : {}),
       updatedAt: now,
     },

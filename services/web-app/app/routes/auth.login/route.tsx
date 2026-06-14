@@ -1,9 +1,7 @@
 import {
-  data as dataResponse,
   type MetaFunction,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
-  useFetcher,
   Form,
   redirect,
 } from 'react-router';
@@ -34,7 +32,7 @@ const Schema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  return dataResponse({});
+  return null;
 }
 
 const actionImpl = async ({ request }: ActionFunctionArgs) => {
@@ -88,8 +86,6 @@ export async function action(args: ActionFunctionArgs) {
 export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirectTo');
-  const fetcher = useFetcher();
-  const isLoading = fetcher.state !== 'idle';
 
   const form = useForm({
     schema: Schema,
@@ -136,7 +132,7 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <Button className="w-full" type="submit" isLoading={isLoading}>
+          <Button className="w-full" type="submit">
             Log in
           </Button>
         </Form>

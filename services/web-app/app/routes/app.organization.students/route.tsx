@@ -26,7 +26,7 @@ import { cn } from '~/utils/misc';
 import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
 import {
   getPasswordHash,
-  requireProfile,
+  requireMembership,
   requireOwner,
 } from '~/utils/auth.server';
 import {
@@ -60,7 +60,7 @@ const COLUMNS: CookieColumns = {
   },
   classCount: {
     label: 'Classes',
-    formatter: (student) => student._count.classes,
+    formatter: (student) => student._count.classesAsStudent,
   },
   actions: {
     label: 'Actions',
@@ -137,15 +137,14 @@ const createOrEnrollStudent = async (
     where: { email },
     select: {
       id: true,
-      profiles: {
+      memberships: {
+        where: { organizationId },
         select: {
           id: true,
-          organizationId: true,
-          studentProfile: {
-            select: {
-              id: true,
-              classes: { where: { id: classId }, select: { id: true } },
-            },
+          role: true,
+          classesAsStudent: {
+            where: { id: classId },
+            select: { id: true },
           },
         },
       },
@@ -153,11 +152,9 @@ const createOrEnrollStudent = async (
   });
 
   if (existingUser) {
-    const orgProfile = existingUser.profiles.find(
-      (p) => p.organizationId === organizationId
-    );
+    const membership = existingUser.memberships[0];
 
-    if (!orgProfile) {
+    if (!membership) {
       return {
         success: false,
         email,
@@ -165,23 +162,20 @@ const createOrEnrollStudent = async (
       };
     }
 
-    if (orgProfile.studentProfile) {
-      if (orgProfile.studentProfile.classes.length === 0) {
-        await prisma.studentProfile.update({
-          where: { id: orgProfile.studentProfile.id },
-          data: { classes: { connect: { id: classId } } },
-        });
-      }
-
-      return { success: true, email };
+    if (membership.role !== 'STUDENT') {
+      return {
+        success: false,
+        email,
+        error: 'User already has a non-student role in this organization.',
+      };
     }
 
-    await prisma.studentProfile.create({
-      data: {
-        profile: { connect: { id: orgProfile.id } },
-        classes: { connect: { id: classId } },
-      },
-    });
+    if (membership.classesAsStudent.length === 0) {
+      await prisma.orgMembership.update({
+        where: { id: membership.id },
+        data: { classesAsStudent: { connect: { id: classId } } },
+      });
+    }
 
     return { success: true, email };
   }
@@ -196,8 +190,9 @@ const createOrEnrollStudent = async (
 
   const hashedPassword = await getPasswordHash(password);
 
-  await prisma.profile.create({
+  await prisma.orgMembership.create({
     data: {
+      role: 'STUDENT',
       user: {
         create: {
           email,
@@ -206,7 +201,7 @@ const createOrEnrollStudent = async (
         },
       },
       organization: { connect: { id: organizationId } },
-      studentProfile: { create: { classes: { connect: { id: classId } } } },
+      classesAsStudent: { connect: { id: classId } },
     },
   });
 
@@ -215,7 +210,7 @@ const createOrEnrollStudent = async (
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
   const { sort, direction, skip, take } =
@@ -225,47 +220,40 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let orderBy: any = { createdAt: direction };
   if (sort === 'name' || sort === 'email') {
     orderBy = {
-      profile: {
-        user: {
-          [sort]: direction,
-        },
+      user: {
+        [sort]: direction,
       },
     };
   }
 
   const where = {
-    profile: {
-      organizationId: profile.organization.id,
-      ...(q
-        ? {
-            user: {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' as const } },
-                { email: { contains: q, mode: 'insensitive' as const } },
-              ],
-            },
-          }
-        : {}),
-    },
+    organizationId: profile.organization.id,
+    role: 'STUDENT' as const,
+    ...(q
+      ? {
+          user: {
+            OR: [
+              { name: { contains: q, mode: 'insensitive' as const } },
+              { email: { contains: q, mode: 'insensitive' as const } },
+            ],
+          },
+        }
+      : {}),
   } as const;
 
   const [students, totalCount, classes] = await Promise.all([
-    prisma.studentProfile.findMany({
+    prisma.orgMembership.findMany({
       where,
       include: {
-        profile: {
-          include: {
-            user: true,
-          },
-        },
-        classes: {
+        user: true,
+        classesAsStudent: {
           include: {
             school: true,
           },
         },
         _count: {
           select: {
-            classes: true,
+            classesAsStudent: true,
           },
         },
       },
@@ -273,7 +261,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       skip,
       take,
     }),
-    prisma.studentProfile.count({ where }),
+    prisma.orgMembership.count({ where }),
     prisma.class.findMany({
       where: {
         school: {
@@ -303,7 +291,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -414,10 +402,11 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Verify student belongs to organization
-    const existingStudent = await prisma.studentProfile.findFirst({
+    const existingStudent = await prisma.orgMembership.findFirst({
       where: {
         id: studentId,
-        profile: { organizationId: profile.organization.id },
+        organizationId: profile.organization.id,
+        role: 'STUDENT',
       },
     });
 
@@ -442,10 +431,10 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    await prisma.studentProfile.update({
+    await prisma.orgMembership.update({
       where: { id: studentId },
       data: {
-        classes: {
+        classesAsStudent: {
           set: classIds.map((id) => ({ id })),
         },
       },
@@ -713,14 +702,14 @@ export default function OrganizationStudentsRoute() {
                         <TableCell className="pl-4">
                           <TooltipIdCopy id={student.id}>
                             <span className="font-medium">
-                              {student.profile.user.name || 'Not set'}
+                              {student.user.name || 'Not set'}
                             </span>
                           </TooltipIdCopy>
                         </TableCell>
-                        <TableCell>{student.profile.user.email}</TableCell>
+                        <TableCell>{student.user.email}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">
-                            {student._count.classes}
+                            {student._count.classesAsStudent}
                           </Badge>
                         </TableCell>
                         <TableCell className="pr-4">
@@ -793,7 +782,9 @@ function StudentSheet({
   // Reset form when editingStudent changes or sheet opens/closes
   useEffect(() => {
     if (editingStudent) {
-      setSelectedClasses(editingStudent.classes?.map((c: any) => c.id) || []);
+      setSelectedClasses(
+        editingStudent.classesAsStudent?.map((c: { id: string }) => c.id) || []
+      );
     }
   }, [editingStudent, open]);
 
@@ -839,14 +830,14 @@ function StudentSheet({
           <div className="space-y-2">
             <Label>Student Name</Label>
             <div className="text-sm font-medium text-muted-foreground">
-              {editingStudent.profile.user.name || 'Not set'}
+              {editingStudent.user.name || 'Not set'}
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Email</Label>
             <div className="text-sm font-medium text-muted-foreground">
-              {editingStudent.profile.user.email}
+              {editingStudent.user.email}
             </div>
           </div>
 

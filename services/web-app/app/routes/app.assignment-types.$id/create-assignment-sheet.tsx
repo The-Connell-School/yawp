@@ -61,7 +61,6 @@ export function CreateAssignmentSheet({
     teacherClasses[0]?.id ?? ''
   );
   const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState('');
 
   const isSaving = fetcher.state !== 'idle';
 
@@ -69,7 +68,6 @@ export function CreateAssignmentSheet({
     if (!open || !apHistoryEntry) return;
     setSelectedClassId(teacherClasses[0]?.id ?? '');
     setTitle('');
-    setDueDate('');
   }, [open, teacherClasses, apHistoryEntry]);
 
   useEffect(() => {
@@ -166,18 +164,6 @@ export function CreateAssignmentSheet({
             <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
               {apHistoryEntry.prompt}
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cs-due">Due Date (optional)</Label>
-            <Input
-              id="cs-due"
-              type="date"
-              name="dueDate"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={isSaving}
-            />
           </div>
 
           {fetcher.data && !fetcher.data.success ? (

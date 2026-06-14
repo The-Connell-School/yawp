@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAdmin = mock();
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const setFeatureFlagBoolean = mock();
 const setTargetedFeatureFlagTarget = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireAdmin,
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 
 mock.module('~/utils/feature-flags.server', () => ({
@@ -62,7 +62,7 @@ const prisma = {
   setting: {
     findMany: mock(),
   },
-  teacherProfile: {
+  orgMembership: {
     findMany: mock(),
     findUnique: mock(),
   },
@@ -78,7 +78,7 @@ describe('admin feature flags route', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     setFeatureFlagBoolean.mockReset();
     setTargetedFeatureFlagTarget.mockReset();
     prisma.class.findMany.mockReset();
@@ -90,8 +90,8 @@ describe('admin feature flags route', () => {
     prisma.school.findMany.mockReset();
     prisma.school.findUnique.mockReset();
     prisma.setting.findMany.mockReset();
-    prisma.teacherProfile.findMany.mockReset();
-    prisma.teacherProfile.findUnique.mockReset();
+    prisma.orgMembership.findMany.mockReset();
+    prisma.orgMembership.findUnique.mockReset();
 
     requireAdmin.mockResolvedValue({ id: 'admin-1' });
     setFeatureFlagBoolean.mockResolvedValue('true');
@@ -109,14 +109,11 @@ describe('admin feature flags route', () => {
         organization: { name: 'Alpha Org' },
       },
     ]);
-    prisma.teacherProfile.findMany.mockResolvedValue([
+    prisma.orgMembership.findMany.mockResolvedValue([
       {
         id: 'teacher-1',
-        isActive: true,
-        profile: {
-          organization: { name: 'Alpha Org' },
-          user: { email: 'ada@example.com', name: 'Ada Teacher' },
-        },
+        organization: { name: 'Alpha Org' },
+        user: { email: 'ada@example.com', name: 'Ada Teacher' },
       },
     ]);
     prisma.class.findMany.mockResolvedValue([
@@ -375,7 +372,7 @@ describe('admin feature flags route', () => {
   });
 
   test('action upserts a teacher pilot target', async () => {
-    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
     const body = new URLSearchParams({
       intent: 'toggle-pilot-target',
       featureKey: 'assignments',
@@ -415,7 +412,7 @@ describe('admin feature flags route', () => {
   });
 
   test('action accepts an AP History pilot target', async () => {
-    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
     const body = new URLSearchParams({
       intent: 'toggle-pilot-target',
       featureKey: 'ap_history_essay',
@@ -561,7 +558,7 @@ describe('admin feature flags route', () => {
   });
 
   test('action clears expiry when re-enabling a teacher pilot target', async () => {
-    prisma.teacherProfile.findUnique.mockResolvedValue({ id: 'teacher-1' });
+    prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
     const body = new URLSearchParams({
       intent: 'toggle-pilot-target',
       featureKey: 'assignments',

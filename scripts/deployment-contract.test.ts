@@ -115,6 +115,13 @@ describe('production deployment contract', () => {
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
   });
+
+  test('remote production migrate verifies org membership after deploy when cutover tables exist', () => {
+    const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
+
+    expect(migrateRemoteScript).toContain('org-membership:postcheck');
+    expect(migrateRemoteScript).toContain('OrgMembership');
+  });
 });
 
 describe('PR preview deployment contract', () => {

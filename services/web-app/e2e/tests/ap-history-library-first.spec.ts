@@ -40,7 +40,7 @@ test.describe.serial('AP History library-first assignment flow', () => {
         prisma,
         featureKey: 'ap_history_essay',
         targetKind: 'teacher',
-        targetId: e2eContext.teacherProfileId,
+        targetId: e2eContext.teacherMembershipId,
         enabled: true,
         note: 'E2E AP History library-first teacher access',
       });
@@ -105,9 +105,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
       const assignment = await prisma.assignment.findFirst({
         where: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
           title,
+          classAssignments: { some: { classId: e2eContext.classId } },
+          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
         },
         select: {
           id: true,
@@ -186,9 +186,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
       }
       const createdAssignments = await prisma.assignment.findMany({
         where: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
           title,
+          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
+          classAssignments: { some: { classId: e2eContext.classId } },
         },
         select: { id: true },
       });
@@ -200,9 +200,9 @@ test.describe.serial('AP History library-first assignment flow', () => {
       }
       await prisma.assignment.deleteMany({
         where: {
-          classId: e2eContext.classId,
-          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
           title,
+          assignmentTypeId: e2eContext.apHistoryAssignmentTypeId,
+          classAssignments: { some: { classId: e2eContext.classId } },
         },
       });
       await prisma.$disconnect();

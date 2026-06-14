@@ -1,7 +1,7 @@
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { validationError, parseFormData } from '@rvf/react-router';
 import { z } from 'zod';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 const validator = z.object({
@@ -12,7 +12,7 @@ const validator = z.object({
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
   if (!profile) {
     return dataResponse({ error: 'Profile not found.' }, { status: 404 });
@@ -22,12 +22,12 @@ export async function action({ request }: ActionFunctionArgs) {
   if (error) return validationError(error);
 
   const creation = await prisma.documentComment.create({
-    data: { ...data, profileId: profile.id },
+    data: { ...data, membershipId: profile.id },
     include: {
-      profile: { include: { user: { select: { name: true } } } },
+      membership: { include: { user: { select: { name: true } } } },
       responses: {
         include: {
-          profile: { include: { user: { select: { name: true } } } },
+          membership: { include: { user: { select: { name: true } } } },
         },
       },
     },

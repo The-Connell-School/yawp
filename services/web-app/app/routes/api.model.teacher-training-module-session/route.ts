@@ -1,4 +1,4 @@
-import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 
@@ -6,18 +6,17 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
 
   const json = await request.json();
-  const { teacherTrainingModuleId, teacherProfileId } = json;
+  const { teacherTrainingModuleId, membershipId } = json;
 
-  if (!teacherTrainingModuleId || !teacherProfileId) {
+  if (!teacherTrainingModuleId || !membershipId) {
     throw new Response('Invalid data', { status: 400 });
   }
 
-  // Find existing session or create new one
   const existingSession = await prisma.teacherTrainingModuleSession.findUnique({
     where: {
-      teacherTrainingModuleId_teacherProfileId: {
+      teacherTrainingModuleId_membershipId: {
         teacherTrainingModuleId,
-        teacherProfileId,
+        membershipId,
       },
     },
   });
@@ -29,7 +28,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const session = await prisma.teacherTrainingModuleSession.create({
     data: {
       teacherTrainingModuleId,
-      teacherProfileId,
+      membershipId,
       videoTimestamp: 0,
     },
   });

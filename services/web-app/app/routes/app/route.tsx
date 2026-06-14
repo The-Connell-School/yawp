@@ -1,7 +1,6 @@
 import {
   Form,
   Link,
-  NavLink,
   Outlet,
   data,
   useLocation,
@@ -12,17 +11,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import {
-  CogIcon,
-  GaugeIcon,
-  GraduationCap,
-  LockIcon,
-  MonitorPlay,
-  Settings2,
-  UserIcon,
-  Users,
-  Pencil,
-} from 'lucide-react';
+import { Settings2, Pencil, Eye, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -68,6 +57,10 @@ import {
   writeLastNonDocumentRoute,
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
+import {
+  FLAT_SIDEBAR_SECTIONS,
+  SidebarNavLinks,
+} from './sidebar-nav';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -76,52 +69,29 @@ export const NavExpandedContext = createContext({
 
 export const handle: BreadcrumbHandle = { breadcrumb: 'Home' };
 
-type RequiresFn = (
-  user: ReturnType<typeof useUser>
-) => boolean | null | undefined;
-
-const LINKS: {
-  to: string;
-  label: string;
-  end?: boolean;
-  icon: React.ReactNode;
-  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
-}[] = [
-  {
-    to: '/app',
-    label: 'Dashboard',
-    end: true,
-    icon: <GaugeIcon size={20} />,
-  },
-  {
-    to: '/app/my-classes',
-    label: 'My Classes',
-    icon: <Users size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/teacher-trainings',
-    label: "Teacher's Lounge",
-    icon: <MonitorPlay size={20} />,
-    requires: (user) => !!user.selectedProfile?.teacherProfile,
-  },
-  {
-    to: '/app/organization',
-    label: 'Organization',
-    icon: <CogIcon size={20} />,
-    requires: (user) => user.selectedProfile?.isOwner,
-  },
-  {
-    to: '/app/admin',
-    label: 'Admin',
-    icon: <LockIcon size={20} />,
-    requires: (user) => user.isAdmin,
-  },
-];
-
 const EditNameSchema = z.object({
   name: NameSchema,
 });
+
+function normalizePathname(pathname: string) {
+  if (pathname.length > 1 && pathname.endsWith('/')) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+}
+
+function isAppNavLinkActive(linkTo: string, pathname: string) {
+  const normalized = normalizePathname(pathname);
+
+  if (linkTo === '/app') {
+    return normalized === '/app';
+  }
+
+  return (
+    normalized === linkTo ||
+    normalized.startsWith(`${linkTo}/`)
+  );
+}
 
 export default function Route() {
   const location = useLocation();
@@ -130,6 +100,9 @@ export default function Route() {
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const isReadOnlyImpersonation =
     rootData?.impersonation?.isReadOnly ?? false;
+  const studentPreviewActive = rootData?.studentPreview?.active ?? false;
+  const canToggleStudentPreview =
+    user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isEditNameOpen, setIsEditNameOpen] = useState(false);
 
@@ -184,6 +157,10 @@ export default function Route() {
       `${location.pathname}${location.search}${location.hash}`
     );
   }, [location.hash, location.pathname, location.search]);
+
+  const isClassDetailRoute = /^\/app\/my-classes\/[^/]+/.test(
+    location.pathname
+  );
 
   return (
     <main
@@ -243,50 +220,16 @@ export default function Route() {
             <XIcon />
           </Button>
         </div>
-        <div className="grid gap-1 p-3">
-          {LINKS.filter(
-            (link) =>
-              !link.requires ||
-              (typeof link.requires === 'object'
-                ? 'OR' in link.requires
-                  ? link.requires.OR.some((r) => r(user))
-                  : link.requires.AND.every((r) => r(user))
-                : link.requires(user))
-          ).map((link) => (
-            <NavLink
-              key={link.to}
-              className={({ isActive }) =>
-                cn(
-                  'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground',
-                  {
-                    'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary font-bold':
-                      isActive,
-                    'py-2': !navExpanded,
-                  }
-                )
-              }
-              to={link.to}
-              end={link.end}
-            >
-              {link.icon ? (
-                navExpanded ? (
-                  link.icon
-                ) : (
-                  <Tooltip
-                    key={link.to}
-                    text={link.label}
-                    open={navExpanded ? false : undefined}
-                    contentProps={{ side: 'right' }}
-                  >
-                    {link.icon}
-                  </Tooltip>
-                )
-              ) : null}
-              {navExpanded ? (
-                <span className="w-full">{link.label}</span>
-              ) : null}
-            </NavLink>
-          ))}
+        <div className="p-3">
+          <SidebarNavLinks
+            sections={FLAT_SIDEBAR_SECTIONS}
+            user={user}
+            navExpanded={navExpanded}
+            pathname={location.pathname}
+            isAppNavLinkActive={isAppNavLinkActive}
+            forceFullNavigation={isClassDetailRoute}
+            studentPreviewActive={studentPreviewActive}
+          />
         </div>
         <div className="flex flex-grow flex-col justify-end">
           <Popover>
@@ -318,21 +261,21 @@ export default function Route() {
                   <Pencil size={14} />
                 </Button>
               </div>
-              {/* Organization / Profile selector */}
-              {user.profiles?.length ? (
+              {/* Organization / Membership selector */}
+              {user.memberships?.length ? (
                 <div className="max-h-64 overflow-auto p-1 border-b space-y-1">
-                  {user.profiles.map((p) => {
-                    const isSelected = user.selectedProfile
-                      ? user.selectedProfile?.id === p.id
-                      : user.profiles?.[0]?.id === p.id;
+                  {user.memberships.map((m) => {
+                    const isSelected = user.selectedMembership
+                      ? user.selectedMembership?.id === m.id
+                      : user.memberships?.[0]?.id === m.id;
                     return (
-                      <Form method="POST" action="/api/profile-id" key={p.id}>
+                      <Form method="POST" action="/api/membership-id" key={m.id}>
                         <input
                           type="hidden"
                           name="intent"
-                          value="switch-profile"
+                          value="switch-membership"
                         />
-                        <input type="hidden" name="profileId" value={p.id} />
+                        <input type="hidden" name="membershipId" value={m.id} />
                         <Button
                           type="submit"
                           size="sm"
@@ -342,7 +285,7 @@ export default function Route() {
                         >
                           <span className="flex min-w-0 flex-col text-left">
                             <span className="truncate">
-                              {p.organization?.name ?? 'Organization'}
+                              {m.organization?.name ?? 'Organization'}
                             </span>
                           </span>
                           {isSelected ? <Check size={16} /> : null}
@@ -350,6 +293,40 @@ export default function Route() {
                       </Form>
                     );
                   })}
+                </div>
+              ) : null}
+              {canToggleStudentPreview ? (
+                <div className="border-b p-1">
+                  <Form method="POST" action="/api/student-preview">
+                    <input
+                      type="hidden"
+                      name="intent"
+                      value={studentPreviewActive ? 'end' : 'start'}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant={studentPreviewActive ? 'secondary' : 'ghost'}
+                      className="w-full justify-start gap-2 rounded-lg px-3 py-2"
+                      disabled={isReadOnlyImpersonation}
+                      title={
+                        isReadOnlyImpersonation
+                          ? 'Read-only impersonation active'
+                          : studentPreviewActive
+                            ? 'Exit student preview'
+                            : 'View the app as a student (read-only)'
+                      }
+                    >
+                      {studentPreviewActive ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                      {studentPreviewActive
+                        ? 'Exit student preview'
+                        : 'View as student'}
+                    </Button>
+                  </Form>
                 </div>
               ) : null}
               <Form action="/auth/logout" method="POST" className="p-1">
@@ -387,6 +364,11 @@ export default function Route() {
           <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900">
             Read-only impersonation active. You can navigate the app, but
             creates, edits, and deletes are disabled.
+          </div>
+        ) : null}
+        {studentPreviewActive ? (
+          <div className="border-b border-sky-300 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-900">
+            Student preview active. You are viewing student pages read-only.
           </div>
         ) : null}
         {/* Mobile top menu */}
@@ -428,7 +410,7 @@ export default function Route() {
         <NavExpandedContext.Provider
           value={{ isMobileNavOpen, setIsMobileNavOpen }}
         >
-          <Outlet />
+          <Outlet key={location.pathname} />
         </NavExpandedContext.Provider>
       </div>
       <EditNameDialog

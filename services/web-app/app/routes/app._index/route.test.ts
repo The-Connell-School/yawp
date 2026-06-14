@@ -1,35 +1,60 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  assignment: { findMany: mock() },
+  classAssignment: { findMany: mock() },
   assignmentType: { findMany: mock() },
   class: { findMany: mock() },
   document: { findMany: mock(), count: mock() },
   featureAccessTarget: { findMany: mock() },
-  studentProfile: { findMany: mock() },
-  teacherProfile: { findUnique: mock() },
+  orgMembership: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
   submission: { findMany: mock() },
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const getAssignmentsEnabledClassIdsForContext = mock();
 const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
+const getTeacherClassCardStats = mock();
+const getTeacherRecentActiveClassIds = mock();
+const getAvailableAssignmentTypesForScopes = mock();
+const getStudentPreviewState = mock();
+
+const featureFlagsActual = await import('~/utils/feature-flags.server');
+const assignmentTypeAccessActual = await import(
+  '~/utils/assignment-type-access.server'
+);
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
+  ...featureFlagsActual,
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
   getAssignmentsEnabledClassIdsForContext,
+}));
+mock.module('~/utils/teacher-class-card-stats.server', () => ({
+  getTeacherClassCardStats,
+}));
+mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
+  getTeacherRecentActiveClassIds,
+}));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  ...assignmentTypeAccessActual,
+  getAvailableAssignmentTypesForScopes,
+}));
+mock.module('~/utils/student-preview.server', () => ({
+  getStudentPreviewState,
+  shouldUseStudentExperience: (
+    args: { membershipRole: string; previewActive: boolean }
+  ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
 
 const { loader } = await import('./route');
@@ -40,30 +65,40 @@ describe('app index loader assignments', () => {
       for (const fn of Object.values(model)) fn.mockReset();
     }
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     getAssignmentsEnabledClassIdsForContext.mockReset();
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
+    getTeacherClassCardStats.mockReset();
+    getTeacherRecentActiveClassIds.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
+    getStudentPreviewState.mockReset();
+    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
+    getTeacherClassCardStats.mockResolvedValue({
+      ungradedCount: 0,
+      gradedUnreleasedCount: 0,
+    });
+    getTeacherRecentActiveClassIds.mockResolvedValue([]);
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
+    requireMembership.mockResolvedValue({
       id: 'profile-1',
-      isOwner: false,
-      organization: { id: 'org-1' },
-      teacherProfile: null,
-      studentProfile: {
-        id: 'student-profile-1',
-        classes: [{ id: 'class-1' }, { id: 'class-2' }],
-      },
+      role: 'STUDENT',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    prisma.orgMembership.findUnique.mockResolvedValue({
+      _count: { classesAsStudent: 2 },
     });
     prisma.class.findMany.mockResolvedValue([
       {
         id: 'class-1',
-        school: { organizationId: 'org-1' },
+        school: { id: 'school-1', organizationId: 'org-1' },
         teachers: [{ id: 'teacher-1' }],
       },
       {
         id: 'class-2',
-        school: { organizationId: 'org-1' },
+        school: { id: 'school-1', organizationId: 'org-1' },
         teachers: [{ id: 'teacher-2' }],
       },
     ]);
@@ -71,13 +106,8 @@ describe('app index loader assignments', () => {
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.document.count.mockResolvedValue(0);
-    prisma.studentProfile.findMany.mockResolvedValue([]);
-    prisma.teacherProfile.findUnique.mockResolvedValue({
-      _count: { assignedTeacherTrainings: 0 },
-      schools: [],
-    });
     prisma.teacherTraining.findMany.mockResolvedValue([]);
-    prisma.assignment.findMany.mockResolvedValue([]);
+    prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
       []
@@ -101,16 +131,18 @@ describe('app index loader assignments', () => {
         {
           id: 'class-1',
           organizationId: 'org-1',
+          schoolId: 'school-1',
           teacherProfileIds: ['teacher-1'],
         },
         {
           id: 'class-2',
           organizationId: 'org-1',
+          schoolId: 'school-1',
           teacherProfileIds: ['teacher-2'],
         },
       ],
     });
-    expect(prisma.assignment.findMany).toHaveBeenCalledWith(
+    expect(prisma.classAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { classId: { in: ['class-1'] } },
       })
@@ -118,16 +150,16 @@ describe('app index loader assignments', () => {
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
-    requireProfile.mockResolvedValue({
-      id: 'teacher-profile-wrapper-1',
-      isOwner: false,
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-profile-1' },
-      studentProfile: null,
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
     });
     getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
+    getTeacherRecentActiveClassIds.mockResolvedValue(['class-1', 'class-2']);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.grade) {
+      if (args.select?._count) {
         return [
           {
             id: 'class-1',
@@ -139,7 +171,7 @@ describe('app index loader assignments', () => {
               name: 'Parker High School',
               organizationId: 'org-1',
             },
-            _count: { students: 1, teachers: 1 },
+            _count: { students: 1, teachers: 1, classAssignments: 2 },
           },
           {
             id: 'class-2',
@@ -151,14 +183,20 @@ describe('app index loader assignments', () => {
               name: 'Parker High School',
               organizationId: 'org-1',
             },
-            _count: { students: 1, teachers: 1 },
+            _count: { students: 1, teachers: 1, classAssignments: 0 },
           },
         ];
       }
 
       return [
-        { id: 'class-1', school: { organizationId: 'org-1' } },
-        { id: 'class-2', school: { organizationId: 'org-1' } },
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+        {
+          id: 'class-2',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -174,100 +212,94 @@ describe('app index loader assignments', () => {
       organizationId: 'org-1',
       teacherProfileId: 'teacher-profile-1',
       classes: [
-        { id: 'class-1', organizationId: 'org-1' },
-        { id: 'class-2', organizationId: 'org-1' },
+        { id: 'class-1', organizationId: 'org-1', schoolId: 'school-1' },
+        { id: 'class-2', organizationId: 'org-1', schoolId: 'school-1' },
       ],
     });
-    expect(prisma.assignment.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          class: expect.objectContaining({ id: { in: ['class-1'] } }),
-        }),
-      })
-    );
-    expect(data.teacherClassOptions).toEqual([
-      { id: 'class-1', name: 'Pilot Class' },
-    ]);
     expect(
       data.teacherClasses.map((klass: { id: string }) => klass.id)
     ).toEqual(['class-1', 'class-2']);
-    expect(data.coursesGlance).toHaveLength(2);
-    expect(data.coursesGlance[0].id).toBe('class-1');
-    expect(data.coursesGlance[1]).toMatchObject({
+    expect(data.totalTeacherClassCount).toBe(2);
+    expect(getTeacherRecentActiveClassIds).toHaveBeenCalledWith({
+      teacherClassIds: ['class-1', 'class-2'],
+    });
+    expect(data.teacherClassCards).toHaveLength(2);
+    expect(data.teacherClassCards[0]).toMatchObject({
+      id: 'class-1',
+      title: 'Pilot Class',
+    });
+    expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
-      name: 'Non-Pilot Class',
-      inProgress: 0,
-      submitted: 0,
-      graded: 0,
-      released: 0,
+      title: 'Non-Pilot Class',
     });
-    expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.submission.findMany.mock.calls[0][0].where).toEqual({
-      archivedAt: null,
-      document: {
-        deletedAt: null,
-        assignment: { classId: 'class-1' },
-      },
-    });
-    expect(prisma.document.count).toHaveBeenCalledTimes(1);
-    expect(prisma.document.count.mock.calls[0][0].where).toEqual({
-      deletedAt: null,
-      archivedAt: null,
-      assignment: { classId: 'class-1' },
-      submissions: { none: { archivedAt: null } },
-    });
+    expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
 
-  test('includes teacher-enabled assignment types that are not exposed org-wide', async () => {
-    requireProfile.mockResolvedValue({
-      id: 'teacher-profile-wrapper-1',
-      isOwner: false,
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-profile-1' },
-      studentProfile: null,
+  test('sorts recently active classes first while still showing every class', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
     });
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
+    getTeacherRecentActiveClassIds.mockResolvedValue([
+      'class-active-1',
+      'class-active-2',
+    ]);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.school?.select?.organizationId) {
+      if (args.select?._count) {
         return [
           {
-            id: 'class-1',
-            school: { id: 'school-1', organizationId: 'org-1' },
+            id: 'class-active-1',
+            grade: '9',
+            period: '1',
+            title: 'Active One',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 1 },
+          },
+          {
+            id: 'class-active-2',
+            grade: '9',
+            period: '2',
+            title: 'Active Two',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 1 },
+          },
+          {
+            id: 'class-quiet',
+            grade: '10',
+            period: '1',
+            title: 'Quiet Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 0 },
           },
         ];
       }
 
       return [
         {
-          id: 'class-1',
-          grade: '9',
-          period: '1',
-          title: 'Pilot Class',
-          school: { name: 'Parker High School' },
-          _count: { students: 1, teachers: 1 },
+          id: 'class-active-1',
+          school: { id: 'school-1', organizationId: 'org-1' },
         },
+        {
+          id: 'class-active-2',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
+        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
       ];
-    });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      {
-        featureKey: 'assignment_type:daily-pages-type',
-        targetKind: 'teacher',
-        targetId: 'teacher-profile-1',
-        enabled: true,
-      },
-    ]);
-    prisma.assignmentType.findMany.mockImplementation(async (args: any) => {
-      if (Array.isArray(args.where?.OR)) {
-        return [
-          {
-            id: 'daily-pages-type',
-            title: 'Daily Pages',
-            image: null,
-            organizationAssignments: [],
-          },
-        ];
-      }
-      return [];
     });
 
     const response = await loader({
@@ -277,63 +309,100 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentTypes).toEqual([
-      {
-        id: 'daily-pages-type',
-        title: 'Daily Pages',
-        image: null,
-      },
-    ]);
+    expect(data.totalTeacherClassCount).toBe(3);
+    expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
+      ['class-active-1', 'class-active-2', 'class-quiet']
+    );
+    expect(data.teacherWorkspaceClassStats).toHaveLength(3);
   });
 
-  test('scopes standardized dashboard assignment creation to standardized classes', async () => {
-    requireProfile.mockResolvedValue({
-      id: 'teacher-profile-wrapper-1',
-      isOwner: false,
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-profile-1' },
-      studentProfile: null,
+  test('shows all teacher classes when none have recent document activity', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
     });
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([
-      'class-1',
-      'class-2',
-    ]);
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
-      ['class-2']
-    );
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
+    getTeacherRecentActiveClassIds.mockResolvedValue([]);
     prisma.class.findMany.mockImplementation(async (args: any) => {
-      if (args.select?.grade) {
+      if (args.select?._count) {
+        return [
+          {
+            id: 'class-quiet',
+            grade: '10',
+            period: '1',
+            title: 'Quiet Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 0 },
+          },
+        ];
+      }
+
+      return [
+        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+      ];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.totalTeacherClassCount).toBe(1);
+    expect(data.teacherClassCards).toHaveLength(1);
+    expect(data.teacherClassCards[0]).toMatchObject({
+      id: 'class-quiet',
+      title: 'Quiet Class',
+    });
+  });
+
+  test('loads available assignment types for teachers when assignments are enabled', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
+    getTeacherRecentActiveClassIds.mockResolvedValue(['class-1']);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      {
+        id: 'type-1',
+        title: 'Daily Pages',
+        systemKey: null,
+        image: { id: 'image-1' },
+      },
+    ]);
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?._count) {
         return [
           {
             id: 'class-1',
             grade: '9',
             period: '1',
-            title: 'Legacy Class',
+            title: 'Pilot Class',
             school: {
               id: 'school-1',
               name: 'Parker High School',
               organizationId: 'org-1',
             },
-            _count: { students: 1, teachers: 1 },
-          },
-          {
-            id: 'class-2',
-            grade: '9',
-            period: '2',
-            title: 'Standardized Class',
-            school: {
-              id: 'school-1',
-              name: 'Parker High School',
-              organizationId: 'org-1',
-            },
-            _count: { students: 1, teachers: 1 },
+            _count: { students: 1, teachers: 1, classAssignments: 1 },
           },
         ];
       }
 
       return [
-        { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
-        { id: 'class-2', school: { id: 'school-1', organizationId: 'org-1' } },
+        {
+          id: 'class-1',
+          school: { id: 'school-1', organizationId: 'org-1' },
+        },
       ];
     });
 
@@ -344,27 +413,18 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.assignmentCreationStandardizationEnabled).toBe(true);
-    expect(data.teacherClassOptions).toEqual([
-      { id: 'class-2', name: 'Standardized Class' },
+    expect(data.courses).toEqual([]);
+    expect(data.teacherAssignmentTypes).toEqual([
+      {
+        id: 'type-1',
+        title: 'Daily Pages',
+        systemKey: null,
+        image: { id: 'image-1' },
+      },
     ]);
-    expect(
-      getAssignmentCreationStandardizationEnabledClassIdsForContext
-    ).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      teacherProfileId: 'teacher-profile-1',
-      classes: [
-        {
-          id: 'class-1',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-        },
-        {
-          id: 'class-2',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-        },
-      ],
-    });
+    expect(getAvailableAssignmentTypesForScopes).toHaveBeenCalledTimes(1);
+    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
+    expect(prisma.classAssignment.findMany).not.toHaveBeenCalled();
   });
+
 });

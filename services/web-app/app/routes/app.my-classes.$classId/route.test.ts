@@ -1,48 +1,59 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  class: { findFirst: mock() },
+  class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
   featureAccessTarget: { findMany: mock() },
-  profile: { findMany: mock() },
+  orgMembership: { findUnique: mock(), findMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
   document: { findMany: mock() },
   assignment: {
-    create: mock(),
     findFirst: mock(),
     findMany: mock(),
     update: mock(),
   },
+  classAssignment: { findMany: mock() },
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const getSubmittedPapersFilter = mock();
 const isDocumentSubmissionEnabledForScope = mock();
 const isAssignmentsEnabledForContext = mock();
 const isAssignmentCreationStandardizationEnabledForContext = mock();
-const isReleasedGradesOrganizationEnabledForOrganization = mock();
+const createAssignmentDeployedToClasses = mock();
+const deleteClassAssignmentDeployment = mock();
+const getAvailableAssignmentTypesForScopes = mock();
+
+const featureFlagsActual = await import('~/utils/feature-flags.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
 }));
 mock.module('~/utils/feature-flags.server', () => ({
+  ...featureFlagsActual,
   isDocumentSubmissionEnabledForScope,
   isAssignmentsEnabledForContext,
   isAssignmentCreationStandardizationEnabledForContext,
-  isReleasedGradesOrganizationEnabledForOrganization,
+}));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  getAvailableAssignmentTypesForScopes,
+}));
+mock.module('~/utils/assignment-deployment.server', () => ({
+  createAssignmentDeployedToClasses,
+  deleteClassAssignmentDeployment,
 }));
 
 const {
@@ -61,18 +72,20 @@ describe('class detail loader document visibility', () => {
       }
     }
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     getSubmittedPapersFilter.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
     isAssignmentsEnabledForContext.mockReset();
     isAssignmentCreationStandardizationEnabledForContext.mockReset();
-    isReleasedGradesOrganizationEnabledForOrganization.mockReset();
+    createAssignmentDeployedToClasses.mockReset();
+    deleteClassAssignmentDeployment.mockReset();
+    getAvailableAssignmentTypesForScopes.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
-      id: 'profile-1',
-      organization: { id: 'org-1' },
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -86,25 +99,29 @@ describe('class detail loader document visibility', () => {
       },
       students: [],
     });
+    prisma.class.findMany.mockResolvedValue([]);
     prisma.documentClassForensic.findMany.mockResolvedValue([
       { documentId: 'legacy-doc-1' },
       { documentId: 'legacy-doc-2' },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
-    prisma.profile.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findUnique.mockResolvedValue({ schools: [] });
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.pasteAlert.findMany.mockResolvedValue([]);
     prisma.submission.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
+    prisma.classAssignment.findMany.mockResolvedValue([]);
     prisma.assignment.findMany.mockResolvedValue([]);
     prisma.assignment.findFirst.mockResolvedValue(null);
-    prisma.assignment.create.mockResolvedValue({});
     prisma.assignment.update.mockResolvedValue({});
+    createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
+    deleteClassAssignmentDeployment.mockResolvedValue('ca-1');
     getSubmittedPapersFilter.mockResolvedValue('all');
     isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     isAssignmentsEnabledForContext.mockResolvedValue(true);
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
-    isReleasedGradesOrganizationEnabledForOrganization.mockResolvedValue(false);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
   });
 
   test('includes legacy class documents preserved during assignment migration', async () => {
@@ -116,11 +133,7 @@ describe('class detail loader document visibility', () => {
 
     const expectedScope = {
       OR: [
-        { assignment: { classId: 'class-1' } },
-        {
-          assignmentId: null,
-          studentProfile: { classes: { some: { id: 'class-1' } } },
-        },
+        { classAssignment: { classId: 'class-1' } },
         { id: { in: ['legacy-doc-1', 'legacy-doc-2'] } },
       ],
     };
@@ -129,41 +142,6 @@ describe('class detail loader document visibility', () => {
       where: { oldClassId: 'class-1' },
       select: { documentId: true },
     });
-    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          featureKey: { startsWith: 'assignment_type:' },
-          targetId: { in: ['org-1', 'school-1', 'teacher-1'] },
-        }),
-      })
-    );
-    expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
-      where: {
-        archivedAt: null,
-        OR: [
-          {
-            organizationAssignments: {
-              some: { organizationId: { in: ['org-1'] } },
-            },
-          },
-        ],
-      },
-      select: {
-        id: true,
-        title: true,
-        systemKey: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
-      },
-      orderBy: { position: 'asc' },
-    });
-    expect(
-      prisma.profile.findMany.mock.calls[0][0].select.documents.where
-    ).toEqual(expectedScope);
-    expect(prisma.pasteAlert.findMany.mock.calls[0][0].where.document).toEqual(
-      expectedScope
-    );
     expect(prisma.submission.findMany.mock.calls[0][0].where.document).toEqual({
       is: {
         ...expectedScope,
@@ -198,35 +176,26 @@ describe('class detail loader document visibility', () => {
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('omits AP History from the generic class assignment picker', async () => {
-    prisma.assignmentType.findMany.mockResolvedValue([
-      {
-        id: 'generic-type-1',
-        title: 'Literary Analysis',
-        systemKey: null,
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-      {
-        id: 'ap-history-type',
-        title: 'AP History Essay',
-        systemKey: 'ap_history_essay',
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-    ]);
-
+  test('redirects the retired assignments tab to the teacher Assignments page', async () => {
     const response = await loader({
-      request: new Request('https://example.test/app/my-classes/class-1'),
+      request: new Request(
+        'https://example.test/app/my-classes/class-1?tab=assignments'
+      ),
       params: { classId: 'class-1' },
       context: {} as never,
     });
-    const data = (response as { data: any }).data;
 
-    expect(data.allowedAssignmentTypes).toEqual([
-      { id: 'generic-type-1', title: 'Literary Analysis', systemKey: null },
-    ]);
+    expect(response.status).toBe(302);
+    expect(response.headers.get('Location')).toBe('/app/assignments');
   });
 
   test('rejects generic class-page AP History assignment creation', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      {
+        id: 'ap-history-type',
+        systemKey: 'ap_history_essay',
+      },
+    ]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'ap-history-type',
@@ -255,7 +224,7 @@ describe('class detail loader document visibility', () => {
       message: 'Choose an APUSH prompt from the library first.',
     });
     expect(response.init).toMatchObject({ status: 400 });
-    expect(prisma.assignment.create).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects generic edits to AP History assignment snapshots', async () => {
@@ -327,7 +296,6 @@ describe('class detail loader document visibility', () => {
         title: null,
         prompt: 'Updated prompt',
         tutorContext: 'Legacy tutor guidance',
-        dueDate: null,
         submitForGrade: true,
         pointValue: 100,
       },
@@ -335,6 +303,9 @@ describe('class detail loader document visibility', () => {
   });
 
   test('creates a standardized class assignment with grading intent and no tutor context', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'at-1',
@@ -361,22 +332,24 @@ describe('class detail loader document visibility', () => {
     });
 
     expect(response.data).toMatchObject({ success: true });
-    expect(prisma.assignment.create).toHaveBeenCalledWith({
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: {
-        classId: 'class-1',
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
         tutorContext: null,
-        dueDate: null,
         submitForGrade: true,
         pointValue: 25,
       },
+      classIds: ['class-1'],
     });
   });
 
   test('keeps legacy class assignment tutor context when standardization is disabled', async () => {
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'at-1',
@@ -401,19 +374,21 @@ describe('class detail loader document visibility', () => {
     });
 
     expect(response.data).toMatchObject({ success: true });
-    expect(prisma.assignment.create).toHaveBeenCalledWith({
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: {
-        classId: 'class-1',
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
         tutorContext: 'Legacy tutor context.',
-        dueDate: null,
       },
+      classIds: ['class-1'],
     });
   });
 
   test('rejects invalid class assignment point values', async () => {
+    getAvailableAssignmentTypesForScopes.mockResolvedValue([
+      { id: 'at-1', systemKey: null },
+    ]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'at-1',
@@ -443,7 +418,7 @@ describe('class detail loader document visibility', () => {
       message: 'Point value must be a positive whole number no greater than 1000.',
     });
     expect(response.init).toMatchObject({ status: 400 });
-    expect(prisma.assignment.create).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('rejects creating an assignment from an archived assignment type', async () => {
@@ -466,7 +441,7 @@ describe('class detail loader document visibility', () => {
       message: 'Selected assignment type is not available.',
     });
     expect(response.init).toMatchObject({ status: 400 });
-    expect(prisma.assignment.create).not.toHaveBeenCalled();
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('shows a visible draft title when the document title is blank', () => {

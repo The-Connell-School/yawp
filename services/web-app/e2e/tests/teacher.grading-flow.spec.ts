@@ -158,13 +158,16 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         timeout: 15000,
       });
 
-      // Teacher clicks View from the class page — submissions route with edit=1
-      await expect(page.getByRole('tab', { name: /submitted/i })).toBeVisible({
+      // Teacher clicks View details from the class Documents tab — submissions route with edit=1
+      await expect(page.getByRole('tab', { name: /documents/i })).toBeVisible({
         timeout: 10000,
       });
-      await page.getByRole('tab', { name: /submitted/i }).click();
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&status=needs-grading`
+      );
+      await page.waitForLoadState('networkidle');
       await page
-        .getByRole('link', { name: /^view$/i })
+        .getByRole('link', { name: /view details/i })
         .first()
         .click();
       await page.waitForURL(/\/app\/submissions\/[^/]+\?edit=1/, {
@@ -324,15 +327,17 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}`);
       await page.waitForLoadState('networkidle');
 
-      await page.getByRole('tab', { name: /graded/i }).click();
+      await page.getByRole('tab', { name: /documents/i }).click();
       await expect(page.getByTestId('class-release-grades-open')).toBeVisible({
         timeout: 10000,
       });
       await page.getByTestId('class-release-grades-open').click();
-      await page.getByRole('menuitem', { name: /all graded docs/i }).click();
       await page.getByTestId('release-grades-confirm').click();
       await page.waitForLoadState('networkidle');
-      await page.getByRole('tab', { name: /released/i }).click();
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&status=released`
+      );
+      await page.waitForLoadState('networkidle');
       await expect(
         page.getByRole('cell', { name: /E2E Doc/i }).first()
       ).toBeVisible({ timeout: 15000 });

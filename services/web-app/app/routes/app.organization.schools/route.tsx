@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Checkbox } from '~/components/ui/checkbox';
-import { requireProfile, requireOwner } from '~/utils/auth.server';
+import { requireMembership, requireOwner } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
   Sheet,
@@ -39,7 +39,7 @@ import { TooltipIdCopy } from '~/components/ui/tooltip-id-copy';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const url = new URL(request.url);
   const q = url.searchParams.get('q');
 
@@ -61,11 +61,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       include: {
         teachers: {
           include: {
-            profile: {
-              include: {
-                user: true,
-              },
-            },
+            user: true,
           },
         },
         _count: {
@@ -77,25 +73,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       orderBy: { name: 'asc' },
     }),
-    prisma.teacherProfile.findMany({
+    prisma.orgMembership.findMany({
       where: {
-        profile: {
-          organizationId: profile.organization.id,
-        },
+        organizationId: profile.organization.id,
+        role: 'TEACHER',
         isActive: true,
       },
       include: {
-        profile: {
-          include: {
-            user: true,
-          },
-        },
+        user: true,
       },
       orderBy: {
-        profile: {
-          user: {
-            name: 'asc',
-          },
+        user: {
+          name: 'asc',
         },
       },
     }),
@@ -110,7 +99,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -564,8 +553,7 @@ function SchoolSheet({
                         htmlFor={`teacher-${teacher.id}`}
                         className="text-sm font-normal cursor-pointer flex-1"
                       >
-                        {teacher.profile.user.name ||
-                          teacher.profile.user.email}
+                        {teacher.user.name || teacher.user.email}
                       </Label>
                     </div>
                   ))

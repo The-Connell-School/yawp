@@ -27,7 +27,7 @@ import {
   AccordionTrigger,
 } from '~/components/ui/accordion';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
-import { requireUserId, requireProfile } from '~/utils/auth.server';
+import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
@@ -155,7 +155,7 @@ export function shouldRevalidate() {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   invariant(params.submissionId, 'No submission id found');
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
   const url = new URL(request.url);
   const editParam = url.searchParams.get('edit') === '1';
 
@@ -170,23 +170,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       document: {
         is: {
           OR: [
-            // Owner of the document
-            { profile: { id: profile.id } },
-            // Teacher of the student's class
+            { membershipId: profile.id },
             {
-              profile: {
-                studentProfile: {
-                  classes: {
-                    some: {
-                      teachers: {
-                        some: { profileId: profile.id },
-                      },
+              membership: {
+                classesAsStudent: {
+                  some: {
+                    teachers: {
+                      some: { id: profile.id },
                     },
                   },
                 },
               },
             },
-            // Admin override
             ...(user?.isAdmin ? [{}] : []),
           ],
         },
@@ -210,7 +205,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       aiMeta: true,
       releasedAt: true,
       gradedAt: true,
-      gradedById: true,
+      gradedByMembershipId: true,
       archivedAt: true,
       documentId: true,
       document: {
@@ -222,6 +217,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               submitForGrade: true,
               pointValue: true,
+            },
+          },
+          classAssignment: {
+            select: {
               class: {
                 select: {
                   id: true,
@@ -232,16 +231,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               },
             },
           },
-          profile: {
+          membership: {
             select: {
               id: true,
               userId: true,
               user: { select: { name: true } },
-            },
-          },
-          studentProfile: {
-            select: {
-              classes: {
+              classesAsStudent: {
                 select: {
                   id: true,
                   schoolId: true,
@@ -255,7 +250,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       },
       comments: {
         include: {
-          profile: {
+          membership: {
             include: { user: { select: { name: true, email: true } } },
           },
         },
@@ -272,34 +267,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.profile.id === profile.id;
+  const isOwner = submission.document.membership.id === profile.id;
 
-  // Teacher detection: profile has a teacherProfile linked to student's class
-  const teacherProfile = !isOwner
-    ? await prisma.teacherProfile.findFirst({
-        where: {
-          profileId: profile.id,
-          classes: {
-            some: {
-              students: {
-                some: {
-                  profileId: submission.document.profile.id,
-                },
-              },
-            },
-          },
-        },
-        select: { id: true },
-      })
-    : null;
-  const isTeacher = Boolean(teacherProfile);
+  const isTeacher =
+    !isOwner &&
+    profile.role === 'TEACHER' &&
+    (submission.document.classAssignment?.class?.teachers.some(
+      (teacher) => teacher.id === profile.id
+    ) ||
+      submission.document.membership.classesAsStudent.some((klass) =>
+        klass.teachers.some((teacher) => teacher.id === profile.id)
+      ));
 
   const isAdmin = user?.isAdmin ?? false;
   const isDocumentSubmissionEnabled =
     !isOwner && (isTeacher || isAdmin)
       ? await isDocumentSubmissionEnabledForScope({
-          ...getDocumentSubmissionScope(submission.document),
-          actorTeacherProfileId: teacherProfile?.id ?? null,
+          ...getDocumentSubmissionScope({
+            classAssignment: submission.document.classAssignment,
+            membership: submission.document.membership,
+          }),
+          actorTeacherProfileId: isTeacher ? profile.id : null,
         })
       : true;
 
@@ -822,12 +810,12 @@ export default function SubmissionRoute() {
         <div className="h-4 w-px bg-border shrink-0" />
 
         <div className="flex min-w-0 items-center gap-2">
-          {isGradingOther && submission.document.profile.user.name ? (
+          {isGradingOther && submission.document.membership.user.name ? (
             <span className="shrink-0 text-sm text-muted-foreground">
-              {submission.document.profile.user.name}
+              {submission.document.membership.user.name}
             </span>
           ) : null}
-          {isGradingOther && submission.document.profile.user.name ? (
+          {isGradingOther && submission.document.membership.user.name ? (
             <span className="text-muted-foreground/40 shrink-0">·</span>
           ) : null}
           {canEditTitle ? (

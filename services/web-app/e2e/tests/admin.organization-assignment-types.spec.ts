@@ -49,7 +49,7 @@ test.describe.serial('Admin organization assignment types', () => {
 
       await page.context().clearCookies();
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app');
+      await page.goto('/app/assignments');
       await expect(page.getByRole('link', { name: title })).toBeVisible();
     } finally {
       await prisma.organizationAssignmentType.deleteMany({

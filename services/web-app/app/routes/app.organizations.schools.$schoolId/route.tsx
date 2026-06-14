@@ -29,11 +29,11 @@ import { Label } from '~/components/ui/label';
 import { Input } from '~/components/ui/input';
 import React from 'react';
 import { prisma } from '~/utils/db.server';
-import { requireOwner, requireProfile } from '~/utils/auth.server';
+import { requireOwner, requireMembership } from '~/utils/auth.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
 
   const school = await prisma.school.findFirst({
     where: { id: params.schoolId, organizationId: profile.organization.id },
@@ -41,27 +41,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       classes: {
         include: {
           teachers: {
-            include: {
-              profile: {
-                include: { user: { select: { name: true, email: true } } },
-              },
-            },
+            include: { user: { select: { name: true, email: true } } },
           },
           students: {
-            include: {
-              profile: {
-                include: { user: { select: { name: true, email: true } } },
-              },
-            },
+            include: { user: { select: { name: true, email: true } } },
           },
         },
         orderBy: [{ grade: 'asc' }, { period: 'asc' }],
       },
       teachers: {
         include: {
-          profile: {
-            include: { user: { select: { name: true, email: true } } },
-          },
+          user: { select: { name: true, email: true } },
         },
       },
     },
@@ -76,7 +66,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   const formData = await request.formData();
   const intent = formData.get('intent');
 
@@ -130,10 +120,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse({ error: 'Class not found' }, { status: 404 });
 
     if (teacherProfileId && teacherProfileId.length > 0) {
-      const teacher = await prisma.teacherProfile.findFirst({
+      const teacher = await prisma.orgMembership.findFirst({
         where: {
           id: teacherProfileId,
-          profile: { organizationId: profile.organization.id },
+          organizationId: profile.organization.id,
+          role: 'TEACHER',
         },
         select: { id: true },
       });
@@ -150,7 +141,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       });
 
       // Ensure the teacher is associated with this school
-      await prisma.teacherProfile.update({
+      await prisma.orgMembership.update({
         where: { id: teacher.id },
         data: { schools: { connect: { id: klass.schoolId } } },
       });

@@ -10,13 +10,11 @@ import {
   ScrollRestoration,
   Outlet,
 } from 'react-router';
-import { AlertTriangle, FlaskConical } from 'lucide-react';
-import { useEffect } from 'react';
 import { PostHogProvider } from 'posthog-js/react';
+import { useEffect } from 'react';
 import { GeneralErrorBoundary } from './components/error-boundary.tsx';
 import { GlobalLoading } from './components/global-loading.tsx';
 import { Toaster } from './components/toaster.tsx';
-import { Tooltip } from './components/ui/tooltip.tsx';
 import { useNonce } from './contexts/nonce.ts';
 import { authSessionStorage } from './cookie-session-storages/authentication.server.ts';
 import {
@@ -33,7 +31,10 @@ import { getToast } from './utils/toast.server.ts';
 import type { Route } from './+types/root.ts';
 import posthog from 'posthog-js';
 import omit from 'lodash/omit';
-import { getProfileId } from './cookies/profile-id.server.ts';
+import { getMembershipId } from './cookies/membership-id.server.ts';
+import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
+import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
+import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
 
 export const links: LinksFunction = () => {
   return [
@@ -82,7 +83,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         ENV: getEnv(),
         bannerWarning: null,
+        localDevQuickLogin: { enabled: false, options: [] },
         impersonation: { isReadOnly: false, impersonatorUserId: null },
+        studentPreview: { active: false, organizationId: null },
         toast: null,
       },
       { headers: { 'Server-Timing': timings.toString() } }
@@ -113,13 +116,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
               name: true,
               email: true,
               isAdmin: true,
-              profiles: {
+              memberships: {
                 orderBy: { createdAt: 'asc' },
                 select: {
                   id: true,
-                  isOwner: true,
-                  teacherProfile: { select: { id: true, profileId: true } },
-                  studentProfile: { select: { id: true, profileId: true } },
+                  role: true,
+                  isOrgOwner: true,
                   organization: { select: { name: true } },
                 },
               },
@@ -145,14 +147,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const { toast, headers: toastHeaders } = await getToast(request);
   const navCookie = (await navStateCookie.parse(cookieHeader)) || {};
-  const profileId = await getProfileId(request);
-  const profile =
-    user?.profiles.find((p) => p.id === profileId) ?? user?.profiles[0];
+  const membershipId = await getMembershipId(request);
+  const membership =
+    user?.memberships.find((m) => m.id === membershipId) ??
+    user?.memberships[0];
   const impersonation = await getImpersonationState(request);
+  const { getStudentPreviewState } = await import(
+    './utils/student-preview.server.ts'
+  );
+  const studentPreview = await getStudentPreviewState(request);
+  const bannerWarning = request.url.includes('staging')
+    ? ('staging' as const)
+    : request.url.includes('localhost')
+      ? ('localhost' as const)
+      : null;
+  const localDevQuickLoginEnabled =
+    isLocalDevAuthEnabled() && !userId && url.pathname === '/auth/login';
 
   return data(
     {
-      user: { ...user, selectedProfile: profile },
+      user: { ...user, selectedMembership: membership },
       requestInfo: {
         hints: getHints(request),
         origin: getDomainUrl(request),
@@ -162,12 +176,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       ENV: getEnv(),
-      bannerWarning: request.url.includes('staging')
-        ? 'staging'
-        : request.url.includes('localhost')
-          ? 'localhost'
-          : null,
+      bannerWarning,
+      localDevQuickLogin: {
+        enabled: localDevQuickLoginEnabled,
+        options: localDevQuickLoginEnabled ? getLocalDevLoginOptions() : [],
+      },
       impersonation,
+      studentPreview,
       toast,
     },
     {
@@ -283,9 +298,9 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
         posthog.identify(data.user.id, {
           email: data.user.email,
           name: data.user.name,
-          profile_id: data.user.selectedProfile?.id,
+          membership_id: data.user.selectedMembership?.id,
           is_admin: data.user.isAdmin,
-          is_owner: data.user.selectedProfile?.isOwner,
+          is_owner: data.user.selectedMembership?.isOrgOwner,
           ...omit(data.user, ['id', 'email', 'name']),
         });
       }
@@ -294,24 +309,11 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
 
   const appChildren = (
     <Document nonce={nonce} env={data.ENV}>
-      {data.bannerWarning === 'staging' ? (
-        <Tooltip
-          text="This is a staging environment. Do not use real data."
-          delayDuration={0}
-        >
-          <div className="fixed bottom-4 right-4 z-30 rounded-full bg-yellow-400 p-3 shadow">
-            <AlertTriangle size={26} />
-          </div>
-        </Tooltip>
-      ) : data.bannerWarning === 'localhost' ? (
-        <Tooltip
-          text="This is a local environment. Do not use real data."
-          delayDuration={0}
-        >
-          <div className="fixed bottom-4 right-4 z-30 rounded-full bg-red-300 p-3 shadow">
-            <FlaskConical size={26} />
-          </div>
-        </Tooltip>
+      {data.bannerWarning ? (
+        <LocalDevEnvironmentBar
+          bannerWarning={data.bannerWarning}
+          localDevQuickLogin={data.localDevQuickLogin}
+        />
       ) : null}
       <GlobalLoading />
       <div className="flex h-screen min-h-screen flex-col justify-between">

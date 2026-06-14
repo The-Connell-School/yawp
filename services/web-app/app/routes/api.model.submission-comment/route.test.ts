@@ -7,10 +7,10 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireUserId, requireProfile }));
+mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 
 const { action } = await import('./route');
 
@@ -20,10 +20,10 @@ describe('api.model.submission-comment', () => {
     prisma.submission.findFirst.mockReset();
     prisma.submissionComment.create.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({ id: 'profile-1' });
+    requireMembership.mockResolvedValue({ id: 'profile-1' });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: false });
   });
 

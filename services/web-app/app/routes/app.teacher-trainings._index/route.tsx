@@ -7,18 +7,18 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { prisma } from '~/utils/db.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     throw new Response('Teacher profile required', { status: 403 });
   }
 
-  const assignmentCounts = await prisma.teacherProfile.findUnique({
-    where: { id: profile.teacherProfile.id },
+  const assignmentCounts = await prisma.orgMembership.findUnique({
+    where: { id: profile.id, role: 'TEACHER' },
     select: { _count: { select: { assignedTeacherTrainings: true } } },
   });
   const hasAssignedCourses =
@@ -26,7 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const teacherTrainings = await prisma.teacherTraining.findMany({
     where: hasAssignedCourses
-      ? { assignedTeachers: { some: { id: profile.teacherProfile.id } } }
+      ? { assignedTeachers: { some: { id: profile.id } } }
       : undefined,
     include: {
       teacherTrainingModules: {

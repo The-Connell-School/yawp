@@ -80,15 +80,19 @@ ssh -i "${YAWP_PROD_BASTION_KEY}" -o StrictHostKeyChecking=accept-new \
   | tee "${DUMP_FILE}" | pg_dump_plain_pipe_to_psql "${DATABASE_URL}"
 
 echo "Applying Prisma migrations newer than the dump..."
-(
-  cd "${ROOT}/packages/prisma"
-  DATABASE_URL="${DATABASE_URL}" bunx prisma migrate deploy
-)
+if [[ -z "${YAWP_SKIP_MIGRATE:-}" ]]; then
+  (
+    cd "${ROOT}/packages/prisma"
+    DATABASE_URL="${DATABASE_URL}" bunx prisma migrate deploy
+  )
 
-echo "Generating Prisma client..."
-(
-  cd "${ROOT}/packages/prisma"
-  bunx prisma generate
-)
+  echo "Generating Prisma client..."
+  (
+    cd "${ROOT}/packages/prisma"
+    bunx prisma generate
+  )
+else
+  echo "Skipping migrate deploy (YAWP_SKIP_MIGRATE is set)."
+fi
 
 echo "Done. Snapshot: ${DUMP_FILE}"

@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -8,7 +8,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const membership = await requireMembership(request, userId);
 
   const body = await request.json();
   const { documentId, textLength, content } = body;
@@ -17,11 +17,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Invalid request' }, { status: 400 });
   }
 
-  // Verify the document belongs to the user
   const document = await prisma.document.findFirst({
     where: {
       id: documentId,
-      profileId: profile.id,
+      membershipId: membership.id,
     },
   });
 
@@ -29,11 +28,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'Document not found' }, { status: 404 });
   }
 
-  // Create the paste alert
   await prisma.pasteAlert.create({
     data: {
       documentId,
-      profileId: profile.id,
+      membershipId: membership.id,
       textLength,
       content: content || null,
     },
@@ -41,6 +39,3 @@ export async function action({ request }: ActionFunctionArgs) {
 
   return dataResponse({ success: true });
 }
-
-
-

@@ -10,9 +10,8 @@ const prisma = {
   assignment: {
     findUnique: mock(),
   },
-  studentProfile: {
+  classAssignment: {
     findUnique: mock(),
-    create: mock(),
   },
   document: {
     create: mock(),
@@ -28,8 +27,7 @@ describe('createDocumentForAssignmentType', () => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentModule.findMany.mockReset();
     prisma.assignment.findUnique.mockReset();
-    prisma.studentProfile.findUnique.mockReset();
-    prisma.studentProfile.create.mockReset();
+    prisma.classAssignment.findUnique.mockReset();
     prisma.document.create.mockReset();
 
     prisma.assignmentType.findFirst.mockResolvedValue({
@@ -38,11 +36,36 @@ describe('createDocumentForAssignmentType', () => {
     prisma.assignment.findUnique.mockResolvedValue({
       assignmentTypeId: 'assignment-type-1',
     });
-    prisma.studentProfile.findUnique.mockResolvedValue({
-      id: 'student-profile-1',
-      classes: [],
-    });
     prisma.document.create.mockResolvedValue({ id: 'document-1' });
+  });
+
+  test('links classAssignmentId when starting from a deployed assignment', async () => {
+    prisma.classAssignment.findUnique.mockResolvedValue({
+      assignmentId: 'assignment-1',
+      assignment: { assignmentTypeId: 'assignment-type-1' },
+    });
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+
+    await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      assignmentId: 'assignment-1',
+      classAssignmentId: 'class-assignment-1',
+    });
+
+    expect(prisma.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          assignmentId: 'assignment-1',
+          classAssignmentId: 'class-assignment-1',
+        }),
+      })
+    );
   });
 
   test('creates one module session for every active assignment module', async () => {
@@ -58,7 +81,7 @@ describe('createDocumentForAssignmentType', () => {
     ]);
 
     await createDocumentForAssignmentType({
-      profileId: 'profile-1',
+      membershipId: 'membership-1',
       assignmentTypeId: 'assignment-type-1',
       assignmentId: 'assignment-1',
     });
@@ -92,7 +115,7 @@ describe('createDocumentForAssignmentType', () => {
 
     await expect(
       createDocumentForAssignmentType({
-        profileId: 'profile-1',
+        membershipId: 'membership-1',
         assignmentTypeId: 'assignment-type-1',
       })
     ).rejects.toThrow('AssignmentType is not available.');

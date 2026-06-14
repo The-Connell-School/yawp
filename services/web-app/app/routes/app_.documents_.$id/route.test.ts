@@ -46,7 +46,7 @@ const prisma = {
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const requireMutableRequest = mock();
 const redirectWithToast = mock();
 const isAssignmentsEnabledForContext = mock();
@@ -55,7 +55,7 @@ const isDocumentSubmissionEnabledForScope = mock();
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
   requireMutableRequest,
 }));
 mock.module('~/utils/toast.server', () => ({
@@ -173,8 +173,9 @@ function makeDocument({
       title: 'Revolutionary Ideals DBQ',
       prompt: apHistorySnapshot.prompt,
       tutorContext: 'Use AP History DBQ expectations.',
-      dueDate: new Date('2026-06-01T00:00:00.000Z'),
       ...(includeSnapshot ? { apHistorySnapshot } : {}),
+    },
+    classAssignment: {
       class: {
         id: 'class-1',
         schoolId: 'school-1',
@@ -216,7 +217,7 @@ describe('app_.documents_.$id loader', () => {
     prisma.document.findFirst.mockReset();
     prisma.documentRevision.create.mockReset();
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     requireMutableRequest.mockReset();
     redirectWithToast.mockReset();
     isAssignmentsEnabledForContext.mockReset();
@@ -224,7 +225,7 @@ describe('app_.documents_.$id loader', () => {
 
     requireUserId.mockResolvedValue('user-1');
     requireMutableRequest.mockResolvedValue(undefined);
-    requireProfile.mockResolvedValue({
+    requireMembership.mockResolvedValue({
       id: 'profile-1',
       teacherProfile: null,
     });

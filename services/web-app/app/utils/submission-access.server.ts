@@ -3,7 +3,7 @@ import { prisma } from '~/utils/db.server';
 /** Owner, teacher of student's class, or admin — same visibility as submission page loader. */
 export async function findSubmissionForTitleEdit(params: {
   submissionId: string;
-  profileId: string;
+  membershipId: string;
   isAdmin: boolean;
 }) {
   return prisma.submission.findFirst({
@@ -13,13 +13,13 @@ export async function findSubmissionForTitleEdit(params: {
         is: {
           deletedAt: null,
           OR: [
-            { profile: { id: params.profileId } },
+            { membershipId: params.membershipId },
             {
-              studentProfile: {
-                classes: {
+              membership: {
+                classesAsStudent: {
                   some: {
                     teachers: {
-                      some: { profileId: params.profileId },
+                      some: { id: params.membershipId },
                     },
                   },
                 },

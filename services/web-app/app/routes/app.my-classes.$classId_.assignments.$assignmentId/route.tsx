@@ -6,7 +6,7 @@ import {
   useNavigate,
 } from 'react-router';
 import { useState, useCallback, useMemo } from 'react';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
@@ -22,7 +22,6 @@ import {
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
-import { formatDateOnly } from '~/utils/date-only';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 
@@ -45,15 +44,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
 
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  if (!profile.teacherProfile) {
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== "TEACHER") {
     throw new Response('Not Found', { status: 404 });
   }
 
   const klass = await prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
     },
     select: {
       id: true,
@@ -64,18 +63,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!klass) throw new Response('Not Found', { status: 404 });
 
-  const assignment = await prisma.assignment.findFirst({
-    where: { id: assignmentId, classId },
+  const classAssignment = await prisma.classAssignment.findFirst({
+    where: {
+      assignmentId,
+      classId,
+      class: { teachers: { some: { id: profile.id } } },
+    },
     select: {
       id: true,
-      title: true,
-      dueDate: true,
-      submitForGrade: true,
-      pointValue: true,
-      assignmentType: { select: { title: true } },
+      assignment: {
+        select: {
+          id: true,
+          title: true,
+          submitForGrade: true,
+          pointValue: true,
+          assignmentType: { select: { title: true } },
+        },
+      },
     },
   });
-  if (!assignment) throw new Response('Not Found', { status: 404 });
+  if (!classAssignment) throw new Response('Not Found', { status: 404 });
+  const assignment = classAssignment.assignment;
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
@@ -87,7 +95,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     {
       schoolIds: [klass.school?.id],
       organizationIds: [klass.school?.organizationId],
-      teacherProfileIds: [profile.teacherProfile.id],
+      teacherProfileIds: [profile.id],
       classIds: [klass.id],
     }
   );
@@ -97,7 +105,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ? await prisma.submission.findMany({
           where: {
             document: {
-              assignmentId,
+              classAssignmentId: classAssignment.id,
               deletedAt: null,
             },
             ...(status === 'submitted'
@@ -119,7 +127,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               select: {
                 id: true,
                 title: true,
-                profile: {
+                membership: {
                   select: {
                     id: true,
                     user: { select: { name: true, email: true } },
@@ -136,7 +144,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     status === 'in-progress'
       ? await prisma.document.findMany({
           where: {
-            assignmentId,
+            classAssignmentId: classAssignment.id,
             deletedAt: null,
             archivedAt: null,
             submissions: { none: {} },
@@ -145,7 +153,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             id: true,
             title: true,
             updatedAt: true,
-            profile: {
+            membership: {
               select: {
                 id: true,
                 user: { select: { name: true, email: true } },
@@ -285,9 +293,11 @@ export default function AssignmentSubmissionsRoute() {
     navigate(`?status=${newStatus}`);
   };
 
+  // 'submitted' stays as the URL param for old links; the teacher-facing
+  // lifecycle calls this state Needs Grading.
   const statusLabel: Record<StatusFilter, string> = {
     'in-progress': 'In Progress',
-    submitted: 'Submitted',
+    submitted: 'Needs Grading',
     graded: 'Graded',
     released: 'Released',
   };
@@ -325,9 +335,6 @@ export default function AssignmentSubmissionsRoute() {
           </h3>
           <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
             <span>{assignment.assignmentType.title}</span>
-            {assignment.dueDate && (
-              <span>Due {formatDateOnly(assignment.dueDate)}</span>
-            )}
           </div>
         </div>
 
@@ -395,7 +402,7 @@ export default function AssignmentSubmissionsRoute() {
                   {inProgressDocuments.map((doc) => (
                     <TableRow key={doc.id}>
                       <TableCell>
-                        {doc.profile.user.name ?? doc.profile.user.email}
+                        {doc.membership.user.name ?? doc.membership.user.email}
                       </TableCell>
                       <TableCell>
                         <Link
@@ -448,7 +455,7 @@ export default function AssignmentSubmissionsRoute() {
                     </TableHead>
                     <TableHead>Student</TableHead>
                     <TableHead>Submission</TableHead>
-                    <TableHead>Submitted</TableHead>
+                    <TableHead>Submitted at</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -472,8 +479,8 @@ export default function AssignmentSubmissionsRoute() {
                           />
                         </TableCell>
                         <TableCell>
-                          {sub.document.profile.user.name ??
-                            sub.document.profile.user.email}
+                          {sub.document.membership.user.name ??
+                            sub.document.membership.user.email}
                         </TableCell>
                         <TableCell>
                           <Link
@@ -585,8 +592,8 @@ export default function AssignmentSubmissionsRoute() {
                         />
                       </TableCell>
                       <TableCell>
-                        {sub.document.profile.user.name ??
-                          sub.document.profile.user.email}
+                        {sub.document.membership.user.name ??
+                          sub.document.membership.user.email}
                       </TableCell>
                       <TableCell>
                         <Link
@@ -641,8 +648,8 @@ export default function AssignmentSubmissionsRoute() {
                   {submissions.map((sub) => (
                     <TableRow key={sub.id}>
                       <TableCell>
-                        {sub.document.profile.user.name ??
-                          sub.document.profile.user.email}
+                        {sub.document.membership.user.name ??
+                          sub.document.membership.user.email}
                       </TableCell>
                       <TableCell>
                         <Link

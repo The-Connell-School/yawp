@@ -42,7 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
     prisma.document.findUnique({
       where: { id: data.documentId },
       select: {
-        studentProfileId: true,
+        membershipId: true,
       },
     }),
     prisma.assignmentModule.findUnique({
@@ -60,9 +60,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse({ error: 'No document found.' }, { status: 404 });
   }
 
-  if (!document.studentProfileId) {
+  if (!document.membershipId) {
     return dataResponse(
-      { error: 'No student profile found.' },
+      { error: 'No student membership found.' },
       { status: 404 }
     );
   }

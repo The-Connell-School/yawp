@@ -24,7 +24,7 @@ import { invitationCookieStorage } from '~/cookie-session-storages/invitation.se
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { FormInput } from '~/components/rvf-forms/form-input.tsx';
 import { FormSelect } from '~/components/rvf-forms/form-select.tsx';
-import { setProfileId } from '~/cookies/profile-id.server.ts';
+import { setMembershipId } from '~/cookies/membership-id.server.ts';
 import { normalizeEmail } from '~/utils/normalize-email';
 
 export const Schema = z
@@ -87,7 +87,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       period: true,
       school: { select: { name: true, organizationId: true } },
       teachers: {
-        select: { profile: { select: { user: { select: { name: true } } } } },
+        select: { user: { select: { name: true } } },
       },
     },
     orderBy: [
@@ -131,7 +131,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const hashedPassword = await getPasswordHash(data.password);
 
-  const profile = await prisma.profile.create({
+  const membership = await prisma.orgMembership.create({
     data: {
       user: {
         create: {
@@ -141,14 +141,15 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
       organization: { connect: { id: klass.school.organizationId } },
-      studentProfile: { create: { classes: { connect: { id: klass.id } } } },
+      role: 'STUDENT',
+      classesAsStudent: { connect: { id: klass.id } },
     },
   });
 
   const session = await prisma.session.create({
     data: {
       expirationDate: getSessionExpirationDate(),
-      user: { connect: { id: profile.userId } },
+      user: { connect: { id: membership.userId } },
     },
     select: { id: true, expirationDate: true },
   });
@@ -169,7 +170,7 @@ export async function action({ request }: ActionFunctionArgs) {
             expires: session.expirationDate,
           }),
           await invitationCookieStorage.destroySession(invitationCookie),
-          await setProfileId(profile.id),
+          await setMembershipId(membership.id),
         ].join(';'),
       },
     }
@@ -221,7 +222,7 @@ export default function Route() {
                   value: klass.id,
                   label: `${klass.school.name} • ${klass.schoolYear} • Grade ${klass.grade} • Period ${klass.period} • ${
                     klass.teachers
-                      .map((t) => t.profile.user.name)
+                      .map((t) => t.user.name)
                       .filter(Boolean)
                       .join(', ') || 'Teacher'
                   }`,

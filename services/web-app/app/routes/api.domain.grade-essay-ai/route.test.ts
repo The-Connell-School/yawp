@@ -84,16 +84,18 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     gradedAt: null,
     document: {
       id: 'doc-1',
-      profileId: 'student-profile-1',
+      membershipId: 'student-profile-1',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentType: {
         id: 'assignment-type-legacy',
         kind: null,
         title: 'Critical Essay',
       },
-      assignment: { class: { schoolId: 'school-1' } },
-      studentProfile: { classes: [] },
-      profile: { user: { name: 'Jordan Student' } },
+      classAssignment: { class: { schoolId: 'school-1' } },
+      membership: {
+        classesAsStudent: [],
+        user: { name: 'Jordan Student' },
+      },
     },
     ...overrides,
   };
@@ -181,7 +183,7 @@ describe('api.domain.grade-essay-ai', () => {
     redirectWithToast.mockReset();
 
     getGradingActor.mockResolvedValue({
-      profileId: 'teacher-profile-1',
+      membershipId: 'teacher-1',
       teacherProfileId: 'teacher-1',
       isTeacher: true,
       isAdmin: false,
@@ -272,7 +274,7 @@ describe('api.domain.grade-essay-ai', () => {
     buildTeacherClassWhere.mockReturnValue({
       assignment: {
         class: {
-          teachers: { some: { profileId: 'teacher-profile-1' } },
+          teachers: { some: { id: 'teacher-profile-1' } },
         },
       },
     });
@@ -298,7 +300,7 @@ describe('api.domain.grade-essay-ai', () => {
               deletedAt: null,
               assignment: {
                 class: {
-                  teachers: { some: { profileId: 'teacher-profile-1' } },
+                  teachers: { some: { id: 'teacher-profile-1' } },
                 },
               },
             },
@@ -314,10 +316,10 @@ describe('api.domain.grade-essay-ai', () => {
         id: 'legacy-sub-1',
         document: {
           id: 'legacy-doc-1',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignment: null,
-          studentProfile: {
-            classes: [
+          membership: {
+            classesAsStudent: [
               {
                 id: 'legacy-class-1',
                 schoolId: 'scranton-prep-school',
@@ -325,8 +327,8 @@ describe('api.domain.grade-essay-ai', () => {
                 teachers: [{ id: 'teacher-1' }],
               },
             ],
+            user: { name: 'Jordan Student' },
           },
-          profile: { user: { name: 'Jordan Student' } },
         },
       })
     );
@@ -480,16 +482,18 @@ describe('api.domain.grade-essay-ai', () => {
         id: 'sub-act',
         document: {
           id: 'doc-act',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignmentTypeId: 'assignment-type-act',
           assignmentType: {
             id: 'assignment-type-act',
             kind: 'act_writing',
             title: 'Renamed ACT demo title',
           },
-          assignment: { class: { schoolId: 'school-1' } },
-          studentProfile: { classes: [] },
-          profile: { user: { name: 'Jordan Student' } },
+          classAssignment: { class: { schoolId: 'school-1' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
         },
       })
     );
@@ -625,13 +629,15 @@ describe('api.domain.grade-essay-ai', () => {
         text: 'Reconstruction changed political rights through amendments and federal enforcement.',
         document: {
           id: 'ap-doc-1',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignment: {
             apHistorySnapshot: dbqSnapshot,
             class: { schoolId: 'school-1' },
           },
-          studentProfile: { classes: [] },
-          profile: { user: { name: 'Jordan Student' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
         },
       })
     );
@@ -780,13 +786,15 @@ describe('api.domain.grade-essay-ai', () => {
         text: 'The Market Revolution changed society through wage labor, transportation, and regional specialization.',
         document: {
           id: 'ap-leq-doc-1',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignment: {
             apHistorySnapshot: leqSnapshot,
             class: { schoolId: 'school-1' },
           },
-          studentProfile: { classes: [] },
-          profile: { user: { name: 'Jordan Student' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
         },
       })
     );
@@ -857,13 +865,15 @@ describe('api.domain.grade-essay-ai', () => {
         text: 'Reconstruction changed political rights through amendments.',
         document: {
           id: 'ap-doc-malformed',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignment: {
             apHistorySnapshot: dbqSnapshot,
             class: { schoolId: 'school-1' },
           },
-          studentProfile: { classes: [] },
-          profile: { user: { name: 'Jordan Student' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
         },
       })
     );
@@ -918,13 +928,15 @@ describe('api.domain.grade-essay-ai', () => {
         text: 'Reconstruction changed political rights through amendments.',
         document: {
           id: 'ap-doc-db-failure',
-          profileId: 'student-profile-1',
+          membershipId: 'student-profile-1',
           assignment: {
             apHistorySnapshot: dbqSnapshot,
             class: { schoolId: 'school-1' },
           },
-          studentProfile: { classes: [] },
-          profile: { user: { name: 'Jordan Student' } },
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Jordan Student' },
+          },
         },
       })
     );

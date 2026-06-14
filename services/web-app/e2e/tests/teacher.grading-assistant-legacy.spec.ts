@@ -1,5 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
+import { createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('Teacher grading assistant legacy flow', () => {
   test('keeps the existing unlinked submission grading assistant button working', async ({
@@ -95,11 +96,6 @@ test.describe.serial('Teacher grading assistant legacy flow', () => {
     let actSubmissionId: string | null = null;
 
     try {
-      const studentProfile = await prisma.studentProfile.findUniqueOrThrow({
-        where: { profileId: e2eContext.profileId },
-        select: { id: true },
-      });
-
       const actAssignmentType = await prisma.assignmentType.create({
         data: {
           title: `ACT Writing E2E ${suffix}`,
@@ -123,16 +119,15 @@ test.describe.serial('Teacher grading assistant legacy flow', () => {
         },
       });
 
-      const actAssignment = await prisma.assignment.create({
-        data: {
+      const { assignment: actAssignment, classAssignment: actClassAssignment } =
+        await createDeployedAssignment({
+          prisma,
           classId: e2eContext.classId,
           assignmentTypeId: actAssignmentType.id,
           title: `ACT Writing E2E Assignment ${suffix}`,
           prompt:
             'Machines are changing public life. Write an ACT essay that evaluates three perspectives.',
-        },
-        select: { id: true },
-      });
+        });
       actAssignmentId = actAssignment.id;
 
       const actEssay =
@@ -143,10 +138,10 @@ test.describe.serial('Teacher grading assistant legacy flow', () => {
           text: actEssay,
           html: `<p>${actEssay}</p>`,
           revision: 1,
-          profileId: e2eContext.profileId,
-          studentProfileId: studentProfile.id,
+          membershipId: e2eContext.membershipId,
           assignmentTypeId: actAssignmentType.id,
           assignmentId: actAssignment.id,
+          classAssignmentId: actClassAssignment.id,
         },
         select: { id: true },
       });

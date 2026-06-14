@@ -21,7 +21,6 @@ const {
   isAssignmentsEnabledForContext,
   isAssignmentsEnabledForOrganization,
   isDocumentSubmissionEnabledForScope,
-  isReleasedGradesOrganizationEnabledForOrganization,
   isTargetedFeatureFlagEnabled,
   setFeatureFlagBoolean,
   setTargetedFeatureFlagTarget,
@@ -840,50 +839,6 @@ describe('isDocumentSubmissionEnabledForScope', () => {
   });
 });
 
-describe('isReleasedGradesOrganizationEnabledForOrganization', () => {
-  beforeEach(() => {
-    prisma.setting.findUnique.mockReset();
-    prisma.setting.upsert.mockReset();
-  });
-
-  test('returns false when flag setting absent', async () => {
-    prisma.setting.findUnique.mockResolvedValue(null);
-    const result =
-      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
-    expect(result).toBe(false);
-  });
-
-  test('returns true when org id is in the allowlist setting value', async () => {
-    prisma.setting.findUnique.mockResolvedValue({
-      value: 'org-1,org-2',
-      valueType: 'string',
-    });
-    const result =
-      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
-    expect(result).toBe(true);
-  });
-
-  test('returns false when org id not in allowlist', async () => {
-    prisma.setting.findUnique.mockResolvedValue({
-      value: 'org-2',
-      valueType: 'string',
-    });
-    const result =
-      await isReleasedGradesOrganizationEnabledForOrganization('org-1');
-    expect(result).toBe(false);
-  });
-
-  test('returns false when organizationId is null', async () => {
-    prisma.setting.findUnique.mockResolvedValue({
-      value: 'org-1',
-      valueType: 'string',
-    });
-    const result =
-      await isReleasedGradesOrganizationEnabledForOrganization(null);
-    expect(result).toBe(false);
-  });
-});
-
 describe('targeted feature flags', () => {
   beforeEach(() => {
     prisma.setting.findUnique.mockReset();
@@ -917,26 +872,20 @@ describe('targeted feature flags', () => {
     });
     prisma.setting.upsert.mockResolvedValue({});
 
-    const result = await setTargetedFeatureFlagTarget(
-      'releasedGradesOrganization',
-      'org-2',
-      true
-    );
+    const result = await setTargetedFeatureFlagTarget('assignments', 'org-2', true);
 
     expect(result).toBe('org-1,org-2');
     expect(prisma.setting.upsert).toHaveBeenCalledWith({
-      where: { name: 'released_grades_organization_enabled_org_ids' },
+      where: { name: 'assignments_enabled_org_ids' },
       create: {
-        id: 'released_grades_organization_enabled_org_ids',
-        name: 'released_grades_organization_enabled_org_ids',
-        description:
-          'Organization IDs allowed to use released grades organization view',
+        id: 'assignments_enabled_org_ids',
+        name: 'assignments_enabled_org_ids',
+        description: 'Organization IDs allowed to use assignments',
         value: 'org-1,org-2',
         valueType: 'string',
       },
       update: {
-        description:
-          'Organization IDs allowed to use released grades organization view',
+        description: 'Organization IDs allowed to use assignments',
         value: 'org-1,org-2',
         valueType: 'string',
       },

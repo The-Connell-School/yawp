@@ -64,7 +64,7 @@ test.describe.serial('Admin teacher assignment type controls', () => {
               featureKey_targetKind_targetId: {
                 featureKey: `assignment_type:${assignmentType.id}`,
                 targetKind: 'teacher',
-                targetId: e2eContext.teacherProfileId,
+                targetId: e2eContext.teacherMembershipId,
               },
             },
             select: { enabled: true },
@@ -98,16 +98,18 @@ test.describe.serial('Admin teacher assignment type controls', () => {
 
       await expect
         .poll(async () => {
-          const assignment = await prisma.assignment.findFirst({
+          const deployment = await prisma.classAssignment.findFirst({
             where: {
               classId: e2eContext.classId,
-              assignmentTypeId: assignmentType.id,
-              title: createdAssignmentTitle,
-              prompt: createdAssignmentPrompt,
+              assignment: {
+                assignmentTypeId: assignmentType.id,
+                title: createdAssignmentTitle,
+                prompt: createdAssignmentPrompt,
+              },
             },
             select: { id: true },
           });
-          return Boolean(assignment);
+          return Boolean(deployment);
         })
         .toBe(true);
 
@@ -145,7 +147,7 @@ test.describe.serial('Admin teacher assignment type controls', () => {
         peerTeacher.teacherEmail,
         peerTeacher.studentEmail,
       ];
-      await prisma.profile.deleteMany({
+      await prisma.orgMembership.deleteMany({
         where: {
           user: {
             email: {

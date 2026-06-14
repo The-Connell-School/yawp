@@ -35,7 +35,10 @@
     "infra:production:apply": "bun export-env && bun run --cwd infra terraform apply -var-file=envs/variables/production.tfvars",
     "github:preview-config": "bash scripts/github-preview-config.sh",
     "db:restore-local-from-s3": "bash scripts/restore-local-from-s3.sh",
+    "db:seed-local-dev": "bun run --cwd packages/prisma seed-local-dev",
+    "db:fixtures-export-prod-fidelity": "bun run --cwd packages/prisma fixtures:export-prod-fidelity",
     "db:sync-local-from-production": "bash scripts/sync-production-db-to-local.sh",
-    "db:practice-full-rollback": "bash scripts/practice-full-rollback.sh"
+    "db:practice-full-rollback": "bash scripts/practice-full-rollback.sh",
+    "db:staging-org-membership-rehearsal": "bash scripts/staging-org-membership-rehearsal.sh"
   }
 }

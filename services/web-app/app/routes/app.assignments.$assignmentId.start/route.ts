@@ -5,7 +5,7 @@ import {
   createDocumentForAssignmentType,
   DocumentCreationError,
 } from '~/domain/documents.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
@@ -14,35 +14,40 @@ const POST = z.object({});
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.studentProfile) {
+  if (profile.role !== 'STUDENT') {
     return redirectWithToast('/app', {
       type: 'error',
       description: 'Only students can start assignments.',
     });
   }
 
-  const { error, data } = await parseFormData(request, POST);
+  const { error } = await parseFormData(request, POST);
   if (error) return validationError(error);
 
-  const assignment = await prisma.assignment.findFirst({
+  const classAssignment = await prisma.classAssignment.findFirst({
     where: {
-      id: params.assignmentId,
+      assignmentId: params.assignmentId,
       class: {
         students: {
           some: {
-            id: profile.studentProfile.id,
+            id: profile.id,
           },
         },
       },
     },
     select: {
       id: true,
-      assignmentTypeId: true,
-      classId: true,
+      assignmentId: true,
+      assignment: {
+        select: {
+          assignmentTypeId: true,
+        },
+      },
       class: {
         select: {
+          id: true,
           school: { select: { id: true, organizationId: true } },
           teachers: { select: { id: true } },
         },
@@ -50,7 +55,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
   });
 
-  if (!assignment) {
+  if (!classAssignment) {
     return redirectWithToast('/app?tab=assignments', {
       type: 'error',
       description: 'Assignment not found.',
@@ -59,11 +64,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const assignmentsEnabled = await isAssignmentsEnabledForContext({
     organizationId:
-      assignment.class.school.organizationId ?? profile.organization.id,
-    schoolId: assignment.class.school.id,
+      classAssignment.class.school.organizationId ?? profile.organization.id,
+    schoolId: classAssignment.class.school.id,
     teacherProfileId: null,
-    teacherProfileIds: assignment.class.teachers.map((teacher) => teacher.id),
-    classIds: [assignment.classId],
+    teacherProfileIds: classAssignment.class.teachers.map((teacher) => teacher.id),
+    classIds: [classAssignment.class.id],
   });
   if (!assignmentsEnabled) {
     return redirectWithToast('/app', {
@@ -75,9 +80,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   let documentId = '';
   try {
     const created = await createDocumentForAssignmentType({
-      profileId: profile.id,
-      assignmentTypeId: assignment.assignmentTypeId,
-      assignmentId: assignment.id,
+      membershipId: profile.id,
+      assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+      assignmentId: classAssignment.assignmentId,
+      classAssignmentId: classAssignment.id,
     });
     documentId = created.documentId;
   } catch (creationError) {

@@ -48,15 +48,15 @@ export async function action({ request }: ActionFunctionArgs) {
       const submissions = await tx.submission.findMany({
         where: {
           id: { in: requestedSubmissionIds },
-          document: { is: { profileId: { not: actor.profileId } } },
-          ...(actor.isAdmin ? {} : { gradedById: actor.profileId }),
+          document: { is: { membershipId: { not: actor.membershipId } } },
+          ...(actor.isAdmin ? {} : { gradedByMembershipId: actor.membershipId }),
           releasedAt: null,
         },
         select: {
           id: true,
           document: {
             select: {
-              assignment: {
+              classAssignment: {
                 select: {
                   class: {
                     select: {
@@ -68,9 +68,9 @@ export async function action({ request }: ActionFunctionArgs) {
                   },
                 },
               },
-              studentProfile: {
+              membership: {
                 select: {
-                  classes: {
+                  classesAsStudent: {
                     select: {
                       id: true,
                       schoolId: true,

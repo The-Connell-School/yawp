@@ -10,7 +10,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { prisma } from '~/utils/db.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import {
   Table,
   TableBody,
@@ -43,15 +43,15 @@ import { normalizeEmail } from '~/utils/normalize-email';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
-  const profile = await requireProfile(request, currentUser.id);
+  const profile = await requireMembership(request, currentUser.id);
 
   const [organization, invitations, totalOrganizations, assignmentTypes] =
     await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
       include: {
-        profiles: {
-          where: { isOwner: true },
+        memberships: {
+          where: { isOrgOwner: true },
           include: { user: { select: { name: true, email: true } } },
         },
         assignmentTypeAssignments: {
@@ -99,7 +99,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -345,7 +345,9 @@ export default function OrganizationRoute() {
   const [isEditSheetOpen, setIsEditSheetOpen] = React.useState(false);
   const [isInviteSheetOpen, setIsInviteSheetOpen] = React.useState(false);
 
-  const owners = organization.profiles.filter((profile) => profile.isOwner);
+  const owners = organization.memberships.filter(
+    (membership) => membership.isOrgOwner
+  );
   const assignedAssignmentTypeIds = new Set(
     organization.assignmentTypeAssignments.map(
       (assignment) => assignment.assignmentType.id

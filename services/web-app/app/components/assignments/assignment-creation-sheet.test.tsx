@@ -170,7 +170,6 @@ describe('AssignmentCreationSheetContent', () => {
       expectText('Prompt');
       expectText('Submit for grade');
       expectText('Point value');
-      expectText('Due Date (optional)');
       expectNoText('Tutor Context');
 
       const form = document.querySelector('form');
@@ -188,6 +187,21 @@ describe('AssignmentCreationSheetContent', () => {
       expect(inputByName('pointValue').value).toBe('100');
     }
   );
+
+  it('preselects but does not lock assignment type from dashboard quick create', () => {
+    root = renderSheet({
+      entryPoint: 'dashboard',
+      initialAssignmentTypeId: 'type-2',
+    }).root;
+
+    expect(inputByName('assignmentTypeId').value).toBe('type-2');
+
+    const assignmentTypeTrigger = document.querySelector(
+      'button[role="combobox"]'
+    ) as HTMLButtonElement | null;
+    expect(assignmentTypeTrigger).not.toBeNull();
+    expect(assignmentTypeTrigger!.disabled).toBe(false);
+  });
 
   it('submits selected class ids for bulk create entry points', () => {
     root = renderSheet({

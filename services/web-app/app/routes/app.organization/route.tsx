@@ -13,7 +13,7 @@ import { BookOpen, Building2, Users, GraduationCap } from 'lucide-react';
 import {
   requireAdmin,
   requireOwner,
-  requireProfile,
+  requireMembership,
 } from '~/utils/auth.server';
 
 const tabs = [
@@ -43,7 +43,7 @@ export const handle: BreadcrumbHandle = { breadcrumb: 'Organization' };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
-  const profile = await requireProfile(request, user.id);
+  const profile = await requireMembership(request, user.id);
   return dataResponse({ organization: profile.organization });
 }
 

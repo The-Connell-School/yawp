@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router';
-import { Check, PlusCircle } from 'lucide-react';
+import { Check, ChevronDown, PlusCircle } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import pluralize from '~/utils/pluralize/pluralize.ts';
 import { Badge } from './ui/badge';
@@ -22,6 +22,10 @@ interface Props {
   onChange: (values: string[]) => void;
   values: string[];
   disabled?: boolean;
+  triggerClassName?: string;
+  emptySelectionLabel?: string;
+  popoverClassName?: string;
+  variant?: 'chip' | 'field';
 }
 
 export function MultiSelect({
@@ -31,22 +35,46 @@ export function MultiSelect({
   queryKey,
   values,
   disabled,
+  triggerClassName,
+  emptySelectionLabel,
+  popoverClassName,
+  variant = 'chip',
 }: Props) {
   const [searchParams] = useSearchParams();
   const selectedValues =
     values || (queryKey ? searchParams.get(queryKey)?.split(',') : []) || [];
+  const selectedOptions = options.filter((option) =>
+    selectedValues.includes(option.value)
+  );
+  const selectionSummary =
+    selectedValues.length === 0
+      ? (emptySelectionLabel ?? label)
+      : selectedValues.length > 2
+        ? `${selectedValues.length} selected`
+        : selectedOptions.map((option) => option.label).join(', ');
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="h-8 gap-1 border-dashed px-2"
+          className={cn(
+            variant === 'field'
+              ? 'h-9 w-full justify-between gap-2 rounded-md border-0 bg-background px-3 font-normal shadow-none ring-1 ring-black/5 hover:bg-muted/60'
+              : 'h-8 gap-1 border-dashed px-2',
+            triggerClassName
+          )}
           disabled={disabled}
         >
-          <PlusCircle size={16} />
-          {label}
-          {selectedValues?.length > 0 && (
+          {variant === 'chip' ? <PlusCircle size={16} /> : null}
+          {variant === 'chip' ? label : null}
+          {variant === 'field' ? (
+            <>
+              <span className="min-w-0 truncate text-left">{selectionSummary}</span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </>
+          ) : null}
+          {variant === 'chip' && selectedValues?.length > 0 ? (
             <>
               <Separator orientation="vertical" className="mx-1" />
               <Badge
@@ -64,24 +92,25 @@ export function MultiSelect({
                     {selectedValues.length} selected
                   </Badge>
                 ) : (
-                  options
-                    .filter((option) => selectedValues.includes(option.value))
-                    .map((option) => (
-                      <Badge
-                        variant="secondary"
-                        key={option.value}
-                        className="rounded-sm px-1 font-normal"
-                      >
-                        {option.label}
-                      </Badge>
-                    ))
+                  selectedOptions.map((option) => (
+                    <Badge
+                      variant="secondary"
+                      key={option.value}
+                      className="rounded-sm px-1 font-normal"
+                    >
+                      {option.label}
+                    </Badge>
+                  ))
                 )}
               </div>
             </>
-          )}
+          ) : null}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0" align="start">
+      <PopoverContent
+        className={cn('w-[min(20rem,calc(100vw-2rem))] p-0', popoverClassName)}
+        align="start"
+      >
         <Command>
           <CommandInput placeholder={`Search ${label.toLowerCase()}`} />
           <CommandList>

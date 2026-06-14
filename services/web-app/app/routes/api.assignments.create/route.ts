@@ -5,7 +5,8 @@ import {
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import {
@@ -14,32 +15,11 @@ import {
   isAssignmentsEnabledForContext,
 } from '~/utils/feature-flags.server';
 
-function parseDateOnlyToUtc(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-
-  if (
-    Number.isNaN(parsed.getTime()) ||
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
-
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
-  if (!profile.teacherProfile) {
+  if (profile.role !== "TEACHER") {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
@@ -63,15 +43,12 @@ export async function action({ request }: ActionFunctionArgs) {
   const titleRaw = formData.get('title')?.toString() ?? '';
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
-  const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const legacyTutorContext = tutorContextRaw.trim() || null;
-  const dueDateInput = dueDateRaw.trim();
-  const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
 
   if (!assignmentTypeId) {
@@ -86,17 +63,11 @@ export async function action({ request }: ActionFunctionArgs) {
       { status: 400 }
     );
   }
-  if (dueDateInput && !dueDate) {
-    return dataResponse(
-      { success: false, message: 'Due date is invalid.' },
-      { status: 400 }
-    );
-  }
 
   const classes = await prisma.class.findMany({
     where: {
       id: { in: classIds },
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
       isArchived: false,
     },
     select: {
@@ -117,7 +88,7 @@ export async function action({ request }: ActionFunctionArgs) {
       isAssignmentsEnabledForContext({
         organizationId: klass.school.organizationId,
         schoolId: klass.school.id,
-        teacherProfileId: profile.teacherProfile!.id,
+        teacherProfileId: profile.id,
         classIds: [klass.id],
       })
     )
@@ -137,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs) {
       isAssignmentCreationStandardizationEnabledForContext({
         organizationId: klass.school.organizationId,
         schoolId: klass.school.id,
-        teacherProfileId: profile.teacherProfile!.id,
+        teacherProfileId: profile.id,
         classIds: [klass.id],
       })
     )
@@ -174,7 +145,7 @@ export async function action({ request }: ActionFunctionArgs) {
     scopes: classes.map((klass) => ({
       organizationId: klass.school.organizationId,
       schoolId: klass.school.id,
-      teacherProfileId: profile.teacherProfile!.id,
+      teacherProfileId: profile.id,
     })),
   });
 
@@ -196,6 +167,8 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
+  const deployClassIds = classes.map((klass) => klass.id);
+
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     if (!apHistoryLibraryEntryId) {
       return dataResponse(
@@ -209,7 +182,7 @@ export async function action({ request }: ActionFunctionArgs) {
         isApHistoryEssayEnabledForContext({
           organizationId: klass.school.organizationId,
           schoolIds: [klass.school.id],
-          teacherProfileId: profile.teacherProfile!.id,
+          teacherProfileId: profile.id,
           classIds: [klass.id],
         })
       )
@@ -235,21 +208,18 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.assignment.createMany({
-      data: classes.map((klass) =>
-        buildAssignmentCreateInputFromApHistoryEntry({
-          classId: klass.id,
-          assignmentTypeId: assignmentType.id,
-          title,
-          dueDate,
-          entry,
-        })
-      ),
+    await createAssignmentDeployedToClasses({
+      data: buildAssignmentCreateInputFromApHistoryEntry({
+        assignmentTypeId: assignmentType.id,
+        title,
+        entry,
+      }),
+      classIds: deployClassIds,
     });
 
     return dataResponse({
       success: true,
-      message: 'Assignments created successfully.',
+      message: 'Assignment created and applied to classes.',
     });
   }
 
@@ -260,27 +230,26 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  await prisma.assignment.createMany({
-    data: classes.map((klass) => ({
-      classId: klass.id,
+  await createAssignmentDeployedToClasses({
+    data: {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
       tutorContext: assignmentCreationStandardizationEnabled
         ? null
         : legacyTutorContext,
-      dueDate,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,
             pointValue: gradingIntent.data.pointValue,
           }
         : {}),
-    })),
+    },
+    classIds: deployClassIds,
   });
 
   return dataResponse({
     success: true,
-    message: 'Assignments created successfully.',
+    message: 'Assignment created and applied to classes.',
   });
 }

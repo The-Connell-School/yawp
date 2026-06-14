@@ -16,8 +16,6 @@ export const FEATURE_FLAGS = {
   ASSIGNMENTS_ENABLED_ORG_IDS: 'assignments_enabled_org_ids',
   ASSIGNMENT_CREATION_STANDARDIZATION:
     'feature_assignment_creation_standardization',
-  RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS:
-    'released_grades_organization_enabled_org_ids',
 } as const;
 
 export const PILOT_FEATURE_KEYS = {
@@ -53,13 +51,6 @@ export const TARGETED_FEATURE_FLAGS = {
     settingName: FEATURE_FLAGS.ASSIGNMENTS_ENABLED_ORG_IDS,
     targetKind: 'organization',
     description: 'Organization IDs allowed to use assignments',
-  },
-  releasedGradesOrganization: {
-    label: 'Released grades organization',
-    settingName: FEATURE_FLAGS.RELEASED_GRADES_ORGANIZATION_ENABLED_ORG_IDS,
-    targetKind: 'organization',
-    description:
-      'Organization IDs allowed to use released grades organization view',
   },
 } as const satisfies Record<string, TargetedFeatureFlagDefinition>;
 
@@ -660,13 +651,4 @@ export async function isDocumentSubmissionEnabledForScope({
     teacherProfileIds,
     classIds,
   });
-}
-
-export async function isReleasedGradesOrganizationEnabledForOrganization(
-  organizationId: string | null | undefined
-): Promise<boolean> {
-  return isTargetedFeatureFlagEnabled(
-    'releasedGradesOrganization',
-    organizationId
-  );
 }

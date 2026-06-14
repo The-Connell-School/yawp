@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
-  assignment: { findFirst: mock() },
+  classAssignment: { findFirst: mock() },
   class: { findFirst: mock() },
   document: { findMany: mock() },
   submission: { findMany: mock() },
 };
 
 const requireUserId = mock();
-const requireProfile = mock();
+const requireMembership = mock();
 const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
-  requireProfile,
+  requireMembership,
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/feature-flags.server', () => ({
@@ -28,25 +28,30 @@ describe('assignment submissions loader', () => {
       for (const fn of Object.values(model)) fn.mockReset();
     }
     requireUserId.mockReset();
-    requireProfile.mockReset();
+    requireMembership.mockReset();
     isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
-    requireProfile.mockResolvedValue({
-      id: 'profile-1',
-      teacherProfile: { id: 'teacher-1' },
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findFirst.mockResolvedValue({
       id: 'class-1',
       grade: '9',
       period: '2',
-      school: { id: 'school-1', name: 'Tallassee High School' },
+      school: { id: 'school-1', name: 'Tallassee High School', organizationId: 'org-1' },
     });
-    prisma.assignment.findFirst.mockResolvedValue({
-      id: 'assignment-1',
-      title: 'Essay',
-      dueDate: null,
-      assignmentType: { title: 'Essay' },
+    prisma.classAssignment.findFirst.mockResolvedValue({
+      id: 'class-assignment-1',
+      assignment: {
+        id: 'assignment-1',
+        title: 'Essay',
+        submitForGrade: true,
+        pointValue: 100,
+        assignmentType: { title: 'Essay' },
+      },
     });
     prisma.submission.findMany.mockResolvedValue([
       { id: 'submission-1', title: 'Submitted essay' },

@@ -8,31 +8,32 @@ import {
   Form,
   useLoaderData,
   useSearchParams,
+  useFetcher,
   useNavigate,
-  useOutlet,
+  useRevalidator,
 } from 'react-router';
 import { Link } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server.js';
+import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { prisma } from '~/utils/db.server.js';
-import { getSubmittedPapersFilter } from '~/utils/cookies.server';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
+import {
+  createAssignmentDeployedToClasses,
+  deleteClassAssignmentDeployment,
+} from '~/utils/assignment-deployment.server';
 import {
   isAssignmentCreationStandardizationEnabledForContext,
   isAssignmentsEnabledForContext,
   isDocumentSubmissionEnabledForScope,
-  isReleasedGradesOrganizationEnabledForOrganization,
 } from '~/utils/feature-flags.server';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
-import { StudentArchiveCell } from '~/components/student-archive-cell';
+import { badgeVariants } from '~/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -42,37 +43,27 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { CaretLeftIcon } from '~/components/icons';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import {
+  ClassManageSheet,
+  type ClassManageRow,
+} from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from './release-grades-sheet';
 import {
-  FileText,
-  ClipboardCheck,
   Send,
-  User,
-  AlertCircle,
   ArrowDown,
   ArrowUp,
-  ArrowUpDown,
-  Filter,
-  X,
+  ArrowRightLeft,
+  Plus,
+  UserMinus,
+  Search,
+  ChevronRight,
 } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
-import {
-  formatAssignmentGrade,
-  formatGrade,
-} from '~/domain/grading/gradeMath';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '~/components/ui/dropdown-menu';
+import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import {
   Select,
   SelectContent,
@@ -80,35 +71,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select';
-import { AssignmentSheet } from './assignment-sheet';
-import { formatDateOnly } from '~/utils/date-only';
-import {
-  studentModuleSessionListSelect,
-  studentModuleSessionSingleSelect,
-} from './module-session-select.server';
+import { studentModuleSessionSingleSelect } from './module-session-select.server';
 import { buildClassDocumentScope } from './class-document-where.server';
+import { parseDocumentGroupMode } from './class-documents-grouping';
+import {
+  getStoredCollapsedDocumentGroups,
+  mergeClassDocumentsViewPreferences,
+  mergeStoredClassDocumentsSearchParams,
+  readClassDocumentsViewPreferences,
+  withStoredCollapsedDocumentGroups,
+} from './class-documents-view-preferences';
+import {
+  TeacherDocumentWorkPanel,
+  type TeacherDocumentWorkFilters,
+} from '~/components/teacher-document-work/teacher-document-work-panel';
+import {
+  parseDocumentWorkFilterIds,
+  serializeDocumentWorkFilterIds,
+} from '~/utils/teacher-document-work-filter-options';
+import {
+  DEFAULT_DOCUMENT_WORK_SORT,
+  type DocumentWorkSort,
+} from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-
-function parseDateOnlyToUtc(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-
-  if (
-    Number.isNaN(parsed.getTime()) ||
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month ||
-    parsed.getUTCDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
+import { ClassDetailHeader, type ClassHeaderTab, resolveClassHeaderTab } from './class-detail-header';
+import {
+  TEACHER_DOCUMENT_STATUSES,
+  hasMeaningfulGrade,
+  type TeacherDocumentStatus,
+} from '~/utils/teacher-document-status';
+import {
+  countTeacherDocumentWorkStatuses,
+  type TeacherDocumentWorkRow,
+} from '~/utils/teacher-document-work-utils';
+import { cn } from '~/utils/misc';
+import { useTable } from '~/hooks/useTable';
+import { Tooltip } from '~/components/ui/tooltip';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { SheetDescription } from '~/components/ui/sheet';
+import {
+  enrollExistingStudentInClass,
+  lookupStudentEmailForClass,
+  sendStudentClassInvite,
+} from './class-student-enrollment.server';
+import { filterClassStudentsByQuery } from './class-students-search';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -123,10 +130,26 @@ export function getDraftDisplayTitle(document: {
   return 'Untitled draft';
 }
 
+async function getClassStudentMemberships(
+  classId: string,
+  membershipIds: string[],
+  organizationId: string
+) {
+  return prisma.orgMembership.findMany({
+    where: {
+      id: { in: membershipIds },
+      role: 'STUDENT',
+      classesAsStudent: { some: { id: classId } },
+      organizationId,
+    },
+    select: { id: true },
+  });
+}
+
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  if (!profile.teacherProfile) {
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== "TEACHER") {
     return dataResponse(
       { success: false, message: 'Only teachers can manage assignments.' },
       { status: 403 }
@@ -144,7 +167,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const classAccess = await prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
     },
     select: {
       id: true,
@@ -167,7 +190,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       {
         organizationId: classAccess.school.organizationId,
         schoolId: classAccess.school.id,
-        teacherProfileId: profile.teacherProfile.id,
+        teacherProfileId: profile.id,
       },
     ],
     select: { id: true, systemKey: true },
@@ -189,7 +212,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentsEnabled = await isAssignmentsEnabledForContext({
       organizationId: classAccess.school.organizationId,
       schoolId: classAccess.school.id,
-      teacherProfileId: profile.teacherProfile.id,
+      teacherProfileId: profile.id,
       classIds: [classAccess.id],
     });
     if (!assignmentsEnabled) {
@@ -213,7 +236,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     const assignment = await prisma.assignment.findFirst({
-      where: { id: assignmentId, classId },
+      where: {
+        id: assignmentId,
+        classAssignments: { some: { classId } },
+      },
       select: { id: true },
     });
 
@@ -224,9 +250,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    await prisma.assignment.delete({
-      where: { id: assignment.id },
-    });
+    await deleteClassAssignmentDeployment({ assignmentId, classId });
 
     return dataResponse({
       success: true,
@@ -240,13 +264,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
     const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
-    const dueDateRaw = formData.get('dueDate')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
     const legacyTutorContext = tutorContextRaw.trim() || null;
-    const dueDateInput = dueDateRaw.trim();
-    const dueDate = dueDateInput ? parseDateOnlyToUtc(dueDateInput) : null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -269,7 +290,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       }
 
       existingAssignment = await prisma.assignment.findFirst({
-        where: { id: assignmentId, classId },
+        where: {
+          id: assignmentId,
+          classAssignments: { some: { classId } },
+        },
         select: {
           id: true,
           assignmentTypeId: true,
@@ -325,18 +349,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    if (dueDateInput && !dueDate) {
-      return dataResponse(
-        { success: false, message: 'Due date is invalid.' },
-        { status: 400 }
-      );
-    }
 
     const assignmentCreationStandardizationEnabled =
       await isAssignmentCreationStandardizationEnabledForContext({
         organizationId: classAccess.school.organizationId,
         schoolId: classAccess.school.id,
-        teacherProfileId: profile.teacherProfile.id,
+        teacherProfileId: profile.id,
         classIds: [classId],
       });
 
@@ -351,16 +369,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     if (intent === 'create-assignment') {
-      await prisma.assignment.create({
+      await createAssignmentDeployedToClasses({
         data: {
-          classId,
           assignmentTypeId,
           title,
           prompt,
           tutorContext: assignmentCreationStandardizationEnabled
             ? null
             : legacyTutorContext,
-          dueDate,
           ...(gradingIntent?.success
             ? {
                 submitForGrade: gradingIntent.data.submitForGrade,
@@ -368,6 +384,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
               }
             : {}),
         },
+        classIds: [classId],
       });
 
       return dataResponse({
@@ -385,7 +402,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         tutorContext: assignmentCreationStandardizationEnabled
           ? existingAssignment!.tutorContext
           : legacyTutorContext,
-        dueDate,
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -401,6 +417,161 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  if (intent === 'lookup-student-email') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await lookupStudentEmailForClass({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
+    });
+
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+
+    if (result.status === 'needs_invite') {
+      return dataResponse({ needsInvite: true, email: result.email });
+    }
+
+    if (result.status === 'already_enrolled') {
+      return dataResponse({
+        alreadyEnrolled: true,
+        email: result.email,
+        message: result.message,
+      });
+    }
+
+    return dataResponse({ hasAccount: true, email: result.email });
+  }
+
+  if (intent === 'enroll-student') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await enrollExistingStudentInClass({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
+    });
+
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+
+    return dataResponse({
+      success: true,
+      message: result.message,
+    });
+  }
+
+  if (intent === 'invite-student') {
+    const email = formData.get('email')?.toString() ?? '';
+    const result = await sendStudentClassInvite({
+      email,
+      classId,
+      organizationId: classAccess.school.organizationId,
+      request,
+    });
+
+    if (result.status === 'error') {
+      return dataResponse({ error: result.error }, { status: 400 });
+    }
+
+    return dataResponse({
+      success: true,
+      message: `Invitation sent to ${result.email}.`,
+    });
+  }
+
+  // Removes class enrollment only — student profiles and accounts stay intact.
+  if (intent === 'remove-students') {
+    const studentProfileIds = formData.getAll('studentProfileIds') as string[];
+
+    if (!studentProfileIds.length) {
+      return dataResponse({ error: 'No students selected.' }, { status: 400 });
+    }
+
+    const students = await getClassStudentMemberships(
+      classId,
+      studentProfileIds,
+      classAccess.school.organizationId
+    );
+
+    if (students.length !== studentProfileIds.length) {
+      return dataResponse(
+        { error: 'Some selected students were not found in this class.' },
+        { status: 400 }
+      );
+    }
+
+    for (const student of students) {
+      await prisma.orgMembership.update({
+        where: { id: student.id },
+        data: { classesAsStudent: { disconnect: { id: classId } } },
+      });
+    }
+
+    return dataResponse({ success: true });
+  }
+
+  // Reassigns class enrollment only — student profiles and accounts stay intact.
+  if (intent === 'move-students') {
+    const studentProfileIds = formData.getAll('studentProfileIds') as string[];
+    const targetClassId = formData.get('targetClassId')?.toString();
+
+    if (!studentProfileIds.length || !targetClassId) {
+      return dataResponse(
+        { error: 'Students and target class are required.' },
+        { status: 400 }
+      );
+    }
+
+    if (targetClassId === classId) {
+      return dataResponse(
+        { error: 'Choose a different class to move students into.' },
+        { status: 400 }
+      );
+    }
+
+    const targetClass = await prisma.class.findFirst({
+      where: {
+        id: targetClassId,
+        isArchived: false,
+        teachers: { some: { id: profile.id } },
+      },
+      select: { id: true },
+    });
+
+    if (!targetClass) {
+      return dataResponse({ error: 'Target class not found.' }, { status: 404 });
+    }
+
+    const students = await getClassStudentMemberships(
+      classId,
+      studentProfileIds,
+      classAccess.school.organizationId
+    );
+
+    if (students.length !== studentProfileIds.length) {
+      return dataResponse(
+        { error: 'Some selected students were not found in this class.' },
+        { status: 400 }
+      );
+    }
+
+    for (const student of students) {
+      await prisma.orgMembership.update({
+        where: { id: student.id },
+        data: {
+          classesAsStudent: {
+            disconnect: { id: classId },
+            connect: { id: targetClassId },
+          },
+        },
+      });
+    }
+
+    return dataResponse({ success: true });
+  }
+
   return dataResponse(
     { success: false, message: 'Unsupported action.' },
     { status: 400 }
@@ -409,34 +580,52 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
-  if (!profile.teacherProfile) {
+  const profile = await requireMembership(request, userId);
+  if (profile.role !== "TEACHER") {
     return redirect('/app');
   }
   const classId = params.classId!;
 
-  const klass = await prisma.class.findFirst({
+  // Assignment management moved to the teacher-level Assignments surface.
+  if (new URL(request.url).searchParams.get('tab') === 'assignments') {
+    return redirect('/app/assignments');
+  }
+
+  const [klass, manageSchools] = await Promise.all([
+    prisma.class.findFirst({
     where: {
       id: classId,
-      teachers: { some: { id: profile.teacherProfile.id } },
+      teachers: { some: { id: profile.id } },
     },
     select: {
       id: true,
+      schoolId: true,
+      schoolYear: true,
+      code: true,
       grade: true,
       period: true,
       title: true,
+      classArtIndex: true,
       school: { select: { id: true, name: true, organizationId: true } },
       students: {
         select: {
           id: true,
-          profile: {
-            select: { id: true, user: { select: { name: true, email: true } } },
-          },
+          user: { select: { name: true, email: true } },
         },
         orderBy: { createdAt: 'asc' },
       },
     },
-  });
+  }),
+    prisma.orgMembership.findUnique({
+      where: { id: profile.id },
+      select: {
+        schools: {
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        },
+      },
+    }),
+  ]);
   if (!klass) throw new Response('Class not found', { status: 404 });
 
   const legacyClassDocumentIds = (
@@ -445,123 +634,41 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: { documentId: true },
     })
   ).map((row) => row.documentId);
+
+  const url = new URL(request.url);
+  const studentProfileIdFilters = parseDocumentWorkFilterIds(
+    url.searchParams.get('studentId')
+  );
+  const studentProfileIdFilter =
+    studentProfileIdFilters.length === 1 ? studentProfileIdFilters[0] : null;
+  const enrolledStudent = studentProfileIdFilter
+    ? klass.students.find(
+        (student) => student.id === studentProfileIdFilter
+      )
+    : null;
   const classDocumentScope = buildClassDocumentScope(
     classId,
-    legacyClassDocumentIds
+    legacyClassDocumentIds,
+    enrolledStudent
+      ? { membershipId: enrolledStudent.id }
+      : undefined
   );
-
-  const allowedAssignmentTypes = await getAvailableAssignmentTypesForScopes<{
-    id: string;
-    title: string;
-    systemKey: string | null;
-  }>({
-    scopes: [
-      {
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileId: profile.teacherProfile.id,
-      },
-    ],
-    select: { id: true, title: true, systemKey: true },
-    orderBy: { position: 'asc' },
-  });
-  const genericAllowedAssignmentTypes = allowedAssignmentTypes.filter(
-    (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
-  );
-
-  const profiles = await prisma.profile.findMany({
-    where: {
-      studentProfile: {
-        classes: { some: { id: classId } },
-      },
-    },
-    select: {
-      id: true,
-      user: { select: { name: true, email: true } },
-      documents: {
-        where: classDocumentScope,
-        select: {
-          id: true,
-          title: true,
-          createdAt: true,
-          updatedAt: true,
-          html: true,
-          text: true,
-          assignmentModuleSessions: studentModuleSessionListSelect,
-          _count: {
-            select: {
-              pasteAlerts: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  // Get recent paste alerts for this class
-  const pasteAlerts = await prisma.pasteAlert.findMany({
-    where: {
-      document: classDocumentScope,
-    },
-    select: {
-      id: true,
-      createdAt: true,
-      textLength: true,
-      content: true,
-      document: {
-        select: {
-          id: true,
-          title: true,
-          assignmentId: true,
-        },
-      },
-      profile: {
-        select: {
-          id: true,
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    take: 50, // Limit to most recent 50 alerts
-  });
 
   // Check feature flags
-  const [
-    isDocumentSubmissionEnabled,
-    assignmentsEnabled,
-    releasedGradesEnabled,
-    assignmentCreationStandardizationEnabled,
-  ] = await Promise.all([
-    isDocumentSubmissionEnabledForScope({
-      schoolIds: [klass.school?.id],
-      organizationIds: [klass.school?.organizationId],
-      teacherProfileIds: [profile.teacherProfile.id],
-      classIds: [klass.id],
-    }),
-    isAssignmentsEnabledForContext({
-      organizationId: klass.school?.organizationId,
-      schoolId: klass.school?.id,
-      teacherProfileId: profile.teacherProfile.id,
-      classIds: [klass.id],
-    }),
-    isReleasedGradesOrganizationEnabledForOrganization(
-      klass.school?.organizationId
-    ),
-    isAssignmentCreationStandardizationEnabledForContext({
-      organizationId: klass.school?.organizationId,
-      schoolId: klass.school?.id,
-      teacherProfileId: profile.teacherProfile.id,
-      classIds: [klass.id],
-    }),
-  ]);
+  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
+      isDocumentSubmissionEnabledForScope({
+        schoolIds: [klass.school?.id],
+        organizationIds: [klass.school?.organizationId],
+        teacherProfileIds: [profile.id],
+        classIds: [klass.id],
+      }),
+      isAssignmentsEnabledForContext({
+        organizationId: klass.school?.organizationId,
+        schoolId: klass.school?.id,
+        teacherProfileId: profile.id,
+        classIds: [klass.id],
+      }),
+    ]);
 
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
@@ -602,7 +709,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
               pointValue: true,
             },
           },
-          profile: {
+          membership: {
             select: {
               id: true,
               user: {
@@ -638,9 +745,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         select: {
           id: true,
           title: true,
+          submitForGrade: true,
+          pointValue: true,
         },
       },
-      profile: {
+      membership: {
         select: {
           id: true,
           user: {
@@ -658,22 +767,26 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     },
   });
 
-  const assignments = await prisma.assignment.findMany({
+  const classAssignments = await prisma.classAssignment.findMany({
     where: { classId },
     select: {
       id: true,
-      title: true,
-      prompt: true,
-      tutorContext: true,
-      submitForGrade: true,
-      pointValue: true,
-      dueDate: true,
-      assignmentTypeId: true,
-      assignmentType: {
+      assignment: {
         select: {
           id: true,
           title: true,
-          systemKey: true,
+          prompt: true,
+          tutorContext: true,
+          submitForGrade: true,
+          pointValue: true,
+          assignmentTypeId: true,
+          assignmentType: {
+            select: {
+              id: true,
+              title: true,
+              systemKey: true,
+            },
+          },
         },
       },
       _count: {
@@ -682,77 +795,121 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     },
-    orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
+    orderBy: [{ createdAt: 'desc' }],
   });
 
-  const submittedPapersFilter = await getSubmittedPapersFilter(request);
+  const assignments = classAssignments.map((classAssignment) => ({
+    id: classAssignment.assignment.id,
+    classAssignmentId: classAssignment.id,
+    title: classAssignment.assignment.title,
+    prompt: classAssignment.assignment.prompt,
+    tutorContext: classAssignment.assignment.tutorContext,
+    submitForGrade: classAssignment.assignment.submitForGrade,
+    pointValue: classAssignment.assignment.pointValue,
+    assignmentTypeId: classAssignment.assignment.assignmentTypeId,
+    assignmentType: classAssignment.assignment.assignmentType,
+    _count: classAssignment._count,
+  }));
+
+  const teacherClasses = await prisma.class.findMany({
+    where: {
+      teachers: { some: { id: profile.id } },
+      isArchived: false,
+      id: { not: classId },
+    },
+    select: {
+      id: true,
+      grade: true,
+      period: true,
+      title: true,
+      school: { select: { name: true } },
+    },
+    orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+  });
 
   return dataResponse({
     klass,
-    allowedAssignmentTypes: genericAllowedAssignmentTypes,
-    profiles,
-    pasteAlerts,
     submissions,
     inProgressDocuments,
     assignments,
     assignmentsEnabled,
-    assignmentCreationStandardizationEnabled,
-    submittedPapersFilter,
     isDocumentSubmissionEnabled,
-    releasedGradesEnabled,
+    manageSchools: manageSchools?.schools ?? [],
+    teacherClasses,
   });
 }
 
-type TabValue =
-  | 'in-progress'
-  | 'to-grade'
-  | 'graded'
-  | 'released'
-  | 'assignments'
-  | 'paste-activity'
-  | 'students';
+type TabValue = 'students' | 'documents';
 
-type SortDirection = 'asc' | 'desc';
-type AssignmentSort = {
-  key: 'title' | 'dueDate';
-  direction: SortDirection;
+type ClassDocumentSubmission = {
+  id: string;
+  title: string;
+  submittedAt: Date | string | null;
+  createdAt: Date | string;
+  releasedAt: Date | string | null;
+  score: string | null;
+  feedback: string | null;
+  rubricScores?: unknown | null;
+  overallComment?: string | null;
+  numericPercentage?: number | null;
+  letterGrade?: string | null;
+  gradedAt?: Date | string | null;
 };
 
-export default function ClassDetailRoute() {
-  const outlet = useOutlet();
-  if (outlet) return outlet;
+type ClassDocumentRow = {
+  id: string;
+  title: string | null;
+  updatedAt: Date;
+  membership: {
+    id: string;
+    user: { name: string | null; email: string };
+  };
+  assignment: {
+    id: string;
+    title: string | null;
+    submitForGrade?: boolean;
+    pointValue?: number | null;
+  } | null;
+  submissions: ClassDocumentSubmission[];
+  latestSubmission: ClassDocumentSubmission | null;
+};
 
+type SortDirection = 'asc' | 'desc';
+
+export default function ClassDetailRoute() {
   return <ClassDetailPage />;
 }
 
 function ClassDetailPage() {
   const data = useLoaderData<typeof loader>();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
-  const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(
-    null
+  const revalidator = useRevalidator();
+  const studentFetcher = useFetcher();
+  const [isClassEditSheetOpen, setIsClassEditSheetOpen] = useState(false);
+  const [isAddStudentSheetOpen, setIsAddStudentSheetOpen] = useState(false);
+  const [addStudentStep, setAddStudentStep] = useState<'email' | 'confirm'>(
+    'email'
   );
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
-    null
-  );
-  const [selectedPasteContent, setSelectedPasteContent] = useState<
-    string | null
+  const [addStudentEmail, setAddStudentEmail] = useState('');
+  const [addStudentConfirmAction, setAddStudentConfirmAction] = useState<
+    'enroll' | 'invite' | 'already_enrolled' | null
   >(null);
-  const [selectedGradedDocuments, setSelectedGradedDocuments] = useState<
+  const [isMoveStudentsSheetOpen, setIsMoveStudentsSheetOpen] = useState(false);
+  const [moveTargetClassId, setMoveTargetClassId] = useState('');
+  const [collapsedDocumentGroups, setCollapsedDocumentGroups] = useState<
     Set<string>
   >(new Set());
+  const [documentSort, setDocumentSort] = useState<DocumentWorkSort>(
+    DEFAULT_DOCUMENT_WORK_SORT
+  );
+  const hasHydratedCollapsedDocumentGroups = useRef(false);
+  const hasHydratedDocumentSort = useRef(false);
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
-  const [assignmentSort, setAssignmentSort] = useState<AssignmentSort>({
-    key: 'title',
-    direction: 'asc',
-  });
-  const [selectedAssignmentTypeIds, setSelectedAssignmentTypeIds] = useState<
-    Set<string>
-  >(new Set());
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     {
       id: string;
@@ -762,7 +919,7 @@ function ClassDetailPage() {
       document: {
         id: string;
         title: string;
-        profile: {
+        membership: {
           user: {
             name: string | null;
             email: string;
@@ -776,53 +933,71 @@ function ClassDetailPage() {
   const classDetailExitTo = classDetailSearch
     ? `${classDetailPath}?${classDetailSearch}`
     : classDetailPath;
-  const encodedClassDetailExitTo = encodeURIComponent(classDetailExitTo);
+  const editingClass: ClassManageRow = {
+    id: data.klass.id,
+    schoolId: data.klass.schoolId,
+    schoolYear: data.klass.schoolYear,
+    grade: data.klass.grade,
+    period: data.klass.period,
+    title: data.klass.title,
+    code: data.klass.code,
+  };
 
   const assignmentsEnabled = data.assignmentsEnabled === true;
-  const validTabs: TabValue[] = assignmentsEnabled
-    ? ['students', 'assignments']
-    : ['students'];
+  const validTabs: TabValue[] = ['students', 'documents'];
   const requestedTab = searchParams.get('tab') as TabValue | null;
   const activeTab =
     requestedTab && validTabs.includes(requestedTab)
       ? requestedTab
       : 'students';
-  const assignmentFilterParam = searchParams.get('assignmentId') ?? 'all';
-  const selectedAssignmentId =
-    assignmentFilterParam !== 'all' &&
-    data.assignments.some(
-      (assignment) => assignment.id === assignmentFilterParam
-    )
-      ? assignmentFilterParam
-      : 'all';
-  const editingAssignment =
-    data.assignments.find(
-      (assignment) => assignment.id === editingAssignmentId
-    ) ?? null;
-  const [pagination, setPagination] = useState({ skip: 0, take: 20 });
-  const hasMeaningfulGrade = (submission: {
-    score: string | null;
-    feedback: string | null;
-    rubricScores?: unknown | null;
-    overallComment?: string | null;
-    numericPercentage?: number | null;
-    letterGrade?: string | null;
-    gradedAt?: Date | string | null;
-  }) =>
-    Boolean(
-      submission.gradedAt ||
-      submission.score ||
-      submission.feedback ||
-      submission.overallComment ||
-      submission.letterGrade ||
-      submission.numericPercentage !== null ||
-      (submission.rubricScores &&
-        typeof submission.rubricScores === 'object' &&
-        Object.keys(submission.rubricScores as Record<string, unknown>).length >
-          0)
-    );
-
+  const classAssignmentFilterParam =
+    searchParams.get('classAssignmentId') ?? 'all';
+  const assignmentIdParam = searchParams.get('assignmentId');
+  const studentIdParam = searchParams.get('studentId');
   const students = data.klass.students;
+  const resolvedAssignmentFilterIds = useMemo(() => {
+    if (classAssignmentFilterParam !== 'all') {
+      const assignmentId = data.assignments.find(
+        (assignment) =>
+          assignment.classAssignmentId === classAssignmentFilterParam
+      )?.id;
+      return assignmentId ? [assignmentId] : [];
+    }
+
+    return parseDocumentWorkFilterIds(assignmentIdParam);
+  }, [assignmentIdParam, classAssignmentFilterParam, data.assignments]);
+  const validAssignmentIds = useMemo(
+    () => new Set(data.assignments.map((assignment) => assignment.id)),
+    [data.assignments]
+  );
+  const selectedAssignmentIds = useMemo(
+    () =>
+      resolvedAssignmentFilterIds.filter((assignmentId) =>
+        validAssignmentIds.has(assignmentId)
+      ),
+    [resolvedAssignmentFilterIds, validAssignmentIds]
+  );
+  const documentFilterStudentIds = useMemo(
+    () =>
+      parseDocumentWorkFilterIds(studentIdParam).filter((studentId) =>
+        students.some((student) => student.id === studentId)
+      ),
+    [studentIdParam, students]
+  );
+  const statusFilterParam = searchParams.get('status') ?? 'all';
+  const statusFilter: TeacherDocumentStatus | 'all' =
+    TEACHER_DOCUMENT_STATUSES.includes(
+      statusFilterParam as TeacherDocumentStatus
+    )
+      ? (statusFilterParam as TeacherDocumentStatus)
+      : 'all';
+  const activeHeaderTab = resolveClassHeaderTab(activeTab);
+  const documentGroupMode = parseDocumentGroupMode(
+    searchParams.get('documentGroup')
+  );
+  const [pagination, setPagination] = useState({ skip: 0, take: 20 });
+  const hasHydratedDocumentPreferences = useRef(false);
+
   const allSubmissions = useMemo(() => data.submissions, [data.submissions]);
   const collator = useMemo(
     () => new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }),
@@ -831,13 +1006,103 @@ function ClassDetailPage() {
 
   // Reset pagination when tab changes
   useEffect(() => {
+    hasHydratedDocumentPreferences.current = false;
+    hasHydratedCollapsedDocumentGroups.current = false;
+    hasHydratedDocumentSort.current = false;
+  }, [data.klass.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'documents' || hasHydratedDocumentPreferences.current) {
+      return;
+    }
+
+    hasHydratedDocumentPreferences.current = true;
+
+    if (
+      searchParams.get('status') ||
+      searchParams.get('documentGroup') ||
+      searchParams.get('studentId') ||
+      searchParams.get('assignmentId')
+    ) {
+      mergeClassDocumentsViewPreferences(searchParams);
+    }
+
+    const merged = mergeStoredClassDocumentsSearchParams({
+      searchParams,
+      storedPreferences: readClassDocumentsViewPreferences(),
+    });
+
+    if (!merged.shouldReplace) {
+      return;
+    }
+
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of merged.searchParams.entries()) {
+      next.set(key, value);
+    }
+    setSearchParams(next, { replace: true });
+  }, [
+    activeTab,
+    assignmentIdParam,
+    classAssignmentFilterParam,
+    data.klass.id,
+    searchParams,
+    setSearchParams,
+    studentIdParam,
+  ]);
+
+  useEffect(() => {
     setPagination({ skip: 0, take: 20 });
   }, [
     activeTab,
-    assignmentSort,
-    selectedAssignmentTypeIds,
     studentNameSortDirection,
+    studentSearchQuery,
+    documentFilterStudentIds,
+    selectedAssignmentIds,
+    statusFilter,
+    documentGroupMode,
+    documentSort,
+    searchParams.get('q'),
   ]);
+
+  useEffect(() => {
+    if (activeTab !== 'documents' || !hasHydratedDocumentPreferences.current) {
+      return;
+    }
+
+    if (documentGroupMode === 'none') {
+      setCollapsedDocumentGroups(new Set());
+      return;
+    }
+
+    if (hasHydratedCollapsedDocumentGroups.current) {
+      return;
+    }
+
+    hasHydratedCollapsedDocumentGroups.current = true;
+    setCollapsedDocumentGroups(
+      getStoredCollapsedDocumentGroups(
+        readClassDocumentsViewPreferences(),
+        documentGroupMode
+      )
+    );
+  }, [activeTab, documentGroupMode]);
+
+  useEffect(() => {
+    if (
+      activeTab !== 'documents' ||
+      !hasHydratedDocumentPreferences.current ||
+      hasHydratedDocumentSort.current
+    ) {
+      return;
+    }
+
+    hasHydratedDocumentSort.current = true;
+    const storedSort = readClassDocumentsViewPreferences().documentSort;
+    if (storedSort) {
+      setDocumentSort(storedSort);
+    }
+  }, [activeTab, documentGroupMode]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
@@ -861,38 +1126,15 @@ function ClassDetailPage() {
   }, [allSubmissions]);
 
   const matchesSelectedAssignment = (assignmentId?: string | null) =>
-    selectedAssignmentId === 'all' || assignmentId === selectedAssignmentId;
-
-  const filteredInProgressDocuments = useMemo(
-    () =>
-      data.inProgressDocuments.filter((document) =>
-        matchesSelectedAssignment(document.assignment?.id)
-      ),
-    [data.inProgressDocuments, selectedAssignmentId]
-  );
-
-  const filteredUngradedDocuments = useMemo(
-    () =>
-      ungradedDocuments.filter((submission) =>
-        matchesSelectedAssignment(submission.document.assignment?.id)
-      ),
-    [ungradedDocuments, selectedAssignmentId]
-  );
+    selectedAssignmentIds.length === 0 ||
+    (assignmentId ? selectedAssignmentIds.includes(assignmentId) : false);
 
   const filteredGradedUnreleasedDocuments = useMemo(
     () =>
       gradedUnreleasedDocuments.filter((submission) =>
         matchesSelectedAssignment(submission.document.assignment?.id)
       ),
-    [gradedUnreleasedDocuments, selectedAssignmentId]
-  );
-
-  const filteredReleasedDocuments = useMemo(
-    () =>
-      releasedDocuments.filter((submission) =>
-        matchesSelectedAssignment(submission.document.assignment?.id)
-      ),
-    [releasedDocuments, selectedAssignmentId]
+    [gradedUnreleasedDocuments, selectedAssignmentIds]
   );
 
   // Get unreleased grades for release functionality
@@ -913,17 +1155,13 @@ function ClassDetailPage() {
         document: {
           id: submission.document.id,
           title: submission.title,
-          profile: submission.document.profile,
+          membership: submission.document.membership,
         },
       };
     });
   }, [filteredGradedUnreleasedDocuments]);
 
-  const unreleasedGradesBySubmissionId = useMemo(() => {
-    return new Map(unreleasedGrades.map((grade) => [grade.id, grade]));
-  }, [unreleasedGrades]);
-
-  // Handle URL param for to-release action
+  // Handle URL param for to-release action (legacy deep link)
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab === 'to-release') {
@@ -931,7 +1169,7 @@ function ClassDetailPage() {
         setReleaseGradesForSheet(unreleasedGrades);
         setIsReleaseGradesSheetOpen(true);
         const next = new URLSearchParams(searchParams);
-        next.set('tab', 'graded');
+        next.set('tab', 'documents');
         navigate(`?${next.toString()}`, { replace: true });
       }
     }
@@ -939,150 +1177,202 @@ function ClassDetailPage() {
 
   // Handle successful release
   const handleGradingSuccess = () => {
-    setSelectedGradedDocuments(new Set());
     setReleaseGradesForSheet([]);
     window.location.reload();
   };
 
-  const toggleGradedDocumentSelection = (docId: string) => {
-    const newSelection = new Set(selectedGradedDocuments);
-    if (newSelection.has(docId)) {
-      newSelection.delete(docId);
-    } else {
-      newSelection.add(docId);
-    }
-    setSelectedGradedDocuments(newSelection);
-  };
-
-  const toggleAllGradedDocuments = () => {
-    const submissionIds = filteredGradedUnreleasedDocuments.map((d) => d.id);
-    if (submissionIds.every((id) => selectedGradedDocuments.has(id))) {
-      const newSelection = new Set(selectedGradedDocuments);
-      submissionIds.forEach((id) => newSelection.delete(id));
-      setSelectedGradedDocuments(newSelection);
-    } else {
-      const newSelection = new Set(selectedGradedDocuments);
-      submissionIds.forEach((id) => newSelection.add(id));
-      setSelectedGradedDocuments(newSelection);
-    }
-  };
-
-  const selectedUnreleasedGrades = useMemo(() => {
-    return Array.from(selectedGradedDocuments)
-      .map((submissionId) => unreleasedGradesBySubmissionId.get(submissionId))
-      .filter((grade): grade is (typeof unreleasedGrades)[number] => !!grade);
-  }, [selectedGradedDocuments, unreleasedGradesBySubmissionId]);
-
-  const canReleaseSelected = selectedUnreleasedGrades.length > 0;
-
-  const openReleaseSheetForMode = (mode: 'all' | 'selected') => {
-    if (mode === 'selected') {
-      if (!canReleaseSelected) return;
-      setReleaseGradesForSheet(selectedUnreleasedGrades);
-    } else {
-      setReleaseGradesForSheet(unreleasedGrades);
-    }
+  const openReleaseSheet = () => {
+    if (unreleasedGrades.length === 0) return;
+    setReleaseGradesForSheet(unreleasedGrades);
     setIsReleaseGradesSheetOpen(true);
   };
-
-  const selectedDocs = selectedProfileId
-    ? (data.profiles.find((p) => p.id === selectedProfileId)?.documents ?? [])
-    : [];
 
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
-      const aName = a.profile.user.name || a.profile.user.email;
-      const bName = b.profile.user.name || b.profile.user.email;
+      const aName = a.user.name || a.user.email;
+      const bName = b.user.name || b.user.email;
       const primary = collator.compare(aName, bName);
       if (primary !== 0) return primary * direction;
-      return collator.compare(a.profile.user.email, b.profile.user.email);
+      return collator.compare(a.user.email, b.user.email);
     });
   }, [collator, studentNameSortDirection, students]);
 
-  const assignmentTypeOptions = useMemo(() => {
-    const typesById = new Map<string, { id: string; title: string }>();
-    for (const assignment of data.assignments) {
-      typesById.set(assignment.assignmentType.id, assignment.assignmentType);
+  const filteredStudents = useMemo(
+    () => filterClassStudentsByQuery(sortedStudents, studentSearchQuery),
+    [sortedStudents, studentSearchQuery]
+  );
+
+  const classDocuments = useMemo((): ClassDocumentRow[] => {
+    const byDocumentId = new Map<string, ClassDocumentRow>();
+
+    for (const document of data.inProgressDocuments) {
+      byDocumentId.set(document.id, {
+        id: document.id,
+        title: document.title,
+        updatedAt: new Date(document.updatedAt),
+        membership: document.membership,
+        assignment: document.assignment,
+        submissions: [],
+        latestSubmission: null,
+      });
     }
-    return Array.from(typesById.values()).sort((a, b) =>
-      collator.compare(a.title, b.title)
-    );
-  }, [collator, data.assignments]);
 
-  const hasAssignmentTypeFilter = selectedAssignmentTypeIds.size > 0;
+    for (const submission of allSubmissions) {
+      const existing = byDocumentId.get(submission.documentId);
+      const row: ClassDocumentRow = existing ?? {
+        id: submission.documentId,
+        title: submission.document.title,
+        updatedAt: new Date(submission.submittedAt ?? submission.createdAt),
+        membership: submission.document.membership,
+        assignment: submission.document.assignment,
+        submissions: [],
+        latestSubmission: null,
+      };
 
-  const sortedFilteredAssignments = useMemo(() => {
-    const visibleAssignments = hasAssignmentTypeFilter
-      ? data.assignments.filter((assignment) =>
-          selectedAssignmentTypeIds.has(assignment.assignmentType.id)
-        )
-      : data.assignments;
-
-    return [...visibleAssignments].sort((a, b) => {
-      const titleCompare = collator.compare(
-        a.title || 'Untitled Assignment',
-        b.title || 'Untitled Assignment'
+      row.submissions.push(submission);
+      const submissionUpdatedAt = new Date(
+        submission.submittedAt ?? submission.createdAt
       );
-      const aDue = a.dueDate ? new Date(a.dueDate).getTime() : null;
-      const bDue = b.dueDate ? new Date(b.dueDate).getTime() : null;
-      const bothHaveDueDates = aDue !== null && bDue !== null;
-      const direction = assignmentSort.direction === 'asc' ? 1 : -1;
-
-      if (assignmentSort.key === 'title') {
-        if (titleCompare !== 0) return titleCompare * direction;
-        if (bothHaveDueDates && aDue !== bDue) return aDue - bDue;
-        if (aDue === null && bDue !== null) return 1;
-        if (aDue !== null && bDue === null) return -1;
-        return collator.compare(a.id, b.id);
+      if (submissionUpdatedAt > row.updatedAt) {
+        row.updatedAt = submissionUpdatedAt;
       }
 
-      if (bothHaveDueDates && aDue !== bDue) {
-        return (aDue - bDue) * direction;
+      byDocumentId.set(submission.documentId, row);
+    }
+
+    for (const row of byDocumentId.values()) {
+      row.submissions.sort(
+        (a, b) =>
+          new Date(b.submittedAt ?? b.createdAt).getTime() -
+          new Date(a.submittedAt ?? a.createdAt).getTime()
+      );
+      row.latestSubmission = row.submissions[0] ?? null;
+    }
+
+    return Array.from(byDocumentId.values()).sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
+    );
+  }, [allSubmissions, data.inProgressDocuments]);
+
+  const teacherDocumentWorkRows = useMemo((): TeacherDocumentWorkRow[] => {
+    return classDocuments.map((document) => ({
+      ...document,
+      resolvedClass: {
+        id: data.klass.id,
+        grade: data.klass.grade,
+        period: data.klass.period,
+        title: data.klass.title,
+      },
+      submissionCount: document.submissions.length,
+    }));
+  }, [classDocuments, data.klass]);
+
+  const documentWorkStatusCounts = useMemo(
+    () => countTeacherDocumentWorkStatuses(teacherDocumentWorkRows),
+    [teacherDocumentWorkRows]
+  );
+
+  const documentWorkFilters = useMemo(
+    (): TeacherDocumentWorkFilters => ({
+      studentIds: documentFilterStudentIds,
+      classIds: [],
+      assignmentIds: selectedAssignmentIds,
+      status: statusFilter,
+      group: documentGroupMode,
+      query: searchParams.get('q') ?? '',
+    }),
+    [
+      documentGroupMode,
+      searchParams,
+      selectedAssignmentIds,
+      documentFilterStudentIds,
+      statusFilter,
+    ]
+  );
+
+  const {
+    selected: selectedStudentIds,
+    setSelected: setSelectedStudentIds,
+    handleSelectAll: handleSelectAllStudents,
+    handleSelect: handleSelectStudent,
+  } = useTable({ rows: filteredStudents });
+
+  const handleAddStudentSheetOpenChange = (open: boolean) => {
+    setIsAddStudentSheetOpen(open);
+    if (!open) {
+      setAddStudentStep('email');
+      setAddStudentEmail('');
+      setAddStudentConfirmAction(null);
+    }
+  };
+
+  useEffect(() => {
+    if (studentFetcher.state !== 'idle' || !studentFetcher.data) {
+      return;
+    }
+
+    if (addStudentStep !== 'email') {
+      if (
+        'success' in studentFetcher.data &&
+        studentFetcher.data.success
+      ) {
+        setSelectedStudentIds([]);
+        setIsAddStudentSheetOpen(false);
+        setAddStudentStep('email');
+        setAddStudentEmail('');
+        setAddStudentConfirmAction(null);
+        setIsMoveStudentsSheetOpen(false);
+        setMoveTargetClassId('');
+        revalidator.revalidate();
       }
-      if (aDue === null && bDue !== null) return 1;
-      if (aDue !== null && bDue === null) return -1;
-      if (titleCompare !== 0) return titleCompare;
-      return collator.compare(a.id, b.id);
-    });
+      return;
+    }
+
+    if (
+      'needsInvite' in studentFetcher.data &&
+      studentFetcher.data.needsInvite
+    ) {
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('invite');
+      setAddStudentStep('confirm');
+      return;
+    }
+
+    if (
+      'hasAccount' in studentFetcher.data &&
+      studentFetcher.data.hasAccount
+    ) {
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('enroll');
+      setAddStudentStep('confirm');
+      return;
+    }
+
+    if (
+      'alreadyEnrolled' in studentFetcher.data &&
+      studentFetcher.data.alreadyEnrolled
+    ) {
+      setAddStudentEmail(studentFetcher.data.email);
+      setAddStudentConfirmAction('already_enrolled');
+      setAddStudentStep('confirm');
+    }
   }, [
-    assignmentSort,
-    collator,
-    data.assignments,
-    hasAssignmentTypeFilter,
-    selectedAssignmentTypeIds,
+    addStudentStep,
+    studentFetcher.state,
+    studentFetcher.data,
+    revalidator,
+    setSelectedStudentIds,
   ]);
 
   // Get current tab data and paginate it
   const currentTabData = useMemo(() => {
-    switch (activeTab) {
-      case 'in-progress':
-        return filteredInProgressDocuments;
-      case 'to-grade':
-        return filteredUngradedDocuments;
-      case 'graded':
-        return filteredGradedUnreleasedDocuments;
-      case 'released':
-        return filteredReleasedDocuments;
-      case 'assignments':
-        return sortedFilteredAssignments;
-      case 'paste-activity':
-        return data.pasteAlerts;
-      case 'students':
-        return sortedStudents;
-      default:
-        return [];
+    if (activeTab === 'students') {
+      return filteredStudents;
     }
-  }, [
-    activeTab,
-    filteredInProgressDocuments,
-    filteredUngradedDocuments,
-    filteredGradedUnreleasedDocuments,
-    filteredReleasedDocuments,
-    data.pasteAlerts,
-    sortedFilteredAssignments,
-    sortedStudents,
-  ]) as any[];
+
+    return [];
+  }, [activeTab, filteredStudents]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1091,20 +1381,104 @@ function ClassDetailPage() {
     );
   }, [currentTabData, pagination.skip, pagination.take]) as any[];
 
-  const handleTabChange = (value: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('tab', value);
+  const persistDocumentViewPreferences = (next: URLSearchParams) => {
+    mergeClassDocumentsViewPreferences(next);
+  };
+
+  const persistCollapsedDocumentGroups = (collapsedGroupKeys: Set<string>) => {
+    if (documentGroupMode === 'none') return;
+
+    mergeClassDocumentsViewPreferences(searchParams, {
+      collapsedGroups: withStoredCollapsedDocumentGroups(
+        readClassDocumentsViewPreferences(),
+        documentGroupMode,
+        collapsedGroupKeys
+      ).collapsedGroups,
+    });
+  };
+
+  const handleDocumentSortChange = (next: DocumentWorkSort) => {
+    setDocumentSort(next);
+    mergeClassDocumentsViewPreferences(searchParams, { documentSort: next });
+  };
+
+  const navigateWithDocumentPreferences = (next: URLSearchParams) => {
+    persistDocumentViewPreferences(next);
     navigate(`?${next.toString()}`);
   };
 
-  const handleAssignmentFilterChange = (value: string) => {
+  const handleHeaderTabChange = (tab: ClassHeaderTab) => {
     const next = new URLSearchParams(searchParams);
-    if (value === 'all') {
-      next.delete('assignmentId');
-    } else {
-      next.set('assignmentId', value);
+    next.set('tab', tab);
+
+    if (tab === 'students') {
+      next.delete('status');
+      navigate(`?${next.toString()}`);
+      return;
     }
-    navigate(`?${next.toString()}`);
+
+    navigateWithDocumentPreferences(next);
+  };
+
+  const handleViewStudentDocuments = (profileId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'documents');
+    next.set('studentId', profileId);
+    navigateWithDocumentPreferences(next);
+  };
+
+  const handleDocumentWorkFiltersChange = (
+    updates: Partial<TeacherDocumentWorkFilters>
+  ) => {
+    const next = new URLSearchParams(searchParams);
+
+    if ('studentIds' in updates) {
+      const serialized = serializeDocumentWorkFilterIds(updates.studentIds ?? []);
+      if (!serialized) {
+        next.delete('studentId');
+      } else {
+        next.set('studentId', serialized);
+      }
+    }
+
+    if ('assignmentIds' in updates) {
+      const serialized = serializeDocumentWorkFilterIds(
+        updates.assignmentIds ?? []
+      );
+      if (!serialized) {
+        next.delete('assignmentId');
+        next.delete('classAssignmentId');
+      } else {
+        next.set('assignmentId', serialized);
+        next.delete('classAssignmentId');
+      }
+    }
+
+    if ('status' in updates) {
+      if (!updates.status || updates.status === 'all') {
+        next.delete('status');
+      } else {
+        next.set('status', updates.status);
+      }
+    }
+
+    if ('group' in updates) {
+      if (!updates.group || updates.group === 'none') {
+        next.delete('documentGroup');
+      } else {
+        next.set('documentGroup', updates.group);
+      }
+    }
+
+    if ('query' in updates) {
+      if (!updates.query?.trim()) {
+        next.delete('q');
+      } else {
+        next.set('q', updates.query.trim());
+      }
+    }
+
+    navigateWithDocumentPreferences(next);
   };
 
   const toggleStudentNameSort = () => {
@@ -1113,992 +1487,452 @@ function ClassDetailPage() {
     );
   };
 
-  const toggleAssignmentSort = (key: AssignmentSort['key']) => {
-    setAssignmentSort((current) => ({
-      key,
-      direction:
-        current.key === key && current.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  };
-
-  const toggleAssignmentTypeFilter = (assignmentTypeId: string) => {
-    setSelectedAssignmentTypeIds((current) => {
-      const allTypeIds = assignmentTypeOptions.map((type) => type.id);
-      const next = current.size === 0 ? new Set(allTypeIds) : new Set(current);
-
-      if (next.has(assignmentTypeId)) {
-        next.delete(assignmentTypeId);
-      } else {
-        next.add(assignmentTypeId);
-      }
-
-      return next.size === allTypeIds.length ? new Set() : next;
-    });
-  };
-
-  const clearAssignmentTypeFilter = () => {
-    setSelectedAssignmentTypeIds(new Set());
-  };
-
   const handlePaginationChange = (skip: number, take: number) => {
     setPagination({ skip, take });
   };
 
   // Render table based on active tab
   const renderTable = () => {
-    if (paginatedData.length === 0) {
+    if (activeTab === 'documents') {
       return (
-        <div className="text-center text-muted-foreground py-8">
-          <p>
-            {activeTab === 'in-progress' && 'No in-progress documents.'}
-            {activeTab === 'to-grade' && 'All caught up! No essays to grade.'}
-            {activeTab === 'graded' && 'No grades ready to release.'}
-            {activeTab === 'released' && 'No released documents yet.'}
-            {activeTab === 'assignments' &&
-              (hasAssignmentTypeFilter
-                ? 'No assignments match this filter.'
-                : 'No assignments yet.')}
-            {activeTab === 'paste-activity' &&
-              'No copy/paste activity detected yet.'}
-            {activeTab === 'students' && 'No students in this class yet.'}
-          </p>
-          {activeTab === 'assignments' && hasAssignmentTypeFilter ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={clearAssignmentTypeFilter}
-            >
-              Clear filter
-            </Button>
-          ) : null}
-        </div>
-      );
-    }
-
-    if (activeTab === 'in-progress') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Document</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Course Module</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((doc) => (
-                <TableRow key={doc.id}>
-                  <TableCell className="font-medium">
-                    {doc.profile.user.name || doc.profile.user.email}
-                  </TableCell>
-                  <TableCell>{getDraftDisplayTitle(doc)}</TableCell>
-                  {assignmentsEnabled && (
-                    <TableCell className="text-muted-foreground">
-                      {doc.assignment?.title || '—'}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground">
-                    {doc.assignmentModuleSessions[0]?.assignmentModule.title ||
-                      '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {timeAgo(new Date(doc.updatedAt))}
-                  </TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                      >
-                        View
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'to-grade') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Course Module</TableHead>
-                <TableHead>Student archive</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => (
-                <TableRow key={submission.id}>
-                  <TableCell className="font-medium">
-                    {submission.document.profile.user.name ||
-                      submission.document.profile.user.email}
-                  </TableCell>
-                  <TableCell>{submission.title}</TableCell>
-                  {assignmentsEnabled && (
-                    <TableCell className="text-muted-foreground">
-                      {submission.document.assignment?.title || '—'}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground">
-                    {submission.document.assignmentModuleSessions[0]
-                      ?.assignmentModule.title || '—'}
-                  </TableCell>
-                  <TableCell>
-                    <StudentArchiveCell archivedAt={submission.archivedAt} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {timeAgo(
-                      new Date(submission.submittedAt ?? submission.createdAt)
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        to={`/app/submissions/${submission.id}?${
-                          data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                        }exitTo=${encodedClassDetailExitTo}`}
-                      >
-                        View
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'graded') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <Checkbox
-                    checked={
-                      filteredGradedUnreleasedDocuments.length > 0 &&
-                      filteredGradedUnreleasedDocuments.every((d) =>
-                        selectedGradedDocuments.has(d.id)
-                      )
-                    }
-                    onCheckedChange={toggleAllGradedDocuments}
-                    aria-label="Select all graded documents"
-                  />
-                </TableHead>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Student archive</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Graded</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => {
-                const gradeDisplay =
-                  formatAssignmentGrade({
-                    submitForGrade:
-                      submission.document.assignment?.submitForGrade,
-                    numericPercentage: submission.numericPercentage ?? null,
-                    letterGrade: submission.letterGrade ?? null,
-                    pointValue:
-                      submission.document.assignment?.pointValue ?? null,
-                    score: submission.score,
-                  }) || '—';
-                return (
-                  <TableRow key={submission.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedGradedDocuments.has(submission.id)}
-                        onCheckedChange={() =>
-                          toggleGradedDocumentSelection(submission.id)
-                        }
-                        aria-label={`Select graded ${submission.title}`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {submission.document.profile.user.name ||
-                        submission.document.profile.user.email}
-                    </TableCell>
-                    <TableCell>{submission.title}</TableCell>
-                    {assignmentsEnabled && (
-                      <TableCell className="text-muted-foreground">
-                        {submission.document.assignment?.title || '—'}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <StudentArchiveCell archivedAt={submission.archivedAt} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{gradeDisplay}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(
-                        new Date(submission.gradedAt ?? submission.createdAt)
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/submissions/${submission.id}?${
-                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'released') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Essay</TableHead>
-                {assignmentsEnabled && <TableHead>Assignment</TableHead>}
-                <TableHead>Student archive</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Released</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((submission) => {
-                const gradeDisplay =
-                  formatAssignmentGrade({
-                    submitForGrade:
-                      submission.document.assignment?.submitForGrade,
-                    numericPercentage: submission.numericPercentage ?? null,
-                    letterGrade: submission.letterGrade ?? null,
-                    pointValue:
-                      submission.document.assignment?.pointValue ?? null,
-                    score: submission.score,
-                  }) || '—';
-                return (
-                  <TableRow key={submission.id}>
-                    <TableCell className="font-medium">
-                      {submission.document.profile.user.name ||
-                        submission.document.profile.user.email}
-                    </TableCell>
-                    <TableCell>{submission.title}</TableCell>
-                    {assignmentsEnabled && (
-                      <TableCell className="text-muted-foreground">
-                        {submission.document.assignment?.title || '—'}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <StudentArchiveCell archivedAt={submission.archivedAt} />
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{gradeDisplay}</Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(submission.releasedAt!))}
-                    </TableCell>
-                    <TableCell>
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to={`/app/submissions/${submission.id}?${
-                            data.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodedClassDetailExitTo}`}
-                        >
-                          View
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'assignments') {
-      return (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  disabled={assignmentTypeOptions.length === 0}
-                  aria-label="Filter assignment types"
-                >
-                  <Filter className="h-4 w-4" />
-                  Type
-                  {hasAssignmentTypeFilter ? (
-                    <span className="rounded border px-1.5 text-xs">
-                      {selectedAssignmentTypeIds.size}
-                    </span>
-                  ) : null}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>Assignment Type</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {assignmentTypeOptions.map((type) => (
-                  <DropdownMenuCheckboxItem
-                    key={type.id}
-                    checked={
-                      !hasAssignmentTypeFilter ||
-                      selectedAssignmentTypeIds.has(type.id)
-                    }
-                    onCheckedChange={() => toggleAssignmentTypeFilter(type.id)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {type.title}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {hasAssignmentTypeFilter ? (
+        <TeacherDocumentWorkPanel
+          tableLabel="Class documents"
+          documents={teacherDocumentWorkRows}
+          statusCounts={documentWorkStatusCounts}
+          students={sortedStudents.map((student) => ({
+            id: student.id,
+            label: student.user.name || student.user.email,
+          }))}
+          assignments={data.assignments.map((assignment) => ({
+            id: assignment.id,
+            label: assignment.title ?? 'Untitled assignment',
+          }))}
+          assignmentsEnabled={assignmentsEnabled}
+          isDocumentSubmissionEnabled={data.isDocumentSubmissionEnabled}
+          exitTo={classDetailExitTo}
+          filters={documentWorkFilters}
+          onFiltersChange={handleDocumentWorkFiltersChange}
+          onClearFilters={() => {
+            const next = new URLSearchParams(searchParams);
+            next.delete('studentId');
+            next.delete('assignmentId');
+            next.delete('status');
+            next.delete('q');
+            navigateWithDocumentPreferences(next);
+          }}
+          collapsedGroups={collapsedDocumentGroups}
+          onCollapsedGroupsChange={(next, options) => {
+            setCollapsedDocumentGroups(next);
+            if (options?.persist === false) return;
+            persistCollapsedDocumentGroups(next);
+          }}
+          pagination={{
+            skip: pagination.skip,
+            take: pagination.take,
+            onChange: handlePaginationChange,
+          }}
+          headerActions={
+            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
               <Button
                 type="button"
-                variant="ghost"
                 size="sm"
-                className="gap-2"
-                aria-label="Clear assignment type filter"
-                onClick={clearAssignmentTypeFilter}
+                data-testid="class-release-grades-open"
+                onClick={openReleaseSheet}
               >
-                <X className="h-4 w-4" />
-                Clear
+                <Send className="mr-2 h-4 w-4" />
+                Release grades ({unreleasedGrades.length})
               </Button>
-            ) : null}
-          </div>
-          <Table aria-label="Assignments">
-            <TableHeader>
-              <TableRow>
-                <TableHead>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort assignments by title ${
-                      assignmentSort.key === 'title' &&
-                      assignmentSort.direction === 'asc'
-                        ? 'descending'
-                        : 'ascending'
-                    }`}
-                    onClick={() => toggleAssignmentSort('title')}
-                  >
-                    Title
-                    {assignmentSort.key === 'title' ? (
-                      assignmentSort.direction === 'asc' ? (
-                        <ArrowUp className="h-4 w-4" />
-                      ) : (
-                        <ArrowDown className="h-4 w-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 opacity-50" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>Assignment Type</TableHead>
-                <TableHead>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort assignments by due date ${
-                      assignmentSort.key === 'dueDate' &&
-                      assignmentSort.direction === 'asc'
-                        ? 'descending'
-                        : 'ascending'
-                    }`}
-                    onClick={() => toggleAssignmentSort('dueDate')}
-                  >
-                    Due Date
-                    {assignmentSort.key === 'dueDate' ? (
-                      assignmentSort.direction === 'asc' ? (
-                        <ArrowUp className="h-4 w-4" />
-                      ) : (
-                        <ArrowDown className="h-4 w-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-4 w-4 opacity-50" />
-                    )}
-                  </Button>
-                </TableHead>
-                <TableHead>In Progress</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead>Graded</TableHead>
-                <TableHead>Released</TableHead>
-                <TableHead>Copy &amp; Paste</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((assignment) => {
-                const assignmentSubmissions = allSubmissions.filter(
-                  (s) => s.document.assignment?.id === assignment.id
-                );
-                const inProgressCount = data.inProgressDocuments.filter(
-                  (doc) => doc.assignment?.id === assignment.id
-                ).length;
-                const submittedCount = assignmentSubmissions.filter(
-                  (s) => !hasMeaningfulGrade(s) && !s.releasedAt
-                ).length;
-                const gradedCount = assignmentSubmissions.filter(
-                  (s) => hasMeaningfulGrade(s) && !s.releasedAt
-                ).length;
-                const releasedCount = assignmentSubmissions.filter(
-                  (s) => !!s.releasedAt
-                ).length;
-                const pasteCount = data.pasteAlerts.filter(
-                  (a) => a.document.assignmentId === assignment.id
-                ).length;
-                const canEditAssignment =
-                  assignment.assignmentType.systemKey !==
-                  AP_HISTORY_ASSIGNMENT_TYPE_KEY;
-                return (
-                  <TableRow key={assignment.id}>
-                    <TableCell className="font-medium">
-                      {assignment.title || 'Untitled Assignment'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.assignmentType.title}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {assignment.dueDate
-                        ? formatDateOnly(assignment.dueDate)
-                        : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=in-progress`}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-secondary/80"
-                        >
-                          {inProgressCount}
-                        </Badge>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=submitted`}
-                      >
-                        {submittedCount > 0 ? (
-                          <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200 cursor-pointer">
-                            {submittedCount}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="cursor-pointer hover:bg-secondary/80"
-                          >
-                            {submittedCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=graded`}
-                      >
-                        {gradedCount > 0 ? (
-                          <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 cursor-pointer">
-                            {gradedCount}
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="secondary"
-                            className="cursor-pointer hover:bg-secondary/80"
-                          >
-                            {gradedCount}
-                          </Badge>
-                        )}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/my-classes/${data.klass.id}/assignments/${assignment.id}?status=released`}
-                      >
-                        <Badge
-                          variant="secondary"
-                          className="cursor-pointer hover:bg-secondary/80"
-                        >
-                          {releasedCount}
-                        </Badge>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {pasteCount > 0 ? (
-                        <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-                          {pasteCount}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">{pasteCount}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {canEditAssignment ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            type="button"
-                            onClick={() => {
-                              setEditingAssignmentId(assignment.id);
-                              setIsAssignmentSheetOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        <Form
-                          method="post"
-                          onSubmit={(event) => {
-                            if (
-                              !window.confirm(
-                                'Delete this assignment? Existing student documents will remain, but they will no longer be linked to this assignment.'
-                              )
-                            ) {
-                              event.preventDefault();
-                            }
-                          }}
-                        >
-                          <input
-                            type="hidden"
-                            name="intent"
-                            value="delete-assignment"
-                          />
-                          <input
-                            type="hidden"
-                            name="assignmentId"
-                            value={assignment.id}
-                          />
-                          <Button size="sm" variant="destructive" type="submit">
-                            Delete
-                          </Button>
-                        </Form>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-
-    if (activeTab === 'paste-activity') {
-      return (
-        <div className="rounded-lg bg-muted/50">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Document</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead className="text-right">Characters</TableHead>
-                <TableHead>Content</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((alert) => {
-                const truncatedContent = alert.content
-                  ? alert.content.length > 100
-                    ? alert.content.substring(0, 100) + '...'
-                    : alert.content
-                  : null;
-                return (
-                  <TableRow key={alert.id}>
-                    <TableCell className="font-medium">
-                      {alert.profile.user.name || alert.profile.user.email}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        to={`/app/documents/${alert.document.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                        className="text-primary hover:underline"
-                      >
-                        {alert.document.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {timeAgo(new Date(alert.createdAt))}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="secondary">
-                        {alert.textLength.toLocaleString()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {truncatedContent ? (
-                        <button
-                          onClick={() =>
-                            setSelectedPasteContent(alert.content || null)
-                          }
-                          className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors max-w-xs truncate block"
-                          title="Click to view full content"
-                        >
-                          {truncatedContent}
-                        </button>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+            ) : null
+          }
+          emptyMessageSecondary="Student documents will appear here once work begins"
+          testIds={{
+            statusChips: 'class-documents-status-chips',
+            groupSelect: 'class-documents-group-filter',
+          }}
+          collapseAllGroupsWhenGroupChanges
+          sort={documentSort}
+          onSortChange={handleDocumentSortChange}
+        />
       );
     }
 
     if (activeTab === 'students') {
+      const studentIsLoading = studentFetcher.state !== 'idle';
+
       return (
-        <div className="rounded-lg bg-muted/50">
-          <Table aria-label="Students">
-            <TableHeader>
-              <TableRow>
-                <TableHead>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative min-w-0 w-full max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                name="class-students-search"
+                value={studentSearchQuery}
+                onChange={(event) => setStudentSearchQuery(event.target.value)}
+                placeholder="Search students"
+                className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Search students"
+                data-testid="class-students-search"
+              />
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2">
+            {selectedStudentIds.length > 0 && (
+              <>
+                <studentFetcher.Form method="post" className="inline">
+                  <input type="hidden" name="intent" value="remove-students" />
+                  {selectedStudentIds.map((id) => (
+                    <input
+                      key={id}
+                      type="hidden"
+                      name="studentProfileIds"
+                      value={id}
+                    />
+                  ))}
+                  <Tooltip
+                    text={`Remove from class (${selectedStudentIds.length})`}
+                  >
+                    <Button
+                      type="submit"
+                      size="icon-sm"
+                      variant="outline"
+                      disabled={studentIsLoading}
+                      aria-label={`Remove ${selectedStudentIds.length} student(s) from this class`}
+                      onClick={(e) => {
+                        if (
+                          !confirm(
+                            `Remove ${selectedStudentIds.length} student(s) from this class? Their accounts and work are not deleted.`
+                          )
+                        ) {
+                          e.preventDefault();
+                          return;
+                        }
+                        setSelectedStudentIds([]);
+                      }}
+                    >
+                      <UserMinus className="h-4 w-4" />
+                    </Button>
+                  </Tooltip>
+                </studentFetcher.Form>
+                <Tooltip text={`Move to another class (${selectedStudentIds.length})`}>
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 h-8 gap-2 px-2"
-                    aria-label={`Sort students by name ${
-                      studentNameSortDirection === 'asc'
-                        ? 'descending'
-                        : 'ascending'
-                    }`}
-                    onClick={toggleStudentNameSort}
+                    size="icon-sm"
+                    variant="outline"
+                    disabled={
+                      studentIsLoading || data.teacherClasses.length === 0
+                    }
+                    aria-label={`Move ${selectedStudentIds.length} student(s) to another class`}
+                    onClick={() => {
+                      setMoveTargetClassId(data.teacherClasses[0]?.id ?? '');
+                      setIsMoveStudentsSheetOpen(true);
+                    }}
                   >
-                    Student Name
-                    {studentNameSortDirection === 'asc' ? (
-                      <ArrowUp className="h-4 w-4" />
-                    ) : (
-                      <ArrowDown className="h-4 w-4" />
-                    )}
+                    <ArrowRightLeft className="h-4 w-4" />
                   </Button>
-                </TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Documents</TableHead>
-                <TableHead>Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedData.map((s) => {
-                const studentProfileId = s.profile.id;
-                const studentSubmissions = allSubmissions.filter(
-                  (sub) => sub.document.profile.id === studentProfileId
-                );
-                const studentSubmitted = studentSubmissions.filter(
-                  (sub) => !hasMeaningfulGrade(sub) && !sub.releasedAt
-                );
-                const studentGraded = studentSubmissions.filter(
-                  (sub) => hasMeaningfulGrade(sub) && !sub.releasedAt
-                );
-                const studentReleased = studentSubmissions.filter(
-                  (sub) => !!sub.releasedAt
-                );
-                const studentDrafts = data.inProgressDocuments.filter(
-                  (doc) => doc.profile.id === studentProfileId
-                );
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">
-                      {s.profile.user.name ?? 'Unnamed Student'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {s.profile.user.email}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {studentDrafts.length + studentSubmissions.length}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Sheet>
-                        <SheetTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedProfileId(s.profile.id)}
-                          >
-                            View Details
-                          </Button>
-                        </SheetTrigger>
-                        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-                          <SheetHeader>
-                            <SheetTitle>
-                              {s.profile.user.name ?? 'Unnamed Student'}
-                            </SheetTitle>
-                            <p className="text-sm text-muted-foreground">
-                              {s.profile.user.email}
-                            </p>
-                          </SheetHeader>
-                          <div className="mt-6 space-y-6">
-                            {/* Submitted */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">
-                                  Submitted
-                                </span>
-                                {studentSubmitted.length > 0 && (
-                                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100">
-                                    {studentSubmitted.length}
-                                  </Badge>
-                                )}
-                              </div>
-                              {studentSubmitted.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  None
-                                </p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {studentSubmitted.map((sub) => (
-                                    <div
-                                      key={sub.id}
-                                      className="flex items-center justify-between text-sm"
-                                    >
-                                      <div className="min-w-0">
-                                        <Link
-                                          to={`/app/submissions/${sub.id}?${
-                                            data.isDocumentSubmissionEnabled
-                                              ? 'edit=1&'
-                                              : ''
-                                          }exitTo=${encodedClassDetailExitTo}`}
-                                          className="text-primary hover:underline truncate block"
-                                        >
-                                          {sub.title}
-                                        </Link>
-                                        {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {sub.document.assignment.title}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                                        {timeAgo(
-                                          new Date(
-                                            sub.submittedAt ?? sub.createdAt
-                                          )
-                                        )}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                </Tooltip>
+              </>
+            )}
+            <Button
+              size="sm"
+              type="button"
+              onClick={() => setIsAddStudentSheetOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Student
+            </Button>
+            </div>
+          </div>
 
-                            {/* Graded */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">
-                                  Graded
-                                </span>
-                                {studentGraded.length > 0 && (
-                                  <Badge className="bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100">
-                                    {studentGraded.length}
-                                  </Badge>
-                                )}
-                              </div>
-                              {studentGraded.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  None
-                                </p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {studentGraded.map((sub) => {
-                                    const gradeDisplay = formatAssignmentGrade({
-                                      submitForGrade:
-                                        sub.document.assignment?.submitForGrade,
-                                      numericPercentage:
-                                        sub.numericPercentage ?? null,
-                                      letterGrade: sub.letterGrade ?? null,
-                                      pointValue:
-                                        sub.document.assignment?.pointValue ??
-                                        null,
-                                    });
+          <Sheet
+            open={isAddStudentSheetOpen}
+            onOpenChange={handleAddStudentSheetOpenChange}
+          >
+            <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Add Student by Email</SheetTitle>
+                <p className="text-sm text-muted-foreground">
+                  {addStudentStep === 'email'
+                    ? 'Enter a student email to add them to this class.'
+                    : 'Review the next step before continuing.'}
+                </p>
+              </SheetHeader>
+              {addStudentStep === 'email' ? (
+                <studentFetcher.Form method="post" className="mt-4 space-y-4">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value="lookup-student-email"
+                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="add-student-email">Email</Label>
+                    <Input
+                      id="add-student-email"
+                      data-testid="add-student-email-input"
+                      name="email"
+                      type="email"
+                      required
+                      autoComplete="off"
+                      value={addStudentEmail}
+                      onChange={(event) =>
+                        setAddStudentEmail(event.target.value)
+                      }
+                    />
+                  </div>
+                  {studentFetcher.data &&
+                    'error' in studentFetcher.data &&
+                    studentFetcher.data.error && (
+                      <p className="text-sm text-red-600">
+                        {studentFetcher.data.error}
+                      </p>
+                    )}
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={studentIsLoading}
+                    data-testid="add-student-next-button"
+                  >
+                    {studentIsLoading ? 'Checking...' : 'Next'}
+                  </Button>
+                </studentFetcher.Form>
+              ) : (
+                <studentFetcher.Form method="post" className="mt-4 space-y-4">
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value={
+                      addStudentConfirmAction === 'enroll'
+                        ? 'enroll-student'
+                        : 'invite-student'
+                    }
+                  />
+                  <input type="hidden" name="email" value={addStudentEmail} />
+                  <p
+                    className="text-sm"
+                    data-testid="add-student-confirm-message"
+                  >
+                    {addStudentConfirmAction === 'enroll'
+                      ? 'They have an account in the system. Are you ready to add them to the class?'
+                      : addStudentConfirmAction === 'invite'
+                        ? "They don't have an account in the system. Should I send them an invite?"
+                        : (studentFetcher.data &&
+                            'message' in studentFetcher.data &&
+                            studentFetcher.data.message) ||
+                          'This student is already in this class.'}
+                  </p>
+                  <p className="rounded-md border bg-muted/40 p-3 text-sm">
+                    {addStudentEmail}
+                  </p>
+                  {studentFetcher.data &&
+                    'error' in studentFetcher.data &&
+                    studentFetcher.data.error && (
+                      <p className="text-sm text-red-600">
+                        {studentFetcher.data.error}
+                      </p>
+                    )}
+                  {addStudentConfirmAction !== 'already_enrolled' && (
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={studentIsLoading}
+                      data-testid="add-student-confirm-button"
+                    >
+                      {studentIsLoading
+                        ? addStudentConfirmAction === 'enroll'
+                          ? 'Adding...'
+                          : 'Sending invite...'
+                        : 'Confirm'}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setAddStudentStep('email');
+                      setAddStudentConfirmAction(null);
+                    }}
+                    disabled={studentIsLoading}
+                  >
+                    Back
+                  </Button>
+                </studentFetcher.Form>
+              )}
+            </SheetContent>
+          </Sheet>
 
-                                    return (
-                                      <div
-                                        key={sub.id}
-                                        className="flex items-center justify-between text-sm"
-                                      >
-                                        <div className="min-w-0">
-                                          <Link
-                                            to={`/app/submissions/${sub.id}?${
-                                              data.isDocumentSubmissionEnabled
-                                                ? 'edit=1&'
-                                                : ''
-                                            }exitTo=${encodedClassDetailExitTo}`}
-                                            className="text-primary hover:underline truncate block"
-                                          >
-                                            {sub.title}
-                                          </Link>
-                                          {sub.document.assignment && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {sub.document.assignment.title}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center gap-2 ml-2 shrink-0">
-                                          {gradeDisplay ? (
-                                            <Badge variant="secondary">
-                                              {gradeDisplay}
-                                            </Badge>
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
+          <Sheet
+            open={isMoveStudentsSheetOpen}
+            onOpenChange={setIsMoveStudentsSheetOpen}
+          >
+            <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+              <SheetHeader>
+                <SheetTitle>Move Students</SheetTitle>
+                <p className="text-sm text-muted-foreground">
+                  Changes which class these student profiles belong to. Accounts
+                  and work are not deleted.
+                </p>
+              </SheetHeader>
+              <studentFetcher.Form method="post" className="mt-4 space-y-4">
+                <input type="hidden" name="intent" value="move-students" />
+                {selectedStudentIds.map((id) => (
+                  <input
+                    key={id}
+                    type="hidden"
+                    name="studentProfileIds"
+                    value={id}
+                  />
+                ))}
+                <div className="space-y-2">
+                  <Label htmlFor="move-target-class">Target class</Label>
+                  <select
+                    id="move-target-class"
+                    name="targetClassId"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={moveTargetClassId}
+                    onChange={(e) => setMoveTargetClassId(e.target.value)}
+                    required
+                  >
+                    {data.teacherClasses.map((klass) => (
+                      <option key={klass.id} value={klass.id}>
+                        {klass.school.name} — Grade {klass.grade}, Period{' '}
+                        {klass.period}
+                        {klass.title ? ` — ${klass.title}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {studentFetcher.data &&
+                  'error' in studentFetcher.data &&
+                  studentFetcher.data.error && (
+                    <p className="text-sm text-red-600">
+                      {studentFetcher.data.error}
+                    </p>
+                  )}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={studentIsLoading || !moveTargetClassId}
+                >
+                  {studentIsLoading
+                    ? 'Moving...'
+                    : `Move ${selectedStudentIds.length} student(s)`}
+                </Button>
+              </studentFetcher.Form>
+            </SheetContent>
+          </Sheet>
 
-                            {/* Released */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">
-                                  Released
-                                </span>
-                                {studentReleased.length > 0 && (
-                                  <Badge variant="secondary">
-                                    {studentReleased.length}
-                                  </Badge>
-                                )}
-                              </div>
-                              {studentReleased.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  None
-                                </p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {studentReleased.map((sub) => (
-                                    <div
-                                      key={sub.id}
-                                      className="flex items-center justify-between text-sm"
-                                    >
-                                      <div className="min-w-0">
-                                        <Link
-                                          to={`/app/submissions/${sub.id}?${
-                                            data.isDocumentSubmissionEnabled
-                                              ? 'edit=1&'
-                                              : ''
-                                          }exitTo=${encodedClassDetailExitTo}`}
-                                          className="text-primary hover:underline truncate block"
-                                        >
-                                          {sub.title}
-                                        </Link>
-                                        {sub.document.assignment && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {sub.document.assignment.title}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 ml-2 shrink-0">
-                                        {(sub.letterGrade ||
-                                          sub.numericPercentage != null) && (
-                                          <Badge variant="secondary">
-                                            {formatGrade(
-                                              sub.numericPercentage ?? null,
-                                              sub.letterGrade ?? null
-                                            )}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Drafts in progress */}
-                            <div>
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="text-sm font-medium">
-                                  Drafts in progress
-                                </span>
-                                {studentDrafts.length > 0 && (
-                                  <Badge variant="secondary">
-                                    {studentDrafts.length}
-                                  </Badge>
-                                )}
-                              </div>
-                              {studentDrafts.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  None
-                                </p>
-                              ) : (
-                                <div className="space-y-1">
-                                  {studentDrafts.map((doc) => (
-                                    <div
-                                      key={doc.id}
-                                      className="flex items-center justify-between text-sm"
-                                    >
-                                      <div className="min-w-0">
-                                        <Link
-                                          to={`/app/documents/${doc.id}?left=tutor&exitTo=${encodedClassDetailExitTo}`}
-                                          className="text-primary hover:underline truncate block"
-                                        >
-                                          {getDraftDisplayTitle(doc)}
-                                        </Link>
-                                        {doc.assignment && (
-                                          <span className="text-xs text-muted-foreground">
-                                            {doc.assignment.title}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                                        {timeAgo(new Date(doc.updatedAt))}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </SheetContent>
-                      </Sheet>
-                    </TableCell>
+          {sortedStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+              <span className="text-lg font-bold">No students yet</span>
+              <span className="text-sm text-muted-foreground">
+                Add students to this class to get started
+              </span>
+            </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+              <span className="text-lg font-bold">No students found</span>
+              <span className="text-sm text-muted-foreground">
+                Try a different search term
+              </span>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'rounded-lg bg-muted/50',
+                studentIsLoading ? 'opacity-50 transition-opacity' : ''
+              )}
+            >
+              <Table aria-label="Students">
+                <TableHeader className="rounded-t-lg">
+                  <TableRow className="bg-muted/50 rounded-t-lg">
+                    <TableHead className="w-[50px] pl-4 rounded-tl-lg">
+                      <Checkbox
+                        checked={
+                          filteredStudents.length > 0 &&
+                          selectedStudentIds.length === filteredStudents.length
+                        }
+                        onCheckedChange={handleSelectAllStudents}
+                      />
+                    </TableHead>
+                    <TableHead>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 h-8 gap-2 px-2"
+                        aria-label={`Sort students by name ${
+                          studentNameSortDirection === 'asc'
+                            ? 'descending'
+                            : 'ascending'
+                        }`}
+                        onClick={toggleStudentNameSort}
+                      >
+                        Student Name
+                        {studentNameSortDirection === 'asc' ? (
+                          <ArrowUp className="h-4 w-4" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap pr-4">
+                      Documents
+                    </TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedData.map((s) => {
+                    const studentDocumentCount =
+                      data.inProgressDocuments.filter(
+                        (doc) => doc.membership.id === s.id
+                      ).length +
+                      new Set(
+                        allSubmissions
+                          .filter(
+                            (sub) => sub.document.membership.id === s.id
+                          )
+                          .map((sub) => sub.documentId)
+                      ).size;
+
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell className="max-h-[37px] pl-4">
+                          <Checkbox
+                            checked={selectedStudentIds.includes(s.id)}
+                            onCheckedChange={() => handleSelectStudent(s.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {s.user.name ?? 'Unnamed Student'}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {s.user.email}
+                        </TableCell>
+                        <TableCell className="pr-4">
+                          <button
+                            type="button"
+                            className={cn(
+                              badgeVariants({ variant: 'secondary' }),
+                              'cursor-pointer gap-1 py-1 pl-2 pr-1'
+                            )}
+                            onClick={() => handleViewStudentDocuments(s.id)}
+                            aria-label={`View ${s.user.name ?? s.user.email}'s documents`}
+                          >
+                            {studentDocumentCount}{' '}
+                            {studentDocumentCount === 1 ? 'doc' : 'docs'}
+                            <ChevronRight
+                              className="size-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       );
     }
@@ -2108,138 +1942,58 @@ function ClassDetailPage() {
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      {/* Header */}
-      <div className="flex w-full justify-between border-b bg-secondary">
-        <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <h2>
-              Grade {data.klass.grade} • Period {data.klass.period}
-            </h2>
-            {data.klass.title && (
-              <p className="mt-1 font-medium">{data.klass.title}</p>
-            )}
-            {data.klass.school?.name ? (
-              <p className="mt-1 text-muted-foreground">
-                {data.klass.school.name}
-              </p>
-            ) : null}
-            {data.releasedGradesEnabled ? (
-              <Link
-                to={`/app/my-classes/${data.klass.id}/released-grades`}
-                className="mt-2 text-sm underline"
-              >
-                Released grades →
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
       <div className="mx-auto w-full max-w-screen-xl px-3 py-3 pb-24 sm:px-5">
-        <div className="mb-6">
-          <Button asChild variant="outline" size="sm">
+        <div className="mb-4">
+          <Button asChild variant="ghost" size="sm">
             <Link to="/app/my-classes" className="w-fit">
               <CaretLeftIcon className="mr-1 h-4 w-4" /> Back to my classes
             </Link>
           </Button>
         </div>
 
-        {/* Tabs and Table */}
-        <Tabs
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="w-full"
+        <ClassDetailHeader
+          klass={{
+            id: data.klass.id,
+            grade: data.klass.grade,
+            period: data.klass.period,
+            title: data.klass.title,
+            school: data.klass.school,
+            schoolYear: data.klass.schoolYear,
+            code: data.klass.code,
+            classArtIndex: data.klass.classArtIndex ?? null,
+          }}
+          studentCount={students.length}
+          documentCount={classDocuments.length}
+          activeTab={activeHeaderTab}
+          onTabChange={handleHeaderTabChange}
+          onEdit={() => setIsClassEditSheetOpen(true)}
+        />
+
+        <div
+          key={activeHeaderTab}
+          className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
         >
-          <div>
-            <div className="flex items-center justify-between">
-              <TabsList className="flex h-auto">
-                <TabsTrigger
-                  value="students"
-                  className="flex items-center gap-2 h-auto py-2"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden sm:inline">Students</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {students.length}
-                  </span>
-                </TabsTrigger>
-                {assignmentsEnabled ? (
-                  <TabsTrigger
-                    value="assignments"
-                    className="flex items-center gap-2 h-auto py-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="hidden sm:inline">Assignments</span>
-                    <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                      {data.assignments.length}
-                    </span>
-                  </TabsTrigger>
-                ) : null}
-              </TabsList>
-              {assignmentsEnabled ? (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditingAssignmentId(null);
-                    setIsAssignmentSheetOpen(true);
-                  }}
-                >
-                  + Create New Assignment
-                </Button>
-              ) : null}
+          <div>{renderTable()}</div>
+          {activeTab === 'students' && currentTabData.length > 0 ? (
+            <div className="mt-4">
+              <Pagination
+                totalCount={currentTabData.length}
+                skip={pagination.skip}
+                take={pagination.take}
+                onChange={handlePaginationChange}
+              />
             </div>
-            <TabsContent value={activeTab} className="mt-4">
-              <div>{renderTable()}</div>
-              {currentTabData.length > 0 && (
-                <div className="mt-4">
-                  <Pagination
-                    totalCount={currentTabData.length}
-                    skip={pagination.skip}
-                    take={pagination.take}
-                    onChange={handlePaginationChange}
-                  />
-                </div>
-              )}
-            </TabsContent>
-          </div>
-        </Tabs>
+          ) : null}
+        </div>
       </div>
 
-      <AssignmentSheet
-        classId={data.klass.id}
-        classOption={{
-          id: data.klass.id,
-          grade: data.klass.grade,
-          period: data.klass.period,
-          title: data.klass.title,
-        }}
-        allowedAssignmentTypes={data.allowedAssignmentTypes}
-        assignmentCreationStandardizationEnabled={
-          data.assignmentCreationStandardizationEnabled
-        }
-        open={isAssignmentSheetOpen}
-        onOpenChange={(open) => {
-          setIsAssignmentSheetOpen(open);
-          if (!open) setEditingAssignmentId(null);
-        }}
-        editingAssignment={editingAssignment}
+      <ClassManageSheet
+        open={isClassEditSheetOpen}
+        onOpenChange={setIsClassEditSheetOpen}
+        editingClass={editingClass}
+        schools={data.manageSchools}
+        onSuccess={() => revalidator.revalidate()}
       />
-
-      <Sheet
-        open={selectedPasteContent !== null}
-        onOpenChange={(open) => !open && setSelectedPasteContent(null)}
-      >
-        <SheetContent className="w-full sm:max-w-2xl">
-          <SheetHeader>
-            <SheetTitle>Pasted Content</SheetTitle>
-          </SheetHeader>
-          <div className="mt-4 h-[calc(100vh-8rem)] overflow-y-auto">
-            <pre className="whitespace-pre-wrap break-words text-sm font-mono bg-muted p-4 rounded-lg">
-              {selectedPasteContent || ''}
-            </pre>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {data.isDocumentSubmissionEnabled ? (
         <ReleaseGradesSheet

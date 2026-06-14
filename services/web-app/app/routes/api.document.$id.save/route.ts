@@ -1,6 +1,6 @@
 import { invariant } from '@epic-web/invariant';
 import { type ActionFunctionArgs } from 'react-router';
-import { requireProfile, requireUserId } from '~/utils/auth.server';
+import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { contentHash as computeContentHash } from '~/utils/content-hash';
 import { prisma } from '~/utils/db.server';
 
@@ -10,7 +10,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   invariant(params.id, 'No document id provided');
 
   const userId = await requireUserId(request);
-  const profile = await requireProfile(request, userId);
+  const profile = await requireMembership(request, userId);
 
   const body = await request.json();
   const { html, text, contentHash: clientContentHash, trigger, baseRevision } = body as {
@@ -33,13 +33,13 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
         ? {}
         : {
             OR: [
-              { profileId: profile.id },
+              { membershipId: profile.id },
               {
-                studentProfile: {
-                  classes: {
+                membership: {
+                  classesAsStudent: {
                     some: {
                       teachers: {
-                        some: { profileId: profile.id },
+                        some: { id: profile.id },
                       },
                     },
                   },
@@ -50,7 +50,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     },
     select: {
       id: true,
-      profileId: true,
+      membershipId: true,
       html: true,
       text: true,
       revision: true,
@@ -71,7 +71,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
       source: 'sync-service',
       status: 'pending',
       userId,
-      profileId: profile.id,
+      membershipId: profile.id,
       documentId: document.id,
       htmlHash: clientContentHash,
       textHash: clientContentHash,
