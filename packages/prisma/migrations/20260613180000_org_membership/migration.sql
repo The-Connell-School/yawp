@@ -65,6 +65,21 @@ FROM "StudentProfile" sp
 WHERE sp.id = d."studentProfileId"
   AND d."profileId" <> sp."profileId";
 
+-- 5b. Rewire teacher-scoped feature flags from TeacherProfile.id -> Profile.id (OrgMembership.id)
+CREATE TABLE "FeatureAccessTargetTeacherForensic" AS
+SELECT
+  fat.*,
+  NOW() AS "capturedAt"
+FROM "FeatureAccessTarget" fat
+WHERE fat."targetKind" = 'teacher';
+
+UPDATE "FeatureAccessTarget" fat
+SET "targetId" = tp."profileId"
+FROM "TeacherProfile" tp
+WHERE fat."targetKind" = 'teacher'
+  AND fat."targetId" = tp."id"
+  AND fat."targetId" <> tp."profileId";
+
 -- 6. Rewire join tables to membership (profile) ids
 ALTER TABLE "_ClassToTeacherProfile" DROP CONSTRAINT "_ClassToTeacherProfile_B_fkey";
 ALTER TABLE "_ClassToStudentProfile" DROP CONSTRAINT "_ClassToStudentProfile_B_fkey";
@@ -121,11 +136,25 @@ ALTER TABLE "TeacherTrainingModuleSession" DROP COLUMN "teacherProfileId";
 ALTER TABLE "TeacherTrainingModuleSession" ALTER COLUMN "membershipId" SET NOT NULL;
 
 -- 8. Drop studentProfileId from Document
+CREATE TABLE "DocumentStudentProfileIdForensic" (
+  "documentId" TEXT PRIMARY KEY,
+  "studentProfileId" TEXT NOT NULL,
+  "capturedAt" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO "DocumentStudentProfileIdForensic" ("documentId", "studentProfileId")
+SELECT "id", "studentProfileId"
+FROM "Document"
+WHERE "studentProfileId" IS NOT NULL;
+
 ALTER TABLE "Document" DROP CONSTRAINT "Document_studentProfileId_fkey";
 DROP INDEX "Document_studentProfileId_idx";
 ALTER TABLE "Document" DROP COLUMN "studentProfileId";
 
--- 9. Drop TeacherProfile, StudentProfile tables
+-- 9. Archive sub-profile tables, then drop live tables
+CREATE TABLE "TeacherProfileForensic" AS TABLE "TeacherProfile" WITH DATA;
+CREATE TABLE "StudentProfileForensic" AS TABLE "StudentProfile" WITH DATA;
+
 ALTER TABLE "TeacherProfile" DROP CONSTRAINT "TeacherProfile_profileId_fkey";
 ALTER TABLE "StudentProfile" DROP CONSTRAINT "StudentProfile_profileId_fkey";
 DROP TABLE "TeacherProfile";
