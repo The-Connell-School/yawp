@@ -96,6 +96,9 @@ jobs:
           PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
           PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
 
+      - name: 🧬 Generate Prisma client
+        run: bun prisma:generate
+
       - name: 🧱 Apply production Prisma migrations (with post-cutover verification)
         run: bun prisma:migrate-remote production
         env:
