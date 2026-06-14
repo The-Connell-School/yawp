@@ -54,9 +54,9 @@ function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Pr
   });
 }
 
-async function orgMembershipTableExists(): Promise<boolean> {
+async function orgMembershipTableExists(env: NodeJS.ProcessEnv): Promise<boolean> {
   const { createPrismaClient } = await import('./local-dev/connection');
-  const prisma = createPrismaClient();
+  const prisma = createPrismaClient(env.DATABASE_URL);
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
       SELECT EXISTS (
@@ -83,7 +83,7 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return migrateCode;
   }
 
-  if (!(await orgMembershipTableExists())) {
+  if (!(await orgMembershipTableExists(env))) {
     console.log('Skipping org-membership postcheck (OrgMembership table not present yet).');
     return 0;
   }
