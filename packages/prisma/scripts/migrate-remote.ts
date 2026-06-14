@@ -131,7 +131,8 @@ setTimeout(async () => {
     migrationStarted = true;
     const env = {
       ...process.env,
-      DATABASE_URL: `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}`,
+      REMOTE_MIGRATE_TUNNEL: '1',
+      DATABASE_URL: `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}?sslmode=require`,
     };
 
     const exitCode = await runProductionMigrations(env);
