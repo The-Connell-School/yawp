@@ -45,6 +45,49 @@ Teacher-scoped `FeatureAccessTarget.targetId` values are rewired from `TeacherPr
 
 ## Pre-cutover staging rehearsal
 
+### One-command local rehearsal (recommended)
+
+Uses a **fresh production snapshot** loaded into a **local** database only. Does not touch production.
+
+```bash
+cp scripts/production-sync.env.example scripts/production-sync.env
+# fill bastion + RDS credentials + local DATABASE_URL (dedicated DB name)
+
+set -a && source scripts/production-sync.env && set +a
+YAWP_CONFIRM=yes bun run db:staging-org-membership-rehearsal
+```
+
+This runs, in order:
+
+1. Production `pg_dump` → local restore (pre-cutover schema)
+2. `org-membership-precheck.ts` (raw SQL; works on pre-cutover schema)
+3. `prisma migrate deploy` (assignment split + org membership + forensic archives)
+4. `org-membership-staging-verify.ts` (postcheck + forensic parity + sample accounts)
+5. Prisma + auth unit tests
+6. E2E smoke (isolated e2e DB) unless `YAWP_SKIP_E2E=1`
+7. `bun web-app:build`
+
+To rehearse from an existing dump instead of live bastion sync:
+
+```bash
+YAWP_CONFIRM=yes PRELOADED_DUMP=services/web-app/e2e/.data/production-live-YYYYMMDD-HHMMSS.sql \
+  DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/yawp-rehearsal \
+  ./scripts/staging-org-membership-rehearsal.sh
+```
+
+After automated gates pass, start the app against the restored DB and run manual smoke:
+
+```bash
+cd services/web-app
+DATABASE_URL="$DATABASE_URL" bun dev
+```
+
+Use `sampleAccounts` emails from the staging-verify JSON output. Passwords are unchanged from production — use known test accounts or password reset flows in staging only.
+
+---
+
+## Pre-cutover staging rehearsal (manual steps)
+
 Run against a **fresh restore** of the latest production snapshot. Do not rehearse on live production.
 
 ### 1. Snapshot and restore
@@ -268,9 +311,11 @@ Full behavioral parity checklist for staging rehearsal or post-cutover validatio
 
 | Step | Command |
 | --- | --- |
-| Precheck | `cd packages/prisma && bun run scripts/org-membership-precheck.ts` |
+| Full local rehearsal | `YAWP_CONFIRM=yes bun run db:staging-org-membership-rehearsal` |
+| Precheck | `cd packages/prisma && bun run org-membership:precheck` |
 | Migrate | `cd packages/prisma && bun run prisma migrate deploy` |
-| Postcheck | `cd packages/prisma && bun run scripts/org-membership-postcheck.ts` |
+| Staging verify | `cd packages/prisma && bun run org-membership:staging-verify` |
+| Postcheck | `cd packages/prisma && bun run org-membership:postcheck` |
 | E2E prepare | `cd services/web-app && bun run test:e2e:prepare` |
 | E2E smoke | `cd services/web-app && bun run test:e2e:smoke` |
 

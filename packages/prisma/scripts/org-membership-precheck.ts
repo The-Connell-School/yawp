@@ -32,17 +32,54 @@ export function buildPrecheckReport(input: PrecheckInput) {
   return { ok: blockers.length === 0, counts: input.counts, blockers };
 }
 
+async function rawCount(prisma: ReturnType<typeof createPrismaClient>, tableName: string) {
+  const rows = await prisma.$queryRawUnsafe<Array<{ count: number }>>(
+    `SELECT COUNT(*)::int AS count FROM "${tableName}"`
+  );
+  return rows[0]?.count ?? 0;
+}
+
+async function tableExists(
+  prisma: ReturnType<typeof createPrismaClient>,
+  tableName: string
+) {
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = ${tableName}
+    ) AS "exists"
+  `;
+  return rows[0]?.exists ?? false;
+}
+
 async function main() {
   const prisma = createPrismaClient();
   try {
+    if (!(await tableExists(prisma, 'Profile'))) {
+      console.error(
+        JSON.stringify(
+          {
+            ok: false,
+            error:
+              'Profile table not found. Database may already be migrated; use org-membership-postcheck or org-membership-staging-verify instead.',
+          },
+          null,
+          2
+        )
+      );
+      process.exit(1);
+    }
+
     const [users, profiles, teacherProfiles, studentProfiles, documents, classes] =
       await Promise.all([
-        prisma.user.count(),
-        prisma.profile.count(),
-        prisma.teacherProfile.count(),
-        prisma.studentProfile.count(),
-        prisma.document.count(),
-        prisma.class.count(),
+        rawCount(prisma, 'User'),
+        rawCount(prisma, 'Profile'),
+        rawCount(prisma, 'TeacherProfile'),
+        rawCount(prisma, 'StudentProfile'),
+        rawCount(prisma, 'Document'),
+        rawCount(prisma, 'Class'),
       ]);
 
     const dualSubProfiles = await prisma.$queryRaw<
