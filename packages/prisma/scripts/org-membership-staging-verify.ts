@@ -12,6 +12,8 @@ import {
 const FORENSIC_TABLES = [
   'TeacherProfileForensic',
   'StudentProfileForensic',
+  'ProfileDuplicateForensic',
+  'ProfileOrphanForensic',
   'AssignmentClassIdForensic',
   'AssignmentDueDateForensic',
   'FeatureAccessTargetTeacherForensic',

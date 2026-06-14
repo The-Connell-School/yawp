@@ -27,19 +27,6 @@ SET "role" = 'STUDENT'
 WHERE "role" IS NULL
   AND EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id);
 
-DO $$
-DECLARE
-  unresolved_count INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO unresolved_count
-  FROM "Profile"
-  WHERE "role" IS NULL;
-
-  IF unresolved_count > 0 THEN
-    RAISE EXCEPTION 'OrgMembership migration blocked: % Profile rows have no TeacherProfile or StudentProfile', unresolved_count;
-  END IF;
-END $$;
-
 -- 3. Backfill teacher/student fields
 UPDATE "Profile" p
 SET "isActive" = tp."isActive"
@@ -79,6 +66,136 @@ FROM "TeacherProfile" tp
 WHERE fat."targetKind" = 'teacher'
   AND fat."targetId" = tp."id"
   AND fat."targetId" <> tp."profileId";
+
+-- 5c. Dedupe duplicate Profile rows per (userId, organizationId)
+CREATE TABLE "ProfileDuplicateForensic" AS
+SELECT p.*, NOW() AS "archivedAt"
+FROM "Profile" p
+INNER JOIN (
+  SELECT "userId", "organizationId"
+  FROM "Profile"
+  GROUP BY 1, 2
+  HAVING COUNT(*) > 1
+) d ON d."userId" = p."userId" AND d."organizationId" = p."organizationId";
+
+CREATE TEMP TABLE _profile_dedupe_map ON COMMIT DROP AS
+WITH ranked AS (
+  SELECT
+    p.id,
+    p."userId",
+    p."organizationId",
+    p."isOrgOwner",
+    ROW_NUMBER() OVER (
+      PARTITION BY p."userId", p."organizationId"
+      ORDER BY
+        (EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)) DESC,
+        (EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id)) DESC,
+        p."isOrgOwner" DESC,
+        p."createdAt" ASC
+    ) AS rn
+  FROM "Profile" p
+)
+SELECT loser.id AS loser_id, keeper.id AS keeper_id
+FROM ranked loser
+JOIN ranked keeper
+  ON keeper."userId" = loser."userId"
+ AND keeper."organizationId" = loser."organizationId"
+ AND keeper.rn = 1
+WHERE loser.rn > 1;
+
+UPDATE "Profile" keeper
+SET "isOrgOwner" = true
+FROM _profile_dedupe_map m
+JOIN "Profile" loser ON loser.id = m.loser_id
+WHERE keeper.id = m.keeper_id AND loser."isOrgOwner" = true;
+
+UPDATE "Document" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "DocumentComment" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "DocumentCommentResponse" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "PasteAlert" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "Submission" d
+SET "gradedById" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."gradedById" = m.loser_id;
+
+UPDATE "SubmissionComment" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "AssignmentType" d
+SET "ownerTeacherId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."ownerTeacherId" = m.loser_id;
+
+UPDATE "GradingAssistantTemplate" d
+SET "createdById" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."createdById" = m.loser_id;
+
+UPDATE "GradingAssistantTemplate" d
+SET "updatedById" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."updatedById" = m.loser_id;
+
+UPDATE "DocumentWriteJournal" d
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE d."profileId" = m.loser_id;
+
+UPDATE "TeacherProfile" tp
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE tp."profileId" = m.loser_id;
+
+UPDATE "StudentProfile" sp
+SET "profileId" = m.keeper_id
+FROM _profile_dedupe_map m
+WHERE sp."profileId" = m.loser_id;
+
+DELETE FROM "Profile" p
+USING _profile_dedupe_map m
+WHERE p.id = m.loser_id;
+
+-- 5d. Archive and remove Profile rows with no teacher/student sub-profiles
+CREATE TABLE "ProfileOrphanForensic" AS
+SELECT p.*, NOW() AS "archivedAt"
+FROM "Profile" p
+WHERE NOT EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)
+  AND NOT EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id);
+
+DELETE FROM "Profile" p
+WHERE NOT EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)
+  AND NOT EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id);
+
+DO $$
+DECLARE
+  unresolved_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO unresolved_count
+  FROM "Profile"
+  WHERE "role" IS NULL;
+
+  IF unresolved_count > 0 THEN
+    RAISE EXCEPTION 'OrgMembership migration blocked: % Profile rows have no TeacherProfile or StudentProfile after dedupe/orphan cleanup', unresolved_count;
+  END IF;
+END $$;
 
 -- 6. Rewire join tables to membership (profile) ids
 ALTER TABLE "_ClassToTeacherProfile" DROP CONSTRAINT "_ClassToTeacherProfile_B_fkey";

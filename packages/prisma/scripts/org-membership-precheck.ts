@@ -17,19 +17,36 @@ export type PrecheckInput = {
   }>;
   orphanSubProfiles: Array<{ kind: 'teacher' | 'student'; id: string }>;
   duplicateUserOrgProfiles: Array<{ userId: string; organizationId: string; count: number }>;
+  orphanProfilesWithoutSubProfiles: number;
 };
 
 export function buildPrecheckReport(input: PrecheckInput) {
-  const blockers = [
-    ...input.dualSubProfiles.map((row) => ({ kind: 'dual_sub_profile' as const, row })),
-    ...input.documentMismatches.map((row) => ({ kind: 'document_mismatch' as const, row })),
-    ...input.orphanSubProfiles.map((row) => ({ kind: 'orphan_sub_profile' as const, row })),
+  const warnings = [
+    ...input.dualSubProfiles.map((row) => ({
+      kind: 'dual_sub_profile' as const,
+      row,
+      note: 'Migration assigns TEACHER role when both sub-profiles exist.',
+    })),
     ...input.duplicateUserOrgProfiles.map((row) => ({
       kind: 'duplicate_user_org' as const,
       row,
+      note: 'Migration dedupes to one membership and archives extras in ProfileDuplicateForensic.',
     })),
+    ...(input.orphanProfilesWithoutSubProfiles > 0
+      ? [
+          {
+            kind: 'orphan_profile_without_sub_profile' as const,
+            row: { count: input.orphanProfilesWithoutSubProfiles },
+            note: 'Migration archives and removes empty profiles in ProfileOrphanForensic.',
+          },
+        ]
+      : []),
   ];
-  return { ok: blockers.length === 0, counts: input.counts, blockers };
+  const blockers = [
+    ...input.documentMismatches.map((row) => ({ kind: 'document_mismatch' as const, row })),
+    ...input.orphanSubProfiles.map((row) => ({ kind: 'orphan_sub_profile' as const, row })),
+  ];
+  return { ok: blockers.length === 0, counts: input.counts, warnings, blockers };
 }
 
 async function rawCount(prisma: ReturnType<typeof createPrismaClient>, tableName: string) {
@@ -129,12 +146,23 @@ async function main() {
       HAVING COUNT(*) > 1
     `;
 
+    const orphanProfilesWithoutSubProfiles = await prisma.$queryRaw<
+      Array<{ count: number }>
+    >`
+      SELECT COUNT(*)::int AS count
+      FROM "Profile" p
+      WHERE NOT EXISTS (SELECT 1 FROM "TeacherProfile" tp WHERE tp."profileId" = p.id)
+        AND NOT EXISTS (SELECT 1 FROM "StudentProfile" sp WHERE sp."profileId" = p.id)
+    `;
+
     const report = buildPrecheckReport({
       counts: { users, profiles, teacherProfiles, studentProfiles, documents, classes },
       dualSubProfiles,
       documentMismatches,
       orphanSubProfiles,
       duplicateUserOrgProfiles,
+      orphanProfilesWithoutSubProfiles:
+        orphanProfilesWithoutSubProfiles[0]?.count ?? 0,
     });
 
     console.log(JSON.stringify(report, null, 2));

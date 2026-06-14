@@ -30,7 +30,9 @@ These migrations **do not delete production rows**. They copy dropped columns/ta
 | --- | --- | --- |
 | `20260612120000_assignment_templates_and_class_assignments` | `AssignmentClassIdForensic` | former `Assignment.classId` |
 | same | `AssignmentDueDateForensic` | former `Assignment.dueDate` |
-| `20260613180000_org_membership` | `FeatureAccessTargetTeacherForensic` | teacher-scoped flag rows before ID rewire |
+| `20260613180000_org_membership` | `ProfileDuplicateForensic` | duplicate `(userId, organizationId)` profiles before dedupe |
+| same | `ProfileOrphanForensic` | profiles with no teacher/student sub-profiles (empty legacy rows) |
+| same | `FeatureAccessTargetTeacherForensic` | teacher-scoped flag rows before ID rewire |
 | same | `DocumentStudentProfileIdForensic` | former `Document.studentProfileId` |
 | same | `TeacherProfileForensic` | full `TeacherProfile` table |
 | same | `StudentProfileForensic` | full `StudentProfile` table |
@@ -111,12 +113,15 @@ bun run scripts/org-membership-precheck.ts
 
 Expected when run on pre-cutover schema: JSON report with `"ok": true`. If blockers appear, stop and resolve before continuing.
 
-Blocker kinds:
+Blocker kinds (hard stop):
 
-- `dual_sub_profile` — profile has both teacher and student sub-profiles (migration auto-resolves to TEACHER; investigate before cutover)
 - `document_mismatch` — document profile does not match student sub-profile parent
 - `orphan_sub_profile` — teacher/student sub-profile without parent profile
-- `duplicate_user_org` — more than one profile per user+organization
+
+Expected warnings (migration handles automatically):
+
+- `dual_sub_profile` — profile has both teacher and student sub-profiles (migration assigns TEACHER)
+- `duplicate_user_org` — more than one profile per user+organization (migration dedupes; archived in `ProfileDuplicateForensic`)
 
 ### 3. Apply migrations on staging
 

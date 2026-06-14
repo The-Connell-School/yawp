@@ -15,6 +15,7 @@ describe('org-membership staging verify', () => {
       forensicCounts: {
         TeacherProfileForensic: 10,
         StudentProfileForensic: 8,
+        ProfileDuplicateForensic: 2,
         AssignmentClassIdForensic: 4,
         AssignmentDueDateForensic: 1,
         FeatureAccessTargetTeacherForensic: 2,
@@ -46,6 +47,7 @@ describe('org-membership staging verify', () => {
       forensicCounts: {
         TeacherProfileForensic: null,
         StudentProfileForensic: 8,
+        ProfileDuplicateForensic: 2,
         AssignmentClassIdForensic: 4,
         AssignmentDueDateForensic: 1,
         FeatureAccessTargetTeacherForensic: 2,
