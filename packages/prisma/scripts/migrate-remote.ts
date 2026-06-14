@@ -3,7 +3,6 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { createPrismaClient } from './local-dev/connection';
 
 const prismaRoot = join(import.meta.dir, '..');
 
@@ -56,6 +55,7 @@ function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Pr
 }
 
 async function orgMembershipTableExists(): Promise<boolean> {
+  const { createPrismaClient } = await import('./local-dev/connection');
   const prisma = createPrismaClient();
   try {
     const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
@@ -73,6 +73,11 @@ async function orgMembershipTableExists(): Promise<boolean> {
 }
 
 async function runProductionMigrations(env: NodeJS.ProcessEnv) {
+  const generateCode = await runCommand('bun', ['prisma', 'generate'], env);
+  if (generateCode !== 0) {
+    return generateCode;
+  }
+
   const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
   if (migrateCode !== 0) {
     return migrateCode;
