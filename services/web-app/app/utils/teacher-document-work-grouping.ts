@@ -47,23 +47,21 @@ export function buildTeacherDocumentWorkGroups<
   mode: DocumentGroupMode;
   collator: Intl.Collator;
 }): TeacherDocumentWorkGroup<T>[] {
-  const sortedDocuments = [...params.documents].sort(
-    (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
-  );
+  const orderedDocuments = [...params.documents];
 
   if (params.mode === 'none') {
     return [
       {
         key: 'all',
         label: '',
-        documents: sortedDocuments,
+        documents: orderedDocuments,
       },
     ];
   }
 
   const groups = new Map<string, TeacherDocumentWorkGroup<T>>();
 
-  for (const document of sortedDocuments) {
+  for (const document of orderedDocuments) {
     const key =
       params.mode === 'class'
         ? (document.resolvedClass?.id ?? 'no-class')

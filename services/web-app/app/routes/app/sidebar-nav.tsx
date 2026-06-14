@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router';
+import { Link } from 'react-router';
 import {
   ClipboardList,
   CogIcon,
@@ -66,7 +66,7 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         requires: teacher,
       },
       {
-        to: '/app/student-work',
+        to: '/app/documents',
         label: 'Documents',
         icon: icons.studentWork,
         requires: teacher,
@@ -212,20 +212,11 @@ export function SidebarNavLinks({
               }
 
               return (
-                <NavLink
+                <Link
                   key={link.to}
-                  end={link.end}
-                  className={({ isActive: navIsActive }) =>
-                    cn(
-                      'flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground',
-                      {
-                        'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary':
-                          navIsActive,
-                        'py-2': !navExpanded,
-                      }
-                    )
-                  }
                   to={link.to}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={className}
                 >
                   {link.icon ? (
                     navExpanded ? (
@@ -244,7 +235,7 @@ export function SidebarNavLinks({
                   {navExpanded ? (
                     <span className="w-full min-w-0">{link.label}</span>
                   ) : null}
-                </NavLink>
+                </Link>
               );
             })}
           </div>

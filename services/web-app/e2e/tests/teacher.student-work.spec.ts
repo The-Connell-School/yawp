@@ -42,7 +42,7 @@ async function deleteDocument(documentId: string) {
   }
 }
 
-test.describe.serial('Teacher Student Work page', () => {
+test.describe.serial('Teacher Documents page', () => {
   test('shows lifecycle chips and filters by status', async ({
     page,
     e2eContext,
@@ -59,7 +59,7 @@ test.describe.serial('Teacher Student Work page', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/student-work');
+      await page.goto('/app/documents');
       await page.waitForLoadState('networkidle');
 
       const chips = page.getByTestId('student-work-status-chips');
@@ -67,7 +67,7 @@ test.describe.serial('Teacher Student Work page', () => {
       await expect(chips.getByText(/Needs Grading/)).toBeVisible();
       await expect(chips.getByText(/Released/)).toBeVisible();
 
-      const table = page.getByRole('table', { name: /student work/i });
+      const table = page.getByRole('table', { name: /documents/i });
       await expect(
         table.getByText('Needs Grading').first()
       ).toBeVisible();
@@ -90,7 +90,7 @@ test.describe.serial('Teacher Student Work page', () => {
     signIn,
   }) => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-    await page.goto('/app/student-work?group=class');
+    await page.goto('/app/documents?group=class');
     await page.waitForLoadState('networkidle');
 
     const group = page
@@ -101,7 +101,7 @@ test.describe.serial('Teacher Student Work page', () => {
     // Collapsing hides the group's rows.
     await group.click();
     await expect(
-      page.getByRole('table', { name: /student work/i })
+      page.getByRole('table', { name: /documents/i })
     ).toHaveCount(0);
   });
 
@@ -121,10 +121,10 @@ test.describe.serial('Teacher Student Work page', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto(`/app/student-work?q=Searchable+doc+${suffix}`);
+      await page.goto(`/app/documents?q=Searchable+doc+${suffix}`);
       await page.waitForLoadState('networkidle');
 
-      const table = page.getByRole('table', { name: /student work/i });
+      const table = page.getByRole('table', { name: /documents/i });
       await expect(table.locator('tbody tr')).toHaveCount(1);
       await expect(
         table.getByText(new RegExp(submissionTitle))
@@ -150,17 +150,21 @@ test.describe.serial('Teacher Student Work page', () => {
 
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
-      await page.goto('/app/student-work?status=needs-grading');
+      await page.goto('/app/documents?status=needs-grading');
       await page.waitForLoadState('networkidle');
 
+      const table = page.getByRole('table', { name: /documents/i });
       const row = page.getByRole('row', { name: new RegExp(submissionTitle) });
-      const openHref = await row
-        .getByRole('link', { name: /view details/i })
-        .getAttribute('href');
-      expect(openHref).toMatch(/\/app\/submissions\//);
-      expect(openHref).toContain('edit=1');
-      expect(openHref).toContain(
-        encodeURIComponent('/app/student-work?status=needs-grading')
+      await expect(table.getByRole('columnheader', { name: /action/i })).toHaveCount(
+        0
+      );
+      await expect(row.getByRole('link', { name: /view/i })).toHaveCount(0);
+
+      await row.click();
+      await page.waitForURL(/\/app\/submissions\//);
+      expect(page.url()).toContain('edit=1');
+      expect(page.url()).toContain(
+        encodeURIComponent('/app/documents?status=needs-grading')
       );
     } finally {
       await deleteDocument(document.id);

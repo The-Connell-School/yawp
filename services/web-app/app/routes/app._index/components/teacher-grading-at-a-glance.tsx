@@ -9,12 +9,12 @@ import { Link } from 'react-router';
 import { cn } from '~/utils/misc';
 
 const GRADING_LINKS = {
-  all: '/app/student-work',
-  needsGrading: '/app/student-work?status=needs-grading',
-  byStudent: '/app/student-work?status=needs-grading&group=student',
-  byClass: '/app/student-work?status=needs-grading&group=class',
-  byAssignment: '/app/student-work?status=needs-grading&group=assignment',
-  toRelease: '/app/student-work?status=graded',
+  all: '/app/documents',
+  needsGrading: '/app/documents?status=needs-grading',
+  byStudent: '/app/documents?status=needs-grading&group=student',
+  byClass: '/app/documents?status=needs-grading&group=class',
+  byAssignment: '/app/documents?status=needs-grading&group=assignment',
+  toRelease: '/app/documents?status=graded',
 } as const;
 
 function GradingModeCard({
@@ -126,7 +126,7 @@ export function TeacherGradingAtAGlance({
                 icon={Users}
                 accentClassName="bg-amber-50"
                 testId="teacher-workspace-cards"
-                ariaLabel="Student work, grade by student"
+                ariaLabel="Documents, grade by student"
               />
               <GradingModeCard
                 to={GRADING_LINKS.byClass}

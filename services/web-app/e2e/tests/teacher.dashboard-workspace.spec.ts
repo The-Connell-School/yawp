@@ -176,7 +176,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
       page.getByTestId('teacher-workspace-cards')
     ).toHaveAttribute(
       'href',
-      '/app/student-work?status=needs-grading&group=student'
+      '/app/documents?status=needs-grading&group=student'
     );
 
     // Retired dashboard sections stay gone.
@@ -191,13 +191,13 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await classesGrid.getByText(CLASS_LABEL).first().click();
     await page.waitForURL(`**/app/my-classes/${e2eContext.classId}**`);
 
+    const sidebarMyClasses = page
+      .locator('nav')
+      .getByRole('link', { name: 'My Classes', exact: true });
     await expect(
-      page.getByRole('link', { name: 'Dashboard' })
+      page.locator('nav').getByRole('link', { name: 'Dashboard', exact: true })
     ).not.toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('link', { name: 'My Classes' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    await expect(sidebarMyClasses).toHaveAttribute('aria-current', 'page');
   });
 
   test('only highlights My Classes after visiting grading from the dashboard', async ({
@@ -210,18 +210,21 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await page.waitForLoadState('networkidle');
 
     await page.getByTestId('teacher-workspace-cards').click();
-    await page.waitForURL(/\/app\/student-work/);
+    await page.waitForURL(/\/app\/documents/);
 
-    await page.getByRole('link', { name: 'My Classes' }).click();
+    await page
+      .locator('nav')
+      .getByRole('link', { name: 'My Classes', exact: true })
+      .click();
     await page.waitForURL('**/app/my-classes**');
 
+    const sidebarMyClasses = page
+      .locator('nav')
+      .getByRole('link', { name: 'My Classes', exact: true });
     await expect(
-      page.getByRole('link', { name: 'Dashboard' })
+      page.locator('nav').getByRole('link', { name: 'Dashboard', exact: true })
     ).not.toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('link', { name: 'My Classes' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
+    await expect(sidebarMyClasses).toHaveAttribute('aria-current', 'page');
   });
 
   test('creates one assignment record for each selected class from the Assignments page', async ({

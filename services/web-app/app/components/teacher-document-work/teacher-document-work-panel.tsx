@@ -1,6 +1,6 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -54,8 +54,57 @@ import {
   dedupeFilterOptionsById,
   studentMatchesStudentFilters,
 } from '~/utils/teacher-document-work-filter-options';
+import {
+  type DocumentWorkSort,
+  type DocumentWorkSortField,
+  sortTeacherDocumentWorkRows,
+  toggleDocumentWorkSort,
+} from '~/utils/teacher-document-work-sort';
 import { cn } from '~/utils/misc';
 import { timeAgo } from '~/utils/timeAgo';
+
+const DOCUMENT_TABLE_ROW_CLASSES = {
+  table: 'w-full table-fixed text-sm',
+  head: 'h-9 whitespace-nowrap px-2 py-1.5 text-sm',
+  cell: 'max-w-0 truncate whitespace-nowrap px-2 py-2 text-sm',
+  dateCell: 'text-sm text-muted-foreground',
+  badgeSize: 'default' as const,
+  columnWidths: {
+    student: 'w-[10%]',
+    document: 'w-[18%]',
+    class: 'w-[14%]',
+    assignment: 'w-[14%]',
+    status: 'w-[20%]',
+    date: 'w-[8%]',
+  },
+};
+
+function compactHeadClassName(
+  field: DocumentWorkSortField,
+  compactRows: boolean,
+  extra?: string
+) {
+  if (!compactRows) return extra;
+
+  const width =
+    field === 'student'
+      ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.student
+      : field === 'document'
+        ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.document
+        : field === 'class'
+          ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.class
+          : field === 'assignment'
+            ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.assignment
+            : field === 'status'
+              ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.status
+              : DOCUMENT_TABLE_ROW_CLASSES.columnWidths.date;
+
+  return cn(
+    DOCUMENT_TABLE_ROW_CLASSES.head,
+    width,
+    extra
+  );
+}
 
 export type TeacherDocumentWorkFilters = {
   studentIds: string[];
@@ -87,7 +136,10 @@ export type TeacherDocumentWorkPanelProps = {
   onFiltersChange: (updates: Partial<TeacherDocumentWorkFilters>) => void;
   onClearFilters: () => void;
   collapsedGroups: Set<string>;
-  onCollapsedGroupsChange: (next: Set<string>) => void;
+  onCollapsedGroupsChange: (
+    next: Set<string>,
+    options?: { persist?: boolean }
+  ) => void;
   headerActions?: React.ReactNode;
   pagination?: {
     skip: number;
@@ -100,6 +152,10 @@ export type TeacherDocumentWorkPanelProps = {
     groupSelect?: string;
   };
   collapseAllGroupsWhenGroupChanges?: boolean;
+  clickableRows?: boolean;
+  compactRows?: boolean;
+  sort?: DocumentWorkSort;
+  onSortChange?: (sort: DocumentWorkSort) => void;
 };
 
 export function TeacherDocumentWorkPanel({
@@ -122,7 +178,12 @@ export function TeacherDocumentWorkPanel({
   emptyMessageSecondary = 'Try clearing a filter or check another class.',
   testIds,
   collapseAllGroupsWhenGroupChanges = false,
+  clickableRows = false,
+  compactRows = false,
+  sort,
+  onSortChange,
 }: TeacherDocumentWorkPanelProps) {
+  const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState(filters.query);
   const previousGroupModeRef = useRef<DocumentGroupMode | null>(null);
   const collator = useMemo(
@@ -210,28 +271,46 @@ export function TeacherDocumentWorkPanel({
     });
   }, [documents, filters, uniqueStudents]);
 
+  const sortedFilteredDocuments = useMemo(() => {
+    if (!sort) return filteredDocuments;
+
+    return sortTeacherDocumentWorkRows({
+      documents: filteredDocuments,
+      sort,
+      collator,
+    });
+  }, [collator, filteredDocuments, sort]);
+
   const groups = useMemo(
     () =>
       buildTeacherDocumentWorkGroups({
-        documents: filteredDocuments,
+        documents: sortedFilteredDocuments,
         mode: filters.group,
         collator,
       }),
-    [collator, filteredDocuments, filters.group]
+    [collator, sortedFilteredDocuments, filters.group]
   );
 
   useEffect(() => {
     if (!collapseAllGroupsWhenGroupChanges) return;
+
+    if (previousGroupModeRef.current === null) {
+      previousGroupModeRef.current = filters.group;
+      return;
+    }
+
     if (previousGroupModeRef.current === filters.group) return;
 
     previousGroupModeRef.current = filters.group;
 
     if (filters.group === 'none') {
-      onCollapsedGroupsChange(new Set());
+      onCollapsedGroupsChange(new Set(), { persist: false });
       return;
     }
 
-    onCollapsedGroupsChange(collapsedGroupKeysForGroups(groups));
+    onCollapsedGroupsChange(collapsedGroupKeysForGroups(groups), {
+      persist: false,
+    });
   }, [
     collapseAllGroupsWhenGroupChanges,
     filters.group,
@@ -241,11 +320,11 @@ export function TeacherDocumentWorkPanel({
 
   const documentsToRender =
     filters.group === 'none' && pagination
-      ? filteredDocuments.slice(
+      ? sortedFilteredDocuments.slice(
           pagination.skip,
           pagination.skip + pagination.take
         )
-      : filteredDocuments;
+      : sortedFilteredDocuments;
 
   const hasActiveFilters =
     filters.studentIds.length > 0 ||
@@ -259,6 +338,42 @@ export function TeacherDocumentWorkPanel({
     count: statusCounts[status],
   }));
 
+  const renderSortableHead = (
+    label: string,
+    field: DocumentWorkSortField,
+    className?: string
+  ) => {
+    if (!sort || !onSortChange) {
+      return <TableHead className={className}>{label}</TableHead>;
+    }
+
+    const isActive = sort.field === field;
+
+    return (
+      <TableHead className={className}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="-ml-2 h-8 gap-2 px-2"
+          aria-label={`Sort by ${label} ${
+            isActive && sort.direction === 'asc' ? 'descending' : 'ascending'
+          }`}
+          onClick={() => onSortChange(toggleDocumentWorkSort(sort, field))}
+        >
+          {label}
+          {isActive ? (
+            sort.direction === 'asc' ? (
+              <ArrowUp className="h-4 w-4" />
+            ) : (
+              <ArrowDown className="h-4 w-4" />
+            )
+          ) : null}
+        </Button>
+      </TableHead>
+    );
+  };
+
   const renderRows = (rows: TeacherDocumentWorkRow[]) =>
     rows.map((document) => {
       const status = getTeacherDocumentWorkStatusDisplay(document);
@@ -266,48 +381,117 @@ export function TeacherDocumentWorkPanel({
         document.latestSubmission?.title?.trim() ||
         getDraftDisplayTitle(document);
       const latestSubmission = document.latestSubmission;
+      const detailLink = getTeacherDocumentWorkDetailLink({
+        document,
+        exitTo,
+        isDocumentSubmissionEnabled,
+      });
+      const rowClasses = compactRows ? DOCUMENT_TABLE_ROW_CLASSES : null;
 
       return (
-        <TableRow key={document.id}>
+        <TableRow
+          key={document.id}
+          className={cn(
+            clickableRows && 'group cursor-pointer hover:bg-muted'
+          )}
+          onClick={
+            clickableRows
+              ? () => {
+                  navigate(detailLink);
+                }
+              : undefined
+          }
+          onKeyDown={
+            clickableRows
+              ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(detailLink);
+                  }
+                }
+              : undefined
+          }
+          tabIndex={clickableRows ? 0 : undefined}
+        >
           {showStudentColumn ? (
-            <TableCell className="pl-4 font-medium">
+            <TableCell
+              className={cn(
+                'pl-4 font-medium',
+                rowClasses?.cell
+              )}
+              title={
+                document.membership.user.name || document.membership.user.email
+              }
+            >
               {document.membership.user.name || document.membership.user.email}
             </TableCell>
           ) : null}
-          <TableCell>{displayTitle}</TableCell>
+          <TableCell className={rowClasses?.cell} title={displayTitle}>
+            {clickableRows ? (
+              <span className="flex min-w-0 items-center gap-1">
+                <span className="min-w-0 truncate group-hover:underline">
+                  {displayTitle}
+                </span>
+                <ChevronRight
+                  className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+                  aria-hidden="true"
+                />
+              </span>
+            ) : (
+              displayTitle
+            )}
+          </TableCell>
           {showClassColumn ? (
-            <TableCell className="text-muted-foreground">
+            <TableCell
+              className={cn('text-muted-foreground', rowClasses?.cell)}
+              title={
+                document.resolvedClass
+                  ? formatClassLabel(document.resolvedClass)
+                  : undefined
+              }
+            >
               {document.resolvedClass
                 ? formatClassLabel(document.resolvedClass)
                 : '—'}
             </TableCell>
           ) : null}
           {showAssignmentColumn ? (
-            <TableCell className="text-muted-foreground">
+            <TableCell
+              className={cn('text-muted-foreground', rowClasses?.cell)}
+              title={document.assignment?.title || undefined}
+            >
               {document.assignment?.title || '—'}
             </TableCell>
           ) : null}
           {showStatusColumn ? (
-            <TableCell>
-              <div className="flex items-center gap-2">
+            <TableCell className={rowClasses?.cell}>
+              <div className="flex min-w-0 items-center gap-1.5">
                 <Badge
                   variant="secondary"
+                  size={rowClasses?.badgeSize}
                   className={cn(
                     status.badgeClassName,
-                    'shrink-0 whitespace-nowrap'
+                    'max-w-full truncate'
                   )}
+                  title={status.label}
                 >
                   {status.label}
                 </Badge>
                 {document.submissionCount >= 2 ? (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     v{document.submissionCount}
                   </span>
                 ) : null}
               </div>
             </TableCell>
           ) : null}
-          <TableCell className="text-muted-foreground">
+          <TableCell
+            className={cn(
+              'text-muted-foreground',
+              rowClasses?.cell,
+              rowClasses?.dateCell
+            )}
+          >
             {latestSubmission
               ? timeAgo(
                   new Date(
@@ -316,27 +500,34 @@ export function TeacherDocumentWorkPanel({
                 )
               : '—'}
           </TableCell>
-          <TableCell className="text-muted-foreground">
+          <TableCell
+            className={cn(
+              'text-muted-foreground',
+              rowClasses?.cell,
+              rowClasses?.dateCell
+            )}
+          >
             {latestSubmission?.gradedAt
               ? timeAgo(new Date(latestSubmission.gradedAt))
               : '—'}
           </TableCell>
-          <TableCell className="text-muted-foreground">
+          <TableCell
+            className={cn(
+              'text-muted-foreground',
+              rowClasses?.cell,
+              rowClasses?.dateCell,
+              'pr-4'
+            )}
+          >
             {timeAgo(document.updatedAt)}
           </TableCell>
-          <TableCell className="pr-4">
-            <Button asChild size="sm" variant="link" className="h-auto px-0">
-              <Link
-                to={getTeacherDocumentWorkDetailLink({
-                  document,
-                  exitTo,
-                  isDocumentSubmissionEnabled,
-                })}
-              >
-                View
-              </Link>
-            </Button>
-          </TableCell>
+          {clickableRows ? null : (
+            <TableCell className="pr-4">
+              <Button asChild size="sm" variant="link" className="h-auto px-0">
+                <Link to={detailLink}>View</Link>
+              </Button>
+            </TableCell>
+          )}
         </TableRow>
       );
     });
@@ -350,21 +541,64 @@ export function TeacherDocumentWorkPanel({
       containerClassName={
         nested ? 'rounded-none border-0 shadow-none' : undefined
       }
-      className={nested ? undefined : 'rounded-lg bg-muted/50'}
+      className={cn(
+        nested ? undefined : 'rounded-lg bg-muted/50',
+        compactRows && DOCUMENT_TABLE_ROW_CLASSES.table
+      )}
     >
       <TableHeader>
         <TableRow>
-          {showStudentColumn ? (
-            <TableHead className="pl-4">Student</TableHead>
-          ) : null}
-          <TableHead>Document</TableHead>
-          {showClassColumn ? <TableHead>Class</TableHead> : null}
-          {showAssignmentColumn ? <TableHead>Assignment</TableHead> : null}
-          {showStatusColumn ? <TableHead>Status</TableHead> : null}
-          <TableHead>Submitted at</TableHead>
-          <TableHead>Graded at</TableHead>
-          <TableHead>Last edited</TableHead>
-          <TableHead className="pr-4">Action</TableHead>
+          {showStudentColumn
+            ? renderSortableHead(
+                'Student',
+                'student',
+                compactHeadClassName('student', compactRows, 'pl-4')
+              )
+            : null}
+          {renderSortableHead(
+            'Document',
+            'document',
+            compactHeadClassName('document', compactRows)
+          )}
+          {showClassColumn
+            ? renderSortableHead(
+                'Class',
+                'class',
+                compactHeadClassName('class', compactRows)
+              )
+            : null}
+          {showAssignmentColumn
+            ? renderSortableHead(
+                'Assignment',
+                'assignment',
+                compactHeadClassName('assignment', compactRows)
+              )
+            : null}
+          {showStatusColumn
+            ? renderSortableHead(
+                'Status',
+                'status',
+                compactHeadClassName('status', compactRows)
+              )
+            : null}
+          {renderSortableHead(
+            'Submitted at',
+            'submittedAt',
+            compactHeadClassName('submittedAt', compactRows)
+          )}
+          {renderSortableHead(
+            'Graded at',
+            'gradedAt',
+            compactHeadClassName('gradedAt', compactRows)
+          )}
+          {renderSortableHead(
+            'Last edited',
+            'lastEdited',
+            compactHeadClassName('lastEdited', compactRows)
+          )}
+          {clickableRows ? null : (
+            <TableHead className="pr-4">Action</TableHead>
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>{renderRows(rows)}</TableBody>
@@ -526,34 +760,12 @@ const DOCUMENT_WORK_GROUP_OPTIONS: Array<{
   { value: 'status', label: 'Group by status' },
 ];
 
-function getStatusPillClasses(
-  isActive: boolean,
-  status?: TeacherDocumentStatus | 'all'
-) {
-  if (status === 'needs-grading') {
-    return isActive
-      ? 'bg-yellow-100 text-yellow-900 ring-1 ring-yellow-200 shadow-sm'
-      : 'bg-yellow-50 text-yellow-800 hover:bg-yellow-100';
-  }
-
-  if (status === 'graded') {
-    return isActive
-      ? 'bg-blue-100 text-blue-900 ring-1 ring-blue-200 shadow-sm'
-      : 'bg-blue-50 text-blue-800 hover:bg-blue-100';
-  }
-
-  if (status === 'released') {
-    return isActive
-      ? 'bg-green-100 text-green-900 ring-1 ring-green-200 shadow-sm'
-      : 'bg-green-50 text-green-800 hover:bg-green-100';
-  }
-
-  if (isActive) {
-    return 'bg-background text-foreground ring-1 ring-border/70 shadow-sm';
-  }
-
-  return 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground';
-}
+const STATUS_DOT_CLASSES: Record<TeacherDocumentStatus, string> = {
+  'in-progress': 'bg-zinc-500',
+  'needs-grading': 'bg-amber-500',
+  graded: 'bg-blue-600',
+  released: 'bg-emerald-600',
+};
 
 function DocumentWorkStatusPills({
   filters,
@@ -569,26 +781,41 @@ function DocumentWorkStatusPills({
   | 'onFiltersChange'
   | 'testIds'
 >) {
+  const testId = testIds?.statusChips ?? 'teacher-document-work-status-chips';
+
+  const pillClass = (isActive: boolean) =>
+    cn(
+      'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm/5 font-medium sm:text-sm/5',
+      isActive
+        ? 'bg-popover text-foreground shadow-sm ring-1 ring-black/10'
+        : 'text-foreground/80 hover:bg-popover/70 hover:text-foreground'
+    );
+
+  const countClass = (isActive: boolean) =>
+    cn(
+      'tabular-nums',
+      isActive ? 'text-muted-foreground' : 'text-foreground/60'
+    );
+
   return (
     <div
       className="overflow-x-auto no-scrollbar"
-      data-testid={testIds?.statusChips ?? 'teacher-document-work-status-chips'}
+      data-testid={testId}
       role="tablist"
       aria-label="Filter by status"
     >
-      <div className="inline-flex w-max max-w-none flex-nowrap items-center gap-2">
+      <div className="inline-flex w-max max-w-none flex-nowrap items-center gap-0.5 rounded-full border border-border bg-secondary p-1 shadow-xs">
         <button
           type="button"
           role="tab"
           aria-selected={filters.status === 'all'}
           onClick={() => onFiltersChange({ status: 'all' })}
-          className={cn(
-            'inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-            getStatusPillClasses(filters.status === 'all', 'all')
-          )}
+          className={pillClass(filters.status === 'all')}
         >
           All
-          <span className="tabular-nums text-xs opacity-80">{totalDocumentCount}</span>
+          <span className={countClass(filters.status === 'all')}>
+            {totalDocumentCount}
+          </span>
         </button>
         {statusChips.map(({ status, count }) => (
           <button
@@ -597,13 +824,14 @@ function DocumentWorkStatusPills({
             role="tab"
             aria-selected={filters.status === status}
             onClick={() => onFiltersChange({ status })}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-              getStatusPillClasses(filters.status === status, status)
-            )}
+            className={pillClass(filters.status === status)}
           >
+            <span
+              className={cn('size-2 shrink-0 rounded-full', STATUS_DOT_CLASSES[status])}
+              aria-hidden
+            />
             {TEACHER_DOCUMENT_STATUS_LABELS[status]}
-            <span className="tabular-nums text-xs opacity-80">{count}</span>
+            <span className={countClass(filters.status === status)}>{count}</span>
           </button>
         ))}
       </div>
@@ -663,7 +891,6 @@ function DocumentWorkRefinementFields({
   assignments,
   showClassFilter,
   onFiltersChange,
-  layout,
 }: Pick<
   DocumentWorkToolbarProps,
   | 'tableLabel'
@@ -675,106 +902,163 @@ function DocumentWorkRefinementFields({
   | 'assignments'
   | 'showClassFilter'
   | 'onFiltersChange'
-> & {
-  layout: 'grid' | 'stack';
-}) {
-  const fieldClass =
-    layout === 'grid' ? 'flex flex-col gap-1.5' : 'flex flex-col gap-1.5';
+>) {
+  const searchField = (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">Search</span>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onFiltersChange({ query: searchValue.trim() });
+        }}
+        className="relative"
+      >
+        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          name="document-work-search"
+          value={searchValue}
+          onChange={(event) => setSearchValue(event.target.value)}
+          placeholder="Students or documents"
+          className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Search ${tableLabel.toLowerCase()}`}
+        />
+      </form>
+    </div>
+  );
+
+  const studentSelect = (
+    <MultiSelect
+      label="students"
+      variant="field"
+      emptySelectionLabel="All students"
+      values={filters.studentIds}
+      options={students.map((student) => ({
+        value: student.id,
+        label: student.label,
+      }))}
+      onChange={(studentIds) => onFiltersChange({ studentIds })}
+    />
+  );
+
+  const classSelect = showClassFilter ? (
+    <MultiSelect
+      label="classes"
+      variant="field"
+      emptySelectionLabel="All classes"
+      values={filters.classIds}
+      options={classes!.map((klass) => ({
+        value: klass.id,
+        label: klass.label,
+      }))}
+      onChange={(classIds) => {
+        const visibleAssignmentIds = new Set(
+          (classIds.length > 0
+            ? assignments.filter((assignment) =>
+                assignmentMatchesClassFilters(assignment, classIds)
+              )
+            : assignments
+          ).map((assignment) => assignment.id)
+        );
+
+        onFiltersChange({
+          classIds,
+          assignmentIds: filters.assignmentIds.filter((assignmentId) =>
+            visibleAssignmentIds.has(assignmentId)
+          ),
+        });
+      }}
+    />
+  ) : null;
+
+  const assignmentSelect = (
+    <MultiSelect
+      label="assignments"
+      variant="field"
+      emptySelectionLabel="All assignments"
+      values={filters.assignmentIds}
+      options={assignments.map((assignment) => ({
+        value: assignment.id,
+        label: assignment.label,
+      }))}
+      onChange={(assignmentIds) => onFiltersChange({ assignmentIds })}
+    />
+  );
 
   return (
-    <div
-      className={
-        layout === 'grid'
-          ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4'
-          : 'flex flex-col gap-3'
-      }
-    >
-      <div className={fieldClass}>
-        <span className="text-xs font-medium text-muted-foreground">Search</span>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            onFiltersChange({ query: searchValue.trim() });
-          }}
-          className="relative"
-        >
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            name="document-work-search"
-            value={searchValue}
-            onChange={(event) => setSearchValue(event.target.value)}
-            placeholder="Students or documents"
-            className="h-9 bg-background pl-9"
-            aria-label={`Search ${tableLabel.toLowerCase()}`}
-          />
-        </form>
-      </div>
-
-      <div className={fieldClass}>
-        <span className="text-xs font-medium text-muted-foreground">Student</span>
-        <MultiSelect
-          label="students"
-          variant="field"
-          emptySelectionLabel="All students"
-          values={filters.studentIds}
-          options={students.map((student) => ({
-            value: student.id,
-            label: student.label,
-          }))}
-          onChange={(studentIds) => onFiltersChange({ studentIds })}
-        />
-      </div>
-
-      {showClassFilter ? (
-        <div className={fieldClass}>
-          <span className="text-xs font-medium text-muted-foreground">Class</span>
-          <MultiSelect
-            label="classes"
-            variant="field"
-            emptySelectionLabel="All classes"
-            values={filters.classIds}
-            options={classes!.map((klass) => ({
-              value: klass.id,
-              label: klass.label,
-            }))}
-            onChange={(classIds) => {
-              const visibleAssignmentIds = new Set(
-                (classIds.length > 0
-                  ? assignments.filter((assignment) =>
-                      assignmentMatchesClassFilters(assignment, classIds)
-                    )
-                  : assignments
-                ).map((assignment) => assignment.id)
-              );
-
-              onFiltersChange({
-                classIds,
-                assignmentIds: filters.assignmentIds.filter((assignmentId) =>
-                  visibleAssignmentIds.has(assignmentId)
-                ),
-              });
-            }}
-          />
+    <div className="flex flex-col gap-3">
+      {searchField}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Student
+          </span>
+          {studentSelect}
         </div>
-      ) : null}
-
-      <div className={fieldClass}>
-        <span className="text-xs font-medium text-muted-foreground">
-          Assignment
-        </span>
-        <MultiSelect
-          label="assignments"
-          variant="field"
-          emptySelectionLabel="All assignments"
-          values={filters.assignmentIds}
-          options={assignments.map((assignment) => ({
-            value: assignment.id,
-            label: assignment.label,
-          }))}
-          onChange={(assignmentIds) => onFiltersChange({ assignmentIds })}
-        />
+        {showClassFilter ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Class
+            </span>
+            {classSelect}
+          </div>
+        ) : null}
+        <div
+          className={cn(
+            'flex flex-col gap-1.5',
+            showClassFilter ? 'sm:col-span-2' : 'sm:col-span-1'
+          )}
+        >
+          <span className="text-xs font-medium text-muted-foreground">
+            Assignment
+          </span>
+          {assignmentSelect}
+        </div>
       </div>
     </div>
+  );
+}
+
+function FilterDropdownPanel({
+  hasActiveFilters,
+  onClearFilters,
+  ...fieldsProps
+}: Pick<
+  DocumentWorkToolbarProps,
+  | 'tableLabel'
+  | 'filters'
+  | 'searchValue'
+  | 'setSearchValue'
+  | 'students'
+  | 'classes'
+  | 'assignments'
+  | 'showClassFilter'
+  | 'onFiltersChange'
+  | 'hasActiveFilters'
+  | 'onClearFilters'
+>) {
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">Filter results</p>
+          <p className="text-xs text-muted-foreground">
+            Narrow by student, class, or assignment
+          </p>
+        </div>
+        {hasActiveFilters ? (
+          <button
+            type="button"
+            onClick={onClearFilters}
+            className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear all
+          </button>
+        ) : null}
+      </div>
+      <div className="p-4">
+        <DocumentWorkRefinementFields {...fieldsProps} />
+      </div>
+    </>
   );
 }
 
@@ -789,12 +1073,19 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
   return (
     <section className="space-y-3">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <DocumentWorkStatusPills {...props} />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="min-w-0 lg:flex-1">
+          <DocumentWorkStatusPills {...props} />
+        </div>
+        <div className="flex shrink-0 flex-nowrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="h-9 gap-2">
-                <Filter className="h-4 w-4" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-2 rounded-full"
+              >
+                <Filter className="size-4 shrink-0" />
                 Filter
                 {activeFilterCount > 0 ? (
                   <Badge variant="secondary" size="sm">
@@ -803,22 +1094,11 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
                 ) : null}
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium">Filter results</p>
-                  {props.hasActiveFilters ? (
-                    <button
-                      type="button"
-                      onClick={props.onClearFilters}
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      Clear all
-                    </button>
-                  ) : null}
-                </div>
-                <DocumentWorkRefinementFields {...props} layout="stack" />
-              </div>
+            <PopoverContent
+              align="end"
+              className="w-[min(24rem,calc(100vw-2rem))] overflow-hidden p-0 ring-1 ring-black/5"
+            >
+              <FilterDropdownPanel {...props} />
             </PopoverContent>
           </Popover>
           {props.headerActions}

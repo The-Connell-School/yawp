@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router';
-import { Check, PlusCircle } from 'lucide-react';
+import { Check, ChevronDown, PlusCircle } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import pluralize from '~/utils/pluralize/pluralize.ts';
 import { Badge } from './ui/badge';
@@ -60,7 +60,7 @@ export function MultiSelect({
           variant="outline"
           className={cn(
             variant === 'field'
-              ? 'h-9 w-full justify-between bg-background px-3 font-normal'
+              ? 'h-9 w-full justify-between gap-2 rounded-md border-0 bg-background px-3 font-normal shadow-none ring-1 ring-black/5 hover:bg-muted/60'
               : 'h-8 gap-1 border-dashed px-2',
             triggerClassName
           )}
@@ -69,7 +69,10 @@ export function MultiSelect({
           {variant === 'chip' ? <PlusCircle size={16} /> : null}
           {variant === 'chip' ? label : null}
           {variant === 'field' ? (
-            <span className="truncate text-left">{selectionSummary}</span>
+            <>
+              <span className="min-w-0 truncate text-left">{selectionSummary}</span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </>
           ) : null}
           {variant === 'chip' && selectedValues?.length > 0 ? (
             <>

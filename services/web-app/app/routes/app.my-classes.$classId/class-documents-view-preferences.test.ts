@@ -22,6 +22,7 @@ describe('class documents view preferences', () => {
       assignmentIds: ['assignment-1'],
       status: 'needs-grading',
       documentGroup: 'status',
+      documentSort: { field: 'assignment', direction: 'desc' },
       collapsedGroups: {
         status: ['needs-grading', 'released'],
       },
@@ -32,6 +33,7 @@ describe('class documents view preferences', () => {
       assignmentIds: ['assignment-1'],
       status: 'needs-grading',
       documentGroup: 'status',
+      documentSort: { field: 'assignment', direction: 'desc' },
       collapsedGroups: {
         status: ['needs-grading', 'released'],
       },
@@ -150,6 +152,53 @@ describe('class documents view preferences', () => {
         )
       ).toEqual({
         status: 'graded',
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: originalWindow,
+      });
+    }
+  });
+
+  test('mergeClassDocumentsViewPreferences preserves document sort', () => {
+    const storage = new Map<string, string>();
+    const originalWindow = globalThis.window;
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        localStorage: {
+          getItem: (key: string) => storage.get(key) ?? null,
+          setItem: (key: string, value: string) => {
+            storage.set(key, value);
+          },
+        },
+      },
+    });
+
+    try {
+      mergeClassDocumentsViewPreferences(
+        new URLSearchParams('tab=documents&documentGroup=status'),
+        {
+          documentSort: { field: 'student', direction: 'asc' },
+        }
+      );
+
+      mergeClassDocumentsViewPreferences(
+        new URLSearchParams(
+          'tab=documents&documentGroup=status&status=needs-grading'
+        )
+      );
+
+      expect(
+        parseClassDocumentsViewPreferences(
+          storage.get(CLASS_DOCUMENTS_VIEW_STORAGE_KEY)
+        )
+      ).toEqual({
+        documentGroup: 'status',
+        status: 'needs-grading',
+        documentSort: { field: 'student', direction: 'asc' },
       });
     } finally {
       Object.defineProperty(globalThis, 'window', {

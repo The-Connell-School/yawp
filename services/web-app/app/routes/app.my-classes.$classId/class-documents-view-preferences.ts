@@ -6,6 +6,10 @@ import {
   parseDocumentWorkFilterIds,
   serializeDocumentWorkFilterIds,
 } from '~/utils/teacher-document-work-filter-options';
+import {
+  parseDocumentWorkSort,
+  type DocumentWorkSort,
+} from '~/utils/teacher-document-work-sort';
 
 import {
   parseDocumentGroupMode,
@@ -20,6 +24,7 @@ export type ClassDocumentsViewPreferences = {
   collapsedGroups?: Partial<
     Record<Exclude<DocumentGroupMode, 'none'>, string[]>
   >;
+  documentSort?: DocumentWorkSort;
 };
 
 const DOCUMENT_GROUP_MODES = ['class', 'student', 'assignment', 'status'] as const;
@@ -140,6 +145,7 @@ export function parseClassDocumentsViewPreferences(
     }
 
     preferences.collapsedGroups = parseCollapsedGroups(parsed.collapsedGroups);
+    preferences.documentSort = parseDocumentWorkSort(parsed.documentSort);
 
     return preferences;
   } catch {
@@ -231,6 +237,7 @@ export function mergeClassDocumentsViewPreferences(
     ...base,
     ...updates,
     collapsedGroups: updates.collapsedGroups ?? base.collapsedGroups,
+    documentSort: updates.documentSort ?? base.documentSort,
   });
 }
 

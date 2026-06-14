@@ -87,7 +87,7 @@ test.describe.serial('Teacher class sorting and filtering', () => {
 
       const studentsTable = page.getByRole('table', { name: 'Students' });
       const studentHeaders = studentsTable.locator('thead th');
-      await expect(studentHeaders).toHaveCount(5);
+      await expect(studentHeaders).toHaveCount(4);
       for (const header of await studentHeaders.all()) {
         await expect(header).toHaveCSS('white-space', 'nowrap');
       }
@@ -100,6 +100,24 @@ test.describe.serial('Teacher class sorting and filtering', () => {
       await expect(studentsTable.locator('tbody tr').nth(2)).toContainText(
         'Zoe Carter'
       );
+
+      await page.getByRole('searchbox', { name: /search students/i }).fill('Brian');
+      await expect(studentsTable.locator('tbody tr')).toHaveCount(1);
+      await expect(studentsTable.locator('tbody tr').first()).toContainText(
+        'Brian Adams'
+      );
+
+      await page.getByRole('searchbox', { name: /search students/i }).fill('');
+      await expect(studentsTable.locator('tbody tr')).toHaveCount(3);
+
+      await studentsTable
+        .getByRole('button', { name: /view brian adams's documents/i })
+        .click();
+      await expect(page).toHaveURL(/tab=documents/);
+      await expect(page).toHaveURL(/studentId=/);
+
+      await page.goto(`/app/my-classes/${klass.id}`);
+      await page.waitForLoadState('networkidle');
 
       await page
         .getByRole('button', { name: /sort students by name descending/i })

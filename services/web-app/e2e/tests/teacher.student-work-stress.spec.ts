@@ -77,7 +77,7 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
       await expect(classTable.getByText(/^Released/)).toHaveCount(0);
 
       // Student Work grouped by student shows the volume in one group.
-      await page.goto('/app/student-work?group=student');
+      await page.goto('/app/documents?group=student');
       await page.waitForLoadState('networkidle');
       const studentGroup = page
         .getByRole('button', { name: /John Doe/i })
@@ -85,9 +85,9 @@ test.describe.serial('Teacher surfaces under stress volume', () => {
       await expect(studentGroup).toBeVisible();
 
       // Filtering by the stress assignment shows all 50 rows without breaking.
-      await page.goto(`/app/student-work?assignment=${assignment.id}`);
+      await page.goto(`/app/documents?assignment=${assignment.id}`);
       await page.waitForLoadState('networkidle');
-      const workTable = page.getByRole('table', { name: /student work/i });
+      const workTable = page.getByRole('table', { name: /documents/i });
       await expect(workTable.locator('tbody tr')).toHaveCount(STRESS_COUNT);
     } finally {
       await prisma.submission

@@ -11,6 +11,7 @@ import { prisma } from '~/utils/db.server';
 
 const PreviewIntentSchema = z.object({
   intent: z.enum(['start', 'end']),
+  redirectTo: z.string().optional(),
 });
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -18,7 +19,8 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
 
-  const { error, data } = await parseFormData(request, PreviewIntentSchema);
+  const formData = await request.formData();
+  const { error, data } = await parseFormData(formData, PreviewIntentSchema);
   if (error) return validationError(error);
 
   const userId = await requireUserId(request);
@@ -28,7 +30,12 @@ export async function action({ request }: ActionFunctionArgs) {
     select: { isAdmin: true },
   });
 
-  const redirectTo = request.headers.get('Referer') || '/app';
+  const redirectTo =
+    (typeof data.redirectTo === 'string' && data.redirectTo.startsWith('/')
+      ? data.redirectTo
+      : null) ||
+    request.headers.get('Referer') ||
+    '/app';
 
   if (data.intent === 'end') {
     return redirect(redirectTo, {

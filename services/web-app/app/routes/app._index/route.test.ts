@@ -18,6 +18,7 @@ const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
+const getStudentPreviewState = mock();
 
 const featureFlagsActual = await import('~/utils/feature-flags.server');
 const assignmentTypeAccessActual = await import(
@@ -49,6 +50,12 @@ mock.module('~/utils/assignment-type-access.server', () => ({
   ...assignmentTypeAccessActual,
   getAvailableAssignmentTypesForScopes,
 }));
+mock.module('~/utils/student-preview.server', () => ({
+  getStudentPreviewState,
+  shouldUseStudentExperience: (
+    args: { membershipRole: string; previewActive: boolean }
+  ) => args.membershipRole === 'STUDENT' || args.previewActive,
+}));
 
 const { loader } = await import('./route');
 
@@ -64,6 +71,8 @@ describe('app index loader assignments', () => {
     getTeacherClassCardStats.mockReset();
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
+    getStudentPreviewState.mockReset();
+    getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
       ungradedCount: 0,
@@ -226,7 +235,7 @@ describe('app index loader assignments', () => {
     expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
 
-  test('shows only recent active classes on the dashboard while keeping total class count', async () => {
+  test('sorts recently active classes first while still showing every class', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',
       role: 'TEACHER',
@@ -302,9 +311,56 @@ describe('app index loader assignments', () => {
 
     expect(data.totalTeacherClassCount).toBe(3);
     expect(data.teacherClassCards.map((klass: { id: string }) => klass.id)).toEqual(
-      ['class-active-1', 'class-active-2']
+      ['class-active-1', 'class-active-2', 'class-quiet']
     );
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
+  });
+
+  test('shows all teacher classes when none have recent document activity', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
+    getTeacherRecentActiveClassIds.mockResolvedValue([]);
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?._count) {
+        return [
+          {
+            id: 'class-quiet',
+            grade: '10',
+            period: '1',
+            title: 'Quiet Class',
+            school: {
+              id: 'school-1',
+              name: 'Parker High School',
+              organizationId: 'org-1',
+            },
+            _count: { students: 1, teachers: 1, classAssignments: 0 },
+          },
+        ];
+      }
+
+      return [
+        { id: 'class-quiet', school: { id: 'school-1', organizationId: 'org-1' } },
+      ];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.totalTeacherClassCount).toBe(1);
+    expect(data.teacherClassCards).toHaveLength(1);
+    expect(data.teacherClassCards[0]).toMatchObject({
+      id: 'class-quiet',
+      title: 'Quiet Class',
+    });
   });
 
   test('loads available assignment types for teachers when assignments are enabled', async () => {

@@ -159,8 +159,8 @@ test.describe.serial('Teacher Assignments page', () => {
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
 
-      const row = page.getByRole('row', { name: new RegExp(title) });
-      await row.getByRole('button', { name: /duplicate/i }).click();
+      const row = page.getByRole('row', { name: new RegExp(title) }).first();
+      await row.getByLabel('Duplicate').click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
       await expect(dialog.getByLabel('Title (optional)')).toHaveValue(
@@ -210,9 +210,12 @@ test.describe.serial('Teacher Assignments page', () => {
       await page.goto('/app/assignments');
       await page.waitForLoadState('networkidle');
 
-      const row = page.getByRole('row', { name: new RegExp(title) });
+      const row = page.getByRole('row', { name: new RegExp(title) }).first();
       page.once('dialog', (dialog) => dialog.accept());
-      await row.getByRole('button', { name: /delete/i }).click();
+      await row.getByRole('checkbox').check();
+      await page
+        .getByRole('button', { name: /Delete 1 assignment\(s\)/ })
+        .click();
 
       await expect(
         page.getByRole('row', { name: new RegExp(title) })

@@ -246,7 +246,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [],
   ]);
 
-  // Surface the six most recently active teacher classes on the dashboard.
+  // Sort teacher classes with recent activity first; keep every class visible.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   let recentActiveClassIds: string[] = [];
   if (!useStudentExperience && teacherClasses.length > 0) {
@@ -256,13 +256,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const recentClassIdRank = new Map(
       recentActiveClassIds.map((classId, index) => [classId, index])
     );
-    teacherClassesOrdered = teacherClasses
-      .filter((klass) => recentClassIdRank.has(klass.id))
-      .sort(
-        (a, b) =>
-          (recentClassIdRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-          (recentClassIdRank.get(b.id) ?? Number.MAX_SAFE_INTEGER)
+    teacherClassesOrdered = [...teacherClasses].sort((a, b) => {
+      const aRank = recentClassIdRank.get(a.id);
+      const bRank = recentClassIdRank.get(b.id);
+
+      if (aRank !== undefined && bRank !== undefined) {
+        return aRank - bRank;
+      }
+      if (aRank !== undefined) {
+        return -1;
+      }
+      if (bRank !== undefined) {
+        return 1;
+      }
+
+      return (
+        a.title.localeCompare(b.title) ||
+        a.grade.localeCompare(b.grade) ||
+        a.period.localeCompare(b.period)
       );
+    });
   }
 
   const teacherClassStatsById = !useStudentExperience

@@ -14,6 +14,8 @@ import { Button } from '~/components/ui/button';
 import { FormInput } from '~/components/rvf-forms/form-input';
 import { FormSelect } from '~/components/rvf-forms/form-select';
 import { redirectWithToast } from '~/utils/toast.server';
+import { getStudentPreviewState } from '~/utils/student-preview.server';
+import { EnterCodeEscapeActions } from './escape-actions';
 
 const CodeSchema = z.object({
   code: z.string().min(1, 'Code is required'),
@@ -33,11 +35,17 @@ async function connectMembershipToClass(membershipId: string, classId: string) {
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const membership = await requireMembership(request, userId);
+  const preview = await getStudentPreviewState(request);
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
 
   if (!code) {
-    return data({ membership, classes: [], code: null });
+    return data({
+      membership,
+      classes: [],
+      code: null,
+      studentPreviewActive: preview.active,
+    });
   }
 
   const classes = await prisma.class.findMany({
@@ -65,7 +73,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ],
   });
 
-  return data({ membership, classes, code });
+  return data({
+    membership,
+    classes,
+    code,
+    studentPreviewActive: preview.active,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -174,6 +187,9 @@ export default function Route() {
               Continue
             </Button>
           </Form>
+          <EnterCodeEscapeActions
+            studentPreviewActive={data.studentPreviewActive}
+          />
         </div>
       </div>
     );
@@ -220,6 +236,7 @@ export default function Route() {
             Join Class
           </Button>
         </Form>
+        <EnterCodeEscapeActions studentPreviewActive={data.studentPreviewActive} />
       </div>
     </div>
   );

@@ -2,6 +2,10 @@
 
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
+import { join } from 'path';
+import { createPrismaClient } from './local-dev/connection';
+
+const prismaRoot = join(import.meta.dir, '..');
 
 const ENV = process.argv[2];
 
@@ -38,6 +42,51 @@ if (!existsSync(SSH_KEY_PATH!)) {
   process.exit(1);
 }
 
+function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      env,
+      cwd: prismaRoot,
+    });
+
+    child.on('close', (code) => resolve(code ?? 1));
+    child.on('error', reject);
+  });
+}
+
+async function orgMembershipTableExists(): Promise<boolean> {
+  const prisma = createPrismaClient();
+  try {
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'OrgMembership'
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function runProductionMigrations(env: NodeJS.ProcessEnv) {
+  const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
+  if (migrateCode !== 0) {
+    return migrateCode;
+  }
+
+  if (!(await orgMembershipTableExists())) {
+    console.log('Skipping org-membership postcheck (OrgMembership table not present yet).');
+    return 0;
+  }
+
+  console.log('Running org-membership postcheck...');
+  return runCommand('bun', ['run', 'org-membership:postcheck'], env);
+}
+
 const sshProcess = spawn('ssh', [
   '-N',
   '-o',
@@ -72,21 +121,17 @@ process.on('SIGINT', () => {
   process.exit();
 });
 
-// Wait for SSH tunnel to establish
 setTimeout(async () => {
   try {
     migrationStarted = true;
-    process.env.DATABASE_URL = `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}`;
+    const env = {
+      ...process.env,
+      DATABASE_URL: `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}`,
+    };
 
-    const prismaProcess = spawn('bun', ['prisma', 'migrate', 'deploy'], {
-      stdio: 'inherit',
-      env: process.env,
-    });
-
-    prismaProcess.on('close', (code) => {
-      sshProcess.kill();
-      process.exit(code || 0);
-    });
+    const exitCode = await runProductionMigrations(env);
+    sshProcess.kill();
+    process.exit(exitCode);
   } catch (error) {
     console.error('Migration failed:', error);
     sshProcess.kill();

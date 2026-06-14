@@ -1,13 +1,11 @@
 import {
-  data as dataResponse,
   type MetaFunction,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
-  useFetcher,
   Form,
   redirect,
 } from 'react-router';
-import { Link, useSearchParams, useLoaderData } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { ArrowRightIcon } from 'lucide-react';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -25,8 +23,6 @@ import { EmailSchema, PasswordSchema } from '~/utils/schemas/user';
 import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { posthog } from '~/services/posthog.server';
-import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server';
-import { getLocalDevLoginOptions } from '~/routes/auth.dev-login/route';
 
 const Schema = z.object({
   email: EmailSchema,
@@ -36,10 +32,7 @@ const Schema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAnonymous(request);
-  return dataResponse({
-    devLoginEnabled: isLocalDevAuthEnabled(),
-    devLoginOptions: isLocalDevAuthEnabled() ? getLocalDevLoginOptions() : [],
-  });
+  return null;
 }
 
 const actionImpl = async ({ request }: ActionFunctionArgs) => {
@@ -91,12 +84,8 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function LoginPage() {
-  const { devLoginEnabled, devLoginOptions } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirectTo');
-  const fetcher = useFetcher();
-  const devLoginFetcher = useFetcher();
-  const isLoading = fetcher.state !== 'idle';
 
   const form = useForm({
     schema: Schema,
@@ -143,48 +132,10 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <Button className="w-full" type="submit" isLoading={isLoading}>
+          <Button className="w-full" type="submit">
             Log in
           </Button>
         </Form>
-        {devLoginEnabled ? (
-          <div className="my-8 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-6">
-            <p className="text-xl font-bold">Local dev quick login</p>
-            <p className="text-muted-foreground">
-              One-click personas seeded by <code>bun db:seed-local-dev</code>.
-            </p>
-            <div className="mt-4 grid gap-2">
-              {devLoginOptions.map((option) => (
-                <devLoginFetcher.Form
-                  key={option.email}
-                  method="post"
-                  action="/auth/dev-login"
-                  className="contents"
-                >
-                  <input type="hidden" name="email" value={option.email} />
-                  <input
-                    type="hidden"
-                    name="redirectTo"
-                    value={redirectTo ?? '/app'}
-                  />
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    className="h-auto w-full justify-start px-4 py-3 text-left"
-                    isLoading={devLoginFetcher.state !== 'idle'}
-                  >
-                    <span>
-                      <span className="block font-semibold">{option.label}</span>
-                      <span className="block text-sm text-muted-foreground">
-                        {option.description}
-                      </span>
-                    </span>
-                  </Button>
-                </devLoginFetcher.Form>
-              ))}
-            </div>
-          </div>
-        ) : null}
         <div className="my-8 rounded-xl border bg-muted p-6">
           <p className="text-xl font-bold">New here?</p>
           <p className="text-muted-foreground">

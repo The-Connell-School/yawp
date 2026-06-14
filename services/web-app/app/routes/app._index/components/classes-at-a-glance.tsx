@@ -34,9 +34,7 @@ export function ClassesAtAGlance({
       {classes.length === 0 ? (
         <div className="rounded-lg border border-dashed p-6 text-center">
           <p className="text-sm text-muted-foreground">
-            {totalClassCount > 0
-              ? 'No recent student document activity yet. Open My Classes to see every class.'
-              : 'No classes yet. Create one from My Classes.'}
+            No classes yet. Create one from My Classes.
           </p>
         </div>
       ) : (

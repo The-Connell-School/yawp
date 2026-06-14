@@ -608,7 +608,7 @@ export default function AssignmentsRoute() {
               <h2>Assignments</h2>
               <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
                 Create assignments and apply them to your classes. Grading
-                lives in Student Work.
+                lives in Documents.
               </p>
             </div>
           </div>

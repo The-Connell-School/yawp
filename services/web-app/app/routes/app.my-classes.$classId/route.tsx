@@ -33,7 +33,7 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Button } from '~/components/ui/button';
-import { Badge } from '~/components/ui/badge';
+import { badgeVariants } from '~/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -52,19 +52,15 @@ import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
 import { ReleaseGradesSheet } from './release-grades-sheet';
 import {
-  Files,
-  ClipboardCheck,
   Send,
-  User,
   ArrowDown,
   ArrowUp,
   ArrowRightLeft,
-  Pencil,
   Plus,
   UserMinus,
-  Users,
+  Search,
+  ChevronRight,
 } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
@@ -93,8 +89,12 @@ import {
   parseDocumentWorkFilterIds,
   serializeDocumentWorkFilterIds,
 } from '~/utils/teacher-document-work-filter-options';
+import {
+  DEFAULT_DOCUMENT_WORK_SORT,
+  type DocumentWorkSort,
+} from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { ClassArt } from '~/components/class-art';
+import { ClassDetailHeader, type ClassHeaderTab, resolveClassHeaderTab } from './class-detail-header';
 import {
   TEACHER_DOCUMENT_STATUSES,
   hasMeaningfulGrade,
@@ -115,6 +115,7 @@ import {
   lookupStudentEmailForClass,
   sendStudentClassInvite,
 } from './class-student-enrollment.server';
+import { filterClassStudentsByQuery } from './class-students-search';
 
 export function getDraftDisplayTitle(document: {
   title?: string | null;
@@ -899,10 +900,16 @@ function ClassDetailPage() {
   const [collapsedDocumentGroups, setCollapsedDocumentGroups] = useState<
     Set<string>
   >(new Set());
+  const [documentSort, setDocumentSort] = useState<DocumentWorkSort>(
+    DEFAULT_DOCUMENT_WORK_SORT
+  );
+  const hasHydratedCollapsedDocumentGroups = useRef(false);
+  const hasHydratedDocumentSort = useRef(false);
   const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
     useState(false);
   const [studentNameSortDirection, setStudentNameSortDirection] =
     useState<SortDirection>('asc');
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
     {
       id: string;
@@ -945,25 +952,37 @@ function ClassDetailPage() {
       : 'students';
   const classAssignmentFilterParam =
     searchParams.get('classAssignmentId') ?? 'all';
-  const resolvedAssignmentFilterIds =
-    classAssignmentFilterParam !== 'all'
-      ? (() => {
-          const assignmentId = data.assignments.find(
-            (assignment) =>
-              assignment.classAssignmentId === classAssignmentFilterParam
-          )?.id;
-          return assignmentId ? [assignmentId] : [];
-        })()
-      : parseDocumentWorkFilterIds(searchParams.get('assignmentId'));
+  const assignmentIdParam = searchParams.get('assignmentId');
+  const studentIdParam = searchParams.get('studentId');
   const students = data.klass.students;
-  const validAssignmentIds = new Set(data.assignments.map((assignment) => assignment.id));
-  const selectedAssignmentIds = resolvedAssignmentFilterIds.filter((assignmentId) =>
-    validAssignmentIds.has(assignmentId)
+  const resolvedAssignmentFilterIds = useMemo(() => {
+    if (classAssignmentFilterParam !== 'all') {
+      const assignmentId = data.assignments.find(
+        (assignment) =>
+          assignment.classAssignmentId === classAssignmentFilterParam
+      )?.id;
+      return assignmentId ? [assignmentId] : [];
+    }
+
+    return parseDocumentWorkFilterIds(assignmentIdParam);
+  }, [assignmentIdParam, classAssignmentFilterParam, data.assignments]);
+  const validAssignmentIds = useMemo(
+    () => new Set(data.assignments.map((assignment) => assignment.id)),
+    [data.assignments]
   );
-  const documentFilterStudentIds = parseDocumentWorkFilterIds(
-    searchParams.get('studentId')
-  ).filter((studentId) =>
-    students.some((student) => student.id === studentId)
+  const selectedAssignmentIds = useMemo(
+    () =>
+      resolvedAssignmentFilterIds.filter((assignmentId) =>
+        validAssignmentIds.has(assignmentId)
+      ),
+    [resolvedAssignmentFilterIds, validAssignmentIds]
+  );
+  const documentFilterStudentIds = useMemo(
+    () =>
+      parseDocumentWorkFilterIds(studentIdParam).filter((studentId) =>
+        students.some((student) => student.id === studentId)
+      ),
+    [studentIdParam, students]
   );
   const statusFilterParam = searchParams.get('status') ?? 'all';
   const statusFilter: TeacherDocumentStatus | 'all' =
@@ -972,6 +991,7 @@ function ClassDetailPage() {
     )
       ? (statusFilterParam as TeacherDocumentStatus)
       : 'all';
+  const activeHeaderTab = resolveClassHeaderTab(activeTab);
   const documentGroupMode = parseDocumentGroupMode(
     searchParams.get('documentGroup')
   );
@@ -987,6 +1007,8 @@ function ClassDetailPage() {
   // Reset pagination when tab changes
   useEffect(() => {
     hasHydratedDocumentPreferences.current = false;
+    hasHydratedCollapsedDocumentGroups.current = false;
+    hasHydratedDocumentSort.current = false;
   }, [data.klass.id]);
 
   useEffect(() => {
@@ -995,6 +1017,16 @@ function ClassDetailPage() {
     }
 
     hasHydratedDocumentPreferences.current = true;
+
+    if (
+      searchParams.get('status') ||
+      searchParams.get('documentGroup') ||
+      searchParams.get('studentId') ||
+      searchParams.get('assignmentId')
+    ) {
+      mergeClassDocumentsViewPreferences(searchParams);
+    }
+
     const merged = mergeStoredClassDocumentsSearchParams({
       searchParams,
       storedPreferences: readClassDocumentsViewPreferences(),
@@ -1009,33 +1041,68 @@ function ClassDetailPage() {
       next.set(key, value);
     }
     setSearchParams(next, { replace: true });
-  }, [activeTab, data.klass.id, searchParams, setSearchParams]);
+  }, [
+    activeTab,
+    assignmentIdParam,
+    classAssignmentFilterParam,
+    data.klass.id,
+    searchParams,
+    setSearchParams,
+    studentIdParam,
+  ]);
 
   useEffect(() => {
     setPagination({ skip: 0, take: 20 });
   }, [
     activeTab,
     studentNameSortDirection,
+    studentSearchQuery,
     documentFilterStudentIds,
     selectedAssignmentIds,
     statusFilter,
     documentGroupMode,
+    documentSort,
     searchParams.get('q'),
   ]);
 
   useEffect(() => {
+    if (activeTab !== 'documents' || !hasHydratedDocumentPreferences.current) {
+      return;
+    }
+
     if (documentGroupMode === 'none') {
       setCollapsedDocumentGroups(new Set());
       return;
     }
 
+    if (hasHydratedCollapsedDocumentGroups.current) {
+      return;
+    }
+
+    hasHydratedCollapsedDocumentGroups.current = true;
     setCollapsedDocumentGroups(
       getStoredCollapsedDocumentGroups(
         readClassDocumentsViewPreferences(),
         documentGroupMode
       )
     );
-  }, [documentGroupMode]);
+  }, [activeTab, documentGroupMode]);
+
+  useEffect(() => {
+    if (
+      activeTab !== 'documents' ||
+      !hasHydratedDocumentPreferences.current ||
+      hasHydratedDocumentSort.current
+    ) {
+      return;
+    }
+
+    hasHydratedDocumentSort.current = true;
+    const storedSort = readClassDocumentsViewPreferences().documentSort;
+    if (storedSort) {
+      setDocumentSort(storedSort);
+    }
+  }, [activeTab, documentGroupMode]);
 
   // Get ungraded submissions (submitted but not meaningfully graded)
   const ungradedDocuments = useMemo(() => {
@@ -1131,6 +1198,11 @@ function ClassDetailPage() {
     });
   }, [collator, studentNameSortDirection, students]);
 
+  const filteredStudents = useMemo(
+    () => filterClassStudentsByQuery(sortedStudents, studentSearchQuery),
+    [sortedStudents, studentSearchQuery]
+  );
+
   const classDocuments = useMemo((): ClassDocumentRow[] => {
     const byDocumentId = new Map<string, ClassDocumentRow>();
 
@@ -1224,7 +1296,7 @@ function ClassDetailPage() {
     setSelected: setSelectedStudentIds,
     handleSelectAll: handleSelectAllStudents,
     handleSelect: handleSelectStudent,
-  } = useTable({ rows: sortedStudents });
+  } = useTable({ rows: filteredStudents });
 
   const handleAddStudentSheetOpenChange = (open: boolean) => {
     setIsAddStudentSheetOpen(open);
@@ -1296,11 +1368,11 @@ function ClassDetailPage() {
   // Get current tab data and paginate it
   const currentTabData = useMemo(() => {
     if (activeTab === 'students') {
-      return sortedStudents;
+      return filteredStudents;
     }
 
     return [];
-  }, [activeTab, sortedStudents]) as any[];
+  }, [activeTab, filteredStudents]) as any[];
 
   const paginatedData = useMemo(() => {
     return currentTabData.slice(
@@ -1325,15 +1397,27 @@ function ClassDetailPage() {
     });
   };
 
+  const handleDocumentSortChange = (next: DocumentWorkSort) => {
+    setDocumentSort(next);
+    mergeClassDocumentsViewPreferences(searchParams, { documentSort: next });
+  };
+
   const navigateWithDocumentPreferences = (next: URLSearchParams) => {
     persistDocumentViewPreferences(next);
     navigate(`?${next.toString()}`);
   };
 
-  const handleTabChange = (value: string) => {
+  const handleHeaderTabChange = (tab: ClassHeaderTab) => {
     const next = new URLSearchParams(searchParams);
-    next.set('tab', value);
-    navigate(`?${next.toString()}`);
+    next.set('tab', tab);
+
+    if (tab === 'students') {
+      next.delete('status');
+      navigate(`?${next.toString()}`);
+      return;
+    }
+
+    navigateWithDocumentPreferences(next);
   };
 
   const handleViewStudentDocuments = (profileId: string) => {
@@ -1437,8 +1521,9 @@ function ClassDetailPage() {
             navigateWithDocumentPreferences(next);
           }}
           collapsedGroups={collapsedDocumentGroups}
-          onCollapsedGroupsChange={(next) => {
+          onCollapsedGroupsChange={(next, options) => {
             setCollapsedDocumentGroups(next);
+            if (options?.persist === false) return;
             persistCollapsedDocumentGroups(next);
           }}
           pagination={{
@@ -1464,6 +1549,9 @@ function ClassDetailPage() {
             statusChips: 'class-documents-status-chips',
             groupSelect: 'class-documents-group-filter',
           }}
+          collapseAllGroupsWhenGroupChanges
+          sort={documentSort}
+          onSortChange={handleDocumentSortChange}
         />
       );
     }
@@ -1473,7 +1561,20 @@ function ClassDetailPage() {
 
       return (
         <div className="space-y-4">
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative min-w-0 w-full max-w-sm flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                name="class-students-search"
+                value={studentSearchQuery}
+                onChange={(event) => setStudentSearchQuery(event.target.value)}
+                placeholder="Search students"
+                className="h-9 rounded-md border-0 bg-background pl-9 shadow-none ring-1 ring-black/5 focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Search students"
+                data-testid="class-students-search"
+              />
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2">
             {selectedStudentIds.length > 0 && (
               <>
                 <studentFetcher.Form method="post" className="inline">
@@ -1538,6 +1639,7 @@ function ClassDetailPage() {
               <Plus className="mr-2 h-4 w-4" />
               Add Student
             </Button>
+            </div>
           </div>
 
           <Sheet
@@ -1725,6 +1827,13 @@ function ClassDetailPage() {
                 Add students to this class to get started
               </span>
             </div>
+          ) : filteredStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center border border-dashed bg-muted/50 p-12 rounded-lg">
+              <span className="text-lg font-bold">No students found</span>
+              <span className="text-sm text-muted-foreground">
+                Try a different search term
+              </span>
+            </div>
           ) : (
             <div
               className={cn(
@@ -1738,8 +1847,8 @@ function ClassDetailPage() {
                     <TableHead className="w-[50px] pl-4 rounded-tl-lg">
                       <Checkbox
                         checked={
-                          sortedStudents.length > 0 &&
-                          selectedStudentIds.length === sortedStudents.length
+                          filteredStudents.length > 0 &&
+                          selectedStudentIds.length === filteredStudents.length
                         }
                         onCheckedChange={handleSelectAllStudents}
                       />
@@ -1765,9 +1874,10 @@ function ClassDetailPage() {
                         )}
                       </Button>
                     </TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Documents</TableHead>
-                    <TableHead className="pr-4">Action</TableHead>
+                    <TableHead className="whitespace-nowrap">Email</TableHead>
+                    <TableHead className="whitespace-nowrap pr-4">
+                      Documents
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1798,20 +1908,23 @@ function ClassDetailPage() {
                         <TableCell className="text-muted-foreground">
                           {s.user.email}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {studentDocumentCount}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
+                        <TableCell className="pr-4">
+                          <button
                             type="button"
+                            className={cn(
+                              badgeVariants({ variant: 'secondary' }),
+                              'cursor-pointer gap-1 py-1 pl-2 pr-1'
+                            )}
                             onClick={() => handleViewStudentDocuments(s.id)}
+                            aria-label={`View ${s.user.name ?? s.user.email}'s documents`}
                           >
-                            View Details
-                          </Button>
+                            {studentDocumentCount}{' '}
+                            {studentDocumentCount === 1 ? 'doc' : 'docs'}
+                            <ChevronRight
+                              className="size-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                          </button>
                         </TableCell>
                       </TableRow>
                     );
@@ -1838,120 +1951,40 @@ function ClassDetailPage() {
           </Button>
         </div>
 
-        <div
-          data-testid="class-detail-header"
-          className="mb-6 overflow-hidden rounded-lg border"
-        >
-          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="hidden h-16 w-24 shrink-0 overflow-hidden rounded-md border sm:block">
-                <ClassArt seed={data.klass.id} classArtIndex={data.klass.classArtIndex ?? null} />
-              </div>
-              <div className="min-w-0">
-                <h3 className="truncate text-lg font-semibold">
-                  Grade {data.klass.grade} • Period {data.klass.period}
-                  {data.klass.title ? ` — ${data.klass.title}` : ''}
-                </h3>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
-                  {data.klass.school?.name ? (
-                    <span>{data.klass.school.name}</span>
-                  ) : null}
-                  <span>{data.klass.schoolYear}</span>
-                  <Badge variant="outline" size="sm" className="font-mono">
-                    {data.klass.code}
-                  </Badge>
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary" size="sm" className="gap-1">
-                    <Users className="h-3 w-3" />
-                    {students.length} student{students.length === 1 ? '' : 's'}
-                  </Badge>
-                  <Badge variant="secondary" size="sm" className="gap-1">
-                    <Files className="h-3 w-3" />
-                    {classDocuments.length} document
-                    {classDocuments.length === 1 ? '' : 's'}
-                  </Badge>
-                  {ungradedDocuments.length > 0 ? (
-                    <Badge
-                      variant="warning-soft"
-                      size="sm"
-                      className="pointer-events-none gap-1 hover:bg-orange-100 hover:text-orange-700"
-                    >
-                      <ClipboardCheck className="h-3 w-3" />
-                      {ungradedDocuments.length} to grade
-                    </Badge>
-                  ) : null}
-                  {releasedDocuments.length > 0 ? (
-                    <Badge
-                      variant="outline"
-                      size="sm"
-                      className="pointer-events-none gap-1 border-green-200 bg-green-100 text-green-700 hover:bg-green-100 hover:text-green-700"
-                    >
-                      <Send className="h-3 w-3" />
-                      {releasedDocuments.length} released
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-              <Button
-                size="sm"
-                variant="outline"
-                type="button"
-                onClick={() => setIsClassEditSheetOpen(true)}
-              >
-                <Pencil className="mr-1 h-3.5 w-3.5" />
-                Edit Class
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ClassDetailHeader
+          klass={{
+            id: data.klass.id,
+            grade: data.klass.grade,
+            period: data.klass.period,
+            title: data.klass.title,
+            school: data.klass.school,
+            schoolYear: data.klass.schoolYear,
+            code: data.klass.code,
+            classArtIndex: data.klass.classArtIndex ?? null,
+          }}
+          studentCount={students.length}
+          documentCount={classDocuments.length}
+          activeTab={activeHeaderTab}
+          onTabChange={handleHeaderTabChange}
+          onEdit={() => setIsClassEditSheetOpen(true)}
+        />
 
-        {/* Tabs and Table */}
-        <Tabs
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="w-full"
+        <div
+          key={activeHeaderTab}
+          className="animate-in fade-in-0 slide-in-from-right-2 duration-300"
         >
-          <div>
-            <TabsList className="grid h-auto w-full grid-cols-2">
-                <TabsTrigger
-                  value="students"
-                  className="flex h-auto items-center justify-center gap-2 py-2"
-                >
-                  <User className="w-4 h-4" />
-                  <span>Students</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {students.length}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="documents"
-                  className="flex h-auto items-center justify-center gap-2 py-2"
-                >
-                  <Files className="w-4 h-4" />
-                  <span>Documents</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full border text-muted-foreground">
-                    {classDocuments.length}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
-            <TabsContent value={activeTab} className="mt-4">
-              <div>{renderTable()}</div>
-              {activeTab === 'students' && currentTabData.length > 0 && (
-                <div className="mt-4">
-                  <Pagination
-                    totalCount={currentTabData.length}
-                    skip={pagination.skip}
-                    take={pagination.take}
-                    onChange={handlePaginationChange}
-                  />
-                </div>
-              )}
-            </TabsContent>
-          </div>
-        </Tabs>
+          <div>{renderTable()}</div>
+          {activeTab === 'students' && currentTabData.length > 0 ? (
+            <div className="mt-4">
+              <Pagination
+                totalCount={currentTabData.length}
+                skip={pagination.skip}
+                take={pagination.take}
+                onChange={handlePaginationChange}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <ClassManageSheet

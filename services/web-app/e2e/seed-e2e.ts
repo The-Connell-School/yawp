@@ -52,6 +52,8 @@ export type E2EContext = {
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
   apHistoryLeqEntryKey: string;
+  assignmentId: string;
+  classAssignmentId: string;
   teacherTrainingId: string;
   freshDocumentId: string;
   editedDocumentId: string;
@@ -709,6 +711,8 @@ export async function seedE2E(): Promise<E2EContext> {
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
     apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
+    assignmentId: seededAssignment.id,
+    classAssignmentId: seededClassAssignment.id,
     teacherTrainingId: teacherTraining.id,
     freshDocumentId: freshDoc.id,
     editedDocumentId: editedDoc.id,
