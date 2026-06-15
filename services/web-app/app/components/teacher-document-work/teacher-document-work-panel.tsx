@@ -47,6 +47,7 @@ import {
   getDraftDisplayTitle,
   getTeacherDocumentWorkDetailLink,
   getTeacherDocumentWorkStatusDisplay,
+  countTeacherDocumentWorkStatuses,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
 import {
@@ -161,7 +162,7 @@ export type TeacherDocumentWorkPanelProps = {
 export function TeacherDocumentWorkPanel({
   tableLabel,
   documents,
-  statusCounts,
+  statusCounts: _statusCounts,
   students,
   classes,
   assignments,
@@ -214,7 +215,7 @@ export function TeacherDocumentWorkPanel({
         )
       : uniqueAssignments;
 
-  const filteredDocuments = useMemo(() => {
+  const documentsMatchingNonStatusFilters = useMemo(() => {
     const query = filters.query.trim().toLowerCase();
 
     return documents.filter((document) => {
@@ -244,13 +245,6 @@ export function TeacherDocumentWorkPanel({
         return false;
       }
 
-      if (filters.status !== 'all') {
-        const status = getTeacherDocumentWorkStatusDisplay(document).status;
-        if (status !== filters.status) {
-          return false;
-        }
-      }
-
       if (!query) {
         return true;
       }
@@ -270,6 +264,22 @@ export function TeacherDocumentWorkPanel({
       return haystack.includes(query);
     });
   }, [documents, filters, uniqueStudents]);
+
+  const filteredDocuments = useMemo(() => {
+    if (filters.status === 'all') {
+      return documentsMatchingNonStatusFilters;
+    }
+
+    return documentsMatchingNonStatusFilters.filter((document) => {
+      const status = getTeacherDocumentWorkStatusDisplay(document).status;
+      return status === filters.status;
+    });
+  }, [documentsMatchingNonStatusFilters, filters.status]);
+
+  const effectiveStatusCounts = useMemo(
+    () => countTeacherDocumentWorkStatuses(documentsMatchingNonStatusFilters),
+    [documentsMatchingNonStatusFilters]
+  );
 
   const sortedFilteredDocuments = useMemo(() => {
     if (!sort) return filteredDocuments;
@@ -335,7 +345,7 @@ export function TeacherDocumentWorkPanel({
 
   const statusChips = TEACHER_DOCUMENT_STATUSES.map((status) => ({
     status,
-    count: statusCounts[status],
+    count: effectiveStatusCounts[status],
   }));
 
   const renderSortableHead = (
@@ -609,7 +619,7 @@ export function TeacherDocumentWorkPanel({
     tableLabel,
     filters,
     statusChips,
-    totalDocumentCount: Object.values(statusCounts).reduce(
+    totalDocumentCount: Object.values(effectiveStatusCounts).reduce(
       (total, count) => total + count,
       0
     ),

@@ -6,7 +6,7 @@ export type ClassScopedDocumentWhere = {
 
 export type StudentClassDocumentsWhere = {
   OR: Array<
-    | ClassScopedDocumentWhere
+    | (ClassScopedDocumentWhere & { membershipId: string })
     | {
         classAssignmentId: null;
         membershipId: string;
@@ -23,14 +23,17 @@ export function buildClassAssignmentDocumentScope(
   };
 }
 
-/** All documents for one student in a class view (includes practice / type-only work). */
+/** Documents for one student in a class view (assignment work + practice / type-only). */
 export function buildStudentClassDocumentsScope(params: {
   classId: string;
   membershipId: string;
 }): StudentClassDocumentsWhere {
   return {
     OR: [
-      buildClassAssignmentDocumentScope(params.classId),
+      {
+        ...buildClassAssignmentDocumentScope(params.classId),
+        membershipId: params.membershipId,
+      },
       {
         classAssignmentId: null,
         membershipId: params.membershipId,
