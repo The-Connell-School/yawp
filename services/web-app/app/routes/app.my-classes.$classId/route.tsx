@@ -651,8 +651,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     legacyClassDocumentIds,
     enrolledStudent
       ? { membershipId: enrolledStudent.id }
-      : undefined
+      : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
+
+  // #region agent log
+  fetch('http://127.0.0.1:7933/ingest/2c4519aa-0e76-4e76-81da-6a59121fb758',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351e20'},body:JSON.stringify({sessionId:'351e20',location:'route.tsx:loader:scope',message:'class document scope resolved',data:{studentProfileIdFilter,scopeUsesStudentMembership:Boolean(enrolledStudent),enrolledStudentCount:klass.students.length,scopeOrClauses:classDocumentScope.OR.length},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
 
   // Check feature flags
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
@@ -766,6 +770,18 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       updatedAt: 'desc',
     },
   });
+
+  // #region agent log
+  {
+    const practiceInProgress = inProgressDocuments.filter(
+      (document) => !document.assignment?.id
+    ).length;
+    const practiceSubmissionCount = submissions.filter(
+      (submission) => !submission.document.assignment?.id
+    ).length;
+    fetch('http://127.0.0.1:7933/ingest/2c4519aa-0e76-4e76-81da-6a59121fb758',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351e20'},body:JSON.stringify({sessionId:'351e20',location:'route.tsx:loader:queryResults',message:'loader document query counts',data:{submissionCount:submissions.length,inProgressCount:inProgressDocuments.length,practiceSubmissionCount,practiceInProgress,filteredStudentMembershipId:enrolledStudent?.id??null,enrolledStudentCount:klass.students.length},timestamp:Date.now(),hypothesisId:'A,C',runId:'practice-scope-fix'})}).catch(()=>{});
+  }
+  // #endregion
 
   const classAssignments = await prisma.classAssignment.findMany({
     where: { classId },

@@ -23,6 +23,35 @@ export function buildClassAssignmentDocumentScope(
   };
 }
 
+export type EnrolledClassDocumentsWhere = {
+  OR: Array<
+    | ClassScopedDocumentWhere
+    | {
+        classAssignmentId: null;
+        membershipId: { in: string[] };
+      }
+  >;
+};
+
+/** Class assignment work plus practice docs for currently enrolled students. */
+export function buildEnrolledClassDocumentsScope(
+  classId: string,
+  enrolledMembershipIds: string[]
+): EnrolledClassDocumentsWhere {
+  const scope: EnrolledClassDocumentsWhere['OR'] = [
+    buildClassAssignmentDocumentScope(classId),
+  ];
+
+  if (enrolledMembershipIds.length > 0) {
+    scope.push({
+      classAssignmentId: null,
+      membershipId: { in: enrolledMembershipIds },
+    });
+  }
+
+  return { OR: scope };
+}
+
 /** Documents for one student in a class view (assignment work + practice / type-only). */
 export function buildStudentClassDocumentsScope(params: {
   classId: string;

@@ -132,3 +132,102 @@ test.describe('Teacher class documents filter counts', () => {
     }
   });
 });
+
+test.describe('Teacher class documents practice visibility', () => {
+  test('enrolled student practice documents appear without a student filter', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+    const suffix = Date.now().toString(36);
+    const documentIds: string[] = [];
+    let ericMembershipId = '';
+    const ericDocTitle = `Bored in the USA ${suffix}`;
+
+    try {
+      const eric = await prisma.user.create({
+        data: {
+          email: `eric.${suffix}@yawp.test`,
+          name: 'Eric',
+          password: { create: createPassword('eric-e2e-password') },
+          memberships: {
+            create: {
+              organizationId: e2eContext.organizationId,
+              role: 'STUDENT',
+              classesAsStudent: { connect: { id: e2eContext.classId } },
+            },
+          },
+        },
+        include: { memberships: true },
+      });
+      ericMembershipId = eric.memberships[0]!.id;
+
+      for (const title of [ericDocTitle, `Bored in the USA follow-up ${suffix}`]) {
+        const body = `${title} body`;
+        const doc = await prisma.document.create({
+          data: {
+            title,
+            text: body,
+            html: `<p>${body}</p>`,
+            membershipId: ericMembershipId,
+            assignmentTypeId: e2eContext.assignmentTypeId,
+            submissions: {
+              create: {
+                title,
+                text: body,
+                html: `<p>${body}</p>`,
+                submittedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                gradedAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000),
+                numericPercentage: 88,
+                letterGrade: 'B',
+                releasedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+              },
+            },
+          },
+          select: { id: true },
+        });
+        documentIds.push(doc.id);
+      }
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.class-documents-view');
+      });
+
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none&status=all`
+      );
+      await page.waitForLoadState('networkidle');
+
+      const unfilteredTable = page.getByRole('table', {
+        name: /class documents/i,
+      });
+      await expect(unfilteredTable.getByText(ericDocTitle)).toBeVisible();
+
+      await page.goto(
+        `/app/my-classes/${e2eContext.classId}?tab=documents&documentGroup=none&studentId=${ericMembershipId}`
+      );
+      await page.waitForLoadState('networkidle');
+
+      const filteredTable = page.getByRole('table', { name: /class documents/i });
+      await expect(filteredTable.getByText(ericDocTitle)).toBeVisible();
+      await expect(await parseAllStatusCount(page)).toBe(2);
+    } finally {
+      if (documentIds.length > 0) {
+        await prisma.submission
+          .deleteMany({ where: { documentId: { in: documentIds } } })
+          .catch(() => {});
+        await prisma.document
+          .deleteMany({ where: { id: { in: documentIds } } })
+          .catch(() => {});
+      }
+      if (ericMembershipId) {
+        await prisma.orgMembership
+          .delete({ where: { id: ericMembershipId } })
+          .catch(() => {});
+      }
+      await prisma.$disconnect();
+    }
+  });
+});
