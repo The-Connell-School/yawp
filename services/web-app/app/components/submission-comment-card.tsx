@@ -2,14 +2,26 @@ import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
 
+type CommentAuthorShape = {
+  profile?: { user?: { name?: string | null; email?: string } };
+  membership?: { user?: { name?: string | null; email?: string } };
+};
+
+function getCommentAuthorLabel(comment: CommentAuthorShape) {
+  const user = comment.membership?.user ?? comment.profile?.user;
+  return user?.name || user?.email || 'Unknown user';
+}
+
 export type SubmissionComment = {
   id: string;
   content: string;
-  profile: { user: { name: string | null; email: string } };
+  profile?: { user: { name: string | null; email: string } };
+  membership?: { user: { name: string | null; email: string } };
   responses?: {
     id: string;
     content: string;
-    profile: { user: { name: string | null; email: string } };
+    profile?: { user: { name: string | null; email: string } };
+    membership?: { user: { name: string | null; email: string } };
   }[];
 };
 
@@ -66,7 +78,7 @@ export function SubmissionCommentCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-sm font-medium text-muted-foreground">
-            {comment.profile.user.name || comment.profile.user.email}
+            {getCommentAuthorLabel(comment)}
           </div>
         </div>
         {!readOnly && onEdit && onDelete && !isEditing && (
@@ -147,7 +159,7 @@ export function SubmissionCommentCard({
           {comment.responses.map((r) => (
             <div key={r.id} className="whitespace-pre-line text-xs text-muted-foreground">
               <span className="font-semibold text-foreground/80">
-                {r.profile.user.name || r.profile.user.email}:
+                {getCommentAuthorLabel(r)}:
               </span>{' '}
               {r.content}
             </div>
