@@ -18,11 +18,12 @@ export function createPrismaClient(databaseUrl = process.env.DATABASE_URL) {
   const schema =
     process.env.DATABASE_SCHEMA?.trim() ||
     getSchemaFromDatabaseUrl(databaseUrl);
-  const isLocal = isLocalDatabaseUrl(databaseUrl);
+  const isRemoteMigrateTunnel = process.env.REMOTE_MIGRATE_TUNNEL === '1';
+  const isLocal = isLocalDatabaseUrl(databaseUrl) && !isRemoteMigrateTunnel;
   const isSimpleLocal =
     !schema &&
     isLocalDatabaseUrl(databaseUrl) &&
-    process.env.REMOTE_MIGRATE_TUNNEL !== '1';
+    !isRemoteMigrateTunnel;
 
   const adapter = isSimpleLocal
     ? new PrismaPg({ connectionString: databaseUrl, ssl: false })
