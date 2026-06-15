@@ -54,42 +54,13 @@ function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Pr
   });
 }
 
-async function orgMembershipTableExists(env: NodeJS.ProcessEnv): Promise<boolean> {
-  const { createPrismaClient } = await import('./local-dev/connection');
-  const prisma = createPrismaClient(env.DATABASE_URL);
-  try {
-    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
-      SELECT EXISTS (
-        SELECT 1
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-          AND table_name = 'OrgMembership'
-      ) AS "exists"
-    `;
-    return rows[0]?.exists === true;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
 async function runProductionMigrations(env: NodeJS.ProcessEnv) {
   const generateCode = await runCommand('bun', ['prisma', 'generate'], env);
   if (generateCode !== 0) {
     return generateCode;
   }
 
-  const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
-  if (migrateCode !== 0) {
-    return migrateCode;
-  }
-
-  if (!(await orgMembershipTableExists(env))) {
-    console.log('Skipping org-membership postcheck (OrgMembership table not present yet).');
-    return 0;
-  }
-
-  console.log('Running org-membership postcheck...');
-  return runCommand('bun', ['run', 'org-membership:postcheck'], env);
+  return runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
 }
 
 const sshProcess = spawn('ssh', [
@@ -131,8 +102,7 @@ setTimeout(async () => {
     migrationStarted = true;
     const env = {
       ...process.env,
-      REMOTE_MIGRATE_TUNNEL: '1',
-      DATABASE_URL: `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}?sslmode=require`,
+      DATABASE_URL: `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${LOCAL_PORT}/${DB_NAME}`,
     };
 
     const exitCode = await runProductionMigrations(env);

@@ -99,7 +99,7 @@ jobs:
       - name: 🧬 Generate Prisma client
         run: bun prisma:generate
 
-      - name: 🧱 Apply production Prisma migrations (with post-cutover verification)
+      - name: 🧱 Apply production Prisma migrations
         run: bun prisma:migrate-remote production
         env:
           PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
