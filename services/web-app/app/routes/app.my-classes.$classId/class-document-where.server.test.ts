@@ -8,6 +8,22 @@ describe('buildClassDocumentScope', () => {
     });
   });
 
+  test('includes practice docs for enrolled students when unfiltered', () => {
+    expect(
+      buildClassDocumentScope('class-1', [], {
+        enrolledMembershipIds: ['membership-1', 'membership-2'],
+      })
+    ).toEqual({
+      OR: [
+        { classAssignment: { classId: 'class-1' } },
+        {
+          classAssignmentId: null,
+          membershipId: { in: ['membership-1', 'membership-2'] },
+        },
+      ],
+    });
+  });
+
   test('narrows to one student assignment and practice docs when filtered', () => {
     expect(
       buildClassDocumentScope('class-1', [], { membershipId: 'membership-1' })

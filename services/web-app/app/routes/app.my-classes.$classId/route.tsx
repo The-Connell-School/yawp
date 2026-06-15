@@ -651,7 +651,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     legacyClassDocumentIds,
     enrolledStudent
       ? { membershipId: enrolledStudent.id }
-      : undefined
+      : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
   // Check feature flags
