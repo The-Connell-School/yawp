@@ -8,12 +8,15 @@ describe('buildClassDocumentScope', () => {
     });
   });
 
-  test('includes practice docs for a filtered student membership', () => {
+  test('narrows to one student assignment and practice docs when filtered', () => {
     expect(
       buildClassDocumentScope('class-1', [], { membershipId: 'membership-1' })
     ).toEqual({
       OR: [
-        { classAssignment: { classId: 'class-1' } },
+        {
+          classAssignment: { classId: 'class-1' },
+          membershipId: 'membership-1',
+        },
         { classAssignmentId: null, membershipId: 'membership-1' },
       ],
     });
