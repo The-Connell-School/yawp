@@ -111,6 +111,9 @@ resource "aws_apprunner_service" "web" {
           DATABASE_SCHEMA          = var.database_schema
           DATABASE_SSL_REQUIRE     = "true"
           AI_MODEL                 = var.ai_model
+          EMAIL_PROVIDER           = "ses"
+          AWS_SES_REGION           = var.aws_region
+          SES_FROM_EMAIL           = var.resend_from_email
           RESEND_FROM_EMAIL        = var.resend_from_email
           POSTHOG_API_KEY          = var.posthog_api_key
           POSTHOG_HOST             = var.posthog_host
