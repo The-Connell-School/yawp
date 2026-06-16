@@ -118,42 +118,42 @@ export function TeacherGradingAtAGlance({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <GradingModeCard
-                to={GRADING_LINKS.byStudent}
-                title="By student"
-                description="Group the queue by student name."
-                icon={Users}
-                accentClassName="bg-amber-50"
-                testId="teacher-workspace-cards"
-                ariaLabel="Documents, grade by student"
-              />
-              <GradingModeCard
-                to={GRADING_LINKS.byClass}
-                title="By class"
-                description="Work through one class at a time."
-                icon={GraduationCap}
-                accentClassName="bg-sky-50"
-              />
-              <GradingModeCard
-                to={GRADING_LINKS.byAssignment}
-                title="By assignment"
-                description="Grade the same prompt across students."
-                icon={FileText}
-                accentClassName="bg-violet-50"
-              />
-              <GradingModeCard
-                to={GRADING_LINKS.toRelease}
-                title="To release"
-                description="Return graded work to students."
-                icon={Send}
-                accentClassName="bg-blue-50"
-              />
-          </div>
           <GradingQueueStatStrip
             needsGradingCount={needsGradingCount}
             readyToReleaseCount={readyToReleaseCount}
           />
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <GradingModeCard
+              to={GRADING_LINKS.byStudent}
+              title="By student"
+              description="Group the queue by student name."
+              icon={Users}
+              accentClassName="bg-amber-50"
+              testId="teacher-workspace-cards"
+              ariaLabel="Documents, grade by student"
+            />
+            <GradingModeCard
+              to={GRADING_LINKS.byClass}
+              title="By class"
+              description="Work through one class at a time."
+              icon={GraduationCap}
+              accentClassName="bg-sky-50"
+            />
+            <GradingModeCard
+              to={GRADING_LINKS.byAssignment}
+              title="By assignment"
+              description="Grade the same prompt across students."
+              icon={FileText}
+              accentClassName="bg-violet-50"
+            />
+            <GradingModeCard
+              to={GRADING_LINKS.toRelease}
+              title="To release"
+              description="Return graded work to students."
+              icon={Send}
+              accentClassName="bg-blue-50"
+            />
+          </div>
         </>
       )}
     </div>

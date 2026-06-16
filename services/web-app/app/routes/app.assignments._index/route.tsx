@@ -4,7 +4,13 @@ import {
   data as dataResponse,
   redirect,
 } from 'react-router';
-import { Form, Link, useLoaderData, useSearchParams } from 'react-router';
+import {
+  Form,
+  Link,
+  useLoaderData,
+  useNavigate,
+  useSearchParams,
+} from 'react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Copy, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
@@ -52,6 +58,18 @@ function formatClassLabel(klass: {
 }) {
   const base = `Grade ${klass.grade} • Period ${klass.period}`;
   return klass.title ? `${base} — ${klass.title}` : base;
+}
+
+export function sanitizeAssignmentCreateReturnTo(value: string | null) {
+  if (!value) return null;
+  if (
+    value === '/app' ||
+    value.startsWith('/app/') ||
+    value.startsWith('/app?')
+  ) {
+    return value;
+  }
+  return null;
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -494,6 +512,7 @@ type AssignmentRow = {
 
 export default function AssignmentsRoute() {
   const data = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [duplicateAssignment, setDuplicateAssignment] =
@@ -504,6 +523,7 @@ export default function AssignmentsRoute() {
   const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
     string | undefined
   >();
+  const [createReturnTo, setCreateReturnTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (searchParams.get('create') !== '1') {
@@ -520,10 +540,14 @@ export default function AssignmentsRoute() {
       setCreateAssignmentTypeId(undefined);
     }
 
+    setCreateReturnTo(
+      sanitizeAssignmentCreateReturnTo(searchParams.get('returnTo'))
+    );
     setIsCreateSheetOpen(true);
     const next = new URLSearchParams(searchParams);
     next.delete('create');
     next.delete('assignmentType');
+    next.delete('returnTo');
     setSearchParams(next, { replace: true });
   }, [data.assignmentTypes, searchParams, setSearchParams]);
 
@@ -781,6 +805,7 @@ export default function AssignmentsRoute() {
                     <TableRow className="rounded-t-lg bg-muted/50">
                       <TableHead className="w-[50px] rounded-tl-lg pl-4">
                         <Checkbox
+                          aria-label="Select all assignments"
                           checked={
                             filteredAssignments.length > 0 &&
                             selectedAssignmentIds.length ===
@@ -805,6 +830,10 @@ export default function AssignmentsRoute() {
                         <TableRow key={assignment.id}>
                           <TableCell className="max-h-[37px] pl-4">
                             <Checkbox
+                              aria-label={`Select assignment ${
+                                assignment.title?.trim() ||
+                                'Untitled Assignment'
+                              }`}
                               checked={selectedAssignmentIds.includes(
                                 assignment.id
                               )}
@@ -915,8 +944,13 @@ export default function AssignmentsRoute() {
         onOpenChange={(open) => {
           setIsCreateSheetOpen(open);
           if (!open) {
+            const returnTo = createReturnTo;
             setDuplicateAssignment(null);
             setCreateAssignmentTypeId(undefined);
+            setCreateReturnTo(null);
+            if (returnTo) {
+              navigate(returnTo, { replace: true });
+            }
           }
         }}
         entryPoint="dashboard"

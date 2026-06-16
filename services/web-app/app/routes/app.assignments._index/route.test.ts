@@ -34,7 +34,7 @@ mock.module('~/utils/feature-flags.server', () => ({
   getAssignmentCreationStandardizationEnabledClassIdsForContext,
 }));
 
-const { action } = await import('./route');
+const { action, sanitizeAssignmentCreateReturnTo } = await import('./route');
 
 function requestFor(body: Record<string, string>) {
   const form = new FormData();
@@ -209,6 +209,24 @@ describe('app.assignments action', () => {
     expect(prisma.document.updateMany).not.toHaveBeenCalled();
     expect(prisma.document.delete).not.toHaveBeenCalled();
     expect(prisma.document.deleteMany).not.toHaveBeenCalled();
+  });
+
+  test('allows safe app return targets for assignment creation', () => {
+    expect(sanitizeAssignmentCreateReturnTo('/app')).toBe('/app');
+    expect(
+      sanitizeAssignmentCreateReturnTo('/app/my-classes/class-1?tab=documents')
+    ).toBe('/app/my-classes/class-1?tab=documents');
+  });
+
+  test('rejects unsafe assignment creation return targets', () => {
+    expect(sanitizeAssignmentCreateReturnTo('')).toBeNull();
+    expect(sanitizeAssignmentCreateReturnTo(null)).toBeNull();
+    expect(sanitizeAssignmentCreateReturnTo('assignments')).toBeNull();
+    expect(
+      sanitizeAssignmentCreateReturnTo('https://example.com/app')
+    ).toBeNull();
+    expect(sanitizeAssignmentCreateReturnTo('//example.com/app')).toBeNull();
+    expect(sanitizeAssignmentCreateReturnTo('/application')).toBeNull();
   });
 
   test('updates assignment fields with grading intent', async () => {

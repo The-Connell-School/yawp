@@ -9,6 +9,8 @@ export type AssignmentTypeGlanceRow = {
   image?: { id: string } | null;
 };
 
+const DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO = encodeURIComponent('/app');
+
 function AssignmentTypeImage({
   assignmentType,
   className,
@@ -46,7 +48,7 @@ export function AssignmentsAtAGlance({
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Assignments</h2>
         <Link
-          to="/app/assignments?create=1"
+          to={`/app/assignments?create=1&returnTo=${DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO}`}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
@@ -78,7 +80,7 @@ export function AssignmentsAtAGlance({
                 </Link>
                 <Tooltip text={`New ${assignmentType.title} assignment`}>
                   <Link
-                    to={`/app/assignments?create=1&assignmentType=${assignmentType.id}`}
+                    to={`/app/assignments?create=1&assignmentType=${assignmentType.id}&returnTo=${DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO}`}
                     aria-label={`New ${assignmentType.title} assignment`}
                     className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
                   >

@@ -139,13 +139,12 @@ function ClassHeaderTabBar({
       ref={listRef}
       role="tablist"
       aria-label="Class sections"
-      className="relative flex items-stretch"
+      className="relative flex w-full max-w-md items-stretch"
     >
       <div
         className={cn(
           'pointer-events-none absolute inset-y-0 bg-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.55),inset_0_2px_6px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-black/15 transition-[left,width] duration-300 ease-out',
-          activeIndex === 0 && 'rounded-bl-xl',
-          activeIndex === tabs.length - 1 && 'rounded-br-xl'
+          activeIndex === 0 && 'rounded-bl-xl'
         )}
         style={{ left: indicator.left, width: indicator.width }}
         aria-hidden
@@ -167,6 +166,7 @@ function ClassHeaderTabBar({
             onClick={() => onTabChange(tab.id)}
             className={cn(
               'relative min-w-0 flex-1 px-5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              index === tabs.length - 1 && 'border-r border-border/60',
               activeTab === tab.id
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
