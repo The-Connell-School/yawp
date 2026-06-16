@@ -154,6 +154,14 @@ test.describe.serial('Teacher class page redesign', () => {
 
     const header = page.getByTestId('class-detail-header');
     await expect(header).toBeVisible();
+    const headerBox = await header.boundingBox();
+    const tablist = header.getByRole('tablist', { name: 'Class sections' });
+    const tablistBox = await tablist.boundingBox();
+    expect(headerBox).not.toBeNull();
+    expect(tablistBox).not.toBeNull();
+    expect(tablistBox!.x - headerBox!.x).toBeGreaterThanOrEqual(12);
+    expect(tablistBox!.x - headerBox!.x).toBeLessThan(40);
+    expect(tablistBox!.width).toBeLessThan(headerBox!.width * 0.7);
     await expect(header.getByText(/Grade 9th .* Period 1st/)).toBeVisible();
     await expect(header.getByText('E2E High')).toBeVisible();
     await expect(header.getByText('2024-2025')).toBeVisible();
