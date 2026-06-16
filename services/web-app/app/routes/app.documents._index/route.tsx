@@ -5,6 +5,7 @@ import {
   TeacherDocumentWorkPanel,
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
+import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
@@ -24,8 +25,10 @@ import {
   serializeDocumentWorkFilterIds,
 } from '~/utils/teacher-document-work-filter-options';
 import {
+  buildReleaseGradeRows,
   countTeacherDocumentWorkStatuses,
   formatClassLabel,
+  type ReleaseGradeRow,
   type TeacherDocumentWorkClassSummary,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -63,12 +66,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
 
   const url = new URL(request.url);
-  const studentIds = parseDocumentWorkFilterIds(url.searchParams.get('student'));
+  const studentIds = parseDocumentWorkFilterIds(
+    url.searchParams.get('student')
+  );
   const selectedClassIds = parseDocumentWorkFilterIds(
     url.searchParams.get('class')
   );
@@ -178,6 +183,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           releasedAt: true,
           submittedAt: true,
           createdAt: true,
+          archivedAt: true,
         },
       },
       _count: { select: { submissions: true } },
@@ -235,10 +241,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function StudentWorkRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set()
+  );
   const [documentSort, setDocumentSort] = useState<DocumentWorkSort>(
     DEFAULT_DOCUMENT_WORK_SORT
   );
+  const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
+    useState(false);
+  const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
+    ReleaseGradeRow[]
+  >([]);
   const hasHydratedStudentWorkPreferences = useRef(false);
   const hasHydratedCollapsedStudentWorkGroups = useRef(false);
   const hasHydratedDocumentSort = useRef(false);
@@ -286,7 +299,10 @@ export default function StudentWorkRoute() {
   }, [documentGroupMode]);
 
   useEffect(() => {
-    if (!hasHydratedStudentWorkPreferences.current || hasHydratedDocumentSort.current) {
+    if (
+      !hasHydratedStudentWorkPreferences.current ||
+      hasHydratedDocumentSort.current
+    ) {
       return;
     }
 
@@ -301,7 +317,9 @@ export default function StudentWorkRoute() {
     mergeStudentWorkViewPreferences(next);
   };
 
-  const persistCollapsedStudentWorkGroups = (collapsedGroupKeys: Set<string>) => {
+  const persistCollapsedStudentWorkGroups = (
+    collapsedGroupKeys: Set<string>
+  ) => {
     if (documentGroupMode === 'none') return;
 
     mergeStudentWorkViewPreferences(searchParams, {
@@ -316,6 +334,22 @@ export default function StudentWorkRoute() {
   const handleDocumentSortChange = (next: DocumentWorkSort) => {
     setDocumentSort(next);
     mergeStudentWorkViewPreferences(searchParams, { documentSort: next });
+  };
+
+  const unreleasedGrades = useMemo(
+    () => buildReleaseGradeRows(data.documents),
+    [data.documents]
+  );
+
+  const openReleaseSheet = () => {
+    if (unreleasedGrades.length === 0) return;
+    setReleaseGradesForSheet(unreleasedGrades);
+    setIsReleaseGradesSheetOpen(true);
+  };
+
+  const handleReleaseGradesSuccess = () => {
+    setReleaseGradesForSheet([]);
+    window.location.reload();
   };
 
   const filters = useMemo(
@@ -383,7 +417,8 @@ export default function StudentWorkRoute() {
           <div className="flex flex-col">
             <h2>Documents</h2>
             <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-              Review, grade, and release student submissions across your classes.
+              Review, grade, and release student submissions across your
+              classes.
             </p>
           </div>
         </div>
@@ -412,6 +447,18 @@ export default function StudentWorkRoute() {
             if (options?.persist === false) return;
             persistCollapsedStudentWorkGroups(next);
           }}
+          actions={
+            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0
+              ? [
+                  {
+                    id: 'release-grades',
+                    label: 'Release grades',
+                    count: unreleasedGrades.length,
+                    onSelect: openReleaseSheet,
+                  },
+                ]
+              : undefined
+          }
           testIds={{
             statusChips: 'student-work-status-chips',
             groupSelect: 'student-work-group-select',
@@ -422,6 +469,14 @@ export default function StudentWorkRoute() {
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
         />
+        {data.isDocumentSubmissionEnabled ? (
+          <ReleaseGradesSheet
+            grades={releaseGradesForSheet}
+            isOpen={isReleaseGradesSheetOpen}
+            onClose={() => setIsReleaseGradesSheetOpen(false)}
+            onSuccess={handleReleaseGradesSuccess}
+          />
+        ) : null}
       </div>
     </section>
   );

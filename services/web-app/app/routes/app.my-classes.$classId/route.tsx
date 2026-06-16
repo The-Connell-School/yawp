@@ -50,9 +50,8 @@ import {
 } from '~/components/class-manage-sheet';
 import { DocumentLink } from '~/components/document-link';
 import { Checkbox } from '~/components/ui/checkbox';
-import { ReleaseGradesSheet } from './release-grades-sheet';
+import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import {
-  Send,
   ArrowDown,
   ArrowUp,
   ArrowRightLeft,
@@ -63,7 +62,6 @@ import {
 } from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { timeAgo } from '~/utils/timeAgo';
-import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import {
   Select,
   SelectContent,
@@ -94,14 +92,19 @@ import {
   type DocumentWorkSort,
 } from '~/utils/teacher-document-work-sort';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import { ClassDetailHeader, type ClassHeaderTab, resolveClassHeaderTab } from './class-detail-header';
+import {
+  ClassDetailHeader,
+  type ClassHeaderTab,
+  resolveClassHeaderTab,
+} from './class-detail-header';
 import {
   TEACHER_DOCUMENT_STATUSES,
-  hasMeaningfulGrade,
   type TeacherDocumentStatus,
 } from '~/utils/teacher-document-status';
 import {
+  buildReleaseGradeRows,
   countTeacherDocumentWorkStatuses,
+  type ReleaseGradeRow,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
 import { cn } from '~/utils/misc';
@@ -149,7 +152,7 @@ async function getClassStudentMemberships(
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can manage assignments.' },
       { status: 403 }
@@ -541,7 +544,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
 
     if (!targetClass) {
-      return dataResponse({ error: 'Target class not found.' }, { status: 404 });
+      return dataResponse(
+        { error: 'Target class not found.' },
+        { status: 404 }
+      );
     }
 
     const students = await getClassStudentMemberships(
@@ -581,7 +587,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
   const classId = params.classId!;
@@ -593,29 +599,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const [klass, manageSchools] = await Promise.all([
     prisma.class.findFirst({
-    where: {
-      id: classId,
-      teachers: { some: { id: profile.id } },
-    },
-    select: {
-      id: true,
-      schoolId: true,
-      schoolYear: true,
-      code: true,
-      grade: true,
-      period: true,
-      title: true,
-      classArtIndex: true,
-      school: { select: { id: true, name: true, organizationId: true } },
-      students: {
-        select: {
-          id: true,
-          user: { select: { name: true, email: true } },
-        },
-        orderBy: { createdAt: 'asc' },
+      where: {
+        id: classId,
+        teachers: { some: { id: profile.id } },
       },
-    },
-  }),
+      select: {
+        id: true,
+        schoolId: true,
+        schoolYear: true,
+        code: true,
+        grade: true,
+        period: true,
+        title: true,
+        classArtIndex: true,
+        school: { select: { id: true, name: true, organizationId: true } },
+        students: {
+          select: {
+            id: true,
+            user: { select: { name: true, email: true } },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    }),
     prisma.orgMembership.findUnique({
       where: { id: profile.id },
       select: {
@@ -642,9 +648,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const studentProfileIdFilter =
     studentProfileIdFilters.length === 1 ? studentProfileIdFilters[0] : null;
   const enrolledStudent = studentProfileIdFilter
-    ? klass.students.find(
-        (student) => student.id === studentProfileIdFilter
-      )
+    ? klass.students.find((student) => student.id === studentProfileIdFilter)
     : null;
   const classDocumentScope = buildClassDocumentScope(
     classId,
@@ -656,19 +660,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   // Check feature flags
   const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-      isDocumentSubmissionEnabledForScope({
-        schoolIds: [klass.school?.id],
-        organizationIds: [klass.school?.organizationId],
-        teacherProfileIds: [profile.id],
-        classIds: [klass.id],
-      }),
-      isAssignmentsEnabledForContext({
-        organizationId: klass.school?.organizationId,
-        schoolId: klass.school?.id,
-        teacherProfileId: profile.id,
-        classIds: [klass.id],
-      }),
-    ]);
+    isDocumentSubmissionEnabledForScope({
+      schoolIds: [klass.school?.id],
+      organizationIds: [klass.school?.organizationId],
+      teacherProfileIds: [profile.id],
+      classIds: [klass.id],
+    }),
+    isAssignmentsEnabledForContext({
+      organizationId: klass.school?.organizationId,
+      schoolId: klass.school?.id,
+      teacherProfileId: profile.id,
+      classIds: [klass.id],
+    }),
+  ]);
 
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
@@ -911,22 +915,7 @@ function ClassDetailPage() {
     useState<SortDirection>('asc');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
-    {
-      id: string;
-      score: string | null;
-      feedback: string | null;
-      archivedAt: Date | string | null;
-      document: {
-        id: string;
-        title: string;
-        membership: {
-          user: {
-            name: string | null;
-            email: string;
-          };
-        };
-      };
-    }[]
+    ReleaseGradeRow[]
   >([]);
   const classDetailPath = `/app/my-classes/${data.klass.id}`;
   const classDetailSearch = searchParams.toString();
@@ -1104,89 +1093,6 @@ function ClassDetailPage() {
     }
   }, [activeTab, documentGroupMode]);
 
-  // Get ungraded submissions (submitted but not meaningfully graded)
-  const ungradedDocuments = useMemo(() => {
-    return allSubmissions.filter((submission) => {
-      return !hasMeaningfulGrade(submission) && !submission.releasedAt;
-    });
-  }, [allSubmissions]);
-
-  // Get graded but unreleased submissions
-  const gradedUnreleasedDocuments = useMemo(() => {
-    return allSubmissions.filter((submission) => {
-      return hasMeaningfulGrade(submission) && !submission.releasedAt;
-    });
-  }, [allSubmissions]);
-
-  // Get released submissions
-  const releasedDocuments = useMemo(() => {
-    return allSubmissions.filter((submission) => {
-      return hasMeaningfulGrade(submission) && !!submission.releasedAt;
-    });
-  }, [allSubmissions]);
-
-  const matchesSelectedAssignment = (assignmentId?: string | null) =>
-    selectedAssignmentIds.length === 0 ||
-    (assignmentId ? selectedAssignmentIds.includes(assignmentId) : false);
-
-  const filteredGradedUnreleasedDocuments = useMemo(
-    () =>
-      gradedUnreleasedDocuments.filter((submission) =>
-        matchesSelectedAssignment(submission.document.assignment?.id)
-      ),
-    [gradedUnreleasedDocuments, selectedAssignmentIds]
-  );
-
-  // Get unreleased grades for release functionality
-  const unreleasedGrades = useMemo(() => {
-    return filteredGradedUnreleasedDocuments.map((submission) => {
-      const gradeDisplay = formatAssignmentGrade({
-        submitForGrade: submission.document.assignment?.submitForGrade,
-        numericPercentage: submission.numericPercentage ?? null,
-        letterGrade: submission.letterGrade ?? null,
-        pointValue: submission.document.assignment?.pointValue ?? null,
-        score: submission.score,
-      });
-      return {
-        id: submission.id,
-        score: gradeDisplay,
-        feedback: submission.feedback,
-        archivedAt: submission.archivedAt,
-        document: {
-          id: submission.document.id,
-          title: submission.title,
-          membership: submission.document.membership,
-        },
-      };
-    });
-  }, [filteredGradedUnreleasedDocuments]);
-
-  // Handle URL param for to-release action (legacy deep link)
-  useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab === 'to-release') {
-      if (unreleasedGrades.length > 0) {
-        setReleaseGradesForSheet(unreleasedGrades);
-        setIsReleaseGradesSheetOpen(true);
-        const next = new URLSearchParams(searchParams);
-        next.set('tab', 'documents');
-        navigate(`?${next.toString()}`, { replace: true });
-      }
-    }
-  }, [searchParams, navigate, unreleasedGrades]);
-
-  // Handle successful release
-  const handleGradingSuccess = () => {
-    setReleaseGradesForSheet([]);
-    window.location.reload();
-  };
-
-  const openReleaseSheet = () => {
-    if (unreleasedGrades.length === 0) return;
-    setReleaseGradesForSheet(unreleasedGrades);
-    setIsReleaseGradesSheetOpen(true);
-  };
-
   const sortedStudents = useMemo(() => {
     const direction = studentNameSortDirection === 'asc' ? 1 : -1;
     return [...students].sort((a, b) => {
@@ -1268,6 +1174,45 @@ function ClassDetailPage() {
     }));
   }, [classDocuments, data.klass]);
 
+  const unreleasedGrades = useMemo(() => {
+    const rows =
+      selectedAssignmentIds.length === 0
+        ? teacherDocumentWorkRows
+        : teacherDocumentWorkRows.filter((document) =>
+            document.assignment?.id
+              ? selectedAssignmentIds.includes(document.assignment.id)
+              : false
+          );
+
+    return buildReleaseGradeRows(rows);
+  }, [selectedAssignmentIds, teacherDocumentWorkRows]);
+
+  // Handle URL param for to-release action (legacy deep link)
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'to-release') {
+      if (unreleasedGrades.length > 0) {
+        setReleaseGradesForSheet(unreleasedGrades);
+        setIsReleaseGradesSheetOpen(true);
+        const next = new URLSearchParams(searchParams);
+        next.set('tab', 'documents');
+        navigate(`?${next.toString()}`, { replace: true });
+      }
+    }
+  }, [searchParams, navigate, unreleasedGrades]);
+
+  // Handle successful release
+  const handleGradingSuccess = () => {
+    setReleaseGradesForSheet([]);
+    window.location.reload();
+  };
+
+  const openReleaseSheet = () => {
+    if (unreleasedGrades.length === 0) return;
+    setReleaseGradesForSheet(unreleasedGrades);
+    setIsReleaseGradesSheetOpen(true);
+  };
+
   const documentWorkStatusCounts = useMemo(
     () => countTeacherDocumentWorkStatuses(teacherDocumentWorkRows),
     [teacherDocumentWorkRows]
@@ -1313,10 +1258,7 @@ function ClassDetailPage() {
     }
 
     if (addStudentStep !== 'email') {
-      if (
-        'success' in studentFetcher.data &&
-        studentFetcher.data.success
-      ) {
+      if ('success' in studentFetcher.data && studentFetcher.data.success) {
         setSelectedStudentIds([]);
         setIsAddStudentSheetOpen(false);
         setAddStudentStep('email');
@@ -1339,10 +1281,7 @@ function ClassDetailPage() {
       return;
     }
 
-    if (
-      'hasAccount' in studentFetcher.data &&
-      studentFetcher.data.hasAccount
-    ) {
+    if ('hasAccount' in studentFetcher.data && studentFetcher.data.hasAccount) {
       setAddStudentEmail(studentFetcher.data.email);
       setAddStudentConfirmAction('enroll');
       setAddStudentStep('confirm');
@@ -1433,7 +1372,9 @@ function ClassDetailPage() {
     const next = new URLSearchParams(searchParams);
 
     if ('studentIds' in updates) {
-      const serialized = serializeDocumentWorkFilterIds(updates.studentIds ?? []);
+      const serialized = serializeDocumentWorkFilterIds(
+        updates.studentIds ?? []
+      );
       if (!serialized) {
         next.delete('studentId');
       } else {
@@ -1531,18 +1472,17 @@ function ClassDetailPage() {
             take: pagination.take,
             onChange: handlePaginationChange,
           }}
-          headerActions={
-            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
-              <Button
-                type="button"
-                size="sm"
-                data-testid="class-release-grades-open"
-                onClick={openReleaseSheet}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Release grades ({unreleasedGrades.length})
-              </Button>
-            ) : null
+          actions={
+            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0
+              ? [
+                  {
+                    id: 'release-grades',
+                    label: 'Release grades',
+                    count: unreleasedGrades.length,
+                    onSelect: openReleaseSheet,
+                  },
+                ]
+              : undefined
           }
           emptyMessageSecondary="Student documents will appear here once work begins"
           testIds={{
@@ -1550,6 +1490,8 @@ function ClassDetailPage() {
             groupSelect: 'class-documents-group-filter',
           }}
           collapseAllGroupsWhenGroupChanges
+          clickableRows
+          compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
         />
@@ -1575,70 +1517,76 @@ function ClassDetailPage() {
               />
             </div>
             <div className="flex shrink-0 items-center justify-end gap-2">
-            {selectedStudentIds.length > 0 && (
-              <>
-                <studentFetcher.Form method="post" className="inline">
-                  <input type="hidden" name="intent" value="remove-students" />
-                  {selectedStudentIds.map((id) => (
+              {selectedStudentIds.length > 0 && (
+                <>
+                  <studentFetcher.Form method="post" className="inline">
                     <input
-                      key={id}
                       type="hidden"
-                      name="studentProfileIds"
-                      value={id}
+                      name="intent"
+                      value="remove-students"
                     />
-                  ))}
+                    {selectedStudentIds.map((id) => (
+                      <input
+                        key={id}
+                        type="hidden"
+                        name="studentProfileIds"
+                        value={id}
+                      />
+                    ))}
+                    <Tooltip
+                      text={`Remove from class (${selectedStudentIds.length})`}
+                    >
+                      <Button
+                        type="submit"
+                        size="icon-sm"
+                        variant="outline"
+                        disabled={studentIsLoading}
+                        aria-label={`Remove ${selectedStudentIds.length} student(s) from this class`}
+                        onClick={(e) => {
+                          if (
+                            !confirm(
+                              `Remove ${selectedStudentIds.length} student(s) from this class? Their accounts and work are not deleted.`
+                            )
+                          ) {
+                            e.preventDefault();
+                            return;
+                          }
+                          setSelectedStudentIds([]);
+                        }}
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </Button>
+                    </Tooltip>
+                  </studentFetcher.Form>
                   <Tooltip
-                    text={`Remove from class (${selectedStudentIds.length})`}
+                    text={`Move to another class (${selectedStudentIds.length})`}
                   >
                     <Button
-                      type="submit"
+                      type="button"
                       size="icon-sm"
                       variant="outline"
-                      disabled={studentIsLoading}
-                      aria-label={`Remove ${selectedStudentIds.length} student(s) from this class`}
-                      onClick={(e) => {
-                        if (
-                          !confirm(
-                            `Remove ${selectedStudentIds.length} student(s) from this class? Their accounts and work are not deleted.`
-                          )
-                        ) {
-                          e.preventDefault();
-                          return;
-                        }
-                        setSelectedStudentIds([]);
+                      disabled={
+                        studentIsLoading || data.teacherClasses.length === 0
+                      }
+                      aria-label={`Move ${selectedStudentIds.length} student(s) to another class`}
+                      onClick={() => {
+                        setMoveTargetClassId(data.teacherClasses[0]?.id ?? '');
+                        setIsMoveStudentsSheetOpen(true);
                       }}
                     >
-                      <UserMinus className="h-4 w-4" />
+                      <ArrowRightLeft className="h-4 w-4" />
                     </Button>
                   </Tooltip>
-                </studentFetcher.Form>
-                <Tooltip text={`Move to another class (${selectedStudentIds.length})`}>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    disabled={
-                      studentIsLoading || data.teacherClasses.length === 0
-                    }
-                    aria-label={`Move ${selectedStudentIds.length} student(s) to another class`}
-                    onClick={() => {
-                      setMoveTargetClassId(data.teacherClasses[0]?.id ?? '');
-                      setIsMoveStudentsSheetOpen(true);
-                    }}
-                  >
-                    <ArrowRightLeft className="h-4 w-4" />
-                  </Button>
-                </Tooltip>
-              </>
-            )}
-            <Button
-              size="sm"
-              type="button"
-              onClick={() => setIsAddStudentSheetOpen(true)}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Student
-            </Button>
+                </>
+              )}
+              <Button
+                size="sm"
+                type="button"
+                onClick={() => setIsAddStudentSheetOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add Student
+              </Button>
             </div>
           </div>
 
@@ -1888,9 +1836,7 @@ function ClassDetailPage() {
                       ).length +
                       new Set(
                         allSubmissions
-                          .filter(
-                            (sub) => sub.document.membership.id === s.id
-                          )
+                          .filter((sub) => sub.document.membership.id === s.id)
                           .map((sub) => sub.documentId)
                       ).size;
 

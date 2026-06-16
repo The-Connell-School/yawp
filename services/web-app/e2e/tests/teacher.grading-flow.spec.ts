@@ -2,10 +2,7 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
-import {
-  assignTeacherToClass,
-  createTeacherInvitation,
-} from '../db-helpers';
+import { assignTeacherToClass, createTeacherInvitation } from '../db-helpers';
 
 const E2E_BASE_URL = 'http://127.0.0.1:5173';
 
@@ -182,7 +179,10 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         await page.getByTestId(`grading-rubric-score-${key}`).click();
         await page
           .getByRole('option', {
-            name: new RegExp(`^${RUBRIC_EXPECTATIONS[key].score}\\s+-\\s+`, 'i'),
+            name: new RegExp(
+              `^${RUBRIC_EXPECTATIONS[key].score}\\s+-\\s+`,
+              'i'
+            ),
           })
           .click();
         await page
@@ -281,7 +281,10 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         // The essay panel renders the submitted HTML in a plain div
         const essayRoot = document.querySelector('[class*="no-scrollbar"]');
         if (!essayRoot) return;
-        const walker = document.createTreeWalker(essayRoot, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(
+          essayRoot,
+          NodeFilter.SHOW_TEXT
+        );
         const firstNode = walker.nextNode();
         if (!firstNode?.textContent) return;
         const end = Math.min(firstNode.textContent.length, 28);
@@ -294,7 +297,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
         document.dispatchEvent(new Event('selectionchange', { bubbles: true }));
       });
       // Wait for SelectionToolbar to appear, then click Comment
-      await page.getByRole('button', { name: /^comment$/i }).click({ timeout: 5000 });
+      await page
+        .getByRole('button', { name: /^comment$/i })
+        .click({ timeout: 5000 });
       await page
         .locator('textarea[placeholder="Write your comment..."]')
         .fill('Grade comment from teacher E2E flow.');
@@ -328,10 +333,12 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.waitForLoadState('networkidle');
 
       await page.getByRole('tab', { name: /documents/i }).click();
-      await expect(page.getByTestId('class-release-grades-open')).toBeVisible({
+      const actionsButton = page.getByTestId('teacher-document-work-actions');
+      await expect(actionsButton).toBeVisible({
         timeout: 10000,
       });
-      await page.getByTestId('class-release-grades-open').click();
+      await actionsButton.click();
+      await page.getByRole('menuitem', { name: /Release grades/i }).click();
       await page.getByTestId('release-grades-confirm').click();
       await page.waitForLoadState('networkidle');
       await page.goto(
@@ -345,7 +352,9 @@ test.describe.serial('Teacher onboarding and grading lifecycle', () => {
       await page.goto(`/app/submissions/${submissionBeforeMutation!.id}`);
       await page.waitForLoadState('networkidle');
       // Verify the submission page shows the original snapshotted content, not the mutated text
-      await expect(page.getByText('The importance of reading cannot be overstated.')).toBeVisible({ timeout: 10000 });
+      await expect(
+        page.getByText('The importance of reading cannot be overstated.')
+      ).toBeVisible({ timeout: 10000 });
       await expect(page.getByText(mutatedSubmissionText)).toHaveCount(0);
       expect(aiRequests).toBe(1);
     } finally {

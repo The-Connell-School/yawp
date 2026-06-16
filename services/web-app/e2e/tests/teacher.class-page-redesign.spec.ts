@@ -110,13 +110,20 @@ test.describe('Teacher class documents lifecycle', () => {
           .getByTestId('class-documents-status-chips')
           .getByRole('tab', { name: /Needs Grading/ })
       ).toHaveAttribute('aria-selected', 'true');
-      const filteredTable = page.getByRole('table', { name: /class documents/i });
+      const filteredTable = page.getByRole('table', {
+        name: /class documents/i,
+      });
       await expect(
         filteredTable.locator('tbody').getByText('Needs Grading').first()
       ).toBeVisible();
-      await expect.poll(async () => {
-        return filteredTable.locator('tbody').getByText(/^Released/).count();
-      }).toBe(0);
+      await expect
+        .poll(async () => {
+          return filteredTable
+            .locator('tbody')
+            .getByText(/^Released/)
+            .count();
+        })
+        .toBe(0);
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();
@@ -136,8 +143,12 @@ test.describe.serial('Teacher class page redesign', () => {
 
     const header = page.getByTestId('class-detail-header');
     await expect(header.getByRole('tab', { name: /students/i })).toHaveCount(1);
-    await expect(header.getByRole('tab', { name: /documents/i })).toHaveCount(1);
-    await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(0);
+    await expect(header.getByRole('tab', { name: /documents/i })).toHaveCount(
+      1
+    );
+    await expect(page.getByRole('tab', { name: /assignments/i })).toHaveCount(
+      0
+    );
 
     const studentsTab = header.getByRole('tab', { name: /students/i });
     await expect(studentsTab).toHaveAttribute('data-state', 'active');
@@ -174,9 +185,9 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(documentsTabBox).not.toBeNull();
     expect(studentsTabBox!.width).toBeGreaterThan(160);
     expect(documentsTabBox!.width).toBeGreaterThan(160);
-    expect(Math.abs(studentsTabBox!.width - documentsTabBox!.width)).toBeLessThan(
-      4
-    );
+    expect(
+      Math.abs(studentsTabBox!.width - documentsTabBox!.width)
+    ).toBeLessThan(4);
     const documentsTab = header.getByRole('tab', { name: /documents/i });
     await expect(documentsTab).toHaveCSS('border-right-width', '1px');
     await documentsTab.click();
@@ -221,7 +232,7 @@ test.describe.serial('Teacher class page redesign', () => {
     ).toBeVisible();
   });
 
-  test('view details routes by document state', async ({
+  test('documents tab rows open details by document state using the shared table', async ({
     page,
     e2eContext,
     signIn,
@@ -247,28 +258,40 @@ test.describe.serial('Teacher class page redesign', () => {
       await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
       await page.waitForLoadState('networkidle');
 
-      const submittedRow = page.getByRole('row', {
-        name: new RegExp(submittedTitle),
-      }).first();
-      const submittedHref = await submittedRow
-        .getByRole('link', { name: /^View$/i })
-        .getAttribute('href');
-      expect(submittedHref).toMatch(/\/app\/submissions\//);
+      const submittedRow = page
+        .getByRole('row', {
+          name: new RegExp(submittedTitle),
+        })
+        .first();
+      await expect(
+        submittedRow.getByRole('link', { name: /^View$/i })
+      ).toHaveCount(0);
+      await expect(
+        page
+          .getByRole('table', { name: /class documents/i })
+          .getByRole('columnheader', { name: /action/i })
+      ).toHaveCount(0);
+      await submittedRow.click();
+      await page.waitForURL(/\/app\/submissions\//);
 
-      const inProgressRow = page.getByRole('row', {
-        name: new RegExp(inProgressTitle),
-      }).first();
-      const inProgressHref = await inProgressRow
-        .getByRole('link', { name: /^View$/i })
-        .getAttribute('href');
-      expect(inProgressHref).toMatch(/\/app\/documents\//);
+      await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
+      await page.waitForLoadState('networkidle');
+      const inProgressRow = page
+        .getByRole('row', {
+          name: new RegExp(inProgressTitle),
+        })
+        .first();
+      await expect(
+        inProgressRow.getByRole('link', { name: /^View$/i })
+      ).toHaveCount(0);
+      await expect(inProgressRow).toHaveAttribute('tabindex', '0');
     } finally {
       await deleteClassDocuments(prisma, documentIds);
       await prisma.$disconnect();
     }
   });
 
-  test('release grades flow is reachable from the documents tab', async ({
+  test('release grades flow is reachable from the documents tab actions menu', async ({
     page,
     e2eContext,
     signIn,
@@ -277,7 +300,21 @@ test.describe.serial('Teacher class page redesign', () => {
     await page.goto(`/app/my-classes/${e2eContext.classId}?tab=documents`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByTestId('class-release-grades-open')).toBeVisible();
+    const actionsButton = page.getByTestId('teacher-document-work-actions');
+    await expect(actionsButton).toBeVisible();
+    await expect(actionsButton).toHaveText(/Actions/);
+    await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
+
+    await actionsButton.click();
+    const releaseGradesAction = page.getByRole('menuitem', {
+      name: /Release grades\s+1/i,
+    });
+    await expect(releaseGradesAction).toBeVisible();
+    await releaseGradesAction.click();
+
+    await expect(
+      page.getByRole('dialog', { name: /release grades to students/i })
+    ).toBeVisible();
   });
 
   test('documents tab can group by status', async ({
@@ -333,9 +370,9 @@ test.describe.serial('Teacher class page redesign', () => {
       await page.getByTestId('add-student-email-input').fill(studentEmail);
       await page.getByTestId('add-student-next-button').click();
 
-      await expect(page.getByTestId('add-student-confirm-message')).toContainText(
-        "don't have an account in the system"
-      );
+      await expect(
+        page.getByTestId('add-student-confirm-message')
+      ).toContainText("don't have an account in the system");
       await expect(page.getByText(studentEmail)).toBeVisible();
 
       await page.getByTestId('add-student-confirm-button').click();
@@ -391,9 +428,9 @@ test.describe.serial('Teacher class page redesign', () => {
 
     await expect(page).toHaveURL(/status=needs-grading/);
     await expect(page).toHaveURL(/documentGroup=student/);
-    await expect(page.getByTestId('class-documents-group-filter')).toContainText(
-      'Group by student'
-    );
+    await expect(
+      page.getByTestId('class-documents-group-filter')
+    ).toContainText('Group by student');
   });
 
   test('collapsed document groups persist across reload', async ({
@@ -429,9 +466,9 @@ test.describe.serial('Teacher class page redesign', () => {
       await page.reload();
       await page.waitForLoadState('networkidle');
 
-      await expect(page.getByTestId('class-documents-group-filter')).toContainText(
-        'Group by status'
-      );
+      await expect(
+        page.getByTestId('class-documents-group-filter')
+      ).toContainText('Group by status');
       await expect(inProgressGroup).toBeVisible();
     } finally {
       await deleteClassDocuments(prisma, documentIds);
@@ -462,7 +499,9 @@ test.describe.serial('Teacher class page redesign', () => {
       .getByRole('link', { name: 'Documents', exact: true })
       .click();
     await page.waitForURL(/\/app\/documents/);
-    await expect(page.getByRole('heading', { name: /documents/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /documents/i })
+    ).toBeVisible();
     await expect(page.getByTestId('class-detail-header')).toHaveCount(0);
   });
 });

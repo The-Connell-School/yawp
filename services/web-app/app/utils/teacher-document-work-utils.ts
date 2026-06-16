@@ -3,6 +3,7 @@ import {
   TEACHER_DOCUMENT_STATUS_BADGE_CLASSES,
   TEACHER_DOCUMENT_STATUS_LABELS,
   getTeacherDocumentStatus,
+  hasMeaningfulGrade,
   type TeacherDocumentStatus,
 } from '~/utils/teacher-document-status';
 
@@ -20,6 +21,7 @@ export type TeacherDocumentWorkSubmission = {
   createdAt?: Date | string | null;
   releasedAt?: Date | string | null;
   gradedAt?: Date | string | null;
+  archivedAt?: Date | string | null;
   score?: string | null;
   feedback?: string | null;
   rubricScores?: unknown | null;
@@ -46,6 +48,23 @@ export type TeacherDocumentWorkRow = {
   submissions: TeacherDocumentWorkSubmission[];
   latestSubmission: TeacherDocumentWorkSubmission | null;
   submissionCount: number;
+};
+
+export type ReleaseGradeRow = {
+  id: string;
+  score: string | null;
+  feedback: string | null;
+  archivedAt: Date | string | null;
+  document: {
+    id: string;
+    title: string;
+    membership: {
+      user: {
+        name: string | null;
+        email: string;
+      };
+    };
+  };
 };
 
 export function formatClassLabel(klass: TeacherDocumentWorkClassSummary) {
@@ -82,7 +101,9 @@ export function getTeacherDocumentWorkDetailLink(params: {
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;
 }
 
-export function getTeacherDocumentWorkStatusDisplay(document: TeacherDocumentWorkRow) {
+export function getTeacherDocumentWorkStatusDisplay(
+  document: TeacherDocumentWorkRow
+) {
   const status = getTeacherDocumentStatus(document.latestSubmission);
   const submission = document.latestSubmission;
 
@@ -127,4 +148,47 @@ export function countTeacherDocumentWorkStatuses(
   }
 
   return counts;
+}
+
+export function buildReleaseGradeRows(
+  documents: TeacherDocumentWorkRow[]
+): ReleaseGradeRow[] {
+  return documents.flatMap((document) =>
+    document.submissions
+      .filter((submission) => {
+        return hasMeaningfulGrade(submission) && !submission.releasedAt;
+      })
+      .map((submission) => {
+        const score =
+          formatAssignmentGrade({
+            submitForGrade: document.assignment?.submitForGrade,
+            numericPercentage: submission.numericPercentage ?? null,
+            letterGrade: submission.letterGrade ?? null,
+            pointValue: document.assignment?.pointValue ?? null,
+            score: submission.score,
+          }) ??
+          submission.score ??
+          null;
+
+        return {
+          id: submission.id,
+          score,
+          feedback: submission.feedback ?? null,
+          archivedAt: submission.archivedAt ?? null,
+          document: {
+            id: document.id,
+            title:
+              submission.title?.trim() ||
+              document.title?.trim() ||
+              getDraftDisplayTitle(document),
+            membership: {
+              user: {
+                name: document.membership.user.name,
+                email: document.membership.user.email,
+              },
+            },
+          },
+        };
+      })
+  );
 }

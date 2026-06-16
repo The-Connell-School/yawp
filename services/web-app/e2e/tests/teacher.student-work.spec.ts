@@ -68,9 +68,7 @@ test.describe.serial('Teacher Documents page', () => {
       await expect(chips.getByText(/Released/)).toBeVisible();
 
       const table = page.getByRole('table', { name: /documents/i });
-      await expect(
-        table.getByText('Needs Grading').first()
-      ).toBeVisible();
+      await expect(table.getByText('Needs Grading').first()).toBeVisible();
 
       // Status chip narrows the rows.
       await chips.getByText(/Needs Grading/).click();
@@ -100,9 +98,9 @@ test.describe.serial('Teacher Documents page', () => {
 
     // Collapsing hides the group's rows.
     await group.click();
-    await expect(
-      page.getByRole('table', { name: /documents/i })
-    ).toHaveCount(0);
+    await expect(page.getByRole('table', { name: /documents/i })).toHaveCount(
+      0
+    );
   });
 
   test('search narrows results by document title', async ({
@@ -126,9 +124,7 @@ test.describe.serial('Teacher Documents page', () => {
 
       const table = page.getByRole('table', { name: /documents/i });
       await expect(table.locator('tbody tr')).toHaveCount(1);
-      await expect(
-        table.getByText(new RegExp(submissionTitle))
-      ).toBeVisible();
+      await expect(table.getByText(new RegExp(submissionTitle))).toBeVisible();
     } finally {
       await deleteDocument(document.id);
     }
@@ -155,9 +151,9 @@ test.describe.serial('Teacher Documents page', () => {
 
       const table = page.getByRole('table', { name: /documents/i });
       const row = page.getByRole('row', { name: new RegExp(submissionTitle) });
-      await expect(table.getByRole('columnheader', { name: /action/i })).toHaveCount(
-        0
-      );
+      await expect(
+        table.getByRole('columnheader', { name: /action/i })
+      ).toHaveCount(0);
       await expect(row.getByRole('link', { name: /view/i })).toHaveCount(0);
 
       await row.click();
@@ -169,5 +165,31 @@ test.describe.serial('Teacher Documents page', () => {
     } finally {
       await deleteDocument(document.id);
     }
+  });
+
+  test('shows the shared release grades action menu', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/documents');
+    await page.waitForLoadState('networkidle');
+
+    const actionsButton = page.getByTestId('teacher-document-work-actions');
+    await expect(actionsButton).toBeVisible();
+    await expect(actionsButton).toHaveText(/Actions/);
+    await expect(actionsButton.locator('.lucide-chevron-down')).toBeVisible();
+
+    await actionsButton.click();
+    const releaseGradesAction = page.getByRole('menuitem', {
+      name: /Release grades\s+1/i,
+    });
+    await expect(releaseGradesAction).toBeVisible();
+    await releaseGradesAction.click();
+
+    await expect(
+      page.getByRole('dialog', { name: /release grades to students/i })
+    ).toBeVisible();
   });
 });

@@ -18,26 +18,10 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-
-type SubmissionWithDocument = {
-  id: string;
-  score: string | null;
-  feedback: string | null;
-  archivedAt: Date | string | null;
-  document: {
-    id: string;
-    title: string;
-    membership: {
-      user: {
-        name: string | null;
-        email: string;
-      };
-    };
-  };
-};
+import type { ReleaseGradeRow } from '~/utils/teacher-document-work-utils';
 
 type ReleaseGradesSheetProps = {
-  grades: SubmissionWithDocument[];
+  grades: ReleaseGradeRow[];
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
@@ -64,7 +48,6 @@ export function ReleaseGradesSheet({
     });
   };
 
-  // Close and reload when submission is successful
   useEffect(() => {
     if (
       fetcher.data?.success &&
@@ -77,7 +60,6 @@ export function ReleaseGradesSheet({
     }
   }, [fetcher.data, fetcher.state, onClose, onSuccess]);
 
-  // Reset when sheet closes
   useEffect(() => {
     if (!isOpen) {
       hasProcessedSuccess.current = false;
@@ -122,11 +104,11 @@ export function ReleaseGradesSheet({
                       {grade.score ? (
                         <Badge variant="secondary">{grade.score}</Badge>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">&mdash;</span>
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-                      {grade.feedback || '—'}
+                      {grade.feedback || <>&mdash;</>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -134,7 +116,7 @@ export function ReleaseGradesSheet({
             </Table>
           </div>
 
-          {fetcher.data?.message && (
+          {fetcher.data?.message ? (
             <div
               className={`rounded-lg p-3 text-sm ${
                 fetcher.data.success
@@ -144,7 +126,7 @@ export function ReleaseGradesSheet({
             >
               {fetcher.data.message}
             </div>
-          )}
+          ) : null}
 
           <div className="flex gap-2 justify-end pt-4">
             <Button
@@ -162,7 +144,9 @@ export function ReleaseGradesSheet({
             >
               {fetcher.state !== 'idle'
                 ? 'Releasing...'
-                : `Release ${grades.length} ${grades.length === 1 ? 'Grade' : 'Grades'}`}
+                : `Release ${grades.length} ${
+                    grades.length === 1 ? 'Grade' : 'Grades'
+                  }`}
             </Button>
           </div>
         </div>
