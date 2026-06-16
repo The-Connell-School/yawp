@@ -104,6 +104,31 @@ const COLUMNS: CookieColumns = {
   },
 };
 
+type TeacherSchoolConnector = {
+  orgMembership: {
+    update: (args: {
+      where: { id: string };
+      data: { schools: { connect: { id: string } } };
+    }) => Promise<unknown>;
+  };
+};
+
+async function connectTeachersToSchool(
+  tx: TeacherSchoolConnector,
+  teacherIds: string[],
+  schoolId: string
+) {
+  const uniqueTeacherIds = Array.from(new Set(teacherIds));
+  await Promise.all(
+    uniqueTeacherIds.map((id) =>
+      tx.orgMembership.update({
+        where: { id },
+        data: { schools: { connect: { id: schoolId } } },
+      })
+    )
+  );
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
@@ -282,20 +307,26 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.class.create({
-        data: {
-          schoolId,
-          schoolYear,
-          grade,
-          period,
-          title,
-          code,
-          cardGradientKey: generateClassCardGradientKey(code),
-          classArtIndex: await pickClassArtIndexForTeachers(teacherIds),
-          teachers: {
-            connect: teacherIds.map((id) => ({ id })),
+      const classArtIndex = await pickClassArtIndexForTeachers(teacherIds);
+
+      await prisma.$transaction(async (tx) => {
+        await tx.class.create({
+          data: {
+            schoolId,
+            schoolYear,
+            grade,
+            period,
+            title,
+            code,
+            cardGradientKey: generateClassCardGradientKey(code),
+            classArtIndex,
+            teachers: {
+              connect: teacherIds.map((id) => ({ id })),
+            },
           },
-        },
+        });
+
+        await connectTeachersToSchool(tx, teacherIds, schoolId);
       });
 
       return dataResponse({ success: true });
@@ -370,21 +401,25 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.class.update({
-        where: { id: classId },
-        data: {
-          school: {
-            connect: { id: schoolId },
+      await prisma.$transaction(async (tx) => {
+        await tx.class.update({
+          where: { id: classId },
+          data: {
+            school: {
+              connect: { id: schoolId },
+            },
+            schoolYear,
+            grade,
+            period,
+            title,
+            code,
+            teachers: {
+              set: teacherIds.map((id) => ({ id })),
+            },
           },
-          schoolYear,
-          grade,
-          period,
-          title,
-          code,
-          teachers: {
-            set: teacherIds.map((id) => ({ id })),
-          },
-        },
+        });
+
+        await connectTeachersToSchool(tx, teacherIds, schoolId);
       });
 
       return dataResponse({ success: true });
@@ -472,6 +507,10 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
+      const classSchoolIds = new Map(
+        orgClasses.map((klass) => [klass.id, klass.schoolId])
+      );
+
       for (const classId of classIds) {
         await prisma.$transaction(async (tx) => {
           const data: {
@@ -494,6 +533,11 @@ export async function action({ request }: ActionFunctionArgs) {
             where: { id: classId },
             data,
           });
+
+          const targetSchoolId = schoolId || classSchoolIds.get(classId);
+          if (applyTeachers && targetSchoolId) {
+            await connectTeachersToSchool(tx, teacherIds, targetSchoolId);
+          }
         });
       }
 
