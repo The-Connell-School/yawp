@@ -108,7 +108,7 @@ export async function seedE2E(): Promise<E2EContext> {
   const seededTeacherMembershipId = seededTeacherMembership.id;
   await prisma.$executeRaw`
     INSERT INTO "_SchoolTeachers" ("A", "B")
-    VALUES (${school.id}, ${seededTeacherMembershipId})
+    VALUES (${seededTeacherMembershipId}, ${school.id})
     ON CONFLICT DO NOTHING
   `;
   const seededClass = await prisma.class.create({
