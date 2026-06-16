@@ -160,7 +160,9 @@ test.describe.serial('Teacher Assignments page', () => {
       await page.waitForLoadState('networkidle');
 
       const row = page.getByRole('row', { name: new RegExp(title) }).first();
-      await row.getByLabel('Duplicate').click();
+      await row
+        .getByRole('button', { name: 'Duplicate', exact: true })
+        .click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
       await expect(dialog.getByLabel('Title (optional)')).toHaveValue(
@@ -174,7 +176,7 @@ test.describe.serial('Teacher Assignments page', () => {
     }
   });
 
-  test('deleting an assignment keeps the student document', async ({
+  test('deletes selected assignments with checkbox-style bulk actions while keeping student documents', async ({
     page,
     e2eContext,
     signIn,
@@ -211,8 +213,20 @@ test.describe.serial('Teacher Assignments page', () => {
       await page.waitForLoadState('networkidle');
 
       const row = page.getByRole('row', { name: new RegExp(title) }).first();
+      await expect(
+        page.getByRole('button', { name: /Delete 1 assignment\(s\)/ })
+      ).toHaveCount(0);
+
+      const rowCheckbox = row.getByRole('checkbox', {
+        name: new RegExp(`Select assignment ${title}`),
+      });
+      await expect(rowCheckbox).toBeVisible();
+      await rowCheckbox.check();
+      await expect(
+        page.getByRole('button', { name: /Delete 1 assignment\(s\)/ })
+      ).toBeVisible();
+
       page.once('dialog', (dialog) => dialog.accept());
-      await row.getByRole('checkbox').check();
       await page
         .getByRole('button', { name: /Delete 1 assignment\(s\)/ })
         .click();

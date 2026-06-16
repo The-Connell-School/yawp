@@ -805,6 +805,7 @@ export default function AssignmentsRoute() {
                     <TableRow className="rounded-t-lg bg-muted/50">
                       <TableHead className="w-[50px] rounded-tl-lg pl-4">
                         <Checkbox
+                          aria-label="Select all assignments"
                           checked={
                             filteredAssignments.length > 0 &&
                             selectedAssignmentIds.length ===
@@ -829,6 +830,10 @@ export default function AssignmentsRoute() {
                         <TableRow key={assignment.id}>
                           <TableCell className="max-h-[37px] pl-4">
                             <Checkbox
+                              aria-label={`Select assignment ${
+                                assignment.title?.trim() ||
+                                'Untitled Assignment'
+                              }`}
                               checked={selectedAssignmentIds.includes(
                                 assignment.id
                               )}
