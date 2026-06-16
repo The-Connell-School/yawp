@@ -177,6 +177,15 @@ test.describe.serial('Teacher class page redesign', () => {
     expect(Math.abs(studentsTabBox!.width - documentsTabBox!.width)).toBeLessThan(
       4
     );
+    const documentsTab = header.getByRole('tab', { name: /documents/i });
+    await expect(documentsTab).toHaveCSS('border-right-width', '1px');
+    await documentsTab.click();
+    await expect(documentsTab).toHaveAttribute('data-state', 'active');
+    const activeIndicator = tablist.locator('[aria-hidden="true"]').first();
+    await expect(activeIndicator).toHaveCSS(
+      'border-bottom-right-radius',
+      '0px'
+    );
     await expect(header.getByText(/Grade 9th .* Period 1st/)).toBeVisible();
     await expect(header.getByText('E2E High')).toBeVisible();
     await expect(header.getByText('2024-2025')).toBeVisible();
