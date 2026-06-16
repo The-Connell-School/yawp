@@ -142,6 +142,15 @@ async function deleteAssignmentsAndClass(params: {
   }
 }
 
+async function deleteAssignmentsByTitle(title: string) {
+  const prisma = createE2EPrismaClient();
+  try {
+    await prisma.assignment.deleteMany({ where: { title } });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 test.describe.serial('Teacher dashboard workspace', () => {
   test('presents classes first with Assignments and Grading entry points', async ({
     page,
@@ -166,7 +175,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     ).toBeVisible();
     await expect(
       assignmentsGrid.getByRole('link', { name: /new assignment/i })
-    ).toHaveAttribute('href', '/app/assignments?create=1');
+    ).toHaveAttribute('href', '/app/assignments?create=1&returnTo=%2Fapp');
 
     const gradingGrid = page.getByTestId('teacher-grading-grid');
     await expect(
@@ -225,6 +234,49 @@ test.describe.serial('Teacher dashboard workspace', () => {
       page.locator('nav').getByRole('link', { name: 'Dashboard', exact: true })
     ).not.toHaveAttribute('aria-current', 'page');
     await expect(sidebarMyClasses).toHaveAttribute('aria-current', 'page');
+  });
+
+  test('returns to the dashboard after quick-creating from an assignment card', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const title = `Dashboard Quick Create ${Date.now()}`;
+    const prompt = `Dashboard quick-create prompt ${Date.now()}`;
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app');
+      await page.waitForLoadState('networkidle');
+
+      await page
+        .getByTestId('teacher-assignments-grid')
+        .getByLabel('New E2E Course assignment')
+        .click();
+      await expectStandardizedAssignmentForm(page);
+
+      await page.getByLabel(CLASS_LABEL).check();
+      await page.getByLabel('Title (optional)').fill(title);
+      await page.getByLabel('Prompt').fill(prompt);
+      await page.getByLabel(/point value/i).fill('25');
+      await page.getByRole('button', { name: 'Create Assignment' }).click();
+
+      await page.waitForURL(
+        (url) => url.pathname === '/app' && url.search === ''
+      );
+      await expect(page.getByTestId('app._index')).toBeVisible();
+      await expect(page.getByTestId('teacher-assignments-grid')).toBeVisible();
+
+      await expectCreatedAssignment({
+        classId: e2eContext.classId,
+        assignmentTypeId: e2eContext.assignmentTypeId,
+        prompt,
+        title,
+        pointValue: 25,
+      });
+    } finally {
+      await deleteAssignmentsByTitle(title);
+    }
   });
 
   test('creates one assignment record for each selected class from the Assignments page', async ({
