@@ -132,15 +132,21 @@ function ClassHeaderTabBar({
     return () => observer.disconnect();
   }, [updateIndicator]);
 
+  const activeIndex = tabs.findIndex((tab) => tab.id === activeTab);
+
   return (
     <div
       ref={listRef}
       role="tablist"
       aria-label="Class sections"
-      className="relative inline-flex max-w-full items-stretch overflow-hidden rounded-lg bg-muted/40 ring-1 ring-black/5"
+      className="relative flex w-full max-w-md items-stretch"
     >
       <div
-        className="pointer-events-none absolute inset-y-1 rounded-md bg-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.55),inset_0_2px_6px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-black/10 transition-[left,width] duration-300 ease-out"
+        className={cn(
+          'pointer-events-none absolute inset-y-0 bg-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.55),inset_0_2px_6px_rgba(0,0,0,0.08)] ring-1 ring-inset ring-black/15 transition-[left,width] duration-300 ease-out',
+          activeIndex === 0 && 'rounded-bl-xl',
+          activeIndex === tabs.length - 1 && 'rounded-br-xl'
+        )}
         style={{ left: indicator.left, width: indicator.width }}
         aria-hidden
       />
@@ -160,16 +166,16 @@ function ClassHeaderTabBar({
             aria-selected={activeTab === tab.id}
             onClick={() => onTabChange(tab.id)}
             className={cn(
-              'relative inline-flex min-w-0 items-center gap-2 px-4 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              'relative min-w-0 flex-1 px-5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               activeTab === tab.id
                 ? 'text-foreground'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <span className="truncate">{tab.label}</span>
-            <span className="font-semibold tabular-nums text-foreground">
+            <div className="truncate text-base/6 sm:text-sm/5">{tab.label}</div>
+            <div className="text-2xl font-semibold tabular-nums tracking-tight text-foreground sm:text-xl">
               {tab.value}
-            </span>
+            </div>
           </button>
         </Fragment>
       ))}
@@ -216,7 +222,7 @@ export function ClassDetailHeader({
           </div>
         </div>
       </div>
-      <div className="border-t border-border/60 bg-white px-4 py-3 sm:px-5">
+      <div className="border-t border-border/60 bg-white">
         <ClassHeaderTabBar
           tabs={tabs}
           activeTab={activeTab}

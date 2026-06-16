@@ -159,9 +159,24 @@ test.describe.serial('Teacher class page redesign', () => {
     const tablistBox = await tablist.boundingBox();
     expect(headerBox).not.toBeNull();
     expect(tablistBox).not.toBeNull();
-    expect(tablistBox!.x - headerBox!.x).toBeGreaterThanOrEqual(12);
-    expect(tablistBox!.x - headerBox!.x).toBeLessThan(40);
+    expect(tablistBox!.x - headerBox!.x).toBeGreaterThanOrEqual(0);
+    expect(tablistBox!.x - headerBox!.x).toBeLessThan(16);
+    expect(tablistBox!.width).toBeGreaterThanOrEqual(360);
+    expect(tablistBox!.width).toBeLessThanOrEqual(520);
     expect(tablistBox!.width).toBeLessThan(headerBox!.width * 0.7);
+    const studentsTabBox = await header
+      .getByRole('tab', { name: /students/i })
+      .boundingBox();
+    const documentsTabBox = await header
+      .getByRole('tab', { name: /documents/i })
+      .boundingBox();
+    expect(studentsTabBox).not.toBeNull();
+    expect(documentsTabBox).not.toBeNull();
+    expect(studentsTabBox!.width).toBeGreaterThan(160);
+    expect(documentsTabBox!.width).toBeGreaterThan(160);
+    expect(Math.abs(studentsTabBox!.width - documentsTabBox!.width)).toBeLessThan(
+      4
+    );
     await expect(header.getByText(/Grade 9th .* Period 1st/)).toBeVisible();
     await expect(header.getByText('E2E High')).toBeVisible();
     await expect(header.getByText('2024-2025')).toBeVisible();
