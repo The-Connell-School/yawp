@@ -187,6 +187,15 @@ test.describe.serial('Teacher dashboard workspace', () => {
       'href',
       '/app/documents?status=needs-grading&group=student'
     );
+    const toGradeBox = await gradingGrid
+      .getByText('To grade', { exact: true })
+      .boundingBox();
+    const byStudentBox = await gradingGrid
+      .getByRole('link', { name: /By student/i })
+      .boundingBox();
+    expect(toGradeBox).not.toBeNull();
+    expect(byStudentBox).not.toBeNull();
+    expect(toGradeBox!.y).toBeLessThan(byStudentBox!.y);
 
     // Retired dashboard sections stay gone.
     await expect(
