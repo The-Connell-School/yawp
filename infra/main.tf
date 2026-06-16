@@ -307,6 +307,14 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
           "ssm:GetParameter"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -413,6 +421,9 @@ resource "aws_apprunner_service" "web" {
           NODE_ENV = var.env
           PORT = "8080"
           AI_MODEL = "claude-sonnet-4-6"
+          EMAIL_PROVIDER = "ses"
+          AWS_SES_REGION = var.aws_region
+          SES_FROM_EMAIL = var.resend_from_email
           RESEND_FROM_EMAIL = var.resend_from_email
           POSTHOG_API_KEY = var.posthog_api_key
           POSTHOG_HOST = var.posthog_host

@@ -1,3 +1,4 @@
+import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2'
 import { renderAsync } from '@react-email/components'
 import { type ReactElement } from 'react'
 import { z } from 'zod'
@@ -21,24 +22,58 @@ const resendSuccessSchema = z.object({
 	id: z.string(),
 })
 
-export async function sendEmail({
-	react,
-	...options
-}: {
+type EmailProvider = 'resend' | 'ses'
+type EmailPayload = {
+	from: string
+	to: string
+	subject: string
+	html: string
+	text: string
+}
+type SendEmailOptions = {
 	to: string
 	subject: string
 } & (
 	| { html: string; text: string; react?: never }
 	| { react: ReactElement; html?: never; text?: never }
-)) {
-	const from = process.env.RESEND_FROM_EMAIL ?? 'test@example.com'
+)
 
-	const email = {
+export async function sendEmail(options: SendEmailOptions) {
+	const from =
+		process.env.SES_FROM_EMAIL ??
+		process.env.RESEND_FROM_EMAIL ??
+		'test@example.com'
+	const content =
+		'react' in options && options.react
+			? await renderReactEmail(options.react)
+			: { html: options.html, text: options.text }
+
+	const email: EmailPayload = {
 		from,
-		...options,
-		...(react ? await renderReactEmail(react) : null),
+		to: options.to,
+		subject: options.subject,
+		html: content.html,
+		text: content.text,
 	}
 
+	if (getEmailProvider() === 'ses') {
+		return sendEmailWithSes(email)
+	}
+
+	return sendEmailWithResend(email)
+}
+
+function getEmailProvider(): EmailProvider {
+	const provider = process.env.EMAIL_PROVIDER?.toLowerCase()
+
+	if (provider === 'ses' || provider === 'aws-ses') {
+		return 'ses'
+	}
+
+	return 'resend'
+}
+
+async function sendEmailWithResend(email: EmailPayload) {
 	// feel free to remove this condition once you've set up resend
 	if (
 		!(process.env.RESEND_API_KEY || process.env.RESEND_FROM_EMAIL) &&
@@ -95,6 +130,64 @@ export async function sendEmail({
 			} as const
 		}
 	}
+}
+
+async function sendEmailWithSes(email: EmailPayload) {
+	try {
+		const client = new SESv2Client({
+			region:
+				process.env.AWS_SES_REGION ?? process.env.AWS_REGION ?? 'us-east-1',
+		})
+		const response = await client.send(
+			new SendEmailCommand({
+				FromEmailAddress: email.from,
+				Destination: { ToAddresses: [email.to] },
+				Content: {
+					Simple: {
+						Subject: { Data: email.subject },
+						Body: {
+							Html: { Data: email.html },
+							Text: { Data: email.text },
+						},
+					},
+				},
+			}),
+		)
+
+		return {
+			status: 'success',
+			data: { id: response.MessageId ?? 'unknown' },
+		} as const
+	} catch (error) {
+		return {
+			status: 'error',
+			error: normalizeSesError(error),
+		} as const
+	}
+}
+
+function normalizeSesError(error: unknown): ResendError {
+	if (error instanceof Error) {
+		return {
+			name: error.name || 'SESError',
+			message: error.message || 'Unknown SES Error',
+			statusCode: getAwsStatusCode(error),
+		}
+	}
+
+	return {
+		name: 'UnknownError',
+		message: 'Unknown Error',
+		statusCode: 500,
+		cause: error,
+	}
+}
+
+function getAwsStatusCode(error: Error) {
+	const metadata = (error as { $metadata?: { httpStatusCode?: number } })
+		.$metadata
+
+	return metadata?.httpStatusCode ?? 500
 }
 
 async function renderReactEmail(react: ReactElement) {
