@@ -359,7 +359,7 @@ export async function createTeacherClassPilotFixture(params: {
 
   await prisma.$executeRaw`
     INSERT INTO "_SchoolTeachers" ("A", "B")
-    VALUES (${schoolId}, ${teacherMembershipId})
+    VALUES (${teacherMembershipId}, ${schoolId})
     ON CONFLICT DO NOTHING
   `;
 

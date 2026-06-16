@@ -164,7 +164,7 @@ export async function seedOverlay(): Promise<E2EContext> {
   });
   await prisma.$executeRaw`
     INSERT INTO "_SchoolTeachers" ("A", "B")
-    VALUES (${school.id}, ${teacherMembership.id})
+    VALUES (${teacherMembership.id}, ${school.id})
     ON CONFLICT DO NOTHING
   `;
 
@@ -239,7 +239,7 @@ export async function seedOverlay(): Promise<E2EContext> {
     });
     await prisma.$executeRaw`
       INSERT INTO "_SchoolTeachers" ("A", "B")
-      VALUES (${school.id}, ${smokeTeacherMembership.id})
+      VALUES (${smokeTeacherMembership.id}, ${school.id})
       ON CONFLICT DO NOTHING
     `;
   }

@@ -105,7 +105,7 @@ export async function seedSyntheticLocalDevData(
     for (const teacherMembershipId of teacherMembershipIds) {
       await prisma.$executeRaw`
         INSERT INTO "_SchoolTeachers" ("A", "B")
-        VALUES (${school.id}, ${teacherMembershipId})
+        VALUES (${teacherMembershipId}, ${school.id})
         ON CONFLICT DO NOTHING
       `;
     }
