@@ -24,13 +24,7 @@ const assignmentTypeAccessActual = await import(
 );
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
-  requireUserId,
-  requireMembership,
-  requireMutableRequest,
-}));
-mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
