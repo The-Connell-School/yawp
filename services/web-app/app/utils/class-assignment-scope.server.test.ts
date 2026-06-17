@@ -9,17 +9,35 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
       })
     ).toEqual({
       deletedAt: null,
-      OR: [
-        { classAssignment: { classId: { in: ['class-a', 'class-b'] } } },
+      OR: [{ archivedAt: null }, { submissions: { some: {} } }],
+      AND: [
         {
-          classAssignmentId: null,
-          membership: {
-            classesAsStudent: {
-              some: { id: { in: ['class-a', 'class-b'] } },
+          OR: [
+            {
+              classAssignment: { classId: { in: ['class-a', 'class-b'] } },
             },
-          },
+            {
+              classAssignmentId: null,
+              membership: {
+                classesAsStudent: {
+                  some: { id: { in: ['class-a', 'class-b'] } },
+                },
+              },
+            },
+          ],
         },
       ],
+    });
+  });
+
+  test('keeps archived submitted work while excluding archived empty drafts', () => {
+    expect(
+      buildTeacherClassWorkDocumentWhere({
+        classIds: ['class-a'],
+      })
+    ).toMatchObject({
+      deletedAt: null,
+      OR: [{ archivedAt: null }, { submissions: { some: {} } }],
     });
   });
 
@@ -31,17 +49,22 @@ describe('buildTeacherClassWorkDocumentWhere', () => {
       })
     ).toEqual({
       deletedAt: null,
-      OR: [
-        { classAssignment: { classId: { in: ['class-a'] } } },
+      OR: [{ archivedAt: null }, { submissions: { some: {} } }],
+      AND: [
         {
-          classAssignmentId: null,
-          membership: {
-            classesAsStudent: {
-              some: { id: { in: ['class-a'] } },
+          OR: [
+            { classAssignment: { classId: { in: ['class-a'] } } },
+            {
+              classAssignmentId: null,
+              membership: {
+                classesAsStudent: {
+                  some: { id: { in: ['class-a'] } },
+                },
+              },
             },
-          },
+            { id: { in: ['doc-legacy'] } },
+          ],
         },
-        { id: { in: ['doc-legacy'] } },
       ],
     });
   });

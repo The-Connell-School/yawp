@@ -115,6 +115,75 @@ async function createAssignmentlessLifecycleDocuments(params: {
   }
 }
 
+async function createArchivedDraftParityDocuments(params: {
+  membershipId: string;
+  assignmentTypeId: string;
+  suffix: string;
+}) {
+  const prisma = createE2EPrismaClient();
+  const createdDocumentIds: string[] = [];
+
+  try {
+    const activeDraft = await prisma.document.create({
+      data: {
+        title: `Visible active draft ${params.suffix}`,
+        text: 'Visible active draft body',
+        html: '<p>Visible active draft body</p>',
+        membershipId: params.membershipId,
+        assignmentTypeId: params.assignmentTypeId,
+      },
+      select: { id: true },
+    });
+    createdDocumentIds.push(activeDraft.id);
+
+    const archivedDraft = await prisma.document.create({
+      data: {
+        title: `Hidden archived empty draft ${params.suffix}`,
+        text: 'Hidden archived empty draft body',
+        html: '<p>Hidden archived empty draft body</p>',
+        membershipId: params.membershipId,
+        assignmentTypeId: params.assignmentTypeId,
+        archivedAt: new Date(),
+      },
+      select: { id: true },
+    });
+    createdDocumentIds.push(archivedDraft.id);
+
+    const archivedSubmitted = await prisma.document.create({
+      data: {
+        title: `Visible archived submitted ${params.suffix}`,
+        text: 'Visible archived submitted body',
+        html: '<p>Visible archived submitted body</p>',
+        membershipId: params.membershipId,
+        assignmentTypeId: params.assignmentTypeId,
+        archivedAt: new Date(),
+        submissions: {
+          create: {
+            title: `Visible archived submitted ${params.suffix}`,
+            text: 'Visible archived submitted body',
+            html: '<p>Visible archived submitted body</p>',
+            submittedAt: new Date(),
+          },
+        },
+      },
+      select: { id: true },
+    });
+    createdDocumentIds.push(archivedSubmitted.id);
+
+    return createdDocumentIds;
+  } catch (error) {
+    await prisma.submission
+      .deleteMany({ where: { documentId: { in: createdDocumentIds } } })
+      .catch(() => {});
+    await prisma.document
+      .deleteMany({ where: { id: { in: createdDocumentIds } } })
+      .catch(() => {});
+    throw error;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 async function createTeacherWithOnlyInProgressDocument(params: {
   organizationId: string;
   schoolId: string;
@@ -306,6 +375,50 @@ test.describe.serial('Teacher Documents page', () => {
       await expect(
         table.getByText(`Assignmentless needs releasing ${suffix}`)
       ).toBeVisible();
+    } finally {
+      await deleteDocuments(documentIds);
+    }
+  });
+
+  test('hides archived empty drafts while keeping archived submitted work', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const suffix = Date.now().toString(36);
+    const documentIds = await createArchivedDraftParityDocuments({
+      membershipId: e2eContext.membershipId,
+      assignmentTypeId: e2eContext.assignmentTypeId,
+      suffix,
+    });
+
+    try {
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.addInitScript(() => {
+        localStorage.removeItem('yawp.student-work-view');
+      });
+      await page.goto(`/app/documents?q=${suffix}`);
+      await page.waitForLoadState('networkidle');
+
+      const chips = page.getByTestId('student-work-status-chips');
+      await expect(chips.getByRole('tab', { name: /^All\s+2/ })).toBeVisible();
+      await expect(
+        chips.getByRole('tab', { name: /In Progress\s+1/ })
+      ).toBeVisible();
+      await expect(
+        chips.getByRole('tab', { name: /Needs Grading\s+1/ })
+      ).toBeVisible();
+
+      const table = page.getByRole('table', { name: /documents/i });
+      await expect(
+        table.getByText(`Visible active draft ${suffix}`)
+      ).toBeVisible();
+      await expect(
+        table.getByText(`Visible archived submitted ${suffix}`)
+      ).toBeVisible();
+      await expect(
+        table.getByText(`Hidden archived empty draft ${suffix}`)
+      ).toHaveCount(0);
     } finally {
       await deleteDocuments(documentIds);
     }
