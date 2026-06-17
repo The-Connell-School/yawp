@@ -234,6 +234,8 @@ function Document({
         />
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
+        {/* ui.sh picker toolbar — remove when sidebar redesign is finalized */}
+        <script src="https://ui.sh/ui-picker.js" />
       </body>
     </html>
   );

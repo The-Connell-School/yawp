@@ -11,25 +11,14 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Pencil, Eye, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
-  DoubleArrowLeftIcon,
-  DoubleArrowRightIcon,
-  ExitIcon,
   HamburgerIcon,
   ReloadIcon,
   SlashIcon,
-  XIcon,
 } from '~/components/icons';
 import { Button, button } from '~/components/ui/button';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '~/components/ui/popover.js';
-import { Tooltip } from '~/components/ui/tooltip';
 import useBreakpoint from '~/hooks/useBreakpoint';
 import { useOnSwipe } from '~/hooks/useHorizontalSwipe';
 import { useUser } from '~/hooks/useUser';
@@ -38,8 +27,7 @@ import {
   type BreadcrumbHandle,
 } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
-import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
-import { Check } from 'lucide-react';
+import { useNavState } from '../api.preferences.nav/route';
 import {
   Dialog,
   DialogContent,
@@ -58,9 +46,12 @@ import {
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
 import {
-  FLAT_SIDEBAR_SECTIONS,
-  SidebarNavLinks,
-} from './sidebar-nav';
+  SidebarFloatingPanel,
+  SidebarDarkInk,
+  SidebarLineAccent,
+  SidebarWarmTinted,
+  type SidebarVariantProps,
+} from './sidebar-redesign-variants';
 
 export const NavExpandedContext = createContext({
   isMobileNavOpen: false,
@@ -80,18 +71,8 @@ function normalizePathname(pathname: string) {
   return pathname;
 }
 
-function isAppNavLinkActive(linkTo: string, pathname: string) {
-  const normalized = normalizePathname(pathname);
-
-  if (linkTo === '/app') {
-    return normalized === '/app';
-  }
-
-  return (
-    normalized === linkTo ||
-    normalized.startsWith(`${linkTo}/`)
-  );
-}
+// kept for existing code that may reference it via the export
+export { normalizePathname as _normalizePathname };
 
 export default function Route() {
   const location = useLocation();
@@ -171,179 +152,37 @@ export default function Route() {
         }
       )}
     >
-      {/* Left navigation panel */}
-      <nav
-        className={cn(
-          'z-20 flex h-full w-[212px] min-w-[212px] -translate-x-full transform flex-col border-r bg-background transition-all duration-300 ease-in-out sm:translate-x-0',
-          {
-            'translate-x-0': isMobileNavOpen,
-            'w-[56px] min-w-0 items-center': !navExpanded,
-          }
-        )}
-      >
-        <div
-          className={cn('mx-2 mt-1 flex justify-between py-2', {
-            'p-3': navExpanded,
-          })}
-        >
-          <Link to=".">
-            <img
-              src="/img/logo_for_light_mode.png"
-              alt="Logo"
-              className={cn('h-auto w-0 rounded object-cover py-2', {
-                'w-24': navExpanded,
-              })}
-            />
-          </Link>
-          <NavStateSwitch>
-            {({ state, fetcher }) => (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                className="hidden sm:inline-flex"
-                disabled={['submitting', 'loading'].includes(fetcher.state)}
-              >
-                {state === 'expanded' ? (
-                  <DoubleArrowLeftIcon />
-                ) : (
-                  <DoubleArrowRightIcon />
-                )}
-              </Button>
-            )}
-          </NavStateSwitch>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="sm:hidden"
-            onClick={() => setIsMobileNavOpen(false)}
-          >
-            <XIcon />
-          </Button>
-        </div>
-        <div className="p-3">
-          <SidebarNavLinks
-            sections={FLAT_SIDEBAR_SECTIONS}
-            user={user}
-            navExpanded={navExpanded}
-            pathname={location.pathname}
-            isAppNavLinkActive={isAppNavLinkActive}
-            forceFullNavigation={isClassDetailRoute}
-            studentPreviewActive={studentPreviewActive}
-          />
-        </div>
-        <div className="flex flex-grow flex-col justify-end">
-          <Popover>
-            <PopoverTrigger>
-              <div className="flex items-center gap-2 border-t p-4 pb-6 transition hover:bg-foreground/5 sm:pb-3">
-                <Settings2 size={18} />
-                {navExpanded ? <p className="">Settings</p> : null}
-              </div>
-            </PopoverTrigger>
-            <PopoverContent className="m-1 p-0">
-              <div className="flex justify-between p-3 border-b">
-                <div className="flex flex-col">
-                  <p className="text-sm font-bold">{user.name}</p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="opacity-40 hover:opacity-100"
-                  aria-label="Edit name"
-                  disabled={isReadOnlyImpersonation}
-                  title={
-                    isReadOnlyImpersonation
-                      ? 'Read-only impersonation active'
-                      : 'Edit name'
-                  }
-                  onClick={() => setIsEditNameOpen(true)}
-                >
-                  <Pencil size={14} />
-                </Button>
-              </div>
-              {/* Organization / Membership selector */}
-              {user.memberships?.length ? (
-                <div className="max-h-64 overflow-auto p-1 border-b space-y-1">
-                  {user.memberships.map((m) => {
-                    const isSelected = user.selectedMembership
-                      ? user.selectedMembership?.id === m.id
-                      : user.memberships?.[0]?.id === m.id;
-                    return (
-                      <Form method="POST" action="/api/membership-id" key={m.id}>
-                        <input
-                          type="hidden"
-                          name="intent"
-                          value="switch-membership"
-                        />
-                        <input type="hidden" name="membershipId" value={m.id} />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant={isSelected ? 'secondary' : 'ghost'}
-                          className="w-full justify-between rounded-lg px-3 py-2 disabled:opacity-100 disabled:bg-foreground/10 disabled:font-bold"
-                          disabled={isSelected}
-                        >
-                          <span className="flex min-w-0 flex-col text-left">
-                            <span className="truncate">
-                              {m.organization?.name ?? 'Organization'}
-                            </span>
-                          </span>
-                          {isSelected ? <Check size={16} /> : null}
-                        </Button>
-                      </Form>
-                    );
-                  })}
-                </div>
-              ) : null}
-              {canToggleStudentPreview ? (
-                <div className="border-b p-1">
-                  <Form method="POST" action="/api/student-preview">
-                    <input
-                      type="hidden"
-                      name="intent"
-                      value={studentPreviewActive ? 'end' : 'start'}
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      variant={studentPreviewActive ? 'secondary' : 'ghost'}
-                      className="w-full justify-start gap-2 rounded-lg px-3 py-2"
-                      disabled={isReadOnlyImpersonation}
-                      title={
-                        isReadOnlyImpersonation
-                          ? 'Read-only impersonation active'
-                          : studentPreviewActive
-                            ? 'Exit student preview'
-                            : 'View the app as a student (read-only)'
-                      }
-                    >
-                      {studentPreviewActive ? (
-                        <EyeOff size={16} />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                      {studentPreviewActive
-                        ? 'Exit student preview'
-                        : 'View as student'}
-                    </Button>
-                  </Form>
-                </div>
-              ) : null}
-              <Form action="/auth/logout" method="POST" className="p-1">
-                <Button
-                  type="submit"
-                  size="sm"
-                  variant="ghost"
-                  className="text-destructive rounded-lg w-full justify-start gap-2 transition hover:text-destructive hover:bg-destructive/10"
-                >
-                  <ExitIcon />
-                  Logout
-                </Button>
-              </Form>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </nav>
+      {/* ── Sidebar picker ── 4 redesign options via ui.sh toolbar ─────── */}
+      {(() => {
+        const variantProps: SidebarVariantProps = {
+          user,
+          navExpanded,
+          isMobileNavOpen,
+          setIsMobileNavOpen,
+          pathname: location.pathname,
+          isClassDetailRoute,
+          studentPreviewActive,
+          canToggleStudentPreview: canToggleStudentPreview ?? false,
+          isReadOnlyImpersonation,
+          setIsEditNameOpen,
+        };
+        return (
+          <div data-uidotsh-pick="Sidebar design" className="contents">
+            <div data-uidotsh-option="Floating Panel" className="contents">
+              <SidebarFloatingPanel {...variantProps} />
+            </div>
+            <div data-uidotsh-option="Dark Ink" className="contents" hidden>
+              <SidebarDarkInk {...variantProps} />
+            </div>
+            <div data-uidotsh-option="Line Accent" className="contents" hidden>
+              <SidebarLineAccent {...variantProps} />
+            </div>
+            <div data-uidotsh-option="Warm Tinted" className="contents" hidden>
+              <SidebarWarmTinted {...variantProps} />
+            </div>
+          </div>
+        );
+      })()}
       <div
         className={cn(
           'min-w-full flex-1 transition-all duration-300 ease-in-out sm:min-w-0 sm:translate-x-0',
