@@ -47,16 +47,33 @@ import {
 
 export const handle = { breadcrumb: 'Documents' };
 
-function resolveDocumentClass(document: {
-  classAssignment?: {
-    class: TeacherDocumentWorkClassSummary;
-  } | null;
-  membership: {
-    classesAsStudent: TeacherDocumentWorkClassSummary[];
-  };
-}) {
+function resolveDocumentClass(
+  document: {
+    classAssignment?: {
+      class: TeacherDocumentWorkClassSummary;
+    } | null;
+    membership: {
+      classesAsStudent: TeacherDocumentWorkClassSummary[];
+    };
+  },
+  options: {
+    teacherClassIds: Set<string>;
+    fallbackClass?: TeacherDocumentWorkClassSummary | null;
+  }
+) {
   if (document.classAssignment?.class) {
     return document.classAssignment.class;
+  }
+
+  if (options.fallbackClass) {
+    return options.fallbackClass;
+  }
+
+  const enrolledTeacherClass = document.membership.classesAsStudent.find(
+    (klass) => options.teacherClassIds.has(klass.id)
+  );
+  if (enrolledTeacherClass) {
+    return enrolledTeacherClass;
   }
 
   return document.membership.classesAsStudent[0] ?? null;
@@ -104,28 +121,41 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const classIds = classes.map((klass) => klass.id);
+  const classById = new Map(classes.map((klass) => [klass.id, klass]));
+  const teacherClassIds = new Set(classIds);
 
-  const [classAssignments, isDocumentSubmissionEnabled] = await Promise.all([
-    prisma.classAssignment.findMany({
-      where: { classId: { in: classIds } },
-      select: {
-        id: true,
-        classId: true,
-        createdAt: true,
-        assignment: { select: { id: true, title: true } },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-    }),
-    isDocumentSubmissionEnabledForScope({
-      schoolIds: classes.map((klass) => klass.school.id),
-      organizationIds: [profile.organization.id],
-      teacherProfileIds: [profile.id],
-      classIds,
-    }),
-  ]);
+  const [classAssignments, isDocumentSubmissionEnabled, forensicRows] =
+    await Promise.all([
+      prisma.classAssignment.findMany({
+        where: { classId: { in: classIds } },
+        select: {
+          id: true,
+          classId: true,
+          createdAt: true,
+          assignment: { select: { id: true, title: true } },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+      isDocumentSubmissionEnabledForScope({
+        schoolIds: classes.map((klass) => klass.school.id),
+        organizationIds: [profile.organization.id],
+        teacherProfileIds: [profile.id],
+        classIds,
+      }),
+      prisma.documentClassForensic.findMany({
+        where: { oldClassId: { in: classIds } },
+        select: { documentId: true, oldClassId: true },
+      }),
+    ]);
+  const legacyClassIdByDocumentId = new Map(
+    forensicRows.map((row) => [row.documentId, row.oldClassId])
+  );
 
   const documentWhere: Prisma.DocumentWhereInput =
-    buildTeacherClassWorkDocumentWhere({ classIds });
+    buildTeacherClassWorkDocumentWhere({
+      classIds,
+      legacyDocumentIds: forensicRows.map((row) => row.documentId),
+    });
 
   const allDocuments = await prisma.document.findMany({
     where: documentWhere,
@@ -200,7 +230,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       updatedAt: new Date(document.updatedAt),
       membership: document.membership,
       assignment: document.assignment,
-      resolvedClass: resolveDocumentClass(document),
+      resolvedClass: resolveDocumentClass(document, {
+        teacherClassIds,
+        fallbackClass:
+          classById.get(legacyClassIdByDocumentId.get(document.id) ?? '') ??
+          null,
+      }),
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
@@ -447,18 +482,20 @@ export default function StudentWorkRoute() {
             if (options?.persist === false) return;
             persistCollapsedStudentWorkGroups(next);
           }}
-          actions={
-            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0
-              ? [
-                  {
-                    id: 'release-grades',
-                    label: 'Release grades',
-                    count: unreleasedGrades.length,
-                    onSelect: openReleaseSheet,
-                  },
-                ]
-              : undefined
-          }
+          actions={[
+            {
+              id: 'release-grades',
+              label: 'Release grades',
+              count:
+                unreleasedGrades.length > 0
+                  ? unreleasedGrades.length
+                  : undefined,
+              disabled:
+                !data.isDocumentSubmissionEnabled ||
+                unreleasedGrades.length === 0,
+              onSelect: openReleaseSheet,
+            },
+          ]}
           testIds={{
             statusChips: 'student-work-status-chips',
             groupSelect: 'student-work-group-select',
