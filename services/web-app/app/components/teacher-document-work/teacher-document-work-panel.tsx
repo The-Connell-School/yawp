@@ -1109,6 +1109,7 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           <DocumentWorkStatusPills {...props} />
         </div>
         <div className="flex shrink-0 flex-nowrap items-center gap-2">
+          <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -1133,7 +1134,6 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
               <FilterDropdownPanel {...props} />
             </PopoverContent>
           </Popover>
-          <DocumentWorkActionsMenu actions={props.actions} />
           {props.headerActions}
           <DocumentWorkGroupSelect {...props} triggerClassName="w-[10.5rem]" />
         </div>
@@ -1147,8 +1147,7 @@ function DocumentWorkActionsMenu({
 }: {
   actions?: TeacherDocumentWorkAction[];
 }) {
-  const availableActions = actions?.filter((action) => !action.disabled) ?? [];
-  if (availableActions.length === 0) return null;
+  if (!actions || actions.length === 0) return null;
 
   return (
     <DropdownMenu>
@@ -1164,9 +1163,10 @@ function DocumentWorkActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        {availableActions.map((action) => (
+        {actions.map((action) => (
           <DropdownMenuItem
             key={action.id}
+            disabled={action.disabled}
             onSelect={action.onSelect}
             className="gap-3"
           >

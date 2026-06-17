@@ -1472,18 +1472,20 @@ function ClassDetailPage() {
             take: pagination.take,
             onChange: handlePaginationChange,
           }}
-          actions={
-            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0
-              ? [
-                  {
-                    id: 'release-grades',
-                    label: 'Release grades',
-                    count: unreleasedGrades.length,
-                    onSelect: openReleaseSheet,
-                  },
-                ]
-              : undefined
-          }
+          actions={[
+            {
+              id: 'release-grades',
+              label: 'Release grades',
+              count:
+                unreleasedGrades.length > 0
+                  ? unreleasedGrades.length
+                  : undefined,
+              disabled:
+                !data.isDocumentSubmissionEnabled ||
+                unreleasedGrades.length === 0,
+              onSelect: openReleaseSheet,
+            },
+          ]}
           emptyMessageSecondary="Student documents will appear here once work begins"
           testIds={{
             statusChips: 'class-documents-status-chips',
