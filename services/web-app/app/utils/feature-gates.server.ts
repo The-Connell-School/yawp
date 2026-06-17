@@ -15,7 +15,7 @@ export async function isFeatureEnabledForOrganization(
   key: FeatureKey,
   organizationId: string | null | undefined
 ): Promise<boolean> {
-  const scopes = [
+  const scopes: Array<{ scopeKind: string; scopeId: string }> = [
     { scopeKind: GLOBAL_SCOPE.kind, scopeId: GLOBAL_SCOPE.id },
   ];
 
