@@ -50,6 +50,8 @@ model AssignmentType {
   ownerMembership         OrgMembership?                   @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   image                   AssignmentTypeImage?
   organizationAssignments OrganizationAssignmentType[]
+  schoolAssignments       SchoolAssignmentType[]
+  teacherAssignments      TeacherAssignmentType[]
   gradingAssistantLinks   AssignmentTypeGradingAssistant[]
   assignmentModules       AssignmentModule[]
   assignments             Assignment[]
@@ -397,6 +399,8 @@ model OrgMembership {
   schools                          School[]                       @relation("SchoolTeachers")
   teacherTrainingModuleSessions    TeacherTrainingModuleSession[]
   assignedTeacherTrainings         TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized        Boolean                        @default(false)
+  assignmentTypeAssignments        TeacherAssignmentType[]
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")
@@ -416,9 +420,33 @@ model School {
   code           String          @unique
   organizationId String
   organization   Organization    @relation(fields: [organizationId], references: [id])
-  classes        Class[]
-  teachers       OrgMembership[] @relation("SchoolTeachers")
-  invitations    Invitation[]
+  classes                   Class[]
+  teachers                  OrgMembership[]        @relation("SchoolTeachers")
+  invitations               Invitation[]
+  assignmentTypesCustomized Boolean                @default(false)
+  assignmentTypeAssignments SchoolAssignmentType[]
+}
+
+model SchoolAssignmentType {
+  schoolId         String
+  assignmentTypeId String
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  school           School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+
+  @@id([schoolId, assignmentTypeId])
+  @@index([assignmentTypeId])
+}
+
+model TeacherAssignmentType {
+  membershipId     String
+  assignmentTypeId String
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  membership       OrgMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, assignmentTypeId])
+  @@index([assignmentTypeId])
 }
 
 model Session {
@@ -440,26 +468,6 @@ model Setting {
   description String?
   value       String
   valueType   String   @default("string")
-}
-
-// Shared scoped-access table. The removed feature flags used this, but it
-// also backs assignment-type access control (featureKey `assignment_type:<id>`).
-// Do not drop it.
-model FeatureAccessTarget {
-  id         String    @id @default(cuid())
-  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-  featureKey String
-  targetKind String
-  targetId   String
-  enabled    Boolean   @default(true)
-  expiresAt  DateTime? @db.Timestamptz(6)
-  note       String?
-
-  @@unique([featureKey, targetKind, targetId])
-  @@index([targetKind, targetId])
-  @@index([featureKey, enabled])
-  @@index([expiresAt])
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.
