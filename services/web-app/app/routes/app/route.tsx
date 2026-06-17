@@ -46,10 +46,10 @@ import {
 } from '~/utils/document-exit';
 import type { Route as RootRoute } from '../../+types/root';
 import {
-  SidebarFloatingPanel,
-  SidebarDarkInk,
-  SidebarLineAccent,
-  SidebarWarmTinted,
+  SidebarBrandSand,
+  SidebarCoralColumn,
+  SidebarLiterarySerif,
+  SidebarCreamCards,
   type SidebarVariantProps,
 } from './sidebar-redesign-variants';
 
@@ -168,17 +168,17 @@ export default function Route() {
         };
         return (
           <div data-uidotsh-pick="Sidebar design" className="contents">
-            <div data-uidotsh-option="Floating Panel" className="contents">
-              <SidebarFloatingPanel {...variantProps} />
+            <div data-uidotsh-option="Brand Sand" className="contents">
+              <SidebarBrandSand {...variantProps} />
             </div>
-            <div data-uidotsh-option="Dark Ink" className="contents" hidden>
-              <SidebarDarkInk {...variantProps} />
+            <div data-uidotsh-option="Coral Column" className="contents" hidden>
+              <SidebarCoralColumn {...variantProps} />
             </div>
-            <div data-uidotsh-option="Line Accent" className="contents" hidden>
-              <SidebarLineAccent {...variantProps} />
+            <div data-uidotsh-option="Literary Serif" className="contents" hidden>
+              <SidebarLiterarySerif {...variantProps} />
             </div>
-            <div data-uidotsh-option="Warm Tinted" className="contents" hidden>
-              <SidebarWarmTinted {...variantProps} />
+            <div data-uidotsh-option="Cream Cards" className="contents" hidden>
+              <SidebarCreamCards {...variantProps} />
             </div>
           </div>
         );
