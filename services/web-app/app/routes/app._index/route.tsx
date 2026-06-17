@@ -143,10 +143,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
             title: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -165,10 +167,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
             title: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },

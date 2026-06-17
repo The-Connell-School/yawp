@@ -3,6 +3,7 @@ import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
   data as dataResponse,
+  redirect,
 } from 'react-router';
 import {
   useFetcher,
@@ -74,6 +75,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -360,6 +362,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const submissions = doc.submissions;
+  const isOwner = doc.membership.id === profile.id;
+  const wantsDraftEditor =
+    url.searchParams.get('revise') === '1' ||
+    url.searchParams.get('spa') === '1';
+
+  if (
+    isOwner &&
+    profile.role === 'STUDENT' &&
+    !wantsDraftEditor &&
+    !user?.isAdmin
+  ) {
+    const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
+    if (latestReleasedSubmission) {
+      const exitTo = url.searchParams.get('exitTo');
+      const redirectParams = new URLSearchParams();
+      if (exitTo) {
+        redirectParams.set('exitTo', exitTo);
+      }
+      const suffix = redirectParams.toString()
+        ? `?${redirectParams.toString()}`
+        : '';
+      throw redirect(
+        `/app/submissions/${latestReleasedSubmission.id}${suffix}`
+      );
+    }
+  }
 
   if (shouldSaveVersion) {
     const latestRevision = doc.revisions[0];

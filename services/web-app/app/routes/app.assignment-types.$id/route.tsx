@@ -258,7 +258,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submissions: {
           where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
             score: true,
@@ -266,6 +265,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             numericPercentage: true,
             letterGrade: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -289,7 +289,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submissions: {
           where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
             score: true,
@@ -297,6 +296,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             numericPercentage: true,
             letterGrade: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },

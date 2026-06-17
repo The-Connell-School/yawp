@@ -10,16 +10,16 @@ import {
   DropdownMenuItem,
 } from './ui/dropdown-menu';
 import { Tooltip } from './ui/tooltip';
+import {
+  resolveDocumentLinkTarget,
+  type DocumentLinkSubmission,
+} from '../utils/document-link-target';
 
 type Props = {
   exitTo: string;
   doc: Document & {
     assignmentModuleSessions: { assignmentModule: { title: string } }[];
-    submissions?: {
-      id: string;
-      releasedAt: Date | string | null;
-      archivedAt?: Date | string | null;
-    }[];
+    submissions?: DocumentLinkSubmission[];
   };
   isArchived?: boolean;
   isStudentView?: boolean;
@@ -32,7 +32,6 @@ export const DocumentLink = ({
   isStudentView = false,
 }: Props) => {
   const archiveFetcher = useFetcher();
-  const encodedExitTo = encodeURIComponent(exitTo);
   const submissions = doc.submissions ?? [];
   const visibleSubmissions = submissions.filter((s) => !s.archivedAt);
   const isSubmitted = visibleSubmissions.length > 0;
@@ -41,7 +40,12 @@ export const DocumentLink = ({
   );
   const showGradedBadge = isStudentView && gradedSubmissions.length > 0;
   const showSubmittedBadge = isStudentView && isSubmitted && !showGradedBadge;
-  const targetPath = `/app/documents/${doc.id}?ssv=1&exitTo=${encodedExitTo}`;
+  const targetPath = resolveDocumentLinkTarget({
+    documentId: doc.id,
+    exitTo,
+    isStudentView,
+    submissions,
+  });
 
   return (
     <Link
