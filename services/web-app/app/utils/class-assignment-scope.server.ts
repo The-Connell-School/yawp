@@ -82,8 +82,7 @@ export function buildTeacherClassWorkDocumentWhere(params: {
   classIds: string[];
   legacyDocumentIds?: string[];
 }): Prisma.DocumentWhereInput {
-  const where: Prisma.DocumentWhereInput = {
-    deletedAt: null,
+  const classScope: Prisma.DocumentWhereInput = {
     OR: [
       { classAssignment: { classId: { in: params.classIds } } },
       {
@@ -95,8 +94,14 @@ export function buildTeacherClassWorkDocumentWhere(params: {
     ],
   };
 
+  const where: Prisma.DocumentWhereInput = {
+    deletedAt: null,
+    OR: [{ archivedAt: null }, { submissions: { some: {} } }],
+    AND: [classScope],
+  };
+
   if (params.legacyDocumentIds && params.legacyDocumentIds.length > 0) {
-    (where.OR as Prisma.DocumentWhereInput[]).push({
+    (classScope.OR as Prisma.DocumentWhereInput[]).push({
       id: { in: params.legacyDocumentIds },
     });
   }
