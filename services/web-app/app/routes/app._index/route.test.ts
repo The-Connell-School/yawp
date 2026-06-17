@@ -20,13 +20,7 @@ const getStudentPreviewState = mock();
 const isWritingPracticeEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
-  requireUserId,
-  requireMembership,
-  requireMutableRequest,
-}));
-mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
@@ -189,14 +183,6 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-<<<<<<< HEAD
-    expect(
-      data.documents[0].assignmentModuleSessions[0].assignmentModule.title
-    ).toBe('Pre-Writing');
-  });
-
-  test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
-=======
     expect(isWritingPracticeEnabledForOrganization).toHaveBeenCalledWith(
       'org-1'
     );
