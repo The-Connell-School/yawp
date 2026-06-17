@@ -17,6 +17,7 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
+const isWritingPracticeEnabledForOrganization = mock();
 
 const assignmentTypeAccessActual = await import(
   '~/utils/assignment-type-access.server'
@@ -50,6 +51,9 @@ mock.module('~/utils/student-preview.server', () => ({
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
+mock.module('~/utils/feature-gates.server', () => ({
+  isWritingPracticeEnabledForOrganization,
+}));
 
 const { loader } = await import('./route');
 
@@ -66,6 +70,7 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
+    isWritingPracticeEnabledForOrganization.mockReset();
     getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
@@ -73,6 +78,7 @@ describe('app index loader assignments', () => {
       gradedUnreleasedCount: 0,
     });
     getTeacherRecentActiveClassIds.mockResolvedValue([]);
+    isWritingPracticeEnabledForOrganization.mockResolvedValue(false);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -176,6 +182,22 @@ describe('app index loader assignments', () => {
     expect(
       data.documents[0].assignmentModuleSessions[0].assignmentModule.title
     ).toBe('Pre-Writing');
+  });
+
+  test('returns the writing practice feature state for the current organization', async () => {
+    isWritingPracticeEnabledForOrganization.mockResolvedValue(true);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(isWritingPracticeEnabledForOrganization).toHaveBeenCalledWith(
+      'org-1'
+    );
+    expect(data.writingPracticeEnabled).toBe(true);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
