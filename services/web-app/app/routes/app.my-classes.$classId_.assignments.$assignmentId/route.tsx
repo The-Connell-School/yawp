@@ -8,7 +8,6 @@ import {
 import { useState, useCallback, useMemo } from 'react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -91,15 +90,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? rawStatus
     : 'submitted';
 
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
-    {
-      schoolIds: [klass.school?.id],
-      organizationIds: [klass.school?.organizationId],
-      teacherProfileIds: [profile.id],
-      classIds: [klass.id],
-    }
-  );
-
   const submissions =
     status !== 'in-progress'
       ? await prisma.submission.findMany({
@@ -168,7 +158,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     klass,
     assignment,
     status,
-    isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
   });
@@ -185,7 +174,6 @@ export default function AssignmentSubmissionsRoute() {
     klass,
     assignment,
     status,
-    isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
   } = data;
@@ -360,9 +348,7 @@ export default function AssignmentSubmissionsRoute() {
           <div className="mb-3 flex items-center gap-3">
             <Button
               size="sm"
-              disabled={
-                !isDocumentSubmissionEnabled || selected.size === 0 || isGrading
-              }
+              disabled={selected.size === 0 || isGrading}
               onClick={gradeWithAI}
             >
               {isGrading ? (
@@ -471,10 +457,7 @@ export default function AssignmentSubmissionsRoute() {
                           <Checkbox
                             checked={selected.has(sub.id)}
                             onCheckedChange={() => toggleSelect(sub.id)}
-                            disabled={
-                              !isDocumentSubmissionEnabled ||
-                              state === 'grading'
-                            }
+                            disabled={state === 'grading'}
                             aria-label="Select submission"
                           />
                         </TableCell>
@@ -484,9 +467,7 @@ export default function AssignmentSubmissionsRoute() {
                         </TableCell>
                         <TableCell>
                           <Link
-                            to={`/app/submissions/${sub.id}?${
-                              isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                            }exitTo=${encodeURIComponent(backUrl)}`}
+                            to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
                             className="text-primary hover:underline"
                           >
                             {sub.document.title || sub.title || 'Untitled'}
@@ -525,11 +506,7 @@ export default function AssignmentSubmissionsRoute() {
             <div className="mb-3 flex items-center gap-3">
               <Button
                 size="sm"
-                disabled={
-                  !isDocumentSubmissionEnabled ||
-                  selected.size === 0 ||
-                  isReleasing
-                }
+                disabled={selected.size === 0 || isReleasing}
                 onClick={releaseGrades}
               >
                 {isReleasing ? (
@@ -587,7 +564,7 @@ export default function AssignmentSubmissionsRoute() {
                         <Checkbox
                           checked={selected.has(sub.id)}
                           onCheckedChange={() => toggleSelect(sub.id)}
-                          disabled={!isDocumentSubmissionEnabled || isReleasing}
+                          disabled={isReleasing}
                           aria-label="Select submission"
                         />
                       </TableCell>
@@ -597,9 +574,7 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?${
-                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
@@ -653,9 +628,7 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?${
-                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
-                          }exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}

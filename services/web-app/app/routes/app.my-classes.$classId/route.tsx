@@ -22,11 +22,6 @@ import {
   deleteClassAssignmentDeployment,
 } from '~/utils/assignment-deployment.server';
 import {
-  isAssignmentCreationStandardizationEnabledForContext,
-  isAssignmentsEnabledForContext,
-  isDocumentSubmissionEnabledForScope,
-} from '~/utils/feature-flags.server';
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -204,28 +199,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent')?.toString();
 
-  if (
-    intent === 'delete-assignment' ||
-    intent === 'create-assignment' ||
-    intent === 'update-assignment'
-  ) {
-    const assignmentsEnabled = await isAssignmentsEnabledForContext({
-      organizationId: classAccess.school.organizationId,
-      schoolId: classAccess.school.id,
-      teacherProfileId: profile.id,
-      classIds: [classAccess.id],
-    });
-    if (!assignmentsEnabled) {
-      return dataResponse(
-        {
-          success: false,
-          message: 'Assignments are not enabled for your organization.',
-        },
-        { status: 403 }
-      );
-    }
-  }
-
   if (intent === 'delete-assignment') {
     const assignmentId = formData.get('assignmentId')?.toString();
     if (!assignmentId) {
@@ -263,11 +236,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
-    const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
-    const legacyTutorContext = tutorContextRaw.trim() || null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -350,18 +321,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       );
     }
 
-    const assignmentCreationStandardizationEnabled =
-      await isAssignmentCreationStandardizationEnabledForContext({
-        organizationId: classAccess.school.organizationId,
-        schoolId: classAccess.school.id,
-        teacherProfileId: profile.id,
-        classIds: [classId],
-      });
-
-    const gradingIntent = assignmentCreationStandardizationEnabled
-      ? parseAssignmentGradingIntent(formData)
-      : null;
-    if (gradingIntent && !gradingIntent.success) {
+    const gradingIntent = parseAssignmentGradingIntent(formData);
+    if (!gradingIntent.success) {
       return dataResponse(
         { success: false, message: gradingIntent.message },
         { status: 400 }
@@ -374,15 +335,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentTypeId,
           title,
           prompt,
-          tutorContext: assignmentCreationStandardizationEnabled
-            ? null
-            : legacyTutorContext,
-          ...(gradingIntent?.success
-            ? {
-                submitForGrade: gradingIntent.data.submitForGrade,
-                pointValue: gradingIntent.data.pointValue,
-              }
-            : {}),
+          tutorContext: null,
+          submitForGrade: gradingIntent.data.submitForGrade,
+          pointValue: gradingIntent.data.pointValue,
         },
         classIds: [classId],
       });
@@ -399,15 +354,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId,
         title,
         prompt,
-        tutorContext: assignmentCreationStandardizationEnabled
-          ? existingAssignment!.tutorContext
-          : legacyTutorContext,
-        ...(gradingIntent?.success
-          ? {
-              submitForGrade: gradingIntent.data.submitForGrade,
-              pointValue: gradingIntent.data.pointValue,
-            }
-          : {}),
+        tutorContext: existingAssignment!.tutorContext,
+        submitForGrade: gradingIntent.data.submitForGrade,
+        pointValue: gradingIntent.data.pointValue,
       },
     });
 
@@ -654,22 +603,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       : { enrolledMembershipIds: klass.students.map((student) => student.id) }
   );
 
-  // Check feature flags
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-      isDocumentSubmissionEnabledForScope({
-        schoolIds: [klass.school?.id],
-        organizationIds: [klass.school?.organizationId],
-        teacherProfileIds: [profile.id],
-        classIds: [klass.id],
-      }),
-      isAssignmentsEnabledForContext({
-        organizationId: klass.school?.organizationId,
-        schoolId: klass.school?.id,
-        teacherProfileId: profile.id,
-        classIds: [klass.id],
-      }),
-    ]);
-
   // Get all submissions for this class
   const submissions = await prisma.submission.findMany({
     where: {
@@ -832,8 +765,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     submissions,
     inProgressDocuments,
     assignments,
-    assignmentsEnabled,
-    isDocumentSubmissionEnabled,
+    assignmentsEnabled: true,
     manageSchools: manageSchools?.schools ?? [],
     teacherClasses,
   });
@@ -1508,7 +1440,6 @@ function ClassDetailPage() {
             label: assignment.title ?? 'Untitled assignment',
           }))}
           assignmentsEnabled={assignmentsEnabled}
-          isDocumentSubmissionEnabled={data.isDocumentSubmissionEnabled}
           exitTo={classDetailExitTo}
           filters={documentWorkFilters}
           onFiltersChange={handleDocumentWorkFiltersChange}
@@ -1532,7 +1463,7 @@ function ClassDetailPage() {
             onChange: handlePaginationChange,
           }}
           headerActions={
-            data.isDocumentSubmissionEnabled && unreleasedGrades.length > 0 ? (
+            unreleasedGrades.length > 0 ? (
               <Button
                 type="button"
                 size="sm"
@@ -1995,14 +1926,12 @@ function ClassDetailPage() {
         onSuccess={() => revalidator.revalidate()}
       />
 
-      {data.isDocumentSubmissionEnabled ? (
-        <ReleaseGradesSheet
-          grades={releaseGradesForSheet}
-          isOpen={isReleaseGradesSheetOpen}
-          onClose={() => setIsReleaseGradesSheetOpen(false)}
-          onSuccess={handleGradingSuccess}
-        />
-      ) : null}
+      <ReleaseGradesSheet
+        grades={releaseGradesForSheet}
+        isOpen={isReleaseGradesSheetOpen}
+        onClose={() => setIsReleaseGradesSheetOpen(false)}
+        onSuccess={handleGradingSuccess}
+      />
     </section>
   );
 }

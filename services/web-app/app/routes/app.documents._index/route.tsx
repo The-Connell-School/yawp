@@ -7,7 +7,6 @@ import {
 } from '~/components/teacher-document-work/teacher-document-work-panel';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
 import {
   TEACHER_DOCUMENT_STATUSES,
@@ -100,24 +99,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const classIds = classes.map((klass) => klass.id);
 
-  const [classAssignments, isDocumentSubmissionEnabled] = await Promise.all([
-    prisma.classAssignment.findMany({
-      where: { classId: { in: classIds } },
-      select: {
-        id: true,
-        classId: true,
-        createdAt: true,
-        assignment: { select: { id: true, title: true } },
-      },
-      orderBy: [{ createdAt: 'desc' }],
-    }),
-    isDocumentSubmissionEnabledForScope({
-      schoolIds: classes.map((klass) => klass.school.id),
-      organizationIds: [profile.organization.id],
-      teacherProfileIds: [profile.id],
-      classIds,
-    }),
-  ]);
+  const classAssignments = await prisma.classAssignment.findMany({
+    where: { classId: { in: classIds } },
+    select: {
+      id: true,
+      classId: true,
+      createdAt: true,
+      assignment: { select: { id: true, title: true } },
+    },
+    orderBy: [{ createdAt: 'desc' }],
+  });
 
   const documentWhere: Prisma.DocumentWhereInput =
     buildTeacherClassWorkDocumentWhere({ classIds });
@@ -220,7 +211,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     students,
     assignments,
-    isDocumentSubmissionEnabled,
     filters: {
       studentIds,
       classIds: selectedClassIds,
@@ -397,7 +387,6 @@ export default function StudentWorkRoute() {
           students={data.students}
           classes={data.classes}
           assignments={data.assignments}
-          isDocumentSubmissionEnabled={data.isDocumentSubmissionEnabled}
           exitTo={exitTo}
           filters={filters}
           onFiltersChange={updateFilters}

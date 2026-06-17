@@ -29,8 +29,6 @@ import {
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   formatAssignmentGrade,
@@ -280,16 +278,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ));
 
   const isAdmin = user?.isAdmin ?? false;
-  const isDocumentSubmissionEnabled =
-    !isOwner && (isTeacher || isAdmin)
-      ? await isDocumentSubmissionEnabledForScope({
-          ...getDocumentSubmissionScope({
-            classAssignment: submission.document.classAssignment,
-            membership: submission.document.membership,
-          }),
-          actorTeacherProfileId: isTeacher ? profile.id : null,
-        })
-      : true;
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -301,7 +289,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isGradeMode =
     !isOwner &&
     (isTeacher || isAdmin) &&
-    isDocumentSubmissionEnabled &&
     (!submission.releasedAt || editParam);
 
   const rubricConfig = await resolveRubricConfigForSubmission({
@@ -340,7 +327,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner,
     isTeacher: isTeacher || isAdmin,
     isGradeMode,
-    isDocumentSubmissionEnabled,
   };
 }
 
@@ -352,7 +338,6 @@ export default function SubmissionRoute() {
     isOwner,
     isTeacher,
     isGradeMode: loaderGradeMode,
-    isDocumentSubmissionEnabled,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -366,7 +351,6 @@ export default function SubmissionRoute() {
   const isGradingOther = isTeacher && !isOwner;
   const isGradeMode = resolveSubmissionGradeMode({
     isGradingOther,
-    isDocumentSubmissionEnabled,
     editParam,
     loaderGradeMode,
   });
@@ -949,9 +933,8 @@ export default function SubmissionRoute() {
             <>
               <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
-                {isDocumentSubmissionEnabled ? (
-                  <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
-                    <Button
+                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
+                  <Button
                       size="sm"
                       variant={isGradeMode ? 'secondary' : 'ghost'}
                       className="h-7 rounded-full px-3 text-xs"
@@ -976,7 +959,6 @@ export default function SubmissionRoute() {
                       View
                     </Button>
                   </div>
-                ) : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isGradeMode ? (

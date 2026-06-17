@@ -37,7 +37,6 @@ export type AssignmentEditSheetProps = {
   /** Class id used for PDF prompt extraction. */
   pdfClassId: string;
   allowedAssignmentTypes: { id: string; title: string }[];
-  assignmentCreationStandardizationEnabled: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingAssignment: AssignmentEditRecord;
@@ -47,7 +46,6 @@ export function AssignmentEditSheet({
   action,
   pdfClassId,
   allowedAssignmentTypes,
-  assignmentCreationStandardizationEnabled,
   open,
   onOpenChange,
   editingAssignment,
@@ -115,13 +113,7 @@ export function AssignmentEditSheet({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (
-      !assignmentCreationStandardizationEnabled &&
-      typeof extractFetcher.data.tutorContext === 'string'
-    ) {
-      setTutorContext(extractFetcher.data.tutorContext);
-    }
-  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
+  }, [extractFetcher.data]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -259,74 +251,53 @@ export function AssignmentEditSheet({
             />
           </div>
 
-          {assignmentCreationStandardizationEnabled ? (
-            <>
-              <div className="space-y-3 rounded-md border p-3">
-                <input type="hidden" name="submitForGrade" value="false" />
-                <div className="flex items-start gap-2.5">
-                  <Checkbox
-                    id="assignment-submit-for-grade"
-                    name="submitForGrade"
-                    value="true"
-                    checked={submitForGrade}
-                    onCheckedChange={(checked) =>
-                      setSubmitForGrade(checked === true)
-                    }
-                    disabled={isSaving}
-                  />
-                  <div className="space-y-1">
-                    <Label
-                      htmlFor="assignment-submit-for-grade"
-                      className="cursor-pointer font-normal"
-                    >
-                      Submit for grade
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      Students can submit this assignment for a recorded grade.
-                    </p>
-                  </div>
-                </div>
-
-                {submitForGrade ? (
-                  <div className="space-y-2 pl-6">
-                    <Label htmlFor="assignment-point-value">Point value</Label>
-                    <Input
-                      id="assignment-point-value"
-                      name="pointValue"
-                      type="number"
-                      min={1}
-                      max={1000}
-                      step={1}
-                      inputMode="numeric"
-                      value={pointValue}
-                      onChange={(event) => setPointValue(event.target.value)}
-                      disabled={isSaving}
-                      required
-                    />
-                  </div>
-                ) : null}
-              </div>
-
-              {!submitForGrade ? (
-                <input type="hidden" name="pointValue" value="" />
-              ) : null}
-            </>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="assignment-tutor-context">
-                Tutor Context (optional)
-              </Label>
-              <Textarea
-                id="assignment-tutor-context"
-                name="tutorContext"
-                value={tutorContext}
-                onChange={(event) => setTutorContext(event.target.value)}
-                rows={6}
-                placeholder="Guidance for the tutor system prompt..."
+          <div className="space-y-3 rounded-md border p-3">
+            <input type="hidden" name="submitForGrade" value="false" />
+            <div className="flex items-start gap-2.5">
+              <Checkbox
+                id="assignment-submit-for-grade"
+                name="submitForGrade"
+                value="true"
+                checked={submitForGrade}
+                onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
                 disabled={isSaving}
               />
+              <div className="space-y-1">
+                <Label
+                  htmlFor="assignment-submit-for-grade"
+                  className="cursor-pointer font-normal"
+                >
+                  Submit for grade
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Students can submit this assignment for a recorded grade.
+                </p>
+              </div>
             </div>
-          )}
+
+            {submitForGrade ? (
+              <div className="space-y-2 pl-6">
+                <Label htmlFor="assignment-point-value">Point value</Label>
+                <Input
+                  id="assignment-point-value"
+                  name="pointValue"
+                  type="number"
+                  min={1}
+                  max={1000}
+                  step={1}
+                  inputMode="numeric"
+                  value={pointValue}
+                  onChange={(event) => setPointValue(event.target.value)}
+                  disabled={isSaving}
+                  required
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {!submitForGrade ? (
+            <input type="hidden" name="pointValue" value="" />
+          ) : null}
 
           {formError ? (
             <p className="text-sm text-destructive">{formError}</p>
@@ -348,9 +319,7 @@ export function AssignmentEditSheet({
                 isExtracting ||
                 !assignmentTypeId ||
                 !prompt.trim() ||
-                (assignmentCreationStandardizationEnabled &&
-                  submitForGrade &&
-                  !pointValue.trim())
+                (submitForGrade && !pointValue.trim())
               }
             >
               {isSaving ? 'Saving...' : 'Save Assignment'}

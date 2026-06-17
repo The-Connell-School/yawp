@@ -30,7 +30,6 @@ type Props = {
   assignmentTypeId: string;
   assignmentTypeTitle: string;
   teacherClasses: TeacherClass[];
-  assignmentCreationStandardizationEnabled: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPrompt?: string;
@@ -50,7 +49,6 @@ export function CreateAssignmentSheet({
   assignmentTypeId,
   assignmentTypeTitle,
   teacherClasses,
-  assignmentCreationStandardizationEnabled,
   open,
   onOpenChange,
   initialPrompt = '',
@@ -85,9 +83,6 @@ export function CreateAssignmentSheet({
         fixedAssignmentTypeId={assignmentTypeId}
         assignmentTypes={[{ id: assignmentTypeId, title: assignmentTypeTitle }]}
         teacherClasses={teacherClasses}
-        assignmentCreationStandardizationEnabled={
-          assignmentCreationStandardizationEnabled
-        }
         initialPrompt={initialPrompt}
       />
     );

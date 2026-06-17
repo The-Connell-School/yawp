@@ -4,7 +4,9 @@ import {
   redirect,
 } from 'react-router';
 import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
+import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
+import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
@@ -15,7 +17,7 @@ import {
 } from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
-import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   Accordion,
   AccordionContent,
@@ -36,6 +38,15 @@ export type AssignmentTypeRow = {
   systemKey?: string | null;
   image?: { id: string } | null;
 };
+
+function formatClassLabel(klass: {
+  grade: string;
+  period: string;
+  title: string | null;
+}) {
+  const base = `Grade ${klass.grade} • Period ${klass.period}`;
+  return klass.title ? `${base} — ${klass.title}` : base;
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -72,21 +83,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         students: { some: { id: profile.id } },
       },
-      select: {
-        id: true,
-        school: { select: { id: true, organizationId: true } },
-        teachers: { select: { id: true } },
-      },
+      select: { id: true },
     });
-    studentAssignmentClassIds = await getAssignmentsEnabledClassIdsForContext({
-      organizationId: profile.organization.id,
-      classes: studentClasses.map((klass) => ({
-        id: klass.id,
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
-      })),
-    });
+    studentAssignmentClassIds = studentClasses.map((klass) => klass.id);
   }
 
   const teacherAssignmentClassScopes = !useStudentExperience
@@ -110,29 +109,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const teacherAssignmentClassIds = !useStudentExperience
-    ? await getAssignmentsEnabledClassIdsForContext({
-        organizationId: profile.organization.id,
-        teacherProfileId: profile.id,
-        classes: teacherAssignmentClassScopes.map((scope) => ({
-          id: scope.id,
-          organizationId: scope.organizationId,
-          schoolId: scope.schoolId,
-        })),
-      })
-    : [];
   const assignmentsEnabled =
-    studentAssignmentClassIds.length > 0 ||
-    teacherAssignmentClassIds.length > 0;
-
-  const url = new URL(request.url);
-  if (
-    !assignmentsEnabled &&
-    useStudentExperience &&
-    url.searchParams.get('tab') === 'assignments'
-  ) {
-    return redirect('/app');
-  }
+    useStudentExperience
+      ? studentAssignmentClassIds.length > 0
+      : teacherAssignmentClassScopes.length > 0;
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
@@ -344,6 +324,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : [];
 
+  const enabledTeacherClasses =
+    !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
+  const assignmentCreationClasses = enabledTeacherClasses;
+  const assignmentCreationTypes = teacherAssignmentTypes
+    .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+    .map((type) => ({
+      id: type.id,
+      title: type.title,
+    }));
+
   return dataResponse({
     courses,
     documents,
@@ -355,6 +345,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
     teacherAssignmentTypes,
+    assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    })),
+    assignmentCreationTypes,
   });
 }
 
@@ -364,6 +359,10 @@ export default function AppRoute() {
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+  const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
+    string | undefined
+  >();
   const studentPreviewActive = rootData?.studentPreview?.active ?? false;
   const isTeacher =
     user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
@@ -404,9 +403,32 @@ export default function AppRoute() {
             totalClassCount={data.totalTeacherClassCount}
           />
           {assignmentsEnabled ? (
-            <AssignmentsAtAGlance
-              assignmentTypes={data.teacherAssignmentTypes}
-            />
+            <>
+              <AssignmentsAtAGlance
+                assignmentTypes={data.teacherAssignmentTypes}
+                onCreateAssignment={() => {
+                  setCreateAssignmentTypeId(undefined);
+                  setIsCreateSheetOpen(true);
+                }}
+                onCreateAssignmentForType={(assignmentTypeId) => {
+                  setCreateAssignmentTypeId(assignmentTypeId);
+                  setIsCreateSheetOpen(true);
+                }}
+              />
+              <AssignmentCreationSheet
+                open={isCreateSheetOpen}
+                onOpenChange={(open) => {
+                  setIsCreateSheetOpen(open);
+                  if (!open) {
+                    setCreateAssignmentTypeId(undefined);
+                  }
+                }}
+                entryPoint="dashboard"
+                assignmentTypes={data.assignmentCreationTypes}
+                teacherClasses={data.assignmentCreationClasses}
+                initialAssignmentTypeId={createAssignmentTypeId}
+              />
+            </>
           ) : null}
           <TeacherGradingAtAGlance
             needsGradingCount={needsGradingCount}
