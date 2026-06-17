@@ -19,15 +19,11 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForScope,
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast: (to: string, payload: unknown) =>
@@ -49,7 +45,6 @@ describe('api.domain.submit-document', () => {
     prisma.$transaction.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -78,7 +73,6 @@ describe('api.domain.submit-document', () => {
         ],
       },
     });
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     prisma.documentWriteJournal.create.mockResolvedValue({ id: 'journal-1' });
     prisma.documentWriteJournal.update.mockResolvedValue({
       id: 'journal-1',
@@ -117,74 +111,6 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
-    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
-      schoolIds: ['school-1'],
-      organizationIds: ['org-1'],
-      classIds: ['class-1'],
-      teacherProfileIds: ['teacher-1'],
-      classScopes: [
-        {
-          schoolId: 'school-1',
-          organizationId: 'org-1',
-          classId: 'class-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-      ],
-    });
-  });
-
-  test('prefers the assignment class school when the document is assignment-backed', async () => {
-    prisma.document.findFirst.mockResolvedValueOnce({
-      id: 'doc-1',
-      html: '<p>Draft</p>',
-      text: 'Draft',
-      title: 'Essay',
-      submissions: [],
-      revision: 4,
-      classAssignment: {
-        class: {
-          id: 'assignment-class',
-          schoolId: 'assignment-school',
-          school: { organizationId: 'assignment-org' },
-          teachers: [{ id: 'assignment-teacher' }],
-        },
-      },
-      membership: {
-        classesAsStudent: [
-          { id: 'student-class', schoolId: 'student-school' },
-        ],
-      },
-    });
-
-    const form = new FormData();
-    form.append('documentId', 'doc-1');
-
-    const response = (await action({
-      request: new Request('https://example.com/api/domain/submit-document', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any)) as {
-      data: {
-        success: boolean;
-      };
-    };
-
-    expect(response.data.success).toBe(true);
-    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
-      schoolIds: ['assignment-school'],
-      organizationIds: ['assignment-org'],
-      classIds: ['assignment-class'],
-      teacherProfileIds: ['assignment-teacher'],
-      classScopes: [
-        {
-          schoolId: 'assignment-school',
-          organizationId: 'assignment-org',
-          classId: 'assignment-class',
-          teacherProfileIds: ['assignment-teacher'],
-        },
-      ],
-    });
   });
 
   test('records a document submit journal entry with the full document payload', async () => {

@@ -427,34 +427,6 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
-  await prisma.setting.createMany({
-    data: [
-      {
-        name: 'document_submission_enabled',
-        value: 'true',
-        valueType: 'boolean',
-        description: 'Allow students to submit documents for grading',
-      },
-      {
-        name: 'document_submission_enabled_school_ids',
-        value: schools.map((school) => school.id).join(','),
-        valueType: 'string',
-        description: 'Schools enabled for document submission',
-      },
-      {
-        name: 'assignments_enabled_org_ids',
-        value: LOCAL_DEV_ORG_ID,
-        valueType: 'string',
-        description: 'Organizations enabled for assignments',
-      },
-      {
-        name: 'feature_assignment_creation_standardization',
-        value: 'true',
-        valueType: 'boolean',
-      },
-    ],
-  });
-
   return {
     organizationId: LOCAL_DEV_ORG_ID,
     schoolIds: schools.map((school) => school.id),

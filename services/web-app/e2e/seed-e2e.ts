@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { createE2EPrismaClient, type E2EPrismaClient } from './prisma-client';
-import { createDeployedAssignment, setPilotFeatureAccessTarget } from './db-helpers';
+import { createDeployedAssignment } from './db-helpers';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../../../packages/prisma/scripts/ap-history-library-data';
 import bcrypt from 'bcryptjs';
 
@@ -644,44 +644,7 @@ export async function seedE2E(): Promise<E2EContext> {
     },
   });
 
-  // 5. Feature flag settings
-  await prisma.setting.create({
-    data: {
-      name: 'document_submission_enabled',
-      value: 'true',
-      valueType: 'boolean',
-    },
-  });
-  await prisma.setting.create({
-    data: {
-      name: 'document_submission_enabled_school_ids',
-      value: school.id,
-      valueType: 'string',
-    },
-  });
-  await prisma.setting.create({
-    data: {
-      name: 'assignments_enabled_org_ids',
-      value: org.id,
-      valueType: 'string',
-    },
-  });
-  await setPilotFeatureAccessTarget({
-    prisma,
-    featureKey: 'ap_history_essay',
-    targetKind: 'teacher',
-    targetId: seededTeacherMembershipId,
-    enabled: true,
-    note: 'E2E AP History library-first teacher access',
-  });
-  await prisma.setting.create({
-    data: {
-      name: 'feature_assignment_creation_standardization',
-      value: 'true',
-      valueType: 'boolean',
-    },
-  });
-
+  // 5. E2E context metadata
   // 6. Link the edited doc to module session (module 1; submitted doc uses module 2)
   await prisma.assignmentModuleSession.create({
     data: {

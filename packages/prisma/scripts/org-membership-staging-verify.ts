@@ -16,7 +16,6 @@ const FORENSIC_TABLES = [
   'ProfileOrphanForensic',
   'AssignmentClassIdForensic',
   'AssignmentDueDateForensic',
-  'FeatureAccessTargetTeacherForensic',
   'DocumentStudentProfileIdForensic',
 ] as const;
 
@@ -26,8 +25,6 @@ export type StagingVerifyInput = {
   parity: {
     assignments: number;
     classAssignments: number;
-    teacherScopedFeatureTargets: number;
-    orphanTeacherFeatureTargets: number;
   };
   sampleAccounts: Array<{
     email: string;
@@ -63,13 +60,6 @@ export function buildStagingVerifyReport(input: StagingVerifyInput) {
         assignmentClassIdForensic:
           input.forensicCounts.AssignmentClassIdForensic ?? 0,
       },
-    });
-  }
-
-  if (input.parity.orphanTeacherFeatureTargets > 0) {
-    blockers.push({
-      kind: 'orphan_teacher_feature_target' as const,
-      row: { count: input.parity.orphanTeacherFeatureTargets },
     });
   }
 
@@ -193,23 +183,6 @@ async function main() {
       forensicCounts[tableName] = await countTable(prisma, tableName);
     }
 
-    const teacherScopedFeatureTargets = await prisma.featureAccessTarget.count({
-      where: { targetKind: 'teacher' },
-    });
-
-    const orphanTeacherFeatureTargetsRows = await prisma.$queryRaw<
-      Array<{ count: number }>
-    >`
-      SELECT COUNT(*)::int AS count
-      FROM "FeatureAccessTarget" fat
-      WHERE fat."targetKind" = 'teacher'
-        AND NOT EXISTS (
-          SELECT 1 FROM "OrgMembership" m WHERE m.id = fat."targetId"
-        )
-    `;
-    const orphanTeacherFeatureTargets =
-      orphanTeacherFeatureTargetsRows[0]?.count ?? 0;
-
     const sampleAccounts = await prisma.orgMembership.findMany({
       take: 8,
       orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
@@ -234,8 +207,6 @@ async function main() {
       parity: {
         assignments,
         classAssignments,
-        teacherScopedFeatureTargets,
-        orphanTeacherFeatureTargets,
       },
       sampleAccounts: sampleAccounts.map((row) => ({
         email: row.user.email,

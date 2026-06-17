@@ -23,12 +23,8 @@ const requireUserId = mock();
 const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
-const isApHistoryEssayEnabledForContext = mock();
-const getAssignmentsEnabledClassIdsForContext = mock();
-const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 
-const featureFlagsActual = await import('~/utils/feature-flags.server');
 const assignmentTypeAccessActual = await import(
   '~/utils/assignment-type-access.server'
 );
@@ -44,12 +40,6 @@ mock.module('~/domain/documents.server', () => ({
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  ...featureFlagsActual,
-  getAssignmentCreationStandardizationEnabledClassIdsForContext,
-  isApHistoryEssayEnabledForContext,
-  getAssignmentsEnabledClassIdsForContext,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   ...assignmentTypeAccessActual,
@@ -209,9 +199,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     redirectWithToast.mockReset();
-    isApHistoryEssayEnabledForContext.mockReset();
-    getAssignmentsEnabledClassIdsForContext.mockReset();
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
@@ -236,11 +223,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     ]);
     prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
-    isApHistoryEssayEnabledForContext.mockResolvedValue(true);
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
-      ['class-1']
-    );
   });
 
   test('provides prompt library data for teachers viewing Daily Pages', async () => {
@@ -261,7 +243,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     );
   });
 
-  test('filters teacher classes to assignment-enabled classes', async () => {
+  test('returns all teacher classes for assignment creation', async () => {
     prisma.class.findMany.mockResolvedValueOnce([
       {
         id: 'class-1',
@@ -280,7 +262,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-2' }],
       },
     ]);
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValueOnce(['class-2']);
 
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
@@ -288,6 +269,14 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     } as never)) as any;
 
     expect(response.data.teacherClasses).toEqual([
+      {
+        id: 'class-1',
+        grade: '9th',
+        period: '1st',
+        title: null,
+        school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
       {
         id: 'class-2',
         grade: '10th',
@@ -297,89 +286,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-2' }],
       },
     ]);
-    expect(getAssignmentsEnabledClassIdsForContext).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      teacherProfileId: 'teacher-1',
-      classes: [
-        {
-          id: 'class-1',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-        {
-          id: 'class-2',
-          organizationId: 'org-2',
-          schoolId: 'school-2',
-          teacherProfileIds: ['teacher-2'],
-        },
-      ],
-    });
-  });
-
-  test('filters teacher classes to standardized classes when standardization is partially enabled', async () => {
-    prisma.class.findMany.mockResolvedValueOnce([
-      {
-        id: 'class-1',
-        grade: '9th',
-        period: '1st',
-        title: 'Legacy section',
-        school: { id: 'school-1', organizationId: 'org-1' },
-        teachers: [{ id: 'teacher-1' }],
-      },
-      {
-        id: 'class-2',
-        grade: '10th',
-        period: '2nd',
-        title: 'Standardized section',
-        school: { id: 'school-2', organizationId: 'org-2' },
-        teachers: [{ id: 'teacher-2' }],
-      },
-    ]);
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValueOnce([
-      'class-1',
-      'class-2',
-    ]);
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValueOnce(
-      ['class-2']
-    );
-
-    const response = (await loader({
-      request: new Request('https://example.test/app/assignment-types/at-1'),
-      params: { id: 'at-1' },
-    } as never)) as any;
-
-    expect(response.data.assignmentCreationStandardizationEnabled).toBe(true);
-    expect(response.data.teacherClasses).toEqual([
-      {
-        id: 'class-2',
-        grade: '10th',
-        period: '2nd',
-        title: 'Standardized section',
-        school: { id: 'school-2', organizationId: 'org-2' },
-        teachers: [{ id: 'teacher-2' }],
-      },
-    ]);
-    expect(
-      getAssignmentCreationStandardizationEnabledClassIdsForContext
-    ).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      teacherProfileId: 'teacher-1',
-      classes: [
-        {
-          id: 'class-1',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-        {
-          id: 'class-2',
-          organizationId: 'org-2',
-          schoolId: 'school-2',
-          teacherProfileIds: ['teacher-2'],
-        },
-      ],
-    });
   });
 
   test('omits prompt library for student profiles and other assignment types', async () => {
@@ -416,7 +322,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     expect(otherTypeResponse.data.promptLibrary).toBeNull();
   });
 
-  test('provides AP History library entries for teachers when assignments and AP History are enabled', async () => {
+  test('provides AP History library entries for teachers', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
@@ -466,28 +372,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-1' }],
       },
     ]);
-    expect(getAssignmentsEnabledClassIdsForContext).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      teacherProfileId: 'teacher-1',
-      classes: [
-        {
-          id: 'class-1',
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-      ],
-    });
-    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      schoolIds: ['school-1'],
-      teacherProfileId: 'teacher-1',
-      teacherProfileIds: ['teacher-1'],
-      classIds: ['class-1'],
-    });
   });
 
-  test('provides AP History library for mixed class-scoped pilots using only eligible classes', async () => {
+  test('provides AP History library for all teacher classes', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
@@ -530,13 +417,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         sources: [],
       },
     ]);
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([
-      'class-1',
-      'class-2',
-    ]);
-    isApHistoryEssayEnabledForContext.mockImplementation(({ classIds }) =>
-      Promise.resolve(classIds[0] === 'class-1')
-    );
 
     const response = (await loader({
       request: new Request(
@@ -553,6 +433,14 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         period: '1st',
         title: null,
         school: { id: 'school-1', organizationId: 'org-1' },
+        teachers: [{ id: 'teacher-1' }],
+      },
+      {
+        id: 'class-2',
+        grade: '10th',
+        period: '2nd',
+        title: null,
+        school: { id: 'school-2', organizationId: 'org-1' },
         teachers: [{ id: 'teacher-1' }],
       },
     ]);
@@ -574,23 +462,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-1' }],
       },
     ]);
-    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      schoolIds: ['school-1'],
-      teacherProfileId: 'teacher-1',
-      teacherProfileIds: ['teacher-1'],
-      classIds: ['class-1'],
-    });
-    expect(isApHistoryEssayEnabledForContext).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      schoolIds: ['school-2'],
-      teacherProfileId: 'teacher-1',
-      teacherProfileIds: ['teacher-1'],
-      classIds: ['class-2'],
-    });
   });
 
-  test('omits AP History library when AP feature access is disabled', async () => {
+  test('omits AP History library when teacher has no classes', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       withOrganizationAssignment(
         makeAssignmentType({
@@ -599,7 +473,7 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         })
       ),
     ]);
-    isApHistoryEssayEnabledForContext.mockResolvedValue(false);
+    prisma.class.findMany.mockResolvedValue([]);
 
     const response = (await loader({
       request: new Request('https://example.test/app/assignment-types/at-1'),
@@ -607,27 +481,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     } as never)) as any;
 
     expect(response.data.apHistoryLibrary).toBeNull();
-    expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
-  });
-
-  test('omits AP History library when no classes are eligible', async () => {
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      withOrganizationAssignment(
-        makeAssignmentType({
-          title: 'AP History Essay',
-          systemKey: 'ap_history_essay',
-        })
-      ),
-    ]);
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
-
-    const response = (await loader({
-      request: new Request('https://example.test/app/assignment-types/at-1'),
-      params: { id: 'at-1' },
-    } as never)) as any;
-
-    expect(response.data.apHistoryLibrary).toBeNull();
-    expect(isApHistoryEssayEnabledForContext).not.toHaveBeenCalled();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
 
@@ -644,7 +497,6 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     } as never)) as any;
 
     expect(response.data.apHistoryLibrary).toBeNull();
-    expect(isApHistoryEssayEnabledForContext).not.toHaveBeenCalled();
     expect(prisma.apHistoryPromptLibraryEntry.findMany).not.toHaveBeenCalled();
   });
 });

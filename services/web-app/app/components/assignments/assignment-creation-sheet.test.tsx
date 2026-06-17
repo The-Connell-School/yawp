@@ -112,7 +112,6 @@ function renderSheet(
       entryPoint="dashboard"
       assignmentTypes={assignmentTypes}
       teacherClasses={teacherClasses}
-      assignmentCreationStandardizationEnabled
       createFetcher={idleFetcher()}
       extractFetcher={idleFetcher()}
       renderSheet={false}
@@ -244,7 +243,6 @@ describe('AssignmentCreationSheetContent', () => {
             ...assignmentType,
           }))}
           teacherClasses={teacherClasses.map((klass) => ({ ...klass }))}
-          assignmentCreationStandardizationEnabled
           createFetcher={idleFetcher()}
           extractFetcher={idleFetcher(extractData)}
           renderSheet={false}
@@ -268,24 +266,6 @@ describe('AssignmentCreationSheetContent', () => {
     const classControl = controlById('assignment-create-class-class-1');
     expect(isChecked(classControl)).toBe(true);
     expect((classControl as HTMLButtonElement).disabled).toBe(true);
-  });
-
-  it('keeps legacy tutor context and legacy class routing when the flag is off', () => {
-    root = renderSheet({
-      entryPoint: 'assignment-type',
-      fixedAssignmentTypeId: 'type-2',
-      assignmentCreationStandardizationEnabled: false,
-    }).root;
-
-    expectText('Tutor Context (optional)');
-    expectNoText('Submit for grade');
-    expectNoText('Point value');
-
-    const form = document.querySelector('form');
-    expect(form).not.toBeNull();
-    expect(form!.getAttribute('action')).toBe('/app/my-classes/class-1');
-    expect(inputByName('classId').value).toBe('class-1');
-    expect(inputByName('assignmentTypeId').value).toBe('type-2');
   });
 
   it('clears the point value when submit for grade is disabled', () => {

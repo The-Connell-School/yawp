@@ -20,14 +20,9 @@ const prisma = {
 const requireUserId = mock();
 const requireMembership = mock();
 const getSubmittedPapersFilter = mock();
-const isDocumentSubmissionEnabledForScope = mock();
-const isAssignmentsEnabledForContext = mock();
-const isAssignmentCreationStandardizationEnabledForContext = mock();
 const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
 const getAvailableAssignmentTypesForScopes = mock();
-
-const featureFlagsActual = await import('~/utils/feature-flags.server');
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -41,12 +36,6 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/cookies.server', () => ({
   getSubmittedPapersFilter,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  ...featureFlagsActual,
-  isDocumentSubmissionEnabledForScope,
-  isAssignmentsEnabledForContext,
-  isAssignmentCreationStandardizationEnabledForContext,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   getAvailableAssignmentTypesForScopes,
@@ -74,9 +63,6 @@ describe('class detail loader document visibility', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
     getSubmittedPapersFilter.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
-    isAssignmentsEnabledForContext.mockReset();
-    isAssignmentCreationStandardizationEnabledForContext.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     deleteClassAssignmentDeployment.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
@@ -118,9 +104,6 @@ describe('class detail loader document visibility', () => {
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
     deleteClassAssignmentDeployment.mockResolvedValue('ca-1');
     getSubmittedPapersFilter.mockResolvedValue('all');
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
-    isAssignmentsEnabledForContext.mockResolvedValue(true);
-    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(true);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
   });
 
@@ -156,8 +139,7 @@ describe('class detail loader document visibility', () => {
     });
   });
 
-  test('keeps existing submissions visible when document submission grading is disabled', async () => {
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(false);
+  test('keeps existing submissions visible for teachers', async () => {
     prisma.submission.findMany.mockResolvedValue([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
@@ -169,7 +151,6 @@ describe('class detail loader document visibility', () => {
     });
     const data = (response as { data: any }).data;
 
-    expect(data.isDocumentSubmissionEnabled).toBe(false);
     expect(data.submissions).toEqual([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
@@ -340,46 +321,6 @@ describe('class detail loader document visibility', () => {
         tutorContext: null,
         submitForGrade: true,
         pointValue: 25,
-      },
-      classIds: ['class-1'],
-    });
-  });
-
-  test('keeps legacy class assignment tutor context when standardization is disabled', async () => {
-    isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
-    getAvailableAssignmentTypesForScopes.mockResolvedValue([
-      { id: 'at-1', systemKey: null },
-    ]);
-    prisma.assignmentType.findMany.mockResolvedValue([
-      {
-        id: 'at-1',
-        systemKey: null,
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-    ]);
-
-    const form = new FormData();
-    form.set('intent', 'create-assignment');
-    form.set('assignmentTypeId', 'at-1');
-    form.set('prompt', 'Prompt');
-    form.set('tutorContext', 'Legacy tutor context.');
-
-    const response = await action({
-      request: new Request('https://example.test/app/my-classes/class-1', {
-        method: 'POST',
-        body: form,
-      }),
-      params: { classId: 'class-1' },
-      context: {} as never,
-    });
-
-    expect(response.data).toMatchObject({ success: true });
-    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
-      data: {
-        assignmentTypeId: 'at-1',
-        title: null,
-        prompt: 'Prompt',
-        tutorContext: 'Legacy tutor context.',
       },
       classIds: ['class-1'],
     });
