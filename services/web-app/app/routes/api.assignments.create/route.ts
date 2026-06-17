@@ -9,11 +9,6 @@ import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
-import {
-  isAssignmentCreationStandardizationEnabledForContext,
-  isApHistoryEssayEnabledForContext,
-  isAssignmentsEnabledForContext,
-} from '~/utils/feature-flags.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
@@ -42,13 +37,11 @@ export async function action({ request }: ActionFunctionArgs) {
     .filter(Boolean);
   const titleRaw = formData.get('title')?.toString() ?? '';
   const promptRaw = formData.get('prompt')?.toString() ?? '';
-  const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
-  const legacyTutorContext = tutorContextRaw.trim() || null;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
 
   if (!assignmentTypeId) {
@@ -83,56 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const assignmentFlags = await Promise.all(
-    classes.map((klass) =>
-      isAssignmentsEnabledForContext({
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileId: profile.id,
-        classIds: [klass.id],
-      })
-    )
-  );
-  if (assignmentFlags.some((enabled) => !enabled)) {
-    return dataResponse(
-      {
-        success: false,
-        message: 'Assignments are not enabled for one or more classes.',
-      },
-      { status: 403 }
-    );
-  }
-
-  const standardizationFlags = await Promise.all(
-    classes.map((klass) =>
-      isAssignmentCreationStandardizationEnabledForContext({
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileId: profile.id,
-        classIds: [klass.id],
-      })
-    )
-  );
-  const standardizedClassCount = standardizationFlags.filter(Boolean).length;
-  const assignmentCreationStandardizationEnabled =
-    standardizedClassCount === classes.length;
-  if (
-    standardizedClassCount > 0 &&
-    !assignmentCreationStandardizationEnabled
-  ) {
-    return dataResponse(
-      {
-        success: false,
-        message:
-          'Assignment creation standardization is not enabled for one or more classes.',
-      },
-      { status: 403 }
-    );
-  }
-
-  const gradingIntent = assignmentCreationStandardizationEnabled
-    ? parseAssignmentGradingIntent(formData)
-    : null;
+  const gradingIntent = parseAssignmentGradingIntent(formData);
   if (gradingIntent && !gradingIntent.success) {
     return dataResponse(
       { success: false, message: gradingIntent.message },
@@ -177,26 +121,6 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const apHistoryFlags = await Promise.all(
-      classes.map((klass) =>
-        isApHistoryEssayEnabledForContext({
-          organizationId: klass.school.organizationId,
-          schoolIds: [klass.school.id],
-          teacherProfileId: profile.id,
-          classIds: [klass.id],
-        })
-      )
-    );
-    if (apHistoryFlags.some((enabled) => !enabled)) {
-      return dataResponse(
-        {
-          success: false,
-          message: 'AP History Essay is not enabled for one or more classes.',
-        },
-        { status: 403 }
-      );
-    }
-
     const entry = await getApHistoryLibraryEntryForSnapshot({
       assignmentTypeId: assignmentType.id,
       externalKey: apHistoryLibraryEntryId,
@@ -235,9 +159,7 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
-      tutorContext: assignmentCreationStandardizationEnabled
-        ? null
-        : legacyTutorContext,
+      tutorContext: null,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,
