@@ -78,7 +78,7 @@ describe('auth.dev-login action', () => {
       request: makeRequest('dev.student@yawp.local', 'en_session=old'),
       params: {},
       context: {},
-    });
+    } as any);
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app');
@@ -96,7 +96,7 @@ describe('auth.dev-login action', () => {
       request: makeRequest('not-a-persona@yawp.local'),
       params: {},
       context: {},
-    });
+    } as any);
 
     expect(response.status).toBe(404);
   });
