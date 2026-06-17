@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessons,
+  getQuickWritingPracticePrompts,
 } from './static-lessons.server';
 
 describe('Quick Writing Lessons static lesson archive', () => {
@@ -34,5 +35,18 @@ describe('Quick Writing Lessons static lesson archive', () => {
     expect(lesson?.content).toContain('At this point in time');
     expect(lesson?.content).not.toContain('Quick Writing Lesson Generator');
     expect(lesson?.content).not.toContain('Example Lesson 2');
+  });
+
+  test('extracts practice prompts from lesson exercises', () => {
+    const prompts = getQuickWritingPracticePrompts('revising-for-wordiness');
+
+    expect(prompts).toHaveLength(6);
+    expect(prompts[0]).toEqual({
+      id: 'revising-for-wordiness-1',
+      exercise:
+        'At this point in time, we are not able to accept new applications.',
+      instruction: 'Cut the wordiness. Say the same thing in fewer words.',
+    });
+    expect(prompts[1].instruction).toContain('weak');
   });
 });
