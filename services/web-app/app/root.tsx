@@ -162,7 +162,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? ('localhost' as const)
       : null;
   const localDevQuickLoginEnabled =
-    isLocalDevAuthEnabled() && !userId && url.pathname === '/auth/login';
+    isLocalDevAuthEnabled() && bannerWarning === 'localhost';
 
   return data(
     {
@@ -234,8 +234,6 @@ function Document({
         />
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
-        {/* ui.sh picker toolbar — remove when sidebar redesign is finalized */}
-        <script src="https://ui.sh/ui-picker.js" />
       </body>
     </html>
   );
