@@ -11,6 +11,12 @@ export type QuickWritingLesson = LessonMetadata & {
   content: string;
 };
 
+export type QuickWritingPracticePrompt = {
+  id: string;
+  exercise: string;
+  instruction: string;
+};
+
 const LESSON_METADATA: Record<string, LessonMetadata> = {
   'Fixing Comma Splices': {
     slug: 'fixing-comma-splices',
@@ -66,6 +72,8 @@ const LESSON_METADATA: Record<string, LessonMetadata> = {
 
 const EXAMPLE_LESSON_PATTERN =
   /## Example Lesson \d+\n\n\*\*Topic:\*\* [^\n]+\n\n---\n\n([\s\S]*?)(?=\n---\n\n## Example Lesson \d+|\s*$)/g;
+const PRACTICE_EXERCISE_PATTERN =
+  /\*\*Exercise\s+(\d+):\*\*\n([\s\S]*?)(?=\n---\n\n\*\*Exercise\s+\d+:|\n---\s*$|\s*$)/g;
 
 let cachedLessons: QuickWritingLesson[] | null = null;
 
@@ -98,6 +106,15 @@ export function getQuickWritingLessonGroups() {
   return Array.from(groups, ([category, lessons]) => ({ category, lessons }));
 }
 
+export function getQuickWritingPracticePrompts(
+  slug: string | undefined
+): QuickWritingPracticePrompt[] {
+  const lesson = getQuickWritingLessonBySlug(slug);
+  if (!lesson) return [];
+
+  return parsePracticePrompts(lesson);
+}
+
 function parseArchivedLessons(content: string): QuickWritingLesson[] {
   const lessons: QuickWritingLesson[] = [];
 
@@ -121,4 +138,37 @@ function parseArchivedLessons(content: string): QuickWritingLesson[] {
 
 function stripTrailingRule(content: string) {
   return content.replace(/\n---\s*$/, '');
+}
+
+function parsePracticePrompts(
+  lesson: QuickWritingLesson
+): QuickWritingPracticePrompt[] {
+  const prompts: QuickWritingPracticePrompt[] = [];
+
+  for (const match of lesson.content.matchAll(PRACTICE_EXERCISE_PATTERN)) {
+    const position = Number(match[1]);
+    const block = match[2].trim();
+    const [exerciseRaw, instructionRaw] = block.split(/\n\n\*\*Your turn:\*\*\s*/);
+    const exercise = cleanPracticeText(exerciseRaw);
+    const instruction = cleanPracticeText(instructionRaw ?? '');
+
+    if (!exercise) continue;
+
+    prompts.push({
+      id: `${lesson.slug}-${position}`,
+      exercise,
+      instruction: instruction || 'Write your response.',
+    });
+  }
+
+  return prompts;
+}
+
+function cleanPracticeText(value: string) {
+  return value
+    .replace(/`\[Your response here\]`/g, '')
+    .replace(/\[Your response here\]/g, '')
+    .replace(/^["“]|["”]$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
