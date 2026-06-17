@@ -5,7 +5,13 @@ const prisma = {
     findFirst: mock(),
     findMany: mock(),
   },
-  featureAccessTarget: {
+  organizationAssignmentType: {
+    findMany: mock(),
+  },
+  school: {
+    findMany: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
   },
 };
@@ -13,120 +19,178 @@ const prisma = {
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const {
-  getAssignmentTypeAccessFeatureKey,
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
   isAssignmentTypeAvailableForEveryScope,
 } = await import('./assignment-type-access.server');
 
-describe('assignment type access resolution', () => {
+const scope = {
+  organizationId: 'org-1',
+  schoolId: 'school-1',
+  teacherProfileId: 'teacher-1',
+};
+
+function mockOrgDefaults(typeIds: string[]) {
+  prisma.organizationAssignmentType.findMany.mockResolvedValue(
+    typeIds.map((assignmentTypeId) => ({
+      organizationId: 'org-1',
+      assignmentTypeId,
+    }))
+  );
+}
+
+function mockSchoolConfig({
+  customized = false,
+  typeIds = [],
+}: {
+  customized?: boolean;
+  typeIds?: string[];
+}) {
+  prisma.school.findMany.mockResolvedValue([
+    {
+      id: 'school-1',
+      organizationId: 'org-1',
+      assignmentTypesCustomized: customized,
+      assignmentTypeAssignments: typeIds.map((assignmentTypeId) => ({
+        assignmentTypeId,
+      })),
+    },
+  ]);
+}
+
+function mockTeacherConfig({
+  customized = false,
+  typeIds = [],
+}: {
+  customized?: boolean;
+  typeIds?: string[];
+}) {
+  prisma.orgMembership.findMany.mockResolvedValue([
+    {
+      id: 'teacher-1',
+      organizationId: 'org-1',
+      assignmentTypesCustomized: customized,
+      assignmentTypeAssignments: typeIds.map((assignmentTypeId) => ({
+        assignmentTypeId,
+      })),
+    },
+  ]);
+}
+
+function mockScopeConfig({
+  orgTypeIds = ['at-1', 'at-2'],
+  school = { customized: false, typeIds: [] as string[] },
+  teacher = { customized: false, typeIds: [] as string[] },
+}) {
+  mockOrgDefaults(orgTypeIds);
+  mockSchoolConfig(school);
+  mockTeacherConfig(teacher);
+}
+
+describe('assignment type inheritance resolution', () => {
   beforeEach(() => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
-    prisma.featureAccessTarget.findMany.mockReset();
+    prisma.organizationAssignmentType.findMany.mockReset();
+    prisma.school.findMany.mockReset();
+    prisma.orgMembership.findMany.mockReset();
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
   });
 
-  test('uses the assignment type feature key prefix', () => {
-    expect(getAssignmentTypeAccessFeatureKey('daily-pages')).toBe(
-      'assignment_type:daily-pages'
-    );
-  });
-
-  test('teacher overrides take precedence over school and organization defaults', async () => {
+  test('uses organization defaults when school and teacher inherit', async () => {
+    mockScopeConfig({ orgTypeIds: ['at-1'] });
     prisma.assignmentType.findFirst.mockResolvedValue({
       id: 'at-1',
-      organizationAssignments: [{ organizationId: 'org-1' }],
+      archivedAt: null,
     });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'organization',
-        targetId: 'org-1',
-        enabled: true,
-      },
-      {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'school',
-        targetId: 'school-1',
-        enabled: true,
-      },
-      {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'teacher',
-        targetId: 'teacher-1',
-        enabled: false,
-      },
-    ]);
 
     await expect(
       isAssignmentTypeAvailableForEveryScope({
         assignmentTypeId: 'at-1',
-        scopes: [
-          {
-            organizationId: 'org-1',
-            schoolId: 'school-1',
-            teacherProfileId: 'teacher-1',
-          },
-        ],
+        scopes: [scope],
+      })
+    ).resolves.toBe(true);
+  });
+
+  test('school customize narrows the effective set for inheriting teachers', async () => {
+    mockScopeConfig({
+      orgTypeIds: ['at-1', 'at-2'],
+      school: { customized: true, typeIds: ['at-1'] },
+    });
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'at-2',
+      archivedAt: null,
+    });
+
+    await expect(
+      isAssignmentTypeAvailableForEveryScope({
+        assignmentTypeId: 'at-2',
+        scopes: [scope],
       })
     ).resolves.toBe(false);
-
-    expect(prisma.featureAccessTarget.findMany).toHaveBeenCalledWith({
-      where: {
-        featureKey: { in: ['assignment_type:at-1'] },
-        targetKind: { in: ['teacher', 'school', 'organization'] },
-        targetId: { in: ['org-1', 'school-1', 'teacher-1'] },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
-      },
-      select: {
-        featureKey: true,
-        targetKind: true,
-        targetId: true,
-        enabled: true,
-      },
-    });
   });
 
-  test('school overrides can expose org-hidden assignment types when no teacher override exists', async () => {
+  test('teacher customize takes precedence over school configuration', async () => {
+    mockScopeConfig({
+      orgTypeIds: ['at-1', 'at-2'],
+      school: { customized: true, typeIds: ['at-1', 'at-2'] },
+      teacher: { customized: true, typeIds: ['at-2'] },
+    });
     prisma.assignmentType.findFirst.mockResolvedValue({
       id: 'at-1',
-      organizationAssignments: [],
+      archivedAt: null,
     });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'school',
-        targetId: 'school-1',
-        enabled: true,
-      },
-      {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'organization',
-        targetId: 'org-1',
-        enabled: false,
-      },
-    ]);
 
     await expect(
       isAssignmentTypeAvailableForEveryScope({
         assignmentTypeId: 'at-1',
-        scopes: [
-          {
-            organizationId: 'org-1',
-            schoolId: 'school-1',
-            teacherProfileId: 'teacher-1',
-          },
-        ],
+        scopes: [scope],
+      })
+    ).resolves.toBe(false);
+  });
+
+  test('teacher inherits a customized school configuration', async () => {
+    mockScopeConfig({
+      orgTypeIds: ['at-1', 'at-2', 'at-3'],
+      school: { customized: true, typeIds: ['at-1', 'at-3'] },
+    });
+    prisma.assignmentType.findFirst.mockResolvedValue({
+      id: 'at-3',
+      archivedAt: null,
+    });
+
+    await expect(
+      isAssignmentTypeAvailableForEveryScope({
+        assignmentTypeId: 'at-3',
+        scopes: [scope],
       })
     ).resolves.toBe(true);
   });
 
   test('every scope requires each selected class scope to have access', async () => {
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+      { organizationId: 'org-2', assignmentTypeId: 'at-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([
+      {
+        id: 'school-1',
+        organizationId: 'org-1',
+        assignmentTypesCustomized: false,
+        assignmentTypeAssignments: [],
+      },
+      {
+        id: 'school-2',
+        organizationId: 'org-2',
+        assignmentTypesCustomized: true,
+        assignmentTypeAssignments: [],
+      },
+    ]);
     prisma.assignmentType.findFirst.mockResolvedValue({
       id: 'at-1',
-      organizationAssignments: [{ organizationId: 'org-1' }],
+      archivedAt: null,
     });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
 
     const scopes = [
       { organizationId: 'org-1', schoolId: 'school-1' },
@@ -147,80 +211,26 @@ describe('assignment type access resolution', () => {
     ).resolves.toBe(true);
   });
 
-  test('candidate listing includes teacher-enabled org-hidden types and filters teacher-disabled org defaults', async () => {
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      {
-        featureKey: 'assignment_type:teacher-enabled',
-        targetKind: 'teacher',
-        targetId: 'teacher-1',
-        enabled: true,
-      },
-      {
-        featureKey: 'assignment_type:teacher-disabled',
-        targetKind: 'teacher',
-        targetId: 'teacher-1',
-        enabled: false,
-      },
-    ]);
+  test('lists assignment types visible in at least one scope', async () => {
+    mockScopeConfig({
+      orgTypeIds: ['at-1', 'at-2'],
+      teacher: { customized: true, typeIds: ['at-1'] },
+    });
     prisma.assignmentType.findMany.mockResolvedValue([
-      {
-        id: 'teacher-enabled',
-        title: 'Teacher Enabled',
-        organizationAssignments: [],
-      },
-      {
-        id: 'teacher-disabled',
-        title: 'Teacher Disabled',
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
-      {
-        id: 'org-default',
-        title: 'Org Default',
-        organizationAssignments: [{ organizationId: 'org-1' }],
-      },
+      { id: 'at-1', title: 'Allowed' },
+      { id: 'at-2', title: 'Org Only' },
     ]);
 
     const assignmentTypes = await getAvailableAssignmentTypesForScopes<{
       id: string;
       title: string;
-      organizationAssignments?: Array<{ organizationId: string }>;
     }>({
-      scopes: [
-        {
-          organizationId: 'org-1',
-          schoolId: 'school-1',
-          teacherProfileId: 'teacher-1',
-        },
-      ],
+      scopes: [scope],
       select: { id: true, title: true },
       orderBy: { position: 'asc' },
     });
 
-    expect(prisma.assignmentType.findMany).toHaveBeenCalledWith({
-      where: {
-        archivedAt: null,
-        OR: [
-          {
-            organizationAssignments: {
-              some: { organizationId: { in: ['org-1'] } },
-            },
-          },
-          { id: { in: ['teacher-enabled', 'teacher-disabled'] } },
-        ],
-      },
-      select: {
-        id: true,
-        title: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
-      },
-      orderBy: { position: 'asc' },
-    });
-    expect(assignmentTypes).toEqual([
-      { id: 'teacher-enabled', title: 'Teacher Enabled' },
-      { id: 'org-default', title: 'Org Default' },
-    ]);
+    expect(assignmentTypes).toEqual([{ id: 'at-1', title: 'Allowed' }]);
   });
 
   test('does not query assignment types when no usable scope exists', async () => {
@@ -239,6 +249,6 @@ describe('assignment type access resolution', () => {
 
     expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
     expect(prisma.assignmentType.findFirst).not.toHaveBeenCalled();
-    expect(prisma.featureAccessTarget.findMany).not.toHaveBeenCalled();
+    expect(prisma.organizationAssignmentType.findMany).not.toHaveBeenCalled();
   });
 });
