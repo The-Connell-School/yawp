@@ -10,8 +10,15 @@ const prisma = {
   },
   assignmentType: {
     findMany: mock(),
+    findFirst: mock(),
   },
-  featureAccessTarget: {
+  organizationAssignmentType: {
+    findMany: mock(),
+  },
+  school: {
+    findMany: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
   },
   document: {
@@ -104,7 +111,11 @@ describe('app.assignments action', () => {
       },
     ]);
     prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'at-1',

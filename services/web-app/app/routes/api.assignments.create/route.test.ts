@@ -7,7 +7,13 @@ const prisma = {
   assignmentType: {
     findFirst: mock(),
   },
-  featureAccessTarget: {
+  organizationAssignmentType: {
+    findMany: mock(),
+  },
+  school: {
+    findMany: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
   },
   apHistoryPromptLibraryEntry: {
@@ -56,20 +62,17 @@ function responseStatus(response: any) {
 function mockAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = 'generic_essay',
-  organizationId = 'org-1',
 } = {}) {
-  prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.organizationAssignments
-      ? { id, organizationAssignments: [{ organizationId }] }
-      : { id, systemKey }
-  );
+  prisma.assignmentType.findFirst.mockResolvedValue({ id, systemKey });
 }
 
 describe('api.assignments.create', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
     prisma.assignmentType.findFirst.mockReset();
-    prisma.featureAccessTarget.findMany.mockReset();
+    prisma.organizationAssignmentType.findMany.mockReset();
+    prisma.school.findMany.mockReset();
+    prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
     requireUserId.mockReset();
@@ -85,7 +88,12 @@ describe('api.assignments.create', () => {
       { id: 'class-1', school: { id: 'school-1', organizationId: 'org-1' } },
       { id: 'class-2', school: { id: 'school-2', organizationId: 'org-1' } },
     ]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+      { organizationId: 'org-1', assignmentTypeId: 'ap-type-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     mockAssignmentTypeAvailable();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
@@ -119,9 +127,6 @@ describe('api.assignments.create', () => {
       where: { id: 'at-1', archivedAt: null },
       select: {
         id: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
       },
     });
     expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
@@ -240,9 +245,6 @@ describe('api.assignments.create', () => {
       where: { id: 'at-forbidden', archivedAt: null },
       select: {
         id: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
       },
     });
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({

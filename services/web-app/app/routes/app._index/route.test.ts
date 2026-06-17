@@ -5,7 +5,6 @@ const prisma = {
   assignmentType: { findMany: mock() },
   class: { findMany: mock() },
   document: { findMany: mock(), count: mock() },
-  featureAccessTarget: { findMany: mock() },
   orgMembership: { findUnique: mock() },
   teacherTraining: { findMany: mock() },
   submission: { findMany: mock() },
@@ -93,7 +92,6 @@ describe('app index loader assignments', () => {
       },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.document.findMany.mockResolvedValue([]);
     prisma.document.count.mockResolvedValue(0);
     prisma.teacherTraining.findMany.mockResolvedValue([]);

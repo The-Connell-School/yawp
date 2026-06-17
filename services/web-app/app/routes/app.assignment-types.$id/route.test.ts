@@ -11,7 +11,13 @@ const prisma = {
   class: {
     findMany: mock(),
   },
-  featureAccessTarget: {
+  organizationAssignmentType: {
+    findMany: mock(),
+  },
+  school: {
+    findMany: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
   },
   apHistoryPromptLibraryEntry: {
@@ -80,12 +86,11 @@ function withOrganizationAssignment(
 function mockActionAssignmentTypeAvailable({
   id = 'at-1',
   systemKey = null as string | null,
-  organizationId = 'org-1',
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.organizationAssignments
-      ? { id, organizationAssignments: [{ organizationId }] }
-      : { id, systemKey }
+    args.select?.systemKey !== undefined
+      ? { id, systemKey }
+      : { id }
   );
 }
 
@@ -94,7 +99,9 @@ describe('app.assignment-types.$id action', () => {
     prisma.assignmentType.findFirst.mockReset();
     prisma.assignmentType.findMany.mockReset();
     prisma.class.findMany.mockReset();
-    prisma.featureAccessTarget.findMany.mockReset();
+    prisma.organizationAssignmentType.findMany.mockReset();
+    prisma.school.findMany.mockReset();
+    prisma.orgMembership.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
@@ -107,7 +114,11 @@ describe('app.assignment-types.$id action', () => {
       organization: { id: 'org-1', name: 'Org' },
     });
     prisma.class.findMany.mockResolvedValue([]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     mockActionAssignmentTypeAvailable();
     createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-1' });
     redirectWithToast.mockImplementation((url, toast) => ({
@@ -128,9 +139,6 @@ describe('app.assignment-types.$id action', () => {
       where: { id: 'at-1', archivedAt: null },
       select: {
         id: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
       },
     });
     expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
@@ -168,6 +176,9 @@ describe('app.assignment-types.$id action', () => {
       id: 'ap-history-type',
       systemKey: 'ap_history_essay',
     });
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'ap-history-type' },
+    ]);
 
     const response = await action({
       request: new Request(
@@ -194,7 +205,9 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
     prisma.assignmentType.findMany.mockReset();
     prisma.document.findMany.mockReset();
     prisma.class.findMany.mockReset();
-    prisma.featureAccessTarget.findMany.mockReset();
+    prisma.organizationAssignmentType.findMany.mockReset();
+    prisma.school.findMany.mockReset();
+    prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findMany.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -221,7 +234,11 @@ describe('app.assignment-types.$id loader Daily Pages prompt library', () => {
         teachers: [{ id: 'teacher-1' }],
       },
     ]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.apHistoryPromptLibraryEntry.findMany.mockResolvedValue([]);
   });
 

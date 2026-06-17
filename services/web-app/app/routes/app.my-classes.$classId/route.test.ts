@@ -4,7 +4,6 @@ const prisma = {
   class: { findFirst: mock(), findMany: mock() },
   documentClassForensic: { findMany: mock() },
   assignmentType: { findMany: mock() },
-  featureAccessTarget: { findMany: mock() },
   orgMembership: { findUnique: mock(), findMany: mock() },
   pasteAlert: { findMany: mock() },
   submission: { findMany: mock() },
@@ -91,7 +90,6 @@ describe('class detail loader document visibility', () => {
       { documentId: 'legacy-doc-2' },
     ]);
     prisma.assignmentType.findMany.mockResolvedValue([]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ schools: [] });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.pasteAlert.findMany.mockResolvedValue([]);
