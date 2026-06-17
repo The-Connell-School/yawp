@@ -33,6 +33,13 @@ export type EnrolledClassDocumentsWhere = {
   >;
 };
 
+type TeacherClassAssignmentlessDocumentsWhere = {
+  classAssignmentId: null;
+  membership: {
+    classesAsStudent: { some: { id: { in: string[] } } };
+  };
+};
+
 /** Class assignment work plus practice docs for currently enrolled students. */
 export function buildEnrolledClassDocumentsScope(
   classId: string,
@@ -75,19 +82,28 @@ export function buildTeacherClassWorkDocumentWhere(params: {
   classIds: string[];
   legacyDocumentIds?: string[];
 }): Prisma.DocumentWhereInput {
+  const classScope: Prisma.DocumentWhereInput = {
+    OR: [
+      { classAssignment: { classId: { in: params.classIds } } },
+      {
+        classAssignmentId: null,
+        membership: {
+          classesAsStudent: { some: { id: { in: params.classIds } } },
+        },
+      } satisfies TeacherClassAssignmentlessDocumentsWhere,
+    ],
+  };
+
   const where: Prisma.DocumentWhereInput = {
     deletedAt: null,
-    classAssignment: { classId: { in: params.classIds } },
+    OR: [{ archivedAt: null }, { submissions: { some: {} } }],
+    AND: [classScope],
   };
 
   if (params.legacyDocumentIds && params.legacyDocumentIds.length > 0) {
-    return {
-      deletedAt: null,
-      OR: [
-        { classAssignment: { classId: { in: params.classIds } } },
-        { id: { in: params.legacyDocumentIds } },
-      ],
-    };
+    (classScope.OR as Prisma.DocumentWhereInput[]).push({
+      id: { in: params.legacyDocumentIds },
+    });
   }
 
   return where;

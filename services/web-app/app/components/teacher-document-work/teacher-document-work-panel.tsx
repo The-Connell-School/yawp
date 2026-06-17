@@ -1,6 +1,13 @@
 import { Link, useNavigate } from 'react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Filter, Search, ArrowUp, ArrowDown } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Filter,
+  Search,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import { Pagination } from '~/components/table/pagination';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
@@ -15,6 +22,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '~/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { MultiSelect } from '~/components/multi-select';
 import {
   Select,
@@ -100,11 +113,7 @@ function compactHeadClassName(
               ? DOCUMENT_TABLE_ROW_CLASSES.columnWidths.status
               : DOCUMENT_TABLE_ROW_CLASSES.columnWidths.date;
 
-  return cn(
-    DOCUMENT_TABLE_ROW_CLASSES.head,
-    width,
-    extra
-  );
+  return cn(DOCUMENT_TABLE_ROW_CLASSES.head, width, extra);
 }
 
 export type TeacherDocumentWorkFilters = {
@@ -114,6 +123,14 @@ export type TeacherDocumentWorkFilters = {
   status: TeacherDocumentStatus | 'all';
   group: DocumentGroupMode;
   query: string;
+};
+
+export type TeacherDocumentWorkAction = {
+  id: string;
+  label: string;
+  count?: number;
+  onSelect: () => void;
+  disabled?: boolean;
 };
 
 type FilterOption = {
@@ -141,6 +158,7 @@ export type TeacherDocumentWorkPanelProps = {
     options?: { persist?: boolean }
   ) => void;
   headerActions?: React.ReactNode;
+  actions?: TeacherDocumentWorkAction[];
   pagination?: {
     skip: number;
     take: number;
@@ -173,6 +191,7 @@ export function TeacherDocumentWorkPanel({
   collapsedGroups,
   onCollapsedGroupsChange,
   headerActions,
+  actions,
   pagination,
   emptyMessageSecondary = 'Try clearing a filter or check another class.',
   testIds,
@@ -253,7 +272,9 @@ export function TeacherDocumentWorkPanel({
         document.membership.user.name,
         document.membership.user.email,
         document.latestSubmission?.title,
-        document.resolvedClass ? formatClassLabel(document.resolvedClass) : null,
+        document.resolvedClass
+          ? formatClassLabel(document.resolvedClass)
+          : null,
       ]
         .filter(Boolean)
         .join(' ')
@@ -398,9 +419,7 @@ export function TeacherDocumentWorkPanel({
       return (
         <TableRow
           key={document.id}
-          className={cn(
-            clickableRows && 'group cursor-pointer hover:bg-muted'
-          )}
+          className={cn(clickableRows && 'group cursor-pointer hover:bg-muted')}
           onClick={
             clickableRows
               ? () => {
@@ -422,10 +441,7 @@ export function TeacherDocumentWorkPanel({
         >
           {showStudentColumn ? (
             <TableCell
-              className={cn(
-                'pl-4 font-medium',
-                rowClasses?.cell
-              )}
+              className={cn('pl-4 font-medium', rowClasses?.cell)}
               title={
                 document.membership.user.name || document.membership.user.email
               }
@@ -476,10 +492,7 @@ export function TeacherDocumentWorkPanel({
                 <Badge
                   variant="secondary"
                   size={rowClasses?.badgeSize}
-                  className={cn(
-                    status.badgeClassName,
-                    'max-w-full truncate'
-                  )}
+                  className={cn(status.badgeClassName, 'max-w-full truncate')}
                   title={status.label}
                 >
                   {status.label}
@@ -502,7 +515,9 @@ export function TeacherDocumentWorkPanel({
             {latestSubmission
               ? timeAgo(
                   new Date(
-                    latestSubmission.submittedAt ?? latestSubmission.createdAt ?? document.updatedAt
+                    latestSubmission.submittedAt ??
+                      latestSubmission.createdAt ??
+                      document.updatedAt
                   )
                 )
               : '—'}
@@ -628,6 +643,7 @@ export function TeacherDocumentWorkPanel({
     showClassFilter,
     hasActiveFilters,
     headerActions,
+    actions,
     testIds,
     onFiltersChange,
     onClearFilters,
@@ -750,6 +766,7 @@ type DocumentWorkToolbarProps = {
   showClassFilter: boolean;
   hasActiveFilters: boolean;
   headerActions?: React.ReactNode;
+  actions?: TeacherDocumentWorkAction[];
   testIds?: TeacherDocumentWorkPanelProps['testIds'];
   onFiltersChange: (updates: Partial<TeacherDocumentWorkFilters>) => void;
   onClearFilters: () => void;
@@ -834,11 +851,16 @@ function DocumentWorkStatusPills({
             className={pillClass(filters.status === status)}
           >
             <span
-              className={cn('size-2 shrink-0 rounded-full', STATUS_DOT_CLASSES[status])}
+              className={cn(
+                'size-2 shrink-0 rounded-full',
+                STATUS_DOT_CLASSES[status]
+              )}
               aria-hidden
             />
             {TEACHER_DOCUMENT_STATUS_LABELS[status]}
-            <span className={countClass(filters.status === status)}>{count}</span>
+            <span className={countClass(filters.status === status)}>
+              {count}
+            </span>
           </button>
         ))}
       </div>
@@ -1084,6 +1106,7 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
           <DocumentWorkStatusPills {...props} />
         </div>
         <div className="flex shrink-0 flex-nowrap items-center gap-2">
+          <DocumentWorkActionsMenu actions={props.actions} />
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -1109,12 +1132,50 @@ function DocumentWorkToolbar(props: DocumentWorkToolbarProps) {
             </PopoverContent>
           </Popover>
           {props.headerActions}
-          <DocumentWorkGroupSelect
-            {...props}
-            triggerClassName="w-[10.5rem]"
-          />
+          <DocumentWorkGroupSelect {...props} triggerClassName="w-[10.5rem]" />
         </div>
       </div>
     </section>
+  );
+}
+
+function DocumentWorkActionsMenu({
+  actions,
+}: {
+  actions?: TeacherDocumentWorkAction[];
+}) {
+  if (!actions || actions.length === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          size="sm"
+          className="h-9 gap-2 rounded-full"
+          data-testid="teacher-document-work-actions"
+        >
+          Actions
+          <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        {actions.map((action) => (
+          <DropdownMenuItem
+            key={action.id}
+            disabled={action.disabled}
+            onSelect={action.onSelect}
+            className="gap-3"
+          >
+            <span>{action.label}</span>
+            {typeof action.count === 'number' ? (
+              <Badge variant="secondary" size="sm" className="ml-auto">
+                {action.count}
+              </Badge>
+            ) : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

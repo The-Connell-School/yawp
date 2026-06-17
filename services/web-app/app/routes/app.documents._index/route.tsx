@@ -5,6 +5,7 @@ import {
   TeacherDocumentWorkPanel,
   type TeacherDocumentWorkFilters,
 } from '~/components/teacher-document-work/teacher-document-work-panel';
+import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
@@ -23,8 +24,10 @@ import {
   serializeDocumentWorkFilterIds,
 } from '~/utils/teacher-document-work-filter-options';
 import {
+  buildReleaseGradeRows,
   countTeacherDocumentWorkStatuses,
   formatClassLabel,
+  type ReleaseGradeRow,
   type TeacherDocumentWorkClassSummary,
   type TeacherDocumentWorkRow,
 } from '~/utils/teacher-document-work-utils';
@@ -43,16 +46,33 @@ import {
 
 export const handle = { breadcrumb: 'Documents' };
 
-function resolveDocumentClass(document: {
-  classAssignment?: {
-    class: TeacherDocumentWorkClassSummary;
-  } | null;
-  membership: {
-    classesAsStudent: TeacherDocumentWorkClassSummary[];
-  };
-}) {
+function resolveDocumentClass(
+  document: {
+    classAssignment?: {
+      class: TeacherDocumentWorkClassSummary;
+    } | null;
+    membership: {
+      classesAsStudent: TeacherDocumentWorkClassSummary[];
+    };
+  },
+  options: {
+    teacherClassIds: Set<string>;
+    fallbackClass?: TeacherDocumentWorkClassSummary | null;
+  }
+) {
   if (document.classAssignment?.class) {
     return document.classAssignment.class;
+  }
+
+  if (options.fallbackClass) {
+    return options.fallbackClass;
+  }
+
+  const enrolledTeacherClass = document.membership.classesAsStudent.find(
+    (klass) => options.teacherClassIds.has(klass.id)
+  );
+  if (enrolledTeacherClass) {
+    return enrolledTeacherClass;
   }
 
   return document.membership.classesAsStudent[0] ?? null;
@@ -62,12 +82,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return redirect('/app');
   }
 
   const url = new URL(request.url);
-  const studentIds = parseDocumentWorkFilterIds(url.searchParams.get('student'));
+  const studentIds = parseDocumentWorkFilterIds(
+    url.searchParams.get('student')
+  );
   const selectedClassIds = parseDocumentWorkFilterIds(
     url.searchParams.get('class')
   );
@@ -98,20 +120,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const classIds = classes.map((klass) => klass.id);
+  const classById = new Map(classes.map((klass) => [klass.id, klass]));
+  const teacherClassIds = new Set(classIds);
 
-  const classAssignments = await prisma.classAssignment.findMany({
-    where: { classId: { in: classIds } },
-    select: {
-      id: true,
-      classId: true,
-      createdAt: true,
-      assignment: { select: { id: true, title: true } },
-    },
-    orderBy: [{ createdAt: 'desc' }],
-  });
+  const [classAssignments, forensicRows] = await Promise.all([
+    prisma.classAssignment.findMany({
+      where: { classId: { in: classIds } },
+      select: {
+        id: true,
+        classId: true,
+        createdAt: true,
+        assignment: { select: { id: true, title: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    prisma.documentClassForensic.findMany({
+      where: { oldClassId: { in: classIds } },
+      select: { documentId: true, oldClassId: true },
+    }),
+  ]);
+  const legacyClassIdByDocumentId = new Map(
+    forensicRows.map((row) => [row.documentId, row.oldClassId])
+  );
 
   const documentWhere: Prisma.DocumentWhereInput =
-    buildTeacherClassWorkDocumentWhere({ classIds });
+    buildTeacherClassWorkDocumentWhere({
+      classIds,
+      legacyDocumentIds: forensicRows.map((row) => row.documentId),
+    });
 
   const allDocuments = await prisma.document.findMany({
     where: documentWhere,
@@ -169,6 +205,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           releasedAt: true,
           submittedAt: true,
           createdAt: true,
+          archivedAt: true,
         },
       },
       _count: { select: { submissions: true } },
@@ -185,7 +222,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
       updatedAt: new Date(document.updatedAt),
       membership: document.membership,
       assignment: document.assignment,
-      resolvedClass: resolveDocumentClass(document),
+      resolvedClass: resolveDocumentClass(document, {
+        teacherClassIds,
+        fallbackClass:
+          classById.get(legacyClassIdByDocumentId.get(document.id) ?? '') ??
+          null,
+      }),
       submissions,
       latestSubmission: submissions[0] ?? null,
       submissionCount: document._count.submissions,
@@ -225,10 +267,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function StudentWorkRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set()
+  );
   const [documentSort, setDocumentSort] = useState<DocumentWorkSort>(
     DEFAULT_DOCUMENT_WORK_SORT
   );
+  const [isReleaseGradesSheetOpen, setIsReleaseGradesSheetOpen] =
+    useState(false);
+  const [releaseGradesForSheet, setReleaseGradesForSheet] = useState<
+    ReleaseGradeRow[]
+  >([]);
   const hasHydratedStudentWorkPreferences = useRef(false);
   const hasHydratedCollapsedStudentWorkGroups = useRef(false);
   const hasHydratedDocumentSort = useRef(false);
@@ -276,7 +325,10 @@ export default function StudentWorkRoute() {
   }, [documentGroupMode]);
 
   useEffect(() => {
-    if (!hasHydratedStudentWorkPreferences.current || hasHydratedDocumentSort.current) {
+    if (
+      !hasHydratedStudentWorkPreferences.current ||
+      hasHydratedDocumentSort.current
+    ) {
       return;
     }
 
@@ -291,7 +343,9 @@ export default function StudentWorkRoute() {
     mergeStudentWorkViewPreferences(next);
   };
 
-  const persistCollapsedStudentWorkGroups = (collapsedGroupKeys: Set<string>) => {
+  const persistCollapsedStudentWorkGroups = (
+    collapsedGroupKeys: Set<string>
+  ) => {
     if (documentGroupMode === 'none') return;
 
     mergeStudentWorkViewPreferences(searchParams, {
@@ -306,6 +360,22 @@ export default function StudentWorkRoute() {
   const handleDocumentSortChange = (next: DocumentWorkSort) => {
     setDocumentSort(next);
     mergeStudentWorkViewPreferences(searchParams, { documentSort: next });
+  };
+
+  const unreleasedGrades = useMemo(
+    () => buildReleaseGradeRows(data.documents),
+    [data.documents]
+  );
+
+  const openReleaseSheet = () => {
+    if (unreleasedGrades.length === 0) return;
+    setReleaseGradesForSheet(unreleasedGrades);
+    setIsReleaseGradesSheetOpen(true);
+  };
+
+  const handleReleaseGradesSuccess = () => {
+    setReleaseGradesForSheet([]);
+    window.location.reload();
   };
 
   const filters = useMemo(
@@ -373,7 +443,8 @@ export default function StudentWorkRoute() {
           <div className="flex flex-col">
             <h2>Documents</h2>
             <p className="mt-3 max-w-full text-muted-foreground sm:max-w-[460px]">
-              Review, grade, and release student submissions across your classes.
+              Review, grade, and release student submissions across your
+              classes.
             </p>
           </div>
         </div>
@@ -401,6 +472,18 @@ export default function StudentWorkRoute() {
             if (options?.persist === false) return;
             persistCollapsedStudentWorkGroups(next);
           }}
+          actions={[
+            {
+              id: 'release-grades',
+              label: 'Release grades',
+              count:
+                unreleasedGrades.length > 0
+                  ? unreleasedGrades.length
+                  : undefined,
+              disabled: unreleasedGrades.length === 0,
+              onSelect: openReleaseSheet,
+            },
+          ]}
           testIds={{
             statusChips: 'student-work-status-chips',
             groupSelect: 'student-work-group-select',
@@ -410,6 +493,12 @@ export default function StudentWorkRoute() {
           compactRows
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
+        />
+        <ReleaseGradesSheet
+          grades={releaseGradesForSheet}
+          isOpen={isReleaseGradesSheetOpen}
+          onClose={() => setIsReleaseGradesSheetOpen(false)}
+          onSuccess={handleReleaseGradesSuccess}
         />
       </div>
     </section>

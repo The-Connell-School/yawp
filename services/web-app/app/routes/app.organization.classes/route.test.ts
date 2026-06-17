@@ -12,6 +12,12 @@ mock.module('~/utils/auth.server', () => ({
 
 const prisma = {
   class: {
+    create: mock(),
+    findFirst: mock(),
+    findMany: mock(),
+    update: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
     update: mock(),
   },
@@ -35,8 +41,12 @@ describe('app.organization.classes action', () => {
   beforeEach(() => {
     requireOwner.mockClear();
     requireMembership.mockClear();
+    prisma.class.create.mockReset();
+    prisma.class.findFirst.mockReset();
     prisma.class.findMany.mockReset();
     prisma.class.update.mockReset();
+    prisma.orgMembership.findMany.mockReset();
+    prisma.orgMembership.update.mockReset();
     prisma.school.findFirst.mockReset();
     prisma.teacherProfile.findMany.mockReset();
     prisma.studentProfile.findMany.mockReset();
@@ -45,7 +55,7 @@ describe('app.organization.classes action', () => {
     prisma.class.findMany.mockImplementation(
       async ({ where }: { where: { id?: { in: string[] } } }) => {
         const ids = where?.id?.in ?? [];
-        return ids.map((id: string) => ({ id }));
+        return ids.map((id: string) => ({ id, schoolId: `${id}-school` }));
       }
     );
     prisma.$transaction.mockImplementation(
@@ -53,7 +63,70 @@ describe('app.organization.classes action', () => {
         await fn(prisma as unknown as typeof prisma);
       }
     );
+    prisma.class.create.mockResolvedValue({ id: 'c1' });
+    prisma.class.findFirst.mockResolvedValue({ id: 'c1' });
     prisma.class.update.mockResolvedValue({ id: 'c1' });
+    prisma.orgMembership.findMany.mockResolvedValue([]);
+    prisma.orgMembership.update.mockResolvedValue({ id: 'teacher-1' });
+    prisma.school.findFirst.mockResolvedValue({ id: 'school-1' });
+  });
+
+  test('create-class connects selected teachers to the class school', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'create-class');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('grade', '10');
+    body.set('period', '2');
+    body.set('code', 'ABC123');
+    body.append('teacherIds', 'teacher-1');
+    body.append('teacherIds', 'teacher-2');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-1' },
+      data: { schools: { connect: { id: 'school-1' } } },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-2' },
+      data: { schools: { connect: { id: 'school-1' } } },
+    });
+  });
+
+  test('edit-class connects selected teachers to the class school', async () => {
+    const body = new URLSearchParams();
+    body.set('intent', 'edit-class');
+    body.set('classId', 'c1');
+    body.set('schoolId', 'school-1');
+    body.set('schoolYear', '2025-2026');
+    body.set('grade', '10');
+    body.set('period', '2');
+    body.set('code', 'ABC123');
+    body.append('teacherIds', 'teacher-1');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-1' },
+      data: { schools: { connect: { id: 'school-1' } } },
+    });
   });
 
   test('bulk-edit-classes rejects when no classes selected', async () => {
@@ -120,6 +193,47 @@ describe('app.organization.classes action', () => {
     expect(prisma.class.update).toHaveBeenCalledWith({
       where: { id: 'c2' },
       data: { schoolYear: '2025-2026' },
+    });
+  });
+
+  test('bulk-edit-classes connects selected teachers to each class school', async () => {
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'teacher-1' },
+      { id: 'teacher-2' },
+    ]);
+    const body = new URLSearchParams();
+    body.set('intent', 'bulk-edit-classes');
+    body.append('classIds', 'c1');
+    body.append('classIds', 'c2');
+    body.set('applyTeachers', 'on');
+    body.append('teacherIds', 'teacher-1');
+    body.append('teacherIds', 'teacher-2');
+
+    const request = new Request('https://example.com/app/organization/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    const result = (await action({ request } as any)) as {
+      data: { success: boolean };
+    };
+    expect(result.data.success).toBe(true);
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-1' },
+      data: { schools: { connect: { id: 'c1-school' } } },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-2' },
+      data: { schools: { connect: { id: 'c1-school' } } },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-1' },
+      data: { schools: { connect: { id: 'c2-school' } } },
+    });
+    expect(prisma.orgMembership.update).toHaveBeenCalledWith({
+      where: { id: 'teacher-2' },
+      data: { schools: { connect: { id: 'c2-school' } } },
     });
   });
 });

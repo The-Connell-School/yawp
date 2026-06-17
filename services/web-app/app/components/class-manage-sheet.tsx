@@ -40,7 +40,7 @@ export function ClassManageSheet({
   onOpenChange,
   editingClass,
   schools,
-  actionUrl = '/app/my-classes',
+  actionUrl = '/app/my-classes?index',
   onSuccess,
 }: {
   open: boolean;
