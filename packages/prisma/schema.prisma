@@ -442,6 +442,26 @@ model Setting {
   valueType   String   @default("string")
 }
 
+// Shared scoped-access table. The removed feature flags used this, but it
+// also backs assignment-type access control (featureKey `assignment_type:<id>`).
+// Do not drop it.
+model FeatureAccessTarget {
+  id         String    @id @default(cuid())
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  featureKey String
+  targetKind String
+  targetId   String
+  enabled    Boolean   @default(true)
+  expiresAt  DateTime? @db.Timestamptz(6)
+  note       String?
+
+  @@unique([featureKey, targetKind, targetId])
+  @@index([targetKind, targetId])
+  @@index([featureKey, enabled])
+  @@index([expiresAt])
+}
+
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
