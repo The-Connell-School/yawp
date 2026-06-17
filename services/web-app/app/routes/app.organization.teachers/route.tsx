@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Checkbox } from '~/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import { requireMembership, requireOwner } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -41,6 +42,58 @@ import { Textarea } from '~/components/ui/textarea';
 import { useEffect, useState } from 'react';
 import { normalizeEmail } from '~/utils/normalize-email';
 
+function getSchoolEffectiveAssignmentTypeIds({
+  school,
+  orgAssignmentTypeIds,
+}: {
+  school: {
+    assignmentTypesCustomized: boolean;
+    assignmentTypeAssignments: Array<{ assignmentTypeId: string }>;
+  };
+  orgAssignmentTypeIds: string[];
+}) {
+  if (school.assignmentTypesCustomized) {
+    return school.assignmentTypeAssignments.map(
+      (assignment) => assignment.assignmentTypeId
+    );
+  }
+  return orgAssignmentTypeIds;
+}
+
+function getTeacherInheritedAssignmentTypeIds({
+  teacher,
+  schoolsById,
+  orgAssignmentTypeIds,
+}: {
+  teacher: {
+    schools: Array<{ id: string }>;
+  };
+  schoolsById: Map<
+    string,
+    {
+      assignmentTypesCustomized: boolean;
+      assignmentTypeAssignments: Array<{ assignmentTypeId: string }>;
+    }
+  >;
+  orgAssignmentTypeIds: string[];
+}) {
+  const inheritedIds = new Set<string>();
+  for (const school of teacher.schools) {
+    const schoolConfig = schoolsById.get(school.id);
+    if (!schoolConfig) continue;
+    for (const assignmentTypeId of getSchoolEffectiveAssignmentTypeIds({
+      school: schoolConfig,
+      orgAssignmentTypeIds,
+    })) {
+      inheritedIds.add(assignmentTypeId);
+    }
+  }
+  if (inheritedIds.size === 0) {
+    return orgAssignmentTypeIds;
+  }
+  return Array.from(inheritedIds);
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireOwner(request);
   const profile = await requireMembership(request, user.id);
@@ -63,33 +116,85 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const teachers = await prisma.orgMembership.findMany({
-    where,
-    include: {
-      user: true,
-      assignedTeacherTrainings: {
-        select: { id: true },
-      },
-      _count: {
-        select: {
-          classesAsTeacher: true,
-          assignedTeacherTrainings: true,
+  const [teachers, teacherTrainings, assignmentTypes, orgAssignments, schools] =
+    await Promise.all([
+    prisma.orgMembership.findMany({
+      where,
+      include: {
+        user: true,
+        schools: {
+          select: { id: true },
+        },
+        assignmentTypeAssignments: {
+          select: { assignmentTypeId: true },
+        },
+        assignedTeacherTrainings: {
+          select: { id: true },
+        },
+        _count: {
+          select: {
+            classesAsTeacher: true,
+            assignedTeacherTrainings: true,
+          },
         },
       },
-    },
-    orderBy: {
-      user: {
-        name: 'asc',
+      orderBy: {
+        user: {
+          name: 'asc',
+        },
       },
-    },
-  });
+    }),
+    prisma.teacherTraining.findMany({
+      select: { id: true, title: true },
+      orderBy: { position: 'asc' },
+    }),
+    prisma.assignmentType.findMany({
+      where: { archivedAt: null },
+      select: { id: true, title: true },
+      orderBy: { position: 'asc' },
+    }),
+    prisma.organizationAssignmentType.findMany({
+      where: { organizationId: profile.organization.id },
+      select: { assignmentTypeId: true },
+    }),
+    prisma.school.findMany({
+      where: { organizationId: profile.organization.id },
+      select: {
+        id: true,
+        assignmentTypesCustomized: true,
+        assignmentTypeAssignments: {
+          select: { assignmentTypeId: true },
+        },
+      },
+    }),
+  ]);
 
-  const teacherTrainings = await prisma.teacherTraining.findMany({
-    select: { id: true, title: true },
-    orderBy: { position: 'asc' },
-  });
+  const orgAssignmentTypeIds = orgAssignments.map(
+    (assignment) => assignment.assignmentTypeId
+  );
+  const schoolsById = new Map(schools.map((school) => [school.id, school]));
+  const teachersWithAssignmentDefaults = teachers.map((teacher) => ({
+    ...teacher,
+    inheritedAssignmentTypeIds: teacher.assignmentTypesCustomized
+      ? teacher.assignmentTypeAssignments.map(
+          (assignment) => assignment.assignmentTypeId
+        )
+      : getTeacherInheritedAssignmentTypeIds({
+          teacher,
+          schoolsById,
+          orgAssignmentTypeIds,
+        }),
+  }));
 
-  return dataResponse({ teachers, teacherTrainings, q });
+  return dataResponse({
+    teachers: teachersWithAssignmentDefaults,
+    teacherTrainings,
+    assignmentTypes: assignmentTypes.filter((type) =>
+      orgAssignmentTypeIds.includes(type.id)
+    ),
+    orgAssignmentTypeIds,
+    q,
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -108,6 +213,16 @@ export async function action({ request }: ActionFunctionArgs) {
       .getAll('teacherTrainingIds')
       .map((v) => v.toString())
       .filter(Boolean);
+    const assignmentTypesCustomized =
+      formData.get('assignmentTypesCustomized') === 'true';
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
 
     const teacher = await prisma.orgMembership.findFirst({
       where: {
@@ -139,14 +254,31 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    await prisma.orgMembership.update({
-      where: { id: teacherId },
-      data: {
-        assignedTeacherTrainings: {
-          set: teacherTrainingIds.map((id) => ({ id })),
+    await prisma.$transaction([
+      prisma.orgMembership.update({
+        where: { id: teacherId },
+        data: {
+          assignmentTypesCustomized,
+          assignedTeacherTrainings: {
+            set: teacherTrainingIds.map((id) => ({ id })),
+          },
         },
-      },
-    });
+      }),
+      prisma.teacherAssignmentType.deleteMany({
+        where: { membershipId: teacherId },
+      }),
+      ...(assignmentTypesCustomized && assignmentTypeIds.length > 0
+        ? [
+            prisma.teacherAssignmentType.createMany({
+              data: assignmentTypeIds.map((assignmentTypeId) => ({
+                membershipId: teacherId,
+                assignmentTypeId,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
 
     return dataResponse({ success: true });
   }
@@ -317,7 +449,8 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationTeachersRoute() {
-  const { teachers, teacherTrainings, q } = useLoaderData<typeof loader>();
+  const { teachers, teacherTrainings, assignmentTypes, orgAssignmentTypeIds, q } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
   const [searchParams] = useSearchParams();
@@ -464,6 +597,8 @@ export default function OrganizationTeachersRoute() {
         onOpenChange={setSheetOpen}
         editingTeacher={editingTeacher}
         teacherTrainings={teacherTrainings}
+        assignmentTypes={assignmentTypes}
+        orgAssignmentTypeIds={orgAssignmentTypeIds}
       />
 
       {/* Invite Teacher Sheet */}
@@ -517,15 +652,25 @@ function TeacherSheet({
   onOpenChange,
   editingTeacher,
   teacherTrainings,
+  assignmentTypes,
+  orgAssignmentTypeIds,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingTeacher: any | null;
   teacherTrainings: { id: string; title: string }[];
+  assignmentTypes: Array<{ id: string; title: string }>;
+  orgAssignmentTypeIds: string[];
 }) {
   const fetcherKey = editingTeacher ? `edit-${editingTeacher.id}` : 'none';
   const fetcher = useFetcher({ key: fetcherKey });
   const [selectedTeacherTrainings, setSelectedTeacherTrainings] = useState<
+    string[]
+  >([]);
+  const [assignmentTypesMode, setAssignmentTypesMode] = useState<
+    'inherit' | 'customize'
+  >('inherit');
+  const [selectedAssignmentTypes, setSelectedAssignmentTypes] = useState<
     string[]
   >([]);
 
@@ -534,7 +679,30 @@ function TeacherSheet({
     setSelectedTeacherTrainings(
       editingTeacher.assignedTeacherTrainings?.map((c: any) => c.id) || []
     );
-  }, [editingTeacher, open]);
+    if (editingTeacher.assignmentTypesCustomized) {
+      setAssignmentTypesMode('customize');
+      setSelectedAssignmentTypes(
+        editingTeacher.assignmentTypeAssignments?.map(
+          (assignment: { assignmentTypeId: string }) =>
+            assignment.assignmentTypeId
+        ) || []
+      );
+    } else {
+      setAssignmentTypesMode('inherit');
+      setSelectedAssignmentTypes(
+        editingTeacher.inheritedAssignmentTypeIds || orgAssignmentTypeIds
+      );
+    }
+  }, [editingTeacher, open, orgAssignmentTypeIds]);
+
+  const handleAssignmentTypesModeChange = (mode: 'inherit' | 'customize') => {
+    setAssignmentTypesMode(mode);
+    if (mode === 'customize' && editingTeacher) {
+      setSelectedAssignmentTypes(
+        editingTeacher.inheritedAssignmentTypeIds || orgAssignmentTypeIds
+      );
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -543,9 +711,18 @@ function TeacherSheet({
     const formData = new FormData();
     formData.append('intent', 'edit-teacher');
     formData.append('teacherId', editingTeacher.id);
+    formData.append(
+      'assignmentTypesCustomized',
+      assignmentTypesMode === 'customize' ? 'true' : 'false'
+    );
     selectedTeacherTrainings.forEach((teacherTrainingId) => {
       formData.append('teacherTrainingIds', teacherTrainingId);
     });
+    if (assignmentTypesMode === 'customize') {
+      selectedAssignmentTypes.forEach((assignmentTypeId) => {
+        formData.append('assignmentTypeIds', assignmentTypeId);
+      });
+    }
     fetcher.submit(formData, { method: 'POST' });
   };
 
@@ -563,7 +740,7 @@ function TeacherSheet({
         <SheetHeader>
           <SheetTitle>Edit Teacher</SheetTitle>
           <SheetDescription>
-            Manage teacher training assignments for this teacher
+            Manage teacher trainings and assignment type access
           </SheetDescription>
         </SheetHeader>
 
@@ -636,6 +813,87 @@ function TeacherSheet({
                 ? `${selectedTeacherTrainings.length} training${selectedTeacherTrainings.length !== 1 ? 's' : ''} selected`
                 : 'No trainings selected (teacher will see all trainings)'}
             </p>
+          </div>
+
+          <div className="space-y-2" data-testid="teacher-assignment-types-manager">
+            <Label>Assignment Types</Label>
+            <RadioGroup
+              value={assignmentTypesMode}
+              onValueChange={(value) =>
+                handleAssignmentTypesModeChange(value as 'inherit' | 'customize')
+              }
+              className="grid gap-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem
+                  value="inherit"
+                  id="teacher-assignment-inherit"
+                />
+                <Label
+                  htmlFor="teacher-assignment-inherit"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Inherit from school
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem
+                  value="customize"
+                  id="teacher-assignment-customize"
+                />
+                <Label
+                  htmlFor="teacher-assignment-customize"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Customize for this teacher
+                </Label>
+              </div>
+            </RadioGroup>
+            {assignmentTypesMode === 'customize' ? (
+              <div className="rounded-md border border-input bg-background">
+                <div className="max-h-[300px] overflow-y-auto p-3 space-y-2">
+                  {assignmentTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No assignment types available for this organization
+                    </p>
+                  ) : (
+                    assignmentTypes.map((assignmentType) => (
+                      <div
+                        key={assignmentType.id}
+                        className="flex items-center space-x-2"
+                      >
+                        <Checkbox
+                          id={`teacher-assignment-type-${assignmentType.id}`}
+                          checked={selectedAssignmentTypes.includes(
+                            assignmentType.id
+                          )}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedAssignmentTypes([
+                                ...selectedAssignmentTypes,
+                                assignmentType.id,
+                              ]);
+                            } else {
+                              setSelectedAssignmentTypes(
+                                selectedAssignmentTypes.filter(
+                                  (id) => id !== assignmentType.id
+                                )
+                              );
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor={`teacher-assignment-type-${assignmentType.id}`}
+                          className="text-sm font-normal cursor-pointer flex-1"
+                        >
+                          {assignmentType.title}
+                        </Label>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex gap-2 pt-4">
