@@ -174,8 +174,8 @@ test.describe.serial('Teacher dashboard workspace', () => {
       assignmentsGrid.getByRole('heading', { name: 'Assignments' })
     ).toBeVisible();
     await expect(
-      assignmentsGrid.getByRole('link', { name: /new assignment/i })
-    ).toHaveAttribute('href', '/app/assignments?create=1&returnTo=%2Fapp');
+      assignmentsGrid.getByRole('button', { name: /new assignment/i })
+    ).toBeVisible();
 
     const gradingGrid = page.getByTestId('teacher-grading-grid');
     await expect(
@@ -245,7 +245,7 @@ test.describe.serial('Teacher dashboard workspace', () => {
     await expect(sidebarMyClasses).toHaveAttribute('aria-current', 'page');
   });
 
-  test('returns to the dashboard after quick-creating from an assignment card', async ({
+  test('creates an assignment from the dashboard without leaving the page', async ({
     page,
     e2eContext,
     signIn,
@@ -270,9 +270,10 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByLabel(/point value/i).fill('25');
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
-      await page.waitForURL(
+      await expect(page).toHaveURL(
         (url) => url.pathname === '/app' && url.search === ''
       );
+      await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(page.getByTestId('app._index')).toBeVisible();
       await expect(page.getByTestId('teacher-assignments-grid')).toBeVisible();
 
@@ -286,6 +287,25 @@ test.describe.serial('Teacher dashboard workspace', () => {
     } finally {
       await deleteAssignmentsByTitle(title);
     }
+  });
+
+  test('opens the shared create sheet from the dashboard New assignment button', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app');
+    await page.waitForLoadState('networkidle');
+
+    await page
+      .getByTestId('teacher-assignments-grid')
+      .getByRole('button', { name: /new assignment/i })
+      .click();
+    await expectStandardizedAssignmentForm(page);
+    await expect(page).toHaveURL(
+      (url) => url.pathname === '/app' && url.search === ''
+    );
   });
 
   test('creates one assignment record for each selected class from the Assignments page', async ({

@@ -1,2 +1,3 @@
 Don't import from @react-router/node, import from 'react-router' itself
 react-router v7, server-side rendered, tailwindcss, shadcn ui, not remix, bun package manager
+For new git worktrees: run `bash scripts/worktree-local-setup.sh` then `bun dev` (see AGENTS.md)
