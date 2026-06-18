@@ -160,125 +160,39 @@ export default function AssignmentTypesRoute() {
           </p>
         </div>
       ) : (
-        <div data-uidotsh-pick="Layout style" className="contents">
-          {/* Option A: Card grid (current) */}
-          <div data-uidotsh-option="Card grid (current)" className="contents">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {courses.map((course) => (
-                <button
-                  key={course.id}
-                  type="button"
-                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
-                  className="group flex flex-col overflow-hidden rounded-lg border bg-white text-left ring-1 ring-black/5"
-                >
-                  <div className="aspect-[5/3] w-full overflow-hidden">
-                    {course.image ? (
-                      <img
-                        src={`/api/image/course/${course.image.id}`}
-                        alt={course.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-2 p-3">
-                    <p className="text-sm font-semibold line-clamp-1 text-balance">
-                      {course.title}
-                    </p>
-                    <p className="text-sm text-muted-foreground line-clamp-2 text-pretty grow">
-                      {course.description || 'No description'}
-                    </p>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground tabular-nums">
-                      <span>{course.assignmentModules.length} modules</span>
-                      <span>{course.organizationAssignments.length} orgs</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Option B: Compact list */}
-          <div data-uidotsh-option="Compact list" className="contents" hidden>
-            <div
-              role="list"
-              className="divide-y divide-neutral-950/5 rounded-lg border ring-1 ring-black/5"
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {courses.map((course) => (
+            <button
+              key={course.id}
+              type="button"
+              onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
+              className="flex flex-col overflow-hidden rounded-lg border bg-white text-left ring-1 ring-black/5"
             >
-              {courses.map((course) => (
-                <button
-                  key={course.id}
-                  type="button"
-                  role="listitem"
-                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
-                  className="flex w-full items-center gap-4 p-3 text-left first:rounded-t-lg last:rounded-b-lg hover:bg-neutral-50 sm:p-4"
-                >
-                  <div className="size-12 shrink-0 overflow-hidden rounded-md">
-                    {course.image ? (
-                      <img
-                        src={`/api/image/course/${course.image.id}`}
-                        alt={course.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate text-balance">
-                      {course.title}
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1 text-pretty">
-                      {course.description || 'No description'}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-4 text-sm text-muted-foreground tabular-nums max-sm:hidden">
-                    <span>{course.assignmentModules.length} modules</span>
-                    <span>{course.organizationAssignments.length} orgs</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Option C: Wide cards */}
-          <div data-uidotsh-option="Wide cards" className="contents" hidden>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {courses.map((course) => (
-                <button
-                  key={course.id}
-                  type="button"
-                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
-                  className="flex items-start gap-4 rounded-lg border bg-white p-4 text-left ring-1 ring-black/5 hover:bg-neutral-50"
-                >
-                  <div className="size-16 shrink-0 overflow-hidden rounded-md">
-                    {course.image ? (
-                      <img
-                        src={`/api/image/course/${course.image.id}`}
-                        alt={course.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-balance">
-                      {course.title}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2 text-pretty">
-                      {course.description || 'No description'}
-                    </p>
-                    <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground tabular-nums">
-                      <span>{course.assignmentModules.length} modules</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{course.organizationAssignments.length} orgs</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+              <div className="aspect-[5/3] w-full overflow-hidden">
+                {course.image ? (
+                  <img
+                    src={`/api/image/course/${course.image.id}`}
+                    alt={course.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
+                )}
+              </div>
+              <div className="flex flex-1 flex-col gap-2 p-3">
+                <p className="line-clamp-1 text-sm font-semibold text-balance">
+                  {course.title}
+                </p>
+                <p className="line-clamp-2 grow text-sm text-muted-foreground text-pretty">
+                  {course.description || 'No description'}
+                </p>
+                <div className="flex items-center justify-between text-sm text-muted-foreground tabular-nums">
+                  <span>{course.assignmentModules.length} modules</span>
+                  <span>{course.organizationAssignments.length} orgs</span>
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </div>
