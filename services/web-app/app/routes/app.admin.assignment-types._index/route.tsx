@@ -78,6 +78,50 @@ export async function action({ request }: ActionFunctionArgs) {
   return dataResponse({ status: 'error' });
 }
 
+function CreateSheet({
+  isSheetOpen,
+  setIsSheetOpen,
+  fetcher,
+}: {
+  isSheetOpen: boolean;
+  setIsSheetOpen: (open: boolean) => void;
+  fetcher: ReturnType<typeof useFetcher>;
+}) {
+  return (
+    <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+      <SheetTrigger asChild>
+        <Button size="sm" className="gap-1.5 py-1.5 pr-3 pl-2">
+          <Plus className="size-4 shrink-0" />
+          New type
+        </Button>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Create Assignment Type</SheetTitle>
+        </SheetHeader>
+        <fetcher.Form method="post" className="mt-4 space-y-4">
+          <input type="hidden" name="intent" value="create" />
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input id="title" name="title" required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea id="description" name="description" rows={3} />
+          </div>
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={fetcher.state !== 'idle'}
+          >
+            {fetcher.state === 'idle' ? 'Create Assignment Type' : 'Creating...'}
+          </Button>
+        </fetcher.Form>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export default function AssignmentTypesRoute() {
   const { courses } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
@@ -90,69 +134,44 @@ export default function AssignmentTypesRoute() {
     }
   }, [fetcher.state, fetcher.data]);
 
-  return (
-    <div className="p-3 sm:p-5">
-      <div className="flex flex-1 flex-col">
-        <div className="mb-4">
-          <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-            <SheetTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Assignment Type
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Create Assignment Type</SheetTitle>
-              </SheetHeader>
-              <fetcher.Form method="post" className="mt-4 space-y-4">
-                <input type="hidden" name="intent" value="create" />
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input id="title" name="title" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea id="description" name="description" rows={3} />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={fetcher.state !== 'idle'}
-                >
-                  {fetcher.state === 'idle' ? 'Create Assignment Type' : 'Creating...'}
-                </Button>
-              </fetcher.Form>
-            </SheetContent>
-          </Sheet>
-        </div>
+  const isEmpty = courses.length === 0;
 
-        <div className="flex-1 overflow-y-auto">
-          {fetcher.state !== 'idle' ? (
-            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span className="mt-2 text-sm text-muted-foreground">
-                Loading...
-              </span>
-            </div>
-          ) : courses.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center border border-dashed bg-muted">
-              <span className="text-lg font-bold">No assignment types found</span>
-              <span className="text-sm text-muted-foreground">
-                Create your first assignment type to get started
-              </span>
-            </div>
-          ) : (
+  return (
+    <div className="p-4 sm:p-6">
+      {/* Page header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground text-pretty">
+            {courses.length} {courses.length === 1 ? 'type' : 'types'} total
+          </p>
+        </div>
+        <CreateSheet
+          isSheetOpen={isSheetOpen}
+          setIsSheetOpen={setIsSheetOpen}
+          fetcher={fetcher}
+        />
+      </div>
+
+      {isEmpty ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-20 text-center">
+          <p className="text-sm font-semibold text-balance">No assignment types yet</p>
+          <p className="text-sm text-muted-foreground text-pretty">
+            Create your first assignment type to get started.
+          </p>
+        </div>
+      ) : (
+        <div data-uidotsh-pick="Layout style" className="contents">
+          {/* Option A: Card grid (current) */}
+          <div data-uidotsh-option="Card grid (current)" className="contents">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {courses.map((course) => (
-                <Card
+                <button
                   key={course.id}
-                  className="bg-muted cursor-pointer gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
-                  onClick={() =>
-                    navigate(`/app/admin/assignment-types/${course.id}`)
-                  }
+                  type="button"
+                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
+                  className="group flex flex-col overflow-hidden rounded-lg border bg-white text-left ring-1 ring-black/5"
                 >
-                  <div className="aspect-[5/3] w-full overflow-hidden rounded-t-lg">
+                  <div className="aspect-[5/3] w-full overflow-hidden">
                     {course.image ? (
                       <img
                         src={`/api/image/course/${course.image.id}`}
@@ -160,34 +179,108 @@ export default function AssignmentTypesRoute() {
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="h-full w-full bg-gradient-to-br from-foreground/5 to-foreground/20" />
+                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
                     )}
                   </div>
-                  <CardHeader>
-                    <CardTitle className="line-clamp-1">
+                  <div className="flex flex-1 flex-col gap-2 p-3">
+                    <p className="text-sm font-semibold line-clamp-1 text-balance">
                       {course.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                    </p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 text-pretty grow">
                       {course.description || 'No description'}
                     </p>
-                    <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground tabular-nums">
                       <span>{course.assignmentModules.length} modules</span>
-                      <span>
-                        {course.organizationAssignments.length}{' '}
-                        {course.organizationAssignments.length === 1
-                          ? 'organization'
-                          : 'organizations'}
-                      </span>
+                      <span>{course.organizationAssignments.length} orgs</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </button>
               ))}
             </div>
-          )}
+          </div>
+
+          {/* Option B: Compact list */}
+          <div data-uidotsh-option="Compact list" className="contents" hidden>
+            <div
+              role="list"
+              className="divide-y divide-neutral-950/5 rounded-lg border ring-1 ring-black/5"
+            >
+              {courses.map((course) => (
+                <button
+                  key={course.id}
+                  type="button"
+                  role="listitem"
+                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
+                  className="flex w-full items-center gap-4 p-3 text-left first:rounded-t-lg last:rounded-b-lg hover:bg-neutral-50 sm:p-4"
+                >
+                  <div className="size-12 shrink-0 overflow-hidden rounded-md">
+                    {course.image ? (
+                      <img
+                        src={`/api/image/course/${course.image.id}`}
+                        alt={course.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate text-balance">
+                      {course.title}
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1 text-pretty">
+                      {course.description || 'No description'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-4 text-sm text-muted-foreground tabular-nums max-sm:hidden">
+                    <span>{course.assignmentModules.length} modules</span>
+                    <span>{course.organizationAssignments.length} orgs</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Option C: Wide cards */}
+          <div data-uidotsh-option="Wide cards" className="contents" hidden>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {courses.map((course) => (
+                <button
+                  key={course.id}
+                  type="button"
+                  onClick={() => navigate(`/app/admin/assignment-types/${course.id}`)}
+                  className="flex items-start gap-4 rounded-lg border bg-white p-4 text-left ring-1 ring-black/5 hover:bg-neutral-50"
+                >
+                  <div className="size-16 shrink-0 overflow-hidden rounded-md">
+                    {course.image ? (
+                      <img
+                        src={`/api/image/course/${course.image.id}`}
+                        alt={course.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-linear-to-br from-neutral-100 to-neutral-200" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-balance">
+                      {course.title}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground line-clamp-2 text-pretty">
+                      {course.description || 'No description'}
+                    </p>
+                    <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground tabular-nums">
+                      <span>{course.assignmentModules.length} modules</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{course.organizationAssignments.length} orgs</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
