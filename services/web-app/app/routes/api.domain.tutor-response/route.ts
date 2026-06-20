@@ -5,6 +5,8 @@ import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { buildTutorSystemPrompt } from './build-system-prompt';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -45,7 +47,9 @@ export async function action({ request }: ActionFunctionArgs) {
         document: {
           select: {
             text: true,
-            assignment: { select: { tutorContext: true } },
+            assignment: {
+              select: { tutorContext: true, apHistorySnapshot: true },
+            },
           },
         },
       },
@@ -67,11 +71,17 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
-      instructionTutorInstructions: instruction.tutorInstructions,
-      assignmentTutorContext: cms.document.assignment?.tutorContext,
-    });
+    // AP History assignments carry an immutable snapshot; when present, the
+    // tutor coaches against the AP rubric/sources instead of the generic
+    // assignment-type tutor instructions.
+    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    const system = isApHistorySnapshot(apHistorySnapshot)
+      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot)
+      : buildTutorSystemPrompt({
+          tutorInstructions: cms.assignmentModule.tutorInstructions,
+          instructionTutorInstructions: instruction.tutorInstructions,
+          assignmentTutorContext: cms.document.assignment?.tutorContext,
+        });
 
     const documentText = data.content ?? cms.document.text;
 
