@@ -3,8 +3,26 @@ import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
 import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
-  test('exports the two MVP entries', () => {
-    expect(AP_HISTORY_LIBRARY_ENTRIES).toHaveLength(2);
+  test('exports a curated library with both DBQ and LEQ entries', () => {
+    expect(AP_HISTORY_LIBRARY_ENTRIES.length).toBeGreaterThanOrEqual(2);
+    expect(
+      AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'dbq')
+    ).toBe(true);
+    expect(
+      AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'leq')
+    ).toBe(true);
+  });
+
+  test('image sources carry an imageUrl and alt text', () => {
+    const imageSources = AP_HISTORY_LIBRARY_ENTRIES.flatMap((entry) =>
+      entry.sources.filter((source) => source.mediaType === 'image')
+    );
+
+    expect(imageSources.length).toBeGreaterThan(0);
+    for (const source of imageSources) {
+      expect(source.imageUrl).toBeTruthy();
+      expect(source.imageAlt).toBeTruthy();
+    }
   });
 
   test('entry external keys are unique APUSH DBQ or LEQ keys', () => {
