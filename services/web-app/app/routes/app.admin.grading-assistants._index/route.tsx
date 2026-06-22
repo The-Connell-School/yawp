@@ -823,13 +823,6 @@ export default function GradingAssistantsRoute() {
                   <Input id="name" name="name" placeholder="e.g. ACT Writing four-domain" required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="assignmentTypeKind">
-                    Assignment type kind{' '}
-                    <span className="font-normal text-muted-foreground">(optional)</span>
-                  </Label>
-                  <Input id="assignmentTypeKind" name="assignmentTypeKind" className="font-mono text-sm" placeholder="act_writing" />
-                </div>
-                <div className="space-y-1.5">
                   <Label htmlFor="defaultAssignmentTypeId">Link to assignment</Label>
                   <Select name="defaultAssignmentTypeId" defaultValue={NO_DEFAULT_ASSIGNMENT_TYPE}>
                     <SelectTrigger id="defaultAssignmentTypeId">
@@ -914,10 +907,6 @@ export default function GradingAssistantsRoute() {
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-name">Name</Label>
                   <Input id="edit-name" name="name" defaultValue={editingTemplate.name} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-kind">Assignment type kind</Label>
-                  <Input id="edit-kind" name="assignmentTypeKind" defaultValue={editingTemplate.assignmentTypeKind ?? ''} className="font-mono text-sm" />
                 </div>
               </FormSection>
 
@@ -1004,7 +993,6 @@ export default function GradingAssistantsRoute() {
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="whitespace-nowrap">Ver.</TableHead>
-                <TableHead className="whitespace-nowrap">Kind</TableHead>
                 <TableHead className="whitespace-nowrap">Scoring</TableHead>
                 <TableHead>Linked to</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -1027,9 +1015,6 @@ export default function GradingAssistantsRoute() {
                     </TableCell>
                     <TableCell>{statusBadge(template.status)}</TableCell>
                     <TableCell>v{template.version}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {template.assignmentTypeKind ?? '—'}
-                    </TableCell>
                     <TableCell className="text-xs">
                       <span className="font-mono">{scale.type}</span>
                       <span className="ml-1 text-muted-foreground">
