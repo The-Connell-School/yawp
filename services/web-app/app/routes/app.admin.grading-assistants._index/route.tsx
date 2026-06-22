@@ -37,6 +37,13 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Textarea } from '~/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '~/components/ui/select';
 import { requireAdmin, requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
@@ -47,6 +54,7 @@ const DEFAULT_SCORING_SCALE_JSON =
 const DEFAULT_RUBRIC_JSON = '{\n  "categories": []\n}';
 const DEFAULT_PROMPT_CONFIG_JSON = '{\n  "systemInstructions": ""\n}';
 const DEFAULT_OUTPUT_SCHEMA_JSON = '{\n  "schemaVersion": 1\n}';
+const NO_DEFAULT_ASSIGNMENT_TYPE = '__no_default_assignment_type__';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -116,24 +124,53 @@ export async function action({ request }: ActionFunctionArgs) {
     const slug = requireString(formData, 'slug');
     const assignmentTypeKind =
       formData.get('assignmentTypeKind')?.toString().trim() || null;
+    const defaultAssignmentTypeIdRaw =
+      formData.get('defaultAssignmentTypeId')?.toString().trim() || null;
+    const defaultAssignmentTypeId =
+      defaultAssignmentTypeIdRaw &&
+      defaultAssignmentTypeIdRaw !== NO_DEFAULT_ASSIGNMENT_TYPE
+        ? defaultAssignmentTypeIdRaw
+        : null;
     const calibrationNotes =
       formData.get('calibrationNotes')?.toString().trim() || null;
 
-    await prisma.gradingAssistantTemplate.create({
-      data: {
-        name,
-        slug,
-        status: 'draft',
-        version: 1,
-        assignmentTypeKind,
-        scoringScale: parseJsonField(formData, 'scoringScale'),
-        rubricJson: parseJsonField(formData, 'rubricJson'),
-        promptConfigJson: parseJsonField(formData, 'promptConfigJson'),
-        outputSchemaJson: parseJsonField(formData, 'outputSchemaJson'),
-        calibrationNotes,
-        createdByMembershipId: profile.id,
-        updatedByMembershipId: profile.id,
-      },
+    await prisma.$transaction(async (tx) => {
+      const template = await tx.gradingAssistantTemplate.create({
+        data: {
+          name,
+          slug,
+          status: 'draft',
+          version: 1,
+          assignmentTypeKind,
+          scoringScale: parseJsonField(formData, 'scoringScale'),
+          rubricJson: parseJsonField(formData, 'rubricJson'),
+          promptConfigJson: parseJsonField(formData, 'promptConfigJson'),
+          outputSchemaJson: parseJsonField(formData, 'outputSchemaJson'),
+          calibrationNotes,
+          createdByMembershipId: profile.id,
+          updatedByMembershipId: profile.id,
+        },
+      });
+
+      if (!defaultAssignmentTypeId) return;
+
+      const activeFrom = new Date();
+      await tx.assignmentTypeGradingAssistant.updateMany({
+        where: {
+          assignmentTypeId: defaultAssignmentTypeId,
+          isDefault: true,
+          activeTo: null,
+        },
+        data: { activeTo: activeFrom },
+      });
+      await tx.assignmentTypeGradingAssistant.create({
+        data: {
+          assignmentTypeId: defaultAssignmentTypeId,
+          gradingAssistantTemplateId: template.id,
+          isDefault: true,
+          activeFrom,
+        },
+      });
     });
 
     return dataResponse({ status: 'success' });
@@ -250,6 +287,36 @@ export default function GradingAssistantsRoute() {
               <div className="space-y-2">
                 <Label htmlFor="assignmentTypeKind">Assignment Type Kind</Label>
                 <Input id="assignmentTypeKind" name="assignmentTypeKind" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="defaultAssignmentTypeId">
+                  Default Assignment Type
+                </Label>
+                <Select
+                  name="defaultAssignmentTypeId"
+                  defaultValue={NO_DEFAULT_ASSIGNMENT_TYPE}
+                >
+                  <SelectTrigger id="defaultAssignmentTypeId">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_DEFAULT_ASSIGNMENT_TYPE}>
+                      Use Thesis fallback until linked
+                    </SelectItem>
+                    {assignmentTypes.map((assignmentType) => (
+                      <SelectItem
+                        key={assignmentType.id}
+                        value={assignmentType.id}
+                      >
+                        {assignmentType.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Optional. Creates the default link now; draft assistants only
+                  become runtime defaults after activation.
+                </p>
               </div>
               <JsonTextarea
                 id="scoringScale"

@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  $transaction: mock(),
   gradingAssistantTemplate: {
     create: mock(),
     update: mock(),
+  },
+  assignmentTypeGradingAssistant: {
+    updateMany: mock(),
+    create: mock(),
   },
 };
 
@@ -31,14 +36,20 @@ function postForm(body: Record<string, string>) {
 
 describe('admin grading assistant templates action', () => {
   beforeEach(() => {
+    prisma.$transaction.mockReset();
     prisma.gradingAssistantTemplate.create.mockReset();
     prisma.gradingAssistantTemplate.update.mockReset();
+    prisma.assignmentTypeGradingAssistant.updateMany.mockReset();
+    prisma.assignmentTypeGradingAssistant.create.mockReset();
     requireAdmin.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
     requireAdmin.mockResolvedValue(undefined);
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({ id: 'profile-1' });
+    prisma.$transaction.mockImplementation(async (callback: any) =>
+      callback(prisma)
+    );
   });
 
   test('creates a draft template from JSON rubric and prompt config', async () => {
@@ -72,6 +83,51 @@ describe('admin grading assistant templates action', () => {
         outputSchemaJson: { schemaVersion: 1 },
         calibrationNotes: 'Pilot calibration pending.',
       }),
+    });
+  });
+
+  test('creates a default assignment-type link while creating a draft template', async () => {
+    prisma.gradingAssistantTemplate.create.mockResolvedValue({ id: 'template-1' });
+
+    await action({
+      request: postForm({
+        intent: 'createTemplate',
+        name: 'Daily Pages completion assistant',
+        slug: 'daily-pages-completion',
+        assignmentTypeKind: 'daily_pages',
+        defaultAssignmentTypeId: 'assignment-type-1',
+        rubricJson: JSON.stringify({ categories: [] }),
+        promptConfigJson: JSON.stringify({
+          systemInstructions: 'Check completion.',
+        }),
+        scoringScale: JSON.stringify({ type: 'completion' }),
+        outputSchemaJson: JSON.stringify({ schemaVersion: 1 }),
+        calibrationNotes: '',
+      }),
+      params: {},
+    } as any);
+
+    expect(prisma.gradingAssistantTemplate.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'Daily Pages completion assistant',
+        slug: 'daily-pages-completion',
+      }),
+    });
+    expect(prisma.assignmentTypeGradingAssistant.updateMany).toHaveBeenCalledWith({
+      where: {
+        assignmentTypeId: 'assignment-type-1',
+        isDefault: true,
+        activeTo: null,
+      },
+      data: { activeTo: expect.any(Date) },
+    });
+    expect(prisma.assignmentTypeGradingAssistant.create).toHaveBeenCalledWith({
+      data: {
+        assignmentTypeId: 'assignment-type-1',
+        gradingAssistantTemplateId: 'template-1',
+        isDefault: true,
+        activeFrom: expect.any(Date),
+      },
     });
   });
 
