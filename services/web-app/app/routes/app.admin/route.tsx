@@ -13,7 +13,7 @@ import {
   User,
   GraduationCap,
   ScrollText,
-  Bot,
+  ClipboardCheck,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -31,7 +31,7 @@ const tabs = [
   {
     label: 'Grading Assistants',
     to: '/app/admin/grading-assistants',
-    icon: <Bot size={16} className="opacity-75 mr-1" />,
+    icon: <ClipboardCheck size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Teacher Courses',

@@ -9,11 +9,11 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import {
   Archive,
-  AlertTriangle,
   CheckCircle2,
-  Link2,
+  GripVertical,
   Pencil,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
@@ -48,13 +48,117 @@ import { requireAdmin, requireMembership, requireUserId } from '~/utils/auth.ser
 import { prisma } from '~/utils/db.server';
 
 const ALLOWED_TEMPLATE_STATUSES = new Set(['draft', 'active', 'archived']);
-
-const DEFAULT_SCORING_SCALE_JSON =
-  '{\n  "type": "weighted_1_5",\n  "minScore": 1,\n  "maxScore": 5\n}';
-const DEFAULT_RUBRIC_JSON = '{\n  "categories": []\n}';
-const DEFAULT_PROMPT_CONFIG_JSON = '{\n  "systemInstructions": ""\n}';
-const DEFAULT_OUTPUT_SCHEMA_JSON = '{\n  "schemaVersion": 1\n}';
 const NO_DEFAULT_ASSIGNMENT_TYPE = '__no_default_assignment_type__';
+
+// ─── JSON shape types ──────────────────────────────────────────────────────
+
+type ScoringScaleData = {
+  type: string;
+  minScore: number;
+  maxScore: number;
+  compositeMin?: number;
+  compositeMax?: number;
+};
+
+type RubricCategory = {
+  key: string;
+  label: string;
+  weight: number;
+  description: string;
+};
+
+type RubricData = {
+  categories: RubricCategory[];
+};
+
+type PromptConfigData = {
+  systemInstructions?: string;
+  scoreInstructions?: string;
+  rubricInstructions?: string;
+  instructionsPreset?: string;
+};
+
+type OutputSchemaData = {
+  responseShape: string;
+  schemaVersion: number;
+};
+
+// ─── default values ────────────────────────────────────────────────────────
+
+const DEFAULT_SCORING_SCALE: ScoringScaleData = {
+  type: 'weighted_1_5',
+  minScore: 1,
+  maxScore: 5,
+};
+
+const DEFAULT_RUBRIC: RubricData = { categories: [] };
+
+const DEFAULT_PROMPT_CONFIG: PromptConfigData = { systemInstructions: '' };
+
+const DEFAULT_OUTPUT_SCHEMA: OutputSchemaData = {
+  responseShape: 'categories_overall_comment',
+  schemaVersion: 1,
+};
+
+const SCORING_SCALE_TYPES = [
+  { value: 'weighted_1_5', label: 'Weighted 1–5' },
+  { value: 'act_writing_2_12', label: 'ACT Writing 2–12' },
+  { value: 'rubric_points', label: 'Rubric points' },
+];
+
+const RESPONSE_SHAPES = [
+  { value: 'categories_overall_comment', label: 'Categories + overall comment' },
+  { value: 'overall_score_comment', label: 'Overall score + comment only' },
+];
+
+function parseScoringScale(raw: unknown): ScoringScaleData {
+  const d = raw as Partial<ScoringScaleData> | null;
+  return {
+    type: d?.type ?? 'weighted_1_5',
+    minScore: d?.minScore ?? 1,
+    maxScore: d?.maxScore ?? 5,
+    compositeMin: d?.compositeMin,
+    compositeMax: d?.compositeMax,
+  };
+}
+
+function parseRubric(raw: unknown): RubricData {
+  const d = raw as Partial<RubricData> | null;
+  const cats = Array.isArray(d?.categories) ? d!.categories : [];
+  return {
+    categories: cats.map((c: any) => ({
+      key: c.key ?? '',
+      label: c.label ?? '',
+      weight: typeof c.weight === 'number' ? c.weight : 0,
+      description: c.description ?? '',
+    })),
+  };
+}
+
+function parsePromptConfig(raw: unknown): PromptConfigData {
+  const d = raw as Partial<PromptConfigData> | null;
+  return {
+    systemInstructions: d?.systemInstructions ?? '',
+    scoreInstructions: d?.scoreInstructions ?? '',
+    rubricInstructions: d?.rubricInstructions ?? '',
+    instructionsPreset: d?.instructionsPreset ?? '',
+  };
+}
+
+function parseOutputSchema(raw: unknown): OutputSchemaData {
+  const d = raw as Partial<OutputSchemaData> | null;
+  return {
+    responseShape: d?.responseShape ?? 'categories_overall_comment',
+    schemaVersion: d?.schemaVersion ?? 1,
+  };
+}
+
+function labelToKey(label: string) {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -228,6 +332,449 @@ function statusBadge(status: string) {
   return <Badge variant="outline">draft</Badge>;
 }
 
+// ─── sub-editors ──────────────────────────────────────────────────────────
+
+function ScoringScaleEditor({
+  initial,
+  namePrefix = '',
+}: {
+  initial: ScoringScaleData;
+  namePrefix?: string;
+}) {
+  const [scale, setScale] = useState<ScoringScaleData>(initial);
+  const isAct = scale.type === 'act_writing_2_12';
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}scoreType`}>Scoring type</Label>
+        <Select
+          value={scale.type}
+          onValueChange={(v) => setScale((s) => ({ ...s, type: v }))}
+        >
+          <SelectTrigger id={`${namePrefix}scoreType`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SCORING_SCALE_TYPES.map((t) => (
+              <SelectItem key={t.value} value={t.value}>
+                {t.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${namePrefix}minScore`}>Min score</Label>
+          <Input
+            id={`${namePrefix}minScore`}
+            type="number"
+            value={scale.minScore}
+            min={0}
+            onChange={(e) =>
+              setScale((s) => ({ ...s, minScore: Number(e.target.value) }))
+            }
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`${namePrefix}maxScore`}>Max score</Label>
+          <Input
+            id={`${namePrefix}maxScore`}
+            type="number"
+            value={scale.maxScore}
+            min={1}
+            onChange={(e) =>
+              setScale((s) => ({ ...s, maxScore: Number(e.target.value) }))
+            }
+          />
+        </div>
+      </div>
+
+      {isAct && (
+        <div className="grid grid-cols-2 gap-3 rounded-[8px] border border-dashed p-3">
+          <p className="col-span-2 text-xs text-muted-foreground">
+            ACT composite range (domain averages are doubled)
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${namePrefix}compositeMin`}>Composite min</Label>
+            <Input
+              id={`${namePrefix}compositeMin`}
+              type="number"
+              value={scale.compositeMin ?? 2}
+              onChange={(e) =>
+                setScale((s) => ({
+                  ...s,
+                  compositeMin: Number(e.target.value),
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${namePrefix}compositeMax`}>Composite max</Label>
+            <Input
+              id={`${namePrefix}compositeMax`}
+              type="number"
+              value={scale.compositeMax ?? 12}
+              onChange={(e) =>
+                setScale((s) => ({
+                  ...s,
+                  compositeMax: Number(e.target.value),
+                }))
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      <input type="hidden" name="scoringScale" value={JSON.stringify(scale)} />
+    </div>
+  );
+}
+
+function RubricEditor({
+  initial,
+  namePrefix = '',
+}: {
+  initial: RubricData;
+  namePrefix?: string;
+}) {
+  const [cats, setCats] = useState<RubricCategory[]>(initial.categories);
+  const totalWeight = cats.reduce((s, c) => s + (c.weight || 0), 0);
+  const weightOk = Math.abs(totalWeight - 1) < 0.001;
+
+  function addCat() {
+    setCats((prev) => [
+      ...prev,
+      { key: '', label: '', weight: 0, description: '' },
+    ]);
+  }
+
+  function removeCat(i: number) {
+    setCats((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  function updateCat(i: number, patch: Partial<RubricCategory>) {
+    setCats((prev) =>
+      prev.map((c, idx) => {
+        if (idx !== i) return c;
+        const next = { ...c, ...patch };
+        if ('label' in patch && !patch.key) {
+          next.key = labelToKey(patch.label ?? '');
+        }
+        return next;
+      })
+    );
+  }
+
+  const pct = (w: number) => Math.round(w * 100);
+
+  return (
+    <div className="space-y-3">
+      {cats.length === 0 ? (
+        <p className="rounded-[8px] border border-dashed py-5 text-center text-sm text-muted-foreground">
+          No categories yet. Add one below.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {cats.map((cat, i) => (
+            <div
+              key={i}
+              className="rounded-[8px] border bg-muted/40 p-3 space-y-2.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <GripVertical className="h-3.5 w-3.5 shrink-0" />
+                  Category {i + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeCat(i)}
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label="Remove category"
+                >
+                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${namePrefix}catLabel${i}`}>Label</Label>
+                  <Input
+                    id={`${namePrefix}catLabel${i}`}
+                    value={cat.label}
+                    placeholder="e.g. Thesis & Content"
+                    onChange={(e) =>
+                      updateCat(i, {
+                        label: e.target.value,
+                        key: labelToKey(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={`${namePrefix}catWeight${i}`}>
+                    Weight %
+                  </Label>
+                  <Input
+                    id={`${namePrefix}catWeight${i}`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-20 tabular-nums"
+                    value={pct(cat.weight)}
+                    onChange={(e) =>
+                      updateCat(i, {
+                        weight: Number(e.target.value) / 100,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={`${namePrefix}catKey${i}`}>
+                  Key{' '}
+                  <span className="font-normal text-muted-foreground">
+                    (auto)
+                  </span>
+                </Label>
+                <Input
+                  id={`${namePrefix}catKey${i}`}
+                  value={cat.key}
+                  className="font-mono text-xs"
+                  placeholder="snake_case_key"
+                  onChange={(e) => updateCat(i, { key: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={`${namePrefix}catDesc${i}`}>Description</Label>
+                <Textarea
+                  id={`${namePrefix}catDesc${i}`}
+                  value={cat.description}
+                  rows={2}
+                  placeholder="What does good performance look like?"
+                  onChange={(e) =>
+                    updateCat(i, { description: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* weight balance indicator */}
+      {cats.length > 0 && (
+        <div
+          className={`flex items-center gap-2 text-xs ${weightOk ? 'text-green-700' : 'text-amber-700'}`}
+        >
+          <div
+            className={`h-1.5 flex-1 overflow-hidden rounded-full ${weightOk ? 'bg-green-200' : 'bg-amber-200'}`}
+          >
+            <div
+              className={`h-full rounded-full transition-all ${weightOk ? 'bg-green-600' : 'bg-amber-500'}`}
+              style={{ width: `${Math.min(totalWeight * 100, 100)}%` }}
+            />
+          </div>
+          <span className="tabular-nums">
+            {pct(totalWeight)}% {weightOk ? '✓' : '— must total 100%'}
+          </span>
+        </div>
+      )}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={addCat}
+        className="w-full"
+      >
+        <Plus className="mr-1.5 h-4 w-4" />
+        Add category
+      </Button>
+
+      <input
+        type="hidden"
+        name="rubricJson"
+        value={JSON.stringify({ categories: cats })}
+      />
+    </div>
+  );
+}
+
+function PromptConfigEditor({
+  initial,
+  namePrefix = '',
+}: {
+  initial: PromptConfigData;
+  namePrefix?: string;
+}) {
+  const [cfg, setCfg] = useState<PromptConfigData>(initial);
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}sysInstr`}>System instructions</Label>
+        <Textarea
+          id={`${namePrefix}sysInstr`}
+          rows={4}
+          value={cfg.systemInstructions ?? ''}
+          placeholder="High-level system prompt for the grading assistant…"
+          onChange={(e) =>
+            setCfg((c) => ({ ...c, systemInstructions: e.target.value }))
+          }
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}scoreInstr`}>Scoring instructions</Label>
+        <Textarea
+          id={`${namePrefix}scoreInstr`}
+          rows={3}
+          value={cfg.scoreInstructions ?? ''}
+          placeholder="How scores should be assigned (e.g. 'Scores must be integers 1–6')…"
+          onChange={(e) =>
+            setCfg((c) => ({ ...c, scoreInstructions: e.target.value }))
+          }
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}rubricInstr`}>Rubric instructions</Label>
+        <Textarea
+          id={`${namePrefix}rubricInstr`}
+          rows={3}
+          value={cfg.rubricInstructions ?? ''}
+          placeholder="How to apply the rubric categories…"
+          onChange={(e) =>
+            setCfg((c) => ({ ...c, rubricInstructions: e.target.value }))
+          }
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}preset`}>
+          Instructions preset{' '}
+          <span className="font-normal text-muted-foreground">
+            (overrides the above when set)
+          </span>
+        </Label>
+        <Input
+          id={`${namePrefix}preset`}
+          value={cfg.instructionsPreset ?? ''}
+          className="font-mono text-sm"
+          placeholder="e.g. legacy_thesis_driven_essay"
+          onChange={(e) =>
+            setCfg((c) => ({ ...c, instructionsPreset: e.target.value }))
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave blank to use the instructions above. Fill in only if this
+          template delegates to a hard-coded prompt preset.
+        </p>
+      </div>
+
+      <input
+        type="hidden"
+        name="promptConfigJson"
+        value={JSON.stringify(
+          Object.fromEntries(
+            Object.entries(cfg).filter(([, v]) => v !== '' && v != null)
+          )
+        )}
+      />
+    </div>
+  );
+}
+
+function OutputSchemaEditor({
+  initial,
+  namePrefix = '',
+}: {
+  initial: OutputSchemaData;
+  namePrefix?: string;
+}) {
+  const [schema, setSchema] = useState<OutputSchemaData>(initial);
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}responseShape`}>Response shape</Label>
+        <Select
+          value={schema.responseShape}
+          onValueChange={(v) =>
+            setSchema((s) => ({ ...s, responseShape: v }))
+          }
+        >
+          <SelectTrigger id={`${namePrefix}responseShape`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RESPONSE_SHAPES.map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          Controls which fields the AI returns and how the app renders the grade.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor={`${namePrefix}schemaVersion`}>Schema version</Label>
+        <Input
+          id={`${namePrefix}schemaVersion`}
+          type="number"
+          min={1}
+          value={schema.schemaVersion}
+          onChange={(e) =>
+            setSchema((s) => ({ ...s, schemaVersion: Number(e.target.value) }))
+          }
+        />
+      </div>
+
+      <input
+        type="hidden"
+        name="outputSchemaJson"
+        value={JSON.stringify(schema)}
+      />
+    </div>
+  );
+}
+
+// ─── section wrapper ───────────────────────────────────────────────────────
+
+function FormSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-medium leading-none">{title}</p>
+        {description && (
+          <p className="mt-1 text-xs text-muted-foreground text-pretty">{description}</p>
+        )}
+      </div>
+      <div className="rounded-[8px] border bg-muted/30 p-3 space-y-3">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── main route component ──────────────────────────────────────────────────
+
 export default function GradingAssistantsRoute() {
   const { templates, assignmentTypes } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
@@ -244,9 +791,6 @@ export default function GradingAssistantsRoute() {
   }, [fetcher.state, fetcher.data]);
 
   const activeTemplates = templates.filter((t) => t.status === 'active');
-  const uncoveredAssignmentTypes = assignmentTypes.filter(
-    (assignmentType) => !hasActiveDefaultLink(assignmentType)
-  );
   const coveredAssignmentTypes = assignmentTypes.filter((assignmentType) =>
     hasActiveDefaultLink(assignmentType)
   );
@@ -257,85 +801,96 @@ export default function GradingAssistantsRoute() {
         <h2 className="text-xl font-semibold">Grading assistant templates</h2>
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
           <SheetTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              New Template
+            <Button size="sm">
+              <Plus className="mr-1.5 h-4 w-4" />
+              New template
             </Button>
           </SheetTrigger>
-          <SheetContent className="overflow-y-auto sm:max-w-xl">
+          <SheetContent className="overflow-y-auto sm:max-w-2xl">
             <SheetHeader>
-              <SheetTitle>Create Grading Assistant Template</SheetTitle>
+              <SheetTitle>Create grading template</SheetTitle>
             </SheetHeader>
-            <fetcher.Form method="post" className="mt-4 space-y-4">
+            <fetcher.Form method="post" className="mt-5 space-y-5">
               <input type="hidden" name="intent" value="createTemplate" />
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" name="name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slug">Slug</Label>
-                <Input id="slug" name="slug" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="assignmentTypeKind">Assignment Type Kind</Label>
-                <Input id="assignmentTypeKind" name="assignmentTypeKind" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="defaultAssignmentTypeId">
-                  Default Assignment Type
-                </Label>
-                <Select
-                  name="defaultAssignmentTypeId"
-                  defaultValue={NO_DEFAULT_ASSIGNMENT_TYPE}
-                >
-                  <SelectTrigger id="defaultAssignmentTypeId">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_DEFAULT_ASSIGNMENT_TYPE}>
-                      Use Thesis fallback until linked
-                    </SelectItem>
-                    {assignmentTypes.map((assignmentType) => (
-                      <SelectItem
-                        key={assignmentType.id}
-                        value={assignmentType.id}
-                      >
-                        {assignmentType.title}
+
+              <FormSection title="Identity">
+                <div className="space-y-1.5">
+                  <Label htmlFor="name">Name</Label>
+                  <Input id="name" name="name" placeholder="e.g. ACT Writing four-domain" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="slug">Slug</Label>
+                  <Input id="slug" name="slug" className="font-mono text-sm" placeholder="act-writing-four-domain" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="assignmentTypeKind">
+                    Assignment type kind{' '}
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Input id="assignmentTypeKind" name="assignmentTypeKind" className="font-mono text-sm" placeholder="act_writing" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="defaultAssignmentTypeId">Link to assignment</Label>
+                  <Select name="defaultAssignmentTypeId" defaultValue={NO_DEFAULT_ASSIGNMENT_TYPE}>
+                    <SelectTrigger id="defaultAssignmentTypeId">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_DEFAULT_ASSIGNMENT_TYPE}>
+                        No link yet (link later from assignment page)
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Optional. Creates the default link now; draft assistants only
-                  become runtime defaults after activation.
-                </p>
-              </div>
-              <JsonTextarea
-                id="scoringScale"
-                label="Scoring Scale JSON"
-                defaultValue={DEFAULT_SCORING_SCALE_JSON}
-              />
-              <JsonTextarea
-                id="rubricJson"
-                label="Rubric JSON"
-                defaultValue={DEFAULT_RUBRIC_JSON}
-              />
-              <JsonTextarea
-                id="promptConfigJson"
-                label="Prompt Config JSON"
-                defaultValue={DEFAULT_PROMPT_CONFIG_JSON}
-              />
-              <JsonTextarea
-                id="outputSchemaJson"
-                label="Output Schema JSON"
-                defaultValue={DEFAULT_OUTPUT_SCHEMA_JSON}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="calibrationNotes">Calibration Notes</Label>
-                <Textarea id="calibrationNotes" name="calibrationNotes" />
-              </div>
-              <Button disabled={fetcher.state !== 'idle'} className="w-full">
-                Create Draft
+                      {assignmentTypes.map((at) => (
+                        <SelectItem key={at.id} value={at.id}>
+                          {at.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Draft templates won't become runtime defaults until activated.
+                  </p>
+                </div>
+              </FormSection>
+
+              <FormSection
+                title="Scoring scale"
+                description="Defines the numeric range used when scoring each rubric category."
+              >
+                <ScoringScaleEditor initial={DEFAULT_SCORING_SCALE} namePrefix="c-" />
+              </FormSection>
+
+              <FormSection
+                title="Rubric categories"
+                description="Weighted criteria the AI scores independently. Weights must total 100%."
+              >
+                <RubricEditor initial={DEFAULT_RUBRIC} namePrefix="c-" />
+              </FormSection>
+
+              <FormSection
+                title="Prompt configuration"
+                description="Instructions that shape how the AI grades. Preset overrides manual instructions."
+              >
+                <PromptConfigEditor initial={DEFAULT_PROMPT_CONFIG} namePrefix="c-" />
+              </FormSection>
+
+              <FormSection
+                title="Output schema"
+                description="Controls which fields the AI returns and how the app renders the result."
+              >
+                <OutputSchemaEditor initial={DEFAULT_OUTPUT_SCHEMA} namePrefix="c-" />
+              </FormSection>
+
+              <FormSection title="Calibration notes">
+                <Textarea
+                  id="calibrationNotes"
+                  name="calibrationNotes"
+                  rows={3}
+                  placeholder="Notes for human reviewers — calibration samples, known edge cases, sign-off status…"
+                />
+              </FormSection>
+
+              <Button type="submit" disabled={fetcher.state !== 'idle'} className="w-full">
+                {fetcher.state !== 'idle' ? 'Creating…' : 'Create draft'}
               </Button>
             </fetcher.Form>
           </SheetContent>
@@ -345,93 +900,83 @@ export default function GradingAssistantsRoute() {
       {editingTemplate && (
         <Sheet
           open={editingTemplate != null}
-          onOpenChange={(open) => {
-            if (!open) setEditingTemplate(null);
-          }}
+          onOpenChange={(open) => { if (!open) setEditingTemplate(null); }}
         >
-          <SheetContent className="overflow-y-auto sm:max-w-xl">
+          <SheetContent className="overflow-y-auto sm:max-w-2xl">
             <SheetHeader>
-              <SheetTitle>Edit Grading Assistant Template</SheetTitle>
+              <SheetTitle>Edit template</SheetTitle>
             </SheetHeader>
-            <fetcher.Form
-              key={editingTemplate.id}
-              method="post"
-              className="mt-4 space-y-4"
-            >
+            <fetcher.Form key={editingTemplate.id} method="post" className="mt-5 space-y-5">
               <input type="hidden" name="intent" value="updateTemplate" />
-              <input
-                type="hidden"
-                name="templateId"
-                value={editingTemplate.id}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Name</Label>
-                <Input
-                  id="edit-name"
-                  name="name"
-                  defaultValue={editingTemplate.name}
-                  required
+              <input type="hidden" name="templateId" value={editingTemplate.id} />
+
+              <FormSection title="Identity">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name">Name</Label>
+                  <Input id="edit-name" name="name" defaultValue={editingTemplate.name} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-slug">Slug</Label>
+                  <Input id="edit-slug" name="slug" defaultValue={editingTemplate.slug} className="font-mono text-sm" required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-kind">Assignment type kind</Label>
+                  <Input id="edit-kind" name="assignmentTypeKind" defaultValue={editingTemplate.assignmentTypeKind ?? ''} className="font-mono text-sm" />
+                </div>
+              </FormSection>
+
+              <FormSection
+                title="Scoring scale"
+                description="Defines the numeric range used when scoring each rubric category."
+              >
+                <ScoringScaleEditor
+                  initial={parseScoringScale(editingTemplate.scoringScale)}
+                  namePrefix="e-"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-slug">Slug</Label>
-                <Input
-                  id="edit-slug"
-                  name="slug"
-                  defaultValue={editingTemplate.slug}
-                  required
+              </FormSection>
+
+              <FormSection
+                title="Rubric categories"
+                description="Weighted criteria the AI scores independently. Weights must total 100%."
+              >
+                <RubricEditor
+                  initial={parseRubric(editingTemplate.rubricJson)}
+                  namePrefix="e-"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-assignmentTypeKind">
-                  Assignment Type Kind
-                </Label>
-                <Input
-                  id="edit-assignmentTypeKind"
-                  name="assignmentTypeKind"
-                  defaultValue={editingTemplate.assignmentTypeKind ?? ''}
+              </FormSection>
+
+              <FormSection
+                title="Prompt configuration"
+                description="Instructions that shape how the AI grades."
+              >
+                <PromptConfigEditor
+                  initial={parsePromptConfig(editingTemplate.promptConfigJson)}
+                  namePrefix="e-"
                 />
-              </div>
-              <JsonTextarea
-                id="edit-scoringScale"
-                name="scoringScale"
-                label="Scoring Scale JSON"
-                defaultValue={formatJsonField(editingTemplate.scoringScale)}
-              />
-              <JsonTextarea
-                id="edit-rubricJson"
-                name="rubricJson"
-                label="Rubric JSON"
-                defaultValue={formatJsonField(editingTemplate.rubricJson)}
-              />
-              <JsonTextarea
-                id="edit-promptConfigJson"
-                name="promptConfigJson"
-                label="Prompt Config JSON"
-                defaultValue={formatJsonField(editingTemplate.promptConfigJson)}
-              />
-              <JsonTextarea
-                id="edit-outputSchemaJson"
-                name="outputSchemaJson"
-                label="Output Schema JSON"
-                defaultValue={formatJsonField(editingTemplate.outputSchemaJson)}
-              />
-              <div className="space-y-2">
-                <Label htmlFor="edit-calibrationNotes">
-                  Calibration Notes
-                </Label>
+              </FormSection>
+
+              <FormSection
+                title="Output schema"
+                description="Controls which fields the AI returns and how the app renders the result."
+              >
+                <OutputSchemaEditor
+                  initial={parseOutputSchema(editingTemplate.outputSchemaJson)}
+                  namePrefix="e-"
+                />
+              </FormSection>
+
+              <FormSection title="Calibration notes">
                 <Textarea
                   id="edit-calibrationNotes"
                   name="calibrationNotes"
                   defaultValue={editingTemplate.calibrationNotes ?? ''}
+                  rows={3}
+                  placeholder="Notes for human reviewers…"
                 />
-              </div>
-              <Button
-                type="submit"
-                disabled={fetcher.state !== 'idle'}
-                className="w-full"
-              >
-                {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
+              </FormSection>
+
+              <Button type="submit" disabled={fetcher.state !== 'idle'} className="w-full">
+                {fetcher.state !== 'idle' ? 'Saving…' : 'Save changes'}
               </Button>
             </fetcher.Form>
           </SheetContent>
@@ -439,86 +984,18 @@ export default function GradingAssistantsRoute() {
       )}
 
       {/* Coverage summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           { label: 'Total templates', value: templates.length },
           { label: 'Active templates', value: activeTemplates.length },
-          {
-            label: 'Covered assignment types',
-            value: coveredAssignmentTypes.length,
-          },
-          {
-            label: 'Uncovered assignment types',
-            value: uncoveredAssignmentTypes.length,
-            warn: uncoveredAssignmentTypes.length > 0,
-          },
-        ].map(({ label, value, warn }) => (
-          <div
-            key={label}
-            className={`rounded-[8px] border px-4 py-3 ${
-              warn ? 'border-yellow-400 bg-yellow-50' : 'bg-muted'
-            }`}
-          >
-            <div
-              className={`text-2xl font-semibold tabular-nums ${
-                warn ? 'text-yellow-800' : ''
-              }`}
-            >
-              {value}
-            </div>
-            <div
-              className={`text-xs ${
-                warn ? 'text-yellow-700' : 'text-muted-foreground'
-              }`}
-            >
-              {label}
-            </div>
+          { label: 'Covered assignment types', value: coveredAssignmentTypes.length },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-[8px] border bg-muted px-4 py-3">
+            <div className="text-2xl font-semibold tabular-nums">{value}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
           </div>
         ))}
       </div>
-
-      {uncoveredAssignmentTypes.length > 0 && (
-        <Card className="border-yellow-400 bg-yellow-50">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-yellow-800 text-base">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              Assignment types not production covered
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y divide-yellow-200">
-              {uncoveredAssignmentTypes.map((assignmentType) => (
-                <div
-                  key={assignmentType.id}
-                  className="flex items-center justify-between gap-3 py-2"
-                >
-                  <div>
-                    <div className="font-medium text-sm">{assignmentType.title}</div>
-                    <div className="text-xs text-yellow-700">
-                      <span className="font-mono">
-                        {assignmentType.kind || 'no stable kind'}
-                      </span>
-                      <span className="mx-2">/</span>
-                      {coverageReason(assignmentType)}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-yellow-400 text-yellow-800 hover:bg-yellow-100"
-                    asChild
-                  >
-                    <a href={`/app/admin/assignment-types/${assignmentType.id}`}>
-                      <Link2 className="mr-1.5 h-3.5 w-3.5" />
-                      Link
-                    </a>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card className="bg-muted">
         <CardHeader>
@@ -530,23 +1007,17 @@ export default function GradingAssistantsRoute() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Ver.</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>Scoring type</TableHead>
-                <TableHead>Default links</TableHead>
+                <TableHead className="whitespace-nowrap">Ver.</TableHead>
+                <TableHead className="whitespace-nowrap">Kind</TableHead>
+                <TableHead className="whitespace-nowrap">Scoring</TableHead>
+                <TableHead>Linked to</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {templates.map((template) => {
-                const scoringScale = template.scoringScale as Record<
-                  string,
-                  unknown
-                > | null;
-                const scoringType =
-                  typeof scoringScale?.type === 'string'
-                    ? scoringScale.type
-                    : '-';
+                const scale = parseScoringScale(template.scoringScale);
+                const rubric = parseRubric(template.rubricJson);
                 return (
                   <TableRow key={template.id}>
                     <TableCell className="font-medium">
@@ -557,23 +1028,37 @@ export default function GradingAssistantsRoute() {
                       >
                         {template.name}
                       </button>
-                      <div className="text-xs text-muted-foreground font-mono">{template.slug}</div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {template.slug}
+                      </div>
                     </TableCell>
                     <TableCell>{statusBadge(template.status)}</TableCell>
                     <TableCell>v{template.version}</TableCell>
                     <TableCell className="font-mono text-xs">
-                      {template.assignmentTypeKind ?? '-'}
+                      {template.assignmentTypeKind ?? '—'}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{scoringType}</TableCell>
+                    <TableCell className="text-xs">
+                      <span className="font-mono">{scale.type}</span>
+                      <span className="ml-1 text-muted-foreground">
+                        {scale.minScore}–{scale.maxScore}
+                      </span>
+                      {rubric.categories.length > 0 && (
+                        <span className="ml-1 text-muted-foreground">
+                          · {rubric.categories.length} cat.
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
-                      {template.assignmentTypeLinks.length === 0
-                        ? <span className="text-sm text-muted-foreground">None</span>
-                        : template.assignmentTypeLinks
-                            .map((link) => link.assignmentType.title)
-                            .join(', ')}
+                      {template.assignmentTypeLinks.length === 0 ? (
+                        <span className="text-sm text-muted-foreground">None</span>
+                      ) : (
+                        template.assignmentTypeLinks
+                          .map((l) => l.assignmentType.title)
+                          .join(', ')
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1.5">
                         <Button
                           type="button"
                           size="sm"
@@ -620,46 +1105,6 @@ function hasActiveDefaultLink(assignmentType: {
   return assignmentType.gradingAssistantLinks.some(
     (link) => link.gradingAssistantTemplate.status === 'active'
   );
-}
-
-function coverageReason(assignmentType: {
-  gradingAssistantLinks: Array<{
-    gradingAssistantTemplate: { name: string; status: string };
-  }>;
-}) {
-  const link = assignmentType.gradingAssistantLinks[0];
-  if (!link) return 'No default link';
-  return `${link.gradingAssistantTemplate.name} is ${link.gradingAssistantTemplate.status}`;
-}
-
-function JsonTextarea({
-  id,
-  name = id,
-  label,
-  defaultValue,
-}: {
-  id: string;
-  name?: string;
-  label: string;
-  defaultValue: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Textarea
-        id={id}
-        name={name}
-        defaultValue={defaultValue}
-        rows={6}
-        className="font-mono text-xs"
-        required
-      />
-    </div>
-  );
-}
-
-function formatJsonField(value: unknown) {
-  return JSON.stringify(value ?? {}, null, 2);
 }
 
 function TemplateStatusButton({
