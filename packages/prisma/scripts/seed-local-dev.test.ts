@@ -12,6 +12,30 @@ describe('local dev seed fixtures', () => {
     expect(bundle.teacherTrainings.length).toBeGreaterThan(0);
   });
 
+  test('aligns thesis module review instructions with the grading assistant rubric', async () => {
+    const bundle = await loadProdFidelityBundle();
+    const reviewInstructions = bundle.assignmentModuleInstructions.filter(
+      (instruction) =>
+        typeof instruction.title === 'string' &&
+        instruction.title.trim().toLowerCase() === 'review my essay!'
+    );
+
+    expect(reviewInstructions.length).toBeGreaterThanOrEqual(2);
+
+    for (const instruction of reviewInstructions) {
+      const content = `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`;
+
+      expect(content).not.toContain(
+        'Content, Organization, Syntax, and Grammar'
+      );
+      expect(content).toContain('Thesis/Content (25%)');
+      expect(content).toContain('Organization/Structure (25%)');
+      expect(content).toContain('Evidence/Support (20%)');
+      expect(content).toContain('Voice/Style (20%)');
+      expect(content).toContain('Grammar/Syntax/Formatting (10%)');
+    }
+  });
+
   test('defines stable dev personas with shared password', () => {
     expect(LOCAL_DEV_PERSONAS.length).toBeGreaterThanOrEqual(8);
     expect(
