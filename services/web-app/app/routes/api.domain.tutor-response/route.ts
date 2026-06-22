@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -21,12 +22,25 @@ const errorResponse = (error: { message: string }) => {
   );
 };
 
-const READ_DOCUMENT_TOOL = {
-  name: 'read_student_document',
-  description:
-    "Returns the student's current document draft. Call this whenever you need to review, reference, or give feedback on the student's writing.",
-  input_schema: { type: 'object' as const, properties: {} },
-};
+function sha256Text(text: string) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+function buildDocumentContextMessage({
+  documentText,
+  source,
+  sha256,
+}: {
+  documentText: string;
+  source: 'client-content' | 'db-document-text';
+  sha256: string;
+}) {
+  return [
+    `<student_document_context source="${source}" text_length="${documentText.length}" sha256="${sha256}">`,
+    documentText,
+    '</student_document_context>',
+  ].join('\n');
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
@@ -45,7 +59,6 @@ export async function action({ request }: ActionFunctionArgs) {
         document: {
           select: {
             text: true,
-            assignment: { select: { tutorContext: true } },
           },
         },
       },
@@ -70,10 +83,12 @@ export async function action({ request }: ActionFunctionArgs) {
     const system = buildTutorSystemPrompt({
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
-      assignmentTutorContext: cms.document.assignment?.tutorContext,
     });
 
-    const documentText = data.content ?? cms.document.text;
+    const documentSource =
+      data.content === undefined ? 'db-document-text' : 'client-content';
+    const documentText = data.content ?? cms.document.text ?? '';
+    const documentTextSha256 = sha256Text(documentText);
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
@@ -94,6 +109,14 @@ export async function action({ request }: ActionFunctionArgs) {
       .concat([
         {
           role: AgentType.User,
+          content: buildDocumentContextMessage({
+            documentText,
+            source: documentSource,
+            sha256: documentTextSha256,
+          }),
+        },
+        {
+          role: AgentType.User,
           content: data.response,
         },
       ]);
@@ -105,12 +128,15 @@ export async function action({ request }: ActionFunctionArgs) {
         messages,
         system,
         maxTokens: 500,
-        tools: [READ_DOCUMENT_TOOL],
-        handleToolCall: async (name) => {
-          if (name === 'read_student_document') {
-            return documentText ?? '';
-          }
-          return '';
+        metadata: {
+          feature: 'tutor',
+          kind: 'assignment-module-tutor',
+          cmsId: cms.id,
+          assignmentModuleId: cms.assignmentModuleId,
+          instructionId: instruction.id,
+          documentSource,
+          documentTextLength: documentText.length,
+          documentTextSha256,
         },
       });
     } catch (error) {

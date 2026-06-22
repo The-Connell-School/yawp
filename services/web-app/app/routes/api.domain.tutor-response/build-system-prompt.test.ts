@@ -4,7 +4,6 @@ import { buildTutorSystemPrompt } from './build-system-prompt';
 const base = {
   tutorInstructions: 'You are a friendly English writing tutor.',
   instructionTutorInstructions: 'Focus on the current instruction only.',
-  assignmentTutorContext: 'This assignment is a persuasive essay.',
 };
 
 describe('buildTutorSystemPrompt', () => {
@@ -13,10 +12,11 @@ describe('buildTutorSystemPrompt', () => {
     expect(result).toContain('behind-the-scenes information');
   });
 
-  it('includes the document tool instruction', () => {
+  it('includes the explicit document context instruction', () => {
     const result = buildTutorSystemPrompt(base);
-    expect(result).toContain('read_student_document');
-    expect(result).toContain('Always call this tool before commenting');
+    expect(result).toContain('student_document_context');
+    expect(result).toContain('current document draft');
+    expect(result).not.toContain('read_student_document');
   });
 
   it('does not include any <student_document> tags', () => {
@@ -30,20 +30,13 @@ describe('buildTutorSystemPrompt', () => {
     expect(result.toLowerCase()).toContain("student's own writing");
   });
 
-  it('ignores assignment tutor context for normal tutor prompts', () => {
-    const result = buildTutorSystemPrompt(base);
-
-    expect(result).not.toContain('This assignment is a persuasive essay.');
-  });
-
   it('drops undefined / null parts cleanly', () => {
     const result = buildTutorSystemPrompt({
       tutorInstructions: undefined,
       instructionTutorInstructions: null,
-      assignmentTutorContext: '',
     });
     expect(result).toContain('behind-the-scenes information');
-    expect(result).toContain('read_student_document');
+    expect(result).toContain('student_document_context');
     expect(result.startsWith('\n')).toBe(false);
     expect(result.endsWith('\n')).toBe(false);
   });

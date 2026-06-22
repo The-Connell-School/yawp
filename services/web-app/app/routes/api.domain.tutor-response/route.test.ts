@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getLLMCompletion = mock();
@@ -62,7 +63,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((thrown as Response).status).toBe(403);
   });
 
-  test('touches the module session when writing tutor messages', async () => {
+  test('sends the current document as explicit auditable tutor context', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
@@ -79,7 +80,6 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       messages: [],
       document: {
         text: 'Original draft',
-        assignment: { tutorContext: null },
       },
     });
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
@@ -102,6 +102,33 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         body,
       }),
     } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.tools).toBeUndefined();
+    expect(completionArgs.handleToolCall).toBeUndefined();
+    expect(completionArgs.system).toContain('student_document_context');
+
+    const documentContextMessage = completionArgs.messages.find(
+      (message: { role: string; content: string }) =>
+        message.role === 'user' &&
+        message.content.includes('<student_document_context')
+    );
+    expect(documentContextMessage.content).toContain('source="client-content"');
+    expect(documentContextMessage.content).toContain('Current draft');
+
+    expect(completionArgs.metadata).toEqual(
+      expect.objectContaining({
+        feature: 'tutor',
+        kind: 'assignment-module-tutor',
+        documentSource: 'client-content',
+        documentTextLength: 'Current draft'.length,
+        documentTextSha256: createHash('sha256')
+          .update('Current draft')
+          .digest('hex'),
+        cmsId: 'cms-1',
+        instructionId: 'instruction-1',
+      })
+    );
 
     expect(prisma.assignmentModuleSession.update).toHaveBeenCalledWith(
       expect.objectContaining({
