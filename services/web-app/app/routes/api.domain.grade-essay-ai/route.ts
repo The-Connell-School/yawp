@@ -27,6 +27,7 @@ import {
   extractJsonObjectCandidates,
   parseFirstJsonValue,
 } from '~/utils/llm-json.server';
+import { buildAiTextContextAudit } from '~/utils/ai-context-audit.server';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -551,6 +552,12 @@ export async function action({ request }: ActionFunctionArgs) {
   );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
   const useE2EFixture = shouldUseE2EGradingFixture();
+  const documentContext = buildAiTextContextAudit({
+    documentSource: 'submission-snapshot',
+    documentId: submission.document.id,
+    submissionId: submission.id,
+    text: submission.text,
+  });
 
   const apHistorySnapshotCandidate =
     submission.document.assignment?.apHistorySnapshot;
@@ -591,6 +598,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           kind: 'ap-history-rubric',
           rubricId: apHistorySnapshot.rubric.rubricId,
           essayType: apHistorySnapshot.essayType,
+          ...documentContext,
         },
       });
 
@@ -652,6 +660,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           model,
           rubricMode: 'ap_history',
           gradedAt: now.toISOString(),
+          documentContext,
         } satisfies Prisma.InputJsonValue,
         ...(!submission.gradedAt
           ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
@@ -696,6 +705,17 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         system,
         messages: [{ role: 'user', content: userPrompt }],
         maxTokens: 900,
+        metadata: {
+          feature: 'grading',
+          kind: 'rubric-evaluation',
+          gradingAssistantTemplateId: gradingAssistantTemplate.id,
+          gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
+          gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+          gradingAssistantSource: resolvedGradingAssistant.source,
+          assignmentTypeId: submission.document.assignmentTypeId,
+          assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+          ...documentContext,
+        },
       });
     } catch (error) {
       throw error;
@@ -719,6 +739,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'overall-comment',
+        ...documentContext,
       },
     });
     const parsedOverallComment = AiOverallCommentSchema.parse(
@@ -775,6 +796,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'rubric-schema-repair',
+        ...documentContext,
       },
     });
 
@@ -891,7 +913,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         messages: [{ role: 'user', content: grammarUserPrompt }],
         maxTokens: 1600,
         temperature: 0.2,
-        metadata: { feature: 'grading', kind: 'grammar-issues' },
+        metadata: {
+          feature: 'grading',
+          kind: 'grammar-issues',
+          ...documentContext,
+        },
       });
       let parsedGrammarIssues =
         parseGrammarIssuesFromResponseText(grammarResponseText);
@@ -916,6 +942,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             feature: 'grading',
             kind: 'grammar-issues',
             retry: 'schema-repair',
+            ...documentContext,
           },
         });
         parsedGrammarIssues =
@@ -949,6 +976,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         gradingAssistantSource: resolvedGradingAssistant.source,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        documentContext,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
         ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
@@ -972,6 +1000,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         scoringType,
         rubricKeys,
         gradedAt: now.toISOString(),
+        documentContext,
       } satisfies Prisma.InputJsonValue,
     },
   });

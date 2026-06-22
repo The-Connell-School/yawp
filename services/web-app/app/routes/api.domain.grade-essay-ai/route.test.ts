@@ -258,6 +258,14 @@ describe('api.domain.grade-essay-ai', () => {
       gradingAssistantSource: 'legacy-fallback',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentTypeKind: null,
+      documentContext: {
+        documentSource: 'submission-snapshot',
+        documentId: 'doc-1',
+        submissionId: 'sub-1',
+        documentTextLength: 20,
+        documentTextSha256:
+          '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+      },
     });
     expect(
       prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0].data
@@ -267,6 +275,37 @@ describe('api.domain.grade-essay-ai', () => {
       templateVersion: 1,
       source: 'legacy-fallback',
       status: 'succeeded',
+      metadata: {
+        documentContext: {
+          documentSource: 'submission-snapshot',
+          documentId: 'doc-1',
+          submissionId: 'sub-1',
+          documentTextLength: 20,
+          documentTextSha256:
+            '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+        },
+      },
+    });
+
+    expect(getLLMCompletion.mock.calls[0]?.[0].metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'rubric-evaluation',
+      documentSource: 'submission-snapshot',
+      documentId: 'doc-1',
+      submissionId: 'sub-1',
+      documentTextLength: 20,
+      documentTextSha256:
+        '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+    });
+    expect(getLLMCompletion.mock.calls[1]?.[0].metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'grammar-issues',
+      documentSource: 'submission-snapshot',
+      documentId: 'doc-1',
+      submissionId: 'sub-1',
+      documentTextLength: 20,
+      documentTextSha256:
+        '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
     });
   });
 
@@ -672,6 +711,18 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).toContain(
       'Reconstruction changed political rights through amendments and federal enforcement.'
     );
+    expect(firstCallArgs?.metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'ap-history-rubric',
+      rubricId: 'ap-history-dbq-2026',
+      essayType: 'dbq',
+      documentSource: 'submission-snapshot',
+      documentId: 'ap-doc-1',
+      submissionId: 'ap-sub-1',
+      documentTextLength: 83,
+      documentTextSha256:
+        '624d299a9fafbd01f2c77254380a20dfe4bf111c70eb9044456083878e6c0181',
+    });
 
     expect(prisma.submission.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -733,6 +784,14 @@ describe('api.domain.grade-essay-ai', () => {
         rubricScores: payload.rubricScores,
         aiMeta: expect.objectContaining({
           rubricMode: 'ap_history',
+          documentContext: {
+            documentSource: 'submission-snapshot',
+            documentId: 'ap-doc-1',
+            submissionId: 'ap-sub-1',
+            documentTextLength: 83,
+            documentTextSha256:
+              '624d299a9fafbd01f2c77254380a20dfe4bf111c70eb9044456083878e6c0181',
+          },
         }),
       })
     );
