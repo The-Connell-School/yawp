@@ -58,28 +58,12 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
-import { getAssignmentTypeAccessFeatureKey } from '~/utils/assignment-type-access.server';
-
-type TeacherAccessRow = {
-  teacherProfileId: string;
-  teacherName: string;
-  teacherEmail: string;
-  organizationName: string;
-  statusLabel: string;
-  effectiveEnabled: boolean;
-  overrideAccess: 'enabled' | 'disabled' | null;
-};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
   const assignmentTypeId = params.id;
-  const [
-    course,
-    teacherProfiles,
-    teacherAccessTargets,
-    gradingAssistantTemplates,
-  ] = await Promise.all([
+  const [course, gradingAssistantTemplates] = await Promise.all([
     prisma.assignmentType.findUnique({
       where: { id: assignmentTypeId },
       include: {
@@ -104,30 +88,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         image: { select: { id: true } },
       },
     }),
-    prisma.orgMembership.findMany({
-      where: { role: 'TEACHER', isActive: true },
-      select: {
-        id: true,
-        organizationId: true,
-        organization: { select: { name: true } },
-        user: { select: { email: true, name: true } },
-      },
-      orderBy: {
-        user: {
-          name: 'asc',
-        },
-      },
-    }),
-    prisma.featureAccessTarget.findMany({
-      where: {
-        featureKey: getAssignmentTypeAccessFeatureKey(assignmentTypeId!),
-        targetKind: 'teacher',
-      },
-      select: {
-        targetId: true,
-        enabled: true,
-      },
-    }),
     prisma.gradingAssistantTemplate.findMany({
       where: { status: 'active' },
       orderBy: [{ name: 'asc' }],
@@ -138,47 +98,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const organizationDefaultIds = new Set(
-    course.organizationAssignments.map(
-      (assignment) => assignment.organization.id
-    )
-  );
-  const targetsByTeacherId = new Map(
-    teacherAccessTargets.map((target) => [target.targetId, target])
-  );
-
-  const teacherAccessRows: TeacherAccessRow[] = teacherProfiles.map(
-    (teacher) => {
-      const target = targetsByTeacherId.get(teacher.id);
-      const inheritedEnabled = organizationDefaultIds.has(
-        teacher.organizationId
-      );
-      const effectiveEnabled = target ? target.enabled : inheritedEnabled;
-
-      return {
-        teacherProfileId: teacher.id,
-        teacherName:
-          teacher.user.name ??
-          teacher.user.email ??
-          'Unnamed teacher',
-        teacherEmail: teacher.user.email ?? '',
-        organizationName: teacher.organization.name,
-        statusLabel: target
-          ? `Teacher override: ${target.enabled ? 'enabled' : 'disabled'}`
-          : inheritedEnabled
-            ? 'Organization default'
-            : 'No access',
-        effectiveEnabled,
-        overrideAccess: target
-          ? target.enabled
-            ? 'enabled'
-            : 'disabled'
-          : null,
-      };
-    }
-  );
-
-  return dataResponse({ course, teacherAccessRows, gradingAssistantTemplates });
+  return dataResponse({ course, gradingAssistantTemplates });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -186,94 +106,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = formData.get('intent');
   const assignmentTypeId = params.id;
-
-  if (intent === 'setTeacherAccess') {
-    if (!assignmentTypeId) {
-      return dataResponse(
-        { status: 'error', message: 'Assignment type is required.' },
-        { status: 400 }
-      );
-    }
-
-    const teacherProfileId = formData.get('teacherProfileId')?.toString();
-    const access = formData.get('access')?.toString();
-
-    if (!teacherProfileId) {
-      return dataResponse(
-        { status: 'error', message: 'Teacher is required.' },
-        { status: 400 }
-      );
-    }
-    if (access !== 'enabled' && access !== 'disabled' && access !== 'default') {
-      return dataResponse(
-        { status: 'error', message: 'Access value is invalid.' },
-        { status: 400 }
-      );
-    }
-
-    const [assignmentType, teacherProfile] = await Promise.all([
-      prisma.assignmentType.findUnique({
-        where: { id: assignmentTypeId },
-        select: { id: true },
-      }),
-      prisma.orgMembership.findUnique({
-        where: { id: teacherProfileId, role: 'TEACHER' },
-        select: { id: true },
-      }),
-    ]);
-
-    if (!assignmentType) {
-      return dataResponse(
-        { status: 'error', message: 'Assignment type not found.' },
-        { status: 404 }
-      );
-    }
-    if (!teacherProfile) {
-      return dataResponse(
-        { status: 'error', message: 'Teacher not found.' },
-        { status: 404 }
-      );
-    }
-
-    const featureKey = getAssignmentTypeAccessFeatureKey(assignmentType.id);
-
-    if (access === 'default') {
-      await prisma.featureAccessTarget.deleteMany({
-        where: {
-          featureKey,
-          targetKind: 'teacher',
-          targetId: teacherProfile.id,
-        },
-      });
-
-      return dataResponse({ status: 'success' });
-    }
-
-    const enabled = access === 'enabled';
-    await prisma.featureAccessTarget.upsert({
-      where: {
-        featureKey_targetKind_targetId: {
-          featureKey,
-          targetKind: 'teacher',
-          targetId: teacherProfile.id,
-        },
-      },
-      create: {
-        featureKey,
-        targetKind: 'teacher',
-        targetId: teacherProfile.id,
-        enabled,
-        expiresAt: null,
-      },
-      update: {
-        enabled,
-        expiresAt: null,
-        updatedAt: new Date(),
-      },
-    });
-
-    return dataResponse({ status: 'success' });
-  }
 
   if (intent === 'deleteCourse') {
     await prisma.assignmentType.update({
@@ -442,8 +274,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, teacherAccessRows, gradingAssistantTemplates } =
-    useLoaderData<typeof loader>();
+  const { course, gradingAssistantTemplates } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
@@ -777,8 +608,6 @@ export default function AssignmentTypeRoute() {
         </CardContent>
       </Card>
 
-      <TeacherAssignmentTypeAccessManager rows={teacherAccessRows} />
-
       <GradingAssistantCard
         currentLink={currentGradingAssistantLink}
         activeTemplates={gradingAssistantTemplates}
@@ -877,161 +706,6 @@ export default function AssignmentTypeRoute() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function TeacherAssignmentTypeAccessManager({
-  rows,
-}: {
-  rows: TeacherAccessRow[];
-}) {
-  const fetcher = useFetcher();
-  const [query, setQuery] = React.useState('');
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredRows = React.useMemo(
-    () =>
-      rows.filter((row) => {
-        if (!normalizedQuery) return true;
-        return [
-          row.teacherName,
-          row.teacherEmail,
-          row.organizationName,
-          row.statusLabel,
-        ].some((value) => value.toLowerCase().includes(normalizedQuery));
-      }),
-    [normalizedQuery, rows]
-  );
-
-  const submitTeacherAccess = (
-    teacherProfileId: string,
-    access: 'enabled' | 'disabled' | 'default'
-  ) => {
-    const formData = new FormData();
-    formData.set('intent', 'setTeacherAccess');
-    formData.set('teacherProfileId', teacherProfileId);
-    formData.set('access', access);
-    fetcher.submit(formData, { method: 'post' });
-  };
-
-  return (
-    <Card
-      className="bg-muted"
-      data-testid="teacher-assignment-type-access-manager"
-    >
-      <CardHeader className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <CardTitle>Teacher Access</CardTitle>
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search teachers"
-          className="sm:max-w-sm"
-        />
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Teacher</TableHead>
-                <TableHead>Organization</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Override</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="h-20 text-center text-sm text-muted-foreground"
-                  >
-                    No teachers found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredRows.map((row) => (
-                  <TableRow key={row.teacherProfileId}>
-                    <TableCell className="min-w-[260px]">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium">{row.teacherName}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {row.teacherEmail}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{row.organizationName}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            row.effectiveEnabled ? 'default' : 'secondary'
-                          }
-                        >
-                          {row.effectiveEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {row.statusLabel}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            row.overrideAccess === null ? 'default' : 'outline'
-                          }
-                          disabled={fetcher.state !== 'idle'}
-                          onClick={() =>
-                            submitTeacherAccess(row.teacherProfileId, 'default')
-                          }
-                        >
-                          Use default
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            row.overrideAccess === 'enabled'
-                              ? 'default'
-                              : 'outline'
-                          }
-                          disabled={fetcher.state !== 'idle'}
-                          onClick={() =>
-                            submitTeacherAccess(row.teacherProfileId, 'enabled')
-                          }
-                        >
-                          Enable
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={
-                            row.overrideAccess === 'disabled'
-                              ? 'destructive'
-                              : 'outline'
-                          }
-                          disabled={fetcher.state !== 'idle'}
-                          onClick={() =>
-                            submitTeacherAccess(
-                              row.teacherProfileId,
-                              'disabled'
-                            )
-                          }
-                        >
-                          Disable
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

@@ -9,16 +9,12 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForScope,
-}));
 
 const { loader } = await import('./route');
 
@@ -29,7 +25,6 @@ describe('assignment submissions loader', () => {
     }
     requireUserId.mockReset();
     requireMembership.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -59,10 +54,9 @@ describe('assignment submissions loader', () => {
     prisma.document.findMany.mockResolvedValue([
       { id: 'draft-1', title: 'Draft essay' },
     ]);
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(false);
   });
 
-  test('keeps submitted assignment work visible after document submission grading is disabled', async () => {
+  test('keeps submitted assignment work visible', async () => {
     const response = await loader({
       request: new Request(
         'https://example.test/app/my-classes/class-1/assignments/assignment-1?status=submitted'
@@ -72,14 +66,13 @@ describe('assignment submissions loader', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.isDocumentSubmissionEnabled).toBe(false);
     expect(data.submissions).toEqual([
       { id: 'submission-1', title: 'Submitted essay' },
     ]);
     expect(prisma.submission.findMany).toHaveBeenCalledTimes(1);
   });
 
-  test('keeps in-progress assignment drafts visible after document submission grading is disabled', async () => {
+  test('keeps in-progress assignment drafts visible', async () => {
     const response = await loader({
       request: new Request(
         'https://example.test/app/my-classes/class-1/assignments/assignment-1?status=in-progress'
@@ -89,7 +82,6 @@ describe('assignment submissions loader', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.isDocumentSubmissionEnabled).toBe(false);
     expect(data.inProgressDocuments).toEqual([
       { id: 'draft-1', title: 'Draft essay' },
     ]);

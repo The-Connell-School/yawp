@@ -1,6 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import { setAssignmentsForOrganization, createDeployedAssignment } from '../db-helpers';
+import { createDeployedAssignment } from '../db-helpers';
 
 test.describe.serial('Student opens a teacher-created assignment', () => {
   test('assignment card renders on student dashboard and Start creates a document', async ({
@@ -12,12 +12,6 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const prisma = createE2EPrismaClient();
     try {
-      await setAssignmentsForOrganization({
-        prisma,
-        organizationId: e2eContext.organizationId,
-        enabled: true,
-      });
-
       const uniquePromptMarker = `E2E assignment prompt ${Date.now()}`;
       const longPrompt = [
         `${uniquePromptMarker}: Write a 500-word rhetorical analysis of a speech of your choosing.`,

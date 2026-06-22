@@ -5,9 +5,7 @@ import { z } from 'zod';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 
 const POST = z.object({ documentId: z.string(), title: z.string().optional() });
 
@@ -95,16 +93,6 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
   if (!isDocumentSubmittableContent(document.html ?? '', document.text ?? '')) {
     return redirectWithToast(`/app/documents/${data.documentId}`, {
       description: 'Cannot submit an empty document.',
-      type: 'error',
-    });
-  }
-
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
-    getDocumentSubmissionScope(document)
-  );
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/courses', {
-      description: 'Document submission is currently disabled for this school.',
       type: 'error',
     });
   }

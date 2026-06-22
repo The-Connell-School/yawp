@@ -8,7 +8,6 @@ import {
 import { ReleaseGradesSheet } from '~/components/teacher-document-work/release-grades-sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { buildTeacherClassWorkDocumentWhere } from '~/utils/class-assignment-scope.server';
 import {
   TEACHER_DOCUMENT_STATUSES,
@@ -124,29 +123,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const classById = new Map(classes.map((klass) => [klass.id, klass]));
   const teacherClassIds = new Set(classIds);
 
-  const [classAssignments, isDocumentSubmissionEnabled, forensicRows] =
-    await Promise.all([
-      prisma.classAssignment.findMany({
-        where: { classId: { in: classIds } },
-        select: {
-          id: true,
-          classId: true,
-          createdAt: true,
-          assignment: { select: { id: true, title: true } },
-        },
-        orderBy: [{ createdAt: 'desc' }],
-      }),
-      isDocumentSubmissionEnabledForScope({
-        schoolIds: classes.map((klass) => klass.school.id),
-        organizationIds: [profile.organization.id],
-        teacherProfileIds: [profile.id],
-        classIds,
-      }),
-      prisma.documentClassForensic.findMany({
-        where: { oldClassId: { in: classIds } },
-        select: { documentId: true, oldClassId: true },
-      }),
-    ]);
+  const [classAssignments, forensicRows] = await Promise.all([
+    prisma.classAssignment.findMany({
+      where: { classId: { in: classIds } },
+      select: {
+        id: true,
+        classId: true,
+        createdAt: true,
+        assignment: { select: { id: true, title: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    }),
+    prisma.documentClassForensic.findMany({
+      where: { oldClassId: { in: classIds } },
+      select: { documentId: true, oldClassId: true },
+    }),
+  ]);
   const legacyClassIdByDocumentId = new Map(
     forensicRows.map((row) => [row.documentId, row.oldClassId])
   );
@@ -261,7 +253,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     students,
     assignments,
-    isDocumentSubmissionEnabled,
     filters: {
       studentIds,
       classIds: selectedClassIds,
@@ -467,7 +458,6 @@ export default function StudentWorkRoute() {
           students={data.students}
           classes={data.classes}
           assignments={data.assignments}
-          isDocumentSubmissionEnabled={data.isDocumentSubmissionEnabled}
           exitTo={exitTo}
           filters={filters}
           onFiltersChange={updateFilters}
@@ -490,9 +480,7 @@ export default function StudentWorkRoute() {
                 unreleasedGrades.length > 0
                   ? unreleasedGrades.length
                   : undefined,
-              disabled:
-                !data.isDocumentSubmissionEnabled ||
-                unreleasedGrades.length === 0,
+              disabled: unreleasedGrades.length === 0,
               onSelect: openReleaseSheet,
             },
           ]}
@@ -506,14 +494,12 @@ export default function StudentWorkRoute() {
           sort={documentSort}
           onSortChange={handleDocumentSortChange}
         />
-        {data.isDocumentSubmissionEnabled ? (
-          <ReleaseGradesSheet
-            grades={releaseGradesForSheet}
-            isOpen={isReleaseGradesSheetOpen}
-            onClose={() => setIsReleaseGradesSheetOpen(false)}
-            onSuccess={handleReleaseGradesSuccess}
-          />
-        ) : null}
+        <ReleaseGradesSheet
+          grades={releaseGradesForSheet}
+          isOpen={isReleaseGradesSheetOpen}
+          onClose={() => setIsReleaseGradesSheetOpen(false)}
+          onSuccess={handleReleaseGradesSuccess}
+        />
       </div>
     </section>
   );

@@ -7,7 +7,6 @@ import {
 } from '~/domain/documents.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 
 const POST = z.object({});
@@ -59,21 +58,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return redirectWithToast('/app?tab=assignments', {
       type: 'error',
       description: 'Assignment not found.',
-    });
-  }
-
-  const assignmentsEnabled = await isAssignmentsEnabledForContext({
-    organizationId:
-      classAssignment.class.school.organizationId ?? profile.organization.id,
-    schoolId: classAssignment.class.school.id,
-    teacherProfileId: null,
-    teacherProfileIds: classAssignment.class.teachers.map((teacher) => teacher.id),
-    classIds: [classAssignment.class.id],
-  });
-  if (!assignmentsEnabled) {
-    return redirectWithToast('/app', {
-      type: 'error',
-      description: 'Assignments are not enabled for your organization.',
     });
   }
 

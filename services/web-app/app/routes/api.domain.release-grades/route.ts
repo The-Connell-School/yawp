@@ -2,8 +2,6 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
 
@@ -100,19 +98,6 @@ export async function action({ request }: ActionFunctionArgs) {
         };
       }
 
-      const submissionScopeFlags = await Promise.all(
-        submissions.map((submission) => {
-          const scope = getDocumentSubmissionScope(submission.document);
-          return isDocumentSubmissionEnabledForScope({
-            ...scope,
-            actorTeacherProfileId: actor.teacherProfileId,
-          });
-        })
-      );
-      if (submissionScopeFlags.some((enabled) => !enabled)) {
-        return { kind: 'disabled' as const };
-      }
-
       const now = new Date();
 
       // Release all submissions. Keep releasedAt null in the predicate so a
@@ -153,14 +138,6 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: result.message },
       { status: 404 }
     );
-  }
-
-  if (result.kind === 'disabled') {
-    return redirectWithToast('/app/my-classes', {
-      description:
-        'Grade release is currently disabled for one or more schools.',
-      type: 'error',
-    });
   }
 
   const message =

@@ -208,6 +208,7 @@ scripts/production-sync.env
 
 # Git worktrees
 .worktrees/
+.worktree-local/
 .claude/worktrees/
 .superpowers/
 .cursor

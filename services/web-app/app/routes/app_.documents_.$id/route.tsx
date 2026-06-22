@@ -3,6 +3,7 @@ import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
   data as dataResponse,
+  redirect,
 } from 'react-router';
 import {
   useFetcher,
@@ -47,10 +48,6 @@ import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import {
-  isAssignmentsEnabledForContext,
-  isDocumentSubmissionEnabledForScope,
-} from '~/utils/feature-flags.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -62,7 +59,6 @@ import {
   sanitizeExitTarget,
 } from '~/utils/document-exit';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
@@ -79,6 +75,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -364,6 +361,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const submissions = doc.submissions;
+  const isOwner = doc.membership.id === profile.id;
+  const wantsDraftEditor =
+    url.searchParams.get('revise') === '1' ||
+    url.searchParams.get('spa') === '1';
+
+  if (
+    isOwner &&
+    profile.role === 'STUDENT' &&
+    !wantsDraftEditor &&
+    !user?.isAdmin
+  ) {
+    const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
+    if (latestReleasedSubmission) {
+      const exitTo = url.searchParams.get('exitTo');
+      const redirectParams = new URLSearchParams();
+      if (exitTo) {
+        redirectParams.set('exitTo', exitTo);
+      }
+      const suffix = redirectParams.toString()
+        ? `?${redirectParams.toString()}`
+        : '';
+      throw redirect(
+        `/app/submissions/${latestReleasedSubmission.id}${suffix}`
+      );
+    }
+  }
 
   if (shouldSaveVersion) {
     const latestRevision = doc.revisions[0];
@@ -416,23 +439,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-  const assignmentClass = doc.classAssignment?.class;
-  const documentSubmissionScope = getDocumentSubmissionScope({
-    classAssignment: doc.classAssignment,
-    membership: doc.membership,
-  });
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForScope(documentSubmissionScope),
-    isAssignmentsEnabledForContext({
-      organizationId:
-        assignmentClass?.school?.organizationId ?? profile.organization.id,
-      organizationIds: documentSubmissionScope.organizationIds,
-      schoolIds: documentSubmissionScope.schoolIds,
-      teacherProfileId: profile.id,
-      teacherProfileIds: documentSubmissionScope.teacherProfileIds,
-      classIds: documentSubmissionScope.classIds,
-    }),
-  ]);
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
@@ -451,8 +457,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: currentCmsIdx > 0,
-    isDocumentSubmissionEnabled,
-    assignmentsEnabled,
   });
 }
 
@@ -892,7 +896,7 @@ export default function Route() {
             </p>
           ) : null}
           <div className="ml-auto flex items-center gap-4">
-            {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
+            {!isViewingAsTeacher && (
               <>
                 {cannotSubmitEmpty && !isSubmitting ? (
                   <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
@@ -1017,11 +1021,10 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
-      {data.isDocumentSubmissionEnabled && (
-        <Dialog
-          open={isFinalizeDialogOpen}
-          onOpenChange={setIsFinalizeDialogOpen}
-        >
+      <Dialog
+        open={isFinalizeDialogOpen}
+        onOpenChange={setIsFinalizeDialogOpen}
+      >
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1141,8 +1144,7 @@ export default function Route() {
               )}
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-      )}
+      </Dialog>
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

@@ -6,11 +6,6 @@ const prisma = {
     findUnique: mock(),
     update: mock(),
   },
-  featureAccessTarget: {
-    deleteMany: mock(),
-    findMany: mock(),
-    upsert: mock(),
-  },
   orgMembership: {
     findMany: mock(),
     findUnique: mock(),
@@ -51,9 +46,6 @@ describe('admin assignment type detail action', () => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentType.update.mockReset();
-    prisma.featureAccessTarget.deleteMany.mockReset();
-    prisma.featureAccessTarget.findMany.mockReset();
-    prisma.featureAccessTarget.upsert.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
     prisma.gradingAssistantTemplate.findMany.mockReset();
@@ -69,14 +61,6 @@ describe('admin assignment type detail action', () => {
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
-    prisma.featureAccessTarget.upsert.mockResolvedValue({
-      id: 'fat-1',
-      featureKey: 'assignment_type:at-1',
-      targetKind: 'teacher',
-      targetId: 'teacher-1',
-      enabled: true,
-    });
     prisma.gradingAssistantTemplate.findMany.mockResolvedValue([]);
   });
 
@@ -127,84 +111,6 @@ describe('admin assignment type detail action', () => {
       where: { id: 'at-1' },
       data: { archivedAt: null },
     });
-  });
-
-  test('sets a teacher-level assignment type access override', async () => {
-    const form = new FormData();
-    form.set('intent', 'setTeacherAccess');
-    form.set('teacherProfileId', 'teacher-1');
-    form.set('access', 'enabled');
-
-    const response = await action({
-      request: new Request(
-        'https://example.test/app/admin/assignment-types/at-1',
-        {
-          method: 'POST',
-          body: form,
-        }
-      ),
-      params: { id: 'at-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith({
-      where: { id: 'at-1' },
-      select: { id: true },
-    });
-    expect(prisma.orgMembership.findUnique).toHaveBeenCalledWith({
-      where: { id: 'teacher-1', role: 'TEACHER' },
-      select: { id: true },
-    });
-    expect(prisma.featureAccessTarget.upsert).toHaveBeenCalledWith({
-      where: {
-        featureKey_targetKind_targetId: {
-          featureKey: 'assignment_type:at-1',
-          targetKind: 'teacher',
-          targetId: 'teacher-1',
-        },
-      },
-      create: {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'teacher',
-        targetId: 'teacher-1',
-        enabled: true,
-        expiresAt: null,
-      },
-      update: {
-        enabled: true,
-        expiresAt: null,
-        updatedAt: expect.any(Date),
-      },
-    });
-    expect(response.data).toMatchObject({ status: 'success' });
-  });
-
-  test('clears a teacher-level assignment type access override', async () => {
-    const form = new FormData();
-    form.set('intent', 'setTeacherAccess');
-    form.set('teacherProfileId', 'teacher-1');
-    form.set('access', 'default');
-
-    const response = await action({
-      request: new Request(
-        'https://example.test/app/admin/assignment-types/at-1',
-        {
-          method: 'POST',
-          body: form,
-        }
-      ),
-      params: { id: 'at-1' },
-      context: {} as never,
-    });
-
-    expect(prisma.featureAccessTarget.deleteMany).toHaveBeenCalledWith({
-      where: {
-        featureKey: 'assignment_type:at-1',
-        targetKind: 'teacher',
-        targetId: 'teacher-1',
-      },
-    });
-    expect(response.data).toMatchObject({ status: 'success' });
   });
 
   test('links one default grading assistant template to an assignment type', async () => {
@@ -308,7 +214,7 @@ describe('admin assignment type detail action', () => {
     expect(response.data).toMatchObject({ status: 'success' });
   });
 
-  test('loads teacher access rows and only active grading assistant templates', async () => {
+  test('loads assignment type details and active grading assistant templates', async () => {
     const activeTemplate = {
       id: 'template-active',
       name: 'ACT Writing',
@@ -329,17 +235,6 @@ describe('admin assignment type detail action', () => {
       assignmentModules: [],
       image: null,
     });
-    prisma.orgMembership.findMany.mockResolvedValue([
-      {
-        id: 'teacher-1',
-        organizationId: 'org-1',
-        organization: { name: 'Connell School' },
-        user: { email: 'teacher@example.test', name: 'Test Teacher' },
-      },
-    ]);
-    prisma.featureAccessTarget.findMany.mockResolvedValue([
-      { targetId: 'teacher-1', enabled: false },
-    ]);
     prisma.gradingAssistantTemplate.findMany.mockResolvedValue([
       activeTemplate,
     ]);
@@ -359,16 +254,6 @@ describe('admin assignment type detail action', () => {
     expect((result as { data: any }).data.gradingAssistantTemplates).toEqual([
       activeTemplate,
     ]);
-    expect((result as { data: any }).data.teacherAccessRows).toEqual([
-      {
-        teacherProfileId: 'teacher-1',
-        teacherName: 'Test Teacher',
-        teacherEmail: 'teacher@example.test',
-        organizationName: 'Connell School',
-        statusLabel: 'Teacher override: disabled',
-        effectiveEnabled: false,
-        overrideAccess: 'disabled',
-      },
-    ]);
+    expect((result as { data: any }).data.course.title).toBe('ACT Writing');
   });
 });

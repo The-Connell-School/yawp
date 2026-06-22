@@ -148,7 +148,6 @@ export type TeacherDocumentWorkPanelProps = {
   classes?: FilterOption[];
   assignments: FilterOption[];
   assignmentsEnabled?: boolean;
-  isDocumentSubmissionEnabled: boolean;
   exitTo: string;
   filters: TeacherDocumentWorkFilters;
   onFiltersChange: (updates: Partial<TeacherDocumentWorkFilters>) => void;
@@ -185,7 +184,6 @@ export function TeacherDocumentWorkPanel({
   classes,
   assignments,
   assignmentsEnabled = true,
-  isDocumentSubmissionEnabled,
   exitTo,
   filters,
   onFiltersChange,
@@ -415,7 +413,6 @@ export function TeacherDocumentWorkPanel({
       const detailLink = getTeacherDocumentWorkDetailLink({
         document,
         exitTo,
-        isDocumentSubmissionEnabled,
       });
       const rowClasses = compactRows ? DOCUMENT_TABLE_ROW_CLASSES : null;
 

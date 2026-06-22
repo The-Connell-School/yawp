@@ -1,32 +1,29 @@
 import { prisma } from '~/utils/db.server';
 
-export const ASSIGNMENT_TYPE_ACCESS_FEATURE_PREFIX = 'assignment_type:';
-
-const ASSIGNMENT_TYPE_ACCESS_TARGET_KINDS = [
-  'teacher',
-  'school',
-  'organization',
-] as const;
-
-type AssignmentTypeAccessTargetKind =
-  (typeof ASSIGNMENT_TYPE_ACCESS_TARGET_KINDS)[number];
-
 export type AssignmentTypeAccessScope = {
   organizationId: string | null | undefined;
   schoolId?: string | null | undefined;
   teacherProfileId?: string | null | undefined;
 };
 
-type AssignmentTypeAccessTarget = {
-  featureKey: string;
-  targetKind: string;
-  targetId: string;
-  enabled: boolean;
-};
-
-type AssignmentTypeAccessCandidate = {
-  id: string;
-  organizationAssignments: Array<{ organizationId: string }>;
+type ScopeConfiguration = {
+  orgDefaultsByOrgId: Map<string, Set<string>>;
+  schoolsById: Map<
+    string,
+    {
+      organizationId: string;
+      assignmentTypesCustomized: boolean;
+      assignmentTypeIds: Set<string>;
+    }
+  >;
+  teachersById: Map<
+    string,
+    {
+      organizationId: string;
+      assignmentTypesCustomized: boolean;
+      assignmentTypeIds: Set<string>;
+    }
+  >;
 };
 
 function distinctStrings(values: Array<string | null | undefined>): string[] {
@@ -37,16 +34,6 @@ function distinctStrings(values: Array<string | null | undefined>): string[] {
 
 function normalizeScopes(scopes: AssignmentTypeAccessScope[]) {
   return scopes.filter((scope) => Boolean(scope.organizationId));
-}
-
-export function getAssignmentTypeAccessFeatureKey(assignmentTypeId: string) {
-  return `${ASSIGNMENT_TYPE_ACCESS_FEATURE_PREFIX}${assignmentTypeId}`;
-}
-
-function getAssignmentTypeIdFromFeatureKey(featureKey: string) {
-  return featureKey.startsWith(ASSIGNMENT_TYPE_ACCESS_FEATURE_PREFIX)
-    ? featureKey.slice(ASSIGNMENT_TYPE_ACCESS_FEATURE_PREFIX.length)
-    : null;
 }
 
 function buildTargetIds(scopes: AssignmentTypeAccessScope[]) {
@@ -61,113 +48,130 @@ function buildTargetIds(scopes: AssignmentTypeAccessScope[]) {
   };
 }
 
-async function getAssignmentTypeAccessTargetsForScopes({
-  assignmentTypeIds,
-  scopes,
-}: {
-  assignmentTypeIds?: string[];
-  scopes: AssignmentTypeAccessScope[];
-}): Promise<AssignmentTypeAccessTarget[]> {
+async function loadScopeConfiguration(
+  scopes: AssignmentTypeAccessScope[]
+): Promise<ScopeConfiguration> {
   const normalizedScopes = normalizeScopes(scopes);
-  if (normalizedScopes.length === 0) return [];
-
   const { organizationIds, schoolIds, teacherProfileIds } =
     buildTargetIds(normalizedScopes);
-  const targetIds = distinctStrings([
-    ...organizationIds,
-    ...schoolIds,
-    ...teacherProfileIds,
+
+  const [orgAssignments, schools, teachers] = await Promise.all([
+    organizationIds.length > 0
+      ? prisma.organizationAssignmentType.findMany({
+          where: { organizationId: { in: organizationIds } },
+          select: { organizationId: true, assignmentTypeId: true },
+        })
+      : [],
+    schoolIds.length > 0
+      ? prisma.school.findMany({
+          where: { id: { in: schoolIds } },
+          select: {
+            id: true,
+            organizationId: true,
+            assignmentTypesCustomized: true,
+            assignmentTypeAssignments: {
+              select: { assignmentTypeId: true },
+            },
+          },
+        })
+      : [],
+    teacherProfileIds.length > 0
+      ? prisma.orgMembership.findMany({
+          where: { id: { in: teacherProfileIds } },
+          select: {
+            id: true,
+            organizationId: true,
+            assignmentTypesCustomized: true,
+            assignmentTypeAssignments: {
+              select: { assignmentTypeId: true },
+            },
+          },
+        })
+      : [],
   ]);
-  if (targetIds.length === 0) return [];
 
-  return prisma.featureAccessTarget.findMany({
-    where: {
-      featureKey: assignmentTypeIds?.length
-        ? {
-            in: assignmentTypeIds.map((assignmentTypeId) =>
-              getAssignmentTypeAccessFeatureKey(assignmentTypeId)
-            ),
-          }
-        : { startsWith: ASSIGNMENT_TYPE_ACCESS_FEATURE_PREFIX },
-      targetKind: { in: [...ASSIGNMENT_TYPE_ACCESS_TARGET_KINDS] },
-      targetId: { in: targetIds },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-    },
-    select: {
-      featureKey: true,
-      targetKind: true,
-      targetId: true,
-      enabled: true,
-    },
-  });
-}
-
-function matchesTarget(
-  target: AssignmentTypeAccessTarget,
-  kind: AssignmentTypeAccessTargetKind,
-  targetId: string | null | undefined
-) {
-  return (
-    target.targetKind === kind &&
-    Boolean(targetId) &&
-    target.targetId === targetId
-  );
-}
-
-function resolveAssignmentTypeOverride({
-  assignmentTypeId,
-  accessTargets,
-  scope,
-}: {
-  assignmentTypeId: string;
-  accessTargets: AssignmentTypeAccessTarget[];
-  scope: AssignmentTypeAccessScope;
-}): boolean | null {
-  const featureKey = getAssignmentTypeAccessFeatureKey(assignmentTypeId);
-  const scopedTargets = accessTargets.filter(
-    (target) => target.featureKey === featureKey
-  );
-
-  for (const [kind, targetId] of [
-    ['teacher', scope.teacherProfileId],
-    ['school', scope.schoolId],
-    ['organization', scope.organizationId],
-  ] as const) {
-    const match = scopedTargets.find((target) =>
-      matchesTarget(target, kind, targetId)
-    );
-    if (match) return match.enabled;
+  const orgDefaultsByOrgId = new Map<string, Set<string>>();
+  for (const assignment of orgAssignments) {
+    const existing =
+      orgDefaultsByOrgId.get(assignment.organizationId) ?? new Set<string>();
+    existing.add(assignment.assignmentTypeId);
+    orgDefaultsByOrgId.set(assignment.organizationId, existing);
   }
 
-  return null;
+  const schoolsById = new Map(
+    schools.map((school) => [
+      school.id,
+      {
+        organizationId: school.organizationId,
+        assignmentTypesCustomized: school.assignmentTypesCustomized,
+        assignmentTypeIds: new Set(
+          school.assignmentTypeAssignments.map(
+            (assignment) => assignment.assignmentTypeId
+          )
+        ),
+      },
+    ])
+  );
+
+  const teachersById = new Map(
+    teachers.map((teacher) => [
+      teacher.id,
+      {
+        organizationId: teacher.organizationId,
+        assignmentTypesCustomized: teacher.assignmentTypesCustomized,
+        assignmentTypeIds: new Set(
+          teacher.assignmentTypeAssignments.map(
+            (assignment) => assignment.assignmentTypeId
+          )
+        ),
+      },
+    ])
+  );
+
+  return { orgDefaultsByOrgId, schoolsById, teachersById };
 }
 
-function hasOrganizationDefault(
-  assignmentType: AssignmentTypeAccessCandidate,
-  scope: AssignmentTypeAccessScope
-) {
-  return assignmentType.organizationAssignments.some(
-    (assignment) => assignment.organizationId === scope.organizationId
+function getEffectiveAssignmentTypeIds({
+  scope,
+  configuration,
+}: {
+  scope: AssignmentTypeAccessScope;
+  configuration: ScopeConfiguration;
+}): Set<string> {
+  const organizationId = scope.organizationId;
+  if (!organizationId) return new Set();
+
+  const teacher = scope.teacherProfileId
+    ? configuration.teachersById.get(scope.teacherProfileId)
+    : undefined;
+  if (teacher?.assignmentTypesCustomized) {
+    return new Set(teacher.assignmentTypeIds);
+  }
+
+  const school = scope.schoolId
+    ? configuration.schoolsById.get(scope.schoolId)
+    : undefined;
+  if (school?.assignmentTypesCustomized) {
+    return new Set(school.assignmentTypeIds);
+  }
+
+  return new Set(
+    configuration.orgDefaultsByOrgId.get(organizationId) ?? []
   );
 }
 
 function isAssignmentTypeVisibleForScope({
-  assignmentType,
-  accessTargets,
+  assignmentTypeId,
   scope,
+  configuration,
 }: {
-  assignmentType: AssignmentTypeAccessCandidate;
-  accessTargets: AssignmentTypeAccessTarget[];
+  assignmentTypeId: string;
   scope: AssignmentTypeAccessScope;
+  configuration: ScopeConfiguration;
 }) {
-  const override = resolveAssignmentTypeOverride({
-    assignmentTypeId: assignmentType.id,
-    accessTargets,
-    scope,
-  });
-
-  if (override !== null) return override;
-  return hasOrganizationDefault(assignmentType, scope);
+  return getEffectiveAssignmentTypeIds({ scope, configuration }).has(
+    assignmentTypeId
+  );
 }
 
 export async function getAvailableAssignmentTypesForScopes<
@@ -185,67 +189,40 @@ export async function getAvailableAssignmentTypesForScopes<
   const normalizedScopes = normalizeScopes(scopes);
   if (normalizedScopes.length === 0) return [];
 
-  const accessTargets = await getAssignmentTypeAccessTargetsForScopes({
-    scopes: normalizedScopes,
-  });
-  const targetedAssignmentTypeIds = distinctStrings(
-    accessTargets.map((target) =>
-      getAssignmentTypeIdFromFeatureKey(target.featureKey)
+  const configuration = await loadScopeConfiguration(normalizedScopes);
+  const effectiveTypeIds = distinctStrings(
+    normalizedScopes.flatMap((scope) =>
+      Array.from(
+        getEffectiveAssignmentTypeIds({ scope, configuration })
+      )
     )
   );
-  const { organizationIds } = buildTargetIds(normalizedScopes);
-  const accessOr = [
-    organizationIds.length > 0
-      ? {
-          organizationAssignments: {
-            some: { organizationId: { in: organizationIds } },
-          },
-        }
-      : null,
-    targetedAssignmentTypeIds.length > 0
-      ? { id: { in: targetedAssignmentTypeIds } }
-      : null,
-  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
-  if (accessOr.length === 0) return [];
+  if (effectiveTypeIds.length === 0) return [];
 
   const candidates = await prisma.assignmentType.findMany({
     where: {
       archivedAt: null,
-      OR: accessOr,
+      id: { in: effectiveTypeIds },
     },
     select: {
       ...select,
       id: true,
-      organizationAssignments: {
-        select: { organizationId: true },
-      },
     },
     orderBy,
   } as never);
 
-  const keepOrganizationAssignments = Boolean(select.organizationAssignments);
-
-  return (
-    candidates as unknown as Array<
-      AssignmentTypeAccessCandidate & Record<string, unknown>
-    >
-  )
+  return (candidates as unknown as Array<{ id: string } & Record<string, unknown>>)
     .filter((assignmentType) =>
       normalizedScopes.some((scope) =>
         isAssignmentTypeVisibleForScope({
-          assignmentType,
-          accessTargets,
+          assignmentTypeId: assignmentType.id,
           scope,
+          configuration,
         })
       )
     )
-    .map((assignmentType) => {
-      if (keepOrganizationAssignments) return assignmentType;
-      const { organizationAssignments: _organizationAssignments, ...rest } =
-        assignmentType;
-      return rest;
-    }) as TResult[];
+    .map((assignmentType) => assignmentType) as TResult[];
 }
 
 export async function isAssignmentTypeAvailableForEveryScope({
@@ -258,29 +235,21 @@ export async function isAssignmentTypeAvailableForEveryScope({
   const normalizedScopes = normalizeScopes(scopes);
   if (normalizedScopes.length === 0) return false;
 
-  const [assignmentType, accessTargets] = await Promise.all([
+  const [assignmentType, configuration] = await Promise.all([
     prisma.assignmentType.findFirst({
       where: { id: assignmentTypeId, archivedAt: null },
-      select: {
-        id: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
-      },
+      select: { id: true },
     }),
-    getAssignmentTypeAccessTargetsForScopes({
-      assignmentTypeIds: [assignmentTypeId],
-      scopes: normalizedScopes,
-    }),
+    loadScopeConfiguration(normalizedScopes),
   ]);
 
   if (!assignmentType) return false;
 
   return normalizedScopes.every((scope) =>
     isAssignmentTypeVisibleForScope({
-      assignmentType,
-      accessTargets,
+      assignmentTypeId,
       scope,
+      configuration,
     })
   );
 }
@@ -295,29 +264,21 @@ export async function isAssignmentTypeAvailableForAnyScope({
   const normalizedScopes = normalizeScopes(scopes);
   if (normalizedScopes.length === 0) return false;
 
-  const [assignmentType, accessTargets] = await Promise.all([
+  const [assignmentType, configuration] = await Promise.all([
     prisma.assignmentType.findFirst({
       where: { id: assignmentTypeId, archivedAt: null },
-      select: {
-        id: true,
-        organizationAssignments: {
-          select: { organizationId: true },
-        },
-      },
+      select: { id: true },
     }),
-    getAssignmentTypeAccessTargetsForScopes({
-      assignmentTypeIds: [assignmentTypeId],
-      scopes: normalizedScopes,
-    }),
+    loadScopeConfiguration(normalizedScopes),
   ]);
 
   if (!assignmentType) return false;
 
   return normalizedScopes.some((scope) =>
     isAssignmentTypeVisibleForScope({
-      assignmentType,
-      accessTargets,
+      assignmentTypeId,
       scope,
+      configuration,
     })
   );
 }

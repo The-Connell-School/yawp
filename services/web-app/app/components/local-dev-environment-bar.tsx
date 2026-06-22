@@ -1,16 +1,18 @@
 import {
   AlertTriangle,
-  ChevronUp,
   FlaskConical,
   GraduationCap,
   Loader2,
   Shield,
   UserRound,
 } from 'lucide-react';
-import { useState } from 'react';
-import { useFetcher, useSearchParams } from 'react-router';
+import { useFetcher } from 'react-router';
 import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
 
@@ -58,37 +60,26 @@ function EnvironmentIcon({
   const isStaging = bannerWarning === 'staging';
 
   return (
-    <Tooltip
-      text={
-        isStaging
-          ? 'This is a staging environment. Do not use real data.'
-          : 'This is a local environment. Do not use real data.'
-      }
-      delayDuration={0}
+    <div
+      className={cn(
+        'rounded-full p-2.5',
+        isStaging ? 'bg-yellow-400' : 'bg-red-300'
+      )}
+      aria-hidden="true"
     >
-      <div
-        className={cn(
-          'rounded-full p-2.5',
-          isStaging ? 'bg-yellow-400' : 'bg-red-300'
-        )}
-        aria-hidden="true"
-      >
-        {isStaging ? <AlertTriangle size={20} /> : <FlaskConical size={20} />}
-      </div>
-    </Tooltip>
+      {isStaging ? <AlertTriangle size={20} /> : <FlaskConical size={20} />}
+    </div>
   );
 }
 
 function LoginOptionRow({
   Form,
   option,
-  redirectTo,
   isSubmitting,
   submittingEmail,
 }: {
   Form: ReturnType<typeof useFetcher>['Form'];
   option: LocalDevLoginOption;
-  redirectTo: string;
   isSubmitting: boolean;
   submittingEmail: string | null;
 }) {
@@ -99,7 +90,6 @@ function LoginOptionRow({
   return (
     <Form method="post" action="/auth/dev-login" className="block">
       <input type="hidden" name="email" value={option.email} />
-      <input type="hidden" name="redirectTo" value={redirectTo} />
       <button
         type="submit"
         disabled={isSubmitting}
@@ -129,14 +119,12 @@ function LoginOptionGroup({
   Form,
   label,
   options,
-  redirectTo,
   isSubmitting,
   submittingEmail,
 }: {
   Form: ReturnType<typeof useFetcher>['Form'];
   label: string;
   options: LocalDevLoginOption[];
-  redirectTo: string;
   isSubmitting: boolean;
   submittingEmail: string | null;
 }) {
@@ -155,7 +143,6 @@ function LoginOptionGroup({
             key={option.email}
             Form={Form}
             option={option}
-            redirectTo={redirectTo}
             isSubmitting={isSubmitting}
             submittingEmail={submittingEmail}
           />
@@ -171,8 +158,6 @@ function LocalDevQuickLoginPanel({
   options: LocalDevLoginOption[];
 }) {
   const fetcher = useFetcher();
-  const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') ?? '/app';
   const isSubmitting = fetcher.state !== 'idle';
   const submittingEmail = isSubmitting
     ? String(fetcher.formData?.get('email') ?? '')
@@ -182,13 +167,12 @@ function LocalDevQuickLoginPanel({
   return (
     <div
       id="local-dev-quick-login-panel"
-      className="max-h-72 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto border-b border-border/60 p-1.5"
+      className="max-h-72 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-1.5"
     >
       <LoginOptionGroup
         Form={fetcher.Form}
         label="Staff"
         options={staff}
-        redirectTo={redirectTo}
         isSubmitting={isSubmitting}
         submittingEmail={submittingEmail}
       />
@@ -199,7 +183,6 @@ function LocalDevQuickLoginPanel({
         Form={fetcher.Form}
         label="Students"
         options={students}
-        redirectTo={redirectTo}
         isSubmitting={isSubmitting}
         submittingEmail={submittingEmail}
       />
@@ -211,49 +194,56 @@ export function LocalDevEnvironmentBar({
   bannerWarning,
   localDevQuickLogin,
 }: LocalDevEnvironmentBarProps) {
-  const [expanded, setExpanded] = useState(false);
-
   if (!bannerWarning) {
     return null;
   }
 
   const showQuickLogin = localDevQuickLogin?.enabled ?? false;
   const options = localDevQuickLogin?.options ?? [];
+  const environmentLabel =
+    bannerWarning === 'staging'
+      ? 'Staging environment'
+      : 'Local development environment';
 
   if (!showQuickLogin) {
     return (
       <div className="fixed bottom-4 right-4 z-30">
-        <EnvironmentIcon bannerWarning={bannerWarning} />
+        <Tooltip
+          text={
+            bannerWarning === 'staging'
+              ? 'This is a staging environment. Do not use real data.'
+              : 'This is a local environment. Do not use real data.'
+          }
+          delayDuration={0}
+        >
+          <EnvironmentIcon bannerWarning={bannerWarning} />
+        </Tooltip>
       </div>
     );
   }
 
   return (
     <div className="fixed bottom-4 right-4 z-30">
-      <div className="overflow-hidden rounded-2xl border bg-popover/95 shadow-lg ring-1 ring-black/5 backdrop-blur">
-        {expanded ? <LocalDevQuickLoginPanel options={options} /> : null}
-        <div className="flex items-center pl-1 pr-1">
-          <EnvironmentIcon bannerWarning={bannerWarning} />
-          <div className="mx-1 h-6 w-px bg-border/60" aria-hidden="true" />
-          <Button
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="rounded-lg px-3 py-2 text-sm"
-            aria-expanded={expanded}
+            className="rounded-full shadow-lg ring-1 ring-black/5 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`${environmentLabel}. Open dev login menu.`}
             aria-controls="local-dev-quick-login-panel"
-            onClick={() => setExpanded((open) => !open)}
           >
-            Dev login
-            <ChevronUp
-              className={cn(
-                'ml-1 size-4 transition-transform',
-                expanded ? 'rotate-180' : ''
-              )}
-            />
-          </Button>
-        </div>
-      </div>
+            <EnvironmentIcon bannerWarning={bannerWarning} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          side="top"
+          align="end"
+          sideOffset={12}
+          className="w-80 p-0"
+        >
+          <LocalDevQuickLoginPanel options={options} />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

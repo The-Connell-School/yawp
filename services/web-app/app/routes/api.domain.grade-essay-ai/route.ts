@@ -20,8 +20,6 @@ import {
   resolveGradingAssistantTemplateForAssignmentType,
   type GradingRubricCategory,
 } from '~/domain/grading/grading-assistant-templates.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -498,17 +496,6 @@ export async function action({ request }: ActionFunctionArgs) {
       { success: false, message: 'Submitted essay text not found.' },
       { status: 404 }
     );
-  }
-
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
-    ...getDocumentSubmissionScope(submission.document),
-    actorTeacherProfileId: actor.teacherProfileId,
-  });
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled for this school.',
-      type: 'error',
-    });
   }
 
   const resolvedGradingAssistant =

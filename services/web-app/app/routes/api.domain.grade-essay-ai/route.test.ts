@@ -15,7 +15,6 @@ const prisma = {
 };
 
 const getLLMCompletion = mock();
-const isDocumentSubmissionEnabledForScope = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
@@ -29,9 +28,6 @@ mock.module('~/utils/getLLMCompletion', () => ({
     User: 'user',
   },
   getLLMCompletion,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForScope,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
@@ -175,7 +171,6 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.assignmentTypeGradingAssistant.findFirst.mockReset();
     prisma.submissionGradingAssistantRun.create.mockReset();
     getLLMCompletion.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
@@ -193,7 +188,6 @@ describe('api.domain.grade-essay-ai', () => {
     isGradingOwnDocument.mockImplementation(
       (actorId: string, docProfileId: string) => actorId === docProfileId
     );
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
     prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue(null);
@@ -347,58 +341,6 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       })
     );
-  });
-
-  test('checks the document submission flag through student classes for legacy submissions', async () => {
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({
-        id: 'legacy-sub-1',
-        document: {
-          id: 'legacy-doc-1',
-          membershipId: 'student-profile-1',
-          assignment: null,
-          membership: {
-            classesAsStudent: [
-              {
-                id: 'legacy-class-1',
-                schoolId: 'scranton-prep-school',
-                school: { organizationId: 'scranton-org' },
-                teachers: [{ id: 'teacher-1' }],
-              },
-            ],
-            user: { name: 'Jordan Student' },
-          },
-        },
-      })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'legacy-sub-1');
-
-    await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
-      schoolIds: ['scranton-prep-school'],
-      organizationIds: ['scranton-org'],
-      classIds: ['legacy-class-1'],
-      teacherProfileIds: ['teacher-1'],
-      classScopes: [
-        {
-          schoolId: 'scranton-prep-school',
-          organizationId: 'scranton-org',
-          classId: 'legacy-class-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-      ],
-      actorTeacherProfileId: 'teacher-1',
-    });
-    expect(redirectWithToast).not.toHaveBeenCalled();
-    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
   });
 
   test('uses the updated rubric instructions in the grading prompt', async () => {

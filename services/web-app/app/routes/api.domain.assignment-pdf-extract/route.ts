@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { anthropic } from '~/services/anthropic';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isAssignmentsEnabledForContext } from '~/utils/feature-flags.server';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
 
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -95,22 +94,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       { success: false, message: 'Class not found.' },
       { status: 404 }
-    );
-  }
-
-  const assignmentsEnabled = await isAssignmentsEnabledForContext({
-    organizationId: classAccess.school.organizationId,
-    schoolId: classAccess.school.id,
-    teacherProfileId: profile.id,
-    classIds: [classAccess.id],
-  });
-  if (!assignmentsEnabled) {
-    return dataResponse(
-      {
-        success: false,
-        message: 'Assignments are not enabled for your organization.',
-      },
-      { status: 403 }
     );
   }
 

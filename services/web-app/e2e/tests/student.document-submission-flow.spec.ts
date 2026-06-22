@@ -1,7 +1,6 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 import { generateTOTP } from '../../app/utils/totp.server';
-import { setDocumentSubmissionForSchool } from '../db-helpers';
 import { EDITOR_SELECTOR } from '../test-helpers';
 import type { Page } from '@playwright/test';
 

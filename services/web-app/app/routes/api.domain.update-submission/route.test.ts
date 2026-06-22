@@ -4,16 +4,12 @@ const prisma = {
   submission: { findFirst: mock(), update: mock() },
 };
 
-const isDocumentSubmissionEnabledForScope = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const isGradingOwnDocument = mock();
 const buildTeacherClassWhere = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForScope,
-}));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
   canManageGrades,
@@ -35,7 +31,6 @@ describe('api.domain.update-submission', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.update.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     isGradingOwnDocument.mockReset();
@@ -52,7 +47,6 @@ describe('api.domain.update-submission', () => {
       (actorId: string, docMembershipId: string) => actorId === docMembershipId
     );
     buildTeacherClassWhere.mockReturnValue({});
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
   });
 
   test('updates grading fields on a submission', async () => {
@@ -134,21 +128,6 @@ describe('api.domain.update-submission', () => {
         }),
       })
     );
-    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
-      schoolIds: ['school-1'],
-      organizationIds: ['org-1'],
-      classIds: ['class-1'],
-      teacherProfileIds: ['teacher-1'],
-      classScopes: [
-        {
-          schoolId: 'school-1',
-          organizationId: 'org-1',
-          classId: 'class-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-      ],
-      actorTeacherProfileId: 'teacher-1',
-    });
   });
 
   test('persists grammar issue updates for teacher-managed submissions', async () => {
@@ -259,38 +238,6 @@ describe('api.domain.update-submission', () => {
     } as any)) as Response;
 
     expect(response.status).toBe(403);
-    expect(prisma.submission.update).not.toHaveBeenCalled();
-  });
-
-  test('rejects grading updates when document submission grading is disabled for the submission scope', async () => {
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(false);
-    prisma.submission.findFirst.mockResolvedValue({
-      id: 'sub-1',
-      gradedAt: null,
-      gradedByMembershipId: null,
-      document: {
-        membershipId: 'student-1',
-        assignment: {
-          class: {
-            id: 'class-1',
-            schoolId: 'school-1',
-            teachers: [{ id: 'teacher-1' }],
-          },
-        },
-      },
-    });
-
-    const response = (await action({
-      request: makeRequest({ submissionId: 'sub-1', score: '90% A' }),
-    } as any)) as Response;
-
-    const body = await response.json();
-    expect(response.status).toBe(403);
-    expect(body).toMatchObject({
-      success: false,
-      message:
-        'Document submission grading is currently disabled for this school.',
-    });
     expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 

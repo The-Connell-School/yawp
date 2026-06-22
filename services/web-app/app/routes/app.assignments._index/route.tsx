@@ -44,10 +44,6 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import {
-  getAssignmentCreationStandardizationEnabledClassIdsForContext,
-  getAssignmentsEnabledClassIdsForContext,
-} from '~/utils/feature-flags.server';
 
 export const handle = { breadcrumb: 'Assignments' };
 
@@ -138,34 +134,6 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    const enabledClassIds = await getAssignmentsEnabledClassIdsForContext({
-      organizationId: profile.organization.id,
-      teacherProfileId: profile.id,
-      classes: assignments.flatMap((assignment) =>
-        assignment.classAssignments.map((deployment) => ({
-          id: deployment.class.id,
-          organizationId: deployment.class.school.organizationId,
-          schoolId: deployment.class.school.id,
-        }))
-      ),
-    });
-
-    if (
-      assignments.some((assignment) =>
-        assignment.classAssignments.some(
-          (deployment) => !enabledClassIds.includes(deployment.class.id)
-        )
-      )
-    ) {
-      return dataResponse(
-        {
-          success: false,
-          message: 'Assignments are not enabled for your organization.',
-        },
-        { status: 403 }
-      );
-    }
-
     await prisma.assignment.deleteMany({
       where: { id: { in: assignmentIds } },
     });
@@ -192,10 +160,11 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
     },
-      select: {
-        id: true,
-        assignmentTypeId: true,
-        assignmentType: { select: { systemKey: true } },
+    select: {
+      id: true,
+      assignmentTypeId: true,
+      tutorContext: true,
+      assignmentType: { select: { systemKey: true } },
       classAssignments: {
         select: {
           class: {
@@ -219,27 +188,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const deploymentClasses = assignment.classAssignments.map(
     (deployment) => deployment.class
   );
-
-  const enabledClassIds = await getAssignmentsEnabledClassIdsForContext({
-    organizationId: profile.organization.id,
-    teacherProfileId: profile.id,
-    classes: deploymentClasses.map((klass) => ({
-      id: klass.id,
-      organizationId: klass.school.organizationId,
-      schoolId: klass.school.id,
-    })),
-  });
-  if (
-    deploymentClasses.some((klass) => !enabledClassIds.includes(klass.id))
-  ) {
-    return dataResponse(
-      {
-        success: false,
-        message: 'Assignments are not enabled for your organization.',
-      },
-      { status: 403 }
-    );
-  }
 
   if (intent === 'delete-assignment') {
     // Documents keep their content; the assignment link is set to null by the schema.
@@ -304,23 +252,7 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const standardizationEnabledClassIds =
-    await getAssignmentCreationStandardizationEnabledClassIdsForContext({
-      organizationId: profile.organization.id,
-      teacherProfileId: profile.id,
-      classes: deploymentClasses.map((klass) => ({
-        id: klass.id,
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-      })),
-    });
-  const standardizationEnabled = deploymentClasses.every((klass) =>
-    standardizationEnabledClassIds.includes(klass.id)
-  );
-
-  const gradingIntent = standardizationEnabled
-    ? parseAssignmentGradingIntent(formData)
-    : null;
+  const gradingIntent = parseAssignmentGradingIntent(formData);
   if (gradingIntent && !gradingIntent.success) {
     return dataResponse(
       { success: false, message: gradingIntent.message },
@@ -334,6 +266,7 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId,
       title,
       prompt,
+      tutorContext: assignment.tutorContext,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,
@@ -371,33 +304,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     orderBy: [{ grade: 'asc' }, { period: 'asc' }],
   });
 
-  const enabledClassIds = await getAssignmentsEnabledClassIdsForContext({
-    organizationId: profile.organization.id,
-    teacherProfileId: profile.id,
-    classes: classes.map((klass) => ({
-      id: klass.id,
-      organizationId: klass.school.organizationId,
-      schoolId: klass.school.id,
-    })),
-  });
-  const enabledClasses = classes.filter((klass) =>
-    enabledClassIds.includes(klass.id)
-  );
-  const assignmentsEnabled = enabledClasses.length > 0;
+  const classIds = classes.map((klass) => klass.id);
+  const assignmentsEnabled = classIds.length > 0;
 
-  const [assignments, allowedAssignmentTypes, standardizedClassIds] =
-    await Promise.all([
-      assignmentsEnabled
-        ? prisma.assignment.findMany({
-            where: {
-              classAssignments: {
-                some: { classId: { in: enabledClassIds } },
-              },
+  const [assignments, allowedAssignmentTypes] = await Promise.all([
+    assignmentsEnabled
+      ? prisma.assignment.findMany({
+          where: {
+            classAssignments: {
+              some: { classId: { in: classIds } },
             },
+          },
             select: {
               id: true,
               title: true,
               prompt: true,
+              tutorContext: true,
               submitForGrade: true,
               pointValue: true,
               createdAt: true,
@@ -406,7 +328,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
                 select: { id: true, title: true, systemKey: true },
               },
               classAssignments: {
-                where: { classId: { in: enabledClassIds } },
+                where: { classId: { in: classIds } },
                 select: {
                   id: true,
                   class: {
@@ -419,57 +341,37 @@ export async function loader({ request }: LoaderFunctionArgs) {
             orderBy: [{ createdAt: 'desc' }],
           })
         : [],
-      assignmentsEnabled
-        ? getAvailableAssignmentTypesForScopes<{
-            id: string;
-            title: string;
-            systemKey: string | null;
-          }>({
-            scopes: enabledClasses.map((klass) => ({
-              organizationId: klass.school.organizationId,
-              schoolId: klass.school.id,
-              teacherProfileId: profile.id,
-            })),
-            select: { id: true, title: true, systemKey: true },
-            orderBy: { position: 'asc' },
-          })
-        : [],
-      assignmentsEnabled
-        ? getAssignmentCreationStandardizationEnabledClassIdsForContext({
-            organizationId: profile.organization.id,
+    assignmentsEnabled
+      ? getAvailableAssignmentTypesForScopes<{
+          id: string;
+          title: string;
+          systemKey: string | null;
+        }>({
+          scopes: classes.map((klass) => ({
+            organizationId: klass.school.organizationId,
+            schoolId: klass.school.id,
             teacherProfileId: profile.id,
-            classes: enabledClasses.map((klass) => ({
-              id: klass.id,
-              organizationId: klass.school.organizationId,
-              schoolId: klass.school.id,
-            })),
-          })
-        : [],
-    ]);
+          })),
+          select: { id: true, title: true, systemKey: true },
+          orderBy: { position: 'asc' },
+        })
+      : [],
+  ]);
 
   const genericAssignmentTypes = allowedAssignmentTypes.filter(
     (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
-  const standardizedClassIdSet = new Set(standardizedClassIds);
-  const standardizedClasses = enabledClasses.filter((klass) =>
-    standardizedClassIdSet.has(klass.id)
-  );
-  const assignmentCreationStandardizationEnabled =
-    standardizedClasses.length > 0;
-  const creationClasses = assignmentCreationStandardizationEnabled
-    ? standardizedClasses
-    : enabledClasses;
 
   return dataResponse({
     assignments,
-    classes: enabledClasses.map((klass) => ({
+    classes: classes.map((klass) => ({
       id: klass.id,
       grade: klass.grade,
       period: klass.period,
       title: klass.title,
       school: { name: klass.school.name },
     })),
-    creationClasses: creationClasses.map((klass) => ({
+    creationClasses: classes.map((klass) => ({
       id: klass.id,
       name: formatClassLabel(klass),
     })),
@@ -482,7 +384,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       title: type.title,
     })),
     assignmentsEnabled,
-    assignmentCreationStandardizationEnabled,
   });
 }
 
@@ -490,6 +391,7 @@ type AssignmentRow = {
   id: string;
   title: string | null;
   prompt: string;
+  tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   createdAt: Date | string;
@@ -948,9 +850,6 @@ export default function AssignmentsRoute() {
         entryPoint="dashboard"
         assignmentTypes={data.assignmentTypes}
         teacherClasses={data.creationClasses}
-        assignmentCreationStandardizationEnabled={
-          data.assignmentCreationStandardizationEnabled
-        }
         fixedAssignmentTypeId={duplicateAssignment?.assignmentTypeId}
         initialAssignmentTypeId={createAssignmentTypeId}
         initialTitle={
@@ -973,9 +872,6 @@ export default function AssignmentsRoute() {
             editingAssignment.classAssignments[0]?.class.id ?? ''
           }
           allowedAssignmentTypes={data.assignmentTypes}
-          assignmentCreationStandardizationEnabled={
-            data.assignmentCreationStandardizationEnabled
-          }
           editingAssignment={editingAssignment}
         />
       ) : null}

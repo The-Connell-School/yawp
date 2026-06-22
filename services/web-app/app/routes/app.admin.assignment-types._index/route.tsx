@@ -143,16 +143,16 @@ export default function AssignmentTypesRoute() {
               </span>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {courses.map((course) => (
                 <Card
                   key={course.id}
-                  className="bg-muted cursor-pointer transition-shadow hover:shadow-lg"
+                  className="bg-muted cursor-pointer gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
                   onClick={() =>
                     navigate(`/app/admin/assignment-types/${course.id}`)
                   }
                 >
-                  <div className="aspect-video w-full overflow-hidden rounded-t-lg">
+                  <div className="aspect-[5/3] w-full overflow-hidden rounded-t-lg">
                     {course.image ? (
                       <img
                         src={`/api/image/course/${course.image.id}`}

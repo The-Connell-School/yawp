@@ -162,7 +162,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? ('localhost' as const)
       : null;
   const localDevQuickLoginEnabled =
-    isLocalDevAuthEnabled() && !userId && url.pathname === '/auth/login';
+    isLocalDevAuthEnabled() && bannerWarning === 'localhost';
 
   return data(
     {

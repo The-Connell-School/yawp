@@ -3,7 +3,6 @@ import { EDITOR_SELECTOR } from '../test-helpers';
 import { createE2EPrismaClient } from '../prisma-client';
 import {
   invalidateUserSessions,
-  setDocumentSubmissionForSchool,
 } from '../db-helpers';
 
 const PASTE_SHORTCUT = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
@@ -40,7 +39,7 @@ test.describe.serial('Document Editor E2E Tests', () => {
     await expect(editor).toBeVisible({ timeout: 10000 });
   });
 
-  test('submits a practice document when the student school is targeted', async ({
+  test('submits a practice document', async ({
     page,
     signIn,
     e2eContext,
@@ -48,12 +47,6 @@ test.describe.serial('Document Editor E2E Tests', () => {
   }) => {
     const prisma = createE2EPrismaClient();
     try {
-      await setDocumentSubmissionForSchool({
-        prisma,
-        schoolId: e2eContext.schoolId,
-        enabled: true,
-      });
-
       await signIn('jdoe@brock.software', 'johndoe');
       await helpers.openDocument(e2eContext.editedDocumentId, { retry: true });
 

@@ -9,8 +9,6 @@ export type AssignmentTypeGlanceRow = {
   image?: { id: string } | null;
 };
 
-const DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO = encodeURIComponent('/app');
-
 function AssignmentTypeImage({
   assignmentType,
   className,
@@ -40,20 +38,25 @@ function AssignmentTypeImage({
 
 export function AssignmentsAtAGlance({
   assignmentTypes,
+  onCreateAssignment,
+  onCreateAssignmentForType,
 }: {
   assignmentTypes: AssignmentTypeGlanceRow[];
+  onCreateAssignment: () => void;
+  onCreateAssignmentForType: (assignmentTypeId: string) => void;
 }) {
   return (
     <div data-testid="teacher-assignments-grid">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold">Assignments</h2>
-        <Link
-          to={`/app/assignments?create=1&returnTo=${DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO}`}
+        <button
+          type="button"
+          onClick={onCreateAssignment}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <Plus className="h-4 w-4" />
           New assignment
-        </Link>
+        </button>
       </div>
 
       {assignmentTypes.length > 0 ? (
@@ -79,14 +82,20 @@ export function AssignmentsAtAGlance({
                   </div>
                 </Link>
                 <Tooltip text={`New ${assignmentType.title} assignment`}>
-                  <Link
-                    to={`/app/assignments?create=1&assignmentType=${assignmentType.id}&returnTo=${DASHBOARD_ASSIGNMENT_CREATE_RETURN_TO}`}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onCreateAssignmentForType(assignmentType.id)
+                    }
                     aria-label={`New ${assignmentType.title} assignment`}
                     className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-black/10 transition-colors hover:bg-muted"
                   >
                     <Plus className="h-4 w-4" />
-                    <span className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden" aria-hidden="true" />
-                  </Link>
+                    <span
+                      className="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+                      aria-hidden="true"
+                    />
+                  </button>
                 </Tooltip>
               </div>
             ))}

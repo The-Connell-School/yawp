@@ -7,6 +7,11 @@ import { prisma } from '~/utils/db.server';
 import { authSessionStorage } from '~/cookie-session-storages/authentication.server';
 import { setMembershipId } from '~/cookies/membership-id.server';
 import { isLocalDevAuthEnabled } from '~/utils/local-dev-auth.server';
+import { combineHeaders } from '~/utils/misc';
+import {
+  studentPreviewModeKey,
+  studentPreviewOrgIdKey,
+} from '~/utils/student-preview.server';
 import {
   LOCAL_DEV_PERSONA_EMAILS,
   LOCAL_DEV_PERSONAS,
@@ -23,7 +28,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const email = String(formData.get('email') ?? '').trim().toLowerCase();
-  const redirectTo = String(formData.get('redirectTo') ?? '/app');
 
   if (!LOCAL_DEV_PERSONA_EMAILS.includes(email)) {
     return Response.json({ error: 'Unknown dev persona.' }, { status: 404 });
@@ -62,19 +66,24 @@ export async function action({ request }: ActionFunctionArgs) {
   const authSession = await authSessionStorage.getSession(
     request.headers.get('cookie')
   );
+  const previousSessionId = authSession.get(sessionKey);
+  if (previousSessionId) {
+    void prisma.session.deleteMany({ where: { id: previousSessionId } });
+  }
   authSession.set(sessionKey, session.id);
   authSession.unset('impersonationMode');
   authSession.unset('impersonatorUserId');
+  authSession.unset(studentPreviewModeKey);
+  authSession.unset(studentPreviewOrgIdKey);
 
-  return redirect(redirectTo.startsWith('/') ? redirectTo : '/app', {
-    headers: {
-      'set-cookie': [
-        await authSessionStorage.commitSession(authSession, {
-          expires: session.expirationDate,
-        }),
-        await setMembershipId(membershipId),
-      ].join(';'),
-    },
+  return redirect('/app', {
+    headers: combineHeaders({
+      'set-cookie': await authSessionStorage.commitSession(authSession, {
+        expires: session.expirationDate,
+      }),
+    }, {
+      'set-cookie': await setMembershipId(membershipId),
+    }),
   });
 }
 

@@ -10,8 +10,15 @@ const prisma = {
   },
   assignmentType: {
     findMany: mock(),
+    findFirst: mock(),
   },
-  featureAccessTarget: {
+  organizationAssignmentType: {
+    findMany: mock(),
+  },
+  school: {
+    findMany: mock(),
+  },
+  orgMembership: {
     findMany: mock(),
   },
   document: {
@@ -24,15 +31,9 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
-const getAssignmentsEnabledClassIdsForContext = mock();
-const getAssignmentCreationStandardizationEnabledClassIdsForContext = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
-mock.module('~/utils/feature-flags.server', () => ({
-  getAssignmentsEnabledClassIdsForContext,
-  getAssignmentCreationStandardizationEnabledClassIdsForContext,
-}));
 
 const { action, sanitizeAssignmentCreateReturnTo } = await import('./route');
 
@@ -77,8 +78,6 @@ describe('app.assignments action', () => {
     }
     requireUserId.mockReset();
     requireMembership.mockReset();
-    getAssignmentsEnabledClassIdsForContext.mockReset();
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -112,11 +111,11 @@ describe('app.assignments action', () => {
       },
     ]);
     prisma.assignment.deleteMany.mockResolvedValue({ count: 2 });
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue(['class-1']);
-    getAssignmentCreationStandardizationEnabledClassIdsForContext.mockResolvedValue(
-      ['class-1']
-    );
-    prisma.featureAccessTarget.findMany.mockResolvedValue([]);
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'at-1' },
+    ]);
+    prisma.school.findMany.mockResolvedValue([]);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.assignmentType.findMany.mockResolvedValue([
       {
         id: 'at-1',
@@ -301,18 +300,4 @@ describe('app.assignments action', () => {
     expect(prisma.assignment.update).not.toHaveBeenCalled();
   });
 
-  test('blocks managing assignments when the flag is disabled', async () => {
-    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
-
-    const response = await action({
-      request: requestFor({
-        intent: 'delete-assignment',
-        assignmentId: 'assignment-1',
-      }),
-      params: {},
-    } as any);
-
-    expect(responseStatus(response)).toBe(403);
-    expect(prisma.assignment.delete).not.toHaveBeenCalled();
-  });
 });
