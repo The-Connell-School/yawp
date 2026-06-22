@@ -86,7 +86,7 @@ describe('admin grading assistant templates action', () => {
     });
   });
 
-  test('creates a default assignment-type link while creating a draft template', async () => {
+  test('records a draft assignment-type default link without retiring the current runtime default', async () => {
     prisma.gradingAssistantTemplate.create.mockResolvedValue({ id: 'template-1' });
 
     await action({
@@ -113,14 +113,7 @@ describe('admin grading assistant templates action', () => {
         slug: 'daily-pages-completion',
       }),
     });
-    expect(prisma.assignmentTypeGradingAssistant.updateMany).toHaveBeenCalledWith({
-      where: {
-        assignmentTypeId: 'assignment-type-1',
-        isDefault: true,
-        activeTo: null,
-      },
-      data: { activeTo: expect.any(Date) },
-    });
+    expect(prisma.assignmentTypeGradingAssistant.updateMany).not.toHaveBeenCalled();
     expect(prisma.assignmentTypeGradingAssistant.create).toHaveBeenCalledWith({
       data: {
         assignmentTypeId: 'assignment-type-1',

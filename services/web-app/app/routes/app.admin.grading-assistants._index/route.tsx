@@ -155,14 +155,6 @@ export async function action({ request }: ActionFunctionArgs) {
       if (!defaultAssignmentTypeId) return;
 
       const activeFrom = new Date();
-      await tx.assignmentTypeGradingAssistant.updateMany({
-        where: {
-          assignmentTypeId: defaultAssignmentTypeId,
-          isDefault: true,
-          activeTo: null,
-        },
-        data: { activeTo: activeFrom },
-      });
       await tx.assignmentTypeGradingAssistant.create({
         data: {
           assignmentTypeId: defaultAssignmentTypeId,
