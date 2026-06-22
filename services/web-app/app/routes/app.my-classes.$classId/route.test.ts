@@ -270,7 +270,6 @@ describe('class detail loader document visibility', () => {
       id: 'assignment-1',
       assignmentTypeId: 'archived-type-1',
       assignmentType: { systemKey: null },
-      tutorContext: 'Legacy tutor guidance',
     });
 
     const form = new FormData();
@@ -295,7 +294,6 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'archived-type-1',
         title: null,
         prompt: 'Updated prompt',
-        tutorContext: 'Legacy tutor guidance',
         submitForGrade: true,
         pointValue: 100,
       },
@@ -337,15 +335,17 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
-        tutorContext: null,
         submitForGrade: true,
         pointValue: 25,
       },
       classIds: ['class-1'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
   });
 
-  test('keeps legacy class assignment tutor context when standardization is disabled', async () => {
+  test('ignores legacy class assignment tutor context when standardization is disabled', async () => {
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       { id: 'at-1', systemKey: null },
@@ -379,10 +379,12 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
-        tutorContext: 'Legacy tutor context.',
       },
       classIds: ['class-1'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
   });
 
   test('rejects invalid class assignment point values', async () => {

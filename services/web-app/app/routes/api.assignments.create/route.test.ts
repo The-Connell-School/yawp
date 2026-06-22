@@ -150,15 +150,17 @@ describe('api.assignments.create', () => {
         assignmentTypeId: 'at-1',
         title: 'Essay',
         prompt: 'Write the essay.',
-        tutorContext: null,
         submitForGrade: true,
         pointValue: 100,
       }),
       classIds: ['class-1', 'class-2'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
   });
 
-  test('keeps legacy tutor context behavior when standardization is not enabled', async () => {
+  test('ignores legacy tutor context when standardization is not enabled', async () => {
     isAssignmentCreationStandardizationEnabledForContext.mockResolvedValue(false);
 
     const response = await action({
@@ -178,10 +180,12 @@ describe('api.assignments.create', () => {
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
         assignmentTypeId: 'at-1',
-        tutorContext: 'Legacy context.',
       }),
       classIds: ['class-1', 'class-2'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
     const firstAssignment = createAssignmentDeployedToClasses.mock.calls[0][0].data;
     expect(firstAssignment).not.toHaveProperty('submitForGrade');
     expect(firstAssignment).not.toHaveProperty('pointValue');
@@ -208,12 +212,14 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(true);
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        tutorContext: null,
         submitForGrade: false,
         pointValue: null,
       }),
       classIds: ['class-1'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
   });
 
   test('rejects invalid graded point values before creating assignments', async () => {
@@ -444,7 +450,6 @@ describe('api.assignments.create', () => {
         assignmentTypeId: 'ap-type-1',
         title: 'Unit 7 DBQ',
         prompt: libraryEntry.prompt,
-        tutorContext: null,
         apHistorySnapshot: expect.objectContaining({
           schemaVersion: 1,
           libraryEntryId: 'apush-dbq-new-deal-federal-power',
@@ -458,6 +463,9 @@ describe('api.assignments.create', () => {
       }),
       classIds: ['class-1', 'class-2'],
     });
+    expect(createAssignmentDeployedToClasses.mock.calls[0][0].data).not.toHaveProperty(
+      'tutorContext'
+    );
   });
 
   test('creates AP History assignments when AP access is school-scoped', async () => {

@@ -237,6 +237,7 @@ describe('app.assignments action', () => {
         assignmentTypeId: 'at-1',
         title: 'Updated Title',
         prompt: 'Updated prompt.',
+        tutorContext: 'Do not keep this legacy prompt.',
         submitForGrade: 'true',
         pointValue: '50',
       }),
@@ -247,13 +248,13 @@ describe('app.assignments action', () => {
     expect(body.success).toBe(true);
     expect(prisma.assignment.update).toHaveBeenCalledWith({
       where: { id: 'assignment-1' },
-      data: expect.objectContaining({
+      data: {
         assignmentTypeId: 'at-1',
         title: 'Updated Title',
         prompt: 'Updated prompt.',
         submitForGrade: true,
         pointValue: 50,
-      }),
+      },
     });
   });
 

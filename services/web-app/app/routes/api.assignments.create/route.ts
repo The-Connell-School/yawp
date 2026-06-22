@@ -42,13 +42,11 @@ export async function action({ request }: ActionFunctionArgs) {
     .filter(Boolean);
   const titleRaw = formData.get('title')?.toString() ?? '';
   const promptRaw = formData.get('prompt')?.toString() ?? '';
-  const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
-  const legacyTutorContext = tutorContextRaw.trim() || null;
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
 
   if (!assignmentTypeId) {
@@ -235,9 +233,6 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
-      tutorContext: assignmentCreationStandardizationEnabled
-        ? null
-        : legacyTutorContext,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,

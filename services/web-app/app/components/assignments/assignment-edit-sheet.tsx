@@ -24,7 +24,6 @@ export type AssignmentEditRecord = {
   id: string;
   title: string | null;
   prompt: string;
-  tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   assignmentTypeId: string;
@@ -57,7 +56,6 @@ export function AssignmentEditSheet({
   const [title, setTitle] = useState('');
   const [assignmentTypeId, setAssignmentTypeId] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
@@ -99,7 +97,6 @@ export function AssignmentEditSheet({
     setTitle(editingAssignment.title ?? '');
     setAssignmentTypeId(editingAssignment.assignmentTypeId);
     setPrompt(editingAssignment.prompt);
-    setTutorContext(editingAssignment.tutorContext ?? '');
     setSubmitForGrade(editingAssignment.submitForGrade ?? true);
     setPointValue((editingAssignment.pointValue ?? 100).toString());
     setPromptMode('manual');
@@ -115,13 +112,7 @@ export function AssignmentEditSheet({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (
-      !assignmentCreationStandardizationEnabled &&
-      typeof extractFetcher.data.tutorContext === 'string'
-    ) {
-      setTutorContext(extractFetcher.data.tutorContext);
-    }
-  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
+  }, [extractFetcher.data]);
 
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data?.success) {
@@ -311,22 +302,7 @@ export function AssignmentEditSheet({
                 <input type="hidden" name="pointValue" value="" />
               ) : null}
             </>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="assignment-tutor-context">
-                Tutor Context (optional)
-              </Label>
-              <Textarea
-                id="assignment-tutor-context"
-                name="tutorContext"
-                value={tutorContext}
-                onChange={(event) => setTutorContext(event.target.value)}
-                rows={6}
-                placeholder="Guidance for the tutor system prompt..."
-                disabled={isSaving}
-              />
-            </div>
-          )}
+          ) : null}
 
           {formError ? (
             <p className="text-sm text-destructive">{formError}</p>

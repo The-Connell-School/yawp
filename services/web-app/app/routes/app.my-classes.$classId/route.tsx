@@ -266,11 +266,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
     const titleRaw = formData.get('title')?.toString() ?? '';
     const promptRaw = formData.get('prompt')?.toString() ?? '';
-    const tutorContextRaw = formData.get('tutorContext')?.toString() ?? '';
 
     const title = titleRaw.trim() || null;
     const prompt = promptRaw.trim();
-    const legacyTutorContext = tutorContextRaw.trim() || null;
 
     if (!assignmentTypeId) {
       return dataResponse(
@@ -282,7 +280,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: string;
       assignmentTypeId: string;
       assignmentType: { systemKey: string | null };
-      tutorContext: string | null;
     } | null = null;
     if (intent === 'update-assignment') {
       if (!assignmentId) {
@@ -301,7 +298,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: true,
           assignmentTypeId: true,
           assignmentType: { select: { systemKey: true } },
-          tutorContext: true,
         },
       });
 
@@ -377,9 +373,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentTypeId,
           title,
           prompt,
-          tutorContext: assignmentCreationStandardizationEnabled
-            ? null
-            : legacyTutorContext,
           ...(gradingIntent?.success
             ? {
                 submitForGrade: gradingIntent.data.submitForGrade,
@@ -402,9 +395,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId,
         title,
         prompt,
-        tutorContext: assignmentCreationStandardizationEnabled
-          ? existingAssignment!.tutorContext
-          : legacyTutorContext,
         ...(gradingIntent?.success
           ? {
               submitForGrade: gradingIntent.data.submitForGrade,
@@ -780,7 +770,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
-          tutorContext: true,
           submitForGrade: true,
           pointValue: true,
           assignmentTypeId: true,
@@ -807,7 +796,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     title: classAssignment.assignment.title,
     prompt: classAssignment.assignment.prompt,
-    tutorContext: classAssignment.assignment.tutorContext,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,

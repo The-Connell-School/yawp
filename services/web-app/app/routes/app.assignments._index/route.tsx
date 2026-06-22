@@ -192,11 +192,10 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       },
     },
-    select: {
-      id: true,
-      assignmentTypeId: true,
-      tutorContext: true,
-      assignmentType: { select: { systemKey: true } },
+      select: {
+        id: true,
+        assignmentTypeId: true,
+        assignmentType: { select: { systemKey: true } },
       classAssignments: {
         select: {
           class: {
@@ -254,8 +253,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const assignmentTypeId = formData.get('assignmentTypeId')?.toString();
   const title = (formData.get('title')?.toString() ?? '').trim() || null;
   const prompt = (formData.get('prompt')?.toString() ?? '').trim();
-  const legacyTutorContext =
-    (formData.get('tutorContext')?.toString() ?? '').trim() || null;
 
   if (!assignmentTypeId) {
     return dataResponse(
@@ -337,9 +334,6 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId,
       title,
       prompt,
-      tutorContext: standardizationEnabled
-        ? assignment.tutorContext
-        : legacyTutorContext,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,
@@ -404,7 +398,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
               id: true,
               title: true,
               prompt: true,
-              tutorContext: true,
               submitForGrade: true,
               pointValue: true,
               createdAt: true,
@@ -497,7 +490,6 @@ type AssignmentRow = {
   id: string;
   title: string | null;
   prompt: string;
-  tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   createdAt: Date | string;

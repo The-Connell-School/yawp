@@ -11,7 +11,6 @@ const MAX_PDF_BYTES = 10 * 1024 * 1024;
 const ExtractedAssignmentSchema = z.object({
   title: z.string().trim().max(200).optional(),
   prompt: z.string().trim().min(1),
-  tutorContext: z.string().trim().optional(),
 });
 
 function safeText(value: string | undefined): string {
@@ -126,9 +125,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const system = [
     'You extract classroom writing assignments from PDFs.',
     'Return only valid JSON in this exact shape:',
-    '{"title":"string?","prompt":"string","tutorContext":"string?"}',
+    '{"title":"string?","prompt":"string"}',
     'prompt must be the full assignment directions students should see above the editor.',
-    'tutorContext should contain concise tutor guidance for coaching within this assignment when available.',
     'Never include markdown fences or explanatory text.',
   ].join('\n');
 
@@ -163,7 +161,6 @@ export async function action({ request }: ActionFunctionArgs) {
               text: [
                 'Extract the assignment for student writing.',
                 'If multiple prompts appear, choose the primary essay prompt.',
-                'Also infer tutorContext that helps a writing tutor coach this assignment.',
                 'Return strict JSON only.',
               ].join(' '),
             },
@@ -202,7 +199,6 @@ export async function action({ request }: ActionFunctionArgs) {
       success: true,
       title: safeText(parsed.title),
       prompt: parsed.prompt.trim(),
-      tutorContext: safeText(parsed.tutorContext),
     });
   } catch (error) {
     const messageText =

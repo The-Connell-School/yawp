@@ -270,7 +270,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
-          tutorContext: true,
           apHistorySnapshot: true,
         },
       },
