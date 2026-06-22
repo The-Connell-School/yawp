@@ -1,0 +1,11 @@
+{
+  "slug": "yawp2",
+  "containerName": "yawp-dev-yawp2-postgres",
+  "pgPort": 54472,
+  "webPort": 5252,
+  "databaseName": "yawp_dev_yawp2",
+  "databaseUrl": "postgresql://postgres:postgres@127.0.0.1:54472/yawp_dev_yawp2",
+  "webAppEnvPath": "/Users/bryantbrock/.codex/worktrees/4cf2/yawp/services/web-app/.env",
+  "prismaEnvPath": "/Users/bryantbrock/.codex/worktrees/4cf2/yawp/packages/prisma/.env",
+  "contextPath": "/Users/bryantbrock/.codex/worktrees/4cf2/yawp/.yawp-dev/context.json"
+}

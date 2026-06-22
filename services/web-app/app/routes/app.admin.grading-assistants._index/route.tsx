@@ -225,7 +225,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === 'createTemplate') {
     const name = requireString(formData, 'name');
-    const slug = requireString(formData, 'slug');
+    const slug =
+      formData.get('slug')?.toString().trim() ||
+      name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const assignmentTypeKind =
       formData.get('assignmentTypeKind')?.toString().trim() || null;
     const defaultAssignmentTypeIdRaw =
@@ -275,7 +277,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (intent === 'updateTemplate') {
     const templateId = requireString(formData, 'templateId');
     const name = requireString(formData, 'name');
-    const slug = requireString(formData, 'slug');
+    const slug =
+      formData.get('slug')?.toString().trim() ||
+      name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const assignmentTypeKind =
       formData.get('assignmentTypeKind')?.toString().trim() || null;
     const calibrationNotes =
@@ -819,10 +823,6 @@ export default function GradingAssistantsRoute() {
                   <Input id="name" name="name" placeholder="e.g. ACT Writing four-domain" required />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="slug">Slug</Label>
-                  <Input id="slug" name="slug" className="font-mono text-sm" placeholder="act-writing-four-domain" required />
-                </div>
-                <div className="space-y-1.5">
                   <Label htmlFor="assignmentTypeKind">
                     Assignment type kind{' '}
                     <span className="font-normal text-muted-foreground">(optional)</span>
@@ -914,10 +914,6 @@ export default function GradingAssistantsRoute() {
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-name">Name</Label>
                   <Input id="edit-name" name="name" defaultValue={editingTemplate.name} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-slug">Slug</Label>
-                  <Input id="edit-slug" name="slug" defaultValue={editingTemplate.slug} className="font-mono text-sm" required />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-kind">Assignment type kind</Label>
@@ -1028,9 +1024,6 @@ export default function GradingAssistantsRoute() {
                       >
                         {template.name}
                       </button>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {template.slug}
-                      </div>
                     </TableCell>
                     <TableCell>{statusBadge(template.status)}</TableCell>
                     <TableCell>v{template.version}</TableCell>

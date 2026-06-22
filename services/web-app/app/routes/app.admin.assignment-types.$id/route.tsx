@@ -797,12 +797,6 @@ function GradingAssistantCard({
               </dt>
               <dd className="text-sm">v{template.version}</dd>
             </div>
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">
-                Slug
-              </dt>
-              <dd className="text-sm font-mono">{template.slug}</dd>
-            </div>
             {scoringType && (
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">
