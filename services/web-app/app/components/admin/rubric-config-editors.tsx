@@ -199,6 +199,7 @@ function SortableRubricCategory({
     <div
       ref={setNodeRef}
       style={style}
+      data-testid={`rubric-category-row-${index}`}
       className={`rounded-[8px] border bg-muted/40 p-3 space-y-2.5 ${isDragging ? 'shadow-sm' : ''}`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -373,6 +374,7 @@ export function RubricEditor({
         variant="outline"
         size="sm"
         onClick={addCat}
+        data-testid="rubric-add-category"
         className="w-full"
       >
         <Plus className="mr-1.5 h-4 w-4" />
