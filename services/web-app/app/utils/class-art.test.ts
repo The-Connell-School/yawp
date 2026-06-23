@@ -4,9 +4,13 @@ import {
   CLASS_ART_LIBRARY,
   CLASS_ART_POOL,
   CLASS_ART_POOL_SIZE,
+  CLASS_ARTWORK_COUNT,
+  buildClassArtPoolIndex,
   generateClassArt,
+  getArtworkIndexFromPoolIndex,
   getClassArtByIndex,
-  pickNextClassArtIndex,
+  getCropIndexFromPoolIndex,
+  pickNextClassArtIndexForOrganization,
 } from './class-art';
 
 describe('generateClassArt', () => {
@@ -104,21 +108,50 @@ describe('getClassArtByIndex', () => {
   });
 });
 
-describe('pickNextClassArtIndex', () => {
-  test('avoids every recently-used index when an unused one remains', () => {
-    const recent = Array.from({ length: CLASS_ART_POOL_SIZE - 1 }, (_, i) => i);
-    expect(pickNextClassArtIndex(recent, () => 0)).toBe(CLASS_ART_POOL_SIZE - 1);
+describe('class art pool indexing', () => {
+  test('maps artwork and crop indices to the flattened pool index', () => {
+    expect(buildClassArtPoolIndex(0, 0)).toBe(0);
+    expect(buildClassArtPoolIndex(0, 2)).toBe(2);
+    expect(buildClassArtPoolIndex(1, 0)).toBe(3);
+    expect(getArtworkIndexFromPoolIndex(3)).toBe(1);
+    expect(getCropIndexFromPoolIndex(3)).toBe(0);
   });
+});
 
-  test('falls back to the full pool once every index is recent', () => {
-    const recent = Array.from({ length: CLASS_ART_POOL_SIZE }, (_, i) => i);
-    expect(pickNextClassArtIndex(recent, () => 0)).toBe(0);
-  });
-
-  test('uses the provided random source to choose among the remaining indices', () => {
-    const recent = [0, 1, 2];
-    expect(pickNextClassArtIndex(recent, () => 0.999999)).toBe(
-      CLASS_ART_POOL_SIZE - 1
+describe('pickNextClassArtIndexForOrganization', () => {
+  test('uses crop 0 for every artwork before any artwork gets crop 1', () => {
+    const assigned = Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) =>
+      buildClassArtPoolIndex(artwork, 0)
     );
+
+    const next = pickNextClassArtIndexForOrganization(assigned, () => 0);
+
+    expect(getCropIndexFromPoolIndex(next)).toBe(0);
+    expect(getArtworkIndexFromPoolIndex(next)).toBe(CLASS_ARTWORK_COUNT - 1);
+  });
+
+  test('moves to crop 1 only after every artwork has crop 0', () => {
+    const assigned = Array.from({ length: CLASS_ARTWORK_COUNT }, (_, artwork) =>
+      buildClassArtPoolIndex(artwork, 0)
+    );
+
+    const next = pickNextClassArtIndexForOrganization(assigned, () => 0);
+
+    expect(getCropIndexFromPoolIndex(next)).toBe(1);
+    expect(getArtworkIndexFromPoolIndex(next)).toBe(0);
+  });
+
+  test('falls back to crop 0 once every artwork has every crop', () => {
+    const assigned: number[] = [];
+    for (let crop = 0; crop < 3; crop++) {
+      for (let artwork = 0; artwork < CLASS_ARTWORK_COUNT; artwork++) {
+        assigned.push(buildClassArtPoolIndex(artwork, crop));
+      }
+    }
+
+    const next = pickNextClassArtIndexForOrganization(assigned, () => 0);
+
+    expect(getCropIndexFromPoolIndex(next)).toBe(0);
+    expect(getArtworkIndexFromPoolIndex(next)).toBe(0);
   });
 });

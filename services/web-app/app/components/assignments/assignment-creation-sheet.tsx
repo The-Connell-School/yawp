@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import { useFetcher } from 'react-router';
+import { CircleHelp } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -20,6 +26,12 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  gradingAssistantStrictnessHelpText,
+  gradingAssistantStrictnessOptions,
+  type GradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 
 export type AssignmentCreationEntryPoint =
   | 'dashboard'
@@ -155,6 +167,10 @@ export function AssignmentCreationSheetContent({
   const [prompt, setPrompt] = useState(initialPrompt);
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
+  const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
+    useState<GradingAssistantStrictnessLevel>(
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+    );
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const wasOpenRef = useRef(false);
@@ -214,6 +230,9 @@ export function AssignmentCreationSheetContent({
     setPrompt(initialPrompt);
     setSubmitForGrade(true);
     setPointValue('100');
+    setGradingAssistantStrictnessLevel(
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+    );
     setPromptMode('manual');
     setPdfFile(null);
   }, [
@@ -434,46 +453,122 @@ export function AssignmentCreationSheetContent({
           />
         </div>
 
-        <div className="space-y-3 rounded-md border p-3">
+        <div className="pt-6">
           <input type="hidden" name="submitForGrade" value="false" />
-          <div className="flex items-start gap-2.5">
+          <div className="flex items-center gap-2.5">
             <Checkbox
               id="assignment-create-submit-for-grade"
               name="submitForGrade"
               value="true"
               checked={submitForGrade}
-              onCheckedChange={(checked) => setSubmitForGrade(checked === true)}
+              onCheckedChange={(checked) =>
+                setSubmitForGrade(checked === true)
+              }
               disabled={isSaving}
+              className="size-4 shrink-0"
             />
-            <div className="space-y-1">
-              <Label
-                htmlFor="assignment-create-submit-for-grade"
-                className="cursor-pointer font-normal"
-              >
-                Submit for grade
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Students can submit this assignment for a recorded grade.
-              </p>
-            </div>
+            <Label
+              htmlFor="assignment-create-submit-for-grade"
+              className="cursor-pointer font-normal leading-none"
+            >
+              Submit for grade
+            </Label>
           </div>
+          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+            Students can submit this assignment for a recorded grade.
+          </p>
 
           {submitForGrade ? (
-            <div className="space-y-2 pl-6">
-              <Label htmlFor="assignment-create-point-value">Point value</Label>
-              <Input
-                id="assignment-create-point-value"
-                name="pointValue"
-                type="number"
-                min={1}
-                max={1000}
-                step={1}
-                inputMode="numeric"
-                value={pointValue}
-                onChange={(event) => setPointValue(event.target.value)}
-                disabled={isSaving}
-                required
-              />
+            <div className="mt-3 flex gap-2.5">
+              <div className="flex w-4 shrink-0 justify-center">
+                <div aria-hidden className="w-px bg-border" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="assignment-create-point-value">
+                    Point value
+                  </Label>
+                  <Input
+                    id="assignment-create-point-value"
+                    name="pointValue"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    step={1}
+                    inputMode="numeric"
+                    value={pointValue}
+                    onChange={(event) => setPointValue(event.target.value)}
+                    disabled={isSaving}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label>Grading assistant strictness</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-full"
+                          aria-label="Grading assistant strictness help"
+                          title={gradingAssistantStrictnessHelpText}
+                        >
+                          <CircleHelp className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="start"
+                        className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
+                      >
+                        {gradingAssistantStrictnessHelpText}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <input
+                    type="hidden"
+                    name="gradingAssistantStrictnessLevel"
+                    value={gradingAssistantStrictnessLevel}
+                  />
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {gradingAssistantStrictnessOptions.map((option) => {
+                      const selected =
+                        gradingAssistantStrictnessLevel === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setGradingAssistantStrictnessLevel(option.value)
+                          }
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              selected
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {option.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

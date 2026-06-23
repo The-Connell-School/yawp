@@ -144,9 +144,76 @@ describe('api.assignments.create', () => {
         tutorContext: null,
         submitForGrade: true,
         pointValue: 100,
+        gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
     });
+  });
+
+  test('persists the selected grading assistant strictness level on created assignments', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+        gradingAssistantStrictnessLevel: 'advanced',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gradingAssistantStrictnessLevel: 'advanced',
+      }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('defaults assignment grading assistant strictness to intermediate', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1', 'class-2'],
+        prompt: 'Write the essay.',
+        title: 'Essay',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(body.success).toBe(true);
+    expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        gradingAssistantStrictnessLevel: 'intermediate',
+      }),
+      classIds: ['class-1', 'class-2'],
+    });
+  });
+
+  test('rejects invalid grading assistant strictness levels', async () => {
+    const response = await action({
+      request: requestFor({
+        intent: 'create-assignment',
+        assignmentTypeId: 'at-1',
+        classIds: ['class-1'],
+        prompt: 'Write the essay.',
+        gradingAssistantStrictnessLevel: 'punitive',
+      }),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+    expect(responseStatus(response)).toBe(400);
+    expect(body).toMatchObject({
+      success: false,
+      message: 'Grading assistant strictness level is invalid.',
+    });
+    expect(createAssignmentDeployedToClasses).not.toHaveBeenCalled();
   });
 
   test('creates ungraded assignments without a point value', async () => {
@@ -320,7 +387,6 @@ describe('api.assignments.create', () => {
         assignmentTypeId: 'ap-type-1',
         title: 'Unit 7 DBQ',
         prompt: libraryEntry.prompt,
-        tutorContext: null,
         apHistorySnapshot: expect.objectContaining({
           schemaVersion: 1,
           libraryEntryId: 'apush-dbq-new-deal-federal-power',
@@ -331,6 +397,7 @@ describe('api.assignments.create', () => {
             }),
           ],
         }),
+        gradingAssistantStrictnessLevel: 'intermediate',
       }),
       classIds: ['class-1', 'class-2'],
     });

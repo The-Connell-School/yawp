@@ -4,6 +4,10 @@ import {
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { isAssignmentTypeAvailableForEveryScope } from '~/utils/assignment-type-access.server';
 import { createAssignmentDeployedToClasses } from '~/utils/assignment-deployment.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
@@ -39,10 +43,14 @@ export async function action({ request }: ActionFunctionArgs) {
   const promptRaw = formData.get('prompt')?.toString() ?? '';
   const apHistoryLibraryEntryIdRaw =
     formData.get('apHistoryLibraryEntryId')?.toString() ?? '';
+  const strictnessRaw = formData.get('gradingAssistantStrictnessLevel');
 
   const title = titleRaw.trim() || null;
   const prompt = promptRaw.trim();
   const apHistoryLibraryEntryId = apHistoryLibraryEntryIdRaw.trim();
+  const gradingAssistantStrictnessLevel = strictnessRaw
+    ? parseGradingAssistantStrictnessLevel(strictnessRaw)
+    : DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
 
   if (!assignmentTypeId) {
     return dataResponse(
@@ -53,6 +61,15 @@ export async function action({ request }: ActionFunctionArgs) {
   if (classIds.length === 0) {
     return dataResponse(
       { success: false, message: 'At least one class is required.' },
+      { status: 400 }
+    );
+  }
+  if (!gradingAssistantStrictnessLevel) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading assistant strictness level is invalid.',
+      },
       { status: 400 }
     );
   }
@@ -137,6 +154,7 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentTypeId: assignmentType.id,
         title,
         entry,
+        gradingAssistantStrictnessLevel,
       }),
       classIds: deployClassIds,
     });
@@ -160,6 +178,7 @@ export async function action({ request }: ActionFunctionArgs) {
       title,
       prompt,
       tutorContext: null,
+      gradingAssistantStrictnessLevel,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,

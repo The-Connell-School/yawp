@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { generateClassArt, getClassArtByIndex } from '~/utils/class-art';
+import { generateClassArt, getClassArtByIndex, formatClassArtCredit } from '~/utils/class-art';
 import { cn } from '~/utils/misc';
 
 export function ClassArt({
@@ -24,7 +24,7 @@ export function ClassArt({
       data-testid="class-art"
       role="img"
       aria-label={art.credit}
-      title={art.credit}
+      title={formatClassArtCredit(art.credit)}
       className={cn('block h-full w-full bg-cover bg-no-repeat', className)}
       style={{
         backgroundImage: `url(${art.src})`,

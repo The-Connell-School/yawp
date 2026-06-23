@@ -64,7 +64,7 @@ import {
 } from '~/components/ui/select';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
-import { pickClassArtIndexForTeachers } from '~/utils/class-art-assignment.server';
+import { pickClassArtIndexForOrganization } from '~/utils/class-art-assignment.server';
 
 const COLUMNS: CookieColumns = {
   school: {
@@ -307,7 +307,9 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      const classArtIndex = await pickClassArtIndexForTeachers(teacherIds);
+      const classArtIndex = await pickClassArtIndexForOrganization(
+        profile.organization.id
+      );
 
       await prisma.$transaction(async (tx) => {
         await tx.class.create({

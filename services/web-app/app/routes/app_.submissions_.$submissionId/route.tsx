@@ -215,6 +215,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               submitForGrade: true,
               pointValue: true,
+              gradingAssistantStrictnessLevel: true,
             },
           },
           classAssignment: {
@@ -974,6 +975,10 @@ export default function SubmissionRoute() {
                   onAiGradingComplete={handleAiGradingComplete}
                   rubricConfig={
                     teacherGradeUi?.rubricConfig ?? submission.rubricConfig
+                  }
+                  initialGradingAssistantStrictnessLevel={
+                    submission.document.assignment
+                      ?.gradingAssistantStrictnessLevel
                   }
                 />
                 ) : (

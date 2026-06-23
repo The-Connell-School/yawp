@@ -1,5 +1,5 @@
 import { redirect } from 'react-router';
 
 export async function loader() {
-  return redirect('/app/admin/organizations');
+  return redirect('/app/admin/general');
 }

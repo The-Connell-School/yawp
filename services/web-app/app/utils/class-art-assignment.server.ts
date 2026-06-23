@@ -1,25 +1,25 @@
 import { prisma } from '~/utils/db.server';
-import { CLASS_ART_POOL_SIZE, pickNextClassArtIndex } from '~/utils/class-art';
+import { pickNextClassArtIndexForOrganization } from '~/utils/class-art';
 
 /**
- * Picks a classArtIndex for a new class, avoiding the indices most recently
- * assigned to any of the given teachers' other classes so a teacher rotates
- * through the full pool before any artwork repeats.
+ * Picks a classArtIndex for a new class in an organization. The org cycles
+ * through every artwork at crop 0, then every artwork at crop 1, and so on.
  */
-export async function pickClassArtIndexForTeachers(
-  teacherIds: readonly string[]
+export async function pickClassArtIndexForOrganization(
+  organizationId: string,
+  random: () => number = Math.random
 ): Promise<number> {
-  const recent = await prisma.class.findMany({
+  const classes = await prisma.class.findMany({
     where: {
-      teachers: { some: { id: { in: [...teacherIds] } } },
+      school: { organizationId },
       classArtIndex: { not: null },
+      isArchived: false,
     },
-    orderBy: { createdAt: 'desc' },
-    take: CLASS_ART_POOL_SIZE - 1,
     select: { classArtIndex: true },
   });
 
-  return pickNextClassArtIndex(
-    recent.map((klass) => klass.classArtIndex!)
+  return pickNextClassArtIndexForOrganization(
+    classes.map((klass) => klass.classArtIndex!),
+    random
   );
 }

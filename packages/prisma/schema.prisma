@@ -74,9 +74,10 @@ model Assignment {
   title             String?
   prompt            String
   tutorContext      String?
-  submitForGrade    Boolean            @default(true)
-  pointValue        Int?               @default(100)
-  apHistorySnapshot Json?
+  submitForGrade                    Boolean            @default(true)
+  pointValue                        Int?               @default(100)
+  gradingAssistantStrictnessLevel   String             @default("intermediate")
+  apHistorySnapshot                 Json?
   classAssignments  ClassAssignment[]
   documents         Document[]
 

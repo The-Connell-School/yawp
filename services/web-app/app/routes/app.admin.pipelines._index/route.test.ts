@@ -22,7 +22,7 @@ const mockAssignmentType = {
   archivedAt: null,
   image: null,
   assignmentModules: [{ id: 'm-1' }, { id: 'm-2' }],
-  organizationAssignments: [{ id: 'oa-1' }],
+  organizationAssignments: [{ organizationId: 'org-1' }],
   gradingAssistantLinks: [
     {
       gradingAssistantTemplate: {

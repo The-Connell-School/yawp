@@ -20,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       include: {
         image: { select: { id: true } },
         assignmentModules: { where: { deletedAt: null }, select: { id: true } },
-        organizationAssignments: { select: { id: true } },
+        organizationAssignments: { select: { organizationId: true } },
         gradingAssistantLinks: {
           where: { isDefault: true, activeTo: null },
           include: {

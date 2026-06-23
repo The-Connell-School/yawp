@@ -1,4 +1,5 @@
 import type { Prisma } from '@app/prisma';
+import { DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL } from '~/domain/grading/grading-assistant-strictness';
 import { prisma } from '~/utils/db.server';
 import {
   AP_HISTORY_ASSIGNMENT_TYPE_KEY,
@@ -42,6 +43,7 @@ export async function getApHistoryLibraryEntryForSnapshot(params: {
 export function buildAssignmentCreateInputFromApHistoryEntry(params: {
   assignmentTypeId: string;
   title: string | null;
+  gradingAssistantStrictnessLevel?: string;
   entry: NonNullable<
     Awaited<ReturnType<typeof getApHistoryLibraryEntryForSnapshot>>
   >;
@@ -54,6 +56,9 @@ export function buildAssignmentCreateInputFromApHistoryEntry(params: {
     assignmentTypeId: params.assignmentTypeId,
     title: params.title ?? params.entry.title,
     prompt: snapshot.prompt,
+    gradingAssistantStrictnessLevel:
+      params.gradingAssistantStrictnessLevel ??
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
     apHistorySnapshot: snapshot as Prisma.InputJsonValue,
   };
 }

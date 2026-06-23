@@ -7,57 +7,58 @@ const prisma = {
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { pickClassArtIndexForTeachers } = await import(
+const { pickClassArtIndexForOrganization } = await import(
   './class-art-assignment.server'
 );
-const { CLASS_ART_POOL_SIZE } = await import('./class-art');
+const {
+  CLASS_ARTWORK_COUNT,
+  buildClassArtPoolIndex,
+  getArtworkIndexFromPoolIndex,
+  getCropIndexFromPoolIndex,
+} = await import('./class-art');
 
-describe('pickClassArtIndexForTeachers', () => {
+describe('pickClassArtIndexForOrganization', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
   });
 
-  test('avoids the indices most recently used by the given teachers', async () => {
-    const recentIndices = Array.from(
-      { length: CLASS_ART_POOL_SIZE - 1 },
-      (_, i) => i
-    );
+  test('assigns the last unused artwork at crop 0 for the organization', async () => {
     prisma.class.findMany.mockResolvedValue(
-      recentIndices.map((classArtIndex) => ({ classArtIndex }))
+      Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
+        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+      }))
     );
 
-    const index = await pickClassArtIndexForTeachers(['teacher-1']);
+    const index = await pickClassArtIndexForOrganization('org-1', () => 0);
 
-    expect(index).toBe(CLASS_ART_POOL_SIZE - 1);
+    expect(getCropIndexFromPoolIndex(index)).toBe(0);
+    expect(getArtworkIndexFromPoolIndex(index)).toBe(CLASS_ARTWORK_COUNT - 1);
   });
 
-  test('falls back to the full pool once every index is recent', async () => {
-    const recentIndices = Array.from(
-      { length: CLASS_ART_POOL_SIZE },
-      (_, i) => i
-    );
+  test('starts crop 1 after every artwork has crop 0 in the org', async () => {
     prisma.class.findMany.mockResolvedValue(
-      recentIndices.map((classArtIndex) => ({ classArtIndex }))
+      Array.from({ length: CLASS_ARTWORK_COUNT }, (_, artwork) => ({
+        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+      }))
     );
 
-    const index = await pickClassArtIndexForTeachers(['teacher-1']);
+    const index = await pickClassArtIndexForOrganization('org-1', () => 0);
 
-    expect(index).toBeGreaterThanOrEqual(0);
-    expect(index).toBeLessThan(CLASS_ART_POOL_SIZE);
+    expect(getCropIndexFromPoolIndex(index)).toBe(1);
+    expect(getArtworkIndexFromPoolIndex(index)).toBe(0);
   });
 
-  test('queries classes for all of the given teachers, most recent first', async () => {
+  test('queries all non-archived classes in the organization', async () => {
     prisma.class.findMany.mockResolvedValue([]);
 
-    await pickClassArtIndexForTeachers(['teacher-1', 'teacher-2']);
+    await pickClassArtIndexForOrganization('org-1');
 
     expect(prisma.class.findMany).toHaveBeenCalledWith({
       where: {
-        teachers: { some: { id: { in: ['teacher-1', 'teacher-2'] } } },
+        school: { organizationId: 'org-1' },
         classArtIndex: { not: null },
+        isArchived: false,
       },
-      orderBy: { createdAt: 'desc' },
-      take: CLASS_ART_POOL_SIZE - 1,
       select: { classArtIndex: true },
     });
   });

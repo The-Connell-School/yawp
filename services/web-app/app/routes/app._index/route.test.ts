@@ -192,7 +192,7 @@ describe('app index loader assignments', () => {
     expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });
 
-  test('sorts recently active classes first while still showing every class', async () => {
+  test('sorts recently active classes first on the dashboard preview', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',
       role: 'TEACHER',
@@ -270,6 +270,49 @@ describe('app index loader assignments', () => {
       ['class-active-1', 'class-active-2', 'class-quiet']
     );
     expect(data.teacherWorkspaceClassStats).toHaveLength(3);
+  });
+
+  test('shows at most six classes on the dashboard while keeping the full count', async () => {
+    requireMembership.mockResolvedValue({
+      id: 'teacher-profile-1',
+      role: 'TEACHER',
+      isOrgOwner: false,
+      organization: { id: 'org-1', name: 'Org' },
+    });
+    getTeacherRecentActiveClassIds.mockResolvedValue([]);
+    const classRows = Array.from({ length: 8 }, (_, index) => ({
+      id: `class-${index + 1}`,
+      grade: '9',
+      period: String(index + 1),
+      title: `Class ${index + 1}`,
+      school: {
+        id: 'school-1',
+        name: 'Parker High School',
+        organizationId: 'org-1',
+      },
+      _count: { students: 1, teachers: 1, classAssignments: 0 },
+    }));
+    prisma.class.findMany.mockImplementation(async (args: any) => {
+      if (args.select?._count) {
+        return classRows;
+      }
+
+      return classRows.map((klass) => ({
+        id: klass.id,
+        school: { id: klass.school.id, organizationId: klass.school.organizationId },
+      }));
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data.totalTeacherClassCount).toBe(8);
+    expect(data.teacherClassCards).toHaveLength(6);
+    expect(data.teacherClasses).toHaveLength(8);
   });
 
   test('shows all teacher classes when none have recent document activity', async () => {

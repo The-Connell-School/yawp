@@ -20,6 +20,12 @@ import {
   resolveGradingAssistantTemplateForAssignmentType,
   type GradingRubricCategory,
 } from '~/domain/grading/grading-assistant-templates.server';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  getGradingAssistantStrictnessInstructions,
+  getGradingAssistantStrictnessLabel,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -41,6 +47,7 @@ import {
 const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
+  gradingAssistantStrictnessLevel: z.string().optional(),
 });
 
 function buildAiSchemas({
@@ -400,6 +407,8 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         assignment: {
           select: {
+            id: true,
+            gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
           },
         },
@@ -505,6 +514,30 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
     });
   const gradingAssistantTemplate = resolvedGradingAssistant.template;
+  const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
+    ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
+    : null;
+  if (data.gradingAssistantStrictnessLevel && !requestedStrictnessLevel) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading assistant strictness level is invalid.',
+      },
+      { status: 400 }
+    );
+  }
+  const assignmentStrictnessLevel = parseGradingAssistantStrictnessLevel(
+    submission.document.assignment?.gradingAssistantStrictnessLevel
+  );
+  const gradingAssistantStrictnessLevel =
+    requestedStrictnessLevel ??
+    assignmentStrictnessLevel ??
+    DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
+    gradingAssistantStrictnessLevel
+  );
+  const gradingAssistantStrictnessInstructions =
+    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
   const rubricCategories = getTemplateRubricCategories(
     gradingAssistantTemplate
   );
@@ -519,7 +552,7 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     scoringType,
   };
-  const { rubricInstructions, scoreInstructions, systemInstructions } =
+  const templateInstructions =
     getTemplateInstructions(gradingAssistantTemplate);
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
     rubricKeys,
@@ -646,6 +679,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         aiMeta: {
           model,
           rubricMode: 'ap_history',
+          gradingAssistantStrictnessLevel,
           gradedAt: now.toISOString(),
           documentContext,
         } satisfies Prisma.InputJsonValue,
@@ -669,12 +703,36 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const templateSystemInstructions = systemInstructions
-    ? `${systemInstructions}\n\n`
-    : '';
-  const system = `${templateSystemInstructions}You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const strictnessBlock = `Grading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\n`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+  let system = gradingSystemBase;
+  let userPrompt = '';
+
+  if (templateInstructions.mode === 'unified') {
+    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+  } else {
+    const rubricInstructions =
+      templateInstructions.mode === 'legacy-split' ||
+      templateInstructions.mode === 'preset'
+        ? templateInstructions.rubricInstructions
+        : '';
+    const scoreInstructions =
+      templateInstructions.mode === 'legacy-split' ||
+      templateInstructions.mode === 'preset'
+        ? templateInstructions.scoreInstructions
+        : '';
+    const systemInstructions =
+      templateInstructions.mode === 'legacy-split'
+        ? templateInstructions.systemInstructions
+        : undefined;
+    const templateSystemInstructions = systemInstructions
+      ? `${systemInstructions}\n\n`
+      : '';
+    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+  }
 
   let responseText = '';
 
@@ -699,6 +757,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
           gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
           gradingAssistantSource: resolvedGradingAssistant.source,
+          gradingAssistantStrictnessLevel,
           assignmentTypeId: submission.document.assignmentTypeId,
           assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
           ...documentContext,
@@ -961,7 +1020,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
         gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
         gradingAssistantSource: resolvedGradingAssistant.source,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         documentContext,
       } satisfies Prisma.InputJsonValue,
@@ -982,7 +1043,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       status: 'succeeded',
       metadata: {
         gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         scoringType,
         rubricKeys,
@@ -1003,5 +1066,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     score,
     grammarIssues,
     rubricConfig,
+    gradingAssistantStrictnessLevel,
   });
 }

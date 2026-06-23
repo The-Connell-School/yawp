@@ -32,6 +32,8 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 
+const DASHBOARD_MAX_TEACHER_CLASSES = 6;
+
 export type AssignmentTypeRow = {
   id: string;
   title: string;
@@ -230,7 +232,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [],
   ]);
 
-  // Sort teacher classes with recent activity first; keep every class visible.
+  // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   let recentActiveClassIds: string[] = [];
   if (!useStudentExperience && teacherClasses.length > 0) {
@@ -283,22 +285,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
       >();
 
   const teacherClassCards: TeacherClassCardData[] = !useStudentExperience
-    ? teacherClassesOrdered.map((klass) => {
-        const classStats = teacherClassStatsById.get(klass.id);
-        return {
-          id: klass.id,
-          grade: klass.grade,
-          period: klass.period,
-          title: klass.title,
-          classArtIndex: null,
-          school: { id: klass.school.id, name: klass.school.name },
-          _count: {
-            students: klass._count.students,
-            assignments: klass._count.classAssignments,
-          },
-          stats: classStats?.stats,
-        };
-      })
+    ? teacherClassesOrdered
+        .map((klass) => {
+          const classStats = teacherClassStatsById.get(klass.id);
+          return {
+            id: klass.id,
+            grade: klass.grade,
+            period: klass.period,
+            title: klass.title,
+            classArtIndex: null,
+            school: { id: klass.school.id, name: klass.school.name },
+            _count: {
+              students: klass._count.students,
+              assignments: klass._count.classAssignments,
+            },
+            stats: classStats?.stats,
+          };
+        })
+        .slice(0, DASHBOARD_MAX_TEACHER_CLASSES)
     : [];
 
   const teacherWorkspaceClassStats = !useStudentExperience
