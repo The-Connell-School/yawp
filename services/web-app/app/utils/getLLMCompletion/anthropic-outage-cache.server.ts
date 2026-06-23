@@ -1,5 +1,5 @@
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
-const STATE_KEY = Symbol.for('yawp.anthropicOutageCircuit');
+const STATE_KEY = '__yawpAnthropicOutageCircuit';
 
 type AnthropicOutageState = {
   openUntilMs: number;
@@ -9,7 +9,7 @@ type AnthropicOutageState = {
 
 function getState(): AnthropicOutageState {
   const globalState = globalThis as typeof globalThis & {
-    [STATE_KEY]?: AnthropicOutageState;
+    __yawpAnthropicOutageCircuit?: AnthropicOutageState;
   };
   globalState[STATE_KEY] ??= {
     openUntilMs: 0,
