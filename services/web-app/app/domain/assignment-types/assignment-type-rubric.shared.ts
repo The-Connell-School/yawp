@@ -1,5 +1,3 @@
-export const NO_DEFAULT_ASSIGNMENT_TYPE = '__no_default_assignment_type__';
-
 export const DEFAULT_OUTPUT_SCHEMA_JSON = {
   responseShape: 'categories_overall_comment',
   schemaVersion: 1,

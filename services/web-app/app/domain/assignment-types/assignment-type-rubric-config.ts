@@ -8,7 +8,7 @@ import {
   type RubricCategory,
   type RubricData,
   type ScoringScaleData,
-} from '~/utils/grading-assistant-template.shared';
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export const MODULE_RUBRIC_RELATIONSHIPS = [
   'primary',

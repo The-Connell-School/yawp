@@ -56,7 +56,7 @@ import {
   parsePromptConfig,
   parseRubric,
   parseScoringScale,
-} from '~/utils/grading-assistant-template.shared';
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   PromptConfigEditor,
   RubricEditor,

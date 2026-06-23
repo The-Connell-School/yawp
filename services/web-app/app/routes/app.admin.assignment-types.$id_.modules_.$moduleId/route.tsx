@@ -58,7 +58,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
 import { requireAdmin } from '~/utils/auth.server';
-import { parseRubric } from '~/utils/grading-assistant-template.shared';
+import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
   type ModuleRubricRelationship,

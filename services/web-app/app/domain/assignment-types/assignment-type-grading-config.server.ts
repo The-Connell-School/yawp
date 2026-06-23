@@ -7,7 +7,7 @@ import {
   parseAssignmentTypeRubricConfig,
   type AssignmentTypeRubricConfigSource,
 } from './assignment-type-rubric-config';
-import type { RubricCategory } from '~/utils/grading-assistant-template.shared';
+import type { RubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 export type AssignmentTypeGradingInstructions =
   | {

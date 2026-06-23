@@ -33,7 +33,7 @@ import {
   type RubricCategory,
   type RubricData,
   type ScoringScaleData,
-} from '~/utils/grading-assistant-template.shared';
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },

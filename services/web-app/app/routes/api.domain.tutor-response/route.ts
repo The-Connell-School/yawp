@@ -9,7 +9,7 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
 } from './build-system-prompt';
-import { parseRubric } from '~/utils/grading-assistant-template.shared';
+import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 

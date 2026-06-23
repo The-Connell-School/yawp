@@ -174,7 +174,7 @@ describe('admin assignment type detail action', () => {
     });
   });
 
-  test('loads assignment type details without grading assistant templates', async () => {
+  test('loads assignment type details without external rubric links', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
       title: 'ACT Writing',

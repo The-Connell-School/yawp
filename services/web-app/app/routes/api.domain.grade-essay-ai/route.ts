@@ -13,7 +13,7 @@ import {
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
-import type { RubricCategory as GradingRubricCategory } from '~/utils/grading-assistant-template.shared';
+import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   getGradingAssistantStrictnessInstructions,

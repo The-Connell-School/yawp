@@ -8,7 +8,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { AssignmentTypeEditorForm } from '~/components/admin/assignment-type-editor-form';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/utils/grading-assistant-template.shared';
+import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/domain/assignment-types/assignment-type-rubric.shared';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);

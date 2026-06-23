@@ -12,7 +12,7 @@ import {
   type PromptConfigData,
   type RubricData,
   type ScoringScaleData,
-} from '~/utils/grading-assistant-template.shared';
+} from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
   PromptConfigEditor,
   RubricEditor,
