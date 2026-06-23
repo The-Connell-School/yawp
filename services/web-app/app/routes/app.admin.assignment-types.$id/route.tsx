@@ -58,6 +58,17 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
+import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/utils/grading-assistant-template.shared';
+
+function parseJsonFormField(formData: FormData, name: string) {
+  const value = formData.get(name);
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new Response(`${name} must be valid JSON`, { status: 400 });
+  }
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -131,10 +142,30 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const kind = formData.get('kind')?.toString().trim() || null;
     const imageFile = formData.get('image') as File | null;
     const deleteImage = formData.get('deleteImage') === 'true';
+    const hasGradingConfigFields =
+      formData.has('scoringScale') ||
+      formData.has('rubricJson') ||
+      formData.has('promptConfigJson') ||
+      formData.has('outputSchemaJson');
 
     if (!title) {
       throw new Response('Title is required', { status: 400 });
     }
+
+    const gradingConfigData = hasGradingConfigFields
+      ? {
+          scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
+          rubricJson: parseJsonFormField(formData, 'rubricJson'),
+          gradingPromptConfigJson: parseJsonFormField(
+            formData,
+            'promptConfigJson'
+          ),
+          gradingOutputSchemaJson:
+            parseJsonFormField(formData, 'outputSchemaJson') ??
+            DEFAULT_OUTPUT_SCHEMA_JSON,
+          gradingAssistantVersion: { increment: 1 },
+        }
+      : {};
 
     await prisma.$transaction(async (tx) => {
       if (deleteImage) {
@@ -163,6 +194,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
           title,
           kind,
           description: description || null,
+          ...gradingConfigData,
         },
       });
     });

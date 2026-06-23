@@ -87,7 +87,7 @@ describe('admin assignment type detail action', () => {
     const redirectResponse = response as Response;
     expect(redirectResponse.status).toBe(302);
     expect(redirectResponse.headers.get('Location')).toBe(
-      '/app/admin/assignment-types'
+      '/app/admin/assignments-grading'
     );
   });
 
@@ -212,6 +212,80 @@ describe('admin assignment type detail action', () => {
       data: { activeTo: expect.any(Date), isDefault: false },
     });
     expect(response.data).toMatchObject({ status: 'success' });
+  });
+
+  test('updates assignment-type-owned rubric and grading config', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'ACT Writing');
+    form.set('kind', 'act_writing');
+    form.set('description', 'ACT writing assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'act_writing_2_12', minScore: 1, maxScore: 6 })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            description: 'Generate productive ideas and analyze perspectives.',
+            weight: 0.25,
+          },
+        ],
+      })
+    );
+    form.set(
+      'promptConfigJson',
+      JSON.stringify({ gradingInstructions: 'Grade this as ACT Writing.' })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentType.update).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+      data: expect.objectContaining({
+        title: 'ACT Writing',
+        kind: 'act_writing',
+        description: 'ACT writing assignment type',
+        scoringScaleJson: {
+          type: 'act_writing_2_12',
+          minScore: 1,
+          maxScore: 6,
+        },
+        rubricJson: {
+          categories: [
+            {
+              key: 'ideas_and_analysis',
+              label: 'Ideas and Analysis',
+              description:
+                'Generate productive ideas and analyze perspectives.',
+              weight: 0.25,
+            },
+          ],
+        },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Grade this as ACT Writing.',
+        },
+        gradingOutputSchemaJson: {
+          schemaVersion: 1,
+          responseShape: 'categories_overall_comment',
+        },
+        gradingAssistantVersion: { increment: 1 },
+      }),
+    });
   });
 
   test('loads assignment type details and active grading assistant templates', async () => {
