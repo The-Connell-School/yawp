@@ -5,6 +5,7 @@ import {
   useFetcher,
   type LoaderFunctionArgs,
 } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
@@ -112,7 +113,10 @@ function metadataNumber(
   return typeof value === 'number' ? value : null;
 }
 
-function metadataFilter(key: string, value: string | null) {
+function metadataFilter(
+  key: string,
+  value: string | null
+): Prisma.LlmLogWhereInput | null {
   return value
     ? { metadata: { path: [key], equals: value } }
     : null;
@@ -257,12 +261,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     metadata: stripReplayUrl(entry.metadata),
   }));
 
-  const llmMetadataFilters = [
+  const llmMetadataFilters: Prisma.LlmLogWhereInput[] = [
     metadataFilter('documentId', documentId),
     metadataFilter('submissionId', submissionId),
     metadataFilter('feature', feature),
     metadataFilter('kind', kind),
-  ].filter(Boolean);
+  ].filter((filter): filter is Prisma.LlmLogWhereInput => Boolean(filter));
 
   const llmLogs = await prisma.llmLog.findMany({
     where: {

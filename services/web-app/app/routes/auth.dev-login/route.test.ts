@@ -39,6 +39,16 @@ function makeRequest(email: string, cookie?: string) {
   });
 }
 
+function actionArgs(request: Request) {
+  return {
+    request,
+    params: {},
+    url: new URL(request.url),
+    pattern: '/auth/dev-login',
+    context: {},
+  };
+}
+
 describe('auth.dev-login action', () => {
   beforeEach(() => {
     prisma.user.findUnique.mockReset();
@@ -74,11 +84,9 @@ describe('auth.dev-login action', () => {
   });
 
   test('sets auth and membership cookies as separate headers', async () => {
-    const response = await action({
-      request: makeRequest('dev.student@yawp.local', 'en_session=old'),
-      params: {},
-      context: {},
-    });
+    const response = await action(
+      actionArgs(makeRequest('dev.student@yawp.local', 'en_session=old'))
+    );
 
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toBe('/app');
@@ -92,11 +100,9 @@ describe('auth.dev-login action', () => {
   });
 
   test('rejects unknown personas', async () => {
-    const response = await action({
-      request: makeRequest('not-a-persona@yawp.local'),
-      params: {},
-      context: {},
-    });
+    const response = await action(
+      actionArgs(makeRequest('not-a-persona@yawp.local'))
+    );
 
     expect(response.status).toBe(404);
   });

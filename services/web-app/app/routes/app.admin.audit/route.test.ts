@@ -72,13 +72,17 @@ describe('admin audit loader', () => {
   });
 
   test('returns AI context logs filtered by normalized metadata', async () => {
+    const request = new Request(
+      'https://example.test/app/admin/audit?documentId=doc-1&submissionId=sub-1&feature=grading&kind=rubric-evaluation'
+    );
     const response = await loader({
-      request: new Request(
-        'https://example.test/app/admin/audit?documentId=doc-1&submissionId=sub-1&feature=grading&kind=rubric-evaluation'
-      ),
+      request,
       params: {},
+      url: new URL(request.url),
+      pattern: '/app/admin/audit',
       context: {} as never,
     });
+    const data = response.data as { aiLogs: unknown };
 
     expect(prisma.llmLog.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -99,7 +103,7 @@ describe('admin audit loader', () => {
         take: 200,
       })
     );
-    expect(response.data.aiLogs).toEqual([
+    expect(data.aiLogs).toEqual([
       expect.objectContaining({
         id: 'llm-1',
         feature: 'grading',

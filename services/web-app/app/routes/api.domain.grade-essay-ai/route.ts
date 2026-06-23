@@ -618,7 +618,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             textContext: documentContext,
             assignmentTypeId: submission.document.assignmentTypeId,
             assignmentTypeRubricSource: 'ap-history-snapshot',
-            rubricCategoryKeys: apHistoryPointKeysForSnapshot(apHistorySnapshot),
+            rubricCategoryKeys: [
+              ...apHistoryPointKeysForSnapshot(apHistorySnapshot),
+            ],
           }),
         },
       });
