@@ -9,29 +9,29 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { type BreadcrumbHandle } from '~/utils/breadcrumb';
 import { Button } from '~/components/ui/button';
 import {
-  Book,
   User,
   GraduationCap,
   ScrollText,
-  ClipboardCheck,
+  Workflow,
+  Settings,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
 const tabs = [
+  {
+    label: 'General',
+    to: '/app/admin/general',
+    icon: <Settings size={16} className="opacity-75 mr-1" />,
+  },
   {
     label: 'Organizations',
     to: '/app/admin/organizations',
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignment Types',
-    to: '/app/admin/assignment-types',
-    icon: <Book size={16} className="opacity-75 mr-1" />,
-  },
-  {
-    label: 'Grading Assistants',
-    to: '/app/admin/grading-assistants',
-    icon: <ClipboardCheck size={16} className="opacity-75 mr-1" />,
+    label: 'Pipelines',
+    to: '/app/admin/pipelines',
+    icon: <Workflow size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Teacher Courses',

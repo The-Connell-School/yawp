@@ -2,7 +2,7 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 test.describe.serial('Admin grading assistants', () => {
-  test('creates a template and links an assignment type default', async ({
+  test('creates a template and edits it on dedicated pages', async ({
     page,
     e2eContext,
     signIn,
@@ -10,38 +10,30 @@ test.describe.serial('Admin grading assistants', () => {
     const prisma = createE2EPrismaClient();
     const suffix = Date.now();
     const templateName = `E2E ACT Template ${suffix}`;
-    const templateSlug = `e2e-act-template-${suffix}`;
 
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/grading-assistants');
       await expect(
-        page.getByRole('heading', { name: 'Grading assistant templates' })
-      ).toBeVisible();
-      await expect(
-        page.getByText('Thesis-driven essay grading assistant')
+        page.getByRole('heading', { name: 'Grading assistants', exact: true })
       ).toBeVisible();
 
-      await page.getByRole('button', { name: 'New Template' }).click();
+      await page.getByRole('link', { name: 'New grading assistant' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'New grading assistant' })
+      ).toBeVisible();
       await page.getByLabel('Name').fill(templateName);
-      await page.getByLabel('Slug').fill(templateSlug);
-      await page.getByLabel('Assignment Type Kind').fill('act_writing');
-      await page.getByRole('button', { name: 'Create Draft' }).click();
-      await expect(page.getByText(templateName)).toBeVisible();
+      await page.getByRole('button', { name: 'Create draft' }).click();
+
+      await expect(page).toHaveURL(/\/app\/admin\/grading-assistants\/.+/);
+      await expect(page.getByRole('heading', { name: templateName })).toBeVisible();
 
       const updatedTemplateName = `${templateName} Edited`;
-      const templateRow = page.getByRole('row', {
-        name: new RegExp(templateName),
-      });
-      await templateRow.getByRole('button', { name: 'Edit' }).click();
-      await expect(
-        page.getByRole('heading', { name: 'Edit Grading Assistant Template' })
-      ).toBeVisible();
       await page.getByLabel('Name').fill(updatedTemplateName);
-      await page
-        .getByLabel('Calibration Notes')
-        .fill('E2E edited calibration.');
-      await page.getByRole('button', { name: 'Save Changes' }).click();
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(page.getByRole('heading', { name: updatedTemplateName })).toBeVisible();
+
+      await page.goto('/app/admin/grading-assistants');
       await expect(page.getByText(updatedTemplateName)).toBeVisible();
 
       await page.goto(
@@ -74,7 +66,7 @@ test.describe.serial('Admin grading assistants', () => {
         where: { assignmentTypeId: e2eContext.assignmentTypeId },
       });
       await prisma.gradingAssistantTemplate.deleteMany({
-        where: { slug: templateSlug },
+        where: { name: { startsWith: 'E2E ACT Template' } },
       });
       await prisma.$disconnect();
     }

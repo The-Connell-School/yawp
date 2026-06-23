@@ -7,6 +7,7 @@ import {
   redirect,
   useNavigate,
 } from 'react-router';
+// NOTE: This index is superseded by /app/admin/pipelines — the loader redirects there.
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -27,6 +28,7 @@ import { requireAdmin } from '~/utils/auth.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
+  return redirect('/app/admin/pipelines');
 
   const courses = await prisma.assignmentType.findMany({
     include: {

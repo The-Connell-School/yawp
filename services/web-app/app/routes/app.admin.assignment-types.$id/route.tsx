@@ -755,10 +755,9 @@ function GradingAssistantCard({
           <div className="flex items-start gap-2 rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              Linked template is <strong>{template?.status}</strong>. The
-              runtime resolver only uses active templates, so this assignment
-              type is currently falling back to legacy behavior. Relink to an
-              active template.
+              Linked grading assistant is <strong>{template?.status}</strong>. Only
+              active grading assistants are used at runtime, so this assignment is
+              currently falling back to legacy behavior. Link an active one.
             </span>
           </div>
         )}
@@ -777,7 +776,7 @@ function GradingAssistantCard({
           <dl className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             <div>
               <dt className="text-xs font-medium text-muted-foreground">
-                Template
+                Grading assistant
               </dt>
               <dd className="text-sm font-medium">{template.name}</dd>
             </div>
@@ -817,9 +816,8 @@ function GradingAssistantCard({
         )}
 
         <p className="text-xs text-muted-foreground">
-          Only active templates are available for linking. Changes apply to
-          future grading runs only; already graded submissions keep their
-          recorded template provenance.
+          Only active grading assistants can be linked. Changes apply to future
+          grading runs only.
         </p>
 
         <fetcher.Form method="post" className="flex flex-wrap gap-2">
@@ -833,7 +831,7 @@ function GradingAssistantCard({
             required
           >
             <option value="" disabled>
-              Select an active template
+              Select a grading assistant
             </option>
             {activeTemplates.map((t) => (
               <option key={t.id} value={t.id}>

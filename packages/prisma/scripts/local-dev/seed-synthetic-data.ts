@@ -131,6 +131,7 @@ export async function seedSyntheticLocalDevData(
         connect: [
           { id: primaryTeacher.membershipId },
           { id: ownerTeacher.membershipId },
+          { id: multiTeacher.membershipId },
         ],
       },
       students: {
