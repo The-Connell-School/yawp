@@ -5,16 +5,11 @@ import {
   useLoaderData,
   redirect,
 } from 'react-router';
-import {
-  AlertTriangle,
-  ArchiveIcon,
-  RotateCcwIcon,
-} from 'lucide-react';
+import { ArchiveIcon, RotateCcwIcon } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { prisma } from '~/utils/db.server';
 import { useFetcher } from 'react-router';
-import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import {
   Table,
@@ -82,42 +77,31 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
   const assignmentTypeId = params.id;
-  const [course, gradingAssistantTemplates] = await Promise.all([
-    prisma.assignmentType.findUnique({
-      where: { id: assignmentTypeId },
-      include: {
-        organizationAssignments: {
-          include: { organization: { select: { id: true, name: true } } },
-          orderBy: { organization: { name: 'asc' } },
-        },
-        gradingAssistantLinks: {
-          where: { isDefault: true, activeTo: null },
-          include: { gradingAssistantTemplate: true },
-          orderBy: { activeFrom: 'desc' },
-        },
-        assignmentModules: {
-          where: { deletedAt: null },
-          include: {
-            instructions: {
-              orderBy: { position: 'asc' },
-            },
-          },
-          orderBy: { position: 'asc' },
-        },
-        image: { select: { id: true } },
+  const course = await prisma.assignmentType.findUnique({
+    where: { id: assignmentTypeId },
+    include: {
+      organizationAssignments: {
+        include: { organization: { select: { id: true, name: true } } },
+        orderBy: { organization: { name: 'asc' } },
       },
-    }),
-    prisma.gradingAssistantTemplate.findMany({
-      where: { status: 'active' },
-      orderBy: [{ name: 'asc' }],
-    }),
-  ]);
+      assignmentModules: {
+        where: { deletedAt: null },
+        include: {
+          instructions: {
+            orderBy: { position: 'asc' },
+          },
+        },
+        orderBy: { position: 'asc' },
+      },
+      image: { select: { id: true } },
+    },
+  });
 
   if (!course) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ course, gradingAssistantTemplates });
+  return dataResponse({ course });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -210,63 +194,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return dataResponse({ status: 'success' });
   }
 
-  if (intent === 'linkGradingAssistant') {
-    const gradingAssistantTemplateId = formData
-      .get('gradingAssistantTemplateId')
-      ?.toString();
-    if (!gradingAssistantTemplateId) {
-      throw new Response('Grading assistant template is required', {
-        status: 400,
-      });
-    }
-
-    const template = await prisma.gradingAssistantTemplate.findUnique({
-      where: { id: gradingAssistantTemplateId },
-      select: { status: true },
-    });
-    if (!template || template.status !== 'active') {
-      throw new Response(
-        'Only active templates can be linked as runtime defaults.',
-        { status: 400 }
-      );
-    }
-
-    const now = new Date();
-    await prisma.$transaction(async (tx) => {
-      await tx.assignmentTypeGradingAssistant.updateMany({
-        where: {
-          assignmentTypeId: params.id,
-          isDefault: true,
-          activeTo: null,
-        },
-        data: { activeTo: now, isDefault: false },
-      });
-      await tx.assignmentTypeGradingAssistant.create({
-        data: {
-          assignmentTypeId: params.id!,
-          gradingAssistantTemplateId,
-          isDefault: true,
-          activeFrom: now,
-        },
-      });
-    });
-
-    return dataResponse({ status: 'success' });
-  }
-
-  if (intent === 'clearGradingAssistant') {
-    await prisma.assignmentTypeGradingAssistant.updateMany({
-      where: {
-        assignmentTypeId: params.id,
-        isDefault: true,
-        activeTo: null,
-      },
-      data: { activeTo: new Date(), isDefault: false },
-    });
-
-    return dataResponse({ status: 'success' });
-  }
-
   if (intent === 'createModule') {
     const title = formData.get('title')?.toString();
     const description = formData.get('description')?.toString();
@@ -314,7 +241,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course, gradingAssistantTemplates } = useLoaderData<typeof loader>();
+  const { course } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const scoringScale = parseScoringScale(course.scoringScaleJson);
@@ -409,8 +336,6 @@ export default function AssignmentTypeRoute() {
       setIsModuleSheetOpen(false);
     }
   }, [fetcher.data, fetcher.state]);
-
-  const currentGradingAssistantLink = course.gradingAssistantLinks[0] ?? null;
 
   return (
     <div className="grid gap-4 p-3 md:p-5">
@@ -537,12 +462,6 @@ export default function AssignmentTypeRoute() {
         </CardContent>
       </Card>
 
-      <GradingAssistantCard
-        currentLink={currentGradingAssistantLink}
-        activeTemplates={gradingAssistantTemplates}
-        fetcher={fetcher}
-      />
-
       <Card className="bg-muted">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Assignment Modules</CardTitle>
@@ -635,170 +554,6 @@ export default function AssignmentTypeRoute() {
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-type GradingAssistantLink = {
-  gradingAssistantTemplateId: string;
-  activeFrom: string | Date;
-  gradingAssistantTemplate: {
-    id: string;
-    name: string;
-    slug: string;
-    status: string;
-    version: number;
-    assignmentTypeKind: string | null;
-    scoringScale: unknown;
-  };
-};
-
-function GradingAssistantCard({
-  currentLink,
-  activeTemplates,
-  fetcher,
-}: {
-  currentLink: GradingAssistantLink | null;
-  activeTemplates: Array<{
-    id: string;
-    name: string;
-    version: number;
-    status: string;
-  }>;
-  fetcher: ReturnType<typeof useFetcher>;
-}) {
-  const template = currentLink?.gradingAssistantTemplate ?? null;
-  const isLinked = Boolean(currentLink);
-  const isMismatch = isLinked && template?.status !== 'active';
-
-  const scoringScale = template?.scoringScale as Record<string, unknown> | null;
-  const scoringType =
-    typeof scoringScale?.type === 'string' ? scoringScale.type : null;
-
-  return (
-    <Card className={`bg-muted ${isMismatch ? 'border-red-400' : ''}`}>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Grading assistant</CardTitle>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/app/admin/grading-assistants/new">
-            <Plus className="mr-1.5 h-4 w-4" />
-            New grading assistant
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {isMismatch && (
-          <div className="flex items-start gap-2 rounded-[8px] border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              Linked grading assistant is <strong>{template?.status}</strong>. Only
-              active grading assistants are used at runtime, so this assignment type is
-              currently falling back to legacy behavior. Link an active one.
-            </span>
-          </div>
-        )}
-
-        {!isLinked && (
-          <p className="text-sm text-muted-foreground">
-            No grading assistant linked. Grading will use the legacy fallback.
-          </p>
-        )}
-
-        {isLinked && template && (
-          <dl className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">
-                Linked assistant
-              </dt>
-              <dd className="flex items-center gap-2 text-sm font-medium">
-                {template.name}
-                <Button variant="ghost" size="sm" className="h-auto px-1.5 py-0.5 text-xs" asChild>
-                  <Link to={`/app/admin/grading-assistants/${template.id}`}>
-                    Edit
-                  </Link>
-                </Button>
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">Status</dt>
-              <dd className="text-sm">
-                {template.status === 'active' ? (
-                  <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">
-                    active
-                  </Badge>
-                ) : (
-                  <Badge variant="outline">{template.status}</Badge>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">Version</dt>
-              <dd className="text-sm">v{template.version}</dd>
-            </div>
-            {scoringType && (
-              <div>
-                <dt className="text-xs font-medium text-muted-foreground">
-                  Scoring type
-                </dt>
-                <dd className="text-sm font-mono">{scoringType}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">
-                Active from
-              </dt>
-              <dd className="text-sm">
-                {new Date(currentLink!.activeFrom).toLocaleDateString()}
-              </dd>
-            </div>
-          </dl>
-        )}
-
-        <p className="text-xs text-muted-foreground">
-          Only active grading assistants can be linked. Changes apply to future grading runs only.
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <fetcher.Form method="post" className="flex flex-wrap gap-2">
-            <input type="hidden" name="intent" value="linkGradingAssistant" />
-            <select
-              name="gradingAssistantTemplateId"
-              defaultValue={
-                !isMismatch ? (currentLink?.gradingAssistantTemplateId ?? '') : ''
-              }
-              className="h-10 min-w-72 rounded-md border bg-background px-3 text-sm"
-              required
-            >
-              <option value="" disabled>
-                Select a grading assistant
-              </option>
-              {activeTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} v{t.version}
-                </option>
-              ))}
-            </select>
-            <Button type="submit" disabled={fetcher.state !== 'idle'}>
-              {isLinked ? 'Switch' : 'Link'}
-            </Button>
-          </fetcher.Form>
-
-          {isLinked && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                fetcher.submit(
-                  { intent: 'clearGradingAssistant' },
-                  { method: 'post' }
-                )
-              }
-              disabled={fetcher.state !== 'idle'}
-            >
-              Unlink
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

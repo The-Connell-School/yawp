@@ -10,14 +10,6 @@ const prisma = {
     findMany: mock(),
     findUnique: mock(),
   },
-  gradingAssistantTemplate: {
-    findMany: mock(),
-    findUnique: mock(),
-  },
-  assignmentTypeGradingAssistant: {
-    create: mock(),
-    updateMany: mock(),
-  },
 };
 
 const requireAdmin = mock();
@@ -48,10 +40,6 @@ describe('admin assignment type detail action', () => {
     prisma.assignmentType.update.mockReset();
     prisma.orgMembership.findMany.mockReset();
     prisma.orgMembership.findUnique.mockReset();
-    prisma.gradingAssistantTemplate.findMany.mockReset();
-    prisma.gradingAssistantTemplate.findUnique.mockReset();
-    prisma.assignmentTypeGradingAssistant.create.mockReset();
-    prisma.assignmentTypeGradingAssistant.updateMany.mockReset();
     requireAdmin.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
@@ -61,7 +49,6 @@ describe('admin assignment type detail action', () => {
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
-    prisma.gradingAssistantTemplate.findMany.mockResolvedValue([]);
   });
 
   test('archives assignment types instead of hard deleting them', async () => {
@@ -111,107 +98,6 @@ describe('admin assignment type detail action', () => {
       where: { id: 'at-1' },
       data: { archivedAt: null },
     });
-  });
-
-  test('links one default grading assistant template to an assignment type', async () => {
-    prisma.gradingAssistantTemplate.findUnique.mockResolvedValue({
-      status: 'active',
-    });
-    const form = new FormData();
-    form.set('intent', 'linkGradingAssistant');
-    form.set('gradingAssistantTemplateId', 'template-act');
-
-    await action({
-      request: new Request(
-        'https://example.test/app/admin/assignment-types/at-1',
-        {
-          method: 'POST',
-          body: form,
-        }
-      ),
-      params: { id: 'at-1' },
-      context: {} as never,
-    });
-
-    expect(
-      prisma.assignmentTypeGradingAssistant.updateMany
-    ).toHaveBeenCalledWith({
-      where: {
-        assignmentTypeId: 'at-1',
-        isDefault: true,
-        activeTo: null,
-      },
-      data: { activeTo: expect.any(Date), isDefault: false },
-    });
-    expect(prisma.assignmentTypeGradingAssistant.create).toHaveBeenCalledWith({
-      data: {
-        assignmentTypeId: 'at-1',
-        gradingAssistantTemplateId: 'template-act',
-        isDefault: true,
-        activeFrom: expect.any(Date),
-      },
-    });
-  });
-
-  test('rejects non-active grading assistant templates as runtime defaults', async () => {
-    prisma.gradingAssistantTemplate.findUnique.mockResolvedValue({
-      status: 'draft',
-    });
-    const form = new FormData();
-    form.set('intent', 'linkGradingAssistant');
-    form.set('gradingAssistantTemplateId', 'template-draft');
-
-    let thrown: Response | null = null;
-    try {
-      await action({
-        request: new Request(
-          'https://example.test/app/admin/assignment-types/at-1',
-          {
-            method: 'POST',
-            body: form,
-          }
-        ),
-        params: { id: 'at-1' },
-        context: {} as never,
-      });
-    } catch (error) {
-      thrown = error as Response;
-    }
-
-    expect(thrown?.status).toBe(400);
-    expect(
-      prisma.assignmentTypeGradingAssistant.updateMany
-    ).not.toHaveBeenCalled();
-    expect(prisma.assignmentTypeGradingAssistant.create).not.toHaveBeenCalled();
-  });
-
-  test('clears the active grading assistant link', async () => {
-    const form = new FormData();
-    form.set('intent', 'clearGradingAssistant');
-
-    const response = await action({
-      request: new Request(
-        'https://example.test/app/admin/assignment-types/at-1',
-        {
-          method: 'POST',
-          body: form,
-        }
-      ),
-      params: { id: 'at-1' },
-      context: {} as never,
-    });
-
-    expect(
-      prisma.assignmentTypeGradingAssistant.updateMany
-    ).toHaveBeenCalledWith({
-      where: {
-        assignmentTypeId: 'at-1',
-        isDefault: true,
-        activeTo: null,
-      },
-      data: { activeTo: expect.any(Date), isDefault: false },
-    });
-    expect(response.data).toMatchObject({ status: 'success' });
   });
 
   test('updates assignment-type-owned rubric and grading config', async () => {
@@ -288,13 +174,7 @@ describe('admin assignment type detail action', () => {
     });
   });
 
-  test('loads assignment type details and active grading assistant templates', async () => {
-    const activeTemplate = {
-      id: 'template-active',
-      name: 'ACT Writing',
-      version: 1,
-      status: 'active',
-    };
+  test('loads assignment type details without grading assistant templates', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
       title: 'ACT Writing',
@@ -305,13 +185,9 @@ describe('admin assignment type detail action', () => {
       organizationAssignments: [
         { organization: { id: 'org-1', name: 'Connell School' } },
       ],
-      gradingAssistantLinks: [],
       assignmentModules: [],
       image: null,
     });
-    prisma.gradingAssistantTemplate.findMany.mockResolvedValue([
-      activeTemplate,
-    ]);
 
     const result = await loader({
       request: new Request(
@@ -321,13 +197,9 @@ describe('admin assignment type detail action', () => {
       context: {} as never,
     });
 
-    expect(prisma.gradingAssistantTemplate.findMany).toHaveBeenCalledWith({
-      where: { status: 'active' },
-      orderBy: [{ name: 'asc' }],
-    });
-    expect((result as { data: any }).data.gradingAssistantTemplates).toEqual([
-      activeTemplate,
-    ]);
+    expect(
+      (result as { data: any }).data.gradingAssistantTemplates
+    ).toBeUndefined();
     expect((result as { data: any }).data.course.title).toBe('ACT Writing');
   });
 });

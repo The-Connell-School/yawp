@@ -21,11 +21,7 @@ const mockAssignmentType = {
   image: null,
   assignmentModules: [{ id: 'm-1' }, { id: 'm-2' }],
   organizationAssignments: [{ organizationId: 'org-1' }],
-  gradingAssistantLinks: [
-    {
-      gradingAssistantTemplate: { id: 'ga-1', name: 'AP History Grader', status: 'active' },
-    },
-  ],
+  rubricJson: { categories: [] },
 };
 
 describe('AssignmentsGrading loader', () => {
@@ -35,7 +31,7 @@ describe('AssignmentsGrading loader', () => {
     requireAdmin.mockResolvedValue(undefined);
   });
 
-  test('returns assignment types with grading assistant info', async () => {
+  test('returns assignment types with rubric info', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
@@ -43,7 +39,7 @@ describe('AssignmentsGrading loader', () => {
 
     expect(data.assignmentTypes).toHaveLength(1);
     expect(data.assignmentTypes[0].title).toBe('AP History Essay');
-    expect(data.assignmentTypes[0].gradingAssistantLinks[0].gradingAssistantTemplate.status).toBe('active');
+    expect(data.assignmentTypes[0].rubricJson).toEqual({ categories: [] });
   });
 
   test('returns empty list when no assignment types exist', async () => {
