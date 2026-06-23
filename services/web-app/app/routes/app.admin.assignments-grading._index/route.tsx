@@ -1,420 +1,187 @@
 import {
   data as dataResponse,
-  Link,
   type LoaderFunctionArgs,
+  type ActionFunctionArgs,
   useLoaderData,
+  useFetcher,
+  useNavigate,
+  redirect,
 } from 'react-router';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '~/components/ui/table';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '~/components/ui/sheet';
+import { Label } from '~/components/ui/label';
+import { Input } from '~/components/ui/input';
+import { Textarea } from '~/components/ui/textarea';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { CheckCircle2, Circle, ClipboardCheck, FilePen, Plus } from 'lucide-react';
+import { CheckCircle2, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [assignmentTypes, gradingTemplates] = await Promise.all([
-    prisma.assignmentType.findMany({
-      include: {
-        image: { select: { id: true } },
-        assignmentModules: { where: { deletedAt: null }, select: { id: true } },
-        organizationAssignments: { select: { organizationId: true } },
-        gradingAssistantLinks: {
-          where: { isDefault: true, activeTo: null },
-          include: {
-            gradingAssistantTemplate: {
-              select: { id: true, name: true, status: true },
-            },
+  const assignmentTypes = await prisma.assignmentType.findMany({
+    include: {
+      image: { select: { id: true } },
+      assignmentModules: { where: { deletedAt: null }, select: { id: true } },
+      organizationAssignments: { select: { organizationId: true } },
+      gradingAssistantLinks: {
+        where: { isDefault: true, activeTo: null },
+        include: {
+          gradingAssistantTemplate: {
+            select: { id: true, name: true, status: true },
           },
-          orderBy: { activeFrom: 'desc' },
-          take: 1,
         },
+        orderBy: { activeFrom: 'desc' },
+        take: 1,
       },
-      orderBy: { position: 'asc' },
-    }),
-    prisma.gradingAssistantTemplate.findMany({
-      include: {
-        assignmentTypeLinks: {
-          where: { isDefault: true, activeTo: null },
-          include: {
-            assignmentType: { select: { id: true, title: true } },
-          },
-          orderBy: { activeFrom: 'desc' },
-        },
-      },
-      orderBy: [{ status: 'asc' }, { name: 'asc' }],
-    }),
-  ]);
-
-  return dataResponse({
-    assignmentTypes: assignmentTypes.map((at) => ({
-      id: at.id,
-      title: at.title,
-      description: at.description,
-      imageId: at.image?.id ?? null,
-      moduleCount: at.assignmentModules.length,
-      orgCount: at.organizationAssignments.length,
-      archivedAt: at.archivedAt?.toISOString() ?? null,
-      gradingAssistant: at.gradingAssistantLinks[0]?.gradingAssistantTemplate ?? null,
-    })),
-    gradingTemplates: gradingTemplates.map((t) => ({
-      id: t.id,
-      name: t.name,
-      status: t.status,
-      linkedTypes: t.assignmentTypeLinks.map((l) => l.assignmentType),
-    })),
+    },
+    orderBy: { createdAt: 'desc' },
   });
+
+  return dataResponse({ assignmentTypes });
 }
 
-function GradingStatusCell({
-  template,
-}: {
-  template: { id: string; status: string; name: string } | null;
-}) {
-  if (!template) {
-    return (
-      <Link
-        to="/app/admin/grading-assistants/new"
-        className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
-      >
-        <Circle className="size-4 shrink-0" />
-        <span>None</span>
-      </Link>
-    );
+export async function action({ request }: ActionFunctionArgs) {
+  await requireAdmin(request);
+  const formData = await request.formData();
+  const intent = formData.get('intent');
+
+  if (intent === 'create') {
+    const title = formData.get('title')?.toString();
+    const description = formData.get('description')?.toString();
+
+    if (!title) {
+      throw new Response('Title is required', { status: 400 });
+    }
+
+    const count = await prisma.assignmentType.count();
+    const course = await prisma.assignmentType.create({
+      data: {
+        title,
+        description: description || null,
+        position: count,
+      },
+    });
+
+    return redirect(`/app/admin/assignment-types/${course.id}`);
   }
-  return (
-    <Link
-      to={`/app/admin/grading-assistants/${template.id}`}
-      className="flex items-center gap-1.5 hover:underline"
-    >
-      {template.status === 'active' ? (
-        <CheckCircle2 className="size-4 shrink-0 text-green-600" />
-      ) : (
-        <Circle className="size-4 shrink-0 text-muted-foreground/40" />
-      )}
-      <span>{template.name}</span>
-      {template.status !== 'active' && (
-        <Badge variant="outline" className="ml-1">{template.status}</Badge>
-      )}
-    </Link>
-  );
+
+  return dataResponse({ status: 'error' });
 }
 
-function AssignmentsTable({
-  active,
-  archived,
-}: {
-  active: ReturnType<typeof useLoaderData<typeof loader>>['assignmentTypes'];
-  archived: ReturnType<typeof useLoaderData<typeof loader>>['assignmentTypes'];
-}) {
-  if (active.length === 0) {
-    return <p className="text-sm text-muted-foreground">No assignment types yet.</p>;
-  }
+export default function AssignmentsGradingRoute() {
+  const { assignmentTypes } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
+  const navigate = useNavigate();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data) {
+      setIsSheetOpen(false);
+    }
+  }, [fetcher.state, fetcher.data]);
+
   return (
-    <>
-      <div className="-mx-3 -my-2 overflow-x-auto whitespace-nowrap md:-mx-5">
-        <div className="inline-block min-w-full px-3 py-2 align-middle md:px-5">
-          <Table className="w-full">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="whitespace-nowrap">Name</TableHead>
-                <TableHead className="whitespace-nowrap">Modules</TableHead>
-                <TableHead className="whitespace-nowrap">Orgs</TableHead>
-                <TableHead className="whitespace-nowrap">Grading assistant</TableHead>
-                <TableHead className="w-20" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {active.map((at) => (
-                <TableRow key={at.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-12 shrink-0 overflow-hidden rounded bg-linear-to-br from-foreground/5 to-foreground/20">
-                        {at.imageId ? (
-                          <img
-                            src={`/api/image/course/${at.imageId}`}
-                            alt={at.title}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <div>
-                        <p className="font-medium leading-tight">{at.title}</p>
-                        {at.description ? (
-                          <p className="line-clamp-1 text-sm text-muted-foreground text-pretty">
-                            {at.description}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <FilePen className="size-4 shrink-0" />
-                      {at.moduleCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{at.orgCount}</TableCell>
-                  <TableCell>
-                    <GradingStatusCell template={at.gradingAssistant} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      <Button size="sm" variant="ghost" asChild>
-                        <Link to={`/app/admin/assignment-types/${at.id}`}>
-                          <FilePen className="size-4 shrink-0" />
-                        </Link>
-                      </Button>
-                      <Button size="sm" variant="ghost" asChild>
-                        <Link
-                          to={
-                            at.gradingAssistant
-                              ? `/app/admin/grading-assistants/${at.gradingAssistant.id}`
-                              : '/app/admin/grading-assistants/new'
-                          }
-                        >
-                          <ClipboardCheck className="size-4 shrink-0" />
-                        </Link>
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+    <div className="p-3 sm:p-5">
+      <div className="mb-4">
+        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+          <SheetTrigger asChild>
+            <Button>
+              <Plus className="mr-2 size-4 shrink-0" />
+              Create assignment type
+            </Button>
+          </SheetTrigger>
+          <SheetContent>
+            <SheetHeader>
+              <SheetTitle>Create assignment type</SheetTitle>
+            </SheetHeader>
+            <fetcher.Form method="post" className="mt-4 space-y-4">
+              <input type="hidden" name="intent" value="create" />
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input id="title" name="title" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" name="description" rows={3} />
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={fetcher.state !== 'idle'}
+              >
+                {fetcher.state === 'idle' ? 'Create assignment type' : 'Creating...'}
+              </Button>
+            </fetcher.Form>
+          </SheetContent>
+        </Sheet>
       </div>
-      {archived.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <span className="text-sm text-muted-foreground">Archived:</span>
-          {archived.map((at) => (
-            <Link
-              key={at.id}
-              to={`/app/admin/assignment-types/${at.id}`}
-              className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {at.title}
-            </Link>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
 
-function GradingTable({
-  templates,
-}: {
-  templates: ReturnType<typeof useLoaderData<typeof loader>>['gradingTemplates'];
-}) {
-  if (templates.length === 0) {
-    return <p className="text-sm text-muted-foreground">No grading assistants yet.</p>;
-  }
-  return (
-    <div className="-mx-3 -my-2 overflow-x-auto whitespace-nowrap md:-mx-5">
-      <div className="inline-block min-w-full px-3 py-2 align-middle md:px-5">
-        <Table className="w-full">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="whitespace-nowrap">Name</TableHead>
-              <TableHead className="whitespace-nowrap">Status</TableHead>
-              <TableHead className="whitespace-nowrap">Linked to</TableHead>
-              <TableHead className="w-16" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {templates.map((t) => (
-              <TableRow key={t.id}>
-                <TableCell>
-                  <Link
-                    to={`/app/admin/grading-assistants/${t.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {t.name}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    {t.status === 'active' ? (
-                      <CheckCircle2 className="size-4 shrink-0 text-green-600" />
-                    ) : (
-                      <Circle className="size-4 shrink-0 text-muted-foreground/40" />
-                    )}
-                    {t.status}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  {t.linkedTypes.length === 0 ? (
-                    <span className="text-muted-foreground">—</span>
+      {assignmentTypes.length === 0 ? (
+        <div className="flex h-64 flex-col items-center justify-center rounded-lg border border-dashed bg-muted">
+          <span className="text-lg font-semibold">No assignment types</span>
+          <span className="mt-1 text-sm text-muted-foreground">
+            Create your first assignment type to get started.
+          </span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {assignmentTypes.map((at) => {
+            const activeGrading = at.gradingAssistantLinks[0]?.gradingAssistantTemplate ?? null;
+            const hasActiveGrading = activeGrading?.status === 'active';
+
+            return (
+              <Card
+                key={at.id}
+                className="bg-muted cursor-pointer gap-0 overflow-hidden py-0 transition-shadow hover:shadow-md"
+                onClick={() => navigate(`/app/admin/assignment-types/${at.id}`)}
+              >
+                <div className="aspect-[5/3] w-full overflow-hidden rounded-t-lg">
+                  {at.image ? (
+                    <img
+                      src={`/api/image/course/${at.image.id}`}
+                      alt={at.title}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {t.linkedTypes.map((lt) => (
-                        <Link
-                          key={lt.id}
-                          to={`/app/admin/assignment-types/${lt.id}`}
-                          className="text-sm hover:underline"
-                        >
-                          {lt.title}
-                        </Link>
-                      ))}
+                    <div className="h-full w-full bg-linear-to-br from-foreground/5 to-foreground/20" />
+                  )}
+                </div>
+                <CardHeader>
+                  <CardTitle className="line-clamp-1">{at.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {at.description || 'No description'}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+                    <span>{at.assignmentModules.length} modules</span>
+                    <span>
+                      {at.organizationAssignments.length}{' '}
+                      {at.organizationAssignments.length === 1 ? 'org' : 'orgs'}
+                    </span>
+                  </div>
+                  {hasActiveGrading && (
+                    <div className="mt-2 flex items-center gap-1 text-xs text-green-700">
+                      <CheckCircle2 className="size-3.5 shrink-0" />
+                      <span className="truncate">{activeGrading!.name}</span>
                     </div>
                   )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end">
-                    <Button size="sm" variant="ghost" asChild>
-                      <Link to={`/app/admin/grading-assistants/${t.id}`}>
-                        <FilePen className="size-4 shrink-0" />
-                      </Link>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
-
-export default function AssignmentsAndGradingRoute() {
-  const { assignmentTypes, gradingTemplates } = useLoaderData<typeof loader>();
-
-  const active = assignmentTypes.filter((at) => !at.archivedAt);
-  const archived = assignmentTypes.filter((at) => at.archivedAt);
-
-  return (
-    <div data-uidotsh-pick="Page layout" className="contents">
-
-      {/* ── Option A: Stacked (current) ───────────────────────────────── */}
-      <div data-uidotsh-option="Stacked (current)" className="contents">
-        <div className="flex flex-col gap-10 p-3 md:p-5">
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-base font-semibold text-balance">Assignments</h2>
-              <Button size="sm" asChild>
-                <Link to="/app/admin/assignment-types">
-                  <Plus className="size-4 shrink-0" />
-                  New assignment type
-                </Link>
-              </Button>
-            </div>
-            <AssignmentsTable active={active} archived={archived} />
-          </section>
-
-          <div className="border-t border-black/5" />
-
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-base font-semibold text-balance">Grading</h2>
-              <Button size="sm" variant="outline" asChild>
-                <Link to="/app/admin/grading-assistants/new">
-                  <Plus className="size-4 shrink-0" />
-                  New grading assistant
-                </Link>
-              </Button>
-            </div>
-            <GradingTable templates={gradingTemplates} />
-          </section>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-      </div>
-
-      {/* ── Option B: Counts in headings + larger type ────────────────── */}
-      <div data-uidotsh-option="Section headers with counts" className="contents" hidden>
-        <div className="flex flex-col gap-12 p-3 md:p-5">
-          <section className="flex flex-col gap-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight text-balance">
-                  Assignments
-                  <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">
-                    {active.length}
-                  </span>
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-                  Assignment types define modules and the tutor experience.
-                </p>
-              </div>
-              <Button size="sm" asChild>
-                <Link to="/app/admin/assignment-types">
-                  <Plus className="size-4 shrink-0" />
-                  New
-                </Link>
-              </Button>
-            </div>
-            <AssignmentsTable active={active} archived={archived} />
-          </section>
-
-          <div className="border-t border-black/10" />
-
-          <section className="flex flex-col gap-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold tracking-tight text-balance">
-                  Grading
-                  <span className="ml-2 text-sm font-normal tabular-nums text-muted-foreground">
-                    {gradingTemplates.length}
-                  </span>
-                </h2>
-                <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
-                  Grading assistants score submissions against rubrics.
-                </p>
-              </div>
-              <Button size="sm" variant="outline" asChild>
-                <Link to="/app/admin/grading-assistants/new">
-                  <Plus className="size-4 shrink-0" />
-                  New
-                </Link>
-              </Button>
-            </div>
-            <GradingTable templates={gradingTemplates} />
-          </section>
-        </div>
-      </div>
-
-      {/* ── Option C: Side-by-side columns ───────────────────────────── */}
-      <div data-uidotsh-option="Side by side" className="contents" hidden>
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr]">
-          {/* Left — Assignments */}
-          <div className="flex flex-col gap-4 p-3 md:p-5 lg:border-r lg:border-black/5">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-base font-semibold text-balance">Assignments</h2>
-              <Button size="sm" asChild>
-                <Link to="/app/admin/assignment-types">
-                  <Plus className="size-4 shrink-0" />
-                  New
-                </Link>
-              </Button>
-            </div>
-            <AssignmentsTable active={active} archived={archived} />
-          </div>
-
-          {/* Right — Grading */}
-          <div className="flex flex-col gap-4 border-t border-black/5 p-3 md:p-5 lg:border-t-0">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-base font-semibold text-balance">Grading</h2>
-              <Button size="sm" variant="outline" asChild>
-                <Link to="/app/admin/grading-assistants/new">
-                  <Plus className="size-4 shrink-0" />
-                  New
-                </Link>
-              </Button>
-            </div>
-            <GradingTable templates={gradingTemplates} />
-          </div>
-        </div>
-      </div>
-
+      )}
     </div>
   );
 }

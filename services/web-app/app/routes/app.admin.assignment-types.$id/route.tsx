@@ -113,7 +113,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       data: { archivedAt: new Date() },
     });
 
-    return redirect('/app/admin/assignment-types');
+    return redirect('/app/admin/assignments-grading');
   }
 
   if (intent === 'unarchiveCourse') {
@@ -396,9 +396,9 @@ export default function AssignmentTypeRoute() {
     <div className="grid gap-4 p-3 md:p-5">
       <div className="flex justify-between">
         <Button variant="ghost" asChild>
-          <Link to="/app/admin/assignment-types">
+          <Link to="/app/admin/assignments-grading">
             <ChevronLeft size={18} />
-            All assignment types
+            Assignment types
           </Link>
         </Button>
         <div className="flex items-center gap-2">
