@@ -1,0 +1,176 @@
+bun test v1.3.1 (89fa0f34)
+
+app/routes/api.domain.grade-essay-ai/route.test.ts:
+(pass) api.domain.grade-essay-ai > returns AI suggestions and persists to submission [5.45ms]
+274 |   });
+275 | 
+276 |   test('returns a retry signal without persisting when fallback retry is requested', async () => {
+277 |     getLLMCompletion.mockReset();
+278 |     getLLMCompletion.mockImplementationOnce(() => {
+279 |       throw new LlmFallbackRetrySignal({
+                  ^
+LlmFallbackRetrySignal: LLM fallback retry requested
+ fallbackModel: "gpt-4o-mini",
+     reason: "status:529",
+ retryableStatus: 529,
+
+      at <anonymous> (/Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.grade-essay-ai/route.test.ts:279:13)
+      at action (/Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.grade-essay-ai/route.ts:694:28)
+      at async <anonymous> (/Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.grade-essay-ai/route.test.ts:292:29)
+(fail) api.domain.grade-essay-ai > returns a retry signal without persisting when fallback retry is requested [3.09ms]
+321 |       }),
+322 |     } as any);
+323 | 
+324 |     expect(getLLMCompletion).toHaveBeenCalled();
+325 |     for (const call of getLLMCompletion.mock.calls) {
+326 |       expect(call[0]).toMatchObject({
+                            ^
+error: expect(received).toMatchObject(expected)
+
+  {
+-   "forceFallback": true,
+-   "signalFallbackRetry": false,
++   "maxTokens": 900,
++   "messages": [
++     {
++       "content": 
++ "Student first name: Jordan
++ 
++ Grading assistant template: Thesis-driven essay grading assistant (thesis-driven-essay-current)
++ 
++ Rubric category keys (use these exact keys in categories[].key):
++ thesis_and_content: Thesis/Content (25%) - Original, defensible thesis with sustained critical thinking and meaningful deductions.
++ organization_and_structure: Organization/Structure (25%) - Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking.
++ evidence_and_support: Evidence/Support (20%) - Precise, well-integrated evidence that deepens analysis and builds authority.
++ voice_and_style: Voice/Style (20%) - Authentic voice with engaging, precise language and consistent tone.
++ grammar_and_mechanics: Grammar/Syntax/Formatting (10%) - Technical correctness and polished presentation that support clarity.
++ 
++ Rubric Instructions:
++ Philosophy Note
++ This rubric prioritizes what makes writing truly excellent: original thinking, intellectual courage, genuine discovery, and the ability to guide a reader through complex ideas with clarity and style.
++ Technical perfection without compelling content earns a lower grade than bold thinking with minor technical flaws.
++ We are looking for essays that make readers think differently, not just essays that follow the rules.
++ 
++ Category Weights
++ - Thesis/Content: 25%
++ - Organization/Structure: 25%
++ - Evidence/Support: 20%
++ - Voice/Style: 20%
++ - Grammar/Syntax/Formatting: 10%
++ 
++ Detailed Rubric
++ 1. THESIS/CONTENT (25%)
++ Exemplary (90-100%)
++ THESIS: Combines sharp observation with sophisticated, multi-layered analysis; takes intellectual risks; demonstrates genuine discovery through pre-writing; language is precise and concise; each element is complex enough to require thoughtful exploration.
++ CONTENT: Body paragraphs deliver on the thesis promise with depth and originality; ideas build and evolve; sustained critical thinking appears throughout; deep engagement with source material is evident; insights feel discovered; connections are sophisticated and unexpected; conclusions offer earned deductions that make readers reconsider the subject.
++ Proficient (80-89%)
++ THESIS: Clearly combines observation with analysis; position is defensible and thoughtful; language is mostly concise; elements provide clear essay direction.
++ CONTENT: Body paragraphs develop thesis elements; ideas are coherent and support the argument; analysis usually goes beyond surface-level; conclusion offers reasonable deductions.
++ Developing (70-79%)
++ THESIS: Present but simplistic or obvious; analysis can be predictable; language may be wordy; position lacks complexity.
++ CONTENT: Support is inconsistent; some paragraphs repeat or drift; analysis mixes depth with obvious claims; conclusion tends to restate rather than deduce.
++ Struggling (Below 70%)
++ THESIS: Absent, unclear, descriptive, or summary-based; no clear argument.
++ CONTENT: Paragraphs do not develop a clear thesis; little critical thinking; essay wanders; conclusion is absent or repetitive.
++ 
++ 2. ORGANIZATION/STRUCTURE (25%)
++ Exemplary (90-100%)
++ Introduction builds compellingly to thesis; opening strategy enhances discussion; body paragraphs directly support distinct thesis elements; transitions are organic; conclusion adds new insight and deductions; progression feels purposeful.
++ Proficient (80-89%)
++ Introduction prepares the reader; opening strategy is clear; body paragraphs connect to thesis; organization is logical; conclusion draws reasonable deductions.
++ Developing (70-79%)
++ Introduction may be abrupt or generic; opening strategy can feel forced; paragraphs may drift or repeat; transitions can feel mechanical; conclusion mostly restates.
++ Struggling (Below 70%)
++ Introduction missing/confusing/generic; no clear opening strategy; paragraphs wander; progression is hard to follow; conclusion is absent or repetitive.
++ 
++ 3. EVIDENCE/SUPPORT (20%)
++ Exemplary (90-100%)
++ Evidence is selected precisely and integrated seamlessly; sources build authority; evidence illuminates claims; writer creates dialogue with sources; analysis remains primary.
++ Proficient (80-89%)
++ Evidence supports main points, is integrated and cited correctly, and generally balances with analysis.
++ Developing (70-79%)
++ Evidence is present but loosely connected; integration may be mechanical; quote choice may be weak; analysis is thin or uneven.
++ Struggling (Below 70%)
++ Little/no relevant evidence; weak or inaccurate quoting; weak argument connection; citation/plagiarism concerns may appear.
++ 
++ 4. VOICE/STYLE (20%)
++ Exemplary (90-100%)
++ Voice is authentic, confident, engaging, and memorable; language takes creative risks while staying academically credible; wording is precise and economical; rhythm and flow are compelling.
++ Proficient (80-89%)
++ Voice is clear and appropriate; tone is consistent; language is mostly precise and readable.
++ Developing (70-79%)
++ Voice is inconsistent or generic; phrasing may be awkward; filler or repetition appears.
++ Struggling (Below 70%)
++ Voice is unclear or robotic; tone is inappropriate or inconsistent; language is confusing and difficult to read.
++ 
++ 5. GRAMMAR/SYNTAX/FORMATTING (10%)
++ Exemplary (90-100%)
++ Grammar/syntax errors are rare and non-distracting; sentence variety and punctuation enhance clarity.
++ Formatting/presentation is polished and consistent; title is thoughtful; no draft artifacts remain; style guidelines are followed.
++ Proficient (80-89%)
++ Few grammar/syntax errors; formatting is clean and consistent; title is appropriate; only minor style inconsistencies.
++ Developing (70-79%)
++ Multiple grammar/syntax errors with mostly clear meaning; formatting inconsistencies or minor draft artifacts; title may be generic/missing.
++ Struggling (Below 70%)
++ Frequent grammar/syntax errors that interfere with meaning; sloppy formatting; visible draft artifacts; missing/generic title; style guidelines ignored.
++ 
++ Grade Calculation
++ To calculate final grade, multiply each category score by its weight and sum the results.
++ Category | Weight | Score | Weighted Score
++ Thesis/Content | 25% | ___ | ___ x 0.25 = ___
++ Organization/Structure | 25% | ___ | ___ x 0.25 = ___
++ Evidence/Support | 20% | ___ | ___ x 0.20 = ___
++ Voice/Style | 20% | ___ | ___ x 0.20 = ___
++ Grammar/Syntax/Formatting | 10% | ___ | ___ x 0.10 = ___
++ FINAL GRADE: ________%
++ 
++ Essay:
++ Frozen AI essay text"
++ ,
++       "role": "user",
++     },
++   ],
++   "model": "claude-sonnet-4-6",
++   "system": 
++ "You are a grading assistant. Return ONLY valid JSON with the schema:
++ {
++   "categories": [{"key": string, "score": 1-5, "comment": string}],
++   "overallComment": string
++ }
++ Scores must be integers 1-5.
++ Return exactly one category for each rubric key provided.
++ Provide concise, actionable comments.
++ Use the rubric language, proficiency bands, and category weights from the user prompt exactly.
++ Score mapping for the JSON schema in this app:
++ - 5 = Exemplary (90-100%)
++ - 4 = Proficient (80-89%)
++ - 3 = Developing (70-79%)
++ - 2 = Struggling (below 70%, closer to developing)
++ - 1 = Struggling (below 70%, severe gaps)
++ In overallComment, start with "Jordan," and continue with cohesive feedback in a warm but professional tone.
++ After the name, continue naturally (for example: "Jordan, you ...").
++ Do not use fixed lead-ins like "Overall grade," or "Jordan, this is your overall feedback.""
++ ,
+  }
+
+- Expected  - 2
++ Received  + 121
+
+      at <anonymous> (/Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.grade-essay-ai/route.test.ts:326:23)
+(fail) api.domain.grade-essay-ai > forces fallback model on retry requests [1.65ms]
+(pass) api.domain.grade-essay-ai > filters submission access through assignment class relation [0.75ms]
+(pass) api.domain.grade-essay-ai > checks the document submission flag through student classes for legacy submissions [0.38ms]
+(pass) api.domain.grade-essay-ai > uses the updated rubric instructions in the grading prompt [0.54ms]
+(pass) api.domain.grade-essay-ai > uses a linked ACT Writing grading assistant and records template provenance [0.73ms]
+(pass) api.domain.grade-essay-ai > returns numeric percentage using the updated category weights [0.42ms]
+(pass) api.domain.grade-essay-ai > grades AP History DBQ submissions with AP rubric points and skips grammar pass [1.45ms]
+(pass) api.domain.grade-essay-ai > grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total [0.43ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when AP History output omits the points object [0.32ms]
+(pass) api.domain.grade-essay-ai > lets AP History persistence failures throw normally after valid model output [0.38ms]
+(pass) api.domain.grade-essay-ai > repairs a top-level categories array response from the model [0.58ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when the model returns an empty categories array [0.45ms]
+
+ 12 pass
+ 2 fail
+ 64 expect() calls
+Ran 14 tests across 1 file. [99.00ms]

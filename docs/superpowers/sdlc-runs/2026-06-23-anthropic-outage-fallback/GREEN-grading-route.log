@@ -1,0 +1,22 @@
+bun test v1.3.1 (89fa0f34)
+
+app/routes/api.domain.grade-essay-ai/route.test.ts:
+(pass) api.domain.grade-essay-ai > returns AI suggestions and persists to submission [8.50ms]
+(pass) api.domain.grade-essay-ai > returns a retry signal without persisting when fallback retry is requested [3.91ms]
+(pass) api.domain.grade-essay-ai > forces fallback model on retry requests [1.55ms]
+(pass) api.domain.grade-essay-ai > filters submission access through assignment class relation [0.53ms]
+(pass) api.domain.grade-essay-ai > checks the document submission flag through student classes for legacy submissions [1.41ms]
+(pass) api.domain.grade-essay-ai > uses the updated rubric instructions in the grading prompt [0.52ms]
+(pass) api.domain.grade-essay-ai > uses a linked ACT Writing grading assistant and records template provenance [1.00ms]
+(pass) api.domain.grade-essay-ai > returns numeric percentage using the updated category weights [0.55ms]
+(pass) api.domain.grade-essay-ai > grades AP History DBQ submissions with AP rubric points and skips grammar pass [2.50ms]
+(pass) api.domain.grade-essay-ai > grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total [0.69ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when AP History output omits the points object [0.60ms]
+(pass) api.domain.grade-essay-ai > lets AP History persistence failures throw normally after valid model output [0.42ms]
+(pass) api.domain.grade-essay-ai > repairs a top-level categories array response from the model [1.96ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when the model returns an empty categories array [0.56ms]
+
+ 14 pass
+ 0 fail
+ 69 expect() calls
+Ran 14 tests across 1 file. [200.00ms]
