@@ -747,8 +747,14 @@ function GradingAssistantCard({
 
   return (
     <Card className={`bg-muted ${isMismatch ? 'border-red-400' : ''}`}>
-      <CardHeader>
-        <CardTitle>Grading Assistant</CardTitle>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Grading assistant</CardTitle>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/app/admin/grading-assistants/new">
+            <Plus className="mr-1.5 h-4 w-4" />
+            New grading assistant
+          </Link>
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {isMismatch && (
@@ -756,44 +762,47 @@ function GradingAssistantCard({
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               Linked grading assistant is <strong>{template?.status}</strong>. Only
-              active grading assistants are used at runtime, so this assignment is
+              active grading assistants are used at runtime, so this assignment type is
               currently falling back to legacy behavior. Link an active one.
             </span>
           </div>
         )}
 
         {!isLinked && (
-          <div className="flex items-start gap-2 rounded-[8px] border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              No active default link. Grading will use the legacy thesis-driven
-              essay fallback.
-            </span>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            No grading assistant linked. Grading will use the legacy fallback.
+          </p>
         )}
 
-        {isLinked && !isMismatch && template && (
+        {isLinked && template && (
           <dl className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             <div>
               <dt className="text-xs font-medium text-muted-foreground">
-                Grading assistant
+                Linked assistant
               </dt>
-              <dd className="text-sm font-medium">{template.name}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium text-muted-foreground">
-                Status
-              </dt>
-              <dd className="text-sm">
-                <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">
-                  active
-                </Badge>
+              <dd className="flex items-center gap-2 text-sm font-medium">
+                {template.name}
+                <Button variant="ghost" size="sm" className="h-auto px-1.5 py-0.5 text-xs" asChild>
+                  <Link to={`/app/admin/grading-assistants/${template.id}`}>
+                    Edit
+                  </Link>
+                </Button>
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-medium text-muted-foreground">
-                Version
-              </dt>
+              <dt className="text-xs font-medium text-muted-foreground">Status</dt>
+              <dd className="text-sm">
+                {template.status === 'active' ? (
+                  <Badge className="border-green-200 bg-green-100 text-green-800 hover:bg-green-100">
+                    active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">{template.status}</Badge>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs font-medium text-muted-foreground">Version</dt>
               <dd className="text-sm">v{template.version}</dd>
             </div>
             {scoringType && (
@@ -816,48 +825,49 @@ function GradingAssistantCard({
         )}
 
         <p className="text-xs text-muted-foreground">
-          Only active grading assistants can be linked. Changes apply to future
-          grading runs only.
+          Only active grading assistants can be linked. Changes apply to future grading runs only.
         </p>
 
-        <fetcher.Form method="post" className="flex flex-wrap gap-2">
-          <input type="hidden" name="intent" value="linkGradingAssistant" />
-          <select
-            name="gradingAssistantTemplateId"
-            defaultValue={
-              !isMismatch ? (currentLink?.gradingAssistantTemplateId ?? '') : ''
-            }
-            className="h-10 min-w-72 rounded-md border bg-background px-3 text-sm"
-            required
-          >
-            <option value="" disabled>
-              Select a grading assistant
-            </option>
-            {activeTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} v{t.version}
+        <div className="flex flex-wrap items-center gap-2">
+          <fetcher.Form method="post" className="flex flex-wrap gap-2">
+            <input type="hidden" name="intent" value="linkGradingAssistant" />
+            <select
+              name="gradingAssistantTemplateId"
+              defaultValue={
+                !isMismatch ? (currentLink?.gradingAssistantTemplateId ?? '') : ''
+              }
+              className="h-10 min-w-72 rounded-md border bg-background px-3 text-sm"
+              required
+            >
+              <option value="" disabled>
+                Select a grading assistant
               </option>
-            ))}
-          </select>
-          <Button type="submit" disabled={fetcher.state !== 'idle'}>
-            Link Default
-          </Button>
-        </fetcher.Form>
+              {activeTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} v{t.version}
+                </option>
+              ))}
+            </select>
+            <Button type="submit" disabled={fetcher.state !== 'idle'}>
+              {isLinked ? 'Switch' : 'Link'}
+            </Button>
+          </fetcher.Form>
 
-        {isLinked && (
-          <Button
-            variant="outline"
-            onClick={() =>
-              fetcher.submit(
-                { intent: 'clearGradingAssistant' },
-                { method: 'post' }
-              )
-            }
-            disabled={fetcher.state !== 'idle'}
-          >
-            Clear Link
-          </Button>
-        )}
+          {isLinked && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                fetcher.submit(
+                  { intent: 'clearGradingAssistant' },
+                  { method: 'post' }
+                )
+              }
+              disabled={fetcher.state !== 'idle'}
+            >
+              Unlink
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
