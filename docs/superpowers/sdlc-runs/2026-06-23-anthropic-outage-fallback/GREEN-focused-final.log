@@ -1,0 +1,53 @@
+bun test v1.3.1 (89fa0f34)
+
+app/utils/llm-retry-ui.test.ts:
+(pass) LLM retry UI helpers > recognizes retry payloads
+(pass) LLM retry UI helpers > clones form data and sets llmRetry=fallback [0.32ms]
+(pass) LLM retry UI helpers > posts a fallback retry after a 202 retry response [0.44ms]
+
+app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts:
+(pass) anthropic outage cache > opens for the configured ttl and expires after it
+(pass) anthropic outage cache > can be closed after a successful Anthropic probe [0.19ms]
+
+app/utils/getLLMCompletion/llm-provider-errors.server.test.ts:
+(pass) Anthropic outage error classification > treats Anthropic 529, 500, 504, and overloaded_error as retryable [0.34ms]
+(pass) Anthropic outage error classification > does not retry auth, model, validation, or rate-limit failures [0.01ms]
+(pass) Anthropic outage error classification > extracts retryable status when one is available [0.03ms]
+(pass) Anthropic outage error classification > identifies fallback retry signals [0.06ms]
+
+app/utils/getLLMCompletion/getLLMCompletion.test.ts:
+(pass) getLLMCompletion Anthropic outage fallback > falls back to gpt-4o-mini and opens the circuit after Anthropic 529 [1.50ms]
+(pass) getLLMCompletion Anthropic outage fallback > skips Anthropic when the circuit is already open [0.12ms]
+(pass) getLLMCompletion Anthropic outage fallback > signals route-level retry instead of calling OpenAI when requested [0.04ms]
+(pass) getLLMCompletion Anthropic outage fallback > resolves tutor document tool calls through OpenAI fallback [0.26ms]
+
+app/routes/api.domain.grade-essay-ai/route.test.ts:
+(pass) api.domain.grade-essay-ai > returns AI suggestions and persists to submission [4.32ms]
+(pass) api.domain.grade-essay-ai > returns a retry signal without persisting when fallback retry is requested [0.56ms]
+(pass) api.domain.grade-essay-ai > forces fallback model on retry requests [0.28ms]
+(pass) api.domain.grade-essay-ai > filters submission access through assignment class relation [0.21ms]
+(pass) api.domain.grade-essay-ai > checks the document submission flag through student classes for legacy submissions [0.52ms]
+(pass) api.domain.grade-essay-ai > uses the updated rubric instructions in the grading prompt [0.05ms]
+(pass) api.domain.grade-essay-ai > uses a linked ACT Writing grading assistant and records template provenance [0.37ms]
+(pass) api.domain.grade-essay-ai > returns numeric percentage using the updated category weights [0.95ms]
+(pass) api.domain.grade-essay-ai > grades AP History DBQ submissions with AP rubric points and skips grammar pass [1.03ms]
+(pass) api.domain.grade-essay-ai > grades AP History LEQ with canonical keys, ignores DBQ-only keys, and caps scoring at snapshot total [0.46ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when AP History output omits the points object [0.44ms]
+(pass) api.domain.grade-essay-ai > lets AP History persistence failures throw normally after valid model output [0.36ms]
+(pass) api.domain.grade-essay-ai > repairs a top-level categories array response from the model [0.56ms]
+(pass) api.domain.grade-essay-ai > returns a 502 response when the model returns an empty categories array [0.48ms]
+
+app/routes/api.domain.tutor-response/route.test.ts:
+(pass) api.domain.tutor-response read-only impersonation > preserves the read-only mutation guard response [0.29ms]
+(pass) api.domain.tutor-response read-only impersonation > touches the module session when writing tutor messages [0.36ms]
+(pass) api.domain.tutor-response read-only impersonation > returns a retry signal without writing messages when fallback retry is requested [0.14ms]
+(pass) api.domain.tutor-response read-only impersonation > forces fallback model on retry and persists one user and one tutor message [0.18ms]
+
+app/routes/app_.documents_.$id/tutor/tutor-response-retry.test.ts:
+(pass) postTutorResponseWithFallbackRetry > resubmits once with llmRetry=fallback after a 202 retry signal [0.71ms]
+(pass) postTutorResponseWithFallbackRetry > does not retry normal failures [0.02ms]
+
+ 33 pass
+ 0 fail
+ 143 expect() calls
+Ran 33 tests across 7 files. [93.00ms]

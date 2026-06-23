@@ -1,0 +1,2 @@
+$ bun run --cwd services/web-app typecheck
+$ react-router typegen && tsc

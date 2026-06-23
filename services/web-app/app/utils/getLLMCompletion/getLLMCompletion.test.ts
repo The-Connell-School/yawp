@@ -135,7 +135,9 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
 
     expect(isLlmFallbackRetrySignal(thrown)).toBe(true);
     expect(thrown).toBeInstanceOf(LlmFallbackRetrySignal);
-    expect((thrown as LlmFallbackRetrySignal).fallbackModel).toBe('gpt-4o-mini');
+    expect(
+      (thrown as InstanceType<typeof LlmFallbackRetrySignal>).fallbackModel
+    ).toBe('gpt-4o-mini');
     expect(anthropicCreate).not.toHaveBeenCalled();
     expect(openAiCreate).not.toHaveBeenCalled();
   });

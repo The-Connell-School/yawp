@@ -1,0 +1,277 @@
+$ bun run --cwd services/web-app typecheck
+$ react-router typegen && tsc
+../../packages/prisma/index.ts(24,20): error TS2307: Cannot find module './generated/prisma/index.js' or its corresponding type declarations.
+app/components/document-link.tsx(1,15): error TS2305: Module '"@app/prisma"' has no exported member 'Document'.
+app/components/document-link.tsx(37,50): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/components/document-link.tsx(40,6): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/domain/ap-history/library.server.ts(49,3): error TS2503: Cannot find namespace 'Prisma'.
+app/domain/ap-history/library.server.ts(58,36): error TS2503: Cannot find namespace 'Prisma'.
+app/domain/documents.server.ts(103,40): error TS7006: Parameter 'assignmentModule' implicitly has an 'any' type.
+app/root.tsx(152,29): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/api.assignments.create/route.ts(87,18): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/api.assignments.create/route.ts(107,18): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/api.assignments.create/route.ts(145,26): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/api.assignments.create/route.ts(170,39): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/api.assignments.create/route.ts(181,20): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/api.domain.grade-essay-ai/route.ts(152,8): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(324,32): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(348,32): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(593,17): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(642,17): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(668,21): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(820,20): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(846,22): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(880,18): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(952,37): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(968,19): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.grade-essay-ai/route.ts(991,19): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/api.domain.release-grades/route.ts(46,47): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/api.domain.release-grades/route.ts(104,26): error TS7006: Parameter 'submission' implicitly has an 'any' type.
+app/routes/api.domain.release-grades/route.ts(122,38): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/api.domain.submit-document/route.ts(139,40): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/api.domain.tutor-response/route.ts(80,47): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/api.model.assignment-module-session.$id/route.ts(104,53): error TS2339: Property 'id' does not exist on type '{ position?: number | null | undefined; }'.
+app/routes/api.model.assignment-module-session.$id/route.ts(107,50): error TS2339: Property 'prompt' does not exist on type '{ position?: number | null | undefined; }'.
+app/routes/api.model.assignment-module-session.$id/route.ts(109,56): error TS2339: Property 'id' does not exist on type '{ position?: number | null | undefined; }'.
+app/routes/api.model.document-comment.$id/route.ts(23,16): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/app._index/route.tsx(83,36): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(87,48): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(104,16): error TS7006: Parameter 'classes' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(105,24): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(117,52): error TS7006: Parameter 'scope' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(254,44): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(284,37): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(302,34): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(315,30): error TS2339: Property 'stats' does not exist on type '{}'.
+app/routes/app._index/route.tsx(321,27): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(324,36): error TS2339: Property 'assignments' does not exist on type '{}'.
+app/routes/app._index/route.tsx(325,38): error TS2339: Property 'stats' does not exist on type '{}'.
+app/routes/app._index/route.tsx(326,46): error TS2339: Property 'stats' does not exist on type '{}'.
+app/routes/app._index/route.tsx(378,8): error TS7006: Parameter 'total' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(378,15): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(382,8): error TS7006: Parameter 'total' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(382,15): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(467,36): error TS7006: Parameter 'course' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(494,42): error TS7006: Parameter 'classAssignment' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(542,36): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app._index/route.tsx(566,52): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(143,8): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(147,31): error TS7006: Parameter 'target' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(151,6): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(156,48): error TS2339: Property 'enabled' does not exist on type '{}'.
+app/routes/app.admin.assignment-types.$id/route.tsx(167,41): error TS2339: Property 'enabled' does not exist on type '{}'.
+app/routes/app.admin.assignment-types.$id/route.tsx(173,20): error TS2339: Property 'enabled' does not exist on type '{}'.
+app/routes/app.admin.assignment-types.$id/route.tsx(307,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(363,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(471,19): error TS7006: Parameter 'items' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(472,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(473,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(481,61): error TS18046: 'm' is of type 'unknown'.
+app/routes/app.admin.assignment-types.$id/route.tsx(750,29): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(865,39): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types.$id/route.tsx(869,35): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.admin.assignment-types._index/route.tsx(147,29): error TS7006: Parameter 'course' implicitly has an 'any' type.
+app/routes/app.admin.audit/route.tsx(115,33): error TS7006: Parameter 'u' implicitly has an 'any' type.
+app/routes/app.admin.audit/route.tsx(124,45): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.admin.audit/route.tsx(174,64): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+app/routes/app.admin.feature-flags/route.tsx(191,19): error TS7006: Parameter 'setting' implicitly has an 'any' type.
+app/routes/app.admin.feature-flags/route.tsx(201,70): error TS2339: Property 'value' does not exist on type '{}'.
+app/routes/app.admin.feature-flags/route.tsx(203,24): error TS2339: Property 'valueType' does not exist on type '{}'.
+app/routes/app.admin.feature-flags/route.tsx(204,23): error TS2339: Property 'value' does not exist on type '{}'.
+app/routes/app.admin.feature-flags/route.tsx(211,27): error TS7006: Parameter 'school' implicitly has an 'any' type.
+app/routes/app.admin.feature-flags/route.tsx(219,44): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.admin.feature-flags/route.tsx(231,35): error TS7006: Parameter 'school' implicitly has an 'any' type.
+app/routes/app.admin.feature-flags/route.tsx(237,47): error TS7006: Parameter 'organization' implicitly has an 'any' type.
+app/routes/app.admin.general/route.tsx(14,10): error TS2305: Module '"@app/prisma"' has no exported member 'Setting'.
+app/routes/app.admin.general/route.tsx(70,24): error TS7006: Parameter 'setting' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(217,45): error TS7006: Parameter 't' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(219,6): error TS7006: Parameter 'assignmentType' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(221,58): error TS7006: Parameter 'assignmentType' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(431,46): error TS7006: Parameter 'assignmentType' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(482,31): error TS7006: Parameter 'template' implicitly has an 'any' type.
+app/routes/app.admin.grading-assistants._index/route.tsx(513,35): error TS7006: Parameter 'link' implicitly has an 'any' type.
+app/routes/app.admin.organizations.$id/route.tsx(267,33): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/app.admin.organizations.$id/route.tsx(349,6): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.admin.organizations.$id/route.tsx(353,8): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.admin.organizations.$id/route.tsx(460,45): error TS7006: Parameter 'assignmentType' implicitly has an 'any' type.
+app/routes/app.admin.organizations.$id/route.tsx(653,29): error TS7006: Parameter 'profile' implicitly has an 'any' type.
+app/routes/app.admin.organizations._index/route.tsx(405,37): error TS7006: Parameter 'organization' implicitly has an 'any' type.
+app/routes/app.admin.organizations._index/route.tsx(421,28): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.admin.organizations._index/route.tsx(430,28): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(90,73): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(92,40): error TS7006: Parameter 'resource' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(128,38): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(290,19): error TS7006: Parameter 'items' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(291,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(292,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(300,61): error TS18046: 'm' is of type 'unknown'.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(749,39): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(753,35): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id/route.tsx(753,43): error TS7006: Parameter 'idx' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id_.modules_.$moduleId/route.tsx(65,53): error TS7006: Parameter 'resource' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings.$id_.modules_.$moduleId/route.tsx(521,53): error TS7006: Parameter 'resource' implicitly has an 'any' type.
+app/routes/app.admin.teacher-trainings._index/route.tsx(175,38): error TS7006: Parameter 'course' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(381,40): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(385,52): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(391,30): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(398,57): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(402,52): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(408,6): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(416,50): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(421,50): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(691,36): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app.assignment-types.$id/route.tsx(709,54): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app.assignments.$assignmentId.start/route.ts(70,60): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(144,37): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(145,42): error TS7006: Parameter 'deployment' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(154,25): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(156,12): error TS7006: Parameter 'deployment' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(221,6): error TS7006: Parameter 'deployment' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(227,37): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(234,29): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(277,36): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(314,39): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(320,59): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(383,27): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(389,42): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(435,41): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(448,42): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(461,54): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(472,34): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(479,43): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.assignments._index/route.tsx(665,38): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.class-assignments.$classAssignmentId.start/route.ts(70,60): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(123,33): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(124,42): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(140,33): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(151,23): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(154,24): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/app.documents._index/route.tsx(157,44): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(225,65): error TS7006: Parameter 'document' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(234,9): error TS2322: Type 'Set<unknown>' is not assignable to type 'Set<string>'.
+  Type 'unknown' is not assignable to type 'string'.
+app/routes/app.documents._index/route.tsx(235,9): error TS2322: Type '{} | null' is not assignable to type 'TeacherDocumentWorkClassSummary | null | undefined'.
+  Type '{}' is missing the following properties from type 'TeacherDocumentWorkClassSummary': id, grade, period, title
+app/routes/app.documents._index/route.tsx(247,27): error TS7006: Parameter 'classAssignment' implicitly has an 'any' type.
+app/routes/app.documents._index/route.tsx(258,27): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx(64,6): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx(75,6): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx(114,6): error TS7006: Parameter 'membership' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx(125,6): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx(235,27): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/app.my-classes.$classId/route.tsx(642,10): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(651,28): error TS7006: Parameter 'student' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(658,54): error TS7006: Parameter 'student' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(805,45): error TS7006: Parameter 'classAssignment' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(950,10): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(959,41): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(972,24): error TS7006: Parameter 'student' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(1447,46): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(1744,47): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(1837,26): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(1841,36): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId/route.tsx(1842,33): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(209,31): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(215,31): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(223,48): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(229,43): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(411,45): error TS7006: Parameter 'doc' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(472,44): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(599,39): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx(663,37): error TS7006: Parameter 'sub' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(34,40): error TS7006: Parameter 'school' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(81,24): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(90,15): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(92,15): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(94,20): error TS18046: 'a' is of type 'unknown'.
+app/routes/app.my-classes._index/route.tsx(94,41): error TS18046: 'b' is of type 'unknown'.
+app/routes/app.my-classes._index/route.tsx(96,41): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(238,46): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(264,48): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.my-classes._index/route.tsx(317,39): error TS18046: 's' is of type 'unknown'.
+app/routes/app.my-classes._index/route.tsx(317,52): error TS18046: 's' is of type 'unknown'.
+app/routes/app.my-classes._index/route.tsx(318,24): error TS18046: 's' is of type 'unknown'.
+app/routes/app.my-classes._index/route.tsx(329,35): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(312,40): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(404,40): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(511,25): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(515,42): error TS7006: Parameter 'tx' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(539,59): error TS2345: Argument of type '{}' is not assignable to parameter of type 'string'.
+app/routes/app.organization.classes/route.tsx(724,28): error TS7006: Parameter 'cls' implicitly has an 'any' type.
+app/routes/app.organization.classes/route.tsx(891,35): error TS7006: Parameter 'cls' implicitly has an 'any' type.
+app/routes/app.organization.schools/route.tsx(215,48): error TS7006: Parameter 's' implicitly has an 'any' type.
+app/routes/app.organization.schools/route.tsx(340,35): error TS7006: Parameter 'school' implicitly has an 'any' type.
+app/routes/app.organization.students/route.tsx(461,20): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.organization.students/route.tsx(548,38): error TS7006: Parameter 'option' implicitly has an 'any' type.
+app/routes/app.organization.students/route.tsx(697,36): error TS7006: Parameter 'student' implicitly has an 'any' type.
+app/routes/app.organization.teachers/route.tsx(244,33): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/app.organization.teachers/route.tsx(421,36): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app.organizations.schools.$schoolId/route.tsx(287,37): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(89,75): error TS7006: Parameter 'mod' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(91,8): error TS7006: Parameter 'session' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(100,6): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(100,11): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(106,8): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(122,8): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(125,12): error TS7006: Parameter 'session' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(247,58): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id/route.tsx(247,66): error TS7006: Parameter 'index' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx(260,6): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx(383,51): error TS7006: Parameter 'resource' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx(421,62): error TS7006: Parameter 'module' implicitly has an 'any' type.
+app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx(421,70): error TS7006: Parameter 'index' implicitly has an 'any' type.
+app/routes/app.teacher-trainings._index/route.tsx(84,40): error TS7006: Parameter 'course' implicitly has an 'any' type.
+app/routes/app/route.tsx(267,42): error TS7006: Parameter 'm' implicitly has an 'any' type.
+app/routes/app_.documents_.$id/comments/comment.tsx(2,8): error TS2305: Module '"@app/prisma"' has no exported member 'DocumentCommentResponse'.
+app/routes/app_.documents_.$id/comments/comment.tsx(3,8): error TS2305: Module '"@app/prisma"' has no exported member 'DocumentComment'.
+app/routes/app_.documents_.$id/comments/comment.tsx(4,8): error TS2305: Module '"@app/prisma"' has no exported member 'User'.
+app/routes/app_.documents_.$id/comments/comment.tsx(5,8): error TS2305: Module '"@app/prisma"' has no exported member 'OrgMembership'.
+app/routes/app_.documents_.$id/comments/comment.tsx(188,17): error TS7006: Parameter 'response' implicitly has an 'any' type.
+app/routes/app_.documents_.$id/route.tsx(411,6): error TS7006: Parameter 'cm' implicitly has an 'any' type.
+app/routes/app_.documents_.$id/route.tsx(417,12): error TS7006: Parameter 'cm' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(276,8): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(278,61): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(279,30): error TS7006: Parameter 'teacher' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(462,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(465,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(465,40): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(469,20): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(470,19): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/routes/app_.submissions_.$submissionId/route.tsx(561,25): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/routes/auth.inv.forgot-password/route.tsx(65,27): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/auth.inv.onboard-student/route.tsx(221,38): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/auth.inv.onboard-student/route.tsx(225,29): error TS7006: Parameter 't' implicitly has an 'any' type.
+app/routes/auth.inv.onboard-teacher/route.tsx(168,38): error TS7006: Parameter 'school' implicitly has an 'any' type.
+app/routes/auth.inv.signup/route.tsx(77,27): error TS2503: Cannot find namespace 'Prisma'.
+app/routes/auth.inv.signup/route.tsx(85,36): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/routes/auth.inv.verify/route.tsx(18,15): error TS2305: Module '"@app/prisma"' has no exported member 'OrgMembership'.
+app/routes/enter-code/route.tsx(224,36): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/routes/enter-code/route.tsx(228,27): error TS7006: Parameter 't' implicitly has an 'any' type.
+app/utils/assignment-deployment.server.ts(6,5): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/auth.server.ts(2,8): error TS2305: Module '"@app/prisma"' has no exported member 'MembershipRole'.
+app/utils/auth.server.ts(4,8): error TS2305: Module '"@app/prisma"' has no exported member 'Password'.
+app/utils/auth.server.ts(5,8): error TS2305: Module '"@app/prisma"' has no exported member 'User'.
+app/utils/auth.server.ts(26,34): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/class-art-assignment.server.ts(23,17): error TS7006: Parameter 'klass' implicitly has an 'any' type.
+app/utils/class-assignment-scope.server.ts(84,5): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/class-assignment-scope.server.ts(85,21): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/class-assignment-scope.server.ts(97,16): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/class-assignment-scope.server.ts(104,23): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/db.server.ts(97,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+app/utils/getLLMCompletion/getLLMCompletion.test.ts(138,23): error TS2749: 'LlmFallbackRetrySignal' refers to a value, but is being used as a type here. Did you mean 'typeof LlmFallbackRetrySignal'?
+app/utils/grading-auth.server.ts(40,4): error TS2503: Cannot find namespace 'Prisma'.
+app/utils/teacher-class-card-stats.server.ts(27,6): error TS7006: Parameter 'submission' implicitly has an 'any' type.
+app/utils/teacher-class-card-stats.server.ts(32,6): error TS7006: Parameter 'submission' implicitly has an 'any' type.
+app/utils/teacher-dashboard-recent-classes.server.ts(105,23): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/utils/teacher-dashboard-recent-classes.server.ts(107,47): error TS7006: Parameter 'row' implicitly has an 'any' type.
+app/utils/teacher-dashboard-recent-classes.server.ts(136,7): error TS2322: Type 'Map<unknown, unknown>' is not assignable to type 'Map<string, string>'.
+  Type 'unknown' is not assignable to type 'string'.
+e2e/db-helpers.ts(429,34): error TS7006: Parameter 'module' implicitly has an 'any' type.
+e2e/prisma-client.ts(5,55): error TS2307: Cannot find module '../../../packages/prisma/generated/prisma' or its corresponding type declarations.
+e2e/seed-e2e.ts(28,13): error TS7031: Binding element 'tablename' implicitly has an 'any' type.
+e2e/seed-e2e.ts(522,6): error TS7006: Parameter 'a' implicitly has an 'any' type.
+e2e/seed-e2e.ts(522,9): error TS7006: Parameter 'b' implicitly has an 'any' type.
+e2e/tests/ap-history-library-first.spec.ts(195,53): error TS7006: Parameter 'assignment' implicitly has an 'any' type.
+e2e/tests/student.assignment-start.spec.ts(155,37): error TS7006: Parameter 's' implicitly has an 'any' type.
+e2e/tests/student.assignment-start.spec.ts(156,34): error TS7006: Parameter 'm' implicitly has an 'any' type.
+e2e/tests/teacher.dashboard-workspace.spec.ts(117,25): error TS7006: Parameter 'deployment' implicitly has an 'any' type.
