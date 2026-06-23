@@ -17,16 +17,30 @@ Domains: code
 
 ## Proof Map
 
-- `red_green_test_log`: `pending` via RED.log (red-test-log), GREEN.log (green-test-log)
-- `fresh_verification_commands`: `pending` via TEST-PLAN.md (command-plan), GREEN.log (command-output)
-- `code_review_artifact`: `pending` via REVIEW.md (review)
-- `release_gate`: `pending` via RELEASE-GATE.md (release-gate)
-- `evidence_pack`: `pending` via EVIDENCE-PACK.md (evidence-pack)
-- `minimal_hotfix_scope_proof`: `pending` via IMPLEMENTATION-SUMMARY.md (hotfix-scope)
+- `red_green_test_log`: `satisfied` via RED.log (red-test-log), GREEN.log (green-test-log)
+- `fresh_verification_commands`: `satisfied` via TEST-PLAN.md (command-plan), GREEN.log (command-output)
+- `code_review_artifact`: `satisfied` via REVIEW.md (review)
+- `release_gate`: `satisfied` via RELEASE-GATE.md (release-gate)
+- `evidence_pack`: `satisfied` via EVIDENCE-PACK.md (evidence-pack)
+- `minimal_hotfix_scope_proof`: `satisfied` via IMPLEMENTATION-SUMMARY.md (hotfix-scope)
 
 ## Available Artifacts
 
 - `RUN.md`
+- `CONTEXT.md`
+- `ACCEPTANCE.md`
+- `RISK.md`
+- `PLAN.md`
+- `TEST-PLAN.md`
+- `RED.log`
+- `IMPLEMENTATION-SUMMARY.md`
+- `GREEN.log`
+- `REVIEW.md`
+- `QA.md`
+- `RELEASE-GATE.md`
+- `PROD-VERIFY.md`
+- `MEMORY-UPDATE.md`
+- `QUEUE-DISPATCH.md`
 - `TRACE.jsonl`
 - `TASK-BRIEF.json`
 - `REPO-PROFILE.json`

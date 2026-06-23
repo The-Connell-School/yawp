@@ -1,3 +1,67 @@
 {
-  "commands": []
+  "commands": [
+    {
+      "id": "red",
+      "command": "bun test app/services/openai.test.ts",
+      "cwd": "services/web-app",
+      "exit_code": 1,
+      "artifact": "RED-openai-client-env.log",
+      "artifact_sha256": "406e88a115b81468c91ea03570acc879a7d331884e13fefe7907d52fe1501fa6",
+      "result": "failed before service exported getOpenAiClientOptions"
+    },
+    {
+      "id": "green",
+      "command": "bun test app/utils/getLLMCompletion/getLLMCompletion.test.ts app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts app/utils/getLLMCompletion/llm-provider-errors.server.test.ts app/utils/llm-retry-ui.test.ts app/routes/api.domain.grade-essay-ai/route.test.ts app/routes/api.domain.tutor-response/route.test.ts 'app/routes/app_.documents_.$id/tutor/tutor-response-retry.test.ts' && bun test app/services/openai.test.ts && bun run web-app:typecheck && bun run web-app:build",
+      "cwd": ".",
+      "exit_code": 0,
+      "artifact": "GREEN.log",
+      "artifact_sha256": "90cb06ba18f8e7d8850c895aa148665db464af433e5ec7c3250464bcd07014e0",
+      "result": "focused tests, OpenAI service tests, typecheck, and production build passed"
+    },
+    {
+      "id": "focused-final",
+      "command": "bun test app/utils/getLLMCompletion/getLLMCompletion.test.ts app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts app/utils/getLLMCompletion/llm-provider-errors.server.test.ts app/utils/llm-retry-ui.test.ts app/routes/api.domain.grade-essay-ai/route.test.ts app/routes/api.domain.tutor-response/route.test.ts 'app/routes/app_.documents_.$id/tutor/tutor-response-retry.test.ts'",
+      "cwd": "services/web-app",
+      "exit_code": 0,
+      "artifact": "GREEN-focused-final.log",
+      "artifact_sha256": "df85c479da67c1f7815fa2bce2dae294ec2b5d12d32f2cbca9e131c3412843c6",
+      "result": "33 pass, 0 fail"
+    },
+    {
+      "id": "openai-env-red",
+      "command": "bun test app/services/openai.test.ts",
+      "cwd": "services/web-app",
+      "exit_code": 1,
+      "artifact": "RED-openai-client-env.log",
+      "artifact_sha256": "406e88a115b81468c91ea03570acc879a7d331884e13fefe7907d52fe1501fa6",
+      "result": "failed before service exported getOpenAiClientOptions"
+    },
+    {
+      "id": "openai-env-green",
+      "command": "bun test app/services/openai.test.ts",
+      "cwd": "services/web-app",
+      "exit_code": 0,
+      "artifact": "GREEN-openai-client-env-final-2.log",
+      "artifact_sha256": "3b5ef534ca17452c4cb8ee2e5bd8a61195618fd31179ac4f22fcd26e7568558e",
+      "result": "3 pass, 0 fail"
+    },
+    {
+      "id": "typecheck-final",
+      "command": "bun run web-app:typecheck",
+      "cwd": ".",
+      "exit_code": 0,
+      "artifact": "TYPECHECK-openai-env-final-2.log",
+      "artifact_sha256": "5f5f29acc08d3f6a82475ce3ff953d9eb785e9e7f80bfa35eddeca2684d984ec",
+      "result": "react-router typegen && tsc passed"
+    },
+    {
+      "id": "build-final",
+      "command": "bun run web-app:build",
+      "cwd": ".",
+      "exit_code": 0,
+      "artifact": "BUILD-openai-env-final.log",
+      "artifact_sha256": "c7d124412ec449b1344102ee5965abd6c8ae51ce4c8d8a33810a541d46688d79",
+      "result": "react-router build passed"
+    }
+  ]
 }

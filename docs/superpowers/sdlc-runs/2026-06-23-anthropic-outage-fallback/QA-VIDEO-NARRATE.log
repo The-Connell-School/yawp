@@ -1,0 +1,16 @@
+{
+  "outputVideo": "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated.mp4",
+  "manifestPath": "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-narration.json",
+  "audioFiles": [
+    "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-audio/01.wav",
+    "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-audio/02.wav",
+    "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-audio/03.wav",
+    "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-audio/04.wav",
+    "/Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/yawp-anthropic-fallback-qa-narrated-audio/05.wav"
+  ],
+  "videoDuration": 31.8,
+  "ttsProvider": "kokoro_local",
+  "voice": "af_sarah",
+  "voiceSpeed": 1.08,
+  "lang": "en-us"
+}

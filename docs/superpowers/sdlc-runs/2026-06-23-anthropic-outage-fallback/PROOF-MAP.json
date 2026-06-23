@@ -17,7 +17,7 @@
         }
       ],
       "proof": "red_green_test_log",
-      "status": "pending"
+      "status": "satisfied"
     },
     {
       "acceptance_ids": [
@@ -35,7 +35,7 @@
         }
       ],
       "proof": "fresh_verification_commands",
-      "status": "pending"
+      "status": "satisfied"
     },
     {
       "acceptance_ids": [
@@ -48,7 +48,7 @@
         }
       ],
       "proof": "code_review_artifact",
-      "status": "pending"
+      "status": "satisfied"
     },
     {
       "acceptance_ids": [
@@ -61,7 +61,7 @@
         }
       ],
       "proof": "release_gate",
-      "status": "pending"
+      "status": "satisfied"
     },
     {
       "acceptance_ids": [
@@ -74,7 +74,7 @@
         }
       ],
       "proof": "evidence_pack",
-      "status": "pending"
+      "status": "satisfied"
     },
     {
       "acceptance_ids": [
@@ -87,7 +87,7 @@
         }
       ],
       "proof": "minimal_hotfix_scope_proof",
-      "status": "pending"
+      "status": "satisfied"
     }
   ],
   "risk_tier": "critical"

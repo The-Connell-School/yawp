@@ -1,0 +1,23 @@
+# Green Verification Evidence
+
+Final focused verification passed.
+
+```bash
+bun test app/utils/getLLMCompletion/getLLMCompletion.test.ts app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts app/utils/getLLMCompletion/llm-provider-errors.server.test.ts app/utils/llm-retry-ui.test.ts app/routes/api.domain.grade-essay-ai/route.test.ts app/routes/api.domain.tutor-response/route.test.ts 'app/routes/app_.documents_.$id/tutor/tutor-response-retry.test.ts'
+```
+
+Result: `33 pass`, `0 fail`.
+
+Additional verification:
+
+```bash
+bun test app/services/openai.test.ts
+bun run web-app:typecheck
+bun run web-app:build
+```
+
+Results:
+
+- `GREEN-openai-client-env-final-2.log`: `3 pass`, `0 fail`.
+- `TYPECHECK-openai-env-final-2.log`: `react-router typegen && tsc` completed with exit 0.
+- `BUILD-openai-env-final.log`: `react-router build` completed with exit 0.

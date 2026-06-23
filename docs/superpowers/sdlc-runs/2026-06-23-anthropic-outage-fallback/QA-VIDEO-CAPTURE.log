@@ -1,0 +1,17 @@
+{"event":"replace-dialog-visible"}
+{"event":"grade-request","count":1,"postData":"submissionId=cmqqtwx760014ckvs5lnhokru"}
+{"event":"after-click","gradingPostCount":1,"visibleText":"Oops! Something didn't work quite right.\n\nDon't worry though; all your data has been saved. Head back to the dashboard and try again.\n\nGo to dashboard"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.waitFor: Timeout 10000ms exceeded.
+Call log:
+[2m  - waiting for getByText('Retrying...') to be visible[22m
+
+    at /Users/bryantbrock/qa-media/yawp/anthropic-fallback-20260623/record-grading-retry-qa.mjs:104:37 {
+  log: [ "  - waiting for getByText('Retrying...') to be visible" ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.0

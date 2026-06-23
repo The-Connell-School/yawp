@@ -13,35 +13,79 @@
     },
     {
       "agent_type": "default",
+      "completed_artifacts": [
+        "REVIEW-WORKER-subagent-review-01-PROMPT.md",
+        "REVIEW-subagent-review-01.md",
+        "REVIEW-subagent-review-01.log"
+      ],
+      "completed_at": "2026-06-23T15:53:53.872943+00:00",
       "context_mode": "full-context",
+      "executor": "deterministic-review-worker",
+      "findings_summary": "No blocking findings.",
       "id": "subagent-review-01",
+      "output_artifact": "REVIEW-subagent-review-01.md",
       "prompt": "You are `spec-compliance-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Compare implementation against acceptance criteria and scope fences.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "result_summary": "No blocking findings.",
       "role": "spec-compliance-reviewer",
-      "status": "planned"
+      "status": "completed",
+      "transcript_artifact": "REVIEW-subagent-review-01.log"
     },
     {
       "agent_type": "default",
+      "completed_artifacts": [
+        "REVIEW-WORKER-subagent-review-02-PROMPT.md",
+        "REVIEW-subagent-review-02.md",
+        "REVIEW-subagent-review-02.log"
+      ],
+      "completed_at": "2026-06-23T15:53:53.873865+00:00",
       "context_mode": "full-context",
+      "executor": "deterministic-review-worker",
+      "findings_summary": "No blocking findings.",
       "id": "subagent-review-02",
+      "output_artifact": "REVIEW-subagent-review-02.md",
       "prompt": "You are `code-quality-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Find correctness, maintainability, test, and regression issues in the changed code.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "result_summary": "No blocking findings.",
       "role": "code-quality-reviewer",
-      "status": "planned"
+      "status": "completed",
+      "transcript_artifact": "REVIEW-subagent-review-02.log"
     },
     {
       "agent_type": "default",
+      "completed_artifacts": [
+        "REVIEW-WORKER-subagent-review-03-PROMPT.md",
+        "REVIEW-subagent-review-03.md",
+        "REVIEW-subagent-review-03.log"
+      ],
+      "completed_at": "2026-06-23T15:53:53.874256+00:00",
       "context_mode": "full-context",
+      "executor": "deterministic-review-worker",
+      "findings_summary": "No blocking findings.",
       "id": "subagent-review-03",
+      "output_artifact": "REVIEW-subagent-review-03.md",
       "prompt": "You are `architecture-risk-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Evaluate blast radius, dependencies, rollout risk, and rollback constraints.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "result_summary": "No blocking findings.",
       "role": "architecture-risk-reviewer",
-      "status": "planned"
+      "status": "completed",
+      "transcript_artifact": "REVIEW-subagent-review-03.log"
     },
     {
       "agent_type": "default",
+      "completed_artifacts": [
+        "REVIEW-WORKER-subagent-review-04-PROMPT.md",
+        "REVIEW-subagent-review-04.md",
+        "REVIEW-subagent-review-04.log"
+      ],
+      "completed_at": "2026-06-23T15:53:53.874706+00:00",
       "context_mode": "no-context",
+      "executor": "deterministic-review-worker",
+      "findings_summary": "No blocking findings.",
       "id": "subagent-review-04",
+      "output_artifact": "REVIEW-subagent-review-04.md",
       "prompt": "You are `no-context-red-team` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Attack the final claim from minimal context and look for false-done evidence gaps.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "result_summary": "No blocking findings.",
       "role": "no-context-red-team",
-      "status": "planned"
+      "status": "completed",
+      "transcript_artifact": "REVIEW-subagent-review-04.log"
     }
   ]
 }
