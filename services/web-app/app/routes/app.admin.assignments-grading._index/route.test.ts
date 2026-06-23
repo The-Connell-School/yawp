@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAdmin = mock();
+const requireMutableRequest = mock();
 
 const prisma = {
   assignmentType: { findMany: mock(), count: mock(), create: mock() },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireMutableRequest,
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const { loader } = await import('./route');
@@ -27,6 +31,7 @@ const mockAssignmentType = {
 describe('AssignmentsGrading loader', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    requireMutableRequest.mockReset();
     prisma.assignmentType.findMany.mockReset();
     requireAdmin.mockResolvedValue(undefined);
   });

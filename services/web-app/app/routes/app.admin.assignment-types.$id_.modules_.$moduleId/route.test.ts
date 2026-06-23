@@ -7,15 +7,20 @@ const prisma = {
 };
 
 const requireAdmin = mock();
+const requireMutableRequest = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireMutableRequest,
+}));
 
 const { action } = await import('./route');
 
 describe('admin assignment module action', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    requireMutableRequest.mockReset();
     prisma.assignmentModule.update.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);

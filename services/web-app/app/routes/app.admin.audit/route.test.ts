@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireAdmin = mock();
+const requireMutableRequest = mock();
 const prisma = {
   documentWriteJournal: {
     findMany: mock(),
@@ -17,7 +18,10 @@ const prisma = {
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireMutableRequest,
+}));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
 const { loader } = await import('./route');
@@ -25,6 +29,7 @@ const { loader } = await import('./route');
 describe('admin audit loader', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
+    requireMutableRequest.mockReset();
     prisma.documentWriteJournal.findMany.mockReset();
     prisma.documentWriteJournal.findUnique.mockReset();
     prisma.user.findMany.mockReset();

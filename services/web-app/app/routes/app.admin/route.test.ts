@@ -1,8 +1,12 @@
 import { describe, expect, mock, test } from 'bun:test';
 
 const requireAdmin = mock();
+const requireMutableRequest = mock();
 
-mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireMutableRequest,
+}));
 
 const { adminTabs } = await import('./route');
 
