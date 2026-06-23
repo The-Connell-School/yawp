@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
+const requireAdmin = mock();
 const prisma = {
   assignmentModuleSession: {
     findUnique: mock(),
@@ -10,7 +11,7 @@ const prisma = {
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest }));
+mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireAdmin }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: {
@@ -26,6 +27,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   beforeEach(() => {
     getLLMCompletion.mockReset();
     requireMutableRequest.mockReset();
+    requireAdmin.mockReset();
     requireMutableRequest.mockResolvedValue(undefined);
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
