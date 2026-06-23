@@ -7,10 +7,17 @@ import {
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '~/components/ui/table';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { AlertCircle, CheckCircle2, Circle, ClipboardCheck, FilePen, Plus } from 'lucide-react';
-import { cn } from '~/utils/misc';
+import { CheckCircle2, Circle, ClipboardCheck, FilePen, Plus } from 'lucide-react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
@@ -85,43 +92,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
-function GradingStatusIcon({
+function GradingCell({
   template,
+  typeId,
 }: {
-  template: { status: string; name: string } | null;
-}) {
-  if (!template) {
-    return <AlertCircle className="h-3.5 w-3.5 text-muted-foreground/50" />;
-  }
-  if (template.status === 'active') {
-    return <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />;
-  }
-  return <Circle className="h-3.5 w-3.5 text-amber-500" />;
-}
-
-function GradingStatusBadge({
-  template,
-}: {
-  template: { status: string; name: string } | null;
+  template: { id: string; status: string; name: string } | null;
+  typeId: string;
 }) {
   if (!template) {
     return (
-      <Badge variant="outline" className="text-muted-foreground/60 text-[0.65rem]">
-        No grading assistant
-      </Badge>
-    );
-  }
-  if (template.status === 'active') {
-    return (
-      <Badge className="border-green-200 bg-green-50 text-green-700 text-[0.65rem]">
-        {template.name}
-      </Badge>
+      <Link
+        to="/app/admin/grading-assistants/new"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <Circle className="h-3.5 w-3.5 shrink-0" />
+        <span>None</span>
+      </Link>
     );
   }
   return (
-    <Badge variant="outline" className="border-amber-200 text-amber-600 text-[0.65rem]">
-      {template.name} · {template.status}
-    </Badge>
+    <Link
+      to={`/app/admin/grading-assistants/${template.id}`}
+      className="flex items-center gap-1.5 text-sm hover:underline"
+    >
+      {template.status === 'active' ? (
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+      ) : (
+        <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+      )}
+      <span>{template.name}</span>
+      {template.status !== 'active' && (
+        <Badge variant="outline" className="text-[0.65rem]">{template.status}</Badge>
+      )}
+    </Link>
   );
 }
 
@@ -163,45 +166,19 @@ export default function PipelinesRoute() {
         {[
           { label: 'Assignment types', value: stats.typeCount },
           { label: 'Active grading assistants', value: stats.activeGradingCount },
-          {
-            label: 'Types without active grading',
-            value: stats.gapCount,
-            alert: stats.gapCount > 0,
-          },
-        ].map(({ label, value, alert }) => (
-          <div
-            key={label}
-            className={cn(
-              'rounded-lg border bg-muted px-4 py-3',
-              alert && 'border-amber-200 bg-amber-50'
-            )}
-          >
-            <div
-              className={cn(
-                'text-2xl font-semibold tabular-nums',
-                alert && 'text-amber-700'
-              )}
-            >
-              {value}
-            </div>
-            <div
-              className={cn(
-                'text-xs text-muted-foreground',
-                alert && 'text-amber-600'
-              )}
-            >
-              {label}
-            </div>
+          { label: 'Types without active grading', value: stats.gapCount },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-lg border bg-muted px-4 py-3">
+            <div className="text-2xl font-semibold tabular-nums">{value}</div>
+            <div className="text-xs text-muted-foreground">{label}</div>
           </div>
         ))}
       </div>
 
-      {/* Pipeline cards */}
+      {/* Pipeline table */}
       {active.length === 0 ? (
         <div className="rounded-lg border border-dashed py-16 text-center">
-          <p className="font-medium text-muted-foreground">
-            No assignment types yet.
-          </p>
+          <p className="font-medium text-muted-foreground">No assignment types yet.</p>
           <Button size="sm" className="mt-4" asChild>
             <Link to="/app/admin/assignment-types">
               <Plus className="mr-1.5 h-4 w-4" />
@@ -210,90 +187,76 @@ export default function PipelinesRoute() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {active.map((at) => {
-            const hasActiveGrading = at.gradingAssistant?.status === 'active';
-            return (
-              <div
-                key={at.id}
-                className={cn(
-                  'group flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md',
-                  !hasActiveGrading && 'ring-amber-200'
-                )}
-              >
-                {/* Image band */}
-                <div className="h-20 w-full shrink-0 overflow-hidden bg-gradient-to-br from-foreground/5 to-foreground/20">
-                  {at.imageId ? (
-                    <img
-                      src={`/api/image/course/${at.imageId}`}
-                      alt={at.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                </div>
-
-                {/* Body */}
-                <div className="flex flex-1 flex-col gap-3 p-4">
-                  <div>
-                    <p className="font-semibold leading-tight">{at.title}</p>
-                    {at.description ? (
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {at.description}
-                      </p>
-                    ) : null}
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Assignment type</TableHead>
+              <TableHead>Modules</TableHead>
+              <TableHead>Orgs</TableHead>
+              <TableHead>Grading assistant</TableHead>
+              <TableHead className="w-24" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {active.map((at) => (
+              <TableRow key={at.id}>
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-12 shrink-0 overflow-hidden rounded bg-gradient-to-br from-foreground/5 to-foreground/20">
+                      {at.imageId ? (
+                        <img
+                          src={`/api/image/course/${at.imageId}`}
+                          alt={at.title}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div>
+                      <p className="font-medium leading-tight">{at.title}</p>
+                      {at.description ? (
+                        <p className="line-clamp-1 text-xs text-muted-foreground">
+                          {at.description}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-
-                  {/* Lifecycle row */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span
-                      className="flex items-center gap-1"
-                      title={`${at.moduleCount} tutor module${at.moduleCount !== 1 ? 's' : ''}`}
-                    >
-                      <FilePen className="h-3 w-3" />
-                      {at.moduleCount} {at.moduleCount === 1 ? 'module' : 'modules'}
-                    </span>
-                    <span className="text-muted-foreground/30">·</span>
-                    <span>{at.orgCount} {at.orgCount === 1 ? 'org' : 'orgs'}</span>
-                  </div>
-
-                  {/* Grading assistant status */}
-                  <div className="flex items-center gap-1.5">
-                    <GradingStatusIcon template={at.gradingAssistant} />
-                    <GradingStatusBadge template={at.gradingAssistant} />
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="grid grid-cols-2 divide-x divide-black/5 border-t border-black/5">
-                  <Link
-                    to={`/app/admin/assignment-types/${at.id}`}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1">
                     <FilePen className="h-3.5 w-3.5" />
-                    Edit type
-                  </Link>
-                  {at.gradingAssistant ? (
-                    <Link
-                      to={`/app/admin/grading-assistants/${at.gradingAssistant.id}`}
-                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
-                      Edit grading
-                    </Link>
-                  ) : (
-                    <Link
-                      to="/app/admin/grading-assistants/new"
-                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700"
-                    >
-                      <ClipboardCheck className="h-3.5 w-3.5" />
-                      Add grading
-                    </Link>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    {at.moduleCount}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {at.orgCount}
+                </TableCell>
+                <TableCell>
+                  <GradingCell template={at.gradingAssistant} typeId={at.id} />
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link to={`/app/admin/assignment-types/${at.id}`}>
+                        <FilePen className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                    <Button size="sm" variant="ghost" asChild>
+                      <Link
+                        to={
+                          at.gradingAssistant
+                            ? `/app/admin/grading-assistants/${at.gradingAssistant.id}`
+                            : '/app/admin/grading-assistants/new'
+                        }
+                      >
+                        <ClipboardCheck className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {/* Unlinked grading assistants */}
