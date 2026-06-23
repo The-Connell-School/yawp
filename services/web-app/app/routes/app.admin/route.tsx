@@ -12,12 +12,12 @@ import {
   User,
   GraduationCap,
   ScrollText,
-  Workflow,
+  ClipboardList,
   Settings,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
-const tabs = [
+export const adminTabs = [
   {
     label: 'General',
     to: '/app/admin/general',
@@ -29,9 +29,9 @@ const tabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignments & Grading',
+    label: 'Assignments',
     to: '/app/admin/assignments-grading',
-    icon: <Workflow size={16} className="opacity-75 mr-1" />,
+    icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Teacher Courses',
@@ -55,14 +55,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Route() {
   const location = useLocation();
   const pathname = location.pathname;
-  const currentTab = tabs.find((tab) => pathname.startsWith(tab.to));
+  const currentTab = adminTabs.find((tab) => pathname.startsWith(tab.to));
 
   return (
     <main className="flex flex-col h-screen">
       <div className="py-2 md:py-4 px-3 md:px-6 border-b">
         <h1 className="mb-3 text-2xl md:text-3xl">{currentTab?.label}</h1>
         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => (
+          {adminTabs.map((tab) => (
             <Button
               key={tab.to}
               variant={currentTab?.to === tab.to ? 'secondary' : 'ghost'}
