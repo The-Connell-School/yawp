@@ -1,0 +1,27 @@
+bun test v1.3.1 (89fa0f34)
+
+app/services/openai.test.ts:
+(pass) OpenAI service configuration > creates client options from an API key without requiring an org id
+(pass) OpenAI service configuration > includes the org id when it is configured [0.01ms]
+(pass) OpenAI service configuration > does not create client options without an API key
+
+app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts:
+(pass) anthropic outage cache > opens for the configured ttl and expires after it [0.13ms]
+(pass) anthropic outage cache > can be closed after a successful Anthropic probe [0.03ms]
+
+app/utils/getLLMCompletion/llm-provider-errors.server.test.ts:
+(pass) Anthropic outage error classification > treats Anthropic 529, 500, 504, and overloaded_error as retryable [0.15ms]
+(pass) Anthropic outage error classification > does not retry auth, model, validation, or rate-limit failures [0.09ms]
+(pass) Anthropic outage error classification > extracts retryable status when one is available [0.04ms]
+(pass) Anthropic outage error classification > identifies fallback retry signals [0.04ms]
+
+app/utils/getLLMCompletion/getLLMCompletion.test.ts:
+(pass) getLLMCompletion Anthropic outage fallback > falls back to gpt-4o-mini and opens the circuit after Anthropic 529 [1.31ms]
+(pass) getLLMCompletion Anthropic outage fallback > skips Anthropic when the circuit is already open [0.13ms]
+(pass) getLLMCompletion Anthropic outage fallback > signals route-level retry instead of calling OpenAI when requested [0.14ms]
+(pass) getLLMCompletion Anthropic outage fallback > resolves tutor document tool calls through OpenAI fallback [0.20ms]
+
+ 13 pass
+ 0 fail
+ 48 expect() calls
+Ran 13 tests across 4 files. [41.00ms]

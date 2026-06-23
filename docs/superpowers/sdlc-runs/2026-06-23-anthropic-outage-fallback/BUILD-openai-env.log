@@ -1,0 +1,280 @@
+$ bun run --cwd services/web-app build
+$ react-router build
+vite v5.4.21 building for production...
+transforming...
+✓ 3055 modules transformed.
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "api.healthcheck".
+Generated an empty chunk: "api.impersonate".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+Generated an empty chunk: "route".
+rendering chunks...
+computing gzip size...
+build/client/.vite/manifest.json                                   83.57 kB │ gzip:   7.42 kB
+build/client/assets/app-jvm3Yer7.css                               88.81 kB │ gzip:  17.06 kB
+build/client/assets/route-l0sNRNKZ.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DP2rzg_V.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-K6Dvbx-E.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-C6Kfwj0f.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-RnTpOC5-.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DVN7Oi2P.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DdXTRxfG.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BIjMHF-b.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BQEWTaK-.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-My_wb10K.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-D0WdxB02.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-C3LV8HgG.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-LjUnHRa3.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-B_LMHKg6.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CkbblPng.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DqQ1z6gO.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CpFKLJDI.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CbrJj62M.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BxIYjRB6.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-ZDcIa1Yj.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-Bv99duSx.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-qOgKl7D9.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CJ3RCYOB.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BVGXNJvV.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CvNezsrr.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DRt_WQm7.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-D5Y6IAIz.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BqyR-Tlu.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DVC2mRo0.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-NjIwGci4.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CR6TYtE0.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BRWMCMPV.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DSfcGXFE.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/api.healthcheck-l0sNRNKZ.js                     0.00 kB │ gzip:   0.02 kB
+build/client/assets/api.impersonate-l0sNRNKZ.js                     0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-Cd_LnUif.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BFK5zmhw.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DoklkB8Z.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-B_GCtZFT.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BgLH9Ny3.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-DFo6z4S5.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-Bm-vnEUs.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CS-CW__2.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CiwCrv_S.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-BWnp9EEP.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-CQN39BoQ.js                               0.00 kB │ gzip:   0.02 kB
+build/client/assets/route-a8tr-JLs.js                               0.11 kB │ gzip:   0.12 kB
+build/client/assets/route-CNDIgk3w.js                               0.11 kB │ gzip:   0.12 kB
+build/client/assets/class-BFHuhHcJ.js                               0.15 kB │ gzip:   0.16 kB
+build/client/assets/index-F4NxxHzI.js                               0.24 kB │ gzip:   0.18 kB
+build/client/assets/useDebounce-pujFlYJm.js                         0.24 kB │ gzip:   0.20 kB
+build/client/assets/route-Z6e6xLgZ.js                               0.27 kB │ gzip:   0.22 kB
+build/client/assets/check-yn48G0XU.js                               0.30 kB │ gzip:   0.25 kB
+build/client/assets/chevron-left-D7TMVgNj.js                        0.30 kB │ gzip:   0.25 kB
+build/client/assets/chevron-up-xkifFEHa.js                          0.30 kB │ gzip:   0.25 kB
+build/client/assets/chevron-down-D3LrznL6.js                        0.30 kB │ gzip:   0.25 kB
+build/client/assets/chevron-right-CUxjnCX4.js                       0.30 kB │ gzip:   0.25 kB
+build/client/assets/message-circle-D-b11X5X.js                      0.32 kB │ gzip:   0.26 kB
+build/client/assets/plus-DlSgNj8z.js                                0.32 kB │ gzip:   0.25 kB
+build/client/assets/x-CZjk-9QF.js                                   0.32 kB │ gzip:   0.25 kB
+build/client/assets/_-q8SVWpgh.js                                   0.34 kB │ gzip:   0.24 kB
+build/client/assets/arrow-right-CstaZ16E.js                         0.34 kB │ gzip:   0.27 kB
+build/client/assets/search-D3SBzVZt.js                              0.34 kB │ gzip:   0.27 kB
+build/client/assets/circle-check-G4gZVmKq.js                        0.35 kB │ gzip:   0.28 kB
+build/client/assets/clock-BhX405z6.js                               0.36 kB │ gzip:   0.28 kB
+build/client/assets/user-hyvkM578.js                                0.37 kB │ gzip:   0.29 kB
+build/client/assets/useUser-BNIXXLCW.js                             0.37 kB │ gzip:   0.26 kB
+build/client/assets/rotate-ccw-BhAWnrm7.js                          0.37 kB │ gzip:   0.29 kB
+build/client/assets/ellipsis-vertical-q_mK-LXe.js                   0.41 kB │ gzip:   0.28 kB
+build/client/assets/copy-C5HKHT4Q.js                                0.41 kB │ gzip:   0.32 kB
+build/client/assets/trash-CdENfc2W.js                               0.42 kB │ gzip:   0.31 kB
+build/client/assets/arrow-up-down-BC1ZRnmh.js                       0.42 kB │ gzip:   0.30 kB
+build/client/assets/archive-1-Mu8igo.js                             0.42 kB │ gzip:   0.31 kB
+build/client/assets/funnel-jVYFnhUF.js                              0.43 kB │ gzip:   0.32 kB
+build/client/assets/useTable-E2fZ-8q9.js                            0.43 kB │ gzip:   0.33 kB
+build/client/assets/settings-2-B5QdX3wq.js                          0.43 kB │ gzip:   0.30 kB
+build/client/assets/triangle-alert-ClFmPElG.js                      0.43 kB │ gzip:   0.31 kB
+build/client/assets/image-fL0Zcyl-.js                               0.44 kB │ gzip:   0.33 kB
+build/client/assets/index-T-ONMrnH.js                               0.44 kB │ gzip:   0.34 kB
+build/client/assets/pencil-BjxW8SjW.js                              0.45 kB │ gzip:   0.33 kB
+build/client/assets/users-C_qXKkb9.js                               0.47 kB │ gzip:   0.33 kB
+build/client/assets/document-exit-DNQk3FlG.js                       0.49 kB │ gzip:   0.29 kB
+build/client/assets/file-text-BCIkEx0N.js                           0.50 kB │ gzip:   0.32 kB
+build/client/assets/graduation-cap-CkoAVBj2.js                      0.51 kB │ gzip:   0.35 kB
+build/client/assets/trash-2-COFAchzl.js                             0.53 kB │ gzip:   0.35 kB
+build/client/assets/index-wLxVZxAw.js                               0.54 kB │ gzip:   0.39 kB
+build/client/assets/index-COeIfE5J.js                               0.55 kB │ gzip:   0.36 kB
+build/client/assets/timeAgo-MXxIQX98.js                             0.56 kB │ gzip:   0.28 kB
+build/client/assets/useBreakpoint-DyivLPZU.js                       0.56 kB │ gzip:   0.33 kB
+build/client/assets/clipboard-list-CJBPjjUR.js                      0.59 kB │ gzip:   0.37 kB
+build/client/assets/label-B9LS_Oww.js                               0.65 kB │ gzip:   0.43 kB
+build/client/assets/user-8IFEq5Lq.js                                0.70 kB │ gzip:   0.34 kB
+build/client/assets/external-link-Ctmaqxcp.js                       0.71 kB │ gzip:   0.37 kB
+build/client/assets/textarea-DWs-H56L.js                            0.72 kB │ gzip:   0.44 kB
+build/client/assets/route-BdMkJIUo.js                               0.77 kB │ gzip:   0.46 kB
+build/client/assets/input-ftnOvqLs.js                               0.84 kB │ gzip:   0.47 kB
+build/client/assets/settings-BLEsRNgw.js                            0.90 kB │ gzip:   0.45 kB
+build/client/assets/search-input-D1NuvnEH.js                        0.91 kB │ gzip:   0.61 kB
+build/client/assets/jsx-runtime-B5k_6Wp0.js                         0.93 kB │ gzip:   0.59 kB
+build/client/assets/tooltip-id-copy-B5Hp04Ra.js                     0.93 kB │ gzip:   0.54 kB
+build/client/assets/route-CHIG1ZF0.js                               1.06 kB │ gzip:   0.62 kB
+build/client/assets/card-lPr9BAOK.js                                1.07 kB │ gzip:   0.43 kB
+build/client/assets/form-input-2-2WM_OGQc.js                        1.16 kB │ gzip:   0.64 kB
+build/client/assets/upperFirst-BZ0vcF1g.js                          1.18 kB │ gzip:   0.67 kB
+build/client/assets/schema-n6VJeHGm.js                              1.19 kB │ gzip:   0.62 kB
+build/client/assets/badge--ttLexpr.js                               1.22 kB │ gzip:   0.53 kB
+build/client/assets/error-boundary-DArcrT3_.js                      1.24 kB │ gzip:   0.53 kB
+build/client/assets/form-input-C-hk3u5h.js                          1.24 kB │ gzip:   0.68 kB
+build/client/assets/index-DAsf1O2j.js                               1.39 kB │ gzip:   0.70 kB
+build/client/assets/_baseSlice-CGUBeLfi.js                          1.44 kB │ gzip:   0.79 kB
+build/client/assets/route-xYQW5OgD.js                               1.45 kB │ gzip:   0.50 kB
+build/client/assets/form-select-CE7j24Be.js                         1.56 kB │ gzip:   0.83 kB
+build/client/assets/circular-progress-CYXo5E6e.js                   1.64 kB │ gzip:   0.85 kB
+build/client/assets/table-CrjE39bH.js                               1.64 kB │ gzip:   0.62 kB
+build/client/assets/gradeMath-D0BSoXt2.js                           1.66 kB │ gzip:   0.88 kB
+build/client/assets/route-pPoNazqS.js                               1.67 kB │ gzip:   0.82 kB
+build/client/assets/route-DiFkjwD3.js                               1.77 kB │ gzip:   0.89 kB
+build/client/assets/route-C5ysYpCe.js                               1.80 kB │ gzip:   0.88 kB
+build/client/assets/class-art-oUv1H_vW.js                           1.82 kB │ gzip:   0.92 kB
+build/client/assets/route-DoYml39B.js                               1.96 kB │ gzip:   0.98 kB
+build/client/assets/useMultipartUpload-Ex5s5xL_.js                  2.02 kB │ gzip:   1.11 kB
+build/client/assets/route-K8LGD2Zb.js                               2.02 kB │ gzip:   0.98 kB
+build/client/assets/route-CjttgTGh.js                               2.05 kB │ gzip:   0.96 kB
+build/client/assets/teacher-class-card-BxKpCLLx.js                  2.20 kB │ gzip:   0.91 kB
+build/client/assets/route-C1sl21O5.js                               2.27 kB │ gzip:   0.89 kB
+build/client/assets/index-B-tQh2O8.js                               2.31 kB │ gzip:   1.04 kB
+build/client/assets/route-o9RDnYtg.js                               2.37 kB │ gzip:   1.14 kB
+build/client/assets/route-CpnKNCq_.js                               2.42 kB │ gzip:   0.98 kB
+build/client/assets/route-D7t1L9Lk.js                               2.44 kB │ gzip:   1.08 kB
+build/client/assets/sheet-CGCEI9Tm.js                               2.55 kB │ gzip:   1.03 kB
+build/client/assets/route-DJepFdO3.js                               2.62 kB │ gzip:   1.23 kB
+build/client/assets/switch-C2-EJs0x.js                              2.66 kB │ gzip:   1.32 kB
+build/client/assets/no-data-placeholder-DrfngHNY.js                 3.06 kB │ gzip:   1.33 kB
+build/client/assets/_createCompounder--BmQfxDB.js                   3.33 kB │ gzip:   1.80 kB
+build/client/assets/route-CFlQMENE.js                               3.33 kB │ gzip:   1.43 kB
+build/client/assets/route-BWWkiqNh.js                               3.36 kB │ gzip:   1.26 kB
+build/client/assets/pagination-CsUyD5H8.js                          3.36 kB │ gzip:   1.08 kB
+build/client/assets/route-uzBLG35p.js                               3.39 kB │ gzip:   1.31 kB
+build/client/assets/tabs-_4VO0WbN.js                                3.40 kB │ gzip:   1.42 kB
+build/client/assets/class-manage-sheet-BAW24OWU.js                  3.59 kB │ gzip:   1.46 kB
+build/client/assets/index-BI-b0eCI.js                               3.63 kB │ gzip:   1.65 kB
+build/client/assets/route-CF16oyvr.js                               3.69 kB │ gzip:   1.45 kB
+build/client/assets/route-EhGF_EWR.js                               3.72 kB │ gzip:   1.45 kB
+build/client/assets/checkbox-DZ6Xeqx0.js                            4.07 kB │ gzip:   1.80 kB
+build/client/assets/index-DYLXRpC5.js                               4.10 kB │ gzip:   1.78 kB
+build/client/assets/route-mCm7Cqm1.js                               4.21 kB │ gzip:   1.40 kB
+build/client/assets/index-DtlcdsNw.js                               4.51 kB │ gzip:   1.69 kB
+build/client/assets/accordion-Dg1ncnxu.js                           4.79 kB │ gzip:   1.92 kB
+build/client/assets/route-dtHtiCm4.js                               4.91 kB │ gzip:   1.90 kB
+build/client/assets/confirmation-dialog-DqD0_oH1.js                 5.37 kB │ gzip:   2.01 kB
+build/client/assets/index-INgAquhD.js                               5.39 kB │ gzip:   2.08 kB
+build/client/assets/route-Dz0ivbmh.js                               5.75 kB │ gzip:   1.92 kB
+build/client/assets/omit-Dhg20BJ4.js                                6.47 kB │ gzip:   2.85 kB
+build/client/assets/entry.client-BQOS3PLM.js                        6.57 kB │ gzip:   2.63 kB
+build/client/assets/index-BN6k41Er.js                               6.77 kB │ gzip:   2.70 kB
+build/client/assets/route-BoLUqqSw.js                               6.79 kB │ gzip:   2.68 kB
+build/client/assets/route-Blsetfbb.js                               6.95 kB │ gzip:   2.33 kB
+build/client/assets/popover-DXx3JYsZ.js                             7.63 kB │ gzip:   2.63 kB
+build/client/assets/route-CEZGHzOq.js                               7.65 kB │ gzip:   2.76 kB
+build/client/assets/route-hEOLN56U.js                               7.78 kB │ gzip:   2.99 kB
+build/client/assets/assignment-creation-sheet-Bvs-YFyX.js           8.07 kB │ gzip:   2.81 kB
+build/client/assets/tooltip-CF5RRoej.js                             8.53 kB │ gzip:   3.14 kB
+build/client/assets/route-B8VrTtkQ.js                               8.72 kB │ gzip:   2.83 kB
+build/client/assets/route-0zHVVYZO.js                               9.10 kB │ gzip:   3.05 kB
+build/client/assets/react-icons.esm-DiPCHR2E.js                     9.75 kB │ gzip:   2.50 kB
+build/client/assets/route-Bk7VnYTe.js                               9.78 kB │ gzip:   3.02 kB
+build/client/assets/route-CNgNwtQa.js                               9.85 kB │ gzip:   3.26 kB
+build/client/assets/route-phMizbOR.js                               9.99 kB │ gzip:   2.92 kB
+build/client/assets/route-Cn59LGP3.js                              10.04 kB │ gzip:   2.92 kB
+build/client/assets/route-70NqtxAx.js                              10.18 kB │ gzip:   3.78 kB
+build/client/assets/route-bXSujJeG.js                              10.40 kB │ gzip:   3.59 kB
+build/client/assets/route-BcHQlOhw.js                              11.15 kB │ gzip:   4.30 kB
+build/client/assets/_setToString-VoOCTvX4.js                       12.35 kB │ gzip:   5.19 kB
+build/client/assets/route-36q3PwfG.js                              13.27 kB │ gzip:   3.96 kB
+build/client/assets/route-BznVdHzO.js                              15.34 kB │ gzip:   5.45 kB
+build/client/assets/route-BhL6Hp71.js                              15.53 kB │ gzip:   4.98 kB
+build/client/assets/route-BCIWW_9Z.js                              15.86 kB │ gzip:   4.70 kB
+build/client/assets/route-rsO8wb6X.js                              16.11 kB │ gzip:   4.75 kB
+build/client/assets/index-_2mJxUNY.js                              16.73 kB │ gzip:   6.36 kB
+build/client/assets/route-DpZp2geq.js                              17.72 kB │ gzip:   5.48 kB
+build/client/assets/route-C2Ototyz.js                              19.49 kB │ gzip:   6.40 kB
+build/client/assets/dropdown-menu-CvT5y5A0.js                      21.19 kB │ gzip:   6.30 kB
+build/client/assets/select-B8s5Mdzf.js                             21.42 kB │ gzip:   7.45 kB
+build/client/assets/route-kauTqXvW.js                              22.11 kB │ gzip:   7.49 kB
+build/client/assets/index-rJSIyH2J.js                              27.37 kB │ gzip:  10.55 kB
+build/client/assets/index-BWxnIAMQ.js                              33.87 kB │ gzip:   9.59 kB
+build/client/assets/button-C5RXTSlb.js                             37.48 kB │ gzip:  12.50 kB
+build/client/assets/sortable.esm-CSox02zM.js                       46.46 kB │ gzip:  15.55 kB
+build/client/assets/route-CwA-BsH1.js                              47.38 kB │ gzip:  14.37 kB
+build/client/assets/class-documents-view-preferences-CQvwCEBC.js   50.04 kB │ gzip:  16.88 kB
+build/client/assets/types-Bj4z9S2h.js                              59.18 kB │ gzip:  13.97 kB
+build/client/assets/index.esm-Z7Tb4qyr.js                          59.55 kB │ gzip:  19.67 kB
+build/client/assets/index-ChBE4WNw.js                             129.78 kB │ gzip:  41.69 kB
+build/client/assets/chunk-4N6VE7H7-LjEgXtTQ.js                    129.97 kB │ gzip:  43.76 kB
+build/client/assets/root-DA-92soi.js                              208.14 kB │ gzip:  70.21 kB
+build/client/assets/route-BXmJV9od.js                             368.68 kB │ gzip:  99.99 kB
+build/client/assets/route-BcWD5XQ4.js                             390.84 kB │ gzip: 118.52 kB
+✓ built in 6.59s
+vite v5.4.21 building SSR bundle for production...
+transforming...
+✓ 297 modules transformed.
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/db.server.ts is dynamically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/root.tsx but also statically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/domain/ap-history/library.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/domain/documents.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/domain/grading/grading-assistant-templates.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.assignments.create/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.auth.check/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.document.$id.revisions/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.document.$id.save/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.assignment-pdf-extract/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.grade-essay-ai/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.release-grades/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.retention/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.submit-document/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.tutor-response/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.update-submission/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.healthcheck.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.image.assignment-type.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.image.teacher-training.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.impersonate.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.membership-id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.assignment-module-session.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.assignment-module-session/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment-response/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission-comment.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission-comment/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.teacher-training-module-session.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.teacher-training-module-session/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.paste-alert/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.student-preview/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.teacher-training-module-resource.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.user.name/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.audit/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.feature-flags/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.general/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.grading-assistants._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.organizations.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.organizations._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignment-types.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignments.$assignmentId.start/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignments._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.class-assignments.$classAssignmentId.start/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.documents._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes.$classId/class-student-enrollment.server.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes.$classId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.classes/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.schools/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.students/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.teachers/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organizations.schools.$schoolId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app_.documents_.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app_.graded_.$gradeId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app_.submissions_.$submissionId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.dev-login/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.forgot-password/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-owner/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-student/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-teacher/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.signup/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.verify/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.login/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/enter-code/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/no-membership/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/assignment-deployment.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/assignment-type-access.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/auth.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/class-art-assignment.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/feature-flags.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/getLLMCompletion/getLLMCompletion.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/grading-auth.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/submission-access.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/teacher-class-card-stats.server.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/teacher-dashboard-recent-classes.server.ts, dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/auth.server.ts is dynamically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/root.tsx but also statically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/entry.server.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.assignments.create/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.auth.check/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.document.$id.revisions/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.document.$id.save/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.assignment-pdf-extract/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.submit-document/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.domain.tutor-response/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.impersonate.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.membership-id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.assignment-module-session.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.assignment-module-session/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment-response/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document-comment/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.document.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission-comment.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission-comment/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.submission.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.teacher-training-module-session.$id/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.model.teacher-training-module-session/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.paste-alert/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.student-preview/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.user.name/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.abort/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.complete/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.sign-part/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.start/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.assignment-types._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.audit/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.feature-flags/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.general/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.grading-assistants._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.organizations.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.organizations._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin.teacher-trainings._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.admin/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignment-types.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignments.$assignmentId.start/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.assignments._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.class-assignments.$classAssignmentId.start/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.documents._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes.$classId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes.$classId_.assignments.$assignmentId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.my-classes._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.classes/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.schools/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.students/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization.teachers/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organization/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.organizations.schools.$schoolId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app_.documents_.$id/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app_.submissions_.$submissionId/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.dev-login/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.forgot-password-reset/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-owner/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-student/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.inv.onboard-teacher/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.login/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/auth.logout/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/enter-code/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/no-membership/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/grading-auth.server.ts, dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.preferences.nav/cookie.server.ts is dynamically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.preferences.nav/route.tsx but also statically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/root.tsx, dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/services/s3.server.ts is dynamically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app.teacher-trainings.$id_.modules_.$moduleId/route.tsx but also statically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.abort/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.complete/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.sign-part/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.video-upload.start/route.ts, dynamic import will not move module into another chunk.
+
+[plugin:vite:reporter] [plugin vite:reporter] 
+(!) /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/student-preview.server.ts is dynamically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/root.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/utils/auth.server.ts but also statically imported by /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/api.student-preview/route.ts, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/app._index/route.tsx, /Users/bryantbrock/.codex/worktrees/e1c9/yawp/services/web-app/app/routes/enter-code/route.tsx, dynamic import will not move module into another chunk.
+
+rendering chunks...
+build/server/.vite/manifest.json          0.44 kB
+build/server/assets/app-jvm3Yer7.css     88.81 kB
+build/server/index.js                 1,918.02 kB
+
+✓ 1 asset cleaned from React Router server build.
+build/client/assets/app-jvm3Yer7.css
+
+✓ built in 1.64s

@@ -1,0 +1,11 @@
+bun test v1.3.1 (89fa0f34)
+
+app/services/openai.test.ts:
+(pass) OpenAI service configuration > creates client options from an API key without requiring an org id
+(pass) OpenAI service configuration > includes the org id when it is configured [0.23ms]
+(pass) OpenAI service configuration > does not create client options without an API key
+
+ 3 pass
+ 0 fail
+ 3 expect() calls
+Ran 3 tests across 1 file. [34.00ms]

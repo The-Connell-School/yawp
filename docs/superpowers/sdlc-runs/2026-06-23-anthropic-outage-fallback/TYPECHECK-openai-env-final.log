@@ -1,0 +1,3 @@
+$ bun run --cwd services/web-app typecheck
+$ react-router typegen && tsc
+app/services/openai.ts(8,40): error TS2559: Type 'ProcessEnv' has no properties in common with type 'OpenAiClientEnv'.
