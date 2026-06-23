@@ -8,7 +8,13 @@ describe('local dev seed fixtures', () => {
     const bundle = await loadProdFidelityBundle();
     expect(bundle.manifest.version).toBe(1);
     expect(bundle.assignmentTypes.length).toBeGreaterThan(0);
-    expect(bundle.gradingAssistantTemplates.length).toBeGreaterThan(0);
+    expect(
+      bundle.assignmentTypes.some(
+        (assignmentType) =>
+          assignmentType.rubricJson != null &&
+          assignmentType.scoringScaleJson != null
+      )
+    ).toBe(true);
     expect(bundle.teacherTrainings.length).toBeGreaterThan(0);
   });
 

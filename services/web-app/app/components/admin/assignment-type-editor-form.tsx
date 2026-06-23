@@ -17,7 +17,7 @@ import {
   PromptConfigEditor,
   RubricEditor,
   ScoringScaleEditor,
-} from './grading-assistant-template-form';
+} from './rubric-config-editors';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';

@@ -12,13 +12,11 @@ export type SerializedBytes = {
 
 export type ProdFidelityBundle = {
   manifest: ProdFidelityManifest;
-  gradingAssistantTemplates: Array<Record<string, unknown>>;
   assignmentTypes: Array<Record<string, unknown>>;
   assignmentTypeImages: Array<Record<string, unknown> & { blob: SerializedBytes }>;
   assignmentModules: Array<Record<string, unknown>>;
   assignmentModuleInstructions: Array<Record<string, unknown>>;
   assignmentModuleInstructionButtons: Array<Record<string, unknown>>;
-  assignmentTypeGradingAssistants: Array<Record<string, unknown>>;
   teacherTrainings: Array<Record<string, unknown>>;
   teacherTrainingImages: Array<Record<string, unknown> & { blob: SerializedBytes }>;
   teacherTrainingModules: Array<Record<string, unknown>>;

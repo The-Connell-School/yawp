@@ -12,6 +12,52 @@ function createPassword(password: string) {
   };
 }
 
+const E2E_THESIS_SCORING_SCALE = {
+  type: 'weighted_1_5',
+  minScore: 1,
+  maxScore: 5,
+};
+
+const E2E_THESIS_RUBRIC = {
+  categories: [
+    {
+      key: 'thesis_and_content',
+      label: 'Thesis/Content',
+      description: 'Original, defensible thesis with critical thinking.',
+      weight: 0.25,
+    },
+    {
+      key: 'organization_and_structure',
+      label: 'Organization/Structure',
+      description: 'Purposeful structure and clear progression.',
+      weight: 0.25,
+    },
+    {
+      key: 'evidence_and_support',
+      label: 'Evidence/Support',
+      description: 'Evidence that supports analysis.',
+      weight: 0.2,
+    },
+    {
+      key: 'voice_and_style',
+      label: 'Voice/Style',
+      description: 'Clear, authentic, and precise voice.',
+      weight: 0.2,
+    },
+    {
+      key: 'grammar_and_mechanics',
+      label: 'Grammar/Syntax/Formatting',
+      description: 'Conventions that support clarity.',
+      weight: 0.1,
+    },
+  ],
+};
+
+const E2E_GRADING_OUTPUT_SCHEMA = {
+  schemaVersion: 1,
+  responseShape: 'categories_overall_comment',
+};
+
 async function cleanupDb(prismaClient: E2EPrismaClient) {
   const tables = await prismaClient.$queryRaw<Array<{ tablename: string }>>`
     SELECT tablename
@@ -171,6 +217,16 @@ export async function seedE2E(): Promise<E2EContext> {
       title: 'E2E Course',
       position: 1,
       ownerOrgId: org.id,
+      scoringScaleJson: E2E_THESIS_SCORING_SCALE,
+      rubricJson: E2E_THESIS_RUBRIC,
+      gradingPromptConfigJson: {
+        instructionsPreset: 'legacy_thesis_driven_essay',
+      },
+      gradingOutputSchemaJson: E2E_GRADING_OUTPUT_SCHEMA,
+      gradingCalibrationNotes: 'E2E thesis-driven essay rubric.',
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: 'gait_thesis_current_v1',
+      gradingAssistantSourceTemplateSlug: 'thesis-driven-essay-current',
       organizationAssignments: {
         create: { organizationId: org.id },
       },
@@ -302,117 +358,6 @@ export async function seedE2E(): Promise<E2EContext> {
       },
     },
     select: { id: true },
-  });
-
-  await prisma.gradingAssistantTemplate.createMany({
-    data: [
-      {
-        id: 'gait_thesis_current_v1',
-        name: 'Thesis-driven essay grading assistant',
-        slug: 'thesis-driven-essay-current',
-        status: 'active',
-        version: 1,
-        assignmentTypeKind: 'thesis_driven_essay',
-        scoringScale: { type: 'weighted_1_5', minScore: 1, maxScore: 5 },
-        rubricJson: {
-          categories: [
-            {
-              key: 'thesis_and_content',
-              label: 'Thesis/Content',
-              description:
-                'Original, defensible thesis with sustained critical thinking.',
-              weight: 0.25,
-            },
-            {
-              key: 'organization_and_structure',
-              label: 'Organization/Structure',
-              description: 'Purposeful structure and clear progression.',
-              weight: 0.25,
-            },
-            {
-              key: 'evidence_and_support',
-              label: 'Evidence/Support',
-              description: 'Evidence that supports and deepens analysis.',
-              weight: 0.2,
-            },
-            {
-              key: 'voice_and_style',
-              label: 'Voice/Style',
-              description: 'Clear, authentic, and precise voice.',
-              weight: 0.2,
-            },
-            {
-              key: 'grammar_and_mechanics',
-              label: 'Grammar/Syntax/Formatting',
-              description: 'Conventions that support clarity.',
-              weight: 0.1,
-            },
-          ],
-        },
-        promptConfigJson: {
-          instructionsPreset: 'legacy_thesis_driven_essay',
-        },
-        outputSchemaJson: {
-          schemaVersion: 1,
-          responseShape: 'categories_overall_comment',
-        },
-        calibrationNotes: 'E2E thesis-driven essay template.',
-      },
-      {
-        id: 'gait_act_writing_v1',
-        name: 'ACT Writing four-domain grading assistant',
-        slug: 'act-writing-four-domain',
-        status: 'active',
-        version: 1,
-        assignmentTypeKind: 'act_writing',
-        scoringScale: {
-          type: 'act_writing_2_12',
-          minScore: 1,
-          maxScore: 6,
-          compositeMin: 2,
-          compositeMax: 12,
-        },
-        rubricJson: {
-          categories: [
-            {
-              key: 'ideas_and_analysis',
-              label: 'Ideas and Analysis',
-              description: 'Perspective clarity and relationship analysis.',
-              weight: 0.25,
-            },
-            {
-              key: 'development_and_support',
-              label: 'Development and Support',
-              description: 'Reasoning, examples, and implications.',
-              weight: 0.25,
-            },
-            {
-              key: 'organization',
-              label: 'Organization',
-              description: 'Sequencing, paragraphing, and transitions.',
-              weight: 0.25,
-            },
-            {
-              key: 'language_use_and_conventions',
-              label: 'Language Use and Conventions',
-              description: 'Language and conventions as they affect clarity.',
-              weight: 0.25,
-            },
-          ],
-        },
-        promptConfigJson: {
-          systemInstructions:
-            'Grade this as ACT Writing with four rubric domains.',
-          scoreInstructions:
-            'Scores must be integers 1-6 for each ACT domain.',
-        },
-        outputSchemaJson: {
-          schemaVersion: 1,
-          responseShape: 'categories_overall_comment',
-        },
-        calibrationNotes: 'E2E ACT template.',
-      },
-    ],
   });
 
   const { assignment: seededAssignment, classAssignment: seededClassAssignment } =

@@ -35,32 +35,31 @@ model Class {
 }
 
 model AssignmentType {
-  id                                 String                           @id @default(cuid())
-  createdAt                          DateTime                         @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                         @default(now()) @db.Timestamptz(6)
+  id                                 String                        @id @default(cuid())
+  createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                      @default(now()) @db.Timestamptz(6)
   title                              String
-  kind                               String?                          @unique
+  kind                               String?                       @unique
   description                        String?
   position                           Int
-  systemKey                          String?                          @unique
-  archivedAt                         DateTime?                        @db.Timestamptz(6)
+  systemKey                          String?                       @unique
+  archivedAt                         DateTime?                     @db.Timestamptz(6)
   ownerOrgId                         String?
-  ownerOrg                           Organization?                    @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
-  ownerMembership                    OrgMembership?                   @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
-  gradingAssistantVersion            Int                              @default(1)
+  gradingAssistantVersion            Int                           @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
   image                              AssignmentTypeImage?
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
   teacherAssignments                 TeacherAssignmentType[]
-  gradingAssistantLinks              AssignmentTypeGradingAssistant[]
   assignmentModules                  AssignmentModule[]
   assignments                        Assignment[]
   documents                          Document[]
@@ -382,35 +381,33 @@ model OrganizationAssignmentType {
 }
 
 model OrgMembership {
-  id                               String                         @id @default(cuid())
-  createdAt                        DateTime                       @default(now()) @db.Timestamptz(6)
-  userId                           String
-  user                             User                           @relation(fields: [userId], references: [id])
-  organizationId                   String
-  organization                     Organization                   @relation(fields: [organizationId], references: [id])
-  role                             MembershipRole
-  isOrgOwner                       Boolean                        @default(false)
-  isActive                         Boolean                        @default(true)
-  school                           String?
-  schoolTeacher                    String?
-  grade                            String?
-  period                           String?
-  documents                        Document[]
-  documentComments                 DocumentComment[]
-  documentCommentResponses         DocumentCommentResponse[]
-  pasteAlerts                      PasteAlert[]
-  submissionsGraded                Submission[]                   @relation("SubmissionGradedBy")
-  submissionComments               SubmissionComment[]            @relation("SubmissionCommentProfile")
-  ownedAssignmentTypes             AssignmentType[]               @relation("AssignmentTypeOwner")
-  gradingAssistantTemplatesCreated GradingAssistantTemplate[]     @relation("GradingAssistantTemplateCreatedBy")
-  gradingAssistantTemplatesUpdated GradingAssistantTemplate[]     @relation("GradingAssistantTemplateUpdatedBy")
-  classesAsTeacher                 Class[]                        @relation("ClassTeachers")
-  classesAsStudent                 Class[]                        @relation("ClassStudents")
-  schools                          School[]                       @relation("SchoolTeachers")
-  teacherTrainingModuleSessions    TeacherTrainingModuleSession[]
-  assignedTeacherTrainings         TeacherTraining[]              @relation("TeacherTrainingAssignments")
-  assignmentTypesCustomized        Boolean                        @default(false)
-  assignmentTypeAssignments        TeacherAssignmentType[]
+  id                            String                         @id @default(cuid())
+  createdAt                     DateTime                       @default(now()) @db.Timestamptz(6)
+  userId                        String
+  user                          User                           @relation(fields: [userId], references: [id])
+  organizationId                String
+  organization                  Organization                   @relation(fields: [organizationId], references: [id])
+  role                          MembershipRole
+  isOrgOwner                    Boolean                        @default(false)
+  isActive                      Boolean                        @default(true)
+  school                        String?
+  schoolTeacher                 String?
+  grade                         String?
+  period                        String?
+  documents                     Document[]
+  documentComments              DocumentComment[]
+  documentCommentResponses      DocumentCommentResponse[]
+  pasteAlerts                   PasteAlert[]
+  submissionsGraded             Submission[]                   @relation("SubmissionGradedBy")
+  submissionComments            SubmissionComment[]            @relation("SubmissionCommentProfile")
+  ownedAssignmentTypes          AssignmentType[]               @relation("AssignmentTypeOwner")
+  classesAsTeacher              Class[]                        @relation("ClassTeachers")
+  classesAsStudent              Class[]                        @relation("ClassStudents")
+  schools                       School[]                       @relation("SchoolTeachers")
+  teacherTrainingModuleSessions TeacherTrainingModuleSession[]
+  assignedTeacherTrainings      TeacherTraining[]              @relation("TeacherTrainingAssignments")
+  assignmentTypesCustomized     Boolean                        @default(false)
+  assignmentTypeAssignments     TeacherAssignmentType[]
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")
@@ -640,59 +637,12 @@ model Submission {
   @@index([releasedAt])
 }
 
-model GradingAssistantTemplate {
-  id                    String                           @id @default(cuid())
-  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
-  name                  String
-  slug                  String                           @unique
-  status                String                           @default("draft")
-  version               Int                              @default(1)
-  assignmentTypeKind    String?
-  scoringScale          Json
-  rubricJson            Json
-  promptConfigJson      Json
-  outputSchemaJson      Json
-  calibrationNotes      String?
-  createdByMembershipId String?
-  createdBy             OrgMembership?                   @relation("GradingAssistantTemplateCreatedBy", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
-  updatedByMembershipId String?
-  updatedBy             OrgMembership?                   @relation("GradingAssistantTemplateUpdatedBy", fields: [updatedByMembershipId], references: [id], onDelete: SetNull)
-  assignmentTypeLinks   AssignmentTypeGradingAssistant[]
-  submissionRuns        SubmissionGradingAssistantRun[]
-
-  @@index([status])
-  @@index([assignmentTypeKind])
-  @@index([createdByMembershipId])
-  @@index([updatedByMembershipId])
-}
-
-model AssignmentTypeGradingAssistant {
-  id                         String                   @id @default(cuid())
-  createdAt                  DateTime                 @default(now()) @db.Timestamptz(6)
-  updatedAt                  DateTime                 @default(now()) @updatedAt @db.Timestamptz(6)
-  assignmentTypeId           String
-  assignmentType             AssignmentType           @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  gradingAssistantTemplateId String
-  gradingAssistantTemplate   GradingAssistantTemplate @relation(fields: [gradingAssistantTemplateId], references: [id], onDelete: Restrict)
-  isDefault                  Boolean                  @default(true)
-  activeFrom                 DateTime                 @default(now()) @db.Timestamptz(6)
-  activeTo                   DateTime?                @db.Timestamptz(6)
-
-  @@index([assignmentTypeId, isDefault, activeFrom])
-  @@index([gradingAssistantTemplateId])
-  @@index([activeTo])
-}
-
 model SubmissionGradingAssistantRun {
-  id                                 String                    @id @default(cuid())
-  createdAt                          DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  id                                 String     @id @default(cuid())
+  createdAt                          DateTime   @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime   @default(now()) @updatedAt @db.Timestamptz(6)
   submissionId                       String
-  submission                         Submission                @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  gradingAssistantTemplateId         String?
-  gradingAssistantTemplate           GradingAssistantTemplate? @relation(fields: [gradingAssistantTemplateId], references: [id], onDelete: SetNull)
-  templateVersion                    Int?
+  submission                         Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   assignmentTypeId                   String?
   assignmentTypeGradingVersion       Int?
   assignmentTypeRubricSnapshot       Json?
@@ -703,7 +653,6 @@ model SubmissionGradingAssistantRun {
   metadata                           Json?
 
   @@index([submissionId, createdAt(sort: Desc)])
-  @@index([gradingAssistantTemplateId])
   @@index([assignmentTypeId])
   @@index([status])
 }

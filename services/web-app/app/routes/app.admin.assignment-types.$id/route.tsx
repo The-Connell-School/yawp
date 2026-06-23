@@ -61,7 +61,7 @@ import {
   PromptConfigEditor,
   RubricEditor,
   ScoringScaleEditor,
-} from '~/components/admin/grading-assistant-template-form';
+} from '~/components/admin/rubric-config-editors';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);

@@ -197,9 +197,6 @@ describe('admin assignment type detail action', () => {
       context: {} as never,
     });
 
-    expect(
-      (result as { data: any }).data.gradingAssistantTemplates
-    ).toBeUndefined();
     expect((result as { data: any }).data.course.title).toBe('ACT Writing');
   });
 });

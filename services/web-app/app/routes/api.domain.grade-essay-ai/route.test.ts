@@ -9,9 +9,6 @@ const prisma = {
   assignmentType: {
     findUnique: mock(),
   },
-  assignmentTypeGradingAssistant: {
-    findFirst: mock(),
-  },
   submissionGradingAssistantRun: {
     create: mock(),
   },
@@ -189,7 +186,6 @@ describe('api.domain.grade-essay-ai', () => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.update.mockReset();
     prisma.assignmentType.findUnique.mockReset();
-    prisma.assignmentTypeGradingAssistant.findFirst.mockReset();
     prisma.submissionGradingAssistantRun.create.mockReset();
     getLLMCompletion.mockReset();
     getGradingActor.mockReset();
@@ -212,7 +208,6 @@ describe('api.domain.grade-essay-ai', () => {
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
     prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType());
-    prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue(null);
     prisma.submissionGradingAssistantRun.create.mockResolvedValue({
       id: 'ga-run-1',
     });
@@ -588,7 +583,6 @@ describe('api.domain.grade-essay-ai', () => {
       prisma.submission.update.mockReset();
       prisma.submissionGradingAssistantRun.create.mockReset();
       prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType());
-      prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue(null);
       prisma.submission.update.mockResolvedValue({
         id: `sub-${strictnessCase.level}`,
       });
