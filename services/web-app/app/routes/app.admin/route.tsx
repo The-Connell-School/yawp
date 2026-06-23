@@ -29,7 +29,7 @@ const tabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Pipelines',
+    label: 'Assignments & Grading',
     to: '/app/admin/pipelines',
     icon: <Workflow size={16} className="opacity-75 mr-1" />,
   },

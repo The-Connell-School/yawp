@@ -34,7 +34,18 @@ const mockAssignmentType = {
   ],
 };
 
-describe('PipelinesRoute loader', () => {
+const mockTemplate = {
+  id: 'ga-1',
+  name: 'AP History Grader',
+  status: 'active',
+  assignmentTypeLinks: [
+    {
+      assignmentType: { id: 'at-1', title: 'AP History Essay' },
+    },
+  ],
+};
+
+describe('AssignmentsAndGrading loader', () => {
   beforeEach(() => {
     requireAdmin.mockReset();
     prisma.assignmentType.findMany.mockReset();
@@ -44,9 +55,7 @@ describe('PipelinesRoute loader', () => {
 
   test('returns assignment types with grading assistant info', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
-    prisma.gradingAssistantTemplate.findMany.mockResolvedValue([
-      { id: 'ga-1', name: 'AP History Grader', status: 'active', assignmentTypeLinks: [{ id: 'l-1' }] },
-    ]);
+    prisma.gradingAssistantTemplate.findMany.mockResolvedValue([mockTemplate]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
     const data = (response as { data: any }).data;
@@ -56,40 +65,44 @@ describe('PipelinesRoute loader', () => {
     expect(data.assignmentTypes[0].moduleCount).toBe(2);
     expect(data.assignmentTypes[0].orgCount).toBe(1);
     expect(data.assignmentTypes[0].gradingAssistant?.name).toBe('AP History Grader');
-    expect(data.assignmentTypes[0].gradingAssistant?.status).toBe('active');
   });
 
-  test('separates unlinked grading assistants', async () => {
+  test('returns all grading templates with their linked assignment types', async () => {
     prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
     prisma.gradingAssistantTemplate.findMany.mockResolvedValue([
-      { id: 'ga-1', name: 'AP History Grader', status: 'active', assignmentTypeLinks: [] },
-      { id: 'ga-2', name: 'Standalone Template', status: 'draft', assignmentTypeLinks: [] },
+      mockTemplate,
+      { id: 'ga-2', name: 'Standalone', status: 'draft', assignmentTypeLinks: [] },
     ]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
     const data = (response as { data: any }).data;
 
-    // ga-1 is in assignmentType.gradingAssistantLinks so it's considered linked
-    // ga-2 is truly unlinked
-    expect(data.unlinkedTemplates).toHaveLength(1);
-    expect(data.unlinkedTemplates[0].name).toBe('Standalone Template');
+    expect(data.gradingTemplates).toHaveLength(2);
+    expect(data.gradingTemplates[0].linkedTypes).toHaveLength(1);
+    expect(data.gradingTemplates[0].linkedTypes[0].title).toBe('AP History Essay');
+    expect(data.gradingTemplates[1].linkedTypes).toHaveLength(0);
   });
 
-  test('computes gap count for types without active grading', async () => {
-    const typeWithoutGrading = {
+  test('separates archived assignment types', async () => {
+    const archivedType = {
       ...mockAssignmentType,
       id: 'at-2',
-      title: 'No Grading Type',
+      title: 'Old Essay',
+      archivedAt: new Date('2024-01-01'),
       gradingAssistantLinks: [],
     };
 
-    prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType, typeWithoutGrading]);
+    prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType, archivedType]);
     prisma.gradingAssistantTemplate.findMany.mockResolvedValue([]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
     const data = (response as { data: any }).data;
 
-    expect(data.stats.typeCount).toBe(2);
-    expect(data.stats.gapCount).toBe(1);
+    expect(data.assignmentTypes).toHaveLength(2);
+    const active = data.assignmentTypes.filter((at: any) => !at.archivedAt);
+    const archived = data.assignmentTypes.filter((at: any) => at.archivedAt);
+    expect(active).toHaveLength(1);
+    expect(archived).toHaveLength(1);
+    expect(archived[0].title).toBe('Old Essay');
   });
 });
