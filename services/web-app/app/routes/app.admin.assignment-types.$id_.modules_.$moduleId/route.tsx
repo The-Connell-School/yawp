@@ -58,6 +58,43 @@ import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
 import { requireAdmin } from '~/utils/auth.server';
+import { parseRubric } from '~/utils/grading-assistant-template.shared';
+import {
+  MODULE_RUBRIC_RELATIONSHIPS,
+  type ModuleRubricRelationship,
+} from '~/domain/assignment-types/assignment-type-rubric-config';
+import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
+
+const moduleRubricRelationshipSet = new Set<string>(
+  MODULE_RUBRIC_RELATIONSHIPS
+);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function parseRubricAlignmentJson(formData: FormData) {
+  const raw = formData.get('rubricAlignmentJson');
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Response('rubricAlignmentJson must be valid JSON', {
+      status: 400,
+    });
+  }
+  if (!isRecord(parsed)) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(parsed).map(([key, value]) => [
+      key,
+      typeof value === 'string' && moduleRubricRelationshipSet.has(value)
+        ? (value as ModuleRubricRelationship)
+        : 'not-applicable',
+    ])
+  );
+}
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -91,7 +128,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const [course, module] = await Promise.all([
     prisma.assignmentType.findUnique({
       where: { id: params.id },
-      select: { id: true, title: true },
+      select: { id: true, title: true, rubricJson: true },
     }),
     prisma.assignmentModule.findFirst({
       where: { id: params.moduleId, deletedAt: null },
@@ -131,6 +168,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         description: data.description || null,
         isSelfGuided: data.isSelfGuided === 'on',
         tutorInstructions: data.tutorInstructions || null,
+        rubricAlignmentJson: parseRubricAlignmentJson(formData),
       },
     });
 
@@ -252,6 +290,7 @@ export default function AssignmentModuleRoute() {
     React.useState(false);
   const [editingInstruction, setEditingInstruction] = React.useState<any>(null);
   const [instructions, setInstructions] = React.useState(module.instructions);
+  const rubric = parseRubric(course.rubricJson);
 
   // Module form
   const moduleForm = useForm({
@@ -522,6 +561,13 @@ export default function AssignmentModuleRoute() {
                     rows={4}
                   />
                 )}
+                <div className="space-y-2">
+                  <Label>Rubric relationships</Label>
+                  <ModuleRubricAlignmentEditor
+                    categories={rubric.categories}
+                    initialAlignment={module.rubricAlignmentJson}
+                  />
+                </div>
                 <Button
                   type="submit"
                   className="w-full"
