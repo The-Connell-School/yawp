@@ -8,9 +8,7 @@ import {
 import {
   AlertTriangle,
   ArchiveIcon,
-  ImageIcon,
   RotateCcwIcon,
-  TrashIcon,
 } from 'lucide-react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
@@ -26,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '~/components/ui/table';
-import { ChevronLeft, Settings, Plus, GripVertical } from 'lucide-react';
+import { ChevronLeft, Plus, GripVertical, Save } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -58,7 +56,17 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireAdmin } from '~/utils/auth.server';
-import { DEFAULT_OUTPUT_SCHEMA_JSON } from '~/utils/grading-assistant-template.shared';
+import {
+  DEFAULT_OUTPUT_SCHEMA_JSON,
+  parsePromptConfig,
+  parseRubric,
+  parseScoringScale,
+} from '~/utils/grading-assistant-template.shared';
+import {
+  PromptConfigEditor,
+  RubricEditor,
+  ScoringScaleEditor,
+} from '~/components/admin/grading-assistant-template-form';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -308,11 +316,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
 export default function AssignmentTypeRoute() {
   const { course, gradingAssistantTemplates } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const [isCourseSheetOpen, setIsCourseSheetOpen] = React.useState(false);
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
-  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-  const [hasRemovedImage, setHasRemovedImage] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const scoringScale = parseScoringScale(course.scoringScaleJson);
+  const rubric = parseRubric(course.rubricJson);
+  const promptConfig = parsePromptConfig(course.gradingPromptConfigJson);
 
   // --- Drag and drop state for modules ---
   const [modules, setModules] = React.useState(course.assignmentModules);
@@ -399,28 +406,9 @@ export default function AssignmentTypeRoute() {
 
   React.useEffect(() => {
     if (fetcher.data?.status === 'success' && fetcher.state === 'idle') {
-      setIsCourseSheetOpen(false);
       setIsModuleSheetOpen(false);
-      setPreviewUrl(null);
-      setHasRemovedImage(false);
     }
   }, [fetcher.data, fetcher.state]);
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setHasRemovedImage(true);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    setPreviewUrl(null);
-  };
 
   const currentGradingAssistantLink = course.gradingAssistantLinks[0] ?? null;
 
@@ -434,122 +422,6 @@ export default function AssignmentTypeRoute() {
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          <Sheet open={isCourseSheetOpen} onOpenChange={setIsCourseSheetOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline">
-                <Settings className="mr-2 h-4 w-4" />
-                Edit Assignment Type
-              </Button>
-            </SheetTrigger>
-            <SheetContent>
-              <SheetHeader>
-                <SheetTitle>Edit Assignment Type</SheetTitle>
-              </SheetHeader>
-              <fetcher.Form
-                method="post"
-                className="mt-4 space-y-4"
-                encType="multipart/form-data"
-              >
-                <input type="hidden" name="intent" value="updateCourse" />
-                <div className="space-y-2">
-                  <Label>Course Image</Label>
-                  <div className="flex flex-col items-center gap-4">
-                    {previewUrl || (course.image && !hasRemovedImage) ? (
-                      <div className="relative w-full">
-                        <img
-                          src={
-                            previewUrl ||
-                            `/api/image/course/${course.image?.id}`
-                          }
-                          alt=""
-                          className="h-48 w-full rounded-lg object-cover"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute right-2 top-2"
-                          onClick={handleRemoveImage}
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </Button>
-                        {course.image && !previewUrl && (
-                          <input
-                            type="hidden"
-                            name="deleteImage"
-                            value="true"
-                          />
-                        )}
-                      </div>
-                    ) : (
-                      <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className="flex h-48 w-full cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 hover:bg-muted"
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            Click to upload image
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      name="image"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                    {!previewUrl && !course.image && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        Upload Image
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    name="title"
-                    defaultValue={course.title}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="kind">Stable Kind</Label>
-                  <Input
-                    id="kind"
-                    name="kind"
-                    defaultValue={course.kind || ''}
-                    placeholder="act_writing"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    defaultValue={course.description || ''}
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={fetcher.state !== 'idle'}
-                >
-                  {fetcher.state !== 'idle' ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </fetcher.Form>
-            </SheetContent>
-          </Sheet>
           {course.archivedAt ? (
             <Button
               variant="outline"
@@ -592,51 +464,76 @@ export default function AssignmentTypeRoute() {
 
       <Card className="bg-muted">
         <CardHeader>
-          <CardTitle>Assignment Type Details</CardTitle>
+          <CardTitle>Assignment Type Configuration</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid gap-4">
-            <div>
-              <dt className="text-sm font-medium text-muted-foreground">
-                Title
-              </dt>
-              <dd className="text-base font-medium">{course.title}</dd>
+          <fetcher.Form method="post" className="space-y-6">
+            <input type="hidden" name="intent" value="updateCourse" />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  name="title"
+                  defaultValue={course.title}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="kind">Stable kind</Label>
+                <Input
+                  id="kind"
+                  name="kind"
+                  defaultValue={course.kind || ''}
+                  placeholder="act_writing"
+                />
+              </div>
             </div>
-            <div>
-              <dt className="text-sm font-medium text-muted-foreground">
-                Available To
-              </dt>
-              <dd className="text-base">
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                name="description"
+                defaultValue={course.description || ''}
+                rows={3}
+              />
+            </div>
+            <div className="rounded-[8px] border bg-background/70 p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold">Rubric</h3>
+                <p className="text-sm text-muted-foreground">
+                  This rubric is shared by tutor guidance and final grading.
+                </p>
+              </div>
+              <div className="space-y-5">
+                <ScoringScaleEditor initial={scoringScale} namePrefix="detail" />
+                <RubricEditor initial={rubric} namePrefix="detail" />
+              </div>
+            </div>
+            <div className="rounded-[8px] border bg-background/70 p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold">Grading assistant</h3>
+                <p className="text-sm text-muted-foreground">
+                  The grading assistant applies the rubric above during submission review.
+                </p>
+              </div>
+              <PromptConfigEditor initial={promptConfig} namePrefix="detail" />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground">
+                Available to:{' '}
                 {course.organizationAssignments.length === 0
                   ? 'No organizations'
                   : course.organizationAssignments
                       .map((assignment) => assignment.organization.name)
                       .join(', ')}
-              </dd>
+              </p>
+              <Button type="submit" disabled={fetcher.state !== 'idle'}>
+                <Save className="mr-2 size-4" />
+                {fetcher.state !== 'idle' ? 'Saving...' : 'Save assignment type'}
+              </Button>
             </div>
-            <div>
-              <dt className="text-sm font-medium text-muted-foreground">
-                Stable Kind
-              </dt>
-              <dd className="text-base">{course.kind || 'No stable kind'}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted-foreground">
-                Created At
-              </dt>
-              <dd className="text-base">
-                {new Date(course.createdAt).toLocaleDateString()}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted-foreground">
-                Description
-              </dt>
-              <dd className="text-base">
-                {course.description || 'No description'}
-              </dd>
-            </div>
-          </dl>
+          </fetcher.Form>
         </CardContent>
       </Card>
 

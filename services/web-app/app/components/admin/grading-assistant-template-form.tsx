@@ -69,7 +69,7 @@ function rowsFromCategories(categories: RubricCategory[]): RubricCategoryRow[] {
   return categories.map((category) => createRubricCategoryRow(category));
 }
 
-function ScoringScaleEditor({
+export function ScoringScaleEditor({
   initial,
   namePrefix = '',
 }: {
@@ -267,7 +267,7 @@ function SortableRubricCategory({
   );
 }
 
-function RubricEditor({
+export function RubricEditor({
   initial,
   namePrefix = '',
 }: {
@@ -398,7 +398,7 @@ function RubricEditor({
   );
 }
 
-function PromptConfigEditor({
+export function PromptConfigEditor({
   initial,
   namePrefix = '',
 }: {
