@@ -19,6 +19,9 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
+const { LlmFallbackRetrySignal } = await import(
+  '~/utils/getLLMCompletion/llm-provider-errors.server'
+);
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -29,6 +32,27 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
   });
+
+  function mockCms() {
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      instructionsCompleted: 0,
+      assignmentModule: {
+        tutorInstructions: 'Coach the student.',
+        instructions: [
+          {
+            id: 'instruction-1',
+            tutorInstructions: 'Focus on thesis clarity.',
+          },
+        ],
+      },
+      messages: [],
+      document: {
+        text: 'Original draft',
+        assignment: { tutorContext: null },
+      },
+    });
+  }
 
   test('preserves the read-only mutation guard response', async () => {
     requireMutableRequest.mockImplementation(() => {
@@ -64,24 +88,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
 
   test('touches the module session when writing tutor messages', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
-    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
-      id: 'cms-1',
-      instructionsCompleted: 0,
-      assignmentModule: {
-        tutorInstructions: 'Coach the student.',
-        instructions: [
-          {
-            id: 'instruction-1',
-            tutorInstructions: 'Focus on thesis clarity.',
-          },
-        ],
-      },
-      messages: [],
-      document: {
-        text: 'Original draft',
-        assignment: { tutorContext: null },
-      },
-    });
+    mockCms();
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       messages: [],
@@ -112,5 +119,79 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         }),
       })
     );
+  });
+
+  test('returns a retry signal without writing messages when fallback retry is requested', async () => {
+    mockCms();
+    getLLMCompletion.mockImplementationOnce(() => {
+      throw new LlmFallbackRetrySignal({
+        reason: 'status:529',
+        retryableStatus: 529,
+        fallbackModel: 'gpt-4o-mini',
+      });
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const payload = response as {
+      data: { retrying?: boolean };
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(202);
+    expect(payload.data.retrying).toBe(true);
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
+  test('forces fallback model on retry and persists one user and one tutor message', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms();
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current draft');
+    body.set('llmRetry', 'fallback');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    expect(getLLMCompletion.mock.calls[0]?.[0]).toMatchObject({
+      forceFallback: true,
+      signalFallbackRetry: false,
+    });
+    const createPayload =
+      prisma.assignmentModuleSession.update.mock.calls[0]?.[0].data.messages
+        .create;
+    expect(createPayload).toHaveLength(2);
+    expect(createPayload[0]).toMatchObject({
+      agent: 'user',
+      content: 'Can you review this?',
+    });
+    expect(createPayload[1]).toMatchObject({
+      agent: 'assistant',
+      content: 'Draft a clearer thesis.',
+    });
   });
 });

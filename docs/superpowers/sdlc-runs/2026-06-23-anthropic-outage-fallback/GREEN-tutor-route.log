@@ -1,0 +1,12 @@
+bun test v1.3.1 (89fa0f34)
+
+app/routes/api.domain.tutor-response/route.test.ts:
+(pass) api.domain.tutor-response read-only impersonation > preserves the read-only mutation guard response [0.86ms]
+(pass) api.domain.tutor-response read-only impersonation > touches the module session when writing tutor messages [1.23ms]
+(pass) api.domain.tutor-response read-only impersonation > returns a retry signal without writing messages when fallback retry is requested [0.18ms]
+(pass) api.domain.tutor-response read-only impersonation > forces fallback model on retry and persists one user and one tutor message [0.32ms]
+
+ 4 pass
+ 0 fail
+ 10 expect() calls
+Ran 4 tests across 1 file. [64.00ms]
