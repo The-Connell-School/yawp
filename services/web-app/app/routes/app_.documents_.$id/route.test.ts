@@ -166,7 +166,6 @@ function makeDocument({
       id: 'assignment-1',
       title: 'Revolutionary Ideals DBQ',
       prompt: apHistorySnapshot.prompt,
-      tutorContext: 'Use AP History DBQ expectations.',
       ...(includeSnapshot ? { apHistorySnapshot } : {}),
     },
     classAssignment: {
@@ -189,6 +188,11 @@ function makeDocument({
     submissions: [],
     revisions: [],
     profile: {
+      id: 'profile-1',
+      userId: 'user-1',
+      user: { name: 'Student One' },
+    },
+    membership: {
       id: 'profile-1',
       userId: 'user-1',
       user: { name: 'Student One' },

@@ -24,7 +24,6 @@ export type AssignmentEditRecord = {
   id: string;
   title: string | null;
   prompt: string;
-  tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   assignmentTypeId: string;
@@ -55,7 +54,6 @@ export function AssignmentEditSheet({
   const [title, setTitle] = useState('');
   const [assignmentTypeId, setAssignmentTypeId] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
@@ -97,7 +95,6 @@ export function AssignmentEditSheet({
     setTitle(editingAssignment.title ?? '');
     setAssignmentTypeId(editingAssignment.assignmentTypeId);
     setPrompt(editingAssignment.prompt);
-    setTutorContext(editingAssignment.tutorContext ?? '');
     setSubmitForGrade(editingAssignment.submitForGrade ?? true);
     setPointValue((editingAssignment.pointValue ?? 100).toString());
     setPromptMode('manual');

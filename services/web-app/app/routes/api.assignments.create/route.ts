@@ -177,7 +177,6 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId: assignmentType.id,
       title,
       prompt,
-      tutorContext: null,
       gradingAssistantStrictnessLevel,
       ...(gradingIntent?.success
         ? {

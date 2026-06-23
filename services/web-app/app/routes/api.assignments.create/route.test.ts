@@ -24,6 +24,7 @@ const prisma = {
 const requireUserId = mock();
 const requireMembership = mock();
 const createAssignmentDeployedToClasses = mock();
+const isAssignmentTypeAvailableForEveryScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -32,6 +33,9 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
+}));
+mock.module('~/utils/assignment-type-access.server', () => ({
+  isAssignmentTypeAvailableForEveryScope,
 }));
 
 const { action } = await import('./route');
@@ -75,6 +79,7 @@ describe('api.assignments.create', () => {
     prisma.orgMembership.findMany.mockReset();
     prisma.apHistoryPromptLibraryEntry.findFirst.mockReset();
     createAssignmentDeployedToClasses.mockReset();
+    isAssignmentTypeAvailableForEveryScope.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
 
@@ -95,6 +100,7 @@ describe('api.assignments.create', () => {
     prisma.school.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
     mockAssignmentTypeAvailable();
+    isAssignmentTypeAvailableForEveryScope.mockResolvedValue(true);
     prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue(null);
     createAssignmentDeployedToClasses.mockResolvedValue({ id: 'assignment-1' });
   });
@@ -107,7 +113,6 @@ describe('api.assignments.create', () => {
         classIds: ['class-1', 'class-2'],
         prompt: 'Write the essay.',
         title: 'Essay',
-        tutorContext: 'Help with structure.',
       }),
       params: {},
     } as any);
@@ -123,13 +128,7 @@ describe('api.assignments.create', () => {
         }),
       })
     );
-    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(1, {
-      where: { id: 'at-1', archivedAt: null },
-      select: {
-        id: true,
-      },
-    });
-    expect(prisma.assignmentType.findFirst).toHaveBeenNthCalledWith(2, {
+    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'at-1',
         archivedAt: null,
@@ -141,7 +140,6 @@ describe('api.assignments.create', () => {
         assignmentTypeId: 'at-1',
         title: 'Essay',
         prompt: 'Write the essay.',
-        tutorContext: null,
         submitForGrade: true,
         pointValue: 100,
         gradingAssistantStrictnessLevel: 'intermediate',
@@ -237,7 +235,6 @@ describe('api.assignments.create', () => {
     expect(body.success).toBe(true);
     expect(createAssignmentDeployedToClasses).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        tutorContext: null,
         submitForGrade: false,
         pointValue: null,
       }),
@@ -293,6 +290,7 @@ describe('api.assignments.create', () => {
   });
 
   test('rejects assignment types outside the teacher scope or archived', async () => {
+    isAssignmentTypeAvailableForEveryScope.mockResolvedValue(false);
     prisma.assignmentType.findFirst.mockResolvedValue(null);
 
     const response = await action({
@@ -308,12 +306,6 @@ describe('api.assignments.create', () => {
     const body = await readBody(response);
     expect(body.success).toBe(false);
     expect(responseStatus(response)).toBe(400);
-    expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
-      where: { id: 'at-forbidden', archivedAt: null },
-      select: {
-        id: true,
-      },
-    });
     expect(prisma.assignmentType.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'at-forbidden',

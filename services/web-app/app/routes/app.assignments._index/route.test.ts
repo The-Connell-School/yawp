@@ -59,7 +59,6 @@ function responseStatus(response: any) {
 const ownedAssignment = {
   id: 'assignment-1',
   assignmentTypeId: 'at-1',
-  tutorContext: null,
   assignmentType: { systemKey: 'generic_essay' },
   classAssignments: [
     {
@@ -236,7 +235,6 @@ describe('app.assignments action', () => {
         assignmentTypeId: 'at-1',
         title: 'Updated Title',
         prompt: 'Updated prompt.',
-        tutorContext: 'Do not keep this legacy prompt.',
         submitForGrade: 'true',
         pointValue: '50',
       }),

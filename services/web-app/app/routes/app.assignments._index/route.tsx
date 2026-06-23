@@ -163,7 +163,6 @@ export async function action({ request }: ActionFunctionArgs) {
     select: {
       id: true,
       assignmentTypeId: true,
-      tutorContext: true,
       assignmentType: { select: { systemKey: true } },
       classAssignments: {
         select: {
@@ -266,7 +265,6 @@ export async function action({ request }: ActionFunctionArgs) {
       assignmentTypeId,
       title,
       prompt,
-      tutorContext: assignment.tutorContext,
       ...(gradingIntent?.success
         ? {
             submitForGrade: gradingIntent.data.submitForGrade,
@@ -319,7 +317,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
               id: true,
               title: true,
               prompt: true,
-              tutorContext: true,
               submitForGrade: true,
               pointValue: true,
               createdAt: true,
@@ -391,7 +388,6 @@ type AssignmentRow = {
   id: string;
   title: string | null;
   prompt: string;
-  tutorContext: string | null;
   submitForGrade: boolean;
   pointValue: number | null;
   createdAt: Date | string;

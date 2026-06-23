@@ -95,14 +95,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
         select: {
           id: true,
           prompt: true,
-          tutorContext: true,
           apHistorySnapshot: true,
         },
       });
 
       expect(assignment).not.toBeNull();
       expect(assignment?.prompt).toBe(dbqEntry.prompt);
-      expect(assignment?.tutorContext).toBeNull();
       expect(assignment?.apHistorySnapshot).toMatchObject({
         schemaVersion: 1,
         essayType: 'dbq',

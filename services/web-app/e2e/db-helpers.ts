@@ -14,7 +14,6 @@ export async function createDeployedAssignment(params: {
   assignmentTypeId: string;
   title?: string | null;
   prompt: string;
-  tutorContext?: string | null;
   submitForGrade?: boolean;
   pointValue?: number | null;
 }) {
@@ -23,7 +22,6 @@ export async function createDeployedAssignment(params: {
       assignmentTypeId: params.assignmentTypeId,
       title: params.title ?? null,
       prompt: params.prompt,
-      tutorContext: params.tutorContext ?? null,
       ...(params.submitForGrade !== undefined
         ? { submitForGrade: params.submitForGrade }
         : {}),

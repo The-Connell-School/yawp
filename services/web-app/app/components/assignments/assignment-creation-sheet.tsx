@@ -59,7 +59,6 @@ type CreateFetcherData = {
 type ExtractFetcherData = CreateFetcherData & {
   title?: string;
   prompt?: string;
-  tutorContext?: string;
 };
 
 type AssignmentCreationFetcher<Data> = {
@@ -80,7 +79,6 @@ export type AssignmentCreationSheetProps = {
   fixedClassId?: string;
   initialTitle?: string;
   initialPrompt?: string;
-  initialTutorContext?: string;
   emptyClassesMessage?: string;
 };
 
@@ -144,7 +142,6 @@ export function AssignmentCreationSheetContent({
   fixedClassId,
   initialTitle = '',
   initialPrompt = '',
-  initialTutorContext = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   createFetcher,
   extractFetcher,
@@ -242,7 +239,6 @@ export function AssignmentCreationSheetContent({
     fixedClassId,
     initialPrompt,
     initialTitle,
-    initialTutorContext,
     open,
     teacherClasses,
   ]);

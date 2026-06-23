@@ -66,7 +66,6 @@ describe('api.domain.assignment-pdf-extract', () => {
             text: JSON.stringify({
               title: 'Extracted Assignment',
               prompt: 'Write a literary analysis essay.',
-              tutorContext: 'This legacy field should be ignored.',
             }),
           },
         ],
@@ -99,10 +98,6 @@ describe('api.domain.assignment-pdf-extract', () => {
     });
     expect(capturedArgs.system).toContain(
       '{"title":"string?","prompt":"string"}'
-    );
-    expect(capturedArgs.system).not.toContain('tutorContext');
-    expect(capturedArgs.messages[0].content[1].text).not.toContain(
-      'tutorContext'
     );
   });
 });

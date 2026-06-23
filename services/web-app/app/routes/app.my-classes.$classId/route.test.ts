@@ -22,6 +22,7 @@ const getSubmittedPapersFilter = mock();
 const createAssignmentDeployedToClasses = mock();
 const deleteClassAssignmentDeployment = mock();
 const getAvailableAssignmentTypesForScopes = mock();
+const isAssignmentTypeAvailableForEveryScope = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -38,6 +39,7 @@ mock.module('~/utils/cookies.server', () => ({
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
   getAvailableAssignmentTypesForScopes,
+  isAssignmentTypeAvailableForEveryScope,
 }));
 mock.module('~/utils/assignment-deployment.server', () => ({
   createAssignmentDeployedToClasses,
@@ -65,6 +67,7 @@ describe('class detail loader document visibility', () => {
     createAssignmentDeployedToClasses.mockReset();
     deleteClassAssignmentDeployment.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
+    isAssignmentTypeAvailableForEveryScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -249,7 +252,6 @@ describe('class detail loader document visibility', () => {
       id: 'assignment-1',
       assignmentTypeId: 'archived-type-1',
       assignmentType: { systemKey: null },
-      tutorContext: 'Legacy tutor guidance',
     });
 
     const form = new FormData();
@@ -274,14 +276,13 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'archived-type-1',
         title: null,
         prompt: 'Updated prompt',
-        tutorContext: 'Legacy tutor guidance',
         submitForGrade: true,
         pointValue: 100,
       },
     });
   });
 
-  test('creates a standardized class assignment with grading intent and no tutor context', async () => {
+  test('creates a standardized class assignment with grading intent', async () => {
     getAvailableAssignmentTypesForScopes.mockResolvedValue([
       { id: 'at-1', systemKey: null },
     ]);
@@ -297,7 +298,6 @@ describe('class detail loader document visibility', () => {
     form.set('intent', 'create-assignment');
     form.set('assignmentTypeId', 'at-1');
     form.set('prompt', 'Prompt');
-    form.set('tutorContext', 'Do not persist this teacher-authored prompt.');
     form.set('submitForGrade', 'true');
     form.set('pointValue', '25');
 
@@ -316,7 +316,6 @@ describe('class detail loader document visibility', () => {
         assignmentTypeId: 'at-1',
         title: null,
         prompt: 'Prompt',
-        tutorContext: null,
         submitForGrade: true,
         pointValue: 25,
       },

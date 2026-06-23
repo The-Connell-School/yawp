@@ -253,7 +253,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
       id: string;
       assignmentTypeId: string;
       assignmentType: { systemKey: string | null };
-      tutorContext: string | null;
     } | null = null;
     if (intent === 'update-assignment') {
       if (!assignmentId) {
@@ -272,7 +271,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           id: true,
           assignmentTypeId: true,
           assignmentType: { select: { systemKey: true } },
-          tutorContext: true,
         },
       });
 
@@ -338,7 +336,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           assignmentTypeId,
           title,
           prompt,
-          tutorContext: null,
           submitForGrade: gradingIntent.data.submitForGrade,
           pointValue: gradingIntent.data.pointValue,
         },
@@ -357,7 +354,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
         assignmentTypeId,
         title,
         prompt,
-        tutorContext: existingAssignment!.tutorContext,
         submitForGrade: gradingIntent.data.submitForGrade,
         pointValue: gradingIntent.data.pointValue,
       },
@@ -714,7 +710,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
-          tutorContext: true,
           submitForGrade: true,
           pointValue: true,
           assignmentTypeId: true,
@@ -741,7 +736,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     classAssignmentId: classAssignment.id,
     title: classAssignment.assignment.title,
     prompt: classAssignment.assignment.prompt,
-    tutorContext: classAssignment.assignment.tutorContext,
     submitForGrade: classAssignment.assignment.submitForGrade,
     pointValue: classAssignment.assignment.pointValue,
     assignmentTypeId: classAssignment.assignment.assignmentTypeId,

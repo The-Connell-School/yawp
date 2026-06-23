@@ -44,7 +44,6 @@ async function expectCreatedAssignment(params: {
           select: {
             id: true,
             title: true,
-            tutorContext: true,
             submitForGrade: true,
             pointValue: true,
           },
@@ -52,7 +51,6 @@ async function expectCreatedAssignment(params: {
       },
     });
     expect(created?.assignment.title).toBe(params.title);
-    expect(created?.assignment.tutorContext).toBeNull();
     expect(created?.assignment.submitForGrade).toBe(true);
     expect(created?.assignment.pointValue).toBe(params.pointValue);
   } finally {
@@ -105,7 +103,6 @@ async function expectCreatedAssignmentsForClasses(params: {
         classId: true,
         assignment: {
           select: {
-            tutorContext: true,
             submitForGrade: true,
             pointValue: true,
           },
@@ -118,7 +115,6 @@ async function expectCreatedAssignmentsForClasses(params: {
       [...params.classIds].sort()
     );
     for (const deployment of created) {
-      expect(deployment.assignment.tutorContext).toBeNull();
       expect(deployment.assignment.submitForGrade).toBe(true);
       expect(deployment.assignment.pointValue).toBe(params.pointValue);
     }
