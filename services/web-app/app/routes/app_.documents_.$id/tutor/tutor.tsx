@@ -17,6 +17,7 @@ import { Loading } from './loading';
 import { ResponseBar } from './response-bar';
 import { compareTutorMessagesByTimeThenId } from './tutor-message-sort';
 import { getNextAssignmentModuleId } from './assignment-module-navigation';
+import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
 
 type Props = {
   docId: string;
@@ -67,6 +68,7 @@ export const Tutor = ({
     true
   );
   const [isTutorResponding, setIsTutorResponding] = useState(false);
+  const [isTutorRetrying, setIsTutorRetrying] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
   const [optimisticMessage, setOptimisticMessage] = useState<{
     agent: string;
@@ -159,6 +161,7 @@ export const Tutor = ({
         if (!canProceed) return;
       }
       setTutorError(null);
+      setIsTutorRetrying(false);
       setOptimisticMessage({
         agent: 'user',
         createdAt: new Date(),
@@ -170,11 +173,11 @@ export const Tutor = ({
         formData.append('response', response);
         formData.append('cmsId', cms.id);
         formData.append('content', getCurrentDocumentText?.() ?? '');
-        const res = await fetch('/api/domain/tutor-response', {
-          method: 'POST',
-          body: formData,
+        const { response: res, json } =
+          await postTutorResponseWithFallbackRetry({
+            formData,
+            onRetry: () => setIsTutorRetrying(true),
         });
-        const json = await res.json();
         if (!res.ok || json.error) {
           setTutorError(json.error ?? 'An error occurred.');
           setOptimisticMessage(null);
@@ -193,6 +196,7 @@ export const Tutor = ({
         setOptimisticMessage(null);
       } finally {
         setIsTutorResponding(false);
+        setIsTutorRetrying(false);
       }
     },
     [
@@ -399,7 +403,9 @@ export const Tutor = ({
               />
             </div>
           ))}
-          {isTutorResponding && optimisticMessage ? <Loading /> : null}
+          {isTutorResponding && optimisticMessage ? (
+            <Loading label={isTutorRetrying ? 'Retrying...' : undefined} />
+          ) : null}
           {tutorError ? (
             <p className="w-full rounded-lg border-destructive bg-destructive/5 p-3 text-destructive">
               {tutorError}
