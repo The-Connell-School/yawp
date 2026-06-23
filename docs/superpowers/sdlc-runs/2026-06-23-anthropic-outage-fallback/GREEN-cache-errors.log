@@ -1,0 +1,16 @@
+bun test v1.3.1 (89fa0f34)
+
+app/utils/getLLMCompletion/anthropic-outage-cache.server.test.ts:
+(pass) anthropic outage cache > opens for the configured ttl and expires after it [0.16ms]
+(pass) anthropic outage cache > can be closed after a successful Anthropic probe [0.05ms]
+
+app/utils/getLLMCompletion/llm-provider-errors.server.test.ts:
+(pass) Anthropic outage error classification > treats Anthropic 529, 500, 504, and overloaded_error as retryable [0.15ms]
+(pass) Anthropic outage error classification > does not retry auth, model, validation, or rate-limit failures [0.10ms]
+(pass) Anthropic outage error classification > extracts retryable status when one is available [0.03ms]
+(pass) Anthropic outage error classification > identifies fallback retry signals [0.05ms]
+
+ 6 pass
+ 0 fail
+ 24 expect() calls
+Ran 6 tests across 2 files. [23.00ms]

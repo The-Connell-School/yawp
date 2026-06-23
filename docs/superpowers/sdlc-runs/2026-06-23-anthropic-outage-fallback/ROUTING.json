@@ -1,0 +1,52 @@
+{
+  "agent_budget": {
+    "implementers": 1,
+    "qa_passes": 3,
+    "red_team": 3,
+    "reviewers": 4
+  },
+  "approval_required": [],
+  "bryant_only_categories": [],
+  "domains": [
+    "code"
+  ],
+  "lane": "hotfix",
+  "operator_can_continue": true,
+  "reasons": [
+    "No specialized domain keywords found; defaulting to general code workflow.",
+    "Hotfix/incident language requires critical-path discipline."
+  ],
+  "required_proof": [
+    "red_green_test_log",
+    "fresh_verification_commands",
+    "code_review_artifact",
+    "release_gate",
+    "evidence_pack",
+    "minimal_hotfix_scope_proof"
+  ],
+  "required_skills": [
+    "superpowers:brainstorming",
+    "superpowers:writing-plans",
+    "superpowers:test-driven-development",
+    "superpowers:verification-before-completion",
+    "superpowers:requesting-code-review",
+    "sdlc-run-ledger",
+    "sdlc-evidence-pack",
+    "superpowers:systematic-debugging"
+  ],
+  "reviewer_roles": [
+    "spec-compliance-reviewer",
+    "code-quality-reviewer",
+    "architecture-risk-reviewer",
+    "no-context-red-team"
+  ],
+  "risk_tier": "critical",
+  "stop_conditions": [
+    "done",
+    "agent_ready",
+    "ready_for_approval",
+    "true_blocker",
+    "waiting_external"
+  ],
+  "unsafe_actions": []
+}

@@ -1,0 +1,47 @@
+{
+  "policy": "Spawn only disjoint, self-contained sidecar agents. Keep immediate blockers local.",
+  "risk_tier": "critical",
+  "run_id": "sdlc-da9118dcf6e7",
+  "subagents": [
+    {
+      "agent_type": "worker",
+      "context_mode": "full-context",
+      "id": "subagent-implementation-01",
+      "prompt": "You are an SDLC implementation worker. Work only inside the assigned repo/worktree. You are not alone in the codebase; do not revert other edits. Ticket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRun id: sdlc-da9118dcf6e7\nRisk tier: critical; domains: code.\nRequired skills: superpowers:brainstorming, superpowers:writing-plans, superpowers:test-driven-development, superpowers:verification-before-completion, superpowers:requesting-code-review, sdlc-run-ledger, sdlc-evidence-pack, superpowers:systematic-debugging.\nFollow TDD: create or preserve RED.log before implementation, then GREEN.log. Make the smallest scoped change, do not weaken tests, and report changed paths.",
+      "role": "implementation-worker",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-01",
+      "prompt": "You are `spec-compliance-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Compare implementation against acceptance criteria and scope fences.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "spec-compliance-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-02",
+      "prompt": "You are `code-quality-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Find correctness, maintainability, test, and regression issues in the changed code.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "code-quality-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "full-context",
+      "id": "subagent-review-03",
+      "prompt": "You are `architecture-risk-reviewer` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Evaluate blast radius, dependencies, rollout risk, and rollback constraints.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "architecture-risk-reviewer",
+      "status": "planned"
+    },
+    {
+      "agent_type": "default",
+      "context_mode": "no-context",
+      "id": "subagent-review-04",
+      "prompt": "You are `no-context-red-team` for SDLC run sdlc-da9118dcf6e7.\nTicket: YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK\nRisk tier: critical; required proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof.\nMission: Attack the final claim from minimal context and look for false-done evidence gaps.\nReturn findings first, severity ordered, with evidence. Critical and important findings must block completion unless fixed or rebutted.",
+      "role": "no-context-red-team",
+      "status": "planned"
+    }
+  ]
+}

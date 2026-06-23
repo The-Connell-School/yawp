@@ -1,0 +1,94 @@
+{
+  "proof": [
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "RED.log",
+          "command_evidence": "red",
+          "kind": "red-test-log"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "green-test-log"
+        }
+      ],
+      "proof": "red_green_test_log",
+      "status": "pending"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "TEST-PLAN.md",
+          "kind": "command-plan"
+        },
+        {
+          "artifact": "GREEN.log",
+          "command_evidence": "green",
+          "kind": "command-output"
+        }
+      ],
+      "proof": "fresh_verification_commands",
+      "status": "pending"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "REVIEW.md",
+          "kind": "review"
+        }
+      ],
+      "proof": "code_review_artifact",
+      "status": "pending"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "RELEASE-GATE.md",
+          "kind": "release-gate"
+        }
+      ],
+      "proof": "release_gate",
+      "status": "pending"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "EVIDENCE-PACK.md",
+          "kind": "evidence-pack"
+        }
+      ],
+      "proof": "evidence_pack",
+      "status": "pending"
+    },
+    {
+      "acceptance_ids": [
+        "ACCEPTANCE.md"
+      ],
+      "evidence": [
+        {
+          "artifact": "IMPLEMENTATION-SUMMARY.md",
+          "kind": "hotfix-scope"
+        }
+      ],
+      "proof": "minimal_hotfix_scope_proof",
+      "status": "pending"
+    }
+  ],
+  "risk_tier": "critical"
+}

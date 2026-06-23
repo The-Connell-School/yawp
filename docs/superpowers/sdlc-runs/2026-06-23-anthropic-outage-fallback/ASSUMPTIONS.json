@@ -1,0 +1,116 @@
+{
+  "assumptions": [
+    {
+      "confidence": 0.95,
+      "escalates": false,
+      "id": "scope-operator-001",
+      "source": "Bryant operating memory and SDLC master rules",
+      "statement": "Codex may choose repo, branch, worktree, tests, agents, and QA logistics without asking Bryant."
+    },
+    {
+      "confidence": 0.82,
+      "escalates": false,
+      "id": "scope-operator-002",
+      "source": "TASK-BRIEF.json",
+      "statement": "The normalized task brief is the source of accepted behavior unless repo docs provide stronger evidence."
+    },
+    {
+      "confidence": 0.9,
+      "escalates": false,
+      "id": "proof-operator-001",
+      "source": "adaptive risk router",
+      "statement": "Risk tier `critical` requires proof: red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof."
+    }
+  ],
+  "bryant_questions": [],
+  "decision": "continue",
+  "questions": [
+    {
+      "answer": "YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK",
+      "answered_by": "codex-operator",
+      "question": "What user-visible or system behavior must change?",
+      "source": "ticket"
+    },
+    {
+      "answer": "Unrelated refactors, unrelated product behavior, production/customer data mutation, and merge/deploy actions.",
+      "answered_by": "codex-operator",
+      "question": "What is outside the scope unless evidence proves it is required?",
+      "source": "SDLC autonomy policy"
+    },
+    {
+      "answer": "red_green_test_log, fresh_verification_commands, code_review_artifact, release_gate, evidence_pack, minimal_hotfix_scope_proof",
+      "answered_by": "codex-operator",
+      "question": "Which proof will be required before reporting done?",
+      "source": "adaptive risk router"
+    },
+    {
+      "answer": "superpowers:brainstorming, superpowers:writing-plans, superpowers:test-driven-development, superpowers:verification-before-completion, superpowers:requesting-code-review, sdlc-run-ledger, sdlc-evidence-pack, superpowers:systematic-debugging",
+      "answered_by": "codex-operator",
+      "question": "Which skills must be used rather than reinvented?",
+      "source": "adaptive risk router"
+    }
+  ],
+  "required_skills": [
+    "superpowers:brainstorming",
+    "superpowers:writing-plans",
+    "superpowers:test-driven-development",
+    "superpowers:verification-before-completion",
+    "superpowers:requesting-code-review",
+    "sdlc-run-ledger",
+    "sdlc-evidence-pack",
+    "superpowers:systematic-debugging"
+  ],
+  "routing": {
+    "agent_budget": {
+      "implementers": 1,
+      "qa_passes": 3,
+      "red_team": 3,
+      "reviewers": 4
+    },
+    "approval_required": [],
+    "bryant_only_categories": [],
+    "domains": [
+      "code"
+    ],
+    "lane": "hotfix",
+    "operator_can_continue": true,
+    "reasons": [
+      "No specialized domain keywords found; defaulting to general code workflow.",
+      "Hotfix/incident language requires critical-path discipline."
+    ],
+    "required_proof": [
+      "red_green_test_log",
+      "fresh_verification_commands",
+      "code_review_artifact",
+      "release_gate",
+      "evidence_pack",
+      "minimal_hotfix_scope_proof"
+    ],
+    "required_skills": [
+      "superpowers:brainstorming",
+      "superpowers:writing-plans",
+      "superpowers:test-driven-development",
+      "superpowers:verification-before-completion",
+      "superpowers:requesting-code-review",
+      "sdlc-run-ledger",
+      "sdlc-evidence-pack",
+      "superpowers:systematic-debugging"
+    ],
+    "reviewer_roles": [
+      "spec-compliance-reviewer",
+      "code-quality-reviewer",
+      "architecture-risk-reviewer",
+      "no-context-red-team"
+    ],
+    "risk_tier": "critical",
+    "stop_conditions": [
+      "done",
+      "agent_ready",
+      "ready_for_approval",
+      "true_blocker",
+      "waiting_external"
+    ],
+    "unsafe_actions": []
+  },
+  "ticket": "YPM-FIX-ANTHROPIC-OUTAGE-FALLBACK"
+}
