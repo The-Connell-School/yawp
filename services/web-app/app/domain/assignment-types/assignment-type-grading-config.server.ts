@@ -155,6 +155,7 @@ function buildResolvedConfig({
         )
       : (parsedConfig.promptConfig as Record<string, unknown>);
   const { minScore, maxScore } = getScoreBounds(parsedConfig.scoringScale);
+  const scoringType = getScoringType(parsedConfig.scoringScale);
   const rubricCategories = parsedConfig.rubric.categories;
 
   return {
@@ -170,12 +171,12 @@ function buildResolvedConfig({
       parsedConfig.source === 'assignment-type'
         ? (row?.gradingAssistantVersion ?? 1)
         : 1,
-    scoringType: getScoringType(parsedConfig.scoringScale),
+    scoringType,
     minScore,
     maxScore,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
-    rubricSnapshot: { categories: rubricCategories },
+    rubricSnapshot: { categories: rubricCategories, minScore, maxScore, scoringType },
     promptConfigSnapshot,
     outputSchemaSnapshot: parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,

@@ -69,6 +69,9 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     });
     expect(config.rubricSnapshot).toEqual({
       categories: config.rubricCategories,
+      minScore: 1,
+      maxScore: 6,
+      scoringType: 'act_writing_2_12',
     });
     expect(config.promptConfigSnapshot).toEqual({
       gradingInstructions: 'Grade this as ACT Writing.',

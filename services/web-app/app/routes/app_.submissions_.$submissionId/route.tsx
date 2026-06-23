@@ -36,17 +36,7 @@ import {
   formatPointGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
-import {
-  legacyRubricDisplayConfig,
-  type RubricDisplayConfig,
-} from '~/domain/grading/rubric-display';
-import {
-  getTemplateRubricCategories,
-  getTemplateScoreBounds,
-  getTemplateScoringType,
-  resolveGradingAssistantTemplateForAssignmentType,
-  type GradingAssistantTemplate,
-} from '~/domain/grading/grading-assistant-templates.server';
+import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -62,84 +52,10 @@ import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sideb
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
+import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function buildRubricConfigFromTemplate(
-  template: GradingAssistantTemplate
-): RubricDisplayConfig {
-  const { minScore, maxScore } = getTemplateScoreBounds(template);
-  return {
-    categories: getTemplateRubricCategories(template),
-    minScore,
-    maxScore,
-    scoringType: getTemplateScoringType(template),
-  };
-}
-
-function rubricKeysFromScores(rubricScores: unknown) {
-  return isRecord(rubricScores) ? Object.keys(rubricScores) : [];
-}
-
-function hasAllRubricKeys(config: RubricDisplayConfig, keys: string[]) {
-  const configKeys = new Set(config.categories.map((category) => category.key));
-  return keys.every((key) => configKeys.has(key));
-}
-
-async function resolveRubricConfigForSubmission({
-  assignmentTypeId,
-  aiMeta,
-  rubricScores,
-}: {
-  assignmentTypeId: string;
-  aiMeta: unknown;
-  rubricScores: unknown;
-}): Promise<RubricDisplayConfig> {
-  let config: RubricDisplayConfig | null = null;
-
-  if (isRecord(aiMeta)) {
-    const templateId =
-      typeof aiMeta.gradingAssistantTemplateId === 'string'
-        ? aiMeta.gradingAssistantTemplateId
-        : null;
-    const templateSlug =
-      typeof aiMeta.gradingAssistantTemplateSlug === 'string'
-        ? aiMeta.gradingAssistantTemplateSlug
-        : null;
-    if (templateId || templateSlug) {
-      const template = await prisma.gradingAssistantTemplate.findFirst({
-        where: {
-          OR: [
-            ...(templateId ? [{ id: templateId }] : []),
-            ...(templateSlug ? [{ slug: templateSlug }] : []),
-          ],
-        },
-      });
-      if (template) {
-        config = buildRubricConfigFromTemplate(template);
-      }
-    }
-  }
-
-  if (!config) {
-    const resolved = await resolveGradingAssistantTemplateForAssignmentType({
-      assignmentTypeId,
-    });
-    config = buildRubricConfigFromTemplate(resolved.template);
-  }
-
-  const storedKeys = rubricKeysFromScores(rubricScores);
-  if (
-    storedKeys.length > 0 &&
-    !hasAllRubricKeys(config, storedKeys) &&
-    hasAllRubricKeys(legacyRubricDisplayConfig, storedKeys)
-  ) {
-    return legacyRubricDisplayConfig;
-  }
-
-  return config;
 }
 
 // ── Revalidation ─────────────────────────────────────────────────────
@@ -255,6 +171,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         orderBy: { createdAt: 'asc' },
       },
+      gradingAssistantRuns: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          assignmentTypeRubricSnapshot: true,
+        },
+      },
     },
   });
 
@@ -294,7 +217,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const rubricConfig = await resolveRubricConfigForSubmission({
     assignmentTypeId: submission.document.assignmentTypeId,
-    aiMeta: submission.aiMeta,
+    latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
     rubricScores: submission.rubricScores,
   });
 
