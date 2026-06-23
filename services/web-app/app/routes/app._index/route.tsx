@@ -26,6 +26,10 @@ import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import type { TeacherClassCardData } from '~/components/teacher-class-card';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
 import { getTeacherRecentActiveClassIds } from '~/utils/teacher-dashboard-recent-classes.server';
+import {
+  orderAssignmentModuleSessionsForCurrentStep,
+  type AssignmentModuleSessionResumeCandidate,
+} from '~/utils/assignment-module-session-resume';
 import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
@@ -36,6 +40,17 @@ export type AssignmentTypeRow = {
   systemKey?: string | null;
   image?: { id: string } | null;
 };
+
+function orderDocumentTileModuleSessions<
+  T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
+>(documents: T[]) {
+  return documents.map((document) => ({
+    ...document,
+    assignmentModuleSessions: orderAssignmentModuleSessionsForCurrentStep(
+      document.assignmentModuleSessions
+    ),
+  }));
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -158,7 +173,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
       include: {
         assignmentModuleSessions: {
-          include: { assignmentModule: true },
+          include: {
+            assignmentModule: {
+              include: {
+                instructions: { select: { id: true } },
+              },
+            },
+          },
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
@@ -180,7 +201,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       },
       include: {
         assignmentModuleSessions: {
-          include: { assignmentModule: true },
+          include: {
+            assignmentModule: {
+              include: {
+                instructions: { select: { id: true } },
+              },
+            },
+          },
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
@@ -346,8 +373,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     courses,
-    documents,
-    archivedDocuments,
+    documents: orderDocumentTileModuleSessions(documents),
+    archivedDocuments: orderDocumentTileModuleSessions(archivedDocuments),
     teacherClasses: teacherClassesOrdered,
     assignments,
     assignmentsEnabled,

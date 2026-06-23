@@ -61,6 +61,7 @@ import {
   readLastNonDocumentRoute,
   sanitizeExitTarget,
 } from '~/utils/document-exit';
+import { resolveCurrentAssignmentModuleSession } from '~/utils/assignment-module-session-resume';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
 import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
@@ -137,79 +138,6 @@ function sortDocumentCommentsByMarkupOrder<
 
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
-}
-
-type AssignmentModuleSessionResumeCandidate = {
-  createdAt?: Date | string | null;
-  updatedAt?: Date | string | null;
-  instructionsCompleted: number;
-  assignmentModule?: {
-    position?: number | null;
-    instructions?: unknown[] | null;
-  } | null;
-};
-
-function dateTimeValue(value: Date | string | null | undefined) {
-  if (!value) return null;
-  const time =
-    value instanceof Date ? value.getTime() : new Date(value).getTime();
-  return Number.isFinite(time) ? time : null;
-}
-
-function wasSessionTouched(session: AssignmentModuleSessionResumeCandidate) {
-  const createdAt = dateTimeValue(session.createdAt);
-  const updatedAt = dateTimeValue(session.updatedAt);
-  return createdAt != null && updatedAt != null && updatedAt > createdAt;
-}
-
-function isSessionComplete(session: AssignmentModuleSessionResumeCandidate) {
-  const instructionCount = session.assignmentModule?.instructions?.length ?? 0;
-  return (
-    instructionCount > 0 && session.instructionsCompleted >= instructionCount
-  );
-}
-
-function resolveCurrentAssignmentModuleSession<
-  T extends AssignmentModuleSessionResumeCandidate,
->(sessions: T[], explicitCmsIdx: number | null) {
-  if (explicitCmsIdx != null) {
-    const explicitIndex = explicitCmsIdx >= 0 ? explicitCmsIdx : 0;
-    const currentCms = sessions[explicitIndex] ?? sessions[0] ?? null;
-    return {
-      currentCms,
-      currentCmsIdx: currentCms ? sessions.indexOf(currentCms) : -1,
-    };
-  }
-
-  const touched = sessions
-    .map((session, index) => ({
-      session,
-      index,
-      updatedAt: dateTimeValue(session.updatedAt) ?? 0,
-      position: session.assignmentModule?.position ?? index,
-    }))
-    .filter(({ session }) => wasSessionTouched(session))
-    .sort(
-      (a, b) =>
-        b.updatedAt - a.updatedAt ||
-        b.position - a.position ||
-        b.index - a.index
-    );
-
-  if (touched[0]) {
-    return { currentCms: touched[0].session, currentCmsIdx: touched[0].index };
-  }
-
-  const firstIncompleteIndex = sessions.findIndex(
-    (session) => !isSessionComplete(session)
-  );
-  const resumeIndex =
-    firstIncompleteIndex >= 0 ? firstIncompleteIndex : sessions.length - 1;
-
-  return {
-    currentCms: resumeIndex >= 0 ? sessions[resumeIndex] : null,
-    currentCmsIdx: resumeIndex,
-  };
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
