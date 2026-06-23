@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { requireMutableRequest } from '~/utils/auth.server';
-import { buildTutorSystemPrompt } from './build-system-prompt';
+import {
+  buildModuleRubricGuidance,
+  buildTutorSystemPrompt,
+} from './build-system-prompt';
+import { parseRubric } from '~/utils/grading-assistant-template.shared';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -53,7 +57,10 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: data.cmsId },
       include: {
         assignmentModule: {
-          include: { instructions: { orderBy: { position: 'asc' } } },
+          include: {
+            instructions: { orderBy: { position: 'asc' } },
+            assignmentType: { select: { rubricJson: true } },
+          },
         },
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         document: {
@@ -80,9 +87,18 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const moduleRubric = parseRubric(
+      cms.assignmentModule.assignmentType?.rubricJson
+    );
+    const moduleRubricGuidance = buildModuleRubricGuidance({
+      categories: moduleRubric.categories,
+      alignment: cms.assignmentModule.rubricAlignmentJson,
+    });
+
     const system = buildTutorSystemPrompt({
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
+      moduleRubricGuidance,
     });
 
     const documentSource =

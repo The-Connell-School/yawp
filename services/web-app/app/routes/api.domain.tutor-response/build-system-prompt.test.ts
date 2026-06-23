@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'bun:test';
-import { buildTutorSystemPrompt } from './build-system-prompt';
+import {
+  buildModuleRubricGuidance,
+  buildTutorSystemPrompt,
+} from './build-system-prompt';
 
 const base = {
   tutorInstructions: 'You are a friendly English writing tutor.',
@@ -39,5 +42,58 @@ describe('buildTutorSystemPrompt', () => {
     expect(result).toContain('student_document_context');
     expect(result.startsWith('\n')).toBe(false);
     expect(result.endsWith('\n')).toBe(false);
+  });
+
+  it('includes module rubric guidance and excludes not-applicable categories', () => {
+    const guidance = buildModuleRubricGuidance({
+      categories: [
+        {
+          key: 'thesis_and_content',
+          label: 'Thesis/Content',
+          description: 'Original, defensible thesis.',
+          weight: 0.25,
+        },
+        {
+          key: 'organization_and_structure',
+          label: 'Organization/Structure',
+          description: 'Purposeful structure.',
+          weight: 0.25,
+        },
+        {
+          key: 'evidence_and_support',
+          label: 'Evidence/Support',
+          description: 'Precise evidence.',
+          weight: 0.2,
+        },
+        {
+          key: 'grammar_and_mechanics',
+          label: 'Grammar/Syntax/Formatting',
+          description: 'Technical correctness.',
+          weight: 0.1,
+        },
+      ],
+      alignment: {
+        thesis_and_content: 'primary',
+        organization_and_structure: 'supporting',
+        evidence_and_support: 'preparatory',
+        grammar_and_mechanics: 'not-applicable',
+      },
+    });
+
+    expect(guidance).toContain('Primary');
+    expect(guidance).toContain('Thesis/Content (25%)');
+    expect(guidance).toContain('Supporting');
+    expect(guidance).toContain('Organization/Structure (25%)');
+    expect(guidance).toContain('Preparatory');
+    expect(guidance).toContain('Evidence/Support (20%)');
+    expect(guidance).not.toContain('Grammar/Syntax/Formatting');
+
+    const prompt = buildTutorSystemPrompt({
+      ...base,
+      moduleRubricGuidance: guidance,
+    });
+
+    expect(prompt).toContain('Module rubric guidance');
+    expect(prompt).toContain('Primary');
   });
 });

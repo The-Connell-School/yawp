@@ -70,6 +70,28 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       instructionsCompleted: 0,
       assignmentModule: {
         tutorInstructions: 'Coach the student.',
+        rubricAlignmentJson: {
+          thesis_and_content: 'primary',
+          grammar_and_mechanics: 'not-applicable',
+        },
+        assignmentType: {
+          rubricJson: {
+            categories: [
+              {
+                key: 'thesis_and_content',
+                label: 'Thesis/Content',
+                description: 'Original, defensible thesis.',
+                weight: 0.25,
+              },
+              {
+                key: 'grammar_and_mechanics',
+                label: 'Grammar/Syntax/Formatting',
+                description: 'Technical correctness.',
+                weight: 0.1,
+              },
+            ],
+          },
+        },
         instructions: [
           {
             id: 'instruction-1',
@@ -107,6 +129,10 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect(completionArgs.tools).toBeUndefined();
     expect(completionArgs.handleToolCall).toBeUndefined();
     expect(completionArgs.system).toContain('student_document_context');
+    expect(completionArgs.system).toContain('Module rubric guidance');
+    expect(completionArgs.system).toContain('Primary');
+    expect(completionArgs.system).toContain('Thesis/Content (25%)');
+    expect(completionArgs.system).not.toContain('Grammar/Syntax/Formatting');
 
     const documentContextMessage = completionArgs.messages.find(
       (message: { role: string; content: string }) =>
