@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { cn } from '~/utils/misc'
 
-export const Loading = () => {
+export const Loading = ({ label }: { label?: string }) => {
 	const [activeDot, setActiveDot] = useState(0)
 
 	useEffect(() => {
@@ -24,6 +24,11 @@ export const Loading = () => {
 					})}
 				></span>
 			))}
+			{label ? (
+				<span className="text-xs font-medium text-muted-foreground">
+					{label}
+				</span>
+			) : null}
 		</div>
 	)
 }

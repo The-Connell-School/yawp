@@ -3,6 +3,7 @@ import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
+import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { requireMutableRequest } from '~/utils/auth.server';
 import { buildTutorSystemPrompt } from './build-system-prompt';
 
@@ -12,6 +13,7 @@ const POST = z.object({
   response: z.string().min(1),
   cmsId: z.string().min(1),
   content: z.string().optional(),
+  llmRetry: z.enum(['fallback']).optional(),
 });
 
 const errorResponse = (error: { message: string }) => {
@@ -99,12 +101,15 @@ export async function action({ request }: ActionFunctionArgs) {
       ]);
 
     let completion: string;
+    const forceFallback = data.llmRetry === 'fallback';
     try {
       completion = await getLLMCompletion({
         model: (process.env.AI_MODEL as any) ?? 'claude-sonnet-4-6',
         messages,
         system,
         maxTokens: 500,
+        forceFallback,
+        signalFallbackRetry: !forceFallback,
         tools: [READ_DOCUMENT_TOOL],
         handleToolCall: async (name) => {
           if (name === 'read_student_document') {
@@ -114,6 +119,9 @@ export async function action({ request }: ActionFunctionArgs) {
         },
       });
     } catch (error) {
+      if (isLlmFallbackRetrySignal(error)) {
+        return dataResponse({ retrying: true }, { status: 202 });
+      }
       return errorResponse(error as any);
     }
 
