@@ -25,7 +25,10 @@ import {
   extractJsonObjectCandidates,
   parseFirstJsonValue,
 } from '~/utils/llm-json.server';
-import { buildAiTextContextAudit } from '~/utils/ai-context-audit.server';
+import {
+  buildAiContextAuditMetadata,
+  buildAiTextContextAudit,
+} from '~/utils/ai-context-audit.server';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -564,6 +567,13 @@ export async function action({ request }: ActionFunctionArgs) {
     submissionId: submission.id,
     text: submission.text,
   });
+  const gradingAiContextMetadata = buildAiContextAuditMetadata({
+    textContext: documentContext,
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeRubricSource: resolvedGradingConfig.source,
+    assignmentTypeGradingVersion: resolvedGradingConfig.version,
+    rubricCategoryKeys: rubricKeys,
+  });
 
   const apHistorySnapshotCandidate =
     submission.document.assignment?.apHistorySnapshot;
@@ -604,7 +614,12 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           kind: 'ap-history-rubric',
           rubricId: apHistorySnapshot.rubric.rubricId,
           essayType: apHistorySnapshot.essayType,
-          ...documentContext,
+          ...buildAiContextAuditMetadata({
+            textContext: documentContext,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentTypeRubricSource: 'ap-history-snapshot',
+            rubricCategoryKeys: apHistoryPointKeysForSnapshot(apHistorySnapshot),
+          }),
         },
       });
 
@@ -740,15 +755,13 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           feature: 'grading',
           kind: 'rubric-evaluation',
           gradingConfigSource: resolvedGradingConfig.source,
-          assignmentTypeGradingVersion: resolvedGradingConfig.version,
+          ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
           assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
-          assignmentTypeId: submission.document.assignmentTypeId,
           assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-          ...documentContext,
         },
       });
     } catch (error) {
@@ -773,7 +786,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'overall-comment',
-        ...documentContext,
+        ...gradingAiContextMetadata,
       },
     });
     const parsedOverallComment = AiOverallCommentSchema.parse(
@@ -830,7 +843,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'rubric-schema-repair',
-        ...documentContext,
+        ...gradingAiContextMetadata,
       },
     });
 
@@ -950,7 +963,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         metadata: {
           feature: 'grading',
           kind: 'grammar-issues',
-          ...documentContext,
+          ...gradingAiContextMetadata,
         },
       });
       let parsedGrammarIssues =
@@ -976,7 +989,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             feature: 'grading',
             kind: 'grammar-issues',
             retry: 'schema-repair',
-            ...documentContext,
+            ...gradingAiContextMetadata,
           },
         });
         parsedGrammarIssues =
@@ -1005,6 +1018,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         model,
         gradedAt: now.toISOString(),
         gradingConfigSource: resolvedGradingConfig.source,
+        assignmentTypeRubricSource: resolvedGradingConfig.source,
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
@@ -1013,6 +1027,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        rubricCategoryKeys: rubricKeys,
         documentContext,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
@@ -1036,6 +1051,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       status: 'succeeded',
       metadata: {
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
+        assignmentTypeRubricSource: resolvedGradingConfig.source,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
         assignmentTypeSourceTemplateSlug:
           resolvedGradingConfig.sourceTemplateSlug,
@@ -1045,6 +1061,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         scoringType,
         rubricKeys,
+        rubricCategoryKeys: rubricKeys,
         gradedAt: now.toISOString(),
         documentContext,
       } satisfies Prisma.InputJsonValue,

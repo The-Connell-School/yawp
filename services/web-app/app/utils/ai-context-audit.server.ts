@@ -8,6 +8,13 @@ export type AiTextContextAudit = {
   documentTextSha256: string;
 };
 
+export type AiContextAuditMetadata = AiTextContextAudit & {
+  assignmentTypeId?: string | null;
+  assignmentTypeRubricSource?: string | null;
+  assignmentTypeGradingVersion?: number | null;
+  rubricCategoryKeys?: string[];
+};
+
 export function sha256Text(text: string) {
   return createHash('sha256').update(text).digest('hex');
 }
@@ -29,5 +36,31 @@ export function buildAiTextContextAudit({
     submissionId,
     documentTextLength: text.length,
     documentTextSha256: sha256Text(text),
+  };
+}
+
+export function buildAiContextAuditMetadata({
+  textContext,
+  assignmentTypeId,
+  assignmentTypeRubricSource,
+  assignmentTypeGradingVersion,
+  rubricCategoryKeys,
+}: {
+  textContext: AiTextContextAudit;
+  assignmentTypeId?: string | null;
+  assignmentTypeRubricSource?: string | null;
+  assignmentTypeGradingVersion?: number | null;
+  rubricCategoryKeys?: string[];
+}): AiContextAuditMetadata {
+  return {
+    ...textContext,
+    ...(assignmentTypeId !== undefined ? { assignmentTypeId } : {}),
+    ...(assignmentTypeRubricSource !== undefined
+      ? { assignmentTypeRubricSource }
+      : {}),
+    ...(assignmentTypeGradingVersion !== undefined
+      ? { assignmentTypeGradingVersion }
+      : {}),
+    ...(rubricCategoryKeys ? { rubricCategoryKeys } : {}),
   };
 }

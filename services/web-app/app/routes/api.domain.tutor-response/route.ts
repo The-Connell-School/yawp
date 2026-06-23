@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 import { parseFormData, validationError } from '@rvf/react-router';
 import { z } from 'zod';
@@ -10,6 +9,11 @@ import {
   buildTutorSystemPrompt,
 } from './build-system-prompt';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  buildAiContextAuditMetadata,
+  buildAiTextContextAudit,
+} from '~/utils/ai-context-audit.server';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -25,10 +29,6 @@ const errorResponse = (error: { message: string }) => {
     { status: 500 }
   );
 };
-
-function sha256Text(text: string) {
-  return createHash('sha256').update(text).digest('hex');
-}
 
 function buildDocumentContextMessage({
   documentText,
@@ -59,12 +59,19 @@ export async function action({ request }: ActionFunctionArgs) {
         assignmentModule: {
           include: {
             instructions: { orderBy: { position: 'asc' } },
-            assignmentType: { select: { rubricJson: true } },
+            assignmentType: {
+              select: {
+                id: true,
+                gradingAssistantVersion: true,
+                rubricJson: true,
+              },
+            },
           },
         },
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         document: {
           select: {
+            id: true,
             text: true,
           },
         },
@@ -104,7 +111,24 @@ export async function action({ request }: ActionFunctionArgs) {
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
     const documentText = data.content ?? cms.document.text ?? '';
-    const documentTextSha256 = sha256Text(documentText);
+    const documentContext = buildAiTextContextAudit({
+      documentSource,
+      documentId: cms.document.id,
+      text: documentText,
+    });
+    const moduleRubricRelationships = normalizeModuleRubricAlignment(
+      cms.assignmentModule.rubricAlignmentJson,
+      moduleRubric.categories
+    );
+    const aiContextMetadata = buildAiContextAuditMetadata({
+      textContext: documentContext,
+      assignmentTypeId: cms.assignmentModule.assignmentType?.id ?? null,
+      assignmentTypeRubricSource:
+        moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
+      assignmentTypeGradingVersion:
+        cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
+      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+    });
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
@@ -128,7 +152,7 @@ export async function action({ request }: ActionFunctionArgs) {
           content: buildDocumentContextMessage({
             documentText,
             source: documentSource,
-            sha256: documentTextSha256,
+            sha256: documentContext.documentTextSha256,
           }),
         },
         {
@@ -150,9 +174,8 @@ export async function action({ request }: ActionFunctionArgs) {
           cmsId: cms.id,
           assignmentModuleId: cms.assignmentModuleId,
           instructionId: instruction.id,
-          documentSource,
-          documentTextLength: documentText.length,
-          documentTextSha256,
+          ...aiContextMetadata,
+          moduleRubricRelationships,
         },
       });
     } catch (error) {

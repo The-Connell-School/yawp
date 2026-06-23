@@ -75,6 +75,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
           grammar_and_mechanics: 'not-applicable',
         },
         assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 7,
           rubricJson: {
             categories: [
               {
@@ -101,6 +103,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       },
       messages: [],
       document: {
+        id: 'doc-1',
         text: 'Original draft',
       },
     });
@@ -146,12 +149,24 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       expect.objectContaining({
         feature: 'tutor',
         kind: 'assignment-module-tutor',
+        documentId: 'doc-1',
         documentSource: 'client-content',
         documentTextLength: 'Current draft'.length,
         documentTextSha256: createHash('sha256')
           .update('Current draft')
           .digest('hex'),
         cmsId: 'cms-1',
+        assignmentTypeId: 'assignment-type-1',
+        assignmentTypeRubricSource: 'assignment-type',
+        assignmentTypeGradingVersion: 7,
+        rubricCategoryKeys: [
+          'thesis_and_content',
+          'grammar_and_mechanics',
+        ],
+        moduleRubricRelationships: {
+          thesis_and_content: 'primary',
+          grammar_and_mechanics: 'not-applicable',
+        },
         instructionId: 'instruction-1',
       })
     );

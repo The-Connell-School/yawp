@@ -63,6 +63,33 @@ async function logLlmCall(data: {
   }
 }
 
+function messageContentLength(content: unknown) {
+  if (typeof content === 'string') return content.length;
+  return JSON.stringify(content ?? '').length;
+}
+
+function buildLogMetadata({
+  metadata,
+  messages,
+  hasTools,
+  toolRoundCount,
+}: {
+  metadata?: Record<string, unknown>;
+  messages: Array<{ content: unknown }>;
+  hasTools: boolean;
+  toolRoundCount: number;
+}) {
+  return {
+    ...(metadata ?? {}),
+    messageCount: messages.length,
+    messageTextLengths: messages.map((message) =>
+      messageContentLength(message.content)
+    ),
+    hasTools,
+    toolRoundCount,
+  };
+}
+
 export async function getLLMCompletion(params: Params) {
   const startTime = Date.now();
 
@@ -80,6 +107,8 @@ export async function getLLMCompletion(params: Params) {
     const maxRounds = params.maxToolRounds ?? 3;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    let toolRoundCount = 0;
+    const hasTools = Boolean(params.tools?.length);
 
     try {
       for (let round = 0; round <= maxRounds; round++) {
@@ -119,6 +148,7 @@ export async function getLLMCompletion(params: Params) {
             }
           }
           messages.push({ role: 'user', content: toolResults });
+          toolRoundCount += 1;
           continue;
         }
 
@@ -137,13 +167,18 @@ export async function getLLMCompletion(params: Params) {
           model: params.model,
           provider: 'anthropic',
           systemPrompt: system,
-          messages: params.messages, // Log the original messages, not the tool-loop internal ones
+          messages,
           response: responseText,
           inputTokens: totalInputTokens,
           outputTokens: totalOutputTokens,
           totalTokens: totalInputTokens + totalOutputTokens,
           durationMs,
-          metadata: params.metadata,
+          metadata: buildLogMetadata({
+            metadata: params.metadata,
+            messages,
+            hasTools,
+            toolRoundCount,
+          }),
         });
 
         return responseText;
@@ -157,10 +192,15 @@ export async function getLLMCompletion(params: Params) {
         model: params.model,
         provider: 'anthropic',
         systemPrompt: system,
-        messages: params.messages,
+        messages,
         error: err instanceof Error ? err.message : String(err),
         durationMs,
-        metadata: params.metadata,
+        metadata: buildLogMetadata({
+          metadata: params.metadata,
+          messages,
+          hasTools,
+          toolRoundCount,
+        }),
       });
       throw err;
     }
@@ -207,7 +247,12 @@ export async function getLLMCompletion(params: Params) {
         outputTokens: message.usage?.completion_tokens,
         totalTokens: message.usage?.total_tokens,
         durationMs,
-        metadata: params.metadata,
+        metadata: buildLogMetadata({
+          metadata: params.metadata,
+          messages: formattedMessages,
+          hasTools: false,
+          toolRoundCount: 0,
+        }),
       });
 
       return responseText;
@@ -220,7 +265,12 @@ export async function getLLMCompletion(params: Params) {
         messages: formattedMessages,
         error: err instanceof Error ? err.message : String(err),
         durationMs,
-        metadata: params.metadata,
+        metadata: buildLogMetadata({
+          metadata: params.metadata,
+          messages: formattedMessages,
+          hasTools: false,
+          toolRoundCount: 0,
+        }),
       });
       throw err;
     }

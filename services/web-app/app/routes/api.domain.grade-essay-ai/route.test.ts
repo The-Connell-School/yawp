@@ -260,11 +260,13 @@ describe('api.domain.grade-essay-ai', () => {
     );
     expect(prisma.submission.update.mock.calls[0]?.[0].data.aiMeta).toMatchObject({
       gradingConfigSource: 'thesis-default',
+      assignmentTypeRubricSource: 'thesis-default',
       assignmentTypeGradingVersion: 1,
       assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
       gradingAssistantStrictnessLevel: 'intermediate',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentTypeKind: null,
+      rubricCategoryKeys: rubricKeys,
       documentContext: {
         documentSource: 'submission-snapshot',
         documentId: 'doc-1',
@@ -287,7 +289,9 @@ describe('api.domain.grade-essay-ai', () => {
       },
       metadata: {
         assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
+        assignmentTypeRubricSource: 'thesis-default',
         gradingAssistantStrictnessLevel: 'intermediate',
+        rubricCategoryKeys: rubricKeys,
         documentContext: {
           documentSource: 'submission-snapshot',
           documentId: 'doc-1',
@@ -303,7 +307,10 @@ describe('api.domain.grade-essay-ai', () => {
       feature: 'grading',
       kind: 'rubric-evaluation',
       gradingConfigSource: 'thesis-default',
+      assignmentTypeRubricSource: 'thesis-default',
       assignmentTypeGradingVersion: 1,
+      assignmentTypeId: 'assignment-type-legacy',
+      rubricCategoryKeys: rubricKeys,
       documentSource: 'submission-snapshot',
       documentId: 'doc-1',
       submissionId: 'sub-1',
@@ -314,6 +321,10 @@ describe('api.domain.grade-essay-ai', () => {
     expect(getLLMCompletion.mock.calls[1]?.[0].metadata).toMatchObject({
       feature: 'grading',
       kind: 'grammar-issues',
+      assignmentTypeRubricSource: 'thesis-default',
+      assignmentTypeGradingVersion: 1,
+      assignmentTypeId: 'assignment-type-legacy',
+      rubricCategoryKeys: rubricKeys,
       documentSource: 'submission-snapshot',
       documentId: 'doc-1',
       submissionId: 'sub-1',
@@ -531,11 +542,18 @@ describe('api.domain.grade-essay-ai', () => {
     ]);
     expect(updateCall.data.aiMeta).toMatchObject({
       gradingConfigSource: 'assignment-type',
+      assignmentTypeRubricSource: 'assignment-type',
       assignmentTypeGradingVersion: 3,
       assignmentTypeGradingLabel: 'ACT Writing',
       assignmentTypeSourceTemplateId: 'template-act',
       assignmentTypeSourceTemplateSlug: 'act-writing-four-domain',
       gradingAssistantStrictnessLevel: 'advanced',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
     });
     expect(runCall.data).toMatchObject({
       submissionId: 'sub-act',
@@ -552,9 +570,27 @@ describe('api.domain.grade-essay-ai', () => {
     expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(4);
     expect(runCall.data.metadata).toMatchObject({
       assignmentTypeGradingLabel: 'ACT Writing',
+      assignmentTypeRubricSource: 'assignment-type',
       assignmentTypeSourceTemplateSlug: 'act-writing-four-domain',
       gradingAssistantStrictnessLevel: 'advanced',
       assignmentId: 'assignment-act',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
+    });
+    expect(firstCallArgs?.metadata).toMatchObject({
+      assignmentTypeRubricSource: 'assignment-type',
+      assignmentTypeGradingVersion: 3,
+      assignmentTypeId: 'assignment-type-act',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
     });
   });
 
@@ -740,6 +776,12 @@ describe('api.domain.grade-essay-ai', () => {
         document: {
           id: 'ap-doc-1',
           membershipId: 'student-profile-1',
+          assignmentTypeId: 'ap-history-type',
+          assignmentType: {
+            id: 'ap-history-type',
+            kind: null,
+            title: 'AP History Essay',
+          },
           assignment: {
             apHistorySnapshot: dbqSnapshot,
             class: { schoolId: 'school-1' },
@@ -787,6 +829,17 @@ describe('api.domain.grade-essay-ai', () => {
       kind: 'ap-history-rubric',
       rubricId: 'ap-history-dbq-2026',
       essayType: 'dbq',
+      assignmentTypeId: 'ap-history-type',
+      assignmentTypeRubricSource: 'ap-history-snapshot',
+      rubricCategoryKeys: [
+        'thesis',
+        'contextualization',
+        'document_use_describes',
+        'document_use_supports_argument',
+        'outside_evidence',
+        'sourcing',
+        'complexity',
+      ],
       documentSource: 'submission-snapshot',
       documentId: 'ap-doc-1',
       submissionId: 'ap-sub-1',
