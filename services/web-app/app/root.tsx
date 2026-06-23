@@ -234,6 +234,7 @@ function Document({
         />
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
+        <script src="https://ui.sh/ui-picker.js" />
       </body>
     </html>
   );

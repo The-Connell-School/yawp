@@ -30,7 +30,7 @@ const tabs = [
   },
   {
     label: 'Assignments & Grading',
-    to: '/app/admin/pipelines',
+    to: '/app/admin/assignments-grading',
     icon: <Workflow size={16} className="opacity-75 mr-1" />,
   },
   {

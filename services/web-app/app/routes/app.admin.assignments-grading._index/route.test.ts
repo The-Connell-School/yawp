@@ -12,7 +12,7 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 
 const { loader } = await import('./route');
 
-const mockRequest = new Request('http://localhost/app/admin/pipelines');
+const mockRequest = new Request('http://localhost/app/admin/assignments-grading');
 
 const mockAssignmentType = {
   id: 'at-1',

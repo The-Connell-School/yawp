@@ -31,7 +31,7 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
-  return redirect('/app/admin/pipelines');
+  return redirect('/app/admin/assignments-grading');
 
   const [templates, assignmentTypes] = await Promise.all([
     prisma.gradingAssistantTemplate.findMany({
