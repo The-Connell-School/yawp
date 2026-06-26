@@ -201,6 +201,11 @@ export default function Route() {
                 size="icon-sm"
                 variant="ghost"
                 className="hidden sm:inline-flex"
+                aria-label={
+                  state === 'expanded'
+                    ? 'Collapse app navigation'
+                    : 'Expand app navigation'
+                }
                 disabled={['submitting', 'loading'].includes(fetcher.state)}
               >
                 {state === 'expanded' ? (
@@ -215,6 +220,7 @@ export default function Route() {
             variant="outline"
             size="icon-sm"
             className="sm:hidden"
+            aria-label="Close app navigation"
             onClick={() => setIsMobileNavOpen(false)}
           >
             <XIcon />

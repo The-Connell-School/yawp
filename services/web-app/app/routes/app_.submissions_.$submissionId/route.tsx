@@ -1291,7 +1291,7 @@ function ViewPanel({
           <p className="text-sm font-medium text-muted-foreground">
             Not yet graded
           </p>
-          <p className="text-xs text-muted-foreground/60 leading-relaxed max-w-[200px]">
+          <p className="text-xs text-muted-foreground leading-relaxed max-w-[200px]">
             Your grade will appear here once the teacher has reviewed your
             submission.
           </p>

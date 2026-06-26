@@ -261,7 +261,7 @@ export function GradingCommentsSidebar({
               <MessageSquarePlus className="h-8 w-8 text-muted-foreground/40" strokeWidth={1.5} />
               <p className="text-sm font-medium text-muted-foreground">No feedback yet</p>
               {!readOnly ? (
-                <p className="text-xs leading-relaxed text-muted-foreground/70">
+                <p className="text-xs leading-relaxed text-muted-foreground">
                   Select text in the essay, then click the Comment button to add your first note.
                 </p>
               ) : null}
@@ -347,4 +347,3 @@ export function GradingCommentsSidebar({
     </div>
   );
 }
-

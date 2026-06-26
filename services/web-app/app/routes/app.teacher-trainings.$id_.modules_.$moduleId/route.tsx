@@ -31,6 +31,7 @@ import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
+import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -271,10 +272,9 @@ export default function TeacherTrainingModuleRoute() {
     document.body.removeChild(link);
   };
 
-  const progressPct = Math.ceil(
-    ((currentSession?.videoTimestamp || 0) /
-      (currentModule.videoDuration || 0)) *
-      100
+  const progressPct = getTeacherTrainingProgressPercent(
+    currentSession?.videoTimestamp,
+    currentModule.videoDuration
   );
 
   return (
@@ -420,15 +420,10 @@ export default function TeacherTrainingModuleRoute() {
               <CardContent className="space-y-2 max-h-96 overflow-y-auto">
                 {teacherTraining.teacherTrainingModules.map((module, index) => {
                   const isCurrentModule = module.id === currentModule.id;
-                  const moduleProgressPct =
-                    module.teacherTrainingModuleSessions.length > 0
-                      ? Math.ceil(
-                          ((module.teacherTrainingModuleSessions[0]
-                            .videoTimestamp || 0) /
-                            (module.videoDuration || 0)) *
-                            100
-                        )
-                      : 0;
+                  const moduleProgressPct = getTeacherTrainingProgressPercent(
+                    module.teacherTrainingModuleSessions[0]?.videoTimestamp,
+                    module.videoDuration
+                  );
 
                   return (
                     <div
