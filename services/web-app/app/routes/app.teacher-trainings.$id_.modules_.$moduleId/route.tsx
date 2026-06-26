@@ -276,6 +276,11 @@ export default function TeacherTrainingModuleRoute() {
   );
   const { captionResource, transcriptResource } =
     getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
+  const primaryResources = currentModule.resources.filter(
+    (resource) =>
+      resource.id !== captionResource?.id &&
+      resource.id !== transcriptResource?.id
+  );
   const captionTrack = captionResource
     ? {
         src: `/api/teacher-training-module-resource/${captionResource.id}`,
@@ -379,76 +384,91 @@ export default function TeacherTrainingModuleRoute() {
               </CardContent>
             </Card>
 
-            {(captionResource || transcriptResource) && (
-              <Card className="bg-muted">
-                <CardHeader>
-                  <CardTitle>Media accessibility</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {captionResource ? (
-                      <Button variant="outline" size="sm" asChild>
+            {(primaryResources.length > 0 ||
+              captionResource ||
+              transcriptResource) && (
+              <div className="space-y-3">
+                {primaryResources.length > 0 && (
+                  <Card
+                    className="bg-muted"
+                    data-testid="teacher-training-primary-resources"
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        Resources
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {primaryResources.map((resource) => (
+                          <div
+                            key={resource.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="font-medium">{resource.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {resource.contentType}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() =>
+                                downloadResource(resource.id, resource.name)
+                              }
+                              size="sm"
+                              variant="outline"
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              Download
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(captionResource || transcriptResource) && (
+                  <section
+                    aria-labelledby="teacher-training-media-accessibility-heading"
+                    className="px-1 text-xs text-muted-foreground/80"
+                    data-testid="teacher-training-media-accessibility"
+                  >
+                    <h3
+                      id="teacher-training-media-accessibility-heading"
+                      className="sr-only"
+                    >
+                      Media accessibility files
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-medium text-muted-foreground/80">
+                        Media accessibility
+                      </span>
+                      {captionResource ? (
                         <a
+                          className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           href={`/api/teacher-training-module-resource/${captionResource.id}`}
                           download
                         >
-                          Download captions
+                          Captions
                         </a>
-                      </Button>
-                    ) : null}
-                    {transcriptResource ? (
-                      <Button variant="outline" size="sm" asChild>
+                      ) : null}
+                      {transcriptResource ? (
                         <a
+                          className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           href={`/api/teacher-training-module-resource/${transcriptResource.id}`}
                           download
                         >
                           Transcript
                         </a>
-                      </Button>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {currentModule.resources.length > 0 && (
-              <Card className="bg-muted">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Resources
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {currentModule.resources.map((resource) => (
-                      <div
-                        key={resource.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{resource.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {resource.contentType}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          onClick={() =>
-                            downloadResource(resource.id, resource.name)
-                          }
-                          size="sm"
-                          variant="outline"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ) : null}
+                    </div>
+                  </section>
+                )}
+              </div>
             )}
           </div>
 
