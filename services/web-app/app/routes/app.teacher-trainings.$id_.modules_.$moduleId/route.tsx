@@ -32,6 +32,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
 import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
+import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -276,6 +277,15 @@ export default function TeacherTrainingModuleRoute() {
     currentSession?.videoTimestamp,
     currentModule.videoDuration
   );
+  const { captionResource, transcriptResource } =
+    getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
+  const captionTrack = captionResource
+    ? {
+        src: `/api/teacher-training-module-resource/${captionResource.id}`,
+        label: 'English captions',
+        srcLang: 'en',
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-full">
@@ -311,6 +321,7 @@ export default function TeacherTrainingModuleRoute() {
                       teacherTrainingId={teacherTraining.id}
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
+                      captionTrack={captionTrack}
                       onUpdateProgress={(currentTime) => {
                         const formData = new FormData();
                         formData.append('intent', 'updateProgress');
@@ -370,6 +381,38 @@ export default function TeacherTrainingModuleRoute() {
                 </div>
               </CardContent>
             </Card>
+
+            {(captionResource || transcriptResource) && (
+              <Card className="bg-muted">
+                <CardHeader>
+                  <CardTitle>Media accessibility</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {captionResource ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`/api/teacher-training-module-resource/${captionResource.id}`}
+                          download
+                        >
+                          Download captions
+                        </a>
+                      </Button>
+                    ) : null}
+                    {transcriptResource ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`/api/teacher-training-module-resource/${transcriptResource.id}`}
+                          download
+                        >
+                          Transcript
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {currentModule.resources.length > 0 && (
               <Card className="bg-muted">
