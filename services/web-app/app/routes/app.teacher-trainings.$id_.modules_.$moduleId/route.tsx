@@ -33,6 +33,7 @@ import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
 import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
 import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
+import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -111,13 +112,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
-  // Derive a signed URL for playback if using S3 key
-  let playbackUrl: string | null = null;
-  if (currentModule?.videoS3Key) {
-    playbackUrl = await (
-      await import('~/services/s3.server')
-    ).getSignedGetUrl(currentModule.videoS3Key);
-  }
+  const playbackUrl = await getTeacherTrainingPlaybackUrl(
+    currentModule.videoS3Key
+  );
 
   return dataResponse({
     teacherTraining,
