@@ -8,13 +8,19 @@ interface CircularProgressProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
+export function sanitizeCircularProgress(progress: number) {
+  if (!Number.isFinite(progress)) return 0;
+  return Math.max(0, Math.min(100, progress));
+}
+
 export function CircularProgress({
   progress,
   index,
   className,
   size = 'md',
 }: CircularProgressProps) {
-  const isCompleted = progress >= 95;
+  const safeProgress = sanitizeCircularProgress(progress);
+  const isCompleted = safeProgress >= 95;
 
   // Size configurations
   const sizeConfig = {
@@ -42,7 +48,7 @@ export function CircularProgress({
   const radius = size === 'sm' ? 14 : size === 'md' ? 20 : 26;
   const circumference = 2 * Math.PI * radius;
   const strokeDasharray = circumference;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+  const strokeDashoffset = circumference - (safeProgress / 100) * circumference;
 
   return (
     <div
@@ -97,7 +103,7 @@ export function CircularProgress({
             className={cn(
               'font-medium',
               config.text,
-              progress > 0 ? 'text-primary' : 'text-muted-foreground'
+              safeProgress > 0 ? 'text-primary' : 'text-muted-foreground'
             )}
           >
             {index}

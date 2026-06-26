@@ -46,6 +46,7 @@ export const RichTextarea = ({
       <Tooltip text="Type a message first" delayDuration={200}>
         <button
           type="button"
+          aria-label="Send chat message"
           className={cn(
             'absolute bottom-2 right-2 rounded-md p-2 shadow transition',
             hasText && !textareaProps?.disabled

@@ -4,6 +4,10 @@ import { Button } from '~/components/ui/button';
 import { ChevronRight, RotateCcw } from 'lucide-react';
 import z from 'zod';
 import { useForm } from '@rvf/react-router';
+import {
+  VideoCaptionTrack,
+  type VideoCaptionTrackConfig,
+} from './video-caption-track';
 
 export default function VideoPlayer({
   videoLink,
@@ -13,6 +17,7 @@ export default function VideoPlayer({
   initialCurrentTime,
   onUpdateProgress,
   teacherTrainingId,
+  captionTrack,
 }: {
   videoLink: string;
   moduleId: string;
@@ -21,6 +26,7 @@ export default function VideoPlayer({
   initialCurrentTime: number;
   onUpdateProgress: (currentTime: number) => void;
   teacherTrainingId: string;
+  captionTrack?: VideoCaptionTrackConfig | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoEnded, setVideoEnded] = useState(false);
@@ -101,6 +107,7 @@ export default function VideoPlayer({
         onPlay={() => setVideoStarted(true)}
       >
         <source src={videoLink} />
+        <VideoCaptionTrack track={captionTrack} />
         Your browser does not support the video tag.
       </video>
       {videoEnded || isComplete ? (

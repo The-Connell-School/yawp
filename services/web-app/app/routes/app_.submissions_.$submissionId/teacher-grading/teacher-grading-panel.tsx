@@ -438,7 +438,7 @@ export function TeacherGradingPanel({
                 autoSaveStatus === 'saving' && 'text-muted-foreground',
                 autoSaveStatus === 'saved' && 'text-green-600',
                 autoSaveStatus === 'error' && 'text-red-600',
-                autoSaveStatus === 'idle' && 'text-muted-foreground/60'
+                autoSaveStatus === 'idle' && 'text-muted-foreground'
               )}
             >
               {statusLabel ?? 'Autosave on'}

@@ -75,7 +75,7 @@ export const commands: Command[] = [
     override: (editor) => (
       <DropdownMenu key="text-color">
         <Tooltip text="Text Color" delayDuration={300}>
-          <DropdownMenuTrigger>
+          <DropdownMenuTrigger aria-label="Text color">
             <div className={COMMAND_STYLE}>
               <Palette className="h-4 w-4" />
             </div>
@@ -129,6 +129,7 @@ export const commands: Command[] = [
                   className="h-4 w-4 rounded-full border border-gray-300"
                   style={{ backgroundColor: color }}
                 />
+                <span className="sr-only">{color}</span>
               </span>
             </DropdownMenuItem>
           ))}
@@ -187,7 +188,7 @@ export const commands: Command[] = [
       return (
         <DropdownMenu key="text-align">
           <Tooltip text="Align" delayDuration={300}>
-            <DropdownMenuTrigger>
+            <DropdownMenuTrigger aria-label="Text alignment">
               <div
                 className={cn(COMMAND_STYLE, {
                   'bg-muted': !isLeft,
@@ -233,7 +234,7 @@ export const commands: Command[] = [
     override: (editor) => (
       <DropdownMenu key="spacing">
         <Tooltip text="Spacing" delayDuration={300}>
-          <DropdownMenuTrigger>
+          <DropdownMenuTrigger aria-label="Line spacing">
             <div className={COMMAND_STYLE}>
               <AlignVerticalSpaceAround className="h-4 w-4" />
             </div>

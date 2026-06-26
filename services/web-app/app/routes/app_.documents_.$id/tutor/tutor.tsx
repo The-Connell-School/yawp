@@ -294,6 +294,7 @@ export const Tutor = ({
               <Button
                 variant="secondary"
                 size="icon-sm"
+                aria-label="Previous tutor step"
                 data-testid="tutor-previous-module"
                 disabled={prevCmsIdx === undefined}
                 onClick={() =>
@@ -312,6 +313,7 @@ export const Tutor = ({
               <Button
                 variant="secondary"
                 size="icon-sm"
+                aria-label="Next tutor step"
                 data-testid="tutor-next-module"
                 disabled={!liveNextModuleId || isSessionLocked}
                 onClick={advanceToNextCourseModule}
@@ -329,6 +331,7 @@ export const Tutor = ({
                 variant="ghost"
                 size="icon-sm"
                 className="min-w-8"
+                aria-label={messagesExpanded ? 'Hide tutor messages' : 'Show tutor messages'}
                 disabled={isSessionLocked}
                 onClick={() => setMessagesExpanded(!messagesExpanded)}
               >

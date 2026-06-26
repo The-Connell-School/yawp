@@ -149,6 +149,65 @@ describe('app index loader assignments', () => {
     );
   });
 
+  test('orders each student document tile by the current tutor module instead of the last module', async () => {
+    const createdAt = new Date('2026-06-01T12:00:00.000Z');
+    getAssignmentsEnabledClassIdsForContext.mockResolvedValue([]);
+    prisma.document.findMany.mockImplementation(async (args: any) => {
+      if (args.where?.archivedAt?.not === null) return [];
+
+      return [
+        {
+          id: 'doc-1',
+          title: 'Essay Draft',
+          html: '<p>Started</p>',
+          text: 'Started',
+          createdAt,
+          updatedAt: createdAt,
+          assignmentModuleSessions: [
+            {
+              id: 'cms-review',
+              createdAt,
+              updatedAt: createdAt,
+              instructionsCompleted: 0,
+              assignmentModuleId: 'module-review',
+              assignmentModule: {
+                id: 'module-review',
+                position: 4,
+                title: 'Review my Essay',
+                instructions: [{ id: 'review-instruction' }],
+              },
+            },
+            {
+              id: 'cms-prewriting',
+              createdAt,
+              updatedAt: createdAt,
+              instructionsCompleted: 0,
+              assignmentModuleId: 'module-prewriting',
+              assignmentModule: {
+                id: 'module-prewriting',
+                position: 1,
+                title: 'Pre-Writing',
+                instructions: [{ id: 'prewriting-instruction' }],
+              },
+            },
+          ],
+          submissions: [],
+        },
+      ];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(
+      data.documents[0].assignmentModuleSessions[0].assignmentModule.title
+    ).toBe('Pre-Writing');
+  });
+
   test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',

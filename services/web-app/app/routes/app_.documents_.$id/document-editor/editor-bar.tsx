@@ -131,10 +131,11 @@ export const Bar = ({ editor, documentId, isEditable = true, onCommentCreated }:
       ) : null}
       {isEditable && hiddenCommands.length > 0 && (
         <DropdownMenu>
-          <DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon-sm"
+              aria-label="More editor formatting options"
               onClick={(e) => e.preventDefault()}
             >
               <DotsHorizontalIcon />

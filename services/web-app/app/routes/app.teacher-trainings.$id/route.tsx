@@ -11,6 +11,10 @@ import { CircularProgress } from '~/components/ui/circular-progress';
 import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { cn } from '~/utils/misc';
+import {
+  getTeacherTrainingProgressPercent,
+  isTeacherTrainingModuleComplete,
+} from '~/utils/teacher-training-progress';
 import { useMemo } from 'react';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -86,10 +90,14 @@ export default function TeacherTrainingRoute() {
   const { teacherTraining } = useLoaderData<typeof loader>();
 
   const totalModules = teacherTraining.teacherTrainingModules.length;
-  const completedModules = teacherTraining.teacherTrainingModules.filter((mod) =>
-    mod.teacherTrainingModuleSessions.some(
-      (session) => session.videoTimestamp === mod.videoDuration
-    )
+  const completedModules = teacherTraining.teacherTrainingModules.filter(
+    (mod) =>
+      mod.teacherTrainingModuleSessions.some((session) =>
+        isTeacherTrainingModuleComplete(
+          session.videoTimestamp,
+          mod.videoDuration
+        )
+      )
   ).length;
 
   const totalCourseProgressPct = Math.ceil(
@@ -246,9 +254,9 @@ export default function TeacherTrainingRoute() {
           <div className="lg:col-span-2 space-y-2">
             {teacherTraining.teacherTrainingModules.map((module, index) => {
               const session = module.teacherTrainingModuleSessions[0];
-              const progressPct = Math.ceil(
-                ((session?.videoTimestamp || 0) / (module.videoDuration || 0)) *
-                  100
+              const progressPct = getTeacherTrainingProgressPercent(
+                session?.videoTimestamp,
+                module.videoDuration
               );
 
               return (

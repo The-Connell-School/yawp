@@ -31,6 +31,9 @@ import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
+import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
+import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
+import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -109,13 +112,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
-  // Derive a signed URL for playback if using S3 key
-  let playbackUrl: string | null = null;
-  if (currentModule?.videoS3Key) {
-    playbackUrl = await (
-      await import('~/services/s3.server')
-    ).getSignedGetUrl(currentModule.videoS3Key);
-  }
+  const playbackUrl = await getTeacherTrainingPlaybackUrl(
+    currentModule.videoS3Key
+  );
 
   return dataResponse({
     teacherTraining,
@@ -271,11 +270,19 @@ export default function TeacherTrainingModuleRoute() {
     document.body.removeChild(link);
   };
 
-  const progressPct = Math.ceil(
-    ((currentSession?.videoTimestamp || 0) /
-      (currentModule.videoDuration || 0)) *
-      100
+  const progressPct = getTeacherTrainingProgressPercent(
+    currentSession?.videoTimestamp,
+    currentModule.videoDuration
   );
+  const { captionResource, transcriptResource } =
+    getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
+  const captionTrack = captionResource
+    ? {
+        src: `/api/teacher-training-module-resource/${captionResource.id}`,
+        label: 'English captions',
+        srcLang: 'en',
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-full">
@@ -311,6 +318,7 @@ export default function TeacherTrainingModuleRoute() {
                       teacherTrainingId={teacherTraining.id}
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
+                      captionTrack={captionTrack}
                       onUpdateProgress={(currentTime) => {
                         const formData = new FormData();
                         formData.append('intent', 'updateProgress');
@@ -371,6 +379,38 @@ export default function TeacherTrainingModuleRoute() {
               </CardContent>
             </Card>
 
+            {(captionResource || transcriptResource) && (
+              <Card className="bg-muted">
+                <CardHeader>
+                  <CardTitle>Media accessibility</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {captionResource ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`/api/teacher-training-module-resource/${captionResource.id}`}
+                          download
+                        >
+                          Download captions
+                        </a>
+                      </Button>
+                    ) : null}
+                    {transcriptResource ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <a
+                          href={`/api/teacher-training-module-resource/${transcriptResource.id}`}
+                          download
+                        >
+                          Transcript
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {currentModule.resources.length > 0 && (
               <Card className="bg-muted">
                 <CardHeader>
@@ -420,15 +460,10 @@ export default function TeacherTrainingModuleRoute() {
               <CardContent className="space-y-2 max-h-96 overflow-y-auto">
                 {teacherTraining.teacherTrainingModules.map((module, index) => {
                   const isCurrentModule = module.id === currentModule.id;
-                  const moduleProgressPct =
-                    module.teacherTrainingModuleSessions.length > 0
-                      ? Math.ceil(
-                          ((module.teacherTrainingModuleSessions[0]
-                            .videoTimestamp || 0) /
-                            (module.videoDuration || 0)) *
-                            100
-                        )
-                      : 0;
+                  const moduleProgressPct = getTeacherTrainingProgressPercent(
+                    module.teacherTrainingModuleSessions[0]?.videoTimestamp,
+                    module.videoDuration
+                  );
 
                   return (
                     <div
