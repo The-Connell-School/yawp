@@ -1,7 +1,8 @@
 # Draft Email: UA Accessibility Response
 
-Status: Draft for Bryant/Brian review. Do not send until claims and dates are
-approved.
+Status: Content approved by Bryant on 2026-06-27. Do not send until the public
+accessibility page is deployed, manual-status wording is current, and evaluator
+account readiness is confirmed.
 
 To: Rachel Thompson <rsthompson2@ua.edu>
 
@@ -59,9 +60,9 @@ Brian
 
 ## Claims requiring Bryant/Brian sign-off before sending
 
+- Bryant approved the email draft content on 2026-06-27.
 - Public page URL is deployed and reachable at `https://yawp.school/accessibility`.
 - Active Teacher's Lounge captions/transcripts are available in production.
 - Manual keyboard/screen-reader/zoom pass status is accurately represented at
   send time.
 - UA evaluator account setup and roles are ready or can be created immediately.
-
