@@ -66,8 +66,23 @@ The module page now renders media accessibility links as a subdued helper row
 below primary resources. That UI follow-up is merged to `main` in commit
 `a4f1fe6`.
 
-Remaining work is not basic caption/transcript upload work. Bryant confirmed on
-2026-06-27 that at least one UA-scoped Teacher's Lounge video shows important
-instructions or examples that are not spoken aloud and not written in the
-transcript. Remediation is tracked in Central Station ticket
-`YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+## Visual-Content Remediation
+
+On 2026-06-27, the active production Teacher's Lounge videos were sampled from
+`s3://yawp-production-videos` with `ffmpeg` contact sheets and visual review.
+Ten transcript resources were expanded in production with `## Visual notes`
+sections for important on-screen instructions, examples, slide text, YAWP UI
+screenshots, and writing-activity directions that are not fully available from
+audio-only playback.
+
+Production verification:
+
+- 13 active production modules have transcript resources.
+- 10 transcript resources include `## Visual notes` sections.
+- 3 transcript resources were left unchanged because the sampled video content
+  was talking-head/title/decorative-only and did not contain separate
+  instructional visual content.
+- Public resource verification passed for
+  `https://yawp.school/api/teacher-training-module-resource/50185670-7905-4166-a244-d9a432a6d34d`;
+  the response was `200 OK`, `content-type: text/markdown`, and included the
+  new `## Visual notes` section.

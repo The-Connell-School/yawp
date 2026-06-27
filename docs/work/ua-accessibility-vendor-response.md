@@ -124,9 +124,9 @@ Required work:
 
 ### 6. Audio/video, transcripts, captions, audio descriptions
 
-Current answer: Substantially ready for captions/transcripts; Teacher's Lounge
-videos are in UA scope, and Bryant confirmed at least one video shows important
-instructions or examples that are not spoken aloud or written in the transcript.
+Current answer: Ready for active Teacher's Lounge captions/transcripts and
+visual notes. Teacher's Lounge videos are in UA scope, and visually
+instructional transcript resources have been expanded in production.
 
 Evidence:
 
@@ -138,17 +138,16 @@ Evidence:
   links below primary resources.
 - 13/13 active Teacher's Lounge production modules were verified with caption
   and transcript resources after upload.
+- Active production videos were sampled on 2026-06-27; 10 transcript resources
+  were expanded with `## Visual notes` for visual-only or visual-dependent
+  instructional content.
 - Granola notes say the speaker/audio feature was removed and should remain off because it was buggy and unused.
 
-Response posture: "The UA student writing workflows currently do not require audio playback. Teacher training videos in the Teacher's Lounge support captions and transcripts, and active Teacher's Lounge modules have caption/transcript resources available. We have identified that at least one Teacher's Lounge video needs an expanded transcript note or similar accessible text alternative for important on-screen information."
+Response posture: "The UA student writing workflows currently do not require audio playback. Teacher training videos in the Teacher's Lounge support captions and transcripts, and active Teacher's Lounge modules have caption/transcript resources available. We reviewed the active production videos and expanded the transcripts for visually instructional modules with visual notes."
 
 Required work:
 
-- Teacher's Lounge is in UA scope.
-- Complete Central Station backlog ticket
-  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`: identify affected production
-  module(s), add expanded transcript notes or audio-description support, and
-  update compliance evidence.
+- Re-run the visual-content check when Teacher's Lounge videos change.
 - Keep the removed speaker/audio feature off for the UA release unless it receives its own accessibility review.
 
 ### 7. Accessible output
@@ -212,9 +211,8 @@ Preliminary list:
 - Tutor chat likely needs live-region semantics for new messages.
 - Some icon-only controls likely need accessible names.
 - Some clickable cards should be links/buttons for keyboard semantics.
-- Teacher's Lounge captions/transcripts are available for active modules; at
-  least one video needs expanded transcript notes or a similar accessible text
-  alternative for important on-screen information.
+- Teacher's Lounge captions/transcripts are available for active modules, and
+  visually instructional transcripts have been expanded with visual notes.
 - Browser print/save-as-PDF output is not yet validated as accessible/tagged output.
 - Automated 640px reflow proxy passed on representative UA flows; a human
   browser-zoom pass is still recommended before claiming completed manual zoom
@@ -263,7 +261,7 @@ Required work:
 | 8 | Input errors announced in text? | Partial. Shared form components render text errors and `aria-describedby`; route-specific forms need review. |
 | 9 | Tutor chat usable with keyboard + screen reader? | Partial. Keyboard path exists, but new message announcement likely needs work. |
 | 10 | Student editor accessible? | Partial. Editor is named for assistive tech, axe scan passes, and a keyboard `Tab` focus trap was remediated in `cc663b0`; formal screen-reader behavior still needs VoiceOver evidence. |
-| 11 | Teacher's Lounge captions/transcripts? | Implemented and uploaded for active modules; at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information. |
+| 11 | Teacher's Lounge captions/transcripts? | Implemented and uploaded for active modules; production transcripts for visually instructional Teacher Lounge videos have been expanded with visual notes. |
 | 12 | Accessible exports? | Partial. Web output is semantic-ish HTML; print/save-as-PDF is not validated as tagged/accessible output. |
 | 13 | Vendor/product accessibility page/docs? | Page implemented at `/accessibility`, pending deploy/sign-off. |
 | 14 | Report accessibility problem? | Public email path implemented, pending owner/process sign-off. |
@@ -320,8 +318,8 @@ Likely fixes:
 - Add or fix `aria-describedby` IDs where form error components currently point to the input ID instead of an error ID.
 - Deploy public accessibility page and product accessibility documentation.
 - Sign off accessibility issue-reporting owner/process.
-- Complete Teacher Lounge visual-content remediation ticket
-  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+- Re-run Teacher Lounge visual-content remediation when Teacher Lounge videos
+  change.
 
 All code fixes should follow the repo rule: write the failing unit/e2e first, implement the fix, verify, and commit atomically.
 
@@ -365,7 +363,7 @@ Brian,
 
 I found Rachel's vendor questions, your 17-question breakdown, and the separate UA OIT question about AI functionality. The truthful accessibility status is: we do not have a VPAT yet, so we should give UA a WCAG 2.1 AA self-evaluation; the app has a decent accessibility foundation, but we need to audit and likely fix a few things before making strong claims.
 
-Likely remaining gaps: tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Automated keyboard-smoke and reflow-proxy evidence now passes on representative UA flows, a representative macOS VoiceOver smoke pass is recorded, and a student-editor `Tab` focus trap found during testing has been fixed. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; Teacher Lounge is in UA scope, and at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information.
+Likely remaining gaps: tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Automated keyboard-smoke and reflow-proxy evidence now passes on representative UA flows, a representative macOS VoiceOver smoke pass is recorded, and a student-editor `Tab` focus trap found during testing has been fixed. Teacher's Lounge captions/transcripts are implemented for the active modules, and transcripts for visually instructional Teacher Lounge videos have been expanded with visual notes.
 
 I think the right plan is to finish audit + low-risk fixes + docs by July 3, then you can send Rachel the WCAG self-evaluation and platform access before the mid-July GBA 300 demo.
 
@@ -374,8 +372,7 @@ Separate AI functionality answer, pending production confirmation: YAWP uses Ant
 ## Open items
 
 - Who owns the public accessibility support inbox or intake path?
-- Teacher Lounge visual-content remediation:
-  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+- Re-run Teacher Lounge visual-content remediation when videos change.
 - Privacy/terms decision: public legal pages are not a current accessibility
   packet blocker; use
   `docs/work/ua-privacy-data-security-one-pager-draft.md` for broader

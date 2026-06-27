@@ -202,10 +202,9 @@ Pass if:
 
 ### Card 4: Teacher Lounge visual-content check
 
-Status: Bryant confirmed on 2026-06-27 that Teacher Lounge is in UA scope and
-that at least one video shows important instructions or examples that are not
-spoken aloud and not written in the transcript. This is now a backlog item:
-Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+Status: Done for active production videos sampled on 2026-06-27. Ten
+production transcript resources were expanded with `## Visual notes` for
+important visual-only or visual-dependent instructional content.
 
 Use production for this remediation because UA will review production Teacher's
 Lounge content. Use local preview only to verify UI mechanics.
@@ -217,7 +216,7 @@ For each UA-scoped Teacher Lounge video:
 3. Watch or skim the video.
 4. Check whether the video shows important instructions or examples that are
    not spoken aloud and not written in the transcript.
-5. If yes, mark "Needs audio-description support or expanded transcript notes."
+5. If yes, add expanded transcript notes or audio-description support.
 6. If no, mark "Captions/transcript cover the instructional content."
 
 ## Sign-off sheet
@@ -286,6 +285,8 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 - Document editor regression after `Tab` focus fix: 15/15 Playwright tests
   passed.
 - Teacher Lounge media tests: 6/6 passed.
+- Teacher Lounge visual-content remediation: production transcript resources
+  expanded and public transcript endpoint verified.
 
 ## What not to claim yet
 
@@ -299,5 +300,5 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 - Do not claim a completed human 200% zoom walkthrough yet. Current allowed
   claim: automated reflow proxy passed across representative UA flows.
 - Do not claim tagged PDF output.
-- Do not claim captions/transcripts cover all Teacher Lounge video content until
-  Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` is complete.
+- Do not claim future Teacher Lounge video content is covered without repeating
+  the caption/transcript/visual-notes check.

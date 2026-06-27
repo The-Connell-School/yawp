@@ -27,18 +27,28 @@ bun test 'services/web-app/app/routes/app.teacher-trainings.$id_.modules_.$modul
 source /Users/bryantbrock/.codex/skills/node-runtime-fix/scripts/use-modern-node.sh && bun run --cwd services/web-app test:e2e:a11y
 ```
 
-## Remaining Operational Work
+## Visual-Content Remediation
 
 Caption and transcript assets have been generated and uploaded for the active
 Teacher's Lounge production modules identified during the 2026-06-26 UA review
-work. Remaining work is a content check:
+work.
 
-- Bryant confirmed on 2026-06-27 that Teacher's Lounge videos are in UA scope
-  and at least one video shows important instructions or examples that are not
-  spoken aloud and not written in the transcript.
-- Backlog ticket: Central Station
-  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
-- For affected videos, add audio-description support or expand the transcript
-  so that a user who cannot see the video still gets the same instructional
-  information.
-- Re-run this check when Teacher's Lounge videos change.
+On 2026-06-27, the active production videos were sampled from
+`s3://yawp-production-videos` with `ffmpeg` contact sheets and visual review.
+Ten transcript resources were expanded in production with `## Visual notes`
+sections covering important visual-only or visual-dependent instructional
+content. The expanded transcripts cover text-card training notes, slide-deck
+instructions, writing prompts, activity directions, sample essay screenshots,
+YAWP tutor/document screenshots, diagrams, and formatting directions.
+
+Production verification:
+
+- 13/13 active production modules have transcript resources.
+- 10/13 transcript resources include `## Visual notes` sections.
+- 3/13 sampled modules did not need expanded transcript notes because they were
+  talking-head/title/decorative-only in the sampled visual pass.
+- A public production resource check confirmed the expanded transcript for
+  `06-introduction-to-lesson-plan-modules-transcript.md` is served at
+  `https://yawp.school/api/teacher-training-module-resource/50185670-7905-4166-a244-d9a432a6d34d`.
+
+Re-run this visual-content check when Teacher's Lounge videos change.

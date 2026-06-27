@@ -16,13 +16,13 @@ Bryant-facing action packet:
 | Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Public wording narrowed to evidence completed so far; deploy/prod smoke | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
 | Public page axe audit coverage | Added to UA axe audit and passing locally | Engineering done | None | `services/web-app/e2e/tests/accessibility.ua-axe.spec.ts`; `docs/compliance/accessibility/automated-audit-log.md` |
-| Product accessibility/WCAG self-evaluation | WCAG-self-evaluation approach approved by Bryant; not final | Evidence done with limitation | Final status labels; Teacher Lounge visual-content limitation; send-time wording | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-manual-qa-evidence-log.md` |
+| Product accessibility/WCAG self-evaluation | WCAG-self-evaluation approach approved by Bryant; not final | Evidence done with limitation | Final status labels and send-time wording | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | Manual keyboard-only walkthrough | Automated keyboard smoke passed; editor `Tab` focus trap remediated in `cc663b0`; human walkthrough not claimed | Evidence done with limitation | Human walkthrough only if we want to claim completed manual keyboard QA | `docs/work/ua-manual-qa-evidence-log.md`; `services/web-app/e2e/tests/accessibility.ua-manual-evidence.spec.ts` |
 | VoiceOver walkthrough | macOS VoiceOver smoke pass completed with limitations; full screen-reader support not claimed | Evidence done with limitation | Dynamic tutor-chat announcements and NVDA only if stronger screen-reader claim is needed | `docs/work/ua-manual-qa-evidence-log.md` |
 | NVDA walkthrough | Optional but recommended; script created | Manual | Windows/NVDA access and tester time | `docs/compliance/accessibility/ua-manual-qa-script.md` |
 | 200% zoom/reflow check | Automated 640px reflow proxy passed; human browser-zoom walkthrough not claimed | Evidence done with limitation | Human walkthrough only if we want to claim completed manual zoom QA | `docs/work/ua-manual-qa-evidence-log.md`; `services/web-app/e2e/tests/accessibility.ua-manual-evidence.spec.ts` |
 | Teacher's Lounge captions/transcripts | Implemented, generated, uploaded, and UI follow-up merged to `main` | Done | None | `docs/compliance/accessibility/teacher-lounge-caption-generation-log.md`; `a4f1fe6` |
-| Teacher Lounge visual-content remediation | Confirmed in UA scope; Bryant confirmed at least one video has important on-screen information not covered by audio/transcript; backlog ticket created | Backlog task | Identify affected production module(s), add expanded transcript notes or audio-description support, verify upload/evidence | Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`; `docs/work/ua-bryant-action-packet.md` |
+| Teacher Lounge visual-content remediation | Active production videos sampled; 10 production transcript resources expanded with visual notes; public resource endpoint verified | Done | None | `docs/work/ua-manual-qa-evidence-log.md`; `docs/compliance/accessibility/teacher-lounge-media-accessibility.md` |
 | Accessible output/PDF claim | Conservative no-tagged-PDF wording approved by Bryant | Done | None | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
 | Accessibility issue-reporting process | Approved by Bryant using `yawp@theconnellschool.com` | Operational readiness | Confirm inbox owner/escalation before external launch | `/accessibility`; draft emails |
 | UA evaluator accounts | Direction approved; specific accounts/links not generated yet | Operational | Named UA reviewer email addresses; send-ready environment | `docs/work/ua-evaluator-access-instructions-draft.md`; `docs/work/ua-accessibility-email-draft.md` |
@@ -50,9 +50,9 @@ Bryant-facing action packet:
    claims at send time.
 7. UA evaluator access direction is approved; collect named UA reviewer email
    addresses from Rachel's team at send time and generate invite/share links.
-8. Teacher Lounge videos are in UA scope; visual-content remediation is the
-   next backlog item: Central Station
-   `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+8. Teacher Lounge videos are in UA scope; visual-content remediation is done
+   for the active production videos sampled on 2026-06-27. Re-run the check if
+   Teacher Lounge videos change.
 9. Privacy/terms decision made: do not block the accessibility packet on public
    legal pages. Use `docs/work/ua-privacy-data-security-one-pager-draft.md` if
    UA moves into broader vendor-security questions.

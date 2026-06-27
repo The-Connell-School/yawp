@@ -16,7 +16,7 @@ Tester: Codex
 | Keyboard-only QA | PASS WITH LIMITATIONS | Automated keyboard smoke evidence passed across UA-scoped public, login, student editor, teacher dashboard, grading, Teacher Lounge, and admin flows. Found and fixed an editor `Tab` focus trap in `cc663b0`. |
 | VoiceOver QA | PASS WITH LIMITATIONS | macOS VoiceOver smoke pass completed for representative public, login, student editor, teacher grading, and Teacher Lounge controls. Do not claim full screen-reader support; dynamic tutor chat and NVDA remain outside this pass. |
 | 200% zoom/reflow QA | PASS WITH LIMITATIONS | Automated 640px viewport reflow proxy passed for representative UA flows with no document-level horizontal scroll. Human browser-zoom review is still recommended before a full manual claim. |
-| Teacher Lounge visual-content check | Needs remediation | Bryant confirmed at least one video has important on-screen information missing from audio/transcript; tracked in Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
+| Teacher Lounge visual-content check | PASS | Active production videos were sampled; 10 production transcript resources were expanded with `## Visual notes` for important visual-only or visual-dependent instructional content. |
 
 ## Keyboard-only QA
 
@@ -115,23 +115,40 @@ Retest notes:
 
 ## Teacher Lounge visual-content check
 
-Reviewer:
+Reviewer: Codex
 
-Date:
+Date: 2026-06-27
 
-Environment:
+Environment: Production Teacher's Lounge media in `s3://yawp-production-videos`
+and production transcript resources served from `https://yawp.school`
 
-Result: NEEDS REMEDIATION
+Result: PASS
 
 Video review notes:
 
 | Video/module | Captions present | Transcript present | Important on-screen instructions/examples not spoken or written? | Decision |
 |---|---|---|---|---|
-| Unknown pending backlog review | Yes for active modules | Yes for active modules | Yes, confirmed by Bryant; affected module(s) still need identification | Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
+| Welcome to YAWP! | Yes | Yes | Yes: title cards, dashboard screenshots, document/tutor screenshots, feedback examples | Expanded transcript visual notes in production |
+| Critical Writing in the Age of AI | Yes | Yes | Yes: text cards and YAWP tutor/document screenshots | Expanded transcript visual notes in production |
+| Introduction to Lesson Plan Modules | Yes | Yes | Yes: video is primarily text cards with music | Expanded transcript visual notes in production |
+| Lesson 1: Introduce Students to YAWP! | Yes | Yes | Yes: slide text, sample essay, class discussion prompts, document/tutor screenshot | Expanded transcript visual notes in production |
+| Lesson 2: Pre-writing | Yes | Yes | Yes: slide text, prompt text, picture-analysis prompts, diagrams, examples | Expanded transcript visual notes in production |
+| Lesson 3: Developing a Thesis Statement | Yes | Yes | Yes: slide text, thesis examples, diagrams, writing-activity instructions | Expanded transcript visual notes in production |
+| Lesson 4: Introduction Paragraph | Yes | Yes | Yes: ordering exercises, introduction examples, writing-activity directions | Expanded transcript visual notes in production |
+| Lesson 5: Body Paragraphs | Yes | Yes | Yes: quiz text, highlighted paragraph examples, structure notes | Expanded transcript visual notes in production |
+| Lesson 6: The Conclusion | Yes | Yes | Yes: conclusion guidance, pro-tip cards, sample paragraphs | Expanded transcript visual notes in production |
+| Lesson 7: Titling Your Essay | Yes | Yes | Yes: title examples and finishing-touch formatting directions | Expanded transcript visual notes in production |
+| Meet Your Instructor | Yes | Yes | No separate instructional visual-only content found in sampled pass | No transcript expansion needed |
+| How to be a Happy Teacher | Yes | Yes | No; sampled text overlay was decorative/comedic rather than instructional | No transcript expansion needed |
+| Lesson 8: Review my Essay (optional) | Yes | Yes | No separate instructional visual-only content found in sampled pass | No transcript expansion needed |
 
 Remediation notes:
 
-- TBD
+- Production query verified 13 transcript resources and 10 resources with
+  `## Visual notes`.
+- Public endpoint verification passed for
+  `https://yawp.school/api/teacher-training-module-resource/50185670-7905-4166-a244-d9a432a6d34d`,
+  which returned the expanded Introduction to Lesson Plan Modules transcript.
 
 ## Final claims allowed after evidence
 
@@ -156,5 +173,5 @@ Current allowed wording:
   representative UA-scoped flows. A human browser-zoom review is still
   recommended before claiming a completed manual zoom walkthrough."
 - Teacher Lounge media claim: "Captions/transcripts are available for active
-  modules, but Teacher Lounge visual-only instructional content remediation is
-  still tracked separately."
+  modules, and production transcripts for visually instructional Teacher
+  Lounge videos have been expanded with visual notes."

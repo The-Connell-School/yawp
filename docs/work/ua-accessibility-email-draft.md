@@ -31,7 +31,9 @@ Current status in brief:
   accessible names for controls, editor naming, and several Teacher's Lounge
   media/accessibility behaviors.
 - Teacher's Lounge videos now support captions and transcripts; the active
-  Teacher's Lounge videos have caption and transcript resources available.
+  Teacher's Lounge videos have caption and transcript resources available, and
+  visually instructional transcript resources have been expanded with visual
+  notes.
 - Student writing workflows do not require audio or video playback.
 - We have completed automated keyboard-smoke and reflow-proxy evidence on the
   representative UA flows, including remediation of a student-editor `Tab`
@@ -73,6 +75,8 @@ Brian
 - Bryant approved the email draft content on 2026-06-27.
 - Public page URL is deployed and reachable at `https://yawp.school/accessibility`.
 - Active Teacher's Lounge captions/transcripts are available in production.
+- Active Teacher Lounge visual-content transcript notes are available in
+  production for visually instructional modules.
 - Keyboard, screen-reader, and zoom/reflow evidence status is accurately
   represented at send time.
 - UA evaluator access direction is approved: YAWP invite links are primary, and
