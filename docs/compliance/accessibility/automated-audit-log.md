@@ -1,5 +1,31 @@
 # Automated Accessibility Audit Log
 
+## 2026-06-27 UA axe audit update
+
+Tool: `@axe-core/playwright` 4.12.1 using axe WCAG tags `wcag2a`, `wcag2aa`, `wcag21a`, and `wcag21aa`.
+
+Command:
+
+```bash
+source /Users/bryantbrock/.codex/skills/node-runtime-fix/scripts/use-modern-node.sh && bun run --cwd services/web-app test:e2e:a11y
+```
+
+Result: PASS, 6/6 Playwright tests.
+
+Scanned surfaces:
+
+- `/auth/login`
+- `/accessibility`
+- Student document editor and tutor surface at `/app/documents/:id`
+- Teacher dashboard at `/app`
+- Teacher's Lounge index, course page, and module page
+- Teacher grading view at `/app/submissions/:id`
+
+Limitations:
+
+- This is automated static/runtime scanning evidence. It does not prove keyboard-only completion, screen reader announcement quality, captions/transcripts, audio-description applicability, or tagged PDF output.
+- VoiceOver and NVDA checks still need a manual or specialist pass before claiming screen-reader-dependent WCAG criteria as fully supported.
+
 ## 2026-06-26 UA axe audit
 
 Tool: `@axe-core/playwright` 4.12.1 using axe WCAG tags `wcag2a`, `wcag2aa`, `wcag21a`, and `wcag21aa`.

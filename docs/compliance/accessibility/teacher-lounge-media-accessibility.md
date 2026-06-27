@@ -29,4 +29,12 @@ source /Users/bryantbrock/.codex/skills/node-runtime-fix/scripts/use-modern-node
 
 ## Remaining Operational Work
 
-For any Teacher's Lounge video included in UA's launch scope, YAWP still needs the actual caption and transcript assets uploaded for each required module. The product now supports rendering and linking those assets, but the assets themselves are content work.
+Caption and transcript assets have been generated and uploaded for the active
+Teacher's Lounge production modules identified during the 2026-06-26 UA review
+work. Remaining work is content-level review:
+
+- Confirm whether any UA-scoped Teacher's Lounge video communicates visual-only
+  instructional information that is not captured by the captions/transcript.
+- If so, add audio-description support or expand the transcript to cover that
+  visual information.
+- Re-run this check when Teacher's Lounge videos change.

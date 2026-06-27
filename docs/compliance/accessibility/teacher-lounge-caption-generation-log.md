@@ -56,11 +56,15 @@ The generated package was structurally validated after generation:
 
 Result: PASS, 13/13 caption files and 13/13 Markdown transcripts validated.
 
-## Remaining Work
+## Production Upload Status
 
-The generated files are ready for upload as Teacher's Lounge module resources:
+After generation, the caption and transcript assets were uploaded to production
+as Teacher's Lounge module resources. A production verification query showed the
+13 active modules each had one caption resource and one transcript resource.
 
-- Upload each `.vtt` file as the module caption resource.
-- Upload each `.md` transcript file as the module transcript resource.
-- Verify on preview and production that the module page renders `Media accessibility`, `Download captions`, and `Transcript`.
+The module page now renders media accessibility links as a subdued helper row
+below primary resources. That UI follow-up is merged to `main` in commit
+`a4f1fe6`.
 
+Remaining work is not upload work; it is content review for audio-description
+applicability when UA treats Teacher's Lounge videos as in-scope media.
