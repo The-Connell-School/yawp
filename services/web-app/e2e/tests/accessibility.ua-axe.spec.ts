@@ -63,6 +63,17 @@ test.describe.serial('UA accessibility axe audit', () => {
     await scanPage(page, testInfo, 'auth-login');
   });
 
+  test('public accessibility page has no serious or critical WCAG 2.1 A/AA violations', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/accessibility');
+    await expect(
+      page.getByRole('heading', { name: 'Accessibility at YAWP!' })
+    ).toBeVisible();
+
+    await scanPage(page, testInfo, 'public-accessibility');
+  });
+
   test('student document editor has no serious or critical WCAG 2.1 A/AA violations', async ({
     page,
     signIn,

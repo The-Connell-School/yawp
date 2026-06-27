@@ -324,6 +324,7 @@ export default function IndexRoute() {
       <footer className="yawp-footer">
         <p>
           <a href={contactUrl}>Contact</a>
+          <a href="/accessibility">Accessibility</a>
           <a href={connellUrl} target="_blank" rel="noreferrer">
             The Connell School of Writing
           </a>
