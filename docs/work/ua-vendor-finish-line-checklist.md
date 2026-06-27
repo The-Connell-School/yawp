@@ -24,7 +24,7 @@ Bryant-facing action packet:
 | Teacher's Lounge captions/transcripts | Implemented, generated, uploaded, and UI follow-up merged to `main` | Done | None | `docs/compliance/accessibility/teacher-lounge-caption-generation-log.md`; `a4f1fe6` |
 | Audio descriptions decision | Exact review steps and evidence log created, not finalized | Manual | Review whether Teacher's Lounge videos communicate visual-only information not covered by transcript/captions | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | Accessible output/PDF claim | Drafted conservatively | Manual sign-off | Bryant/Brian approval; no tagged PDF claim unless separately implemented/tested | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
-| Accessibility issue-reporting process | Public support path drafted using `yawp@theconnellschool.com` | Manual sign-off | Confirm support owner, expected response process, and escalation path | `/accessibility`; draft emails |
+| Accessibility issue-reporting process | Approved by Bryant using `yawp@theconnellschool.com` | Operational readiness | Confirm inbox owner/escalation before external launch | `/accessibility`; draft emails |
 | UA evaluator accounts | Not created | Manual | Decide reviewer roles, credentials delivery method, and data scope | `docs/work/ua-accessibility-email-draft.md` |
 | UA evaluator instructions | Drafted inside Rachel email | Manual sign-off | Confirm account setup and product scope | `docs/work/ua-accessibility-email-draft.md` |
 | AI/data handling mini-policy | Drafted conservatively | Manual sign-off | Confirm production config and vendor contractual data-use terms | `docs/work/ua-ai-functionality-email-draft.md` |
@@ -37,8 +37,9 @@ Bryant-facing action packet:
    current manual-status wording, and evaluator account readiness.
 2. AI functionality email content is approved; confirm production config and
    send target/thread at send time.
-3. Confirm `yawp@theconnellschool.com` is the correct accessibility support
-   intake address and who owns that inbox/process.
+3. Accessibility support intake address is approved as
+   `yawp@theconnellschool.com`; confirm inbox owner/escalation before external
+   launch.
 4. Public `/accessibility` page draft is verified; do not deploy until formal
    keyboard-only and screen-reader verification are complete.
 5. Confirm the production AI provider/model wording and contractual data-use

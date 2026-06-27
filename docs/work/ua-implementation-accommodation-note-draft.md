@@ -1,6 +1,7 @@
 # UA Implementation and Accommodation Note Draft
 
-Status: Draft. Requires Bryant/Brian sign-off before sending externally.
+Status: Draft. Support-process content approved by Bryant on 2026-06-27.
+Requires final packet review before sending externally.
 
 ## Recommended setup
 
@@ -9,8 +10,7 @@ Status: Draft. Requires Bryant/Brian sign-off before sending externally.
 - Keep the removed speaker/audio feature disabled for the UA release unless it
   receives its own accessibility review.
 - Include Teacher's Lounge videos only with caption and transcript resources.
-- Route accessibility issues to `yawp@theconnellschool.com` until a dedicated
-  institutional support workflow is approved.
+- Route accessibility issues to `yawp@theconnellschool.com`.
 
 ## Media
 
@@ -46,8 +46,6 @@ public accessibility documentation when behavior changes.
 
 ## Decisions needed
 
-- Confirm support owner and expected response process.
 - Confirm whether UA needs a dedicated support address.
 - Confirm whether UA requires privacy/terms pages as part of the same vendor
   review package.
-
