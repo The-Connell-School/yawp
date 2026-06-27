@@ -27,7 +27,7 @@ Use yawp@theconnellschool.com for accessibility intake: YES / NO / EDIT:
 Send WCAG self-evaluation instead of VPAT/ACR: YES / NO / EDIT:
 Keep conservative PDF/output wording: YES / NO / EDIT:
 Teacher Lounge in UA review scope: YES - confirmed by Bryant; remediation tracked in `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`
-Need privacy/terms pages in this packet: YES / NO / EDIT:
+Need privacy/terms pages in this packet: NO - operator decision; use privacy/data-security one-pager for vendor-security review
 Create UA evaluator accounts: YES / NO / EDIT:
 ```
 
@@ -261,8 +261,10 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
      `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
 
 8. Privacy/terms pages:
-   - Approval needed: do we need public privacy/terms pages for this UA packet
-     now, or can that remain a separate legal/vendor-security follow-up?
+   - Operator decision: not required for the accessibility packet.
+   - Follow-up artifact:
+     `docs/work/ua-privacy-data-security-one-pager-draft.md`.
+   - Public legal pages are deferred unless UA/legal specifically asks.
 
 9. UA evaluator accounts:
    - File: `docs/work/ua-evaluator-access-instructions-draft.md`

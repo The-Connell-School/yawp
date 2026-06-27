@@ -28,7 +28,7 @@ Bryant-facing action packet:
 | UA evaluator accounts | Not created | Manual | Decide reviewer roles, credentials delivery method, and data scope | `docs/work/ua-accessibility-email-draft.md` |
 | UA evaluator instructions | Drafted inside Rachel email | Manual sign-off | Confirm account setup and product scope | `docs/work/ua-accessibility-email-draft.md` |
 | AI/data handling mini-policy | Drafted conservatively | Manual sign-off | Confirm production config and vendor contractual data-use terms | `docs/work/ua-ai-functionality-email-draft.md` |
-| Privacy/terms pages | Not implemented in this pass | Product/legal | Decide whether UA requires public privacy/terms pages now or later | Not yet created |
+| Privacy/terms pages | Not required for current accessibility packet; privacy/data-security one-pager drafted for vendor-security lane | Done for this packet | Public legal pages only if UA/legal specifically asks | `docs/work/ua-privacy-data-security-one-pager-draft.md` |
 | Post-QA remediation | Unknown | Engineering | Depends on manual keyboard/screen-reader/zoom findings | To be created if findings appear |
 
 ## Current blockers that require Bryant or Brian
@@ -49,5 +49,6 @@ Bryant-facing action packet:
 7. Teacher Lounge videos are in UA scope; visual-content remediation is the
    next backlog item: Central Station
    `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
-8. Decide whether UA needs public privacy/terms pages for this review or only
-   the accessibility and AI responses.
+8. Privacy/terms decision made: do not block the accessibility packet on public
+   legal pages. Use `docs/work/ua-privacy-data-security-one-pager-draft.md` if
+   UA moves into broader vendor-security questions.

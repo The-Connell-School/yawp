@@ -363,6 +363,10 @@ Separate AI functionality answer, pending production confirmation: YAWP uses Ant
 - Who owns the public accessibility support inbox or intake path?
 - Teacher Lounge visual-content remediation:
   `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+- Privacy/terms decision: public legal pages are not a current accessibility
+  packet blocker; use
+  `docs/work/ua-privacy-data-security-one-pager-draft.md` for broader
+  vendor-security review questions.
 - Should YAWP publish/deploy the accessibility page before all manual QA evidence is complete, or wait until the self-evaluation is complete?
 - Which exact production AI provider/model names should be disclosed to UA?
 - Who will create UA evaluator accounts, and what roles should Rachel's team receive?
