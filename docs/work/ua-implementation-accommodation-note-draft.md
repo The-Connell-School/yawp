@@ -1,7 +1,7 @@
 # UA Implementation and Accommodation Note Draft
 
-Status: Draft. Support-process content approved by Bryant on 2026-06-27.
-Requires final packet review before sending externally.
+Status: Draft. Support-process and accessible-output wording approved by
+Bryant on 2026-06-27. Requires final packet review before sending externally.
 
 ## Recommended setup
 
@@ -28,6 +28,8 @@ information.
 YAWP's primary student and teacher output is browser-rendered HTML. Browser
 print/save-as-PDF output should not be represented as a guaranteed tagged PDF
 export unless a specific export path has been separately tested.
+
+Approved by Bryant on 2026-06-27.
 
 ## Reporting and remediation
 

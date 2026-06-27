@@ -52,7 +52,7 @@ screen-reader-dependent and keyboard-only criteria.
 | Keyboard-only operation | Many flows use native controls and keyboard-capable components | Not Evaluated / Partial | Needs manual keyboard pass |
 | Assistive technology testing | Not final | Not Evaluated | Needs VoiceOver; NVDA recommended |
 | Audio/video captions/transcripts | Teacher's Lounge supports captions/transcripts; active assets uploaded | Supports for captions/transcripts | Audio-description applicability still needs content judgment |
-| Accessible output | Primary output is browser-rendered HTML | Partially Supports | Do not claim tagged PDF output without separate testing |
+| Accessible output | Primary output is browser-rendered HTML | Partially Supports | Conservative no-tagged-PDF wording approved by Bryant on 2026-06-27 |
 | User-facing accessibility docs | Public page implemented | Partially Supports | Needs deploy and owner sign-off |
 | Setup/implementation adjustments | Draft guidance exists | Partially Supports | Needs final UA evaluator/account instructions |
 | Common accessibility issues | Known limitations drafted | Partially Supports | Needs final manual QA findings |

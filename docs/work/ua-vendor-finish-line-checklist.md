@@ -23,7 +23,7 @@ Bryant-facing action packet:
 | 200% zoom/reflow check | Exact 200% zoom steps and evidence log created, not executed as final evidence | Manual | Human walkthrough at browser zoom | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | Teacher's Lounge captions/transcripts | Implemented, generated, uploaded, and UI follow-up merged to `main` | Done | None | `docs/compliance/accessibility/teacher-lounge-caption-generation-log.md`; `a4f1fe6` |
 | Audio descriptions decision | Exact review steps and evidence log created, not finalized | Manual | Review whether Teacher's Lounge videos communicate visual-only information not covered by transcript/captions | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
-| Accessible output/PDF claim | Drafted conservatively | Manual sign-off | Bryant/Brian approval; no tagged PDF claim unless separately implemented/tested | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
+| Accessible output/PDF claim | Conservative no-tagged-PDF wording approved by Bryant | Done | None | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
 | Accessibility issue-reporting process | Approved by Bryant using `yawp@theconnellschool.com` | Operational readiness | Confirm inbox owner/escalation before external launch | `/accessibility`; draft emails |
 | UA evaluator accounts | Not created | Manual | Decide reviewer roles, credentials delivery method, and data scope | `docs/work/ua-accessibility-email-draft.md` |
 | UA evaluator instructions | Drafted inside Rachel email | Manual sign-off | Confirm account setup and product scope | `docs/work/ua-accessibility-email-draft.md` |
