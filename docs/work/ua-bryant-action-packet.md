@@ -199,7 +199,7 @@ Pass if:
 - text does not overlap or clip;
 - sticky/fixed UI does not cover required controls.
 
-### Card 4: Teacher Lounge audio-description judgment
+### Card 4: Teacher Lounge visual-content check
 
 Use production for this judgment if UA will review production Teacher's Lounge
 content. Use local preview only to verify UI mechanics.
@@ -209,10 +209,10 @@ For each UA-scoped Teacher Lounge video:
 1. Confirm captions exist.
 2. Confirm a transcript exists.
 3. Watch or skim the video.
-4. Decide whether any instructional meaning is only visible on screen and is not
-   spoken or captured in the transcript.
-5. If yes, mark "Needs audio-description or expanded transcript remediation."
-6. If no, mark "Captions/transcript cover instructional content."
+4. Check whether the video shows important instructions or examples that are
+   not spoken aloud and not written in the transcript.
+5. If yes, mark "Needs audio-description support or expanded transcript notes."
+6. If no, mark "Captions/transcript cover the instructional content."
 
 ## Sign-off sheet
 
@@ -276,5 +276,6 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 - Do not claim full screen-reader support until the VoiceOver pass is recorded.
 - Do not claim full keyboard-only support until the keyboard pass is recorded.
 - Do not claim tagged PDF output.
-- Do not claim audio descriptions are unnecessary until Teacher Lounge content
-  has been reviewed for visual-only instructional meaning.
+- Do not claim captions/transcripts cover all Teacher Lounge video content until
+  the videos have been checked for important on-screen instructions or examples
+  that are not spoken aloud or written in the transcript.

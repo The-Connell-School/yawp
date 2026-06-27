@@ -66,5 +66,6 @@ The module page now renders media accessibility links as a subdued helper row
 below primary resources. That UI follow-up is merged to `main` in commit
 `a4f1fe6`.
 
-Remaining work is not upload work; it is content review for audio-description
-applicability when UA treats Teacher's Lounge videos as in-scope media.
+Remaining work is not upload work; it is checking whether any UA-scoped video
+shows important instructions or examples that are not spoken aloud and not
+written in the transcript.

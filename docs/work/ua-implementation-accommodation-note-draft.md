@@ -19,9 +19,9 @@ Lounge videos support captions and transcripts. Active Teacher's Lounge modules
 have caption/transcript resources available.
 
 If Teacher's Lounge videos are included in the UA implementation scope, YAWP
-should complete the content-level review for whether any video requires audio
-description or expanded transcript description for visual-only instructional
-information.
+should check whether any video shows important instructions or examples that are
+not spoken aloud or written in the transcript. If so, YAWP should add
+audio-description support or expand the transcript.
 
 ## Accessible output
 

@@ -23,7 +23,7 @@ Scanned surfaces:
 
 Limitations:
 
-- This is automated static/runtime scanning evidence. It does not prove keyboard-only completion, screen reader announcement quality, captions/transcripts, audio-description applicability, or tagged PDF output.
+- This is automated static/runtime scanning evidence. It does not prove keyboard-only completion, screen reader announcement quality, captions/transcripts, whether videos show important information not spoken or written in the transcript, or tagged PDF output.
 - VoiceOver and NVDA checks still need a manual or specialist pass before claiming screen-reader-dependent WCAG criteria as fully supported.
 
 ## 2026-06-26 UA axe audit

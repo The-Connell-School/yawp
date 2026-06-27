@@ -117,8 +117,9 @@ Required work:
 
 ### 6. Audio/video, transcripts, captions, audio descriptions
 
-Current answer: Substantially ready for captions/transcripts; audio-description
-applicability still needs content judgment.
+Current answer: Substantially ready for captions/transcripts; we still need to
+check whether any UA-scoped video shows important instructions or examples that
+are not spoken aloud or written in the transcript.
 
 Evidence:
 
@@ -132,12 +133,13 @@ Evidence:
   and transcript resources after upload.
 - Granola notes say the speaker/audio feature was removed and should remain off because it was buggy and unused.
 
-Response posture: "The UA student writing workflows currently do not require audio playback. Teacher training videos in the Teacher's Lounge support captions and transcripts, and active Teacher's Lounge modules have caption/transcript resources available. We are still reviewing whether any video requires additional audio-description treatment for visual-only instructional information."
+Response posture: "The UA student writing workflows currently do not require audio playback. Teacher training videos in the Teacher's Lounge support captions and transcripts, and active Teacher's Lounge modules have caption/transcript resources available. We are still checking whether any video shows important instructions or examples that are not spoken aloud or written in the transcript."
 
 Required work:
 
 - Decide whether Teacher's Lounge is in UA scope.
-- If in scope, complete audio-description/content-equivalence review.
+- If in scope, check whether any videos show important instructions or examples
+  that are not spoken aloud or written in the transcript.
 - Keep the removed speaker/audio feature off for the UA release unless it receives its own accessibility review.
 
 ### 7. Accessible output
@@ -200,8 +202,9 @@ Preliminary list:
 - Tutor chat likely needs live-region semantics for new messages.
 - Some icon-only controls likely need accessible names.
 - Some clickable cards should be links/buttons for keyboard semantics.
-- Teacher's Lounge captions/transcripts are available for active modules;
-  audio-description applicability still needs content review.
+- Teacher's Lounge captions/transcripts are available for active modules; we
+  still need to check whether videos show important instructions or examples
+  that are not spoken aloud or written in the transcript.
 - Browser print/save-as-PDF output is not yet validated as accessible/tagged output.
 - Contrast and 200% zoom need a flow-by-flow audit.
 
@@ -245,7 +248,7 @@ Required work:
 | 8 | Input errors announced in text? | Partial. Shared form components render text errors and `aria-describedby`; route-specific forms need review. |
 | 9 | Tutor chat usable with keyboard + screen reader? | Partial. Keyboard path exists, but new message announcement likely needs work. |
 | 10 | Student editor accessible? | Partial/unknown. TipTap/ProseMirror foundation is keyboard-capable; toolbar, labels, editor naming, and screen reader behavior need test evidence. |
-| 11 | Teacher's Lounge captions/transcripts? | Implemented and uploaded for active modules; audio-description applicability still needs content review. |
+| 11 | Teacher's Lounge captions/transcripts? | Implemented and uploaded for active modules; still need to check whether videos show important instructions or examples that are not spoken aloud or written in the transcript. |
 | 12 | Accessible exports? | Partial. Web output is semantic-ish HTML; print/save-as-PDF is not validated as tagged/accessible output. |
 | 13 | Vendor/product accessibility page/docs? | Page implemented at `/accessibility`, pending deploy/sign-off. |
 | 14 | Report accessibility problem? | Public email path implemented, pending owner/process sign-off. |
@@ -302,8 +305,9 @@ Likely fixes:
 - Add or fix `aria-describedby` IDs where form error components currently point to the input ID instead of an error ID.
 - Deploy public accessibility page and product accessibility documentation.
 - Sign off accessibility issue-reporting owner/process.
-- Complete audio-description/content-equivalence review for Teacher's Lounge
-  videos if UA includes those videos in scope.
+- Check Teacher's Lounge videos for important instructions or examples that are
+  not spoken aloud or written in the transcript if UA includes those videos in
+  scope.
 
 All code fixes should follow the repo rule: write the failing unit/e2e first, implement the fix, verify, and commit atomically.
 
@@ -347,7 +351,7 @@ Brian,
 
 I found Rachel's vendor questions, your 17-question breakdown, and the separate UA OIT question about AI functionality. The truthful accessibility status is: we do not have a VPAT yet, so we should give UA a WCAG 2.1 AA self-evaluation; the app has a decent accessibility foundation, but we need to audit and likely fix a few things before making strong claims.
 
-Likely remaining gaps: formal screen reader testing, full keyboard-only walkthrough, 200% zoom/reflow verification, tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; we still need a content-level audio-description judgment if UA treats those videos as in scope.
+Likely remaining gaps: formal screen reader testing, full keyboard-only walkthrough, 200% zoom/reflow verification, tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; if UA treats those videos as in scope, we still need to check whether any video shows important instructions or examples that are not spoken aloud or written in the transcript.
 
 I think the right plan is to finish audit + low-risk fixes + docs by July 3, then you can send Rachel the WCAG self-evaluation and platform access before the mid-July GBA 300 demo.
 
@@ -356,7 +360,9 @@ Separate AI functionality answer, pending production confirmation: YAWP uses Ant
 ## Open decisions
 
 - Who owns the public accessibility support inbox or intake path?
-- Should Teacher's Lounge videos be included in UA's initial product scope, and do any require audio descriptions beyond captions/transcripts?
+- Should Teacher's Lounge videos be included in UA's initial product scope, and
+  do any show important instructions or examples that are not spoken aloud or
+  written in the transcript?
 - Should YAWP publish/deploy the accessibility page before all manual QA evidence is complete, or wait until the self-evaluation is complete?
 - Which exact production AI provider/model names should be disclosed to UA?
 - Who will create UA evaluator accounts, and what roles should Rachel's team receive?

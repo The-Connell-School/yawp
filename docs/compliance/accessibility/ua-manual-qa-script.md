@@ -148,13 +148,13 @@ Pass criteria:
 - Text does not overlap or clip.
 - Sticky/fixed UI does not cover required controls.
 
-## Audio/video content judgment
+## Audio/video content check
 
 For each Teacher's Lounge video in UA scope:
 
 1. Confirm captions exist.
 2. Confirm transcript exists.
-3. Decide whether the video contains visual-only instructional information not
-   captured in captions/transcript.
-4. If yes, add audio-description or transcript remediation note.
-5. If no, record "captions/transcript cover instructional content."
+3. Check whether the video shows important instructions or examples that are
+   not spoken aloud and not written in the transcript.
+4. If yes, add audio-description support or expand the transcript.
+5. If no, record "captions/transcript cover the instructional content."

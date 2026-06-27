@@ -31,10 +31,11 @@ source /Users/bryantbrock/.codex/skills/node-runtime-fix/scripts/use-modern-node
 
 Caption and transcript assets have been generated and uploaded for the active
 Teacher's Lounge production modules identified during the 2026-06-26 UA review
-work. Remaining work is content-level review:
+work. Remaining work is a content check:
 
-- Confirm whether any UA-scoped Teacher's Lounge video communicates visual-only
-  instructional information that is not captured by the captions/transcript.
-- If so, add audio-description support or expand the transcript to cover that
-  visual information.
+- Confirm whether any UA-scoped Teacher's Lounge video shows important
+  instructions or examples that are not spoken aloud and not written in the
+  transcript.
+- If so, add audio-description support or expand the transcript so that a user
+  who cannot see the video still gets the same instructional information.
 - Re-run this check when Teacher's Lounge videos change.

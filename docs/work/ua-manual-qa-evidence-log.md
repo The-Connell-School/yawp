@@ -15,7 +15,7 @@ Tester:
 | Keyboard-only QA | Not run | |
 | VoiceOver QA | Not run | |
 | 200% zoom/reflow QA | Not run | |
-| Teacher Lounge audio-description judgment | Not run | |
+| Teacher Lounge visual-content check | Not run | |
 
 ## Keyboard-only QA
 
@@ -79,7 +79,7 @@ Retest notes:
 
 - TBD
 
-## Teacher Lounge audio-description judgment
+## Teacher Lounge visual-content check
 
 Reviewer:
 
@@ -87,11 +87,11 @@ Date:
 
 Environment:
 
-Result: NO AUDIO DESCRIPTION NEEDED / NEEDS REMEDIATION / OUT OF SCOPE
+Result: CAPTIONS/TRANSCRIPTS COVER CONTENT / NEEDS REMEDIATION / OUT OF SCOPE
 
 Video review notes:
 
-| Video/module | Captions present | Transcript present | Visual-only instructional meaning? | Decision |
+| Video/module | Captions present | Transcript present | Important on-screen instructions/examples not spoken or written? | Decision |
 |---|---|---|---|---|
 | | | | | |
 
