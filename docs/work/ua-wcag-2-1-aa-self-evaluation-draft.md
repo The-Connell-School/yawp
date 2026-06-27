@@ -2,8 +2,10 @@
 
 Date: 2026-06-27
 
-Status: Draft. This is not a VPAT/ACR. It is the WCAG 2.1 Level AA
-compliance-status evaluation UA requested as an alternative to a current VPAT.
+Status: WCAG-self-evaluation approach approved by Bryant on 2026-06-27. This
+is not a VPAT/ACR. It is the WCAG 2.1 Level AA compliance-status evaluation UA
+requested as an alternative to a current VPAT. Do not finalize until manual
+keyboard, screen reader, and zoom/reflow evidence is recorded.
 
 ## Scope
 

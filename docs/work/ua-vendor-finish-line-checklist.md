@@ -16,7 +16,7 @@ Bryant-facing action packet:
 | Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Formal keyboard-only and screen-reader verification completed; final wording updated if findings change | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
 | Public page axe audit coverage | Added to UA axe audit and passing locally | Engineering done | None | `services/web-app/e2e/tests/accessibility.ua-axe.spec.ts`; `docs/compliance/accessibility/automated-audit-log.md` |
-| Product accessibility/WCAG self-evaluation | Draft created, not final | Manual sign-off | Keyboard, VoiceOver, zoom/reflow evidence; Bryant/Brian approval of support statements | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-bryant-action-packet.md` |
+| Product accessibility/WCAG self-evaluation | WCAG-self-evaluation approach approved by Bryant; not final | Manual evidence hold | Keyboard, VoiceOver, and zoom/reflow evidence recorded; final status labels updated if findings change | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-bryant-action-packet.md` |
 | Manual keyboard-only walkthrough | Exact local-preview steps and evidence log created, not executed as final evidence | Manual | Human walkthrough of UA-scoped flows | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | VoiceOver walkthrough | Exact macOS steps and evidence log created, not executed as final evidence | Manual | Human screen reader pass on macOS | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | NVDA walkthrough | Optional but recommended; script created | Manual | Windows/NVDA access and tester time | `docs/compliance/accessibility/ua-manual-qa-script.md` |
@@ -42,8 +42,9 @@ Bryant-facing action packet:
    launch.
 4. Public `/accessibility` page draft is verified; do not deploy until formal
    keyboard-only and screen-reader verification are complete.
-5. Confirm the production AI provider/model wording and contractual data-use
-   claims.
-6. Complete or assign the manual keyboard, VoiceOver, and zoom/reflow pass.
+5. WCAG-self-evaluation approach is approved; complete or assign the manual
+   keyboard, VoiceOver, and zoom/reflow pass before finalizing.
+6. Confirm the production AI provider/model wording and contractual data-use
+   claims at send time.
 7. Decide whether UA needs public privacy/terms pages for this review or only
    the accessibility and AI responses.
