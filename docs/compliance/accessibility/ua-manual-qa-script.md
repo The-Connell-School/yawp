@@ -6,6 +6,10 @@ Purpose: Produce manual evidence for the University of Alabama accessibility
 review. This script covers the items automated axe tests do not prove:
 keyboard-only completion, screen reader behavior, and 200% zoom/reflow.
 
+Bryant-facing setup, exact local preview commands, seeded credentials, generated
+QA URLs, and yes/no approval prompts are in
+`docs/work/ua-bryant-action-packet.md`.
+
 ## Record for each pass
 
 - Tester:
@@ -154,4 +158,3 @@ For each Teacher's Lounge video in UA scope:
    captured in captions/transcript.
 4. If yes, add audio-description or transcript remediation note.
 5. If no, record "captions/transcript cover instructional content."
-
