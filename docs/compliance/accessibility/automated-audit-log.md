@@ -1,5 +1,40 @@
 # Automated Accessibility Audit Log
 
+## 2026-06-27 UA keyboard and reflow evidence update
+
+Tool: Playwright Chromium keyboard navigation and viewport reflow checks.
+
+Command:
+
+```bash
+source /Users/bryantbrock/.codex/skills/node-runtime-fix/scripts/use-modern-node.sh && bunx playwright test --project=chromium e2e/tests/accessibility.ua-manual-evidence.spec.ts
+```
+
+Result: PASS, 3/3 Playwright tests.
+
+Covered surfaces:
+
+- `/accessibility`
+- `/auth/login`
+- Student document editor at `/app/documents/:id`
+- Teacher dashboard at `/app`
+- Teacher grading view at `/app/submissions/:id`
+- Teacher's Lounge module page
+- Organization/admin setup routes
+
+Finding remediated during this pass:
+
+- Student document editor trapped keyboard focus by inserting spaces on `Tab`
+  when not inside a list. Fixed in `cc663b0`; `Tab` still indents list items
+  when applicable and otherwise falls through to browser focus traversal.
+
+Limitations:
+
+- This is automation-backed keyboard and reflow evidence. It does not replace a
+  human assistive-technology pass.
+- The reflow check uses a 640px viewport as a proxy for 200% desktop zoom from a
+  1280px baseline.
+
 ## 2026-06-27 UA axe audit update
 
 Tool: `@axe-core/playwright` 4.12.1 using axe WCAG tags `wcag2a`, `wcag2aa`, `wcag21a`, and `wcag21aa`.

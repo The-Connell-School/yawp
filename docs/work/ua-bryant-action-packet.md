@@ -279,14 +279,21 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 
 - Public accessibility page regression: 2 Playwright tests passed.
 - UA axe audit: 6/6 Playwright tests passed.
+- UA keyboard/reflow evidence spec: 3/3 Playwright tests passed.
 - Typecheck: passed.
+- Document editor regression after `Tab` focus fix: 15/15 Playwright tests
+  passed.
 - Teacher Lounge media tests: 6/6 passed.
 
 ## What not to claim yet
 
 - Do not claim a completed VPAT/ACR.
 - Do not claim full screen-reader support until the VoiceOver pass is recorded.
-- Do not claim full keyboard-only support until the keyboard pass is recorded.
+- Do not claim a completed human keyboard-only walkthrough yet. Current allowed
+  claim: automated keyboard smoke passed across representative UA flows, and an
+  editor `Tab` focus trap was remediated.
+- Do not claim a completed human 200% zoom walkthrough yet. Current allowed
+  claim: automated reflow proxy passed across representative UA flows.
 - Do not claim tagged PDF output.
 - Do not claim captions/transcripts cover all Teacher Lounge video content until
   Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` is complete.

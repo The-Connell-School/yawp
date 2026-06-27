@@ -17,7 +17,7 @@ YAWP should not claim full WCAG 2.1 AA conformance yet. The truthful posture is:
 - We do not currently have a completed VPAT/ACR.
 - We can provide a WCAG 2.1 AA self-evaluation focused on the product version UA will use.
 - The app has meaningful accessibility foundations: native links/buttons in many flows, Radix UI primitives for several complex controls, visible focus styles in shared controls, label/error patterns in form components, and browser-native editing/media primitives.
-- Several items still need manual evidence or sign-off before a strong final UA response: formal keyboard walkthroughs, screen reader testing, 200% zoom/reflow verification, accessible output wording, support-process ownership, AI/data-use wording, and approval of the final public accessibility claims.
+- Several items still need evidence or sign-off before a strong final UA response: formal screen reader testing, Teacher Lounge visual-only content remediation, accessible output wording, support-process ownership, AI/data-use wording, and approval of the final public accessibility claims. Automated keyboard-smoke and reflow-proxy evidence now exists for representative UA flows.
 
 Recommended operating target: complete the audit, low-risk fixes, public docs, and WCAG self-evaluation by Friday, 2026-07-03. That creates a buffer before Bryant's 2026-07-06 through 2026-07-11 offline window and the mid-July GBA 300 demo.
 
@@ -88,14 +88,21 @@ Evidence:
 - Playwright tests often use role-based locators.
 - The editor is TipTap/ProseMirror, which supports keyboard editing at the core layer.
 
+Current evidence:
+
+- Automated keyboard-smoke evidence now covers public accessibility, login,
+  student editor, teacher dashboard, teacher grading, Teacher Lounge, and admin
+  organization/setup routes.
+- The pass found a student-editor `Tab` focus trap. It was remediated in
+  `cc663b0` by allowing browser focus traversal outside list indentation.
+
 Known concerns:
 
-- No comprehensive keyboard-only E2E audit exists.
-- Some clickable cards use `onClick` on non-button containers, such as Teacher's Lounge course cards, and should be converted to links/buttons or given equivalent keyboard behavior.
-- Some icon-only buttons need accessible names.
-- Tutor chat and grading/sidebar flows need a manual tab-order and keyboard-trap pass.
+- The automated pass is not a completed human keyboard walkthrough.
+- Tutor chat and grading/sidebar flows still need human tab-order review before
+  claiming full manual keyboard QA.
 
-Response posture: "Core browser/editor interactions are keyboard accessible in many areas, and we are completing a keyboard-only verification of the UA flows. Any failures found in that pass will be remediated before we finalize the self-evaluation."
+Response posture: "Core browser/editor interactions are keyboard accessible in representative UA flows based on automated keyboard-smoke evidence. A student-editor Tab focus issue found during that pass has been remediated. We will document any additional manual findings as accessibility defects and prioritize by user impact."
 
 ### 5. Assistive technology testing
 
@@ -208,7 +215,9 @@ Preliminary list:
   least one video needs expanded transcript notes or a similar accessible text
   alternative for important on-screen information.
 - Browser print/save-as-PDF output is not yet validated as accessible/tagged output.
-- Contrast and 200% zoom need a flow-by-flow audit.
+- Automated 640px reflow proxy passed on representative UA flows; a human
+  browser-zoom pass is still recommended before claiming completed manual zoom
+  QA.
 
 ### 11. How users report accessibility issues
 
@@ -243,16 +252,16 @@ Required work:
 
 | # | Question | Current status |
 |---|---|---|
-| 1 | Can all core flows be completed keyboard-only? | Partial / needs formal audit across login, student editor, tutor chat, submit, teacher dashboard, grading, admin. |
+| 1 | Can all core flows be completed keyboard-only? | Automated keyboard-smoke evidence passed across representative UA flows; human keyboard walkthrough not yet claimed. |
 | 2 | Visible focus, logical tab order, no traps? | Partial. Shared controls include focus-visible styles; full tab-order and trap audit not complete. |
 | 3 | Screen reader testing? | Not complete. Needs VoiceOver and NVDA test runs at minimum. |
 | 4 | Alt text, labels, roles? | Partial. Some forms and images have labels/alt text; several dynamic/chat/editor controls need review. |
 | 5 | 4.5:1 contrast? | Unknown. Needs automated and manual contrast audit. |
-| 6 | 200% zoom? | Unknown. Needs flow-by-flow browser zoom test. |
+| 6 | 200% zoom? | Automated 640px reflow proxy passed across representative UA flows; human browser-zoom pass not yet claimed. |
 | 7 | Color-only information? | Unknown/partial. Feedback/highlight states need review to ensure text or programmatic alternatives. |
 | 8 | Input errors announced in text? | Partial. Shared form components render text errors and `aria-describedby`; route-specific forms need review. |
 | 9 | Tutor chat usable with keyboard + screen reader? | Partial. Keyboard path exists, but new message announcement likely needs work. |
-| 10 | Student editor accessible? | Partial/unknown. TipTap/ProseMirror foundation is keyboard-capable; toolbar, labels, editor naming, and screen reader behavior need test evidence. |
+| 10 | Student editor accessible? | Partial. Editor is named for assistive tech, axe scan passes, and a keyboard `Tab` focus trap was remediated in `cc663b0`; formal screen-reader behavior still needs VoiceOver evidence. |
 | 11 | Teacher's Lounge captions/transcripts? | Implemented and uploaded for active modules; at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information. |
 | 12 | Accessible exports? | Partial. Web output is semantic-ish HTML; print/save-as-PDF is not validated as tagged/accessible output. |
 | 13 | Vendor/product accessibility page/docs? | Page implemented at `/accessibility`, pending deploy/sign-off. |
@@ -355,7 +364,7 @@ Brian,
 
 I found Rachel's vendor questions, your 17-question breakdown, and the separate UA OIT question about AI functionality. The truthful accessibility status is: we do not have a VPAT yet, so we should give UA a WCAG 2.1 AA self-evaluation; the app has a decent accessibility foundation, but we need to audit and likely fix a few things before making strong claims.
 
-Likely remaining gaps: formal screen reader testing, full keyboard-only walkthrough, 200% zoom/reflow verification, tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; Teacher Lounge is in UA scope, and at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information.
+Likely remaining gaps: formal screen reader testing, tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Automated keyboard-smoke and reflow-proxy evidence now passes on representative UA flows, and a student-editor `Tab` focus trap found during that pass has been fixed. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; Teacher Lounge is in UA scope, and at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information.
 
 I think the right plan is to finish audit + low-risk fixes + docs by July 3, then you can send Rachel the WCAG self-evaluation and platform access before the mid-July GBA 300 demo.
 
