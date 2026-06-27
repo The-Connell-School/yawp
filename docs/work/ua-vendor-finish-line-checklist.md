@@ -13,7 +13,7 @@ Bryant-facing action packet:
 |---|---|---|---|---|
 | Accessibility email to Rachel Thompson | Content approved by Bryant, not sent | Send-readiness hold | Public page deployed; manual-status wording current; evaluator account readiness confirmed | `docs/work/ua-accessibility-email-draft.md` |
 | AI functionality email to Mary Anne Canant | Content approved by Bryant, not sent | Send-readiness hold | Production config current at send time; send target/thread confirmed | `docs/work/ua-ai-functionality-email-draft.md` |
-| Public accessibility page | Implemented in app at `/accessibility`, pending deploy | Engineering | Push/deploy approval if not already on production | `services/web-app/app/routes/accessibility/route.tsx` |
+| Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Formal keyboard-only and screen-reader verification completed; final wording updated if findings change | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
 | Public page axe audit coverage | Added to UA axe audit and passing locally | Engineering done | None | `services/web-app/e2e/tests/accessibility.ua-axe.spec.ts`; `docs/compliance/accessibility/automated-audit-log.md` |
 | Product accessibility/WCAG self-evaluation | Draft created, not final | Manual sign-off | Keyboard, VoiceOver, zoom/reflow evidence; Bryant/Brian approval of support statements | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-bryant-action-packet.md` |
@@ -39,8 +39,8 @@ Bryant-facing action packet:
    send target/thread at send time.
 3. Confirm `yawp@theconnellschool.com` is the correct accessibility support
    intake address and who owns that inbox/process.
-4. Confirm whether to deploy the public `/accessibility` page before sending
-   the final packet.
+4. Public `/accessibility` page draft is verified; do not deploy until formal
+   keyboard-only and screen-reader verification are complete.
 5. Confirm the production AI provider/model wording and contractual data-use
    claims.
 6. Complete or assign the manual keyboard, VoiceOver, and zoom/reflow pass.

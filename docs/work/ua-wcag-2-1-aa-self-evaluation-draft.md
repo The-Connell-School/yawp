@@ -44,7 +44,7 @@ screen-reader-dependent and keyboard-only criteria.
 
 | UA question | Current answer | Status | Evidence / limitation |
 |---|---|---|---|
-| Vendor accessibility webpage | `https://yawp.school/accessibility` once deployed | Partially Supports | Implemented in app; needs deploy/sign-off |
+| Vendor accessibility webpage | `https://yawp.school/accessibility` once deployed | Partially Supports | Implemented in app and draft verified by Bryant; publish hold until formal keyboard-only and screen-reader verification are complete |
 | Product accessibility webpage | Same page currently covers YAWP product scope | Partially Supports | Can be split later if UA requires separate vendor/product pages |
 | VPAT/ACR or WCAG evaluation | No VPAT/ACR; WCAG 2.1 AA self-evaluation draft provided | Partially Supports | This document is the draft evaluation |
 | Keyboard-only operation | Many flows use native controls and keyboard-capable components | Not Evaluated / Partial | Needs manual keyboard pass |
@@ -76,4 +76,3 @@ screen-reader-dependent and keyboard-only criteria.
 - Record tester, date, browser, OS, assistive technology, flows covered,
   findings, and remediation links if any.
 - Update this draft's status labels after manual evidence is complete.
-

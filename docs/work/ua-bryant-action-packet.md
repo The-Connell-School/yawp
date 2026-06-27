@@ -22,7 +22,7 @@ To make the sign-off step quick, Bryant can reply with this filled in:
 ```text
 Accessibility email: YES / NO / EDIT:
 AI functionality email: YES / NO / EDIT:
-Publish /accessibility page: YES / NO / EDIT:
+Publish /accessibility page after keyboard/screen-reader verification: YES / NO / EDIT:
 Use yawp@theconnellschool.com for accessibility intake: YES / NO / EDIT:
 Send WCAG self-evaluation instead of VPAT/ACR: YES / NO / EDIT:
 Keep conservative PDF/output wording: YES / NO / EDIT:
@@ -230,8 +230,10 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 
 3. Public accessibility page:
    - File: `services/web-app/app/routes/accessibility/route.tsx`
+   - Current status: draft/content verified by Bryant on 2026-06-27.
    - Approval needed: publish this page and use `https://yawp.school/accessibility`
-     in UA communications?
+     in UA communications after formal keyboard-only and screen-reader
+     verification are complete?
 
 4. Support process:
    - Current draft: `yawp@theconnellschool.com`
