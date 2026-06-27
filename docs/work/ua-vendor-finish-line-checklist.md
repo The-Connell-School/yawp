@@ -12,7 +12,7 @@ Bryant-facing action packet:
 | Item | Current state | Type | Blocked by | Artifact / evidence |
 |---|---|---|---|---|
 | Accessibility email to Rachel Thompson | Content approved by Bryant, not sent | Send-readiness hold | Public page deployed; manual-status wording current; evaluator account readiness confirmed | `docs/work/ua-accessibility-email-draft.md` |
-| AI functionality email to Mary Anne Canant | Draft created, not sent | Manual sign-off | Bryant approval of provider/model names and data-use wording | `docs/work/ua-ai-functionality-email-draft.md` |
+| AI functionality email to Mary Anne Canant | Content approved by Bryant, not sent | Send-readiness hold | Production config current at send time; send target/thread confirmed | `docs/work/ua-ai-functionality-email-draft.md` |
 | Public accessibility page | Implemented in app at `/accessibility`, pending deploy | Engineering | Push/deploy approval if not already on production | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
 | Public page axe audit coverage | Added to UA axe audit and passing locally | Engineering done | None | `services/web-app/e2e/tests/accessibility.ua-axe.spec.ts`; `docs/compliance/accessibility/automated-audit-log.md` |
@@ -35,7 +35,8 @@ Bryant-facing action packet:
 
 1. Accessibility email content is approved; confirm send-readiness after deploy,
    current manual-status wording, and evaluator account readiness.
-2. Approve or edit the AI functionality email before it is sent to Mary Anne.
+2. AI functionality email content is approved; confirm production config and
+   send target/thread at send time.
 3. Confirm `yawp@theconnellschool.com` is the correct accessibility support
    intake address and who owns that inbox/process.
 4. Confirm whether to deploy the public `/accessibility` page before sending

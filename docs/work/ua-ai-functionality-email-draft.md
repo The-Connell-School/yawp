@@ -1,7 +1,7 @@
 # Draft Email: UA AI Functionality Response
 
-Status: Draft for Bryant review. Do not send until production model/provider
-and data-use wording are approved.
+Status: Content approved by Bryant on 2026-06-27. Do not send until production
+config is current at send time and the send target/thread is confirmed.
 
 To: Mary Anne Canant <mcanant@ua.edu>
 
@@ -38,6 +38,7 @@ Brian
 
 ## Claims requiring Bryant sign-off before sending
 
+- Bryant approved the email draft content on 2026-06-27.
 - Exact production model name: current infra says `claude-sonnet-4-6`.
 - Exact fallback behavior: code defaults OpenAI fallback to `gpt-4o-mini` when
   enabled and configured.
@@ -45,4 +46,3 @@ Brian
 - Provider data-use/training claim. This draft intentionally does not claim
   that provider-side data is or is not used for model training until the
   applicable account terms/contracts are confirmed.
-
