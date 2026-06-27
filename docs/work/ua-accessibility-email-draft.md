@@ -38,9 +38,14 @@ Current status in brief:
   accessibility defects and prioritized by user impact.
 
 We can also provide platform access for your team so you can evaluate the
-product directly and identify any campus-specific accommodations. Please let us
-know the best reviewer account setup for your team and which roles you would
-like to inspect, such as student, teacher, and administrator.
+product directly and identify any campus-specific accommodations. We can create
+student, teacher, and administrator reviewer access for named UA reviewers. Our
+preferred path is to send YAWP invitation links to the designated reviewer email
+addresses so reviewers set their own passwords. If a preset student fixture
+credential is unavoidable, we will send it through a one-time secure share
+rather than placing a password in this email thread.
+
+Please send the UA reviewer email addresses that should receive access.
 
 Known limitations we are not overstating:
 
@@ -65,4 +70,8 @@ Brian
 - Active Teacher's Lounge captions/transcripts are available in production.
 - Manual keyboard/screen-reader/zoom pass status is accurately represented at
   send time.
-- UA evaluator account setup and roles are ready or can be created immediately.
+- UA evaluator access direction is approved: YAWP invite links are primary, and
+  1Password email-restricted, view-once shares are the fallback for unavoidable
+  preset credentials.
+- Named UA reviewer email addresses are available or requested in the outgoing
+  message.

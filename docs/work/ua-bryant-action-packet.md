@@ -28,7 +28,8 @@ Send WCAG self-evaluation instead of VPAT/ACR: YES / NO / EDIT:
 Keep conservative PDF/output wording: YES / NO / EDIT:
 Teacher Lounge in UA review scope: YES - confirmed by Bryant; remediation tracked in `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`
 Need privacy/terms pages in this packet: NO - operator decision; use privacy/data-security one-pager for vendor-security review
-Create UA evaluator accounts: YES / NO / EDIT:
+Create UA evaluator accounts: APPROVED - generate exact accounts/links at send-ready time
+UA evaluator access delivery: APPROVED - invite links primary; 1Password view-once share links only for unavoidable preset credentials
 ```
 
 ## Local preview setup
@@ -268,8 +269,11 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 
 9. UA evaluator accounts:
    - File: `docs/work/ua-evaluator-access-instructions-draft.md`
-   - Approval needed: create student, teacher, and admin reviewer accounts for
-     UA, and deliver credentials through a secure channel?
+   - Approved: create student, teacher, and admin reviewer access for UA using
+     YAWP invite links as the primary path. Use 1Password email-restricted,
+     view-once shares only for unavoidable preset student credentials.
+   - Operational hold: collect named UA reviewer email addresses and generate
+     the exact links at send time.
 
 ## What Codex has already verified
 

@@ -235,6 +235,9 @@ Required work:
 
 - Create an internal issue workflow and public-facing wording.
 - Add accessibility checks to release QA for core flows.
+- Provide UA evaluator access through named YAWP invite links when possible;
+  use email-restricted, view-once 1Password shares only for unavoidable preset
+  fixture credentials.
 
 ## Brian's 17-question checklist: current status
 
@@ -358,7 +361,7 @@ I think the right plan is to finish audit + low-risk fixes + docs by July 3, the
 
 Separate AI functionality answer, pending production confirmation: YAWP uses Anthropic Claude as the primary LLM provider for AI-assisted tutoring/grading, with OpenAI configured as a fallback for certain outage scenarios. Students interact with YAWP's integrated tutor/grading workflows, not a standalone chatbot.
 
-## Open decisions
+## Open items
 
 - Who owns the public accessibility support inbox or intake path?
 - Teacher Lounge visual-content remediation:
@@ -369,4 +372,6 @@ Separate AI functionality answer, pending production confirmation: YAWP uses Ant
   vendor-security review questions.
 - Should YAWP publish/deploy the accessibility page before all manual QA evidence is complete, or wait until the self-evaluation is complete?
 - Which exact production AI provider/model names should be disclosed to UA?
-- Who will create UA evaluator accounts, and what roles should Rachel's team receive?
+- UA evaluator access plan is approved; collect named UA reviewer email
+  addresses from Rachel's team and generate student, teacher, and admin/owner
+  links at send time.

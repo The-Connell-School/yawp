@@ -51,10 +51,10 @@ screen-reader-dependent and keyboard-only criteria.
 | VPAT/ACR or WCAG evaluation | No VPAT/ACR; WCAG 2.1 AA self-evaluation draft provided | Partially Supports | This document is the draft evaluation |
 | Keyboard-only operation | Many flows use native controls and keyboard-capable components | Not Evaluated / Partial | Needs manual keyboard pass |
 | Assistive technology testing | Not final | Not Evaluated | Needs VoiceOver; NVDA recommended |
-| Audio/video captions/transcripts | Teacher's Lounge supports captions/transcripts; active assets uploaded | Supports for captions/transcripts | Audio-description applicability still needs content judgment |
+| Audio/video captions/transcripts | Teacher's Lounge supports captions/transcripts; active assets uploaded | Supports for captions/transcripts | Teacher Lounge visual-only instructional content remediation is tracked in Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
 | Accessible output | Primary output is browser-rendered HTML | Partially Supports | Conservative no-tagged-PDF wording approved by Bryant on 2026-06-27 |
 | User-facing accessibility docs | Public page implemented | Partially Supports | Needs deploy and owner sign-off |
-| Setup/implementation adjustments | Draft guidance exists | Partially Supports | Needs final UA evaluator/account instructions |
+| Setup/implementation adjustments | Draft guidance exists | Partially Supports | UA evaluator access plan approved; exact reviewer links generated at send time |
 | Common accessibility issues | Known limitations drafted | Partially Supports | Needs final manual QA findings |
 | Reporting accessibility issues | Support mail link implemented | Partially Supports | Need support owner/process sign-off |
 | Addressing accessibility concerns | Draft remediation process on public page | Partially Supports | Need owner/SLA/escalation sign-off |

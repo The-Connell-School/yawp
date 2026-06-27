@@ -11,7 +11,7 @@ Bryant-facing action packet:
 
 | Item | Current state | Type | Blocked by | Artifact / evidence |
 |---|---|---|---|---|
-| Accessibility email to Rachel Thompson | Content approved by Bryant, not sent | Send-readiness hold | Public page deployed; manual-status wording current; evaluator account readiness confirmed | `docs/work/ua-accessibility-email-draft.md` |
+| Accessibility email to Rachel Thompson | Content approved by Bryant, not sent | Send-readiness hold | Public page deployed; manual-status wording current; reviewer invite/share links generated at send time | `docs/work/ua-accessibility-email-draft.md` |
 | AI functionality email to Mary Anne Canant | Content approved by Bryant, not sent | Send-readiness hold | Production config current at send time; send target/thread confirmed | `docs/work/ua-ai-functionality-email-draft.md` |
 | Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Formal keyboard-only and screen-reader verification completed; final wording updated if findings change | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
@@ -25,16 +25,16 @@ Bryant-facing action packet:
 | Teacher Lounge visual-content remediation | Confirmed in UA scope; Bryant confirmed at least one video has important on-screen information not covered by audio/transcript; backlog ticket created | Backlog task | Identify affected production module(s), add expanded transcript notes or audio-description support, verify upload/evidence | Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`; `docs/work/ua-bryant-action-packet.md` |
 | Accessible output/PDF claim | Conservative no-tagged-PDF wording approved by Bryant | Done | None | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
 | Accessibility issue-reporting process | Approved by Bryant using `yawp@theconnellschool.com` | Operational readiness | Confirm inbox owner/escalation before external launch | `/accessibility`; draft emails |
-| UA evaluator accounts | Not created | Manual | Decide reviewer roles, credentials delivery method, and data scope | `docs/work/ua-accessibility-email-draft.md` |
-| UA evaluator instructions | Drafted inside Rachel email | Manual sign-off | Confirm account setup and product scope | `docs/work/ua-accessibility-email-draft.md` |
+| UA evaluator accounts | Direction approved; specific accounts/links not generated yet | Operational | Named UA reviewer email addresses; send-ready environment | `docs/work/ua-evaluator-access-instructions-draft.md`; `docs/work/ua-accessibility-email-draft.md` |
+| UA evaluator instructions | Secure delivery plan approved: YAWP invite links primary, 1Password view-once shares only for unavoidable preset credentials | Operational | Generate exact links at send time | `docs/work/ua-evaluator-access-instructions-draft.md`; `docs/work/ua-accessibility-email-draft.md` |
 | AI/data handling mini-policy | Drafted conservatively | Manual sign-off | Confirm production config and vendor contractual data-use terms | `docs/work/ua-ai-functionality-email-draft.md` |
 | Privacy/terms pages | Not required for current accessibility packet; privacy/data-security one-pager drafted for vendor-security lane | Done for this packet | Public legal pages only if UA/legal specifically asks | `docs/work/ua-privacy-data-security-one-pager-draft.md` |
 | Post-QA remediation | Unknown | Engineering | Depends on manual keyboard/screen-reader/zoom findings | To be created if findings appear |
 
-## Current blockers that require Bryant or Brian
+## Current send-readiness holds
 
 1. Accessibility email content is approved; confirm send-readiness after deploy,
-   current manual-status wording, and evaluator account readiness.
+   current manual-status wording, and reviewer link generation.
 2. AI functionality email content is approved; confirm production config and
    send target/thread at send time.
 3. Accessibility support intake address is approved as
@@ -46,9 +46,11 @@ Bryant-facing action packet:
    keyboard, VoiceOver, and zoom/reflow pass before finalizing.
 6. Confirm the production AI provider/model wording and contractual data-use
    claims at send time.
-7. Teacher Lounge videos are in UA scope; visual-content remediation is the
+7. UA evaluator access direction is approved; collect named UA reviewer email
+   addresses from Rachel's team at send time and generate invite/share links.
+8. Teacher Lounge videos are in UA scope; visual-content remediation is the
    next backlog item: Central Station
    `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
-8. Privacy/terms decision made: do not block the accessibility packet on public
+9. Privacy/terms decision made: do not block the accessibility packet on public
    legal pages. Use `docs/work/ua-privacy-data-security-one-pager-draft.md` if
    UA moves into broader vendor-security questions.
