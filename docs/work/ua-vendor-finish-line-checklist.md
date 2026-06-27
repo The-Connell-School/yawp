@@ -22,7 +22,7 @@ Bryant-facing action packet:
 | NVDA walkthrough | Optional but recommended; script created | Manual | Windows/NVDA access and tester time | `docs/compliance/accessibility/ua-manual-qa-script.md` |
 | 200% zoom/reflow check | Exact 200% zoom steps and evidence log created, not executed as final evidence | Manual | Human walkthrough at browser zoom | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | Teacher's Lounge captions/transcripts | Implemented, generated, uploaded, and UI follow-up merged to `main` | Done | None | `docs/compliance/accessibility/teacher-lounge-caption-generation-log.md`; `a4f1fe6` |
-| Teacher Lounge visual-content check | Exact review steps and evidence log created, not finalized | Codex/manual review | Check whether Teacher's Lounge videos show important instructions or examples that are not spoken aloud or written in the transcript | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
+| Teacher Lounge visual-content remediation | Confirmed in UA scope; Bryant confirmed at least one video has important on-screen information not covered by audio/transcript; backlog ticket created | Backlog task | Identify affected production module(s), add expanded transcript notes or audio-description support, verify upload/evidence | Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`; `docs/work/ua-bryant-action-packet.md` |
 | Accessible output/PDF claim | Conservative no-tagged-PDF wording approved by Bryant | Done | None | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md` |
 | Accessibility issue-reporting process | Approved by Bryant using `yawp@theconnellschool.com` | Operational readiness | Confirm inbox owner/escalation before external launch | `/accessibility`; draft emails |
 | UA evaluator accounts | Not created | Manual | Decide reviewer roles, credentials delivery method, and data scope | `docs/work/ua-accessibility-email-draft.md` |
@@ -46,5 +46,8 @@ Bryant-facing action packet:
    keyboard, VoiceOver, and zoom/reflow pass before finalizing.
 6. Confirm the production AI provider/model wording and contractual data-use
    claims at send time.
-7. Decide whether UA needs public privacy/terms pages for this review or only
+7. Teacher Lounge videos are in UA scope; visual-content remediation is the
+   next backlog item: Central Station
+   `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+8. Decide whether UA needs public privacy/terms pages for this review or only
    the accessibility and AI responses.

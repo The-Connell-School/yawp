@@ -66,6 +66,8 @@ The module page now renders media accessibility links as a subdued helper row
 below primary resources. That UI follow-up is merged to `main` in commit
 `a4f1fe6`.
 
-Remaining work is not upload work; it is checking whether any UA-scoped video
-shows important instructions or examples that are not spoken aloud and not
-written in the transcript.
+Remaining work is not basic caption/transcript upload work. Bryant confirmed on
+2026-06-27 that at least one UA-scoped Teacher's Lounge video shows important
+instructions or examples that are not spoken aloud and not written in the
+transcript. Remediation is tracked in Central Station ticket
+`YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.

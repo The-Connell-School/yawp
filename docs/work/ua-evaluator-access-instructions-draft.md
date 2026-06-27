@@ -46,5 +46,6 @@ The reviewer accounts are intended to inspect:
 - Whether review happens in production or a production-equivalent preview.
 - Which exact accounts/roles Rachel's team should receive.
 - How credentials will be delivered securely.
-- Whether Teacher's Lounge video content is part of the initial approval scope.
-
+- Teacher's Lounge video content is part of the initial approval scope; visual
+  content remediation is tracked in Central Station
+  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.

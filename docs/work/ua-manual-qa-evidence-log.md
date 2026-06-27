@@ -15,7 +15,7 @@ Tester:
 | Keyboard-only QA | Not run | |
 | VoiceOver QA | Not run | |
 | 200% zoom/reflow QA | Not run | |
-| Teacher Lounge visual-content check | Not run | |
+| Teacher Lounge visual-content check | Needs remediation | Bryant confirmed at least one video has important on-screen information missing from audio/transcript; tracked in Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
 
 ## Keyboard-only QA
 
@@ -87,13 +87,13 @@ Date:
 
 Environment:
 
-Result: CAPTIONS/TRANSCRIPTS COVER CONTENT / NEEDS REMEDIATION / OUT OF SCOPE
+Result: NEEDS REMEDIATION
 
 Video review notes:
 
 | Video/module | Captions present | Transcript present | Important on-screen instructions/examples not spoken or written? | Decision |
 |---|---|---|---|---|
-| | | | | |
+| Unknown pending backlog review | Yes for active modules | Yes for active modules | Yes, confirmed by Bryant; affected module(s) still need identification | Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
 
 Remediation notes:
 

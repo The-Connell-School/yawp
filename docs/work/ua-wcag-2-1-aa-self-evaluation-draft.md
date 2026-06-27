@@ -20,7 +20,7 @@ Flows in scope for UA review:
 - Teacher dashboard and class/document views
 - Teacher grading and feedback views
 - Organization/setup/admin workflows used for implementation
-- Teacher's Lounge training content when included in implementation
+- Teacher's Lounge training content
 
 ## Summary posture
 
@@ -69,8 +69,9 @@ screen-reader-dependent and keyboard-only criteria.
   output.
 - Dedicated school-level high-contrast/font/theme controls are not currently
   available.
-- Audio descriptions need a content-level determination for Teacher's Lounge
-  videos if UA treats those videos as in-scope instructional media.
+- Teacher Lounge visual-content remediation is tracked in Central Station
+  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` because at least one video has
+  important on-screen information not covered by audio/transcript.
 
 ## Manual evidence required before final send
 

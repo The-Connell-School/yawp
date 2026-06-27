@@ -33,9 +33,12 @@ Caption and transcript assets have been generated and uploaded for the active
 Teacher's Lounge production modules identified during the 2026-06-26 UA review
 work. Remaining work is a content check:
 
-- Confirm whether any UA-scoped Teacher's Lounge video shows important
-  instructions or examples that are not spoken aloud and not written in the
-  transcript.
-- If so, add audio-description support or expand the transcript so that a user
-  who cannot see the video still gets the same instructional information.
+- Bryant confirmed on 2026-06-27 that Teacher's Lounge videos are in UA scope
+  and at least one video shows important instructions or examples that are not
+  spoken aloud and not written in the transcript.
+- Backlog ticket: Central Station
+  `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+- For affected videos, add audio-description support or expand the transcript
+  so that a user who cannot see the video still gets the same instructional
+  information.
 - Re-run this check when Teacher's Lounge videos change.

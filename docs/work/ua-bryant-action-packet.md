@@ -26,7 +26,7 @@ Publish /accessibility page after keyboard/screen-reader verification: YES / NO 
 Use yawp@theconnellschool.com for accessibility intake: YES / NO / EDIT:
 Send WCAG self-evaluation instead of VPAT/ACR: YES / NO / EDIT:
 Keep conservative PDF/output wording: YES / NO / EDIT:
-Teacher Lounge in UA review scope: YES / NO / EDIT:
+Teacher Lounge in UA review scope: YES - confirmed by Bryant; remediation tracked in `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`
 Need privacy/terms pages in this packet: YES / NO / EDIT:
 Create UA evaluator accounts: YES / NO / EDIT:
 ```
@@ -201,8 +201,13 @@ Pass if:
 
 ### Card 4: Teacher Lounge visual-content check
 
-Use production for this judgment if UA will review production Teacher's Lounge
-content. Use local preview only to verify UI mechanics.
+Status: Bryant confirmed on 2026-06-27 that Teacher Lounge is in UA scope and
+that at least one video shows important instructions or examples that are not
+spoken aloud and not written in the transcript. This is now a backlog item:
+Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
+
+Use production for this remediation because UA will review production Teacher's
+Lounge content. Use local preview only to verify UI mechanics.
 
 For each UA-scoped Teacher Lounge video:
 
@@ -251,8 +256,9 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
    - Approval needed: keep this conservative wording?
 
 7. Teacher Lounge scope:
-   - Approval needed: include Teacher Lounge videos in the UA review scope, or
-     keep the initial approval scoped to student/teacher writing workflows only?
+   - Approved: Teacher Lounge videos are in UA review scope.
+   - Remediation ticket: Central Station
+     `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`.
 
 8. Privacy/terms pages:
    - Approval needed: do we need public privacy/terms pages for this UA packet
@@ -277,5 +283,4 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 - Do not claim full keyboard-only support until the keyboard pass is recorded.
 - Do not claim tagged PDF output.
 - Do not claim captions/transcripts cover all Teacher Lounge video content until
-  the videos have been checked for important on-screen instructions or examples
-  that are not spoken aloud or written in the transcript.
+  Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` is complete.

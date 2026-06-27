@@ -18,10 +18,12 @@ Student writing workflows do not require audio or video playback. Teacher's
 Lounge videos support captions and transcripts. Active Teacher's Lounge modules
 have caption/transcript resources available.
 
-If Teacher's Lounge videos are included in the UA implementation scope, YAWP
-should check whether any video shows important instructions or examples that are
-not spoken aloud or written in the transcript. If so, YAWP should add
-audio-description support or expand the transcript.
+Teacher's Lounge videos are in the UA implementation scope. Bryant confirmed on
+2026-06-27 that at least one video shows important instructions or examples
+that are not spoken aloud or written in the transcript. Remediation is tracked
+in Central Station ticket `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y`: identify
+the affected module(s), then add audio-description support or expand the
+transcript.
 
 ## Accessible output
 
