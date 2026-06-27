@@ -124,7 +124,10 @@ export default function AccessibilityRoute() {
             Recent automated accessibility testing has covered login, student
             writing and tutor surfaces, the teacher dashboard, Teacher&apos;s
             Lounge pages, and teacher grading pages using axe WCAG 2.1 A and AA
-            checks.
+            checks. Additional keyboard-smoke and reflow-proxy checks have
+            passed on representative review flows, and a macOS VoiceOver smoke
+            pass has covered key public, login, student editor, teacher grading,
+            and Teacher&apos;s Lounge controls.
           </p>
         </Section>
 
@@ -141,12 +144,14 @@ export default function AccessibilityRoute() {
         <Section title="Known limitations">
           <ul className="list-disc space-y-2 pl-6">
             <li>
-              Formal screen reader testing is still being documented for the
-              current product version.
+              Screen reader testing is still limited to a representative
+              macOS VoiceOver smoke pass; full coverage of dynamic workflows
+              and additional assistive technologies is not yet complete.
             </li>
             <li>
-              Keyboard-only verification is in progress across the full
-              institutional review scope.
+              Keyboard-smoke testing has passed on representative institutional
+              review flows, but we are not claiming a completed human
+              keyboard-only walkthrough.
             </li>
             <li>
               Browser print or save-as-PDF output should not be treated as a

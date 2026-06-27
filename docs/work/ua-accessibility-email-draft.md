@@ -35,9 +35,12 @@ Current status in brief:
 - Student writing workflows do not require audio or video playback.
 - We have completed automated keyboard-smoke and reflow-proxy evidence on the
   representative UA flows, including remediation of a student-editor `Tab`
-  focus issue found during that pass. Formal screen-reader testing is still
-  being documented separately. Any findings from those checks will be tracked as
-  accessibility defects and prioritized by user impact.
+  focus issue found during that pass. We have also completed a representative
+  macOS VoiceOver smoke pass covering key public, login, student editor,
+  teacher grading, and Teacher's Lounge controls. We are not overstating that
+  as full screen-reader coverage across every dynamic workflow. Any findings
+  from these checks will be tracked as accessibility defects and prioritized by
+  user impact.
 
 We can also provide platform access for your team so you can evaluate the
 product directly and identify any campus-specific accommodations. We can create

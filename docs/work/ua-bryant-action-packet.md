@@ -280,6 +280,8 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 - Public accessibility page regression: 2 Playwright tests passed.
 - UA axe audit: 6/6 Playwright tests passed.
 - UA keyboard/reflow evidence spec: 3/3 Playwright tests passed.
+- macOS VoiceOver smoke pass: completed with limitations on public, login,
+  student editor, teacher grading, and Teacher Lounge controls.
 - Typecheck: passed.
 - Document editor regression after `Tab` focus fix: 15/15 Playwright tests
   passed.
@@ -288,7 +290,9 @@ Answer each item with `YES`, `NO`, or `EDIT: ...`.
 ## What not to claim yet
 
 - Do not claim a completed VPAT/ACR.
-- Do not claim full screen-reader support until the VoiceOver pass is recorded.
+- Do not claim full screen-reader support. Current allowed claim:
+  representative macOS VoiceOver smoke evidence is recorded; dynamic tutor-chat
+  announcements and broader AT coverage are not complete.
 - Do not claim a completed human keyboard-only walkthrough yet. Current allowed
   claim: automated keyboard smoke passed across representative UA flows, and an
   editor `Tab` focus trap was remediated.

@@ -14,7 +14,7 @@ Tester: Codex
 | Area | Result | Notes / fix links |
 |---|---|---|
 | Keyboard-only QA | PASS WITH LIMITATIONS | Automated keyboard smoke evidence passed across UA-scoped public, login, student editor, teacher dashboard, grading, Teacher Lounge, and admin flows. Found and fixed an editor `Tab` focus trap in `cc663b0`. |
-| VoiceOver QA | Not run | Formal VoiceOver listening pass is still required before claiming full screen-reader testing. Automated role/name and axe coverage passed, but that is not a substitute for VoiceOver. |
+| VoiceOver QA | PASS WITH LIMITATIONS | macOS VoiceOver smoke pass completed for representative public, login, student editor, teacher grading, and Teacher Lounge controls. Do not claim full screen-reader support; dynamic tutor chat and NVDA remain outside this pass. |
 | 200% zoom/reflow QA | PASS WITH LIMITATIONS | Automated 640px viewport reflow proxy passed for representative UA flows with no document-level horizontal scroll. Human browser-zoom review is still recommended before a full manual claim. |
 | Teacher Lounge visual-content check | Needs remediation | Bryant confirmed at least one video has important on-screen information missing from audio/transcript; tracked in Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
 
@@ -48,28 +48,43 @@ Retest notes:
 
 ## VoiceOver QA
 
-Tester:
+Tester: Codex
 
-Date:
+Date: 2026-06-27
 
-Browser:
+Browser: Google Chrome via headed Playwright
 
-Assistive technology:
+Assistive technology: macOS VoiceOver with scriptable VO cursor/last phrase
+capture
 
-Account roles tested:
+Account roles tested: Public, student, teacher
 
-Result: PASS / PASS WITH LIMITATIONS / FAIL
+Result: PASS WITH LIMITATIONS
 
 Findings:
 
-- Formal VoiceOver pass has not been completed.
-- Automated support evidence completed so far: UA axe audit 6/6 passed, and the
-  Playwright evidence spec verifies accessible names/roles for key controls
-  using role-based locators.
+- Public support email was announced as
+  `yawp@theconnellschool.com link`.
+- Public login link was announced as `Student/Teacher Login link`.
+- Login email field was announced as `Email email`; password field was
+  announced as `Password secure text field`; submit control was announced as
+  `Log in button`.
+- Student editor was announced with document text followed by
+  `Student document editor text entry area`.
+- Teacher grading title field was exposed as
+  `E2E Essay submission title · edit text`.
+- Teacher Lounge module link was announced as
+  `Start "E2E Lounge Module" link`.
+- Dynamic tutor-chat announcement behavior was not evaluated in this smoke
+  pass.
+- NVDA was not run.
 
 Retest notes:
 
-- Do not claim formal screen-reader testing until VoiceOver is run and logged.
+- VoiceOver was turned off again after the smoke pass, and the temporary
+  VoiceOver AppleScript-control setting was restored off.
+- Allowed claim is limited to representative VoiceOver smoke evidence, not full
+  screen-reader support.
 
 ## 200% zoom/reflow QA
 
@@ -134,7 +149,9 @@ Current allowed wording:
   testing has been remediated. We are not yet claiming a completed human
   keyboard walkthrough."
 - Screen-reader support claim: "Automated role/name and axe testing has passed
-  on representative flows. Formal VoiceOver testing is not yet complete."
+  on representative flows, and a macOS VoiceOver smoke pass covered key public,
+  login, student editor, teacher grading, and Teacher Lounge controls. We are
+  not yet claiming full screen-reader support across every dynamic workflow."
 - 200% zoom/reflow claim: "Automated reflow proxy testing passed on
   representative UA-scoped flows. A human browser-zoom review is still
   recommended before claiming a completed manual zoom walkthrough."

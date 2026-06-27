@@ -4,9 +4,9 @@ Date: 2026-06-27
 
 Status: WCAG-self-evaluation approach approved by Bryant on 2026-06-27. This
 is not a VPAT/ACR. It is the WCAG 2.1 Level AA compliance-status evaluation UA
-requested as an alternative to a current VPAT. Do not finalize until manual
-screen reader evidence is recorded and the remaining manual-status wording is
-updated.
+requested as an alternative to a current VPAT. Do not finalize until the
+remaining manual-status wording and Teacher Lounge visual-content limitation are
+updated for send time.
 
 ## Scope
 
@@ -29,8 +29,10 @@ YAWP! should be represented as substantially remediated and under active WCAG
 2.1 AA evaluation, not as fully conformant without qualification. Automated
 testing has passed on representative flows, and multiple issues found during
 that testing have been fixed. Automated keyboard-smoke and reflow-proxy
-evidence has also passed. Formal screen-reader evidence still needs to be
-completed before claiming full support for screen-reader-dependent criteria.
+evidence has also passed. A macOS VoiceOver smoke pass covered representative
+public, login, student editor, teacher grading, and Teacher Lounge controls.
+YAWP should still avoid claiming full screen-reader support across every
+dynamic workflow.
 
 ## Evidence completed
 
@@ -46,6 +48,8 @@ completed before claiming full support for screen-reader-dependent criteria.
 - An editor `Tab` focus trap found during keyboard evidence testing was
   remediated in `cc663b0`.
 - Automated 640px viewport reflow proxy passed on representative UA flows.
+- macOS VoiceOver smoke evidence passed with limitations on representative
+  public, login, student editor, teacher grading, and Teacher Lounge controls.
 
 ## Vendor-question answers
 
@@ -55,7 +59,7 @@ completed before claiming full support for screen-reader-dependent criteria.
 | Product accessibility webpage | Same page currently covers YAWP product scope | Partially Supports | Can be split later if UA requires separate vendor/product pages |
 | VPAT/ACR or WCAG evaluation | No VPAT/ACR; WCAG 2.1 AA self-evaluation draft provided | Partially Supports | This document is the draft evaluation |
 | Keyboard-only operation | Automated keyboard smoke passed across representative UA flows | Partially Supports | Editor `Tab` focus trap remediated in `cc663b0`; human walkthrough not yet claimed |
-| Assistive technology testing | Not final | Not Evaluated | Needs VoiceOver; NVDA recommended |
+| Assistive technology testing | VoiceOver smoke evidence completed with limitations | Partially Supports | Dynamic tutor-chat announcements and NVDA were not evaluated |
 | Audio/video captions/transcripts | Teacher's Lounge supports captions/transcripts; active assets uploaded | Supports for captions/transcripts | Teacher Lounge visual-only instructional content remediation is tracked in Central Station `YPM-UA-TEACHER-LOUNGE-VISUAL-CONTENT-A11Y` |
 | Accessible output | Primary output is browser-rendered HTML | Partially Supports | Conservative no-tagged-PDF wording approved by Bryant on 2026-06-27 |
 | User-facing accessibility docs | Public page implemented | Partially Supports | Needs deploy and owner sign-off |
@@ -67,7 +71,8 @@ completed before claiming full support for screen-reader-dependent criteria.
 ## Known limitations to disclose
 
 - No completed VPAT/Accessibility Conformance Report yet.
-- Manual screen reader evidence is not final.
+- Full screen-reader coverage is not final; current evidence is a representative
+  macOS VoiceOver smoke pass.
 - Human manual keyboard-only walkthrough is not final, although automated
   keyboard smoke evidence passed.
 - Human 200% zoom/reflow walkthrough is not final, although automated reflow
@@ -82,7 +87,8 @@ completed before claiming full support for screen-reader-dependent criteria.
 
 ## Remaining evidence before final send
 
-- Complete `docs/compliance/accessibility/ua-manual-qa-script.md`.
+- Complete any remaining send-time review needed from
+  `docs/compliance/accessibility/ua-manual-qa-script.md`.
 - Record tester, date, browser, OS, assistive technology, flows covered,
   findings, and remediation links if any.
 - Update this draft's status labels after manual evidence is complete.

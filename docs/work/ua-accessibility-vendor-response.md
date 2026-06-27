@@ -17,7 +17,7 @@ YAWP should not claim full WCAG 2.1 AA conformance yet. The truthful posture is:
 - We do not currently have a completed VPAT/ACR.
 - We can provide a WCAG 2.1 AA self-evaluation focused on the product version UA will use.
 - The app has meaningful accessibility foundations: native links/buttons in many flows, Radix UI primitives for several complex controls, visible focus styles in shared controls, label/error patterns in form components, and browser-native editing/media primitives.
-- Several items still need evidence or sign-off before a strong final UA response: formal screen reader testing, Teacher Lounge visual-only content remediation, accessible output wording, support-process ownership, AI/data-use wording, and approval of the final public accessibility claims. Automated keyboard-smoke and reflow-proxy evidence now exists for representative UA flows.
+- Several items still need evidence or sign-off before a strong final UA response: Teacher Lounge visual-only content remediation, accessible output wording, support-process ownership, AI/data-use wording, and approval of the final public accessibility claims. Automated keyboard-smoke, reflow-proxy, and representative macOS VoiceOver smoke evidence now exists for UA flows.
 
 Recommended operating target: complete the audit, low-risk fixes, public docs, and WCAG self-evaluation by Friday, 2026-07-03. That creates a buffer before Bryant's 2026-07-06 through 2026-07-11 offline window and the mid-July GBA 300 demo.
 
@@ -106,7 +106,7 @@ Response posture: "Core browser/editor interactions are keyboard accessible in r
 
 ### 5. Assistive technology testing
 
-Current answer: Not complete / needs testing.
+Current answer: Partially complete.
 
 Evidence:
 
@@ -114,11 +114,11 @@ Evidence:
 - Some status regions exist in grading/submission UI.
 - Tutor chat message updates do not currently appear to have explicit live-region semantics.
 
-Response posture: "Formal assistive-technology testing is in progress. We plan to test with VoiceOver on macOS/Safari or Chrome and NVDA on Windows/Chrome or Edge. We will document tools, flows tested, findings, and fixes in the WCAG self-evaluation."
+Response posture: "A representative macOS VoiceOver smoke pass has been completed for key public, login, student editor, teacher grading, and Teacher's Lounge controls. We are not claiming full screen-reader coverage across every dynamic workflow yet; dynamic tutor-chat announcements and NVDA remain outside the completed pass."
 
 Required work:
 
-- Run screen reader smoke tests for login, student editor, tutor chat, submission, teacher dashboard, grading view, and admin setup.
+- Extend screen reader testing to dynamic tutor chat, teacher dashboard, and admin setup if a stronger screen-reader claim is required.
 - Add `aria-live`/`role="log"` semantics to tutor messages if testing confirms new messages are not announced.
 - Add missing accessible names to icon-only controls.
 
@@ -207,7 +207,8 @@ Preliminary list:
 
 - No completed WCAG 2.1 AA self-evaluation.
 - Public accessibility/product accessibility page implemented, pending deploy.
-- No formal screen reader test record yet.
+- Representative macOS VoiceOver smoke evidence exists; full dynamic
+  screen-reader coverage is not complete.
 - Tutor chat likely needs live-region semantics for new messages.
 - Some icon-only controls likely need accessible names.
 - Some clickable cards should be links/buttons for keyboard semantics.
@@ -254,7 +255,7 @@ Required work:
 |---|---|---|
 | 1 | Can all core flows be completed keyboard-only? | Automated keyboard-smoke evidence passed across representative UA flows; human keyboard walkthrough not yet claimed. |
 | 2 | Visible focus, logical tab order, no traps? | Partial. Shared controls include focus-visible styles; full tab-order and trap audit not complete. |
-| 3 | Screen reader testing? | Not complete. Needs VoiceOver and NVDA test runs at minimum. |
+| 3 | Screen reader testing? | Representative macOS VoiceOver smoke pass completed with limitations; dynamic tutor chat and NVDA not yet tested. |
 | 4 | Alt text, labels, roles? | Partial. Some forms and images have labels/alt text; several dynamic/chat/editor controls need review. |
 | 5 | 4.5:1 contrast? | Unknown. Needs automated and manual contrast audit. |
 | 6 | 200% zoom? | Automated 640px reflow proxy passed across representative UA flows; human browser-zoom pass not yet claimed. |
@@ -364,7 +365,7 @@ Brian,
 
 I found Rachel's vendor questions, your 17-question breakdown, and the separate UA OIT question about AI functionality. The truthful accessibility status is: we do not have a VPAT yet, so we should give UA a WCAG 2.1 AA self-evaluation; the app has a decent accessibility foundation, but we need to audit and likely fix a few things before making strong claims.
 
-Likely remaining gaps: formal screen reader testing, tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Automated keyboard-smoke and reflow-proxy evidence now passes on representative UA flows, and a student-editor `Tab` focus trap found during that pass has been fixed. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; Teacher Lounge is in UA scope, and at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information.
+Likely remaining gaps: tutor chat live-announcement evidence, accessible-output wording, public accessibility/support claims sign-off, and an explicit owner/process for issue reporting. Automated keyboard-smoke and reflow-proxy evidence now passes on representative UA flows, a representative macOS VoiceOver smoke pass is recorded, and a student-editor `Tab` focus trap found during testing has been fixed. Teacher's Lounge captions/transcripts are now implemented and uploaded for the active modules; Teacher Lounge is in UA scope, and at least one video needs expanded transcript notes or a similar accessible text alternative for important on-screen information.
 
 I think the right plan is to finish audit + low-risk fixes + docs by July 3, then you can send Rachel the WCAG self-evaluation and platform access before the mid-July GBA 300 demo.
 

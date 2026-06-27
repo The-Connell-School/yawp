@@ -13,12 +13,12 @@ Bryant-facing action packet:
 |---|---|---|---|---|
 | Accessibility email to Rachel Thompson | Content approved by Bryant, not sent | Send-readiness hold | Public page deployed; manual-status wording current; reviewer invite/share links generated at send time | `docs/work/ua-accessibility-email-draft.md` |
 | AI functionality email to Mary Anne Canant | Content approved by Bryant, not sent | Send-readiness hold | Production config current at send time; send target/thread confirmed | `docs/work/ua-ai-functionality-email-draft.md` |
-| Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Formal screen-reader verification completed; final wording updated if findings change | `services/web-app/app/routes/accessibility/route.tsx` |
+| Public accessibility page | Draft verified by Bryant and implemented in app at `/accessibility`; not live yet | Publish-readiness hold | Public wording narrowed to evidence completed so far; deploy/prod smoke | `services/web-app/app/routes/accessibility/route.tsx` |
 | Public accessibility page test | Implemented and passing locally | Engineering done | None | `services/web-app/e2e/tests/public-accessibility.spec.ts` |
 | Public page axe audit coverage | Added to UA axe audit and passing locally | Engineering done | None | `services/web-app/e2e/tests/accessibility.ua-axe.spec.ts`; `docs/compliance/accessibility/automated-audit-log.md` |
-| Product accessibility/WCAG self-evaluation | WCAG-self-evaluation approach approved by Bryant; not final | Manual evidence hold | VoiceOver evidence recorded; final status labels updated if findings change | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-bryant-action-packet.md` |
+| Product accessibility/WCAG self-evaluation | WCAG-self-evaluation approach approved by Bryant; not final | Evidence done with limitation | Final status labels; Teacher Lounge visual-content limitation; send-time wording | `docs/work/ua-wcag-2-1-aa-self-evaluation-draft.md`; `docs/work/ua-manual-qa-evidence-log.md` |
 | Manual keyboard-only walkthrough | Automated keyboard smoke passed; editor `Tab` focus trap remediated in `cc663b0`; human walkthrough not claimed | Evidence done with limitation | Human walkthrough only if we want to claim completed manual keyboard QA | `docs/work/ua-manual-qa-evidence-log.md`; `services/web-app/e2e/tests/accessibility.ua-manual-evidence.spec.ts` |
-| VoiceOver walkthrough | Exact macOS steps and evidence log created, not executed as final evidence | Manual | Human screen reader pass on macOS | `docs/work/ua-bryant-action-packet.md`; `docs/work/ua-manual-qa-evidence-log.md` |
+| VoiceOver walkthrough | macOS VoiceOver smoke pass completed with limitations; full screen-reader support not claimed | Evidence done with limitation | Dynamic tutor-chat announcements and NVDA only if stronger screen-reader claim is needed | `docs/work/ua-manual-qa-evidence-log.md` |
 | NVDA walkthrough | Optional but recommended; script created | Manual | Windows/NVDA access and tester time | `docs/compliance/accessibility/ua-manual-qa-script.md` |
 | 200% zoom/reflow check | Automated 640px reflow proxy passed; human browser-zoom walkthrough not claimed | Evidence done with limitation | Human walkthrough only if we want to claim completed manual zoom QA | `docs/work/ua-manual-qa-evidence-log.md`; `services/web-app/e2e/tests/accessibility.ua-manual-evidence.spec.ts` |
 | Teacher's Lounge captions/transcripts | Implemented, generated, uploaded, and UI follow-up merged to `main` | Done | None | `docs/compliance/accessibility/teacher-lounge-caption-generation-log.md`; `a4f1fe6` |
@@ -40,12 +40,12 @@ Bryant-facing action packet:
 3. Accessibility support intake address is approved as
    `yawp@theconnellschool.com`; confirm inbox owner/escalation before external
    launch.
-4. Public `/accessibility` page draft is verified; do not deploy until formal
-   screen-reader verification is complete or the public wording is narrowed to
-   the evidence completed so far.
-5. WCAG-self-evaluation approach is approved; complete or assign the VoiceOver
-   pass before finalizing screen-reader claims. Keyboard smoke and reflow proxy
-   evidence are complete with limitations.
+4. Public `/accessibility` page draft is verified; update public wording to the
+   evidence completed so far, then deploy and smoke on production.
+5. WCAG-self-evaluation approach is approved; keyboard smoke, reflow proxy, and
+   VoiceOver smoke evidence are complete with limitations. Do not claim full
+   screen-reader support unless dynamic tutor-chat announcements and broader AT
+   coverage are tested.
 6. Confirm the production AI provider/model wording and contractual data-use
    claims at send time.
 7. UA evaluator access direction is approved; collect named UA reviewer email
