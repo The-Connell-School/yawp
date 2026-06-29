@@ -189,7 +189,7 @@ export default function AccessibilityRoute() {
 
         <footer className="border-t py-8 text-sm text-muted-foreground">
           <p>
-            Last updated June 27, 2026. For product or institutional questions,
+            Last updated June 29, 2026. For product or institutional questions,
             contact{' '}
             <a
               className="font-medium text-primary underline-offset-4 hover:underline"

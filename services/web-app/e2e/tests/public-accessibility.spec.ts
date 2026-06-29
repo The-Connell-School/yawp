@@ -44,5 +44,6 @@ test.describe('Public accessibility page', () => {
     await expect(
       page.getByRole('link', { name: 'Student/Teacher Login' })
     ).toHaveAttribute('href', '/auth/login');
+    await expect(page.getByText('Last updated June 29, 2026')).toBeVisible();
   });
 });
