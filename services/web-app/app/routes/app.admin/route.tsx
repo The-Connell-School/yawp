@@ -16,6 +16,7 @@ import {
   ScrollText,
   ToggleLeft,
   Bot,
+  Activity,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -24,6 +25,11 @@ const tabs = [
     label: 'General',
     to: '/app/admin/general',
     icon: <Settings2 size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'Live Status',
+    to: '/app/admin/live-status',
+    icon: <Activity size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Organizations',
