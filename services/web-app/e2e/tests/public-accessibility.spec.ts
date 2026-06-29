@@ -19,7 +19,11 @@ test.describe('Public accessibility page', () => {
     await expect(
       page.getByRole('heading', { name: 'Accessibility at YAWP!' })
     ).toBeVisible();
-    await expect(page.getByText('WCAG 2.1 Level AA').first()).toBeVisible();
+    await expect(
+      page.getByText('designed and evaluated for WCAG 2.1 Level AA support')
+    ).toBeVisible();
+    await expect(page.getByText('working toward')).toHaveCount(0);
+    await expect(page.getByText('Current status:')).toHaveCount(0);
     await expect(
       page.getByText('macOS VoiceOver smoke pass has covered')
     ).toBeVisible();

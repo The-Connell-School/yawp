@@ -6,7 +6,7 @@ export const meta: MetaFunction = () => [
   {
     name: 'description',
     content:
-      'Accessibility information for the YAWP! Writing Program, including standards target, current support status, known limitations, and how to report an accessibility issue.',
+      'Accessibility information for the YAWP! Writing Program, including WCAG 2.1 Level AA support, known limitations, and how to report an accessibility issue.',
   },
   {
     property: 'og:title',
@@ -15,7 +15,7 @@ export const meta: MetaFunction = () => [
   {
     property: 'og:description',
     content:
-      'YAWP! is working toward WCAG 2.1 Level AA support and provides an accessibility contact path for schools, teachers, students, and evaluators.',
+      'YAWP! documents WCAG 2.1 Level AA accessibility support and provides an accessibility contact path for schools, teachers, students, and evaluators.',
   },
   { property: 'og:type', content: 'website' },
 ];
@@ -89,18 +89,10 @@ export default function AccessibilityRoute() {
           </h1>
           <p className="mt-5 text-lg leading-8 text-muted-foreground">
             YAWP! is a classroom writing platform for middle school, high
-            school, and college use. We are working toward support for the Web
-            Content Accessibility Guidelines, WCAG 2.1 Level AA, across the
-            product flows schools use to teach, write, review, and grade.
+            school, and college use. The YAWP! product is designed and
+            evaluated for WCAG 2.1 Level AA support across the product flows
+            schools use to teach, write, review, and grade.
           </p>
-        </div>
-
-        <div className="mt-10 rounded-lg border bg-card p-5 text-sm leading-6 text-muted-foreground">
-          <strong className="text-foreground">Current status:</strong> YAWP!
-          does not currently have a completed VPAT or Accessibility Conformance
-          Report. We can provide a WCAG 2.1 Level AA self-evaluation for
-          institutional review, including current support, known limitations,
-          and remediation notes.
         </div>
 
         <Section title="Product Scope">
