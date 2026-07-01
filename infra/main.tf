@@ -17,9 +17,9 @@ data "aws_cloudfront_cache_policy" "caching_disabled" {
   name  = "Managed-CachingDisabled"
 }
 
-data "aws_cloudfront_origin_request_policy" "all_viewer_except_host_header" {
+data "aws_cloudfront_origin_request_policy" "all_viewer" {
   count = local.production_edge_enabled ? 1 : 0
-  name  = "Managed-AllViewerExceptHostHeader"
+  name  = "Managed-AllViewer"
 }
 
 module "vpc" {
@@ -536,27 +536,6 @@ resource "aws_acm_certificate_validation" "web_edge" {
   validation_record_fqdns = [for record in aws_route53_record.web_edge_cert_validation : record.fqdn]
 }
 
-resource "aws_cloudfront_function" "forward_viewer_host" {
-  count   = local.production_edge_enabled ? 1 : 0
-  name    = "${var.app_name}-${var.env}-forward-viewer-host"
-  runtime = "cloudfront-js-2.0"
-  comment = "Forward the viewer host to App Runner while CloudFront uses the service hostname as origin host."
-  publish = true
-  code    = <<-EOT
-function handler(event) {
-  var request = event.request;
-  var host = request.headers.host;
-
-  if (host && host.value) {
-    request.headers['x-forwarded-host'] = { value: host.value };
-  }
-
-  request.headers['x-forwarded-proto'] = { value: 'https' };
-  return request;
-}
-EOT
-}
-
 resource "aws_cloudfront_distribution" "web_edge" {
   count           = local.production_edge_enabled ? 1 : 0
   enabled         = true
@@ -582,13 +561,8 @@ resource "aws_cloudfront_distribution" "web_edge" {
     target_origin_id         = "apprunner-web"
     viewer_protocol_policy   = "redirect-to-https"
     cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled[0].id
-    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host_header[0].id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer[0].id
     compress                 = true
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.forward_viewer_host[0].arn
-    }
   }
 
   restrictions {
