@@ -272,7 +272,8 @@ describe('worktree local setup contract', () => {
     expect(infra).toContain('"Managed-AllViewer"');
     expect(infra).not.toContain('resource "aws_cloudfront_function" "forward_viewer_host"');
     expect(infra).not.toContain('FunctionValidationError');
-    expect(infra).toContain('minimum_protocol_version = "TLSv1.3_2025"');
+    expect(infra).toContain('minimum_protocol_version = "TLSv1.2_2021"');
+    expect(infra).not.toContain('minimum_protocol_version = "TLSv1.3_2025"');
     expect(infra).toContain('ssl_support_method');
     expect(infra).toContain('"sni-only"');
     expect(infra).toContain('resource "aws_route53_record" "production_domain_a"');
