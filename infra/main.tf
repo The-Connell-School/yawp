@@ -1,5 +1,27 @@
 data "aws_availability_zones" "available" {}
 
+locals {
+  production_edge_enabled = var.env == "production" && var.production_domain_name != ""
+  production_domain_zone  = "${trim(var.production_domain_name, ".")}."
+  apprunner_origin_domain = trimsuffix(replace(replace(aws_apprunner_service.web.service_url, "https://", ""), "http://", ""), "/")
+}
+
+data "aws_route53_zone" "production_domain" {
+  count        = local.production_edge_enabled ? 1 : 0
+  name         = local.production_domain_zone
+  private_zone = false
+}
+
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  count = local.production_edge_enabled ? 1 : 0
+  name  = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_origin_request_policy" "all_viewer_except_host_header" {
+  count = local.production_edge_enabled ? 1 : 0
+  name  = "Managed-AllViewerExceptHostHeader"
+}
+
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = ">= 3.14.0"
@@ -473,6 +495,145 @@ resource "aws_apprunner_service" "web" {
   tags = {
     Environment = var.env
     Project     = var.app_name
+  }
+}
+
+resource "aws_acm_certificate" "web_edge" {
+  count             = local.production_edge_enabled ? 1 : 0
+  domain_name       = var.production_domain_name
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = {
+    Environment = var.env
+    Project     = var.app_name
+  }
+}
+
+resource "aws_route53_record" "web_edge_cert_validation" {
+  for_each = local.production_edge_enabled ? {
+    for option in aws_acm_certificate.web_edge[0].domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+}
+
+resource "aws_acm_certificate_validation" "web_edge" {
+  count                   = local.production_edge_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.web_edge[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.web_edge_cert_validation : record.fqdn]
+}
+
+resource "aws_cloudfront_function" "forward_viewer_host" {
+  count   = local.production_edge_enabled ? 1 : 0
+  name    = "${var.app_name}-${var.env}-forward-viewer-host"
+  runtime = "cloudfront-js-2.0"
+  comment = "Forward the viewer host to App Runner while CloudFront uses the service hostname as origin host."
+  publish = true
+  code    = <<-EOT
+function handler(event) {
+  var request = event.request;
+  var host = request.headers.host;
+
+  if (host && host.value) {
+    request.headers['x-forwarded-host'] = { value: host.value };
+  }
+
+  request.headers['x-forwarded-proto'] = { value: 'https' };
+  return request;
+}
+EOT
+}
+
+resource "aws_cloudfront_distribution" "web_edge" {
+  count           = local.production_edge_enabled ? 1 : 0
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "${var.app_name}-${var.env} TLS 1.3 edge"
+  aliases         = [var.production_domain_name]
+
+  origin {
+    domain_name = local.apprunner_origin_domain
+    origin_id   = "apprunner-web"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    allowed_methods          = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods           = ["GET", "HEAD"]
+    target_origin_id         = "apprunner-web"
+    viewer_protocol_policy   = "redirect-to-https"
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled[0].id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer_except_host_header[0].id
+    compress                 = true
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.forward_viewer_host[0].arn
+    }
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.web_edge[0].certificate_arn
+    minimum_protocol_version = "TLSv1.3_2025"
+    ssl_support_method       = "sni-only"
+  }
+
+  tags = {
+    Environment = var.env
+    Project     = var.app_name
+  }
+}
+
+resource "aws_route53_record" "production_domain_a" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.production_domain_name
+  type            = "A"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "production_domain_aaaa" {
+  count           = local.production_edge_enabled ? 1 : 0
+  allow_overwrite = true
+  name            = var.production_domain_name
+  type            = "AAAA"
+  zone_id         = data.aws_route53_zone.production_domain[0].zone_id
+
+  alias {
+    name                   = aws_cloudfront_distribution.web_edge[0].domain_name
+    zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id
+    evaluate_target_health = false
   }
 }
 
