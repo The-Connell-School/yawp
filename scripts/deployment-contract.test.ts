@@ -206,8 +206,9 @@ describe('worktree local setup contract', () => {
     expect(infra).toContain('[var.production_domain_name]');
     expect(infra).toContain('domain_name = local.apprunner_origin_domain');
     expect(infra).toContain('origin_protocol_policy = "https-only"');
-    expect(infra).toContain('resource "aws_cloudfront_function" "forward_viewer_host"');
-    expect(infra).toContain('x-forwarded-host');
+    expect(infra).toContain('"Managed-AllViewer"');
+    expect(infra).not.toContain('resource "aws_cloudfront_function" "forward_viewer_host"');
+    expect(infra).not.toContain('FunctionValidationError');
     expect(infra).toContain('minimum_protocol_version = "TLSv1.3_2025"');
     expect(infra).toContain('ssl_support_method');
     expect(infra).toContain('"sni-only"');
