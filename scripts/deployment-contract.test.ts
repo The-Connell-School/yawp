@@ -256,6 +256,28 @@ describe('worktree local setup contract', () => {
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(seedIndex).toBeGreaterThan(backfillIndex);
   });
+
+  test('production domain terminates at a CloudFront TLS 1.3 edge before App Runner', () => {
+    const infra = readRepoFile('infra/main.tf');
+    const variables = readRepoFile('infra/variables.tf');
+
+    expect(variables).toContain('variable "production_domain_name"');
+    expect(infra).toContain('production_edge_enabled');
+    expect(infra).toContain('var.env == "production"');
+    expect(infra).toContain('resource "aws_cloudfront_distribution" "web_edge"');
+    expect(infra).toContain('aliases');
+    expect(infra).toContain('[var.production_domain_name]');
+    expect(infra).toContain('domain_name = local.apprunner_origin_domain');
+    expect(infra).toContain('origin_protocol_policy = "https-only"');
+    expect(infra).toContain('resource "aws_cloudfront_function" "forward_viewer_host"');
+    expect(infra).toContain('x-forwarded-host');
+    expect(infra).toContain('minimum_protocol_version = "TLSv1.3_2025"');
+    expect(infra).toContain('ssl_support_method');
+    expect(infra).toContain('"sni-only"');
+    expect(infra).toContain('resource "aws_route53_record" "production_domain_a"');
+    expect(infra).toContain('name                   = aws_cloudfront_distribution.web_edge[0].domain_name');
+    expect(infra).toContain('zone_id                = aws_cloudfront_distribution.web_edge[0].hosted_zone_id');
+  });
 });
 
 describe('PR preview deployment contract', () => {
