@@ -117,6 +117,23 @@ describe('production deployment contract', () => {
   });
 });
 
+describe('worktree local setup contract', () => {
+  test('root dev command loads the isolated worktree app port before starting React Router', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+
+    expect(rootPackage.scripts.dev).toContain('scripts/worktree-local-setup.sh --no-dev');
+    expect(rootPackage.scripts.dev).toContain('source .worktree-local/config.env');
+    expect(rootPackage.scripts.dev).toContain('PORT="$DEV_PORT"');
+  });
+
+  test('Vite dev server honors the configured app port and fails instead of falling back', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
+    expect(viteConfig).toContain('strictPort: true');
+  });
+});
+
 describe('PR preview deployment contract', () => {
   test('preview workflow deploys every same-repo pull request through preview environments', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
