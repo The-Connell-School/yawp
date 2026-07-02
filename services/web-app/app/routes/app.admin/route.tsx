@@ -29,8 +29,8 @@ export const adminTabs = [
     icon: <User size={16} className="opacity-75 mr-1" />,
   },
   {
-    label: 'Assignments',
-    to: '/app/admin/assignments-grading',
+    label: 'Assignment Types',
+    to: '/app/admin/assignments',
     icon: <ClipboardList size={16} className="opacity-75 mr-1" />,
   },
   {
@@ -55,7 +55,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Route() {
   const location = useLocation();
   const pathname = location.pathname;
-  const currentTab = adminTabs.find((tab) => pathname.startsWith(tab.to));
+  const currentTab =
+    pathname.startsWith('/app/admin/assignments') ||
+    pathname.startsWith('/app/admin/assignment-types')
+      ? adminTabs.find((tab) => tab.to === '/app/admin/assignments')
+      : adminTabs.find((tab) => pathname.startsWith(tab.to));
 
   return (
     <main className="flex flex-col h-screen">

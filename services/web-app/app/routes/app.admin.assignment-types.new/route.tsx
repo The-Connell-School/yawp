@@ -29,7 +29,6 @@ export async function action({ request }: ActionFunctionArgs) {
   await requireAdmin(request);
   const formData = await request.formData();
   const title = formData.get('title')?.toString().trim();
-  const kind = formData.get('kind')?.toString().trim() || null;
   const description = formData.get('description')?.toString().trim() || null;
 
   if (!title) {
@@ -40,7 +39,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const assignmentType = await prisma.assignmentType.create({
     data: {
       title,
-      kind,
+      kind: null,
       description,
       position: count,
       scoringScaleJson: parseJsonFormField(formData, 'scoringScale'),
