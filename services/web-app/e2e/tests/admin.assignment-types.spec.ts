@@ -11,14 +11,13 @@ test.describe.serial('Admin assignment types', () => {
     const prisma = createE2EPrismaClient();
     const suffix = Date.now();
     const title = `Rubric E2E Type ${suffix}`;
-    const kind = `rubric_e2e_type_${suffix}`;
     let assignmentTypeId: string | null = null;
     let moduleId: string | null = null;
 
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
-      await page.goto('/app/admin/assignments-grading');
-      await expect(page.getByRole('heading', { name: 'Assignments' })).toBeVisible();
+      await page.goto('/app/admin/assignments');
+      await expect(page.getByRole('heading', { name: 'Assignment Types' })).toBeVisible();
 
       await page.getByRole('link', { name: 'Create assignment type' }).click();
       await expect(
@@ -26,7 +25,6 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
 
       await page.getByLabel('Title').fill(title);
-      await page.getByLabel('Stable kind').fill(kind);
       await page
         .getByLabel('Description')
         .fill('Created by the assignment type rubric e2e test.');
@@ -34,19 +32,17 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByTestId('rubric-add-category').click();
       await page.getByTestId('rubric-add-category').click();
 
-      const firstCategory = page.getByTestId('rubric-category-row-0');
-      await firstCategory.getByLabel('Label').fill('Thesis E2E');
-      await firstCategory.getByLabel('Weight %').fill('60');
-      await firstCategory
-        .getByLabel('Description')
-        .fill('Clear, defensible thesis for the essay.');
+      await page.getByTestId('rubric-category-row-0').click();
+      await page.getByLabel('Label', { exact: true }).fill('Thesis E2E');
+      await page.getByLabel('Weight %').fill('60');
+      await page.locator('#category-edit-description').fill('Clear, defensible thesis for the essay.');
+      await page.getByRole('button', { name: 'Done' }).click();
 
-      const secondCategory = page.getByTestId('rubric-category-row-1');
-      await secondCategory.getByLabel('Label').fill('Grammar E2E');
-      await secondCategory.getByLabel('Weight %').fill('40');
-      await secondCategory
-        .getByLabel('Description')
-        .fill('Grammar and syntax support clarity.');
+      await page.getByTestId('rubric-category-row-1').click();
+      await page.getByLabel('Label', { exact: true }).fill('Grammar E2E');
+      await page.getByLabel('Weight %').fill('40');
+      await page.locator('#category-edit-description').fill('Grammar and syntax support clarity.');
+      await page.getByRole('button', { name: 'Done' }).click();
 
       await page
         .getByPlaceholder(
@@ -61,13 +57,13 @@ test.describe.serial('Admin assignment types', () => {
             url.pathname !== '/app/admin/assignment-types/new',
           { timeout: 15_000 }
         ),
-        page.getByRole('button', { name: 'Create assignment type' }).click(),
+        page.getByRole('button', { name: 'Create' }).click(),
       ]);
       assignmentTypeId = page.url().split('/').pop() ?? null;
       expect(assignmentTypeId).toBeTruthy();
 
       await expect(page.locator('input[name="title"]')).toHaveValue(title);
-      await expect(page.getByRole('heading', { name: 'Assignment Type Configuration' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Edit assignment type' })).toBeVisible();
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
@@ -81,7 +77,7 @@ test.describe.serial('Admin assignment types', () => {
       });
 
       expect(created.title).toBe(title);
-      expect(created.kind).toBe(kind);
+      expect(created.kind).toBeNull();
       expect(created.scoringScaleJson).toMatchObject({
         type: 'weighted_1_5',
         minScore: 1,
@@ -108,7 +104,7 @@ test.describe.serial('Admin assignment types', () => {
           'Grade against the rubric categories and give concise, actionable feedback.',
       });
 
-      await page.getByRole('button', { name: 'Add Module' }).click();
+      await page.getByRole('button', { name: 'Add module' }).click();
       await page.locator('#moduleTitle').fill('Thesis planning');
       await page
         .locator('#moduleDescription')
@@ -116,7 +112,7 @@ test.describe.serial('Admin assignment types', () => {
       await page
         .locator('#tutorInstructions')
         .fill('Coach students toward a defensible thesis.');
-      await page.getByRole('button', { name: 'Create Module' }).click();
+      await page.getByRole('button', { name: 'Create module' }).click();
       await expect(page.getByRole('link', { name: 'View' })).toBeVisible();
 
       const createdModule = await prisma.assignmentModule.findFirstOrThrow({

@@ -158,7 +158,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = request.url.includes('staging')
     ? ('staging' as const)
-    : request.url.includes('localhost')
+    : request.url.includes('localhost') || request.url.includes('127.0.0.1')
       ? ('localhost' as const)
       : null;
   const localDevQuickLoginEnabled =

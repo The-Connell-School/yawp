@@ -28,7 +28,6 @@ describe('admin assignment type new action', () => {
   test('creates assignment type with rubric and grading config', async () => {
     const form = new FormData();
     form.set('title', 'ACT Writing');
-    form.set('kind', 'act_writing');
     form.set('description', 'ACT writing assignment type');
     form.set(
       'scoringScale',
@@ -64,7 +63,7 @@ describe('admin assignment type new action', () => {
     expect(prisma.assignmentType.create).toHaveBeenCalledWith({
       data: {
         title: 'ACT Writing',
-        kind: 'act_writing',
+        kind: null,
         description: 'ACT writing assignment type',
         position: 4,
         scoringScaleJson: {

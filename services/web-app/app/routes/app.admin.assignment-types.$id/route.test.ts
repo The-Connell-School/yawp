@@ -74,7 +74,7 @@ describe('admin assignment type detail action', () => {
     const redirectResponse = response as Response;
     expect(redirectResponse.status).toBe(302);
     expect(redirectResponse.headers.get('Location')).toBe(
-      '/app/admin/assignments-grading'
+      '/app/admin/assignments'
     );
   });
 
@@ -104,7 +104,6 @@ describe('admin assignment type detail action', () => {
     const form = new FormData();
     form.set('intent', 'updateCourse');
     form.set('title', 'ACT Writing');
-    form.set('kind', 'act_writing');
     form.set('description', 'ACT writing assignment type');
     form.set(
       'scoringScale',
@@ -144,7 +143,6 @@ describe('admin assignment type detail action', () => {
       where: { id: 'at-1' },
       data: expect.objectContaining({
         title: 'ACT Writing',
-        kind: 'act_writing',
         description: 'ACT writing assignment type',
         scoringScaleJson: {
           type: 'act_writing_2_12',
@@ -182,9 +180,6 @@ describe('admin assignment type detail action', () => {
       createdAt: new Date('2026-06-04T00:00:00.000Z'),
       description: null,
       archivedAt: null,
-      organizationAssignments: [
-        { organization: { id: 'org-1', name: 'Connell School' } },
-      ],
       assignmentModules: [],
       image: null,
     });

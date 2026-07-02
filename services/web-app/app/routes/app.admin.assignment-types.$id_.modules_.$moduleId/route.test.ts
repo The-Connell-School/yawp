@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
+  assignmentType: {
+    findUnique: mock(),
+  },
   assignmentModule: {
+    findFirst: mock(),
     update: mock(),
   },
 };
@@ -15,7 +19,83 @@ mock.module('~/utils/auth.server', () => ({
   requireMutableRequest,
 }));
 
-const { action } = await import('./route');
+const { action, loader } = await import('./route');
+
+describe('admin assignment module loader', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
+    prisma.assignmentModule.findFirst.mockReset();
+    requireAdmin.mockResolvedValue(undefined);
+  });
+
+  test('loads module without selecting rubricJson explicitly', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+      rubricJson: { categories: [] },
+    });
+    prisma.assignmentModule.findFirst.mockResolvedValue({
+      id: 'mod-1',
+      title: 'Draft',
+      isSelfGuided: false,
+      description: null,
+      tutorInstructions: null,
+      position: 0,
+      rubricAlignmentJson: null,
+      instructions: [],
+    });
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never)) as { data: { course: { id: string }; module: { id: string } } };
+
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+    });
+    expect(prisma.assignmentModule.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'mod-1',
+        assignmentTypeId: 'at-1',
+        deletedAt: null,
+      },
+      include: {
+        instructions: {
+          orderBy: { position: 'asc' },
+          include: {
+            buttons: {
+              orderBy: { position: 'asc' },
+            },
+          },
+        },
+      },
+    });
+    expect(response.data.course.id).toBe('at-1');
+    expect(response.data.module.id).toBe('mod-1');
+  });
+
+  test('returns 404 when module does not belong to assignment type', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+    });
+    prisma.assignmentModule.findFirst.mockResolvedValue(null);
+
+    await expect(
+      loader({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
+        ),
+        params: { id: 'at-1', moduleId: 'mod-1' },
+        context: {} as never,
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
 
 describe('admin assignment module action', () => {
   beforeEach(() => {
