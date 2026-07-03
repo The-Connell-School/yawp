@@ -110,6 +110,31 @@ describe('assignment type release gate', () => {
     ]);
   });
 
+  test('does not block production snapshots that still use default rubric fallback', () => {
+    const input = goodInput({
+      data: {
+        ...goodInput().data,
+        assignmentTypeCount: 9,
+        assignmentTypesWithOwnedRubricConfig: 0,
+        organizationAssignmentTypeRows: 46,
+        schoolCustomizedCount: 0,
+        teacherCustomizedCount: 0,
+        schoolAssignmentTypeRows: 0,
+        teacherAssignmentTypeRows: 0,
+      },
+    });
+
+    const report = buildAssignmentTypeReleaseGateReport(input, {
+      requireData: true,
+    });
+
+    expect(report.ok).toBe(true);
+    expect(report.blockers).toEqual([]);
+    expect(report.warnings.map((warning) => warning.kind)).toEqual([
+      'missing_owned_rubric_config_data',
+    ]);
+  });
+
   test('warns for empty fresh databases unless data is required', () => {
     const input = goodInput({
       data: {
@@ -129,8 +154,10 @@ describe('assignment type release gate', () => {
     expect(strictReport.ok).toBe(false);
     expect(strictReport.blockers.map((blocker) => blocker.kind)).toEqual([
       'missing_assignment_type_data',
-      'missing_owned_rubric_config_data',
       'missing_org_assignment_type_data',
+    ]);
+    expect(strictReport.warnings.map((warning) => warning.kind)).toEqual([
+      'missing_owned_rubric_config_data',
     ]);
   });
 });

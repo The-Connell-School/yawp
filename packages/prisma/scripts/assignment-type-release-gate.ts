@@ -222,22 +222,22 @@ export function buildAssignmentTypeReleaseGateReport(
     if (count > 0) pushIssue(blockers, kind, { count });
   }
 
-  const dataPresenceIssues: Array<[number, string]> = [
+  const requiredDataPresenceIssues: Array<[number, string]> = [
     [input.data.assignmentTypeCount, 'missing_assignment_type_data'],
-    [
-      input.data.assignmentTypesWithOwnedRubricConfig,
-      'missing_owned_rubric_config_data',
-    ],
     [
       input.data.organizationAssignmentTypeRows,
       'missing_org_assignment_type_data',
     ],
   ];
 
-  for (const [count, kind] of dataPresenceIssues) {
+  for (const [count, kind] of requiredDataPresenceIssues) {
     if (count === 0) {
       pushIssue(options.requireData ? blockers : warnings, kind, { count });
     }
+  }
+
+  if (input.data.assignmentTypesWithOwnedRubricConfig === 0) {
+    pushIssue(warnings, 'missing_owned_rubric_config_data', { count: 0 });
   }
 
   return {

@@ -175,7 +175,7 @@ describe('PR preview deployment contract', () => {
     const templateIndex = deployScript.indexOf('ensure_template_database');
     const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
-    const releaseGateIndex = deployScript.indexOf('assignment-type-release-gate.ts');
+    const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
     expect(deployScript).toContain('PREVIEW_DB_DUMP_S3_URI');
@@ -206,6 +206,8 @@ describe('PR preview deployment contract', () => {
 
     expect(deployScript).toContain('compute_tooling_fingerprint()');
     expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
+    expect(deployScript).toContain('packages/prisma/scripts/assignment-type-release-gate.ts');
+    expect(deployScript).toContain('scripts/preview/deploy.sh');
     expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
     expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
     expect(deployScript).not.toContain('Web container already running; relying on bind-mounted source update.');

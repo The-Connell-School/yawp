@@ -176,7 +176,9 @@ compute_tooling_fingerprint() {
         services/web-app/package.json \
         packages/prisma/package.json \
         packages/prisma/schema.prisma \
-        packages/prisma/prisma.config.ts
+        packages/prisma/prisma.config.ts \
+        packages/prisma/scripts/assignment-type-release-gate.ts \
+        scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then
           sha256_file "$file"
