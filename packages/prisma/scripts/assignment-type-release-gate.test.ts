@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildAssignmentTypeReleaseGatePoolConfig,
   buildAssignmentTypeReleaseGateReport,
   type AssignmentTypeReleaseGateInput,
 } from './assignment-type-release-gate';
@@ -35,6 +36,30 @@ function goodInput(
 }
 
 describe('assignment type release gate', () => {
+  test('uses TLS when running through the production migration tunnel', () => {
+    expect(
+      buildAssignmentTypeReleaseGatePoolConfig(
+        'postgresql://yawp:secret@localhost:3306/yawp',
+        { REMOTE_MIGRATE_TUNNEL: '1' }
+      )
+    ).toEqual({
+      connectionString: 'postgresql://yawp:secret@localhost:3306/yawp',
+      ssl: { rejectUnauthorized: false },
+    });
+  });
+
+  test('keeps local migration validation non-TLS', () => {
+    expect(
+      buildAssignmentTypeReleaseGatePoolConfig(
+        'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci',
+        {}
+      )
+    ).toEqual({
+      connectionString:
+        'postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci',
+    });
+  });
+
   test('passes when schema and data invariants hold', () => {
     const report = buildAssignmentTypeReleaseGateReport(goodInput());
 

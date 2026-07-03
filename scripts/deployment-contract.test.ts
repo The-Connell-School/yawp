@@ -150,6 +150,7 @@ describe('production deployment contract', () => {
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
+    expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
     expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);

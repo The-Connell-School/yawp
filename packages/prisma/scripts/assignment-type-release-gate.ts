@@ -9,7 +9,7 @@
  * Fresh empty migration databases are allowed. For production snapshot rehearsals,
  * set ASSIGNMENT_TYPE_RELEASE_GATE_REQUIRE_DATA=true or pass --require-data.
  */
-import pg from 'pg';
+import pg, { type PoolConfig } from 'pg';
 
 export type ColumnRef = {
   tableName: string;
@@ -54,6 +54,24 @@ type ReleaseGateIssue = {
   kind: string;
   row: Record<string, unknown>;
 };
+
+export function buildAssignmentTypeReleaseGatePoolConfig(
+  databaseUrl: string,
+  env: NodeJS.ProcessEnv = process.env
+): PoolConfig {
+  const requiresTls =
+    env.REMOTE_MIGRATE_TUNNEL === '1' ||
+    env.DATABASE_SSL_REQUIRE === 'true' ||
+    /\.rds\.amazonaws\.com/i.test(databaseUrl) ||
+    /[?&]sslmode=require(?:&|$)/i.test(databaseUrl) ||
+    /[?&]sslmode=verify-ca(?:&|$)/i.test(databaseUrl) ||
+    /[?&]sslmode=verify-full(?:&|$)/i.test(databaseUrl);
+
+  return {
+    connectionString: databaseUrl,
+    ...(requiresTls ? { ssl: { rejectUnauthorized: false } } : {}),
+  };
+}
 
 type ColumnExpectation = ColumnRef & {
   requiredNotNull?: boolean;
@@ -469,7 +487,7 @@ async function main() {
   const requireData =
     process.argv.includes('--require-data') ||
     process.env.ASSIGNMENT_TYPE_RELEASE_GATE_REQUIRE_DATA === 'true';
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+  const pool = new pg.Pool(buildAssignmentTypeReleaseGatePoolConfig(databaseUrl));
   try {
     const input = await collectAssignmentTypeReleaseGateInput(pool);
     const report = buildAssignmentTypeReleaseGateReport(input, { requireData });
