@@ -10,6 +10,7 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { recordAssignmentTypeAiVersion } from '~/domain/assignment-types/assignment-type-ai-version.server';
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -38,6 +39,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         orderBy: { position: 'asc' },
       },
       image: { select: { id: true } },
+      aiVersions: {
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          versionNumber: true,
+          changeSource: true,
+          changeSummary: true,
+          createdAt: true,
+          createdByUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -49,7 +68,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  await requireAdmin(request);
+  const admin = await requireAdmin(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
   const assignmentTypeId = params.id;
@@ -142,6 +161,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
           description: description || null,
           ...gradingConfigData,
         },
+      });
+
+      await recordAssignmentTypeAiVersion({
+        tx,
+        assignmentTypeId,
+        changeSource: 'admin.assignment-type.update',
+        changeSummary: hasGradingConfigFields
+          ? 'Updated assignment type rubric and grading assistant'
+          : 'Updated assignment type details',
+        createdByUserId: admin.id,
       });
     });
 

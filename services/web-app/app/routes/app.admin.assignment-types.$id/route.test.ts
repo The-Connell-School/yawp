@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   $transaction: mock(),
+  assignmentTypeAiVersion: {
+    aggregate: mock(),
+    create: mock(),
+  },
   assignmentType: {
     findUnique: mock(),
     update: mock(),
@@ -36,6 +40,8 @@ const loader = routeLoader as any;
 describe('admin assignment type detail action', () => {
   beforeEach(() => {
     prisma.$transaction.mockReset();
+    prisma.assignmentTypeAiVersion.aggregate.mockReset();
+    prisma.assignmentTypeAiVersion.create.mockReset();
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentType.update.mockReset();
     prisma.orgMembership.findMany.mockReset();
@@ -44,9 +50,15 @@ describe('admin assignment type detail action', () => {
     requireUserId.mockReset();
     requireMembership.mockReset();
 
-    requireAdmin.mockResolvedValue(undefined);
+    requireAdmin.mockResolvedValue({ id: 'admin-user-1' });
     prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
+    prisma.assignmentTypeAiVersion.aggregate.mockResolvedValue({
+      _max: { versionNumber: null },
+    });
+    prisma.assignmentTypeAiVersion.create.mockResolvedValue({
+      id: 'version-1',
+    });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
   });
@@ -172,6 +184,104 @@ describe('admin assignment type detail action', () => {
     });
   });
 
+  test('records an AI version snapshot after assignment type grading edits', async () => {
+    prisma.assignmentType.findUnique
+      .mockResolvedValueOnce({ id: 'at-1' })
+      .mockResolvedValueOnce({
+        id: 'at-1',
+        title: 'ACT Writing',
+        kind: 'act_writing',
+        description: 'ACT writing assignment type',
+        scoringScaleJson: {
+          type: 'act_writing_2_12',
+          minScore: 1,
+          maxScore: 6,
+        },
+        rubricJson: {
+          categories: [
+            {
+              key: 'ideas_and_analysis',
+              label: 'Ideas and Analysis',
+              description: 'Generate productive ideas and analyze perspectives.',
+              weight: 0.25,
+            },
+          ],
+        },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Grade this as ACT Writing.',
+        },
+        gradingOutputSchemaJson: {
+          schemaVersion: 1,
+          responseShape: 'categories_overall_comment',
+        },
+        gradingCalibrationNotes: null,
+        gradingAssistantVersion: 4,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+        assignmentModules: [],
+      });
+    prisma.assignmentTypeAiVersion.aggregate.mockResolvedValue({
+      _max: { versionNumber: 2 },
+    });
+
+    const form = new FormData();
+    form.set('intent', 'updateCourse');
+    form.set('title', 'ACT Writing');
+    form.set('description', 'ACT writing assignment type');
+    form.set(
+      'scoringScale',
+      JSON.stringify({ type: 'act_writing_2_12', minScore: 1, maxScore: 6 })
+    );
+    form.set(
+      'rubricJson',
+      JSON.stringify({
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            description: 'Generate productive ideas and analyze perspectives.',
+            weight: 0.25,
+          },
+        ],
+      })
+    );
+    form.set(
+      'promptConfigJson',
+      JSON.stringify({ gradingInstructions: 'Grade this as ACT Writing.' })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentTypeAiVersion.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        versionNumber: 3,
+        changeSource: 'admin.assignment-type.update',
+        changeSummary: 'Updated assignment type rubric and grading assistant',
+        createdByUserId: 'admin-user-1',
+        snapshotJson: expect.objectContaining({
+          schemaVersion: 1,
+          assignmentType: expect.objectContaining({
+            id: 'at-1',
+            title: 'ACT Writing',
+            gradingAssistantVersion: 4,
+          }),
+          modules: [],
+        }),
+      }),
+    });
+  });
+
   test('loads assignment type details without external rubric links', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
@@ -181,6 +291,20 @@ describe('admin assignment type detail action', () => {
       description: null,
       archivedAt: null,
       assignmentModules: [],
+      aiVersions: [
+        {
+          id: 'version-2',
+          versionNumber: 2,
+          changeSource: 'admin.assignment-type.update',
+          changeSummary: 'Updated assignment type rubric and grading assistant',
+          createdAt: new Date('2026-07-03T21:00:00.000Z'),
+          createdByUser: {
+            id: 'admin-user-1',
+            name: 'Bryant Brock',
+            email: 'bryant@brock.software',
+          },
+        },
+      ],
       image: null,
     });
 
@@ -193,5 +317,15 @@ describe('admin assignment type detail action', () => {
     });
 
     expect((result as { data: any }).data.course.title).toBe('ACT Writing');
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          aiVersions: expect.objectContaining({
+            take: 10,
+          }),
+        }),
+      })
+    );
+    expect((result as { data: any }).data.course.aiVersions).toHaveLength(1);
   });
 });
