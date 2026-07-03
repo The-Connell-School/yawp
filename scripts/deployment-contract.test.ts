@@ -159,6 +159,7 @@ describe('production deployment contract', () => {
     expect(migrateRemoteScript).toContain('--require-data');
     expect(migrateRemoteScript).toContain('20260703195500_realign_teacher_training_assignments');
     expect(migrateRemoteScript).toContain("['prisma', 'migrate', 'resolve', '--rolled-back'");
+    expect(migrateRemoteScript).toContain('rejectUnauthorized: false');
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);

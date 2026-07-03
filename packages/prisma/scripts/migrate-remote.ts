@@ -63,7 +63,12 @@ async function listRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
     return [];
   }
 
-  const client = new pg.Client({ connectionString: env.DATABASE_URL });
+  const client = new pg.Client({
+    connectionString: env.DATABASE_URL,
+    ssl: env.REMOTE_MIGRATE_TUNNEL === '1'
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
   try {
     await client.connect();
     const result = await client.query<{ migration_name: string }>(
