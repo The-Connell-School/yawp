@@ -29,6 +29,9 @@ describe('AssignmentTypeAiHistorySection', () => {
     expect(html).toContain('Updated assignment type rubric and grading assistant');
     expect(html).toContain('Kevin Gregorio');
     expect(html).toContain('/app/admin/assignment-types/type-1/ai-workbench');
+    expect(html).toContain(
+      '/app/admin/assignment-types/type-1/ai-workbench?versionId=version-5'
+    );
   });
 
   it('renders an empty state before the first AI snapshot exists', () => {

@@ -2,6 +2,7 @@ import {
   parseAssignmentTypeRubricConfig,
   type AssignmentTypeRubricConfigSource,
 } from './assignment-type-rubric-config';
+import type { AssignmentTypeAiSnapshot } from './assignment-type-ai-version.server';
 import {
   getAssignmentTypeGradingInstructions,
   type AssignmentTypeGradingInstructions,
@@ -41,7 +42,7 @@ type AssignmentTypeAiWorkbenchModuleInput = {
   instructions?: AssignmentTypeAiWorkbenchInstructionInput[] | null;
 };
 
-type AssignmentTypeAiWorkbenchInput = {
+export type AssignmentTypeAiWorkbenchInput = {
   id: string;
   title: string;
   kind: string | null;
@@ -55,6 +56,42 @@ type AssignmentTypeAiWorkbenchInput = {
   gradingAssistantSourceTemplateSlug: string | null;
   assignmentModules?: AssignmentTypeAiWorkbenchModuleInput[] | null;
 };
+
+export function assignmentTypeAiSnapshotToWorkbenchInput(
+  snapshot: AssignmentTypeAiSnapshot
+): AssignmentTypeAiWorkbenchInput {
+  return {
+    id: snapshot.assignmentType.id,
+    title: snapshot.assignmentType.title,
+    kind: snapshot.assignmentType.kind,
+    scoringScaleJson: snapshot.assignmentType.scoringScaleJson,
+    rubricJson: snapshot.assignmentType.rubricJson,
+    gradingPromptConfigJson: snapshot.assignmentType.gradingPromptConfigJson,
+    gradingOutputSchemaJson: snapshot.assignmentType.gradingOutputSchemaJson,
+    gradingCalibrationNotes: snapshot.assignmentType.gradingCalibrationNotes,
+    gradingAssistantVersion: snapshot.assignmentType.gradingAssistantVersion,
+    gradingAssistantSourceTemplateId:
+      snapshot.assignmentType.gradingAssistantSourceTemplateId,
+    gradingAssistantSourceTemplateSlug:
+      snapshot.assignmentType.gradingAssistantSourceTemplateSlug,
+    assignmentModules: snapshot.modules.map((module) => ({
+      id: module.id,
+      title: module.title,
+      position: module.position,
+      description: module.description,
+      tutorInstructions: module.tutorInstructions,
+      isSelfGuided: module.isSelfGuided,
+      rubricAlignmentJson: module.rubricAlignmentJson,
+      instructions: module.instructions.map((instruction) => ({
+        id: instruction.id,
+        title: instruction.title,
+        position: instruction.position,
+        prompt: instruction.prompt,
+        tutorInstructions: instruction.tutorInstructions,
+      })),
+    })),
+  };
+}
 
 export type AssignmentTypeAiWorkbench = {
   assignmentType: {

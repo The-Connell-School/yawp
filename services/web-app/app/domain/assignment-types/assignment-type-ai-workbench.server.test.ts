@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import { buildAssignmentTypeAiWorkbench } from './assignment-type-ai-workbench.server';
+import {
+  assignmentTypeAiSnapshotToWorkbenchInput,
+  buildAssignmentTypeAiWorkbench,
+} from './assignment-type-ai-workbench.server';
 
 describe('buildAssignmentTypeAiWorkbench', () => {
   it('builds grading assistant and tutor prompt previews from one assignment type config', () => {
@@ -92,5 +95,74 @@ describe('buildAssignmentTypeAiWorkbench', () => {
       'Thesis (40%)'
     );
     expect(workbench.tutorPreviews[0].systemPrompt).not.toContain('Evidence');
+  });
+
+  it('replays prompt previews from an assignment type AI snapshot', () => {
+    const assignmentType = assignmentTypeAiSnapshotToWorkbenchInput({
+      schemaVersion: 1,
+      assignmentType: {
+        id: 'type-1',
+        title: 'Saved Thesis Essay',
+        kind: 'essay',
+        description: null,
+        gradingAssistantVersion: 7,
+        scoringScaleJson: { type: 'weighted_0_5', minScore: 0, maxScore: 5 },
+        rubricJson: {
+          categories: [
+            {
+              key: 'thesis',
+              label: 'Thesis',
+              description: 'Saved thesis standard.',
+              weight: 1,
+            },
+          ],
+        },
+        gradingPromptConfigJson: {
+          gradingInstructions: 'Use the saved rubric wording.',
+        },
+        gradingOutputSchemaJson: null,
+        gradingCalibrationNotes: null,
+        gradingAssistantSourceTemplateId: null,
+        gradingAssistantSourceTemplateSlug: null,
+      },
+      modules: [
+        {
+          id: 'module-1',
+          title: 'Saved module',
+          position: 0,
+          description: null,
+          tutorInstructions: 'Saved module tutor instruction.',
+          isSelfGuided: false,
+          rubricAlignmentJson: { thesis: 'primary' },
+          instructions: [
+            {
+              id: 'instruction-1',
+              title: 'Saved instruction',
+              position: 0,
+              prompt: 'Saved prompt.',
+              tutorInstructions: 'Saved instruction tutor instruction.',
+              showChatButton: true,
+              showNextButton: false,
+              buttons: [],
+            },
+          ],
+        },
+      ],
+    });
+
+    const workbench = buildAssignmentTypeAiWorkbench({
+      assignmentType,
+      sampleEssay: 'Saved sample essay.',
+      studentFirstName: 'Ava',
+    });
+
+    expect(workbench.assignmentType.title).toBe('Saved Thesis Essay');
+    expect(workbench.assignmentType.gradingAssistantVersion).toBe(7);
+    expect(workbench.gradingPreview.userPrompt).toContain(
+      'Use the saved rubric wording.'
+    );
+    expect(workbench.tutorPreviews[0].systemPrompt).toContain(
+      'Saved instruction tutor instruction.'
+    );
   });
 });

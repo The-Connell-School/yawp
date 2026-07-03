@@ -100,6 +100,15 @@ export function AssignmentTypeAiHistorySection({
                   {formatVersionDate(version.createdAt)}
                 </time>
               </div>
+              <div className="mt-3">
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <a
+                    href={`/app/admin/assignment-types/${assignmentTypeId}/ai-workbench?versionId=${version.id}`}
+                  >
+                    Replay
+                  </a>
+                </Button>
+              </div>
             </li>
           ))}
         </ol>

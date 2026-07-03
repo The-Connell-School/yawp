@@ -21,11 +21,13 @@ import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
 import {
+  assignmentTypeAiSnapshotToWorkbenchInput,
   buildAssignmentTypeAiWorkbench,
   DEFAULT_WORKBENCH_SAMPLE_ESSAY,
   DEFAULT_WORKBENCH_STUDENT_FIRST_NAME,
   type AssignmentTypeAiWorkbench,
 } from '~/domain/assignment-types/assignment-type-ai-workbench.server';
+import type { AssignmentTypeAiSnapshot } from '~/domain/assignment-types/assignment-type-ai-version.server';
 import {
   DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
   gradingAssistantStrictnessOptions,
@@ -63,6 +65,7 @@ function loadAssignmentTypeForWorkbench(assignmentTypeId: string) {
           changeSource: true,
           changeSummary: true,
           createdAt: true,
+          snapshotJson: true,
           createdByUser: {
             select: {
               id: true,
@@ -145,6 +148,51 @@ function buildPromptSnapshot({
   };
 }
 
+function selectedVersionSummary(
+  version:
+    | {
+        id: string;
+        versionNumber: number;
+        changeSummary: string | null;
+        createdAt: Date;
+      }
+    | null
+) {
+  return version
+    ? {
+        id: version.id,
+        versionNumber: version.versionNumber,
+        changeSummary: version.changeSummary,
+        createdAt: version.createdAt,
+      }
+    : null;
+}
+
+function stripVersionSnapshots<
+  T extends { aiVersions: Array<Record<string, unknown> & { snapshotJson?: unknown }> },
+>(assignmentType: T) {
+  return {
+    ...assignmentType,
+    aiVersions: assignmentType.aiVersions.map(({ snapshotJson: _snapshotJson, ...row }) => row),
+  };
+}
+
+function workbenchInputFromSelection({
+  assignmentType,
+  selectedVersion,
+}: {
+  assignmentType: Parameters<typeof buildAssignmentTypeAiWorkbench>[0]['assignmentType'];
+  selectedVersion: { snapshotJson?: unknown } | null;
+}) {
+  if (selectedVersion?.snapshotJson) {
+    return assignmentTypeAiSnapshotToWorkbenchInput(
+      selectedVersion.snapshotJson as AssignmentTypeAiSnapshot
+    );
+  }
+
+  return assignmentType;
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
@@ -161,14 +209,22 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const url = new URL(request.url);
   const controls = parseSandboxControlsFromSearchParams(url.searchParams);
+  const selectedVersionId = url.searchParams.get('versionId')?.trim() || null;
+  const selectedVersion =
+    assignmentType.aiVersions.find((version) => version.id === selectedVersionId) ??
+    null;
   const workbench = buildAssignmentTypeAiWorkbench({
-    assignmentType,
+    assignmentType: workbenchInputFromSelection({
+      assignmentType,
+      selectedVersion,
+    }),
     ...controls,
   });
 
   return dataResponse({
-    assignmentType,
+    assignmentType: stripVersionSnapshots(assignmentType),
     workbench,
+    selectedVersion: selectedVersionSummary(selectedVersion),
     controls,
   });
 }
@@ -192,8 +248,15 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const controls = parseSandboxControlsFromFormData(formData);
+  const selectedVersionId = formData.get('versionId')?.toString().trim() || null;
+  const selectedVersion =
+    assignmentType.aiVersions.find((version) => version.id === selectedVersionId) ??
+    null;
   const workbench = buildAssignmentTypeAiWorkbench({
-    assignmentType,
+    assignmentType: workbenchInputFromSelection({
+      assignmentType,
+      selectedVersion,
+    }),
     ...controls,
   });
   const label = formData.get('label')?.toString().trim() || null;
@@ -203,7 +266,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const run = await prisma.assignmentTypeAiEvaluationRun.create({
     data: {
       assignmentTypeId,
-      assignmentTypeAiVersionId: latestVersion?.id ?? null,
+      assignmentTypeAiVersionId: selectedVersion?.id ?? latestVersion?.id ?? null,
       createdByUserId: admin.id,
       agentKind: 'workbench-preview',
       status: 'saved',
@@ -222,6 +285,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     sampleEssay: controls.sampleEssay,
     savedRun: run.id,
   });
+  if (selectedVersion) {
+    searchParams.set('versionId', selectedVersion.id);
+  }
 
   return redirect(
     `/app/admin/assignment-types/${assignmentTypeId}/ai-workbench?${searchParams}`
@@ -266,7 +332,8 @@ function runActorLabel(run: {
 }
 
 export default function AssignmentTypeAiWorkbenchRoute() {
-  const { assignmentType, workbench, controls } = useLoaderData<typeof loader>();
+  const { assignmentType, workbench, selectedVersion, controls } =
+    useLoaderData<typeof loader>();
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
@@ -297,6 +364,11 @@ export default function AssignmentTypeAiWorkbenchRoute() {
           <Badge variant="outline" size="sm">
             {workbench.assignmentType.rubricCategories.length} rubric categories
           </Badge>
+          {selectedVersion ? (
+            <Badge variant="info-soft" size="sm">
+              Replaying v{selectedVersion.versionNumber}
+            </Badge>
+          ) : null}
         </div>
       </header>
 
@@ -326,6 +398,9 @@ export default function AssignmentTypeAiWorkbenchRoute() {
               preventScrollReset
               className="mb-5 grid gap-4 rounded-md border p-4 lg:grid-cols-[180px_minmax(0,1fr)_160px]"
             >
+              {selectedVersion ? (
+                <input type="hidden" name="versionId" value={selectedVersion.id} />
+              ) : null}
               <div className="space-y-2">
                 <Label htmlFor="studentFirstName">Student name</Label>
                 <Input
@@ -467,6 +542,9 @@ export default function AssignmentTypeAiWorkbenchRoute() {
             </div>
             <Form method="post" className="space-y-3 rounded-md border p-4">
               <input type="hidden" name="intent" value="saveEvaluationRun" />
+              {selectedVersion ? (
+                <input type="hidden" name="versionId" value={selectedVersion.id} />
+              ) : null}
               <input
                 type="hidden"
                 name="studentFirstName"

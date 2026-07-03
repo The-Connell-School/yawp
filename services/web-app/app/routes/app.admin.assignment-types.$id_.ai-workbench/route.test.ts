@@ -205,6 +205,104 @@ describe('admin assignment type AI workbench loader', () => {
     );
   });
 
+  test('replays prompt previews from a selected AI version snapshot', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Current Thesis Essay',
+      kind: 'essay',
+      description: null,
+      scoringScaleJson: {
+        type: 'weighted_0_5',
+        minScore: 0,
+        maxScore: 5,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'current',
+            label: 'Current',
+            description: 'Current rubric wording.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Use the current rubric wording.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 8,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [],
+      aiVersions: [
+        {
+          id: 'version-7',
+          versionNumber: 7,
+          changeSource: 'admin.assignment-type.update',
+          changeSummary: 'Saved version',
+          createdAt: new Date('2026-07-03T21:00:00.000Z'),
+          createdByUser: null,
+          snapshotJson: {
+            schemaVersion: 1,
+            assignmentType: {
+              id: 'at-1',
+              title: 'Historical Thesis Essay',
+              kind: 'essay',
+              description: null,
+              gradingAssistantVersion: 7,
+              scoringScaleJson: {
+                type: 'weighted_0_5',
+                minScore: 0,
+                maxScore: 5,
+              },
+              rubricJson: {
+                categories: [
+                  {
+                    key: 'historical',
+                    label: 'Historical',
+                    description: 'Historical rubric wording.',
+                    weight: 1,
+                  },
+                ],
+              },
+              gradingPromptConfigJson: {
+                gradingInstructions: 'Use the historical rubric wording.',
+              },
+              gradingOutputSchemaJson: null,
+              gradingCalibrationNotes: null,
+              gradingAssistantSourceTemplateId: null,
+              gradingAssistantSourceTemplateSlug: null,
+            },
+            modules: [],
+          },
+        },
+      ],
+      aiEvaluationRuns: [],
+    });
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/ai-workbench?versionId=version-7'
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.selectedVersion).toMatchObject({
+      id: 'version-7',
+      versionNumber: 7,
+    });
+    expect(data.workbench.assignmentType.title).toBe('Historical Thesis Essay');
+    expect(data.workbench.gradingPreview.userPrompt).toContain(
+      'Use the historical rubric wording.'
+    );
+    expect(data.workbench.gradingPreview.userPrompt).not.toContain(
+      'Use the current rubric wording.'
+    );
+  });
+
   test('saves the current sandbox as an evaluation run', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
