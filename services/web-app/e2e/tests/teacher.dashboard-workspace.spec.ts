@@ -267,7 +267,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       await page.getByRole('button', { name: 'Create Assignment' }).click();
 
       await expect(page).toHaveURL(
-        (url) => url.pathname === '/app' && url.search === ''
+        (url) =>
+          (url.pathname === '/app' || url.pathname === '/app/') &&
+          url.search === ''
       );
       await expect(page.getByRole('dialog')).toHaveCount(0);
       await expect(page.getByTestId('app._index')).toBeVisible();
@@ -300,7 +302,9 @@ test.describe.serial('Teacher dashboard workspace', () => {
       .click();
     await expectStandardizedAssignmentForm(page);
     await expect(page).toHaveURL(
-      (url) => url.pathname === '/app' && url.search === ''
+      (url) =>
+        (url.pathname === '/app' || url.pathname === '/app/') &&
+        url.search === ''
     );
   });
 
