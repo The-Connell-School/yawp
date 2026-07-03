@@ -59,6 +59,7 @@ import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
 import { requireAdmin } from '~/utils/auth.server';
 import { parseAssignmentTypeRubricConfig } from '~/domain/assignment-types/assignment-type-rubric-config';
+import { recordAssignmentTypeAiVersion } from '~/domain/assignment-types/assignment-type-ai-version.server';
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
   type ModuleRubricRelationship,
@@ -162,9 +163,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
-  await requireAdmin(request);
+  const admin = await requireAdmin(request);
   const formData = await request.formData();
   const intent = formData.get('intent');
+  const assignmentTypeId = params.id!;
+
+  const recordAiVersion = (args: {
+    changeSource: string;
+    changeSummary: string;
+  }) =>
+    recordAssignmentTypeAiVersion({
+      assignmentTypeId,
+      changeSource: args.changeSource,
+      changeSummary: args.changeSummary,
+      createdByUserId: admin.id,
+    });
 
   if (intent === 'updateModule') {
     const { error, data } = await parseFormData(formData, moduleSchema);
@@ -181,6 +194,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
     });
 
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module.update',
+      changeSummary: 'Updated tutor module settings',
+    });
+
     return dataResponse({ status: 'success' });
   }
 
@@ -188,6 +206,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await prisma.assignmentModule.update({
       where: { id: params.moduleId },
       data: { deletedAt: new Date() },
+    });
+
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module.delete',
+      changeSummary: 'Archived tutor module',
     });
 
     return redirect(`/app/admin/assignment-types/${params.id}`);
@@ -218,6 +241,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
           })),
         },
       },
+    });
+
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module-instruction.create',
+      changeSummary: 'Created tutor instruction',
     });
 
     return dataResponse({ status: 'success' });
@@ -253,6 +281,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       },
     });
 
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module-instruction.update',
+      changeSummary: 'Updated tutor instruction',
+    });
+
     return dataResponse({ status: 'success' });
   }
 
@@ -265,6 +298,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     await prisma.assignmentModuleInstruction.delete({
       where: { id: instructionId },
+    });
+
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module-instruction.delete',
+      changeSummary: 'Deleted tutor instruction',
     });
 
     return dataResponse({ status: 'success' });
@@ -283,6 +321,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
         })
       )
     );
+
+    await recordAiVersion({
+      changeSource: 'admin.assignment-module-instruction.reorder',
+      changeSummary: 'Reordered tutor instructions',
+    });
 
     return dataResponse({ status: 'success' });
   }
