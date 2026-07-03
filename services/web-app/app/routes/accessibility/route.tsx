@@ -151,9 +151,10 @@ export default function AccessibilityRoute() {
               been separately tested.
             </li>
             <li>
-              Dedicated high-contrast, font-size, or theme settings are not yet
-              exposed as school-level controls; users can use browser zoom and
-              operating-system accessibility settings.
+              A user-level high contrast setting is available from the app
+              settings menu. Font-size and theme settings are not yet exposed as
+              school-level controls; users can use browser zoom and operating-
+              system accessibility settings.
             </li>
           </ul>
         </Section>

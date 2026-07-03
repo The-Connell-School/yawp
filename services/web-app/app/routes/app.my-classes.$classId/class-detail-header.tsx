@@ -29,7 +29,8 @@ export type ClassDetailHeaderProps = {
     school?: { name: string } | null;
     schoolYear: string;
     code: string;
-    classArtIndex: number | null;
+    classArtKey: string | null;
+    legacyClassArtIndex?: number | null;
   };
   studentCount: number;
   documentCount: number;
@@ -207,7 +208,8 @@ export function ClassDetailHeader({
         <div className="size-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-black/10 sm:size-20">
           <ClassArt
             seed={props.klass.id}
-            classArtIndex={props.klass.classArtIndex}
+            classArtKey={props.klass.classArtKey}
+            legacyClassArtIndex={props.klass.legacyClassArtIndex ?? null}
           />
         </div>
         <div className="min-w-0 flex-1">

@@ -6,7 +6,8 @@ export type TeacherClassCardData = {
   grade: string;
   period: string;
   title: string | null;
-  classArtIndex: number | null;
+  classArtKey: string | null;
+  legacyClassArtIndex?: number | null;
   school: { id: string; name: string } | null;
   _count: { students: number; assignments: number };
   stats?: {
@@ -36,7 +37,11 @@ export function TeacherClassCard({
         className="flex min-h-full flex-1 flex-col"
       >
         <div className="h-32 w-full border-b border-black/5">
-          <ClassArt seed={klass.id} classArtIndex={klass.classArtIndex} />
+          <ClassArt
+            seed={klass.id}
+            classArtKey={klass.classArtKey}
+            legacyClassArtIndex={klass.legacyClassArtIndex ?? null}
+          />
         </div>
 
         <div className="flex flex-1 flex-col gap-3 p-4">

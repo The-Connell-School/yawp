@@ -164,6 +164,7 @@ migrate_and_seed() {
     bun install
     bun prisma:generate
     bun run --cwd packages/prisma prisma migrate deploy
+    bun run --cwd packages/prisma backfill-class-art-key
     bun db:seed-local-dev
   )
 }

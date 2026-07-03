@@ -13,12 +13,12 @@
   --card-foreground: 60 1.9608% 10%;
   --popover: 48 100% 99.0196%;
   --popover-foreground: 50.7692 20% 12.7451%;
-  --primary: 14.8837 58.9041% 40%;
+  --primary: 14.8837 58.9041% 57.0588%;
   --primary-foreground: 48 100% 99.0196%;
   --secondary: 45 24.2424% 87.0588%;
   --secondary-foreground: 50 8% 29.4118%;
   --muted: 48 100% 99.0196%;
-  --muted-foreground: 50 2.4% 36%;
+  --muted-foreground: 50 2.4% 49.0196%;
   --accent: 45 24.2424% 87.0588%;
   --accent-foreground: 50.7692 20% 12.7451%;
   --destructive: 0 51.8367% 51.9608%;
@@ -61,6 +61,11 @@
   --shadow-xl:
     0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+}
+
+:root[data-contrast='high'] {
+  --primary: 14.8837 58.9041% 40%;
+  --muted-foreground: 50 2.4% 36%;
 }
 
 .dark {

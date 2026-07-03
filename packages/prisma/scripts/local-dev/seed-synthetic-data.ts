@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
+import { getClassArtByIndex } from '../../../services/web-app/app/utils/class-art.ts';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -125,7 +126,7 @@ export async function seedSyntheticLocalDevData(
       period: '3',
       grade: '10',
       title: 'English 10 - Period 3',
-      classArtIndex: 2,
+      classArtKey: getClassArtByIndex(2).key,
       schoolId: schools[0].id,
       teachers: {
         connect: [
@@ -147,7 +148,7 @@ export async function seedSyntheticLocalDevData(
       period: '5',
       grade: '11',
       title: 'English 11 - Period 5',
-      classArtIndex: 5,
+      classArtKey: getClassArtByIndex(5).key,
       schoolId: schools[1].id,
       teachers: {
         connect: [

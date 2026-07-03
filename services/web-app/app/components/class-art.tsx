@@ -1,27 +1,32 @@
 import { useMemo } from 'react';
-import { generateClassArt, getClassArtByIndex, formatClassArtCredit } from '~/utils/class-art';
+import { resolveClassArtSelection, formatClassArtCredit } from '~/utils/class-art';
 import { cn } from '~/utils/misc';
 
 export function ClassArt({
   seed,
-  classArtIndex,
+  classArtKey,
+  legacyClassArtIndex = null,
   className,
 }: {
   seed: string;
-  classArtIndex: number | null;
+  classArtKey: string | null;
+  legacyClassArtIndex?: number | null;
   className?: string;
 }) {
   const art = useMemo(
     () =>
-      classArtIndex == null
-        ? generateClassArt(seed)
-        : getClassArtByIndex(classArtIndex),
-    [seed, classArtIndex]
+      resolveClassArtSelection({
+        classArtKey,
+        legacyClassArtIndex,
+        seed,
+      }),
+    [seed, classArtKey, legacyClassArtIndex]
   );
 
   return (
     <div
       data-testid="class-art"
+      data-class-art-key={art.key}
       role="img"
       aria-label={art.credit}
       title={formatClassArtCredit(art.credit)}

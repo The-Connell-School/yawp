@@ -20,7 +20,7 @@ import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
-import { pickClassArtIndexForOrganization } from '~/utils/class-art-assignment.server';
+import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -53,6 +53,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         title: true,
         code: true,
         classArtIndex: true,
+        classArtKey: true,
         school: { select: { id: true, name: true } },
         _count: { select: { students: true, classAssignments: true } },
       },
@@ -93,6 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const stats = classStats.find((s) => s.classId === klass.id);
     return {
       ...klass,
+      legacyClassArtIndex: klass.classArtIndex,
       stats,
       _count: {
         students: klass._count.students,
@@ -160,7 +162,7 @@ export async function action({ request }: ActionFunctionArgs) {
           title,
           code,
           cardGradientKey: generateClassCardGradientKey(code),
-          classArtIndex: await pickClassArtIndexForOrganization(
+          classArtKey: await pickClassArtKeyForOrganization(
             profile.organization.id
           ),
           teachers: { connect: [{ id: profile.id }] },

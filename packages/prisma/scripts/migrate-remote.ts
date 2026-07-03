@@ -65,6 +65,15 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return migrateCode;
   }
 
+  const backfillCode = await runCommand(
+    'bun',
+    ['run', 'scripts/backfill-class-art-key.ts'],
+    env
+  );
+  if (backfillCode !== 0) {
+    return backfillCode;
+  }
+
   return runCommand(
     'bun',
     ['run', 'scripts/assignment-type-release-gate.ts', '--require-data'],

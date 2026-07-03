@@ -7,17 +7,23 @@ const prisma = {
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { pickClassArtIndexForOrganization } = await import(
+const { pickClassArtKeyForOrganization } = await import(
   './class-art-assignment.server'
 );
 const {
+  CLASS_ART_POOL,
   CLASS_ARTWORK_COUNT,
   buildClassArtPoolIndex,
   getArtworkIndexFromPoolIndex,
+  getClassArtByIndex,
   getCropIndexFromPoolIndex,
 } = await import('./class-art');
 
-describe('pickClassArtIndexForOrganization', () => {
+function poolIndexForKey(key: string) {
+  return CLASS_ART_POOL.findIndex((entry) => entry.key === key);
+}
+
+describe('pickClassArtKeyForOrganization', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
   });
@@ -25,41 +31,59 @@ describe('pickClassArtIndexForOrganization', () => {
   test('assigns the last unused artwork at crop 0 for the organization', async () => {
     prisma.class.findMany.mockResolvedValue(
       Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
-        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+        classArtKey: getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key,
+        classArtIndex: null,
       }))
     );
 
-    const index = await pickClassArtIndexForOrganization('org-1', () => 0);
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
 
-    expect(getCropIndexFromPoolIndex(index)).toBe(0);
-    expect(getArtworkIndexFromPoolIndex(index)).toBe(CLASS_ARTWORK_COUNT - 1);
+    expect(key).toBe(
+      getClassArtByIndex(buildClassArtPoolIndex(CLASS_ARTWORK_COUNT - 1, 0)).key
+    );
   });
 
   test('starts crop 1 after every artwork has crop 0 in the org', async () => {
     prisma.class.findMany.mockResolvedValue(
       Array.from({ length: CLASS_ARTWORK_COUNT }, (_, artwork) => ({
-        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+        classArtKey: getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key,
+        classArtIndex: null,
       }))
     );
 
-    const index = await pickClassArtIndexForOrganization('org-1', () => 0);
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
 
-    expect(getCropIndexFromPoolIndex(index)).toBe(1);
-    expect(getArtworkIndexFromPoolIndex(index)).toBe(0);
+    expect(getCropIndexFromPoolIndex(poolIndexForKey(key))).toBe(1);
+    expect(getArtworkIndexFromPoolIndex(poolIndexForKey(key))).toBe(0);
   });
 
-  test('queries all non-archived classes in the organization', async () => {
+  test('queries classes with either classArtKey or legacy classArtIndex', async () => {
     prisma.class.findMany.mockResolvedValue([]);
 
-    await pickClassArtIndexForOrganization('org-1');
+    await pickClassArtKeyForOrganization('org-1');
 
     expect(prisma.class.findMany).toHaveBeenCalledWith({
       where: {
         school: { organizationId: 'org-1' },
-        classArtIndex: { not: null },
         isArchived: false,
+        OR: [{ classArtKey: { not: null } }, { classArtIndex: { not: null } }],
       },
-      select: { classArtIndex: true },
+      select: { classArtKey: true, classArtIndex: true },
     });
+  });
+
+  test('maps legacy classArtIndex rows when picking the next key', async () => {
+    prisma.class.findMany.mockResolvedValue(
+      Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
+        classArtKey: null,
+        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+      }))
+    );
+
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
+
+    expect(getArtworkIndexFromPoolIndex(poolIndexForKey(key))).toBe(
+      CLASS_ARTWORK_COUNT - 1
+    );
   });
 });

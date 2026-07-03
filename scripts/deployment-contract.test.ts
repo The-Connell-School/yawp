@@ -40,15 +40,29 @@ describe('production deployment contract', () => {
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
     const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
+    const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
     expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
+    expect(ciWorkflow).toContain('backfill-class-art-key');
     expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
     expect(migrateIndex).toBeGreaterThan(-1);
-    expect(releaseGateIndex).toBeGreaterThan(migrateIndex);
+    expect(backfillIndex).toBeGreaterThan(migrateIndex);
+    expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
+  });
+
+  test('Prisma package keeps both migration release gates available', () => {
+    const prismaPackage = JSON.parse(readRepoFile('packages/prisma/package.json'));
+
+    expect(prismaPackage.scripts['assignment-type-release-gate']).toBe(
+      'bun run scripts/assignment-type-release-gate.ts'
+    );
+    expect(prismaPackage.scripts['backfill-class-art-key']).toBe(
+      'bun run scripts/backfill-class-art-key.ts'
+    );
   });
 
   test('Docker build uses the Bun version that wrote the lockfile', () => {
@@ -109,10 +123,12 @@ describe('production deployment contract', () => {
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
     const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
+    const remoteBackfillIndex = migrateRemoteScript.indexOf('backfill-class-art-key.ts');
     const remoteReleaseGateIndex = migrateRemoteScript.indexOf('assignment-type-release-gate.ts');
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
+    expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
     expect(deployWorkflow).toContain('PROD_DB_HOST');
@@ -124,7 +140,8 @@ describe('production deployment contract', () => {
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
-    expect(remoteReleaseGateIndex).toBeGreaterThan(remoteMigrateIndex);
+    expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
+    expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
   });
 });
 
@@ -142,6 +159,17 @@ describe('worktree local setup contract', () => {
 
     expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
     expect(viteConfig).toContain('strictPort: true');
+  });
+
+  test('worktree setup backfills class art keys before local seed verification', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const migrateIndex = setupScript.indexOf('prisma migrate deploy');
+    const backfillIndex = setupScript.indexOf('backfill-class-art-key');
+    const seedIndex = setupScript.indexOf('db:seed-local-dev');
+
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(backfillIndex).toBeGreaterThan(migrateIndex);
+    expect(seedIndex).toBeGreaterThan(backfillIndex);
   });
 });
 
@@ -175,6 +203,7 @@ describe('PR preview deployment contract', () => {
     const templateIndex = deployScript.indexOf('ensure_template_database');
     const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const backfillIndex = deployScript.indexOf('bun run scripts/backfill-class-art-key.ts');
     const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
@@ -188,6 +217,7 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('Restoring production dump into template database');
     expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
+    expect(deployScript).toContain('backfill-class-art-key.ts');
     expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
     expect(deployScript).not.toContain('seed-overlay.ts');
     expect(templateIndex).toBeGreaterThan(-1);
@@ -197,7 +227,8 @@ describe('PR preview deployment contract', () => {
     expect(webStartIndex).toBeGreaterThan(-1);
     expect(templateIndex).toBeLessThan(cloneIndex);
     expect(cloneIndex).toBeLessThan(migrateIndex);
-    expect(migrateIndex).toBeLessThan(releaseGateIndex);
+    expect(migrateIndex).toBeLessThan(backfillIndex);
+    expect(backfillIndex).toBeLessThan(releaseGateIndex);
     expect(releaseGateIndex).toBeLessThan(webStartIndex);
   });
 
@@ -207,6 +238,7 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('compute_tooling_fingerprint()');
     expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
     expect(deployScript).toContain('packages/prisma/scripts/assignment-type-release-gate.ts');
+    expect(deployScript).toContain('packages/prisma/scripts/backfill-class-art-key.ts');
     expect(deployScript).toContain('scripts/preview/deploy.sh');
     expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
     expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');

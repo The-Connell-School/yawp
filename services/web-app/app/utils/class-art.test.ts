@@ -1,16 +1,20 @@
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
   CLASS_ART_LIBRARY,
   CLASS_ART_POOL,
   CLASS_ART_POOL_SIZE,
   CLASS_ARTWORK_COUNT,
+  buildClassArtKey,
   buildClassArtPoolIndex,
   generateClassArt,
   getArtworkIndexFromPoolIndex,
   getClassArtByIndex,
   getCropIndexFromPoolIndex,
   pickNextClassArtIndexForOrganization,
+  pickNextClassArtKeyForOrganization,
+  resolveClassArtSelection,
 } from './class-art';
 
 describe('generateClassArt', () => {
@@ -64,8 +68,10 @@ describe('generateClassArt', () => {
   });
 
   test('every library image is bundled as a static asset', () => {
+    const publicDir = join(import.meta.dir, '../../public');
+
     for (const entry of CLASS_ART_LIBRARY) {
-      expect(existsSync(`public${entry.src}`)).toBe(true);
+      expect(existsSync(join(publicDir, entry.src))).toBe(true);
     }
   });
 });
@@ -115,6 +121,50 @@ describe('class art pool indexing', () => {
     expect(buildClassArtPoolIndex(1, 0)).toBe(3);
     expect(getArtworkIndexFromPoolIndex(3)).toBe(1);
     expect(getCropIndexFromPoolIndex(3)).toBe(0);
+  });
+});
+
+describe('resolveClassArtSelection', () => {
+  test('prefers a persisted classArtKey', () => {
+    const art = resolveClassArtSelection({
+      classArtKey: getClassArtByIndex(0).key,
+      legacyClassArtIndex: 99,
+      seed: 'class-abc',
+    });
+    expect(art).toEqual(getClassArtByIndex(0));
+  });
+
+  test('falls back to legacy classArtIndex when key is missing', () => {
+    const art = resolveClassArtSelection({
+      classArtKey: null,
+      legacyClassArtIndex: 0,
+      seed: 'class-abc',
+    });
+    expect(art).toEqual(getClassArtByIndex(0));
+  });
+});
+
+describe('class art keys', () => {
+  test('every pool entry has a unique stable key', () => {
+    const keys = CLASS_ART_POOL.map((entry) => entry.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(buildClassArtKey('paul-klee-castle-and-sun', 'center 40%')).toBe(
+      'paul-klee-castle-and-sun::center-40pct'
+    );
+  });
+});
+
+describe('pickNextClassArtKeyForOrganization', () => {
+  test('returns stable keys while preserving crop rotation', () => {
+    const assigned = Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) =>
+      getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key
+    );
+
+    const next = pickNextClassArtKeyForOrganization(assigned, () => 0);
+
+    expect(getCropIndexFromPoolIndex(
+      CLASS_ART_POOL.findIndex((entry) => entry.key === next)
+    )).toBe(0);
   });
 });
 

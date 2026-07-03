@@ -194,6 +194,8 @@ describe('app index loader assignments', () => {
             grade: '9',
             period: '1',
             title: 'Pilot Class',
+            classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
+            classArtIndex: 12,
             school: {
               id: 'school-1',
               name: 'Parker High School',
@@ -206,6 +208,8 @@ describe('app index loader assignments', () => {
             grade: '9',
             period: '2',
             title: 'Non-Pilot Class',
+            classArtKey: 'af-klint-ten-largest-youth::center-10pct',
+            classArtIndex: 3,
             school: {
               id: 'school-1',
               name: 'Parker High School',
@@ -247,10 +251,14 @@ describe('app index loader assignments', () => {
     expect(data.teacherClassCards[0]).toMatchObject({
       id: 'class-1',
       title: 'Pilot Class',
+      classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
+      legacyClassArtIndex: 12,
     });
     expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
       title: 'Non-Pilot Class',
+      classArtKey: 'af-klint-ten-largest-youth::center-10pct',
+      legacyClassArtIndex: 3,
     });
     expect(getTeacherClassCardStats).toHaveBeenCalledTimes(2);
   });

@@ -557,6 +557,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         period: true,
         title: true,
         classArtIndex: true,
+        classArtKey: true,
         school: { select: { id: true, name: true, organizationId: true } },
         students: {
           select: {
@@ -1832,7 +1833,8 @@ function ClassDetailPage() {
             school: data.klass.school,
             schoolYear: data.klass.schoolYear,
             code: data.klass.code,
-            classArtIndex: data.klass.classArtIndex ?? null,
+            classArtKey: data.klass.classArtKey ?? null,
+            legacyClassArtIndex: data.klass.classArtIndex ?? null,
           }}
           studentCount={students.length}
           documentCount={classDocuments.length}

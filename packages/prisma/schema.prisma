@@ -23,6 +23,7 @@ model Class {
   title            String?
   cardGradientKey  String            @default("indigo-purple-pink")
   classArtIndex    Int?
+  classArtKey      String?
   isArchived       Boolean           @default(false)
   students         OrgMembership[]   @relation("ClassStudents")
   teachers         OrgMembership[]   @relation("ClassTeachers")
