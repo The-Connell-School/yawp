@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type * as React from 'react';
 import { useFetcher } from 'react-router';
+import { CircleHelp } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Checkbox } from '~/components/ui/checkbox';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '~/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -20,6 +26,12 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { Textarea } from '~/components/ui/textarea';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  gradingAssistantStrictnessHelpText,
+  gradingAssistantStrictnessOptions,
+  type GradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 
 export type AssignmentCreationEntryPoint =
   | 'dashboard'
@@ -47,7 +59,6 @@ type CreateFetcherData = {
 type ExtractFetcherData = CreateFetcherData & {
   title?: string;
   prompt?: string;
-  tutorContext?: string;
 };
 
 type AssignmentCreationFetcher<Data> = {
@@ -63,13 +74,11 @@ export type AssignmentCreationSheetProps = {
   entryPoint: AssignmentCreationEntryPoint;
   assignmentTypes: AssignmentCreationAssignmentType[];
   teacherClasses: AssignmentCreationClassOption[];
-  assignmentCreationStandardizationEnabled: boolean;
   fixedAssignmentTypeId?: string;
   initialAssignmentTypeId?: string;
   fixedClassId?: string;
   initialTitle?: string;
   initialPrompt?: string;
-  initialTutorContext?: string;
   emptyClassesMessage?: string;
 };
 
@@ -128,13 +137,11 @@ export function AssignmentCreationSheetContent({
   entryPoint,
   assignmentTypes,
   teacherClasses,
-  assignmentCreationStandardizationEnabled,
   fixedAssignmentTypeId,
   initialAssignmentTypeId,
   fixedClassId,
   initialTitle = '',
   initialPrompt = '',
-  initialTutorContext = '',
   emptyClassesMessage = "You don't have any assignment-enabled classes yet.",
   createFetcher,
   extractFetcher,
@@ -155,9 +162,12 @@ export function AssignmentCreationSheetContent({
   );
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState(initialPrompt);
-  const [tutorContext, setTutorContext] = useState('');
   const [submitForGrade, setSubmitForGrade] = useState(true);
   const [pointValue, setPointValue] = useState('100');
+  const [gradingAssistantStrictnessLevel, setGradingAssistantStrictnessLevel] =
+    useState<GradingAssistantStrictnessLevel>(
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+    );
   const [promptMode, setPromptMode] = useState<'manual' | 'pdf'>('manual');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const wasOpenRef = useRef(false);
@@ -169,17 +179,8 @@ export function AssignmentCreationSheetContent({
     fixedAssignmentTypeId ?? selectedAssignmentTypeId ?? '';
   const hasFixedClass = Boolean(fixedClassId);
   const usesBulkCreateApi =
-    entryPoint === 'dashboard' ||
-    (entryPoint === 'assignment-type' &&
-      assignmentCreationStandardizationEnabled);
-  const usesLegacySingleClassRoute =
-    entryPoint === 'assignment-type' &&
-    !assignmentCreationStandardizationEnabled;
-  const formAction = usesBulkCreateApi
-    ? '/api/assignments/create'
-    : usesLegacySingleClassRoute && selectedClassId
-      ? `/app/my-classes/${selectedClassId}`
-      : undefined;
+    entryPoint === 'dashboard' || entryPoint === 'assignment-type';
+  const formAction = usesBulkCreateApi ? '/api/assignments/create' : undefined;
   const selectedClassCount = hasFixedClass
     ? 1
     : usesBulkCreateApi
@@ -224,9 +225,11 @@ export function AssignmentCreationSheetContent({
     setSelectedClassIds(initialClassIds(fixedClassId));
     setTitle(initialTitle);
     setPrompt(initialPrompt);
-    setTutorContext(initialTutorContext);
     setSubmitForGrade(true);
     setPointValue('100');
+    setGradingAssistantStrictnessLevel(
+      DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+    );
     setPromptMode('manual');
     setPdfFile(null);
   }, [
@@ -236,7 +239,6 @@ export function AssignmentCreationSheetContent({
     fixedClassId,
     initialPrompt,
     initialTitle,
-    initialTutorContext,
     open,
     teacherClasses,
   ]);
@@ -256,13 +258,7 @@ export function AssignmentCreationSheetContent({
     if (typeof extractFetcher.data.prompt === 'string') {
       setPrompt(extractFetcher.data.prompt);
     }
-    if (
-      !assignmentCreationStandardizationEnabled &&
-      typeof extractFetcher.data.tutorContext === 'string'
-    ) {
-      setTutorContext(extractFetcher.data.tutorContext);
-    }
-  }, [assignmentCreationStandardizationEnabled, extractFetcher.data]);
+  }, [extractFetcher.data]);
 
   function toggleClass(classId: string) {
     if (hasFixedClass) return;
@@ -291,9 +287,7 @@ export function AssignmentCreationSheetContent({
     !assignmentTypeId ||
     selectedClassCount === 0 ||
     !prompt.trim() ||
-    (assignmentCreationStandardizationEnabled &&
-      submitForGrade &&
-      !pointValue.trim());
+    (submitForGrade && !pointValue.trim());
 
   const header = renderSheet ? (
     <SheetHeader>
@@ -319,17 +313,11 @@ export function AssignmentCreationSheetContent({
 
         {hasFixedClass ? (
           <input type="hidden" name="classId" value={fixedClassId} />
-        ) : usesBulkCreateApi ? (
+        ) : (
           selectedClassIds.map((id) => (
             <input key={id} type="hidden" name="classIds" value={id} />
           ))
-        ) : (
-          <input type="hidden" name="classId" value={selectedClassId} />
         )}
-
-        {assignmentCreationStandardizationEnabled ? (
-          <input type="hidden" name="submitForGrade" value="false" />
-        ) : null}
 
         <div className="space-y-2">
           <Label>Assignment type</Label>
@@ -353,25 +341,7 @@ export function AssignmentCreationSheetContent({
 
         <div className="space-y-2">
           <Label>Assign to</Label>
-          {usesLegacySingleClassRoute && !hasFixedClass ? (
-            <Select
-              value={selectedClassId}
-              onValueChange={setSelectedClassId}
-              disabled={isSaving}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a class" />
-              </SelectTrigger>
-              <SelectContent>
-                {teacherClasses.map((klass) => (
-                  <SelectItem key={klass.id} value={klass.id}>
-                    {assignmentCreationClassLabel(klass)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="space-y-2.5 rounded-md border p-3">
+          <div className="space-y-2.5 rounded-md border p-3">
               {teacherClasses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {emptyClassesMessage}
@@ -401,7 +371,6 @@ export function AssignmentCreationSheetContent({
                 })
               )}
             </div>
-          )}
         </div>
 
         <div className="space-y-2">
@@ -480,35 +449,38 @@ export function AssignmentCreationSheetContent({
           />
         </div>
 
-        {assignmentCreationStandardizationEnabled ? (
-          <>
-            <div className="space-y-3 rounded-md border p-3">
-              <div className="flex items-start gap-2.5">
-                <Checkbox
-                  id="assignment-create-submit-for-grade"
-                  name="submitForGrade"
-                  value="true"
-                  checked={submitForGrade}
-                  onCheckedChange={(checked) =>
-                    setSubmitForGrade(checked === true)
-                  }
-                  disabled={isSaving}
-                />
-                <div className="space-y-1">
-                  <Label
-                    htmlFor="assignment-create-submit-for-grade"
-                    className="cursor-pointer font-normal"
-                  >
-                    Submit for grade
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Students can submit this assignment for a recorded grade.
-                  </p>
-                </div>
-              </div>
+        <div className="pt-6">
+          <input type="hidden" name="submitForGrade" value="false" />
+          <div className="flex items-center gap-2.5">
+            <Checkbox
+              id="assignment-create-submit-for-grade"
+              name="submitForGrade"
+              value="true"
+              checked={submitForGrade}
+              onCheckedChange={(checked) =>
+                setSubmitForGrade(checked === true)
+              }
+              disabled={isSaving}
+              className="size-4 shrink-0"
+            />
+            <Label
+              htmlFor="assignment-create-submit-for-grade"
+              className="cursor-pointer font-normal leading-none"
+            >
+              Submit for grade
+            </Label>
+          </div>
+          <p className="mt-1 pl-[calc(1rem+0.625rem)] text-sm text-muted-foreground">
+            Students can submit this assignment for a recorded grade.
+          </p>
 
-              {submitForGrade ? (
-                <div className="space-y-2 pl-6">
+          {submitForGrade ? (
+            <div className="mt-3 flex gap-2.5">
+              <div className="flex w-4 shrink-0 justify-center">
+                <div aria-hidden className="w-px bg-border" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-4">
+                <div className="space-y-2">
                   <Label htmlFor="assignment-create-point-value">
                     Point value
                   </Label>
@@ -526,29 +498,78 @@ export function AssignmentCreationSheetContent({
                     required
                   />
                 </div>
-              ) : null}
-            </div>
 
-            {!submitForGrade ? (
-              <input type="hidden" name="pointValue" value="" />
-            ) : null}
-          </>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="assignment-create-tutor-context">
-              Tutor Context (optional)
-            </Label>
-            <Textarea
-              id="assignment-create-tutor-context"
-              name="tutorContext"
-              value={tutorContext}
-              onChange={(event) => setTutorContext(event.target.value)}
-              rows={4}
-              placeholder="Guidance for the tutor system prompt..."
-              disabled={isSaving}
-            />
-          </div>
-        )}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Label>Grading assistant strictness</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-full"
+                          aria-label="Grading assistant strictness help"
+                          title={gradingAssistantStrictnessHelpText}
+                        >
+                          <CircleHelp className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        align="start"
+                        className="w-80 rounded-md border-slate-200 bg-slate-100 p-3 text-sm text-slate-800 shadow-md"
+                      >
+                        {gradingAssistantStrictnessHelpText}
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <input
+                    type="hidden"
+                    name="gradingAssistantStrictnessLevel"
+                    value={gradingAssistantStrictnessLevel}
+                  />
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {gradingAssistantStrictnessOptions.map((option) => {
+                      const selected =
+                        gradingAssistantStrictnessLevel === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                            selected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-background hover:bg-muted'
+                          }`}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setGradingAssistantStrictnessLevel(option.value)
+                          }
+                          disabled={isSaving}
+                        >
+                          <span className="block font-medium">
+                            {option.label}
+                          </span>
+                          <span
+                            className={`mt-1 block text-xs ${
+                              selected
+                                ? 'text-primary-foreground/80'
+                                : 'text-muted-foreground'
+                            }`}
+                          >
+                            {option.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {!submitForGrade ? <input type="hidden" name="pointValue" value="" /> : null}
 
         {formError ? (
           <p className="text-sm text-destructive">{formError}</p>

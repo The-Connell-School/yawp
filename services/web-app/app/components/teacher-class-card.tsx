@@ -1,6 +1,4 @@
-import { Pencil } from 'lucide-react';
 import { Link } from 'react-router';
-import { Button } from '~/components/ui/button';
 import { ClassArt } from '~/components/class-art';
 
 export type TeacherClassCardData = {
@@ -8,7 +6,8 @@ export type TeacherClassCardData = {
   grade: string;
   period: string;
   title: string | null;
-  classArtIndex: number | null;
+  classArtKey: string | null;
+  legacyClassArtIndex?: number | null;
   school: { id: string; name: string } | null;
   _count: { students: number; assignments: number };
   stats?: {
@@ -28,21 +27,21 @@ export function formatTeacherClassLabel(klass: {
 
 export function TeacherClassCard({
   klass,
-  showManageActions = false,
-  onEdit,
 }: {
   klass: TeacherClassCardData;
-  showManageActions?: boolean;
-  onEdit?: () => void;
 }) {
   return (
-    <div className="group flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
+    <div className="flex min-h-full flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md">
       <Link
         to={`/app/my-classes/${klass.id}`}
         className="flex min-h-full flex-1 flex-col"
       >
         <div className="h-32 w-full border-b border-black/5">
-          <ClassArt seed={klass.id} classArtIndex={klass.classArtIndex} />
+          <ClassArt
+            seed={klass.id}
+            classArtKey={klass.classArtKey}
+            legacyClassArtIndex={klass.legacyClassArtIndex ?? null}
+          />
         </div>
 
         <div className="flex flex-1 flex-col gap-3 p-4">
@@ -77,18 +76,6 @@ export function TeacherClassCard({
           </div>
         </div>
       </Link>
-
-      {showManageActions ? (
-        <div className="flex items-center gap-2 border-t border-black/5 px-3 py-2.5">
-          <Button asChild size="sm" className="flex-1">
-            <Link to={`/app/my-classes/${klass.id}`}>Open</Link>
-          </Button>
-          <Button size="sm" variant="outline" type="button" onClick={onEdit}>
-            <Pencil className="mr-1 h-3.5 w-3.5" />
-            Edit
-          </Button>
-        </div>
-      ) : null}
     </div>
   );
 }

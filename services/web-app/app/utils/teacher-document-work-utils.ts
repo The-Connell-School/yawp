@@ -88,14 +88,11 @@ export function getDraftDisplayTitle(document: {
 export function getTeacherDocumentWorkDetailLink(params: {
   document: TeacherDocumentWorkRow;
   exitTo: string;
-  isDocumentSubmissionEnabled: boolean;
 }) {
   const encodedExitTo = encodeURIComponent(params.exitTo);
 
   if (params.document.latestSubmission?.id) {
-    return `/app/submissions/${params.document.latestSubmission.id}?${
-      params.isDocumentSubmissionEnabled ? 'edit=1&' : ''
-    }exitTo=${encodedExitTo}`;
+    return `/app/submissions/${params.document.latestSubmission.id}?edit=1&exitTo=${encodedExitTo}`;
   }
 
   return `/app/documents/${params.document.id}?left=tutor&exitTo=${encodedExitTo}`;

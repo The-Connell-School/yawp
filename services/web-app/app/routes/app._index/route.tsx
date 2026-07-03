@@ -4,7 +4,9 @@ import {
   redirect,
 } from 'react-router';
 import { Form, Link, useLoaderData, useRouteLoaderData, useSearchParams } from 'react-router';
+import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
+import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
 import { DocumentLink } from '~/components/document-link.js';
 import { NoDataPlaceholder } from '~/components/no-data-placeholder.js';
 import { useUser } from '~/hooks/useUser.js';
@@ -15,7 +17,7 @@ import {
 } from '~/utils/student-preview.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
-import { getAssignmentsEnabledClassIdsForContext } from '~/utils/feature-flags.server';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
 import {
   Accordion,
   AccordionContent,
@@ -34,12 +36,23 @@ import { AssignmentsAtAGlance } from './components/assignments-at-a-glance';
 import { ClassesAtAGlance } from './components/classes-at-a-glance';
 import { TeacherGradingAtAGlance } from './components/teacher-grading-at-a-glance';
 
+const DASHBOARD_MAX_TEACHER_CLASSES = 6;
+
 export type AssignmentTypeRow = {
   id: string;
   title: string;
   systemKey?: string | null;
   image?: { id: string } | null;
 };
+
+function formatClassLabel(klass: {
+  grade: string;
+  period: string;
+  title: string | null;
+}) {
+  const base = `Grade ${klass.grade} • Period ${klass.period}`;
+  return klass.title ? `${base} — ${klass.title}` : base;
+}
 
 function orderDocumentTileModuleSessions<
   T extends { assignmentModuleSessions: AssignmentModuleSessionResumeCandidate[] },
@@ -87,21 +100,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: {
         students: { some: { id: profile.id } },
       },
-      select: {
-        id: true,
-        school: { select: { id: true, organizationId: true } },
-        teachers: { select: { id: true } },
-      },
+      select: { id: true },
     });
-    studentAssignmentClassIds = await getAssignmentsEnabledClassIdsForContext({
-      organizationId: profile.organization.id,
-      classes: studentClasses.map((klass) => ({
-        id: klass.id,
-        organizationId: klass.school.organizationId,
-        schoolId: klass.school.id,
-        teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
-      })),
-    });
+    studentAssignmentClassIds = studentClasses.map((klass) => klass.id);
   }
 
   const teacherAssignmentClassScopes = !useStudentExperience
@@ -125,29 +126,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const teacherAssignmentClassIds = !useStudentExperience
-    ? await getAssignmentsEnabledClassIdsForContext({
-        organizationId: profile.organization.id,
-        teacherProfileId: profile.id,
-        classes: teacherAssignmentClassScopes.map((scope) => ({
-          id: scope.id,
-          organizationId: scope.organizationId,
-          schoolId: scope.schoolId,
-        })),
-      })
-    : [];
   const assignmentsEnabled =
-    studentAssignmentClassIds.length > 0 ||
-    teacherAssignmentClassIds.length > 0;
-
-  const url = new URL(request.url);
-  if (
-    !assignmentsEnabled &&
-    useStudentExperience &&
-    url.searchParams.get('tab') === 'assignments'
-  ) {
-    return redirect('/app');
-  }
+    useStudentExperience
+      ? studentAssignmentClassIds.length > 0
+      : teacherAssignmentClassScopes.length > 0;
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
@@ -184,10 +166,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
             title: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -212,10 +196,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         submissions: {
           where: { archivedAt: null },
+          orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
             title: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -232,6 +218,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
             grade: true,
             period: true,
             title: true,
+            classArtIndex: true,
+            classArtKey: true,
             school: { select: { id: true, name: true, organizationId: true } },
             _count: {
               select: { students: true, teachers: true, classAssignments: true },
@@ -273,7 +261,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : [],
   ]);
 
-  // Sort teacher classes with recent activity first; keep every class visible.
+  // Sort teacher classes with recent activity first.
   let teacherClassesOrdered: typeof teacherClasses = teacherClasses;
   let recentActiveClassIds: string[] = [];
   if (!useStudentExperience && teacherClasses.length > 0) {
@@ -326,22 +314,25 @@ export async function loader({ request }: LoaderFunctionArgs) {
       >();
 
   const teacherClassCards: TeacherClassCardData[] = !useStudentExperience
-    ? teacherClassesOrdered.map((klass) => {
-        const classStats = teacherClassStatsById.get(klass.id);
-        return {
-          id: klass.id,
-          grade: klass.grade,
-          period: klass.period,
-          title: klass.title,
-          classArtIndex: null,
-          school: { id: klass.school.id, name: klass.school.name },
-          _count: {
-            students: klass._count.students,
-            assignments: klass._count.classAssignments,
-          },
-          stats: classStats?.stats,
-        };
-      })
+    ? teacherClassesOrdered
+        .map((klass) => {
+          const classStats = teacherClassStatsById.get(klass.id);
+          return {
+            id: klass.id,
+            grade: klass.grade,
+            period: klass.period,
+            title: klass.title,
+            classArtKey: klass.classArtKey,
+            legacyClassArtIndex: klass.classArtIndex,
+            school: { id: klass.school.id, name: klass.school.name },
+            _count: {
+              students: klass._count.students,
+              assignments: klass._count.classAssignments,
+            },
+            stats: classStats?.stats,
+          };
+        })
+        .slice(0, DASHBOARD_MAX_TEACHER_CLASSES)
     : [];
 
   const teacherWorkspaceClassStats = !useStudentExperience
@@ -371,6 +362,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
         })
       : [];
 
+  const enabledTeacherClasses =
+    !useStudentExperience && assignmentsEnabled ? teacherClassesOrdered : [];
+  const assignmentCreationClasses = enabledTeacherClasses;
+  const assignmentCreationTypes = teacherAssignmentTypes
+    .filter((type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY)
+    .map((type) => ({
+      id: type.id,
+      title: type.title,
+    }));
+
   return dataResponse({
     courses,
     documents: orderDocumentTileModuleSessions(documents),
@@ -382,6 +383,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalTeacherClassCount: teacherClasses.length,
     teacherWorkspaceClassStats,
     teacherAssignmentTypes,
+    assignmentCreationClasses: assignmentCreationClasses.map((klass) => ({
+      id: klass.id,
+      name: formatClassLabel(klass),
+    })),
+    assignmentCreationTypes,
   });
 }
 
@@ -391,6 +397,10 @@ export default function AppRoute() {
   const rootData =
     useRouteLoaderData<RootRoute.ComponentProps['loaderData']>('root');
   const [searchParams, setSearchParams] = useSearchParams();
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+  const [createAssignmentTypeId, setCreateAssignmentTypeId] = useState<
+    string | undefined
+  >();
   const studentPreviewActive = rootData?.studentPreview?.active ?? false;
   const isTeacher =
     user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
@@ -431,9 +441,32 @@ export default function AppRoute() {
             totalClassCount={data.totalTeacherClassCount}
           />
           {assignmentsEnabled ? (
-            <AssignmentsAtAGlance
-              assignmentTypes={data.teacherAssignmentTypes}
-            />
+            <>
+              <AssignmentsAtAGlance
+                assignmentTypes={data.teacherAssignmentTypes}
+                onCreateAssignment={() => {
+                  setCreateAssignmentTypeId(undefined);
+                  setIsCreateSheetOpen(true);
+                }}
+                onCreateAssignmentForType={(assignmentTypeId) => {
+                  setCreateAssignmentTypeId(assignmentTypeId);
+                  setIsCreateSheetOpen(true);
+                }}
+              />
+              <AssignmentCreationSheet
+                open={isCreateSheetOpen}
+                onOpenChange={(open) => {
+                  setIsCreateSheetOpen(open);
+                  if (!open) {
+                    setCreateAssignmentTypeId(undefined);
+                  }
+                }}
+                entryPoint="dashboard"
+                assignmentTypes={data.assignmentCreationTypes}
+                teacherClasses={data.assignmentCreationClasses}
+                initialAssignmentTypeId={createAssignmentTypeId}
+              />
+            </>
           ) : null}
           <TeacherGradingAtAGlance
             needsGradingCount={needsGradingCount}

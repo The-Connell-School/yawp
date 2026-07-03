@@ -3,6 +3,7 @@ import {
   type LoaderFunctionArgs,
   type ShouldRevalidateFunctionArgs,
   data as dataResponse,
+  redirect,
 } from 'react-router';
 import {
   useFetcher,
@@ -20,12 +21,21 @@ import {
   ExternalLink,
   Archive,
   ArchiveRestore,
+  Clock,
+  EllipsisVertical,
   Printer,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
@@ -47,10 +57,6 @@ import { useUser } from '~/hooks/useUser';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
-import {
-  isAssignmentsEnabledForContext,
-  isDocumentSubmissionEnabledForScope,
-} from '~/utils/feature-flags.server';
 import { Comments } from './comments';
 import { CommentsSelectionProvider } from './comments/selection-context';
 import { DocumentEditor } from './document-editor/document-editor';
@@ -63,7 +69,6 @@ import {
 } from '~/utils/document-exit';
 import { resolveCurrentAssignmentModuleSession } from '~/utils/assignment-module-session-resume';
 import { isDocumentSubmittableContent } from '~/utils/document-submittable';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
 import type { SyncStatus } from '~/utils/sync-service';
 
 import { useAuthHeartbeat } from './hooks/use-auth-heartbeat';
@@ -80,6 +85,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
@@ -198,7 +204,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           prompt: true,
-          tutorContext: true,
           apHistorySnapshot: true,
         },
       },
@@ -293,6 +298,32 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const submissions = doc.submissions;
+  const isOwner = doc.membership.id === profile.id;
+  const wantsDraftEditor =
+    url.searchParams.get('revise') === '1' ||
+    url.searchParams.get('spa') === '1';
+
+  if (
+    isOwner &&
+    profile.role === 'STUDENT' &&
+    !wantsDraftEditor &&
+    !user?.isAdmin
+  ) {
+    const latestReleasedSubmission = pickLatestReleasedSubmission(submissions);
+    if (latestReleasedSubmission) {
+      const exitTo = url.searchParams.get('exitTo');
+      const redirectParams = new URLSearchParams();
+      if (exitTo) {
+        redirectParams.set('exitTo', exitTo);
+      }
+      const suffix = redirectParams.toString()
+        ? `?${redirectParams.toString()}`
+        : '';
+      throw redirect(
+        `/app/submissions/${latestReleasedSubmission.id}${suffix}`
+      );
+    }
+  }
 
   if (shouldSaveVersion) {
     const latestRevision = doc.revisions[0];
@@ -345,23 +376,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           (cm) => cm.position === currentCms.assignmentModule.position + 1
         )?.id;
 
-  const assignmentClass = doc.classAssignment?.class;
-  const documentSubmissionScope = getDocumentSubmissionScope({
-    classAssignment: doc.classAssignment,
-    membership: doc.membership,
-  });
-  const [isDocumentSubmissionEnabled, assignmentsEnabled] = await Promise.all([
-    isDocumentSubmissionEnabledForScope(documentSubmissionScope),
-    isAssignmentsEnabledForContext({
-      organizationId:
-        assignmentClass?.school?.organizationId ?? profile.organization.id,
-      organizationIds: documentSubmissionScope.organizationIds,
-      schoolIds: documentSubmissionScope.schoolIds,
-      teacherProfileId: profile.id,
-      teacherProfileIds: documentSubmissionScope.teacherProfileIds,
-      classIds: documentSubmissionScope.classIds,
-    }),
-  ]);
 
   const sortedComments = sortDocumentCommentsByMarkupOrder(
     doc.comments,
@@ -380,8 +394,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     nextCmId,
     shouldSaveVersion,
     hasPreviousCms: currentCmsIdx > 0,
-    isDocumentSubmissionEnabled,
-    assignmentsEnabled,
   });
 }
 
@@ -445,6 +457,7 @@ export default function Route() {
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -821,7 +834,7 @@ export default function Route() {
             </p>
           ) : null}
           <div className="ml-auto flex items-center gap-4">
-            {data.isDocumentSubmissionEnabled && !isViewingAsTeacher && (
+            {!isViewingAsTeacher && (
               <>
                 {cannotSubmitEmpty && !isSubmitting ? (
                   <Tooltip text={SUBMIT_EMPTY_TOOLTIP} delayDuration={0}>
@@ -871,17 +884,44 @@ export default function Route() {
                 {showOldComments ? 'Hide old comments' : 'Show old comments'}
               </Button>
             )}
-            <Tooltip text="Print / Save as PDF" delayDuration={300}>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handlePrint}
-                aria-label="Print document"
-              >
-                <Printer className="h-4 w-4" />
-              </Button>
-            </Tooltip>
-            <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
+            <div className="flex items-center gap-1.5">
+              <SaveStatusIndicator status={syncStatus} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    aria-label="Document actions"
+                    data-testid="document-actions-menu"
+                  >
+                    <EllipsisVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="gap-2"
+                    data-testid="document-action-history"
+                    onSelect={() => setHistoryOpen(true)}
+                  >
+                    <Clock className="h-4 w-4" />
+                    History
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    data-testid="document-action-print"
+                    onSelect={handlePrint}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <DocumentHistory
+              documentId={data.doc.id}
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+            />
           </div>
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
@@ -946,11 +986,10 @@ export default function Route() {
           </div>
         </CommentsSelectionProvider>
       </main>
-      {data.isDocumentSubmissionEnabled && (
-        <Dialog
-          open={isFinalizeDialogOpen}
-          onOpenChange={setIsFinalizeDialogOpen}
-        >
+      <Dialog
+        open={isFinalizeDialogOpen}
+        onOpenChange={setIsFinalizeDialogOpen}
+      >
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1070,8 +1109,7 @@ export default function Route() {
               )}
             </DialogFooter>
           </DialogContent>
-        </Dialog>
-      )}
+      </Dialog>
       <Dialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

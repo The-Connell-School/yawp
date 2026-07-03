@@ -11,20 +11,16 @@ import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
 import {
   ClassManageSheet,
-  type ClassManageRow,
 } from '~/components/class-manage-sheet';
 import {
   TeacherClassCard,
-  type TeacherClassCardData,
 } from '~/components/teacher-class-card';
 import { requireMembership, requireUserId } from '~/utils/auth.server.js';
 import { prisma } from '~/utils/db.server.js';
 import { generateClassCode } from '~/utils/class';
 import { generateClassCardGradientKey } from '~/utils/class-card-gradient';
 import { getTeacherClassCardStats } from '~/utils/teacher-class-card-stats.server';
-import { pickClassArtIndexForTeachers } from '~/utils/class-art-assignment.server';
-
-type ClassRow = TeacherClassCardData & ClassManageRow;
+import { pickClassArtKeyForOrganization } from '~/utils/class-art-assignment.server';
 
 async function getTeacherSchoolIds(membershipId: string) {
   const teacher = await prisma.orgMembership.findUnique({
@@ -57,6 +53,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         title: true,
         code: true,
         classArtIndex: true,
+        classArtKey: true,
         school: { select: { id: true, name: true } },
         _count: { select: { students: true, classAssignments: true } },
       },
@@ -97,6 +94,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const stats = classStats.find((s) => s.classId === klass.id);
     return {
       ...klass,
+      legacyClassArtIndex: klass.classArtIndex,
       stats,
       _count: {
         students: klass._count.students,
@@ -164,9 +162,9 @@ export async function action({ request }: ActionFunctionArgs) {
           title,
           code,
           cardGradientKey: generateClassCardGradientKey(code),
-          classArtIndex: await pickClassArtIndexForTeachers([
-            profile.id,
-          ]),
+          classArtKey: await pickClassArtKeyForOrganization(
+            profile.organization.id
+          ),
           teachers: { connect: [{ id: profile.id }] },
         },
       });
@@ -259,19 +257,12 @@ export default function MyClassesRoute() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSchoolId = searchParams.get('school') ?? 'all';
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
 
   const filteredClasses = data.classes.filter((klass) =>
     selectedSchoolId === 'all' ? true : klass.school?.id === selectedSchoolId
   );
 
   const openCreate = () => {
-    setEditingClass(null);
-    setSheetOpen(true);
-  };
-
-  const openEdit = (klass: ClassRow) => {
-    setEditingClass(klass);
     setSheetOpen(true);
   };
 
@@ -327,12 +318,7 @@ export default function MyClassesRoute() {
         {filteredClasses.length ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {filteredClasses.map((klass) => (
-              <TeacherClassCard
-                key={klass.id}
-                klass={klass}
-                showManageActions
-                onEdit={() => openEdit(klass)}
-              />
+              <TeacherClassCard key={klass.id} klass={klass} />
             ))}
           </div>
         ) : (
@@ -353,7 +339,7 @@ export default function MyClassesRoute() {
       <ClassManageSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        editingClass={editingClass}
+        editingClass={null}
         schools={data.manageSchools}
       />
     </section>

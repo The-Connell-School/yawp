@@ -23,6 +23,10 @@ function shellEscape(value: string) {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
+export function getDockerPostgresReadyCommand(pgUser: string) {
+  return `docker exec ${CONTAINER_NAME} pg_isready -h 127.0.0.1 -p 5432 -U ${shellEscape(pgUser)}`;
+}
+
 function dockerAvailable() {
   try {
     execSync('docker ps -q', { stdio: 'ignore' });
@@ -71,7 +75,7 @@ function startDockerPostgres(params: {
 async function waitForDockerPostgresReady(pgUser: string) {
   for (let i = 0; i < 60; i++) {
     try {
-      run(`docker exec ${CONTAINER_NAME} pg_isready -U ${shellEscape(pgUser)}`);
+      run(getDockerPostgresReadyCommand(pgUser));
       return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 1000));

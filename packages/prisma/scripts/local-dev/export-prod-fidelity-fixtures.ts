@@ -28,13 +28,11 @@ export async function exportProdFidelityFixtures(
   sourceDatabaseUrl: string
 ): Promise<ProdFidelityBundle> {
   const [
-    gradingAssistantTemplates,
     assignmentTypes,
     assignmentTypeImagesRaw,
     assignmentModules,
     assignmentModuleInstructions,
     assignmentModuleInstructionButtons,
-    assignmentTypeGradingAssistants,
     teacherTrainings,
     teacherTrainingImagesRaw,
     teacherTrainingModules,
@@ -43,7 +41,6 @@ export async function exportProdFidelityFixtures(
     apHistoryPromptLibraryEntries,
     apHistoryPromptLibrarySources,
   ] = await Promise.all([
-    prisma.gradingAssistantTemplate.findMany(),
     prisma.assignmentType.findMany({ orderBy: { position: 'asc' } }),
     prisma.assignmentTypeImage.findMany(),
     prisma.assignmentModule.findMany({ orderBy: [{ assignmentTypeId: 'asc' }, { position: 'asc' }] }),
@@ -53,7 +50,6 @@ export async function exportProdFidelityFixtures(
     prisma.assignmentModuleInstructionButton.findMany({
       orderBy: [{ assignmentModuleInstructionId: 'asc' }, { position: 'asc' }],
     }),
-    prisma.assignmentTypeGradingAssistant.findMany(),
     prisma.teacherTraining.findMany({ orderBy: { position: 'asc' } }),
     prisma.teacherTrainingImage.findMany(),
     prisma.teacherTrainingModule.findMany({
@@ -95,13 +91,11 @@ export async function exportProdFidelityFixtures(
     exportedAt: new Date().toISOString(),
     sourceDatabaseUrl,
     counts: {
-      gradingAssistantTemplates: gradingAssistantTemplates.length,
       assignmentTypes: assignmentTypes.length,
       assignmentTypeImages: assignmentTypeImages.length,
       assignmentModules: assignmentModules.length,
       assignmentModuleInstructions: assignmentModuleInstructions.length,
       assignmentModuleInstructionButtons: assignmentModuleInstructionButtons.length,
-      assignmentTypeGradingAssistants: assignmentTypeGradingAssistants.length,
       teacherTrainings: teacherTrainings.length,
       teacherTrainingImages: teacherTrainingImages.length,
       teacherTrainingModules: teacherTrainingModules.length,
@@ -114,9 +108,6 @@ export async function exportProdFidelityFixtures(
 
   return {
     manifest,
-    gradingAssistantTemplates: gradingAssistantTemplates.map((row) =>
-      serializeRow(row as unknown as Record<string, unknown>)
-    ),
     assignmentTypes: assignmentTypes.map((row) =>
       serializeRow(row as unknown as Record<string, unknown>)
     ),
@@ -129,9 +120,6 @@ export async function exportProdFidelityFixtures(
     ),
     assignmentModuleInstructionButtons: assignmentModuleInstructionButtons.map(
       (row) => serializeRow(row as unknown as Record<string, unknown>)
-    ),
-    assignmentTypeGradingAssistants: assignmentTypeGradingAssistants.map((row) =>
-      serializeRow(row as unknown as Record<string, unknown>)
     ),
     teacherTrainings: teacherTrainings.map((row) =>
       serializeRow(row as unknown as Record<string, unknown>)
@@ -157,7 +145,6 @@ export async function writeProdFidelityBundle(bundle: ProdFidelityBundle) {
   await mkdir(FIXTURE_DIR, { recursive: true });
   const files: Array<[string, unknown]> = [
     ['manifest.json', bundle.manifest],
-    ['grading-assistant-templates.json', bundle.gradingAssistantTemplates],
     ['assignment-types.json', bundle.assignmentTypes],
     ['assignment-type-images.json', bundle.assignmentTypeImages],
     ['assignment-modules.json', bundle.assignmentModules],
@@ -165,10 +152,6 @@ export async function writeProdFidelityBundle(bundle: ProdFidelityBundle) {
     [
       'assignment-module-instruction-buttons.json',
       bundle.assignmentModuleInstructionButtons,
-    ],
-    [
-      'assignment-type-grading-assistants.json',
-      bundle.assignmentTypeGradingAssistants,
     ],
     ['teacher-trainings.json', bundle.teacherTrainings],
     ['teacher-training-images.json', bundle.teacherTrainingImages],

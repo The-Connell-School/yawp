@@ -19,6 +19,8 @@
     "seed-ap-history-library": "bun run scripts/seed-ap-history-library.ts",
     "seed-local-dev": "bun run scripts/seed-local-dev.ts",
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
+    "assignment-type-release-gate": "bun run scripts/assignment-type-release-gate.ts",
+    "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",
     "org-membership:precheck": "bun run scripts/org-membership-precheck.ts",
     "org-membership:postcheck": "bun run scripts/org-membership-postcheck.ts",
     "org-membership:staging-verify": "bun run scripts/org-membership-staging-verify.ts",

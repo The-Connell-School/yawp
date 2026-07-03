@@ -38,11 +38,6 @@ import {
 } from '~/utils/assignment-type-access.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import {
-  getAssignmentCreationStandardizationEnabledClassIdsForContext,
-  getAssignmentsEnabledClassIdsForContext,
-  isApHistoryEssayEnabledForContext,
-} from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApHistoryLibrary } from './ap-history-library';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
@@ -263,7 +258,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submissions: {
           where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
             score: true,
@@ -271,6 +265,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             numericPercentage: true,
             letterGrade: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -294,7 +289,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         submissions: {
           where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
-          take: 1,
           select: {
             id: true,
             score: true,
@@ -302,6 +296,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             numericPercentage: true,
             letterGrade: true,
             releasedAt: true,
+            submittedAt: true,
           },
         },
       },
@@ -374,65 +369,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         }
       : null;
   const enabledTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(
-        await getAssignmentsEnabledClassIdsForContext({
-          organizationId: profile.organization.id,
-          teacherProfileId: profile.id,
-          classes: teacherClasses.map((klass) => ({
-            id: klass.id,
-            organizationId: klass.school.organizationId,
-            schoolId: klass.school.id,
-            teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
-          })),
-        })
-      )
+    ? new Set(teacherClasses.map((klass) => klass.id))
     : new Set<string>();
   const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
-    ? teacherClasses.filter((klass) => enabledTeacherClassIds.has(klass.id))
+    ? teacherClasses
     : [];
-  const standardizedTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(
-        await getAssignmentCreationStandardizationEnabledClassIdsForContext({
-          organizationId: profile.organization.id,
-          teacherProfileId: profile.id,
-          classes: assignmentEnabledTeacherClasses.map((klass) => ({
-            id: klass.id,
-            organizationId: klass.school.organizationId,
-            schoolId: klass.school.id,
-            teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
-          })),
-        })
-      )
-    : new Set<string>();
-  const standardizedTeacherClasses = assignmentEnabledTeacherClasses.filter(
-    (klass) => standardizedTeacherClassIds.has(klass.id)
-  );
-  const assignmentCreationStandardizationEnabled =
-    standardizedTeacherClasses.length > 0;
   let apHistoryLibrary = null;
   if (profile.role === "TEACHER" && isApHistory) {
-    const teacherProfileId = profile.id;
-    const apClassEligibility = await Promise.all(
-      assignmentEnabledTeacherClasses.map(async (klass) => {
-        const apHistoryEnabled = await isApHistoryEssayEnabledForContext({
-          organizationId: profile.organization.id,
-          schoolIds: [klass.school.id],
-          teacherProfileId,
-          teacherProfileIds: klass.teachers.map((teacher) => teacher.id),
-          classIds: [klass.id],
-        });
-
-        return apHistoryEnabled ? klass : null;
-      })
-    );
-    const apEligibleClasses = apClassEligibility.filter(
-      (klass) => klass != null
-    );
-
-    if (apEligibleClasses.length > 0) {
+    if (assignmentEnabledTeacherClasses.length > 0) {
       apHistoryLibrary = {
         entries: await listApHistoryLibraryEntries(assignmentType.id),
-        teacherClasses: apEligibleClasses,
+        teacherClasses: assignmentEnabledTeacherClasses,
       };
     }
   }
@@ -441,12 +388,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentType,
     documents,
     archivedDocuments,
-    teacherClasses: isApHistory
-      ? assignmentEnabledTeacherClasses
-      : assignmentCreationStandardizationEnabled
-      ? standardizedTeacherClasses
-      : assignmentEnabledTeacherClasses,
-    assignmentCreationStandardizationEnabled,
+    teacherClasses: assignmentEnabledTeacherClasses,
     promptLibrary,
     apHistoryLibrary,
   });
@@ -602,9 +544,6 @@ export default function AppAssignmentTypesIdRoute() {
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
                 teacherClasses={assignmentSheetClasses}
-                assignmentCreationStandardizationEnabled={
-                  data.assignmentCreationStandardizationEnabled
-                }
                 open={isAssignmentSheetOpen}
                 onOpenChange={setIsAssignmentSheetOpen}
                 initialPrompt={libraryPrompt}

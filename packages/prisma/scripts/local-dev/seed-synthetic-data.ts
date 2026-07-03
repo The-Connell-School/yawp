@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
+import { getClassArtByIndex } from '../../../services/web-app/app/utils/class-art.ts';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
@@ -125,12 +126,13 @@ export async function seedSyntheticLocalDevData(
       period: '3',
       grade: '10',
       title: 'English 10 - Period 3',
-      classArtIndex: 2,
+      classArtKey: getClassArtByIndex(2).key,
       schoolId: schools[0].id,
       teachers: {
         connect: [
           { id: primaryTeacher.membershipId },
           { id: ownerTeacher.membershipId },
+          { id: multiTeacher.membershipId },
         ],
       },
       students: {
@@ -146,7 +148,7 @@ export async function seedSyntheticLocalDevData(
       period: '5',
       grade: '11',
       title: 'English 11 - Period 5',
-      classArtIndex: 5,
+      classArtKey: getClassArtByIndex(5).key,
       schoolId: schools[1].id,
       teachers: {
         connect: [
@@ -425,34 +427,6 @@ export async function seedSyntheticLocalDevData(
       excerpt: 'The first sentence matters',
       occurrence: 1,
     },
-  });
-
-  await prisma.setting.createMany({
-    data: [
-      {
-        name: 'document_submission_enabled',
-        value: 'true',
-        valueType: 'boolean',
-        description: 'Allow students to submit documents for grading',
-      },
-      {
-        name: 'document_submission_enabled_school_ids',
-        value: schools.map((school) => school.id).join(','),
-        valueType: 'string',
-        description: 'Schools enabled for document submission',
-      },
-      {
-        name: 'assignments_enabled_org_ids',
-        value: LOCAL_DEV_ORG_ID,
-        valueType: 'string',
-        description: 'Organizations enabled for assignments',
-      },
-      {
-        name: 'feature_assignment_creation_standardization',
-        value: 'true',
-        valueType: 'boolean',
-      },
-    ],
   });
 
   return {

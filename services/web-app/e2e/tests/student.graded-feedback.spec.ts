@@ -1,6 +1,43 @@
 import { test, expect } from '../test-setup';
 
 test.describe.serial('Student reads teacher feedback on a released grade', () => {
+  test('dashboard document card opens the graded submission', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByRole('link', { name: /graded document/i }).click();
+    await page.waitForURL(`**/app/submissions/${e2eContext.gradeId}**`, {
+      timeout: 15000,
+    });
+
+    await expect(
+      page.locator('nav').getByText('Graded', { exact: true })
+    ).toBeVisible();
+  });
+
+  test('direct document url redirects student to released submission', async ({
+    page,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto(
+      `/app/documents/${e2eContext.gradedDocumentId}?ssv=1&exitTo=%2Fapp`
+    );
+    await page.waitForURL(`**/app/submissions/${e2eContext.gradeId}**`, {
+      timeout: 15000,
+    });
+
+    await expect(
+      page.locator('nav').getByText('Graded', { exact: true })
+    ).toBeVisible();
+  });
+
   test('graded submission page shows grade, overall comment, rubric, and inline comments', async ({
     page,
     signIn,

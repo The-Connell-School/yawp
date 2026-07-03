@@ -1,7 +1,5 @@
 import { type ActionFunctionArgs } from 'react-router';
 import { prisma } from '~/utils/db.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -97,24 +95,6 @@ export async function action({ request }: ActionFunctionArgs) {
   ) {
     return Response.json(
       { success: false, message: 'You cannot grade your own submission.' },
-      { status: 403 }
-    );
-  }
-
-  const isSubmissionGradingEnabled = await isDocumentSubmissionEnabledForScope({
-    ...getDocumentSubmissionScope({
-      classAssignment: submission.document.classAssignment,
-      membership: submission.document.membership,
-    }),
-    actorTeacherProfileId: actor.teacherProfileId,
-  });
-  if (!isSubmissionGradingEnabled) {
-    return Response.json(
-      {
-        success: false,
-        message:
-          'Document submission grading is currently disabled for this school.',
-      },
       { status: 403 }
     );
   }

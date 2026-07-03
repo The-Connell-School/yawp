@@ -49,8 +49,6 @@ const requireUserId = mock();
 const requireMembership = mock();
 const requireMutableRequest = mock();
 const redirectWithToast = mock();
-const isAssignmentsEnabledForContext = mock();
-const isDocumentSubmissionEnabledForScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -60,10 +58,6 @@ mock.module('~/utils/auth.server', () => ({
 }));
 mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  isAssignmentsEnabledForContext,
-  isDocumentSubmissionEnabledForScope,
 }));
 
 mock.module('./comments', () => ({ Comments: () => null }));
@@ -172,7 +166,6 @@ function makeDocument({
       id: 'assignment-1',
       title: 'Revolutionary Ideals DBQ',
       prompt: apHistorySnapshot.prompt,
-      tutorContext: 'Use AP History DBQ expectations.',
       ...(includeSnapshot ? { apHistorySnapshot } : {}),
     },
     classAssignment: {
@@ -199,6 +192,11 @@ function makeDocument({
       userId: 'user-1',
       user: { name: 'Student One' },
     },
+    membership: {
+      id: 'profile-1',
+      userId: 'user-1',
+      user: { name: 'Student One' },
+    },
     assignmentModuleSessions: assignmentModuleSessions ?? [
       makeModuleSession({
         id: 'cms-1',
@@ -220,8 +218,6 @@ describe('app_.documents_.$id loader', () => {
     requireMembership.mockReset();
     requireMutableRequest.mockReset();
     redirectWithToast.mockReset();
-    isAssignmentsEnabledForContext.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMutableRequest.mockResolvedValue(undefined);
@@ -243,8 +239,6 @@ describe('app_.documents_.$id loader', () => {
       redirectedTo: url,
       toast,
     }));
-    isAssignmentsEnabledForContext.mockResolvedValue(true);
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
   });
 
   test('selects and returns immutable AP History assignment snapshots', async () => {

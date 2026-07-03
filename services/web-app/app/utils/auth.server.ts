@@ -48,6 +48,7 @@ const mutationSafeMethods = new Set(['GET', 'HEAD', 'OPTIONS']);
 const readOnlySessionAllowedMutationPaths = new Set([
   '/auth/logout',
   '/api/preferences/nav',
+  '/api/preferences/contrast',
   '/api/preferences/submitted-papers-filter',
   '/api/membership-id',
   '/api/student-preview',

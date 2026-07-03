@@ -18,6 +18,7 @@ import {
   TableRow,
 } from '~/components/ui/table';
 import { Checkbox } from '~/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group';
 import { requireMembership, requireOwner } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -55,7 +56,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       : {}),
   } as const;
 
-  const [schools, teachers] = await Promise.all([
+  const [schools, teachers, assignmentTypes, orgAssignmentTypeIds] =
+    await Promise.all([
     prisma.school.findMany({
       where,
       include: {
@@ -63,6 +65,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
           include: {
             user: true,
           },
+        },
+        assignmentTypeAssignments: {
+          select: { assignmentTypeId: true },
         },
         _count: {
           select: {
@@ -88,11 +93,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
     }),
+    prisma.assignmentType.findMany({
+      where: { archivedAt: null },
+      select: { id: true, title: true },
+      orderBy: { position: 'asc' },
+    }),
+    prisma.organizationAssignmentType.findMany({
+      where: { organizationId: profile.organization.id },
+      select: { assignmentTypeId: true },
+    }),
   ]);
 
   return dataResponse({
     schools,
     teachers,
+    assignmentTypes,
+    orgAssignmentTypeIds: orgAssignmentTypeIds.map(
+      (assignment) => assignment.assignmentTypeId
+    ),
     q,
   });
 }
@@ -107,6 +125,16 @@ export async function action({ request }: ActionFunctionArgs) {
     const name = formData.get('name') as string;
     const code = formData.get('code') as string;
     const teacherIds = formData.getAll('teacherIds') as string[];
+    const assignmentTypesCustomized =
+      formData.get('assignmentTypesCustomized') === 'true';
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
 
     if (!name || !code) {
       return dataResponse(
@@ -121,9 +149,22 @@ export async function action({ request }: ActionFunctionArgs) {
           name: name.trim(),
           code: code.trim().toUpperCase(),
           organizationId: profile.organization.id,
+          assignmentTypesCustomized,
           teachers: {
             connect: teacherIds.map((id) => ({ id })),
           },
+          ...(assignmentTypesCustomized && assignmentTypeIds.length > 0
+            ? {
+                assignmentTypeAssignments: {
+                  createMany: {
+                    data: assignmentTypeIds.map((assignmentTypeId) => ({
+                      assignmentTypeId,
+                    })),
+                    skipDuplicates: true,
+                  },
+                },
+              }
+            : {}),
         },
       });
 
@@ -144,6 +185,16 @@ export async function action({ request }: ActionFunctionArgs) {
     const name = formData.get('name') as string;
     const code = formData.get('code') as string;
     const teacherIds = formData.getAll('teacherIds') as string[];
+    const assignmentTypesCustomized =
+      formData.get('assignmentTypesCustomized') === 'true';
+    const assignmentTypeIds = Array.from(
+      new Set(
+        formData
+          .getAll('assignmentTypeIds')
+          .map((value) => value.toString())
+          .filter(Boolean)
+      )
+    );
 
     if (!schoolId || !name || !code) {
       return dataResponse(
@@ -161,16 +212,33 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     try {
-      await prisma.school.update({
-        where: { id: schoolId },
-        data: {
-          name: name.trim(),
-          code: code.trim().toUpperCase(),
-          teachers: {
-            set: teacherIds.map((id) => ({ id })),
+      await prisma.$transaction([
+        prisma.school.update({
+          where: { id: schoolId },
+          data: {
+            name: name.trim(),
+            code: code.trim().toUpperCase(),
+            assignmentTypesCustomized,
+            teachers: {
+              set: teacherIds.map((id) => ({ id })),
+            },
           },
-        },
-      });
+        }),
+        prisma.schoolAssignmentType.deleteMany({
+          where: { schoolId },
+        }),
+        ...(assignmentTypesCustomized && assignmentTypeIds.length > 0
+          ? [
+              prisma.schoolAssignmentType.createMany({
+                data: assignmentTypeIds.map((assignmentTypeId) => ({
+                  schoolId,
+                  assignmentTypeId,
+                })),
+                skipDuplicates: true,
+              }),
+            ]
+          : []),
+      ]);
 
       return dataResponse({ success: true });
     } catch (error: any) {
@@ -233,7 +301,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OrganizationSchoolsRoute() {
-  const { schools, teachers, q } = useLoaderData<typeof loader>();
+  const { schools, teachers, assignmentTypes, orgAssignmentTypeIds, q } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -390,6 +459,10 @@ export default function OrganizationSchoolsRoute() {
         onOpenChange={setSheetOpen}
         editingSchool={editingSchool}
         teachers={teachers}
+        assignmentTypes={assignmentTypes.filter((type) =>
+          orgAssignmentTypeIds.includes(type.id)
+        )}
+        orgAssignmentTypeIds={orgAssignmentTypeIds}
       />
     </div>
   );
@@ -428,17 +501,27 @@ function SchoolSheet({
   onOpenChange,
   editingSchool,
   teachers,
+  assignmentTypes,
+  orgAssignmentTypeIds,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingSchool: any | null;
   teachers: any[];
+  assignmentTypes: Array<{ id: string; title: string }>;
+  orgAssignmentTypeIds: string[];
 }) {
   const fetcherKey = editingSchool ? `edit-${editingSchool.id}` : 'create';
   const fetcher = useFetcher({ key: fetcherKey });
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [selectedTeachers, setSelectedTeachers] = useState<string[]>([]);
+  const [assignmentTypesMode, setAssignmentTypesMode] = useState<
+    'inherit' | 'customize'
+  >('inherit');
+  const [selectedAssignmentTypes, setSelectedAssignmentTypes] = useState<
+    string[]
+  >([]);
 
   useEffect(() => {
     setName(editingSchool?.name || '');
@@ -448,7 +531,26 @@ function SchoolSheet({
       setCode(Math.random().toString(36).substring(2, 10).toUpperCase());
     }
     setSelectedTeachers(editingSchool?.teachers?.map((t: any) => t.id) || []);
-  }, [editingSchool, open]);
+    if (editingSchool?.assignmentTypesCustomized) {
+      setAssignmentTypesMode('customize');
+      setSelectedAssignmentTypes(
+        editingSchool.assignmentTypeAssignments?.map(
+          (assignment: { assignmentTypeId: string }) =>
+            assignment.assignmentTypeId
+        ) || []
+      );
+    } else {
+      setAssignmentTypesMode('inherit');
+      setSelectedAssignmentTypes(orgAssignmentTypeIds);
+    }
+  }, [editingSchool, open, orgAssignmentTypeIds]);
+
+  const handleAssignmentTypesModeChange = (mode: 'inherit' | 'customize') => {
+    setAssignmentTypesMode(mode);
+    if (mode === 'customize') {
+      setSelectedAssignmentTypes(orgAssignmentTypeIds);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -459,9 +561,18 @@ function SchoolSheet({
     }
     formData.append('name', name);
     formData.append('code', code);
+    formData.append(
+      'assignmentTypesCustomized',
+      assignmentTypesMode === 'customize' ? 'true' : 'false'
+    );
     selectedTeachers.forEach((teacherId) => {
       formData.append('teacherIds', teacherId);
     });
+    if (assignmentTypesMode === 'customize') {
+      selectedAssignmentTypes.forEach((assignmentTypeId) => {
+        formData.append('assignmentTypeIds', assignmentTypeId);
+      });
+    }
     fetcher.submit(formData, { method: 'POST' });
   };
 
@@ -565,6 +676,84 @@ function SchoolSheet({
                 ? `${selectedTeachers.length} teacher${selectedTeachers.length !== 1 ? 's' : ''} selected`
                 : 'Select teachers to assign to this school'}
             </p>
+          </div>
+
+          <div className="space-y-2" data-testid="school-assignment-types-manager">
+            <Label>Assignment Types</Label>
+            <RadioGroup
+              value={assignmentTypesMode}
+              onValueChange={(value) =>
+                handleAssignmentTypesModeChange(value as 'inherit' | 'customize')
+              }
+              className="grid gap-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="inherit" id="school-assignment-inherit" />
+                <Label
+                  htmlFor="school-assignment-inherit"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Inherit from organization
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem
+                  value="customize"
+                  id="school-assignment-customize"
+                />
+                <Label
+                  htmlFor="school-assignment-customize"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Customize for this school
+                </Label>
+              </div>
+            </RadioGroup>
+            {assignmentTypesMode === 'customize' ? (
+              <div className="rounded-md border border-input bg-background">
+                <div className="max-h-[200px] overflow-y-auto p-3 space-y-2">
+                  {assignmentTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No assignment types available for this organization
+                    </p>
+                  ) : (
+                    assignmentTypes.map((assignmentType) => (
+                      <div
+                        key={assignmentType.id}
+                        className="flex items-center space-x-2"
+                      >
+                        <Checkbox
+                          id={`assignment-type-${assignmentType.id}`}
+                          checked={selectedAssignmentTypes.includes(
+                            assignmentType.id
+                          )}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedAssignmentTypes([
+                                ...selectedAssignmentTypes,
+                                assignmentType.id,
+                              ]);
+                            } else {
+                              setSelectedAssignmentTypes(
+                                selectedAssignmentTypes.filter(
+                                  (id) => id !== assignmentType.id
+                                )
+                              );
+                            }
+                          }}
+                        />
+                        <Label
+                          htmlFor={`assignment-type-${assignmentType.id}`}
+                          className="text-sm font-normal cursor-pointer flex-1"
+                        >
+                          {assignmentType.title}
+                        </Label>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex gap-2 pt-4">

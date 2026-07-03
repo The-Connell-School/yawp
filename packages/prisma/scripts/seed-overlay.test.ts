@@ -11,6 +11,11 @@ describe('isLocalDatabaseUrl', () => {
   test('treats preview PR-scoped Postgres hostnames as local non-TLS Postgres', () => {
     expect(
       isLocalDatabaseUrl(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_184',
+      ),
+    ).toBe(true);
+    expect(
+      isLocalDatabaseUrl(
         'postgresql://postgres:postgres@yawp-pr-153-postgres-1:5432/yawp_preview',
       ),
     ).toBe(true);

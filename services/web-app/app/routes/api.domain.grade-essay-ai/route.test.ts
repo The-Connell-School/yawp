@@ -6,8 +6,8 @@ const prisma = {
     findFirst: mock(),
     update: mock(),
   },
-  assignmentTypeGradingAssistant: {
-    findFirst: mock(),
+  assignmentType: {
+    findUnique: mock(),
   },
   submissionGradingAssistantRun: {
     create: mock(),
@@ -15,7 +15,6 @@ const prisma = {
 };
 
 const getLLMCompletion = mock();
-const isDocumentSubmissionEnabledForScope = mock();
 const getGradingActor = mock();
 const canManageGrades = mock();
 const buildTeacherClassWhere = mock();
@@ -29,9 +28,6 @@ mock.module('~/utils/getLLMCompletion', () => ({
     User: 'user',
   },
   getLLMCompletion,
-}));
-mock.module('~/utils/feature-flags.server', () => ({
-  isDocumentSubmissionEnabledForScope,
 }));
 mock.module('~/utils/grading-auth.server', () => ({
   getGradingActor,
@@ -100,6 +96,23 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
         user: { name: 'Jordan Student' },
       },
     },
+    ...overrides,
+  };
+}
+
+function mockAssignmentType(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'assignment-type-legacy',
+    title: 'Critical Essay',
+    kind: null,
+    scoringScaleJson: null,
+    rubricJson: null,
+    gradingPromptConfigJson: null,
+    gradingOutputSchemaJson: null,
+    gradingCalibrationNotes: null,
+    gradingAssistantVersion: 1,
+    gradingAssistantSourceTemplateId: null,
+    gradingAssistantSourceTemplateSlug: null,
     ...overrides,
   };
 }
@@ -175,10 +188,9 @@ describe('api.domain.grade-essay-ai', () => {
   beforeEach(() => {
     prisma.submission.findFirst.mockReset();
     prisma.submission.update.mockReset();
-    prisma.assignmentTypeGradingAssistant.findFirst.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
     prisma.submissionGradingAssistantRun.create.mockReset();
     getLLMCompletion.mockReset();
-    isDocumentSubmissionEnabledForScope.mockReset();
     getGradingActor.mockReset();
     canManageGrades.mockReset();
     buildTeacherClassWhere.mockReset();
@@ -196,10 +208,9 @@ describe('api.domain.grade-essay-ai', () => {
     isGradingOwnDocument.mockImplementation(
       (actorId: string, docProfileId: string) => actorId === docProfileId
     );
-    isDocumentSubmissionEnabledForScope.mockResolvedValue(true);
     redirectWithToast.mockResolvedValue(new Response(null, { status: 302 }));
     prisma.submission.update.mockResolvedValue({ id: 'sub-1' });
-    prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue(null);
+    prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType());
     prisma.submissionGradingAssistantRun.create.mockResolvedValue({
       id: 'ga-run-1',
     });
@@ -245,31 +256,84 @@ describe('api.domain.grade-essay-ai', () => {
     );
     expect(Object.keys(payload.rubricScores ?? {})).toEqual(rubricKeys);
     expect(prisma.submission.update).toHaveBeenCalledTimes(1);
-    expect(prisma.assignmentTypeGradingAssistant.findFirst).toHaveBeenCalledWith(
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          assignmentTypeId: 'assignment-type-legacy',
-          isDefault: true,
-          gradingAssistantTemplate: { status: 'active' },
-        }),
+        where: { id: 'assignment-type-legacy' },
       })
     );
     expect(prisma.submission.update.mock.calls[0]?.[0].data.aiMeta).toMatchObject({
-      gradingAssistantTemplateId: 'gait_thesis_current_v1',
-      gradingAssistantTemplateVersion: 1,
-      gradingAssistantTemplateSlug: 'thesis-driven-essay-current',
-      gradingAssistantSource: 'legacy-fallback',
+      gradingConfigSource: 'thesis-default',
+      assignmentTypeRubricSource: 'thesis-default',
+      assignmentTypeGradingVersion: 1,
+      assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
+      gradingAssistantStrictnessLevel: 'intermediate',
       assignmentTypeId: 'assignment-type-legacy',
       assignmentTypeKind: null,
+      rubricCategoryKeys: rubricKeys,
+      documentContext: {
+        documentSource: 'submission-snapshot',
+        documentId: 'doc-1',
+        submissionId: 'sub-1',
+        documentTextLength: 20,
+        documentTextSha256:
+          '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+      },
     });
     expect(
       prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0].data
     ).toMatchObject({
       submissionId: 'sub-1',
-      gradingAssistantTemplateId: 'gait_thesis_current_v1',
-      templateVersion: 1,
-      source: 'legacy-fallback',
+      assignmentTypeId: 'assignment-type-legacy',
+      assignmentTypeGradingVersion: 1,
+      source: 'thesis-default',
       status: 'succeeded',
+      assignmentTypePromptConfigSnapshot: {
+        instructionsPreset: 'legacy_thesis_driven_essay',
+      },
+      metadata: {
+        assignmentTypeGradingLabel: 'Thesis-driven essay grading assistant',
+        assignmentTypeRubricSource: 'thesis-default',
+        gradingAssistantStrictnessLevel: 'intermediate',
+        rubricCategoryKeys: rubricKeys,
+        documentContext: {
+          documentSource: 'submission-snapshot',
+          documentId: 'doc-1',
+          submissionId: 'sub-1',
+          documentTextLength: 20,
+          documentTextSha256:
+            '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+        },
+      },
+    });
+
+    expect(getLLMCompletion.mock.calls[0]?.[0].metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'rubric-evaluation',
+      gradingConfigSource: 'thesis-default',
+      assignmentTypeRubricSource: 'thesis-default',
+      assignmentTypeGradingVersion: 1,
+      assignmentTypeId: 'assignment-type-legacy',
+      rubricCategoryKeys: rubricKeys,
+      documentSource: 'submission-snapshot',
+      documentId: 'doc-1',
+      submissionId: 'sub-1',
+      documentTextLength: 20,
+      documentTextSha256:
+        '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
+    });
+    expect(getLLMCompletion.mock.calls[1]?.[0].metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'grammar-issues',
+      assignmentTypeRubricSource: 'thesis-default',
+      assignmentTypeGradingVersion: 1,
+      assignmentTypeId: 'assignment-type-legacy',
+      rubricCategoryKeys: rubricKeys,
+      documentSource: 'submission-snapshot',
+      documentId: 'doc-1',
+      submissionId: 'sub-1',
+      documentTextLength: 20,
+      documentTextSha256:
+        '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
     });
   });
 
@@ -370,58 +434,6 @@ describe('api.domain.grade-essay-ai', () => {
     );
   });
 
-  test('checks the document submission flag through student classes for legacy submissions', async () => {
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({
-        id: 'legacy-sub-1',
-        document: {
-          id: 'legacy-doc-1',
-          membershipId: 'student-profile-1',
-          assignment: null,
-          membership: {
-            classesAsStudent: [
-              {
-                id: 'legacy-class-1',
-                schoolId: 'scranton-prep-school',
-                school: { organizationId: 'scranton-org' },
-                teachers: [{ id: 'teacher-1' }],
-              },
-            ],
-            user: { name: 'Jordan Student' },
-          },
-        },
-      })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'legacy-sub-1');
-
-    await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-
-    expect(isDocumentSubmissionEnabledForScope).toHaveBeenCalledWith({
-      schoolIds: ['scranton-prep-school'],
-      organizationIds: ['scranton-org'],
-      classIds: ['legacy-class-1'],
-      teacherProfileIds: ['teacher-1'],
-      classScopes: [
-        {
-          schoolId: 'scranton-prep-school',
-          organizationId: 'scranton-org',
-          classId: 'legacy-class-1',
-          teacherProfileIds: ['teacher-1'],
-        },
-      ],
-      actorTeacherProfileId: 'teacher-1',
-    });
-    expect(redirectWithToast).not.toHaveBeenCalled();
-    expect(prisma.submission.update).toHaveBeenCalledTimes(1);
-  });
-
   test('uses the updated rubric instructions in the grading prompt', async () => {
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({ id: 'sub-2' })
@@ -452,7 +464,7 @@ describe('api.domain.grade-essay-ai', () => {
     );
   });
 
-  test('uses a linked ACT Writing grading assistant and records template provenance', async () => {
+  test('uses assignment-type-owned ACT Writing grading config and records snapshots', async () => {
     getLLMCompletion.mockReset();
     getLLMCompletion
       .mockResolvedValueOnce(
@@ -484,21 +496,12 @@ describe('api.domain.grade-essay-ai', () => {
         })
       )
       .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
-    prisma.assignmentTypeGradingAssistant.findFirst.mockResolvedValue({
-      id: 'link-act',
-      assignmentTypeId: 'assignment-type-act',
-      gradingAssistantTemplateId: 'template-act',
-      isDefault: true,
-      activeFrom: new Date('2026-06-01T00:00:00.000Z'),
-      activeTo: null,
-      gradingAssistantTemplate: {
-        id: 'template-act',
-        name: 'ACT Writing four-domain grader',
-        slug: 'act-writing-four-domain',
-        status: 'active',
-        version: 3,
-        assignmentTypeKind: 'act_writing',
-        scoringScale: { type: 'act_writing_2_12' },
+    prisma.assignmentType.findUnique.mockResolvedValue(
+      mockAssignmentType({
+        id: 'assignment-type-act',
+        title: 'ACT Writing',
+        kind: 'act_writing',
+        scoringScaleJson: { type: 'act_writing_2_12', minScore: 1, maxScore: 6 },
         rubricJson: {
           categories: [
             {
@@ -528,15 +531,18 @@ describe('api.domain.grade-essay-ai', () => {
             },
           ],
         },
-        promptConfigJson: {
+        gradingPromptConfigJson: {
           systemInstructions:
             'Grade this as ACT Writing with four rubric domains and no thesis-driven essay categories.',
           scoreInstructions: 'Scores must be integers 1-6 for each ACT domain.',
         },
-        outputSchemaJson: { schemaVersion: 1 },
-        calibrationNotes: 'Pilot ACT template.',
-      },
-    });
+        gradingOutputSchemaJson: { schemaVersion: 1 },
+        gradingCalibrationNotes: 'Pilot ACT template.',
+        gradingAssistantVersion: 3,
+        gradingAssistantSourceTemplateId: 'template-act',
+        gradingAssistantSourceTemplateSlug: 'act-writing-four-domain',
+      })
+    );
     prisma.submission.findFirst.mockResolvedValue(
       mockSubmission({
         id: 'sub-act',
@@ -548,6 +554,10 @@ describe('api.domain.grade-essay-ai', () => {
             id: 'assignment-type-act',
             kind: 'act_writing',
             title: 'Renamed ACT demo title',
+          },
+          assignment: {
+            id: 'assignment-act',
+            gradingAssistantStrictnessLevel: 'advanced',
           },
           classAssignment: { class: { schoolId: 'school-1' } },
           membership: {
@@ -576,6 +586,12 @@ describe('api.domain.grade-essay-ai', () => {
 
     expect(payload.success).toBe(true);
     expect(prompt).toContain('ACT Writing');
+    expect(prompt).toContain('Assignment type grading config: ACT Writing');
+    expect(prompt).not.toContain('Grading assistant template:');
+    expect(prompt).toContain('Grading assistant strictness: Advanced');
+    expect(prompt).toContain(
+      'Hold the student to an advanced standard for this rubric'
+    );
     expect(prompt).toContain('Ideas and Analysis (25%)');
     expect(prompt).not.toContain('Thesis/Content');
     expect(Object.keys(payload.rubricScores ?? {})).toEqual([
@@ -585,18 +601,148 @@ describe('api.domain.grade-essay-ai', () => {
       'language_use_and_conventions',
     ]);
     expect(updateCall.data.aiMeta).toMatchObject({
-      gradingAssistantTemplateId: 'template-act',
-      gradingAssistantTemplateVersion: 3,
-      gradingAssistantTemplateSlug: 'act-writing-four-domain',
-      gradingAssistantSource: 'linked',
+      gradingConfigSource: 'assignment-type',
+      assignmentTypeRubricSource: 'assignment-type',
+      assignmentTypeGradingVersion: 3,
+      assignmentTypeGradingLabel: 'ACT Writing',
+      assignmentTypeSourceTemplateId: 'template-act',
+      assignmentTypeSourceTemplateSlug: 'act-writing-four-domain',
+      gradingAssistantStrictnessLevel: 'advanced',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
     });
     expect(runCall.data).toMatchObject({
       submissionId: 'sub-act',
-      gradingAssistantTemplateId: 'template-act',
-      templateVersion: 3,
-      source: 'linked',
+      assignmentTypeId: 'assignment-type-act',
+      assignmentTypeGradingVersion: 3,
+      source: 'assignment-type',
       status: 'succeeded',
+      assignmentTypePromptConfigSnapshot: {
+        systemInstructions:
+          'Grade this as ACT Writing with four rubric domains and no thesis-driven essay categories.',
+        scoreInstructions: 'Scores must be integers 1-6 for each ACT domain.',
+      },
     });
+    expect(runCall.data.assignmentTypeRubricSnapshot.categories).toHaveLength(4);
+    expect(runCall.data.metadata).toMatchObject({
+      assignmentTypeGradingLabel: 'ACT Writing',
+      assignmentTypeRubricSource: 'assignment-type',
+      assignmentTypeSourceTemplateSlug: 'act-writing-four-domain',
+      gradingAssistantStrictnessLevel: 'advanced',
+      assignmentId: 'assignment-act',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
+    });
+    expect(firstCallArgs?.metadata).toMatchObject({
+      assignmentTypeRubricSource: 'assignment-type',
+      assignmentTypeGradingVersion: 3,
+      assignmentTypeId: 'assignment-type-act',
+      rubricCategoryKeys: [
+        'ideas_and_analysis',
+        'development_and_support',
+        'organization',
+        'language_use_and_conventions',
+      ],
+    });
+  });
+
+  test('sends each grading assistant strictness level to the model and audit trail', async () => {
+    const cases = [
+      {
+        level: 'beginner',
+        label: 'Beginner',
+        promptText: 'Use beginner calibration.',
+      },
+      {
+        level: 'intermediate',
+        label: 'Intermediate',
+        promptText: 'Use intermediate calibration.',
+      },
+      {
+        level: 'advanced',
+        label: 'Advanced',
+        promptText: 'Use advanced calibration.',
+      },
+    ] as const;
+
+    for (const strictnessCase of cases) {
+      getLLMCompletion.mockReset();
+      prisma.submission.findFirst.mockReset();
+      prisma.submission.update.mockReset();
+      prisma.submissionGradingAssistantRun.create.mockReset();
+      prisma.assignmentType.findUnique.mockResolvedValue(mockAssignmentType());
+      prisma.submission.update.mockResolvedValue({
+        id: `sub-${strictnessCase.level}`,
+      });
+      prisma.submissionGradingAssistantRun.create.mockResolvedValue({
+        id: `ga-run-${strictnessCase.level}`,
+      });
+      getLLMCompletion
+        .mockResolvedValueOnce(buildRubricResponseJson())
+        .mockResolvedValueOnce(JSON.stringify({ issues: [] }));
+      prisma.submission.findFirst.mockResolvedValue(
+        mockSubmission({
+          id: `sub-${strictnessCase.level}`,
+          document: {
+            id: `doc-${strictnessCase.level}`,
+            membershipId: 'student-profile-1',
+            assignmentTypeId: 'assignment-type-legacy',
+            assignmentType: {
+              id: 'assignment-type-legacy',
+              kind: null,
+              title: 'Critical Essay',
+            },
+            assignment: {
+              id: `assignment-${strictnessCase.level}`,
+              gradingAssistantStrictnessLevel: strictnessCase.level,
+            },
+            classAssignment: { class: { schoolId: 'school-1' } },
+            membership: {
+              classesAsStudent: [],
+              user: { name: 'Jordan Student' },
+            },
+          },
+        })
+      );
+
+      const form = new FormData();
+      form.append('submissionId', `sub-${strictnessCase.level}`);
+
+      const response = await action({
+        request: new Request('https://example.com/api/domain/grade-essay-ai', {
+          method: 'POST',
+          body: form,
+        }),
+      } as any);
+
+      const payload = (response as { data: Record<string, unknown> }).data;
+      const prompt =
+        getLLMCompletion.mock.calls[0]?.[0]?.messages?.[0]?.content;
+      const updateCall = prisma.submission.update.mock.calls[0]?.[0];
+      const runCall =
+        prisma.submissionGradingAssistantRun.create.mock.calls[0]?.[0];
+
+      expect(payload.success).toBe(true);
+      expect(prompt).toContain(
+        `Grading assistant strictness: ${strictnessCase.label}`
+      );
+      expect(prompt).toContain(strictnessCase.promptText);
+      expect(updateCall.data.aiMeta).toMatchObject({
+        gradingAssistantStrictnessLevel: strictnessCase.level,
+      });
+      expect(runCall.data.metadata).toMatchObject({
+        assignmentId: `assignment-${strictnessCase.level}`,
+        gradingAssistantStrictnessLevel: strictnessCase.level,
+      });
+    }
   });
 
   test('returns numeric percentage using the updated category weights', async () => {
@@ -690,6 +836,12 @@ describe('api.domain.grade-essay-ai', () => {
         document: {
           id: 'ap-doc-1',
           membershipId: 'student-profile-1',
+          assignmentTypeId: 'ap-history-type',
+          assignmentType: {
+            id: 'ap-history-type',
+            kind: null,
+            title: 'AP History Essay',
+          },
           assignment: {
             apHistorySnapshot: dbqSnapshot,
             class: { schoolId: 'school-1' },
@@ -732,6 +884,29 @@ describe('api.domain.grade-essay-ai', () => {
     expect(prompt).toContain(
       'Reconstruction changed political rights through amendments and federal enforcement.'
     );
+    expect(firstCallArgs?.metadata).toMatchObject({
+      feature: 'grading',
+      kind: 'ap-history-rubric',
+      rubricId: 'ap-history-dbq-2026',
+      essayType: 'dbq',
+      assignmentTypeId: 'ap-history-type',
+      assignmentTypeRubricSource: 'ap-history-snapshot',
+      rubricCategoryKeys: [
+        'thesis',
+        'contextualization',
+        'document_use_describes',
+        'document_use_supports_argument',
+        'outside_evidence',
+        'sourcing',
+        'complexity',
+      ],
+      documentSource: 'submission-snapshot',
+      documentId: 'ap-doc-1',
+      submissionId: 'ap-sub-1',
+      documentTextLength: 83,
+      documentTextSha256:
+        '624d299a9fafbd01f2c77254380a20dfe4bf111c70eb9044456083878e6c0181',
+    });
 
     expect(prisma.submission.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -793,6 +968,14 @@ describe('api.domain.grade-essay-ai', () => {
         rubricScores: payload.rubricScores,
         aiMeta: expect.objectContaining({
           rubricMode: 'ap_history',
+          documentContext: {
+            documentSource: 'submission-snapshot',
+            documentId: 'ap-doc-1',
+            submissionId: 'ap-sub-1',
+            documentTextLength: 83,
+            documentTextSha256:
+              '624d299a9fafbd01f2c77254380a20dfe4bf111c70eb9044456083878e6c0181',
+          },
         }),
       })
     );

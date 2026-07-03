@@ -5,7 +5,16 @@ import { prisma } from '~/utils/db.server';
 import { AgentType, getLLMCompletion } from '~/utils/getLLMCompletion';
 import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import { requireMutableRequest } from '~/utils/auth.server';
-import { buildTutorSystemPrompt } from './build-system-prompt';
+import {
+  buildModuleRubricGuidance,
+  buildTutorSystemPrompt,
+} from './build-system-prompt';
+import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  buildAiContextAuditMetadata,
+  buildAiTextContextAudit,
+} from '~/utils/ai-context-audit.server';
 
 const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 
@@ -23,12 +32,21 @@ const errorResponse = (error: { message: string }) => {
   );
 };
 
-const READ_DOCUMENT_TOOL = {
-  name: 'read_student_document',
-  description:
-    "Returns the student's current document draft. Call this whenever you need to review, reference, or give feedback on the student's writing.",
-  input_schema: { type: 'object' as const, properties: {} },
-};
+function buildDocumentContextMessage({
+  documentText,
+  source,
+  sha256,
+}: {
+  documentText: string;
+  source: 'client-content' | 'db-document-text';
+  sha256: string;
+}) {
+  return [
+    `<student_document_context source="${source}" text_length="${documentText.length}" sha256="${sha256}">`,
+    documentText,
+    '</student_document_context>',
+  ].join('\n');
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireMutableRequest(request);
@@ -41,13 +59,22 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { id: data.cmsId },
       include: {
         assignmentModule: {
-          include: { instructions: { orderBy: { position: 'asc' } } },
+          include: {
+            instructions: { orderBy: { position: 'asc' } },
+            assignmentType: {
+              select: {
+                id: true,
+                gradingAssistantVersion: true,
+                rubricJson: true,
+              },
+            },
+          },
         },
         messages: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         document: {
           select: {
+            id: true,
             text: true,
-            assignment: { select: { tutorContext: true } },
           },
         },
       },
@@ -69,13 +96,41 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    const moduleRubric = parseRubric(
+      cms.assignmentModule.assignmentType?.rubricJson
+    );
+    const moduleRubricGuidance = buildModuleRubricGuidance({
+      categories: moduleRubric.categories,
+      alignment: cms.assignmentModule.rubricAlignmentJson,
+    });
+
     const system = buildTutorSystemPrompt({
       tutorInstructions: cms.assignmentModule.tutorInstructions,
       instructionTutorInstructions: instruction.tutorInstructions,
-      assignmentTutorContext: cms.document.assignment?.tutorContext,
+      moduleRubricGuidance,
     });
 
-    const documentText = data.content ?? cms.document.text;
+    const documentSource =
+      data.content === undefined ? 'db-document-text' : 'client-content';
+    const documentText = data.content ?? cms.document.text ?? '';
+    const documentContext = buildAiTextContextAudit({
+      documentSource,
+      documentId: cms.document.id,
+      text: documentText,
+    });
+    const moduleRubricRelationships = normalizeModuleRubricAlignment(
+      cms.assignmentModule.rubricAlignmentJson,
+      moduleRubric.categories
+    );
+    const aiContextMetadata = buildAiContextAuditMetadata({
+      textContext: documentContext,
+      assignmentTypeId: cms.assignmentModule.assignmentType?.id ?? null,
+      assignmentTypeRubricSource:
+        moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
+      assignmentTypeGradingVersion:
+        cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
+      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+    });
 
     const currentMessages = cms.messages.map((m) => ({
       role: m.agent as AgentType,
@@ -96,6 +151,14 @@ export async function action({ request }: ActionFunctionArgs) {
       .concat([
         {
           role: AgentType.User,
+          content: buildDocumentContextMessage({
+            documentText,
+            source: documentSource,
+            sha256: documentContext.documentTextSha256,
+          }),
+        },
+        {
+          role: AgentType.User,
           content: data.response,
         },
       ]);
@@ -110,12 +173,14 @@ export async function action({ request }: ActionFunctionArgs) {
         maxTokens: 500,
         forceFallback,
         signalFallbackRetry: !forceFallback,
-        tools: [READ_DOCUMENT_TOOL],
-        handleToolCall: async (name) => {
-          if (name === 'read_student_document') {
-            return documentText ?? '';
-          }
-          return '';
+        metadata: {
+          feature: 'tutor',
+          kind: 'assignment-module-tutor',
+          cmsId: cms.id,
+          assignmentModuleId: cms.assignmentModuleId,
+          instructionId: instruction.id,
+          ...aiContextMetadata,
+          moduleRubricRelationships,
         },
       });
     } catch (error) {

@@ -1,9 +1,5 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
-import {
-  setAssignmentsForOrganization,
-  setPilotFeatureAccessTarget,
-} from '../db-helpers';
 
 const dbqEntry = {
   externalKey: 'apush-dbq-new-deal-federal-power',
@@ -31,19 +27,6 @@ test.describe.serial('AP History library-first assignment flow', () => {
 
     try {
       expect(e2eContext.apHistoryDbqEntryKey).toBe(dbqEntry.externalKey);
-      await setAssignmentsForOrganization({
-        prisma,
-        organizationId: e2eContext.organizationId,
-        enabled: true,
-      });
-      await setPilotFeatureAccessTarget({
-        prisma,
-        featureKey: 'ap_history_essay',
-        targetKind: 'teacher',
-        targetId: e2eContext.teacherMembershipId,
-        enabled: true,
-        note: 'E2E AP History library-first teacher access',
-      });
 
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto(
@@ -112,14 +95,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
         select: {
           id: true,
           prompt: true,
-          tutorContext: true,
           apHistorySnapshot: true,
         },
       });
 
       expect(assignment).not.toBeNull();
       expect(assignment?.prompt).toBe(dbqEntry.prompt);
-      expect(assignment?.tutorContext).toBeNull();
       expect(assignment?.apHistorySnapshot).toMatchObject({
         schemaVersion: 1,
         essayType: 'dbq',

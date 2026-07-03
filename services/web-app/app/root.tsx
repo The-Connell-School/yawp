@@ -21,6 +21,10 @@ import {
   type NavState,
   navStateCookie,
 } from './routes/api.preferences.nav/cookie.server.ts';
+import {
+  type ContrastPreference,
+  contrastPreferenceCookie,
+} from './routes/api.preferences.contrast/cookie.server.ts';
 // @ts-expect-error - TODO: fix this
 import appCssUrl from './app.css?url';
 import { ClientHintCheck, getHints } from './utils/client-hints.tsx';
@@ -35,6 +39,7 @@ import { getMembershipId } from './cookies/membership-id.server.ts';
 import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.tsx';
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
+import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
 
 export const links: LinksFunction = () => {
   return [
@@ -68,6 +73,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const timings = makeTimings('root loader');
   const url = new URL(request.url);
   const publicLandingPage = url.pathname === '/' || url.pathname === '/info';
+  const cookieHeader = request.headers.get('Cookie');
+  const contrastCookie =
+    (await contrastPreferenceCookie.parse(cookieHeader)) || {};
+  const contrastPreference: ContrastPreference =
+    contrastCookie.contrast === 'high' ? 'high' : 'standard';
 
   if (publicLandingPage) {
     return data(
@@ -79,6 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           path: url.pathname,
           userPrefs: {
             navState: 'expanded' as NavState,
+            contrastPreference,
           },
         },
         ENV: getEnv(),
@@ -92,7 +103,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
 
-  const cookieHeader = request.headers.get('Cookie');
   const {
     getImpersonationState,
     getSessionExpirationDate,
@@ -158,11 +168,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const studentPreview = await getStudentPreviewState(request);
   const bannerWarning = request.url.includes('staging')
     ? ('staging' as const)
-    : request.url.includes('localhost')
+    : request.url.includes('localhost') || request.url.includes('127.0.0.1')
       ? ('localhost' as const)
       : null;
   const localDevQuickLoginEnabled =
-    isLocalDevAuthEnabled() && !userId && url.pathname === '/auth/login';
+    isLocalDevAuthEnabled() && bannerWarning === 'localhost';
 
   return data(
     {
@@ -173,6 +183,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         path: new URL(request.url).pathname,
         userPrefs: {
           navState: (navCookie.state as NavState) ?? 'expanded',
+          contrastPreference,
         },
       },
       ENV: getEnv(),
@@ -206,13 +217,19 @@ function Document({
   children,
   nonce,
   env = {},
+  contrastPreference = 'standard',
 }: {
   children: React.ReactNode;
   nonce: string;
   env?: Record<string, string | boolean | undefined>;
+  contrastPreference?: ContrastPreference;
 }) {
   return (
-    <html lang="en" className="h-full overflow-x-hidden">
+    <html
+      lang="en"
+      className="h-full overflow-x-hidden"
+      data-contrast={contrastPreference === 'high' ? 'high' : undefined}
+    >
       <head>
         <ClientHintCheck nonce={nonce} />
         <Meta />
@@ -241,6 +258,7 @@ function Document({
 
 export default function App({ loaderData: data }: Route.ComponentProps) {
   const nonce = useNonce();
+  const contrastPreference = useContrastPreference();
 
   useEffect(() => {
     function createSecureLoginMethod() {
@@ -308,7 +326,11 @@ export default function App({ loaderData: data }: Route.ComponentProps) {
   }, [data.ENV.POSTHOG_API_KEY, data.ENV.POSTHOG_HOST, data.user]);
 
   const appChildren = (
-    <Document nonce={nonce} env={data.ENV}>
+    <Document
+      nonce={nonce}
+      env={data.ENV}
+      contrastPreference={contrastPreference}
+    >
       {data.bannerWarning ? (
         <LocalDevEnvironmentBar
           bannerWarning={data.bannerWarning}

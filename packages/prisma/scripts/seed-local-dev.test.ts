@@ -8,8 +8,38 @@ describe('local dev seed fixtures', () => {
     const bundle = await loadProdFidelityBundle();
     expect(bundle.manifest.version).toBe(1);
     expect(bundle.assignmentTypes.length).toBeGreaterThan(0);
-    expect(bundle.gradingAssistantTemplates.length).toBeGreaterThan(0);
+    expect(
+      bundle.assignmentTypes.some(
+        (assignmentType) =>
+          assignmentType.rubricJson != null &&
+          assignmentType.scoringScaleJson != null
+      )
+    ).toBe(true);
     expect(bundle.teacherTrainings.length).toBeGreaterThan(0);
+  });
+
+  test('aligns thesis module review instructions with the grading assistant rubric', async () => {
+    const bundle = await loadProdFidelityBundle();
+    const reviewInstructions = bundle.assignmentModuleInstructions.filter(
+      (instruction) =>
+        typeof instruction.title === 'string' &&
+        instruction.title.trim().toLowerCase() === 'review my essay!'
+    );
+
+    expect(reviewInstructions.length).toBeGreaterThanOrEqual(2);
+
+    for (const instruction of reviewInstructions) {
+      const content = `${instruction.prompt ?? ''}\n${instruction.tutorInstructions ?? ''}`;
+
+      expect(content).not.toContain(
+        'Content, Organization, Syntax, and Grammar'
+      );
+      expect(content).toContain('Thesis/Content (25%)');
+      expect(content).toContain('Organization/Structure (25%)');
+      expect(content).toContain('Evidence/Support (20%)');
+      expect(content).toContain('Voice/Style (20%)');
+      expect(content).toContain('Grammar/Syntax/Formatting (10%)');
+    }
   });
 
   test('defines stable dev personas with shared password', () => {
@@ -22,6 +52,11 @@ describe('local dev seed fixtures', () => {
   test('treats localhost database urls as local seed targets', () => {
     expect(
       isLocalDatabaseUrl('postgresql://postgres:postgres@localhost:5432/yawp')
+    ).toBe(true);
+    expect(
+      isLocalDatabaseUrl(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_184'
+      )
     ).toBe(true);
     expect(
       isLocalDatabaseUrl(

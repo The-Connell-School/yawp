@@ -11,7 +11,7 @@ import {
   useRevalidator,
   useRouteLoaderData,
 } from 'react-router';
-import { Settings2, Pencil, Eye, EyeOff } from 'lucide-react';
+import { Settings2, Cog, Eye, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useState, createContext } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import {
@@ -39,6 +39,8 @@ import {
 } from '~/utils/breadcrumb';
 import { cn } from '~/utils/misc';
 import { NavStateSwitch, useNavState } from '../api.preferences.nav/route';
+import { ContrastPreferenceSwitch } from '../api.preferences.contrast/route';
+import { Switch } from '~/components/ui/switch';
 import { Check } from 'lucide-react';
 import {
   Dialog,
@@ -104,7 +106,7 @@ export default function Route() {
   const canToggleStudentPreview =
     user.selectedMembership?.role === 'TEACHER' || user.isAdmin;
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [isEditNameOpen, setIsEditNameOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const matches = useMatches();
   const isInAssistants = !!matches.find((m) => m.id.includes('app.assistants'));
@@ -255,16 +257,16 @@ export default function Route() {
                   size="icon-sm"
                   variant="ghost"
                   className="opacity-40 hover:opacity-100"
-                  aria-label="Edit name"
+                  aria-label="User settings"
                   disabled={isReadOnlyImpersonation}
                   title={
                     isReadOnlyImpersonation
                       ? 'Read-only impersonation active'
-                      : 'Edit name'
+                      : 'User settings'
                   }
-                  onClick={() => setIsEditNameOpen(true)}
+                  onClick={() => setIsSettingsOpen(true)}
                 >
-                  <Pencil size={14} />
+                  <Cog size={18} />
                 </Button>
               </div>
               {/* Organization / Membership selector */}
@@ -419,23 +421,26 @@ export default function Route() {
           <Outlet key={location.pathname} />
         </NavExpandedContext.Provider>
       </div>
-      <EditNameDialog
-        open={isEditNameOpen}
-        onOpenChange={setIsEditNameOpen}
+      <UserSettingsDialog
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
         currentName={user.name || ''}
+        readOnly={isReadOnlyImpersonation}
       />
     </main>
   );
 }
 
-function EditNameDialog({
+function UserSettingsDialog({
   open,
   onOpenChange,
   currentName,
+  readOnly,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentName: string;
+  readOnly: boolean;
 }) {
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
@@ -468,38 +473,63 @@ function EditNameDialog({
   useEffect(() => {
     if (fetcher.state === 'idle' && wasSubmitting) {
       revalidator.revalidate();
-      onOpenChange(false);
       setWasSubmitting(false);
     }
-  }, [fetcher.state, wasSubmitting, onOpenChange, revalidator]);
+  }, [fetcher.state, wasSubmitting, revalidator]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Name</DialogTitle>
-          <DialogDescription>Update your display name</DialogDescription>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>
+            Manage your display name and accessibility preferences.
+          </DialogDescription>
         </DialogHeader>
-        <fetcher.Form {...form.getFormProps()}>
-          <FormInput
-            scope={form.scope('name')}
-            type="text"
-            label="Name"
-            autoComplete="name"
-          />
-          <DialogFooter className="mt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              Save
-            </Button>
-          </DialogFooter>
-        </fetcher.Form>
+        <div className="space-y-6">
+          <fetcher.Form {...form.getFormProps()} className="space-y-3">
+            <FormInput
+              scope={form.scope('name')}
+              type="text"
+              label="Display name"
+              autoComplete="name"
+              disabled={readOnly}
+            />
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isLoading || readOnly}>
+                Save name
+              </Button>
+            </div>
+          </fetcher.Form>
+          <div className="border-t pt-6">
+            <ContrastPreferenceSwitch>
+              {({ fetcher: contrastFetcher, highContrast, setPreference }) => (
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">High contrast</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Darken text and controls for stronger contrast. Off by
+                      default.
+                    </p>
+                  </div>
+                  <Switch
+                    aria-label="High contrast"
+                    checked={highContrast}
+                    disabled={contrastFetcher.state !== 'idle'}
+                    onCheckedChange={(checked) =>
+                      setPreference(checked ? 'high' : 'standard')
+                    }
+                  />
+                </div>
+              )}
+            </ContrastPreferenceSwitch>
+          </div>
+        </div>
+        <DialogFooter className="mt-2">
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

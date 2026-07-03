@@ -81,6 +81,12 @@ export class TestHelpers {
     );
   }
 
+  /** Open document version history from the actions menu */
+  async openDocumentHistory() {
+    await this.page.getByTestId('document-actions-menu').click();
+    await this.page.getByTestId('document-action-history').click();
+  }
+
   /** Get the current text content of the editor */
   async getEditorContent() {
     return this.getEditor().textContent();

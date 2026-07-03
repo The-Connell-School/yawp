@@ -112,6 +112,33 @@ function fallbackMetadata(
   };
 }
 
+function messageContentLength(content: unknown) {
+  if (typeof content === 'string') return content.length;
+  return JSON.stringify(content ?? '').length;
+}
+
+function buildLogMetadata({
+  metadata,
+  messages,
+  hasTools,
+  toolRoundCount,
+}: {
+  metadata?: Record<string, unknown>;
+  messages: Array<{ content?: unknown }>;
+  hasTools: boolean;
+  toolRoundCount: number;
+}) {
+  return {
+    ...(metadata ?? {}),
+    messageCount: messages.length,
+    messageTextLengths: messages.map((message) =>
+      messageContentLength(message.content)
+    ),
+    hasTools,
+    toolRoundCount,
+  };
+}
+
 async function runAnthropicCompletion(params: Params, startTime: number) {
   const system = stripTabs(params.system);
   const messages: Array<{
@@ -123,8 +150,10 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
   }));
 
   const maxRounds = params.maxToolRounds ?? 3;
+  const hasTools = Boolean(params.tools?.length);
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let toolRoundCount = 0;
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
@@ -162,6 +191,7 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
           }
         }
         messages.push({ role: 'user', content: toolResults });
+        toolRoundCount += 1;
         continue;
       }
 
@@ -178,13 +208,18 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
         model: params.model,
         provider: 'anthropic',
         systemPrompt: system,
-        messages: params.messages,
+        messages,
         response: responseText,
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
         totalTokens: totalInputTokens + totalOutputTokens,
         durationMs,
-        metadata: params.metadata,
+        metadata: buildLogMetadata({
+          metadata: params.metadata,
+          messages,
+          hasTools,
+          toolRoundCount,
+        }),
       });
 
       return responseText;
@@ -197,10 +232,15 @@ async function runAnthropicCompletion(params: Params, startTime: number) {
       model: params.model,
       provider: 'anthropic',
       systemPrompt: system,
-      messages: params.messages,
+      messages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,
-      metadata: params.metadata,
+      metadata: buildLogMetadata({
+        metadata: params.metadata,
+        messages,
+        hasTools,
+        toolRoundCount,
+      }),
     });
     throw err;
   }
@@ -257,8 +297,10 @@ async function runOpenAiCompletion({
   }));
 
   const maxRounds = params.maxToolRounds ?? 3;
+  const hasTools = Boolean(tools?.length);
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let toolRoundCount = 0;
 
   try {
     for (let round = 0; round <= maxRounds; round++) {
@@ -294,6 +336,7 @@ async function runOpenAiCompletion({
             content: result,
           });
         }
+        toolRoundCount += 1;
         continue;
       }
 
@@ -314,7 +357,12 @@ async function runOpenAiCompletion({
         outputTokens: totalOutputTokens,
         totalTokens: totalInputTokens + totalOutputTokens,
         durationMs,
-        metadata,
+        metadata: buildLogMetadata({
+          metadata,
+          messages: formattedMessages,
+          hasTools,
+          toolRoundCount,
+        }),
       });
 
       return responseText;
@@ -330,7 +378,12 @@ async function runOpenAiCompletion({
       messages: formattedMessages,
       error: err instanceof Error ? err.message : String(err),
       durationMs,
-      metadata,
+      metadata: buildLogMetadata({
+        metadata,
+        messages: formattedMessages,
+        hasTools,
+        toolRoundCount,
+      }),
     });
     throw err;
   }

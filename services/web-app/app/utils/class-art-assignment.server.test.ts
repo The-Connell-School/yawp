@@ -7,58 +7,83 @@ const prisma = {
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { pickClassArtIndexForTeachers } = await import(
+const { pickClassArtKeyForOrganization } = await import(
   './class-art-assignment.server'
 );
-const { CLASS_ART_POOL_SIZE } = await import('./class-art');
+const {
+  CLASS_ART_POOL,
+  CLASS_ARTWORK_COUNT,
+  buildClassArtPoolIndex,
+  getArtworkIndexFromPoolIndex,
+  getClassArtByIndex,
+  getCropIndexFromPoolIndex,
+} = await import('./class-art');
 
-describe('pickClassArtIndexForTeachers', () => {
+function poolIndexForKey(key: string) {
+  return CLASS_ART_POOL.findIndex((entry) => entry.key === key);
+}
+
+describe('pickClassArtKeyForOrganization', () => {
   beforeEach(() => {
     prisma.class.findMany.mockReset();
   });
 
-  test('avoids the indices most recently used by the given teachers', async () => {
-    const recentIndices = Array.from(
-      { length: CLASS_ART_POOL_SIZE - 1 },
-      (_, i) => i
-    );
+  test('assigns the last unused artwork at crop 0 for the organization', async () => {
     prisma.class.findMany.mockResolvedValue(
-      recentIndices.map((classArtIndex) => ({ classArtIndex }))
+      Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
+        classArtKey: getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key,
+        classArtIndex: null,
+      }))
     );
 
-    const index = await pickClassArtIndexForTeachers(['teacher-1']);
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
 
-    expect(index).toBe(CLASS_ART_POOL_SIZE - 1);
+    expect(key).toBe(
+      getClassArtByIndex(buildClassArtPoolIndex(CLASS_ARTWORK_COUNT - 1, 0)).key
+    );
   });
 
-  test('falls back to the full pool once every index is recent', async () => {
-    const recentIndices = Array.from(
-      { length: CLASS_ART_POOL_SIZE },
-      (_, i) => i
-    );
+  test('starts crop 1 after every artwork has crop 0 in the org', async () => {
     prisma.class.findMany.mockResolvedValue(
-      recentIndices.map((classArtIndex) => ({ classArtIndex }))
+      Array.from({ length: CLASS_ARTWORK_COUNT }, (_, artwork) => ({
+        classArtKey: getClassArtByIndex(buildClassArtPoolIndex(artwork, 0)).key,
+        classArtIndex: null,
+      }))
     );
 
-    const index = await pickClassArtIndexForTeachers(['teacher-1']);
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
 
-    expect(index).toBeGreaterThanOrEqual(0);
-    expect(index).toBeLessThan(CLASS_ART_POOL_SIZE);
+    expect(getCropIndexFromPoolIndex(poolIndexForKey(key))).toBe(1);
+    expect(getArtworkIndexFromPoolIndex(poolIndexForKey(key))).toBe(0);
   });
 
-  test('queries classes for all of the given teachers, most recent first', async () => {
+  test('queries classes with either classArtKey or legacy classArtIndex', async () => {
     prisma.class.findMany.mockResolvedValue([]);
 
-    await pickClassArtIndexForTeachers(['teacher-1', 'teacher-2']);
+    await pickClassArtKeyForOrganization('org-1');
 
     expect(prisma.class.findMany).toHaveBeenCalledWith({
       where: {
-        teachers: { some: { id: { in: ['teacher-1', 'teacher-2'] } } },
-        classArtIndex: { not: null },
+        school: { organizationId: 'org-1' },
+        isArchived: false,
+        OR: [{ classArtKey: { not: null } }, { classArtIndex: { not: null } }],
       },
-      orderBy: { createdAt: 'desc' },
-      take: CLASS_ART_POOL_SIZE - 1,
-      select: { classArtIndex: true },
+      select: { classArtKey: true, classArtIndex: true },
     });
+  });
+
+  test('maps legacy classArtIndex rows when picking the next key', async () => {
+    prisma.class.findMany.mockResolvedValue(
+      Array.from({ length: CLASS_ARTWORK_COUNT - 1 }, (_, artwork) => ({
+        classArtKey: null,
+        classArtIndex: buildClassArtPoolIndex(artwork, 0),
+      }))
+    );
+
+    const key = await pickClassArtKeyForOrganization('org-1', () => 0);
+
+    expect(getArtworkIndexFromPoolIndex(poolIndexForKey(key))).toBe(
+      CLASS_ARTWORK_COUNT - 1
+    );
   });
 });

@@ -41,6 +41,13 @@ const {
   isLlmFallbackRetrySignal,
 } = await import('./llm-provider-errors.server');
 
+function anthropicTextResponse(content: string) {
+  return {
+    content: [{ type: 'text', text: content }],
+    usage: { input_tokens: 11, output_tokens: 7 },
+  };
+}
+
 function openAiTextResponse(content: string) {
   return {
     choices: [{ message: { content } }],
@@ -52,7 +59,7 @@ function openAiTextResponse(content: string) {
   };
 }
 
-describe('getLLMCompletion Anthropic outage fallback', () => {
+describe('getLLMCompletion', () => {
   beforeEach(() => {
     anthropicCreate.mockReset();
     openAiCreate.mockReset();
@@ -60,6 +67,56 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
     resetAnthropicOutageForTest();
     process.env.OPENAI_FALLBACK_MODEL = 'gpt-4o-mini';
     delete process.env.ANTHROPIC_OUTAGE_FALLBACK_ENABLED;
+    anthropicCreate.mockResolvedValue(anthropicTextResponse('Logged response'));
+  });
+
+  test('logs the exact normalized Anthropic payload with audit metadata', async () => {
+    const response = await getLLMCompletion({
+      model: 'claude-sonnet-4-6',
+      system: 'System\tprompt',
+      messages: [
+        { role: 'user', content: 'Hello\tstudent' },
+        { role: 'assistant', content: 'Prior\treply', name: 'assistant' },
+      ],
+      metadata: {
+        feature: 'tutor',
+        kind: 'assignment-module-tutor',
+      },
+    });
+
+    expect(response).toBe('Logged response');
+    expect(anthropicCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'Systemprompt',
+        messages: [
+          { role: 'user', content: 'Hellostudent' },
+          { role: 'assistant', content: 'Priorreply' },
+        ],
+      })
+    );
+    expect(llmLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        systemPrompt: 'Systemprompt',
+        messages: [
+          { role: 'user', content: 'Hellostudent' },
+          { role: 'assistant', content: 'Priorreply' },
+        ],
+        response: 'Logged response',
+        inputTokens: 11,
+        outputTokens: 7,
+        totalTokens: 18,
+        metadata: {
+          feature: 'tutor',
+          kind: 'assignment-module-tutor',
+          messageCount: 2,
+          messageTextLengths: [12, 10],
+          hasTools: false,
+          toolRoundCount: 0,
+        },
+      }),
+    });
   });
 
   test('falls back to gpt-4o-mini and opens the circuit after Anthropic 529', async () => {
@@ -92,6 +149,9 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
       fallbackReason: 'status:529',
       fallbackModel: 'gpt-4o-mini',
       primaryModel: 'claude-sonnet-4-6',
+      messageCount: 2,
+      hasTools: false,
+      toolRoundCount: 0,
     });
   });
 
@@ -113,6 +173,9 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
     expect(llmLogCreate.mock.calls[0]?.[0].data.metadata).toMatchObject({
       anthropicCircuitOpen: true,
       fallbackTriggered: true,
+      messageCount: 1,
+      hasTools: false,
+      toolRoundCount: 0,
     });
   });
 
@@ -205,6 +268,11 @@ describe('getLLMCompletion Anthropic outage fallback', () => {
       role: 'tool',
       tool_call_id: 'call_1',
       content: 'Current essay draft.',
+    });
+    expect(llmLogCreate.mock.calls[0]?.[0].data.metadata).toMatchObject({
+      fallbackTriggered: true,
+      toolRoundCount: 1,
+      hasTools: true,
     });
   });
 });

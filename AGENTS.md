@@ -1,3 +1,29 @@
+## Worktree Local Dev Setup
+
+When bootstrapping a new git worktree for local development, run:
+
+```bash
+bash scripts/worktree-local-setup.sh
+bun dev
+```
+
+This script is the source of truth for isolated worktree environments. It:
+
+- starts a dedicated Postgres Docker container with a persistent volume (`yawp-<worktree>-postgres`)
+- writes worktree-specific `.env` files under this worktree only
+- runs prisma migrate deploy and `bun db:seed-local-dev`
+
+If dev login fails with `Can't reach database server`, the worktree Postgres container is down.
+Re-run `bash scripts/worktree-local-setup.sh` (or `bun worktree:setup`) before debugging auth.
+
+Preset dev logins (password `yawp-dev`):
+
+- `dev.admin@yawp.local`
+- `dev.teacher@yawp.local`
+- `dev.student@yawp.local`
+
+Use `/auth/dev-login` in development.
+
 1. For all changes, do test driven development.
     - If it's a ui change or flow, add the e2e first and then write the correct e2e tests before implementing the change
     - If it's a backend or utility or service function change, write correct unit tests before implementing the change

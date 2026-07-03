@@ -23,7 +23,57 @@
     "systemKey": null,
     "archivedAt": null,
     "ownerOrgId": null,
-    "ownerTeacherId": null
+    "ownerTeacherId": null,
+    "scoringScaleJson": {
+      "type": "weighted_1_5",
+      "maxScore": 5,
+      "minScore": 1
+    },
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "thesis_and_content",
+          "label": "Thesis/Content",
+          "weight": 0.25,
+          "description": "Original, defensible thesis with sustained critical thinking and meaningful deductions."
+        },
+        {
+          "key": "organization_and_structure",
+          "label": "Organization/Structure",
+          "weight": 0.25,
+          "description": "Purposeful structure with strong progression, clear transitions, and a conclusion that extends thinking."
+        },
+        {
+          "key": "evidence_and_support",
+          "label": "Evidence/Support",
+          "weight": 0.2,
+          "description": "Precise, well-integrated evidence that deepens analysis and builds authority."
+        },
+        {
+          "key": "voice_and_style",
+          "label": "Voice/Style",
+          "weight": 0.2,
+          "description": "Authentic voice with engaging, precise language and consistent tone."
+        },
+        {
+          "key": "grammar_and_mechanics",
+          "label": "Grammar/Syntax/Formatting",
+          "weight": 0.1,
+          "description": "Technical correctness and polished presentation that support clarity."
+        }
+      ]
+    },
+    "gradingPromptConfigJson": {
+      "instructionsPreset": "legacy_thesis_driven_essay"
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": "Represents the pre-existing Yawp thesis-driven essay grading assistant path.",
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": "gait_thesis_current_v1",
+    "gradingAssistantSourceTemplateSlug": "thesis-driven-essay-current"
   },
   {
     "id": "cmamr5eai08sl82y6dsr4ymxo",
@@ -88,7 +138,55 @@
     "systemKey": null,
     "archivedAt": null,
     "ownerOrgId": null,
-    "ownerTeacherId": null
+    "ownerTeacherId": null,
+    "scoringScaleJson": {
+      "type": "act_writing_2_12",
+      "maxScore": 6,
+      "minScore": 1,
+      "compositeMax": 12,
+      "compositeMin": 2
+    },
+    "rubricJson": {
+      "categories": [
+        {
+          "key": "ideas_and_analysis",
+          "label": "Ideas and Analysis",
+          "weight": 0.25,
+          "description": "Evaluate the clarity of the writer's perspective and analysis of the relationships among perspectives."
+        },
+        {
+          "key": "development_and_support",
+          "label": "Development and Support",
+          "weight": 0.25,
+          "description": "Evaluate how well claims are developed with reasoning, examples, and implications."
+        },
+        {
+          "key": "organization",
+          "label": "Organization",
+          "weight": 0.25,
+          "description": "Evaluate purposeful sequencing, paragraphing, transitions, and control of the response."
+        },
+        {
+          "key": "language_use_and_conventions",
+          "label": "Language Use and Conventions",
+          "weight": 0.25,
+          "description": "Evaluate word choice, sentence control, grammar, usage, and mechanics as they affect clarity."
+        }
+      ]
+    },
+    "gradingPromptConfigJson": {
+      "scoreInstructions": "Scores must be integers 1-6 for each ACT domain. The app converts the average domain score to a 2-12 ACT-style composite for display.",
+      "rubricInstructions": "Score the four ACT Writing domains independently. Focus first on Ideas and Analysis and Development and Support. Language Use and Conventions matters when errors impede clarity.",
+      "systemInstructions": "Grade this as ACT Writing with four rubric domains. Do not use thesis-driven essay categories. Give concise retrospective feedback for each ACT domain."
+    },
+    "gradingOutputSchemaJson": {
+      "responseShape": "categories_overall_comment",
+      "schemaVersion": 1
+    },
+    "gradingCalibrationNotes": "Pilot ACT template. Canonical ACT rubric source and calibration set still need Brian/Kevin sign-off before recorded-grade rollout.",
+    "gradingAssistantVersion": 1,
+    "gradingAssistantSourceTemplateId": "gait_act_writing_v1",
+    "gradingAssistantSourceTemplateSlug": "act-writing-four-domain"
   },
   {
     "id": "prodqa-free-nav-at",

@@ -60,7 +60,25 @@ async function runProductionMigrations(env: NodeJS.ProcessEnv) {
     return generateCode;
   }
 
-  return runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
+  const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);
+  if (migrateCode !== 0) {
+    return migrateCode;
+  }
+
+  const backfillCode = await runCommand(
+    'bun',
+    ['run', 'scripts/backfill-class-art-key.ts'],
+    env
+  );
+  if (backfillCode !== 0) {
+    return backfillCode;
+  }
+
+  return runCommand(
+    'bun',
+    ['run', 'scripts/assignment-type-release-gate.ts', '--require-data'],
+    env
+  );
 }
 
 const sshProcess = spawn('ssh', [

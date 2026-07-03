@@ -5,6 +5,7 @@ import {
   useFetcher,
   type LoaderFunctionArgs,
 } from 'react-router';
+import type { Prisma } from '@app/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
@@ -39,6 +40,33 @@ type TimelineEntry = {
 
 type DetailData = { metadata: unknown };
 
+type AiLogEntry = {
+  id: string;
+  createdAt: string;
+  model: string;
+  provider: string;
+  feature: string | null;
+  kind: string | null;
+  documentSource: string | null;
+  documentId: string | null;
+  submissionId: string | null;
+  documentTextLength: number | null;
+  documentTextSha256: string | null;
+  assignmentTypeId: string | null;
+  assignmentTypeRubricSource: string | null;
+  assignmentTypeGradingVersion: number | null;
+  rubricCategoryKeys: unknown;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  durationMs: number | null;
+  systemPrompt: string | null;
+  messages: unknown;
+  response: string | null;
+  error: string | null;
+  metadata: unknown;
+};
+
 function toMaybeDate(value: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -63,6 +91,37 @@ function stripReplayUrl(value: unknown): unknown {
   return Object.keys(rest).length > 0 ? rest : null;
 }
 
+function metadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function metadataString(
+  metadata: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function metadataNumber(
+  metadata: Record<string, unknown>,
+  key: string
+): number | null {
+  const value = metadata[key];
+  return typeof value === 'number' ? value : null;
+}
+
+function metadataFilter(
+  key: string,
+  value: string | null
+): Prisma.LlmLogWhereInput | null {
+  return value
+    ? { metadata: { path: [key], equals: value } }
+    : null;
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireAdmin(request);
   const url = new URL(request.url);
@@ -85,6 +144,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Normal timeline load
   const userOrEmail = normalizeSearch(url.searchParams.get('userOrEmail'));
   const documentId = normalizeSearch(url.searchParams.get('documentId'));
+  const submissionId = normalizeSearch(url.searchParams.get('submissionId'));
+  const feature = normalizeSearch(url.searchParams.get('feature'));
+  const kind = normalizeSearch(url.searchParams.get('kind'));
   const requestId = normalizeSearch(url.searchParams.get('requestId'));
   const startAt = toMaybeDate(url.searchParams.get('startAt'));
   const endAt = toMaybeDate(url.searchParams.get('endAt'));
@@ -199,15 +261,86 @@ export async function loader({ request }: LoaderFunctionArgs) {
     metadata: stripReplayUrl(entry.metadata),
   }));
 
+  const llmMetadataFilters: Prisma.LlmLogWhereInput[] = [
+    metadataFilter('documentId', documentId),
+    metadataFilter('submissionId', submissionId),
+    metadataFilter('feature', feature),
+    metadataFilter('kind', kind),
+  ].filter((filter): filter is Prisma.LlmLogWhereInput => Boolean(filter));
+
+  const llmLogs = await prisma.llmLog.findMany({
+    where: {
+      ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
+      ...(llmMetadataFilters.length ? { AND: llmMetadataFilters } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+    select: {
+      id: true,
+      createdAt: true,
+      model: true,
+      provider: true,
+      inputTokens: true,
+      outputTokens: true,
+      totalTokens: true,
+      durationMs: true,
+      systemPrompt: true,
+      messages: true,
+      response: true,
+      error: true,
+      metadata: true,
+    },
+  });
+
+  const aiLogs: AiLogEntry[] = llmLogs.map((entry) => {
+    const metadata = metadataRecord(entry.metadata);
+    return {
+      id: entry.id,
+      createdAt: entry.createdAt.toISOString(),
+      model: entry.model,
+      provider: entry.provider,
+      feature: metadataString(metadata, 'feature'),
+      kind: metadataString(metadata, 'kind'),
+      documentSource: metadataString(metadata, 'documentSource'),
+      documentId: metadataString(metadata, 'documentId'),
+      submissionId: metadataString(metadata, 'submissionId'),
+      documentTextLength: metadataNumber(metadata, 'documentTextLength'),
+      documentTextSha256: metadataString(metadata, 'documentTextSha256'),
+      assignmentTypeId: metadataString(metadata, 'assignmentTypeId'),
+      assignmentTypeRubricSource: metadataString(
+        metadata,
+        'assignmentTypeRubricSource'
+      ),
+      assignmentTypeGradingVersion: metadataNumber(
+        metadata,
+        'assignmentTypeGradingVersion'
+      ),
+      rubricCategoryKeys: metadata.rubricCategoryKeys ?? null,
+      inputTokens: entry.inputTokens,
+      outputTokens: entry.outputTokens,
+      totalTokens: entry.totalTokens,
+      durationMs: entry.durationMs,
+      systemPrompt: entry.systemPrompt,
+      messages: entry.messages,
+      response: entry.response,
+      error: entry.error,
+      metadata: entry.metadata,
+    };
+  });
+
   return dataResponse({
     filters: {
       userOrEmail: userOrEmail ?? '',
       documentId: documentId ?? '',
+      submissionId: submissionId ?? '',
+      feature: feature ?? '',
+      kind: kind ?? '',
       requestId: requestId ?? '',
       startAt: url.searchParams.get('startAt') ?? '',
       endAt: url.searchParams.get('endAt') ?? '',
     },
     timeline,
+    aiLogs,
   });
 }
 
@@ -423,12 +556,116 @@ function AuditItem({ item }: { item: TimelineEntry }) {
   );
 }
 
+function AiLogItem({ item }: { item: AiLogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const label = [item.feature, item.kind].filter(Boolean).join(' / ');
+  const summaryLabel =
+    item.documentId ?? item.submissionId ?? item.assignmentTypeId ?? null;
+
+  return (
+    <div
+      data-testid="audit-ai-log-item"
+      className={cn(
+        'border-b last:border-b-0 text-sm transition-colors',
+        item.error ? 'bg-destructive/5' : ''
+      )}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+      >
+        <span className="text-muted-foreground/60 w-4 shrink-0">
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
+        </span>
+
+        <span className="font-medium text-sm shrink-0 min-w-0 truncate max-w-[240px]">
+          {label || 'AI call'}
+        </span>
+
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+          {item.provider}
+        </span>
+
+        {summaryLabel ? (
+          <span className="text-xs text-muted-foreground truncate min-w-0 flex-1">
+            {summaryLabel}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
+
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {new Date(item.createdAt).toLocaleString()}
+        </span>
+
+        <span className="shrink-0 text-xs text-muted-foreground/60 uppercase tracking-wide">
+          ai
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className="px-9 pb-3 pt-1 grid gap-1.5 bg-muted/20">
+          <DetailRow label="ID" value={item.id} />
+          <DetailRow label="Model" value={item.model} />
+          {item.documentSource ? (
+            <DetailRow label="Document source" value={item.documentSource} />
+          ) : null}
+          {item.documentId ? (
+            <DetailRow label="Document" value={item.documentId} />
+          ) : null}
+          {item.submissionId ? (
+            <DetailRow label="Submission" value={item.submissionId} />
+          ) : null}
+          {item.documentTextLength !== null ? (
+            <DetailRow label="Text length" value={item.documentTextLength} />
+          ) : null}
+          {item.documentTextSha256 ? (
+            <DetailRow label="Text sha256" value={item.documentTextSha256} />
+          ) : null}
+          {item.assignmentTypeId ? (
+            <DetailRow label="Assignment type" value={item.assignmentTypeId} />
+          ) : null}
+          {item.assignmentTypeRubricSource ? (
+            <DetailRow
+              label="Rubric source"
+              value={item.assignmentTypeRubricSource}
+            />
+          ) : null}
+          {item.assignmentTypeGradingVersion !== null ? (
+            <DetailRow
+              label="Rubric version"
+              value={item.assignmentTypeGradingVersion}
+            />
+          ) : null}
+          {item.totalTokens !== null ? (
+            <DetailRow label="Tokens" value={item.totalTokens} />
+          ) : null}
+          {item.durationMs !== null ? (
+            <DetailRow label="Duration" value={`${item.durationMs}ms`} />
+          ) : null}
+          {item.error ? <DetailRow label="Error" value={item.error} /> : null}
+          <JsonBlock label="Rubric categories" data={item.rubricCategoryKeys} />
+          <JsonBlock label="System prompt" data={item.systemPrompt} />
+          <JsonBlock label="Messages" data={item.messages} />
+          <JsonBlock label="Response" data={item.response} />
+          <JsonBlock label="Metadata" data={item.metadata} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AdminAuditRoute() {
   const data = useLoaderData<typeof loader>();
   if (!('timeline' in data)) {
     return null;
   }
-  const { filters, timeline } = data;
+  const { filters, timeline, aiLogs } = data;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -463,6 +700,9 @@ export default function AdminAuditRoute() {
   const hasActiveFilters =
     filters.userOrEmail ||
     filters.documentId ||
+    filters.submissionId ||
+    filters.feature ||
+    filters.kind ||
     filters.requestId ||
     filters.startAt ||
     filters.endAt;
@@ -482,6 +722,24 @@ export default function AdminAuditRoute() {
             defaultValue={filters.documentId}
             placeholder="Document ID"
             className="h-8 w-40 text-sm"
+          />
+          <Input
+            name="submissionId"
+            defaultValue={filters.submissionId}
+            placeholder="Submission ID"
+            className="h-8 w-40 text-sm"
+          />
+          <Input
+            name="feature"
+            defaultValue={filters.feature}
+            placeholder="AI feature"
+            className="h-8 w-32 text-sm"
+          />
+          <Input
+            name="kind"
+            defaultValue={filters.kind}
+            placeholder="AI kind"
+            className="h-8 w-44 text-sm"
           />
           <Input
             name="requestId"
@@ -552,6 +810,32 @@ export default function AdminAuditRoute() {
                 )}
               </div>
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle>AI Context Logs</CardTitle>
+            {aiLogs.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                {aiLogs.length}
+              </span>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {aiLogs.length === 0 ? (
+            <p className="px-4 pb-4 text-sm text-muted-foreground">
+              No AI logs found.
+            </p>
+          ) : (
+            <div className="divide-y divide-border">
+              {aiLogs.map((item) => (
+                <AiLogItem key={item.id} item={item} />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

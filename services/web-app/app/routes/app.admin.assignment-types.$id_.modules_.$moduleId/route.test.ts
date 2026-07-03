@@ -1,0 +1,152 @@
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+
+const prisma = {
+  assignmentType: {
+    findUnique: mock(),
+  },
+  assignmentModule: {
+    findFirst: mock(),
+    update: mock(),
+  },
+};
+
+const requireAdmin = mock();
+const requireMutableRequest = mock();
+
+mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/auth.server', () => ({
+  requireAdmin,
+  requireMutableRequest,
+}));
+
+const { action, loader } = await import('./route');
+
+describe('admin assignment module loader', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    prisma.assignmentType.findUnique.mockReset();
+    prisma.assignmentModule.findFirst.mockReset();
+    requireAdmin.mockResolvedValue(undefined);
+  });
+
+  test('loads module without selecting rubricJson explicitly', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+      rubricJson: { categories: [] },
+    });
+    prisma.assignmentModule.findFirst.mockResolvedValue({
+      id: 'mod-1',
+      title: 'Draft',
+      isSelfGuided: false,
+      description: null,
+      tutorInstructions: null,
+      position: 0,
+      rubricAlignmentJson: null,
+      instructions: [],
+    });
+
+    const response = (await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never)) as { data: { course: { id: string }; module: { id: string } } };
+
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith({
+      where: { id: 'at-1' },
+    });
+    expect(prisma.assignmentModule.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'mod-1',
+        assignmentTypeId: 'at-1',
+        deletedAt: null,
+      },
+      include: {
+        instructions: {
+          orderBy: { position: 'asc' },
+          include: {
+            buttons: {
+              orderBy: { position: 'asc' },
+            },
+          },
+        },
+      },
+    });
+    expect(response.data.course.id).toBe('at-1');
+    expect(response.data.module.id).toBe('mod-1');
+  });
+
+  test('returns 404 when module does not belong to assignment type', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Essay',
+    });
+    prisma.assignmentModule.findFirst.mockResolvedValue(null);
+
+    await expect(
+      loader({
+        request: new Request(
+          'https://example.test/app/admin/assignment-types/at-1/modules/mod-1'
+        ),
+        params: { id: 'at-1', moduleId: 'mod-1' },
+        context: {} as never,
+      } as never)
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('admin assignment module action', () => {
+  beforeEach(() => {
+    requireAdmin.mockReset();
+    requireMutableRequest.mockReset();
+    prisma.assignmentModule.update.mockReset();
+
+    requireAdmin.mockResolvedValue(undefined);
+  });
+
+  test('updates module-level rubric relationships', async () => {
+    const form = new FormData();
+    form.set('intent', 'updateModule');
+    form.set('title', 'Draft Thesis');
+    form.set('description', 'Work on the thesis.');
+    form.set('isSelfGuided', 'on');
+    form.set('tutorInstructions', 'Coach thesis revision.');
+    form.set(
+      'rubricAlignmentJson',
+      JSON.stringify({
+        thesis_and_content: 'primary',
+        organization_and_structure: 'supporting',
+        grammar_and_mechanics: 'not-applicable',
+      })
+    );
+
+    await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/modules/mod-1',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1', moduleId: 'mod-1' },
+      context: {} as never,
+    } as never);
+
+    expect(prisma.assignmentModule.update).toHaveBeenCalledWith({
+      where: { id: 'mod-1' },
+      data: {
+        title: 'Draft Thesis',
+        description: 'Work on the thesis.',
+        isSelfGuided: true,
+        tutorInstructions: 'Coach thesis revision.',
+        rubricAlignmentJson: {
+          thesis_and_content: 'primary',
+          organization_and_structure: 'supporting',
+          grammar_and_mechanics: 'not-applicable',
+        },
+      },
+    });
+  });
+});

@@ -20,12 +20,12 @@ test.describe.serial('Admin assignment type archive', () => {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${e2eContext.assignmentTypeId}`);
       await expect(
-        page.getByRole('heading', { name: 'Assignment Type Details' })
+        page.getByRole('heading', { name: 'Edit assignment type' })
       ).toBeVisible();
 
       await page.getByRole('button', { name: 'Archive assignment type' }).click();
       await page.getByRole('button', { name: 'Archive Assignment Type' }).click();
-      await page.waitForURL('**/app/admin/assignment-types');
+      await page.waitForURL('**/app/admin/assignments');
 
       const archived = await prisma.assignmentType.findUnique({
         where: { id: e2eContext.assignmentTypeId },

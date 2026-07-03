@@ -58,6 +58,43 @@ import { CSS } from '@dnd-kit/utilities';
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { cn } from '~/utils/misc';
 import { requireAdmin } from '~/utils/auth.server';
+import { parseAssignmentTypeRubricConfig } from '~/domain/assignment-types/assignment-type-rubric-config';
+import {
+  MODULE_RUBRIC_RELATIONSHIPS,
+  type ModuleRubricRelationship,
+} from '~/domain/assignment-types/assignment-type-rubric-config';
+import { ModuleRubricAlignmentEditor } from '~/components/admin/module-rubric-alignment-editor';
+
+const moduleRubricRelationshipSet = new Set<string>(
+  MODULE_RUBRIC_RELATIONSHIPS
+);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function parseRubricAlignmentJson(formData: FormData) {
+  const raw = formData.get('rubricAlignmentJson');
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Response('rubricAlignmentJson must be valid JSON', {
+      status: 400,
+    });
+  }
+  if (!isRecord(parsed)) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(parsed).map(([key, value]) => [
+      key,
+      typeof value === 'string' && moduleRubricRelationshipSet.has(value)
+        ? (value as ModuleRubricRelationship)
+        : 'not-applicable',
+    ])
+  );
+}
 
 const moduleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -88,13 +125,16 @@ const instructionSchema = z.object({
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireAdmin(request);
 
-  const [course, module] = await Promise.all([
+  const [courseRecord, module] = await Promise.all([
     prisma.assignmentType.findUnique({
       where: { id: params.id },
-      select: { id: true, title: true },
     }),
     prisma.assignmentModule.findFirst({
-      where: { id: params.moduleId, deletedAt: null },
+      where: {
+        id: params.moduleId,
+        assignmentTypeId: params.id,
+        deletedAt: null,
+      },
       include: {
         instructions: {
           orderBy: { position: 'asc' },
@@ -108,9 +148,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
   ]);
 
-  if (!course || !module) {
+  if (!courseRecord || !module) {
     throw new Response('Not Found', { status: 404 });
   }
+
+  const course = {
+    id: courseRecord.id,
+    title: courseRecord.title,
+    rubricJson: (courseRecord as { rubricJson?: unknown }).rubricJson ?? null,
+  };
 
   return dataResponse({ course, module });
 }
@@ -131,6 +177,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         description: data.description || null,
         isSelfGuided: data.isSelfGuided === 'on',
         tutorInstructions: data.tutorInstructions || null,
+        rubricAlignmentJson: parseRubricAlignmentJson(formData),
       },
     });
 
@@ -250,8 +297,16 @@ export default function AssignmentModuleRoute() {
   const [isModuleSheetOpen, setIsModuleSheetOpen] = React.useState(false);
   const [isInstructionSheetOpen, setIsInstructionSheetOpen] =
     React.useState(false);
+  const [isMounted, setIsMounted] = React.useState(false);
   const [editingInstruction, setEditingInstruction] = React.useState<any>(null);
   const [instructions, setInstructions] = React.useState(module.instructions);
+  const rubric = parseAssignmentTypeRubricConfig({
+    rubricJson: course.rubricJson,
+  }).rubric;
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Module form
   const moduleForm = useForm({
@@ -333,12 +388,6 @@ export default function AssignmentModuleRoute() {
     }
   }, [instructionFetcher.state, instructionFetcher.data?.status]);
 
-  React.useEffect(() => {
-    if (isInstructionSheetOpen) {
-      instructionForm.resetForm();
-    }
-  }, [isInstructionSheetOpen]);
-
   // --- DnD logic ---
   const {
     items: sortedInstructions,
@@ -359,36 +408,9 @@ export default function AssignmentModuleRoute() {
     idKey: 'id',
   });
 
-  function SortableInstructionRow({ instruction }: { instruction: any }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: instruction.id });
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.5 : 1,
-    };
-
+  function InstructionRowCells({ instruction }: { instruction: any }) {
     return (
-      <TableRow
-        ref={setNodeRef}
-        style={style}
-        className={isDragging ? 'bg-muted/50' : ''}
-      >
-        <TableCell>
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing"
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
-        </TableCell>
+      <>
         <TableCell className="font-medium">{instruction.title}</TableCell>
         <TableCell>
           {instruction.buttons?.length > 0 ? (
@@ -459,9 +481,7 @@ export default function AssignmentModuleRoute() {
                   { method: 'post' }
                 );
               }}
-              onCancel={() => {
-                // Dialog will close automatically
-              }}
+              onCancel={() => {}}
             >
               <Button variant="destructive-outline" size="icon-sm">
                 <TrashIcon className="h-4 w-4" />
@@ -469,6 +489,52 @@ export default function AssignmentModuleRoute() {
             </ConfirmationDialog>
           </div>
         </TableCell>
+      </>
+    );
+  }
+
+  function StaticInstructionRow({ instruction }: { instruction: any }) {
+    return (
+      <TableRow>
+        <TableCell>
+          <GripVertical className="h-4 w-4 text-muted-foreground opacity-40" />
+        </TableCell>
+        <InstructionRowCells instruction={instruction} />
+      </TableRow>
+    );
+  }
+
+  function SortableInstructionRow({ instruction }: { instruction: any }) {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: instruction.id });
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <TableRow
+        ref={setNodeRef}
+        style={style}
+        className={isDragging ? 'bg-muted/50' : ''}
+      >
+        <TableCell>
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </TableCell>
+        <InstructionRowCells instruction={instruction} />
       </TableRow>
     );
   }
@@ -490,7 +556,7 @@ export default function AssignmentModuleRoute() {
                 Edit Module
               </Button>
             </SheetTrigger>
-            <SheetContent>
+            <SheetContent aria-describedby={undefined}>
               <SheetHeader>
                 <SheetTitle>Edit Module</SheetTitle>
               </SheetHeader>
@@ -522,6 +588,13 @@ export default function AssignmentModuleRoute() {
                     rows={4}
                   />
                 )}
+                <div className="space-y-2">
+                  <Label>Rubric relationships</Label>
+                  <ModuleRubricAlignmentEditor
+                    categories={rubric.categories}
+                    initialAlignment={module.rubricAlignmentJson}
+                  />
+                </div>
                 <Button
                   type="submit"
                   className="w-full"
@@ -657,7 +730,7 @@ export default function AssignmentModuleRoute() {
                 open={isInstructionSheetOpen}
                 onOpenChange={setIsInstructionSheetOpen}
               >
-                <SheetContent>
+                <SheetContent aria-describedby={undefined}>
                   <SheetHeader>
                     <SheetTitle>
                       {editingInstruction
@@ -763,7 +836,7 @@ export default function AssignmentModuleRoute() {
             <div className="text-center text-muted-foreground py-8">
               No instructions yet. Create your first instruction to get started.
             </div>
-          ) : (
+          ) : isMounted ? (
             <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
               <SortableContext
                 items={sortedInstructions.map((i) => i.id)}
@@ -791,6 +864,27 @@ export default function AssignmentModuleRoute() {
                 </Table>
               </SortableContext>
             </DndContext>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8"></TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Buttons</TableHead>
+                  <TableHead>Chat Btn</TableHead>
+                  <TableHead>Next Btn</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedInstructions.map((instruction) => (
+                  <StaticInstructionRow
+                    key={instruction.id}
+                    instruction={instruction}
+                  />
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

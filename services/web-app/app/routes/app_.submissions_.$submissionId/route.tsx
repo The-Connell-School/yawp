@@ -29,8 +29,6 @@ import {
 import { ConfirmationDialog } from '~/components/confirmation-dialog';
 import { requireUserId, requireMembership } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   formatAssignmentGrade,
@@ -38,17 +36,7 @@ import {
   formatPointGrade,
   letterFromPercent,
 } from '~/domain/grading/gradeMath';
-import {
-  legacyRubricDisplayConfig,
-  type RubricDisplayConfig,
-} from '~/domain/grading/rubric-display';
-import {
-  getTemplateRubricCategories,
-  getTemplateScoreBounds,
-  getTemplateScoringType,
-  resolveGradingAssistantTemplateForAssignmentType,
-  type GradingAssistantTemplate,
-} from '~/domain/grading/grading-assistant-templates.server';
+import { type RubricDisplayConfig } from '~/domain/grading/rubric-display';
 import {
   type GrammarIssue,
   parseGrammarIssuesPayload,
@@ -64,84 +52,10 @@ import { GradingCommentsSidebar } from './teacher-grading/grading-comments-sideb
 import { SelectionToolbar } from './teacher-grading/selection-toolbar';
 import { GradeHighlightsOverlay } from './teacher-grading/grade-highlights-overlay';
 import { resolveSubmissionGradeMode } from './submission-grade-mode';
+import { resolveRubricConfigForSubmission } from './submission-rubric-config.server';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
-
-function buildRubricConfigFromTemplate(
-  template: GradingAssistantTemplate
-): RubricDisplayConfig {
-  const { minScore, maxScore } = getTemplateScoreBounds(template);
-  return {
-    categories: getTemplateRubricCategories(template),
-    minScore,
-    maxScore,
-    scoringType: getTemplateScoringType(template),
-  };
-}
-
-function rubricKeysFromScores(rubricScores: unknown) {
-  return isRecord(rubricScores) ? Object.keys(rubricScores) : [];
-}
-
-function hasAllRubricKeys(config: RubricDisplayConfig, keys: string[]) {
-  const configKeys = new Set(config.categories.map((category) => category.key));
-  return keys.every((key) => configKeys.has(key));
-}
-
-async function resolveRubricConfigForSubmission({
-  assignmentTypeId,
-  aiMeta,
-  rubricScores,
-}: {
-  assignmentTypeId: string;
-  aiMeta: unknown;
-  rubricScores: unknown;
-}): Promise<RubricDisplayConfig> {
-  let config: RubricDisplayConfig | null = null;
-
-  if (isRecord(aiMeta)) {
-    const templateId =
-      typeof aiMeta.gradingAssistantTemplateId === 'string'
-        ? aiMeta.gradingAssistantTemplateId
-        : null;
-    const templateSlug =
-      typeof aiMeta.gradingAssistantTemplateSlug === 'string'
-        ? aiMeta.gradingAssistantTemplateSlug
-        : null;
-    if (templateId || templateSlug) {
-      const template = await prisma.gradingAssistantTemplate.findFirst({
-        where: {
-          OR: [
-            ...(templateId ? [{ id: templateId }] : []),
-            ...(templateSlug ? [{ slug: templateSlug }] : []),
-          ],
-        },
-      });
-      if (template) {
-        config = buildRubricConfigFromTemplate(template);
-      }
-    }
-  }
-
-  if (!config) {
-    const resolved = await resolveGradingAssistantTemplateForAssignmentType({
-      assignmentTypeId,
-    });
-    config = buildRubricConfigFromTemplate(resolved.template);
-  }
-
-  const storedKeys = rubricKeysFromScores(rubricScores);
-  if (
-    storedKeys.length > 0 &&
-    !hasAllRubricKeys(config, storedKeys) &&
-    hasAllRubricKeys(legacyRubricDisplayConfig, storedKeys)
-  ) {
-    return legacyRubricDisplayConfig;
-  }
-
-  return config;
 }
 
 // ── Revalidation ─────────────────────────────────────────────────────
@@ -217,6 +131,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             select: {
               submitForGrade: true,
               pointValue: true,
+              gradingAssistantStrictnessLevel: true,
             },
           },
           classAssignment: {
@@ -256,6 +171,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
         orderBy: { createdAt: 'asc' },
       },
+      gradingAssistantRuns: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          assignmentTypeRubricSnapshot: true,
+        },
+      },
     },
   });
 
@@ -280,16 +202,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ));
 
   const isAdmin = user?.isAdmin ?? false;
-  const isDocumentSubmissionEnabled =
-    !isOwner && (isTeacher || isAdmin)
-      ? await isDocumentSubmissionEnabledForScope({
-          ...getDocumentSubmissionScope({
-            classAssignment: submission.document.classAssignment,
-            membership: submission.document.membership,
-          }),
-          actorTeacherProfileId: isTeacher ? profile.id : null,
-        })
-      : true;
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -301,12 +213,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isGradeMode =
     !isOwner &&
     (isTeacher || isAdmin) &&
-    isDocumentSubmissionEnabled &&
     (!submission.releasedAt || editParam);
 
   const rubricConfig = await resolveRubricConfigForSubmission({
     assignmentTypeId: submission.document.assignmentTypeId,
-    aiMeta: submission.aiMeta,
+    latestGradingRun: submission.gradingAssistantRuns[0] ?? null,
     rubricScores: submission.rubricScores,
   });
 
@@ -340,7 +251,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isOwner,
     isTeacher: isTeacher || isAdmin,
     isGradeMode,
-    isDocumentSubmissionEnabled,
   };
 }
 
@@ -352,7 +262,6 @@ export default function SubmissionRoute() {
     isOwner,
     isTeacher,
     isGradeMode: loaderGradeMode,
-    isDocumentSubmissionEnabled,
   } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -366,7 +275,6 @@ export default function SubmissionRoute() {
   const isGradingOther = isTeacher && !isOwner;
   const isGradeMode = resolveSubmissionGradeMode({
     isGradingOther,
-    isDocumentSubmissionEnabled,
     editParam,
     loaderGradeMode,
   });
@@ -949,9 +857,8 @@ export default function SubmissionRoute() {
             <>
               <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
                 <span className="text-sm font-semibold">Grade Summary</span>
-                {isDocumentSubmissionEnabled ? (
-                  <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
-                    <Button
+                <div className="flex items-center gap-0.5 rounded-full border bg-muted/50 p-0.5">
+                  <Button
                       size="sm"
                       variant={isGradeMode ? 'secondary' : 'ghost'}
                       className="h-7 rounded-full px-3 text-xs"
@@ -976,7 +883,6 @@ export default function SubmissionRoute() {
                       View
                     </Button>
                   </div>
-                ) : null}
               </div>
               <div className="no-scrollbar grow overflow-y-auto">
                 {isGradeMode ? (
@@ -992,6 +898,10 @@ export default function SubmissionRoute() {
                   onAiGradingComplete={handleAiGradingComplete}
                   rubricConfig={
                     teacherGradeUi?.rubricConfig ?? submission.rubricConfig
+                  }
+                  initialGradingAssistantStrictnessLevel={
+                    submission.document.assignment
+                      ?.gradingAssistantStrictnessLevel
                   }
                 />
                 ) : (

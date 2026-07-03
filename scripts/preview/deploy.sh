@@ -176,7 +176,10 @@ compute_tooling_fingerprint() {
         services/web-app/package.json \
         packages/prisma/package.json \
         packages/prisma/schema.prisma \
-        packages/prisma/prisma.config.ts
+        packages/prisma/prisma.config.ts \
+        packages/prisma/scripts/assignment-type-release-gate.ts \
+        packages/prisma/scripts/backfill-class-art-key.ts \
+        scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then
           sha256_file "$file"
@@ -222,7 +225,7 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  "${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  "${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 

@@ -128,10 +128,8 @@ test.describe.serial('Document Regression Suite', () => {
     await signIn(e2eContext.userEmail, 'johndoe');
     await helpers.openDocument(e2eContext.editedDocumentId);
 
-    // Click the history sheet trigger (Clock icon button next to save status)
-    const historyTrigger = page.locator('.lucide-clock').first();
-    await expect(historyTrigger).toBeVisible({ timeout: 5000 });
-    await historyTrigger.click();
+    // Open history from the document actions menu
+    await helpers.openDocumentHistory();
 
     // Verify sheet opens with title
     const sheet = page.locator('[role="dialog"]').first();
@@ -159,8 +157,7 @@ test.describe.serial('Document Regression Suite', () => {
     await helpers.waitForSaved();
 
     // Open history sheet
-    const historyIcon = page.locator('.lucide-clock').first();
-    await historyIcon.click();
+    await helpers.openDocumentHistory();
 
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
@@ -185,8 +182,7 @@ test.describe.serial('Document Regression Suite', () => {
     await helpers.openDocument(e2eContext.editedDocumentId);
 
     // Open and close history via the sheet's X button
-    const historyIcon = page.locator('.lucide-clock').first();
-    await historyIcon.click();
+    await helpers.openDocumentHistory();
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });
 

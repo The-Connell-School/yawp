@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
+const requireAdmin = mock();
 const prisma = {
   assignmentModuleSession: {
     findUnique: mock(),
@@ -9,7 +11,7 @@ const prisma = {
   },
 };
 
-mock.module('~/utils/auth.server', () => ({ requireMutableRequest }));
+mock.module('~/utils/auth.server', () => ({ requireMutableRequest, requireAdmin }));
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/getLLMCompletion', () => ({
   AgentType: {
@@ -28,6 +30,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
   beforeEach(() => {
     getLLMCompletion.mockReset();
     requireMutableRequest.mockReset();
+    requireAdmin.mockReset();
     requireMutableRequest.mockResolvedValue(undefined);
     prisma.assignmentModuleSession.findUnique.mockReset();
     prisma.assignmentModuleSession.update.mockReset();
@@ -39,6 +42,30 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       instructionsCompleted: 0,
       assignmentModule: {
         tutorInstructions: 'Coach the student.',
+        rubricAlignmentJson: {
+          thesis_and_content: 'primary',
+          grammar_and_mechanics: 'not-applicable',
+        },
+        assignmentType: {
+          id: 'assignment-type-1',
+          gradingAssistantVersion: 7,
+          rubricJson: {
+            categories: [
+              {
+                key: 'thesis_and_content',
+                label: 'Thesis/Content',
+                description: 'Original, defensible thesis.',
+                weight: 0.25,
+              },
+              {
+                key: 'grammar_and_mechanics',
+                label: 'Grammar/Syntax/Formatting',
+                description: 'Technical correctness.',
+                weight: 0.1,
+              },
+            ],
+          },
+        },
         instructions: [
           {
             id: 'instruction-1',
@@ -48,8 +75,8 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       },
       messages: [],
       document: {
+        id: 'doc-1',
         text: 'Original draft',
-        assignment: { tutorContext: null },
       },
     });
   }
@@ -86,7 +113,7 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     expect((thrown as Response).status).toBe(403);
   });
 
-  test('touches the module session when writing tutor messages', async () => {
+  test('sends the current document as explicit auditable tutor context', async () => {
     getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
     mockCms();
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
@@ -109,6 +136,49 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         body,
       }),
     } as any);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.tools).toBeUndefined();
+    expect(completionArgs.handleToolCall).toBeUndefined();
+    expect(completionArgs.system).toContain('student_document_context');
+    expect(completionArgs.system).toContain('Module rubric guidance');
+    expect(completionArgs.system).toContain('Primary');
+    expect(completionArgs.system).toContain('Thesis/Content (25%)');
+    expect(completionArgs.system).not.toContain('Grammar/Syntax/Formatting');
+
+    const documentContextMessage = completionArgs.messages.find(
+      (message: { role: string; content: string }) =>
+        message.role === 'user' &&
+        message.content.includes('<student_document_context')
+    );
+    expect(documentContextMessage.content).toContain('source="client-content"');
+    expect(documentContextMessage.content).toContain('Current draft');
+
+    expect(completionArgs.metadata).toEqual(
+      expect.objectContaining({
+        feature: 'tutor',
+        kind: 'assignment-module-tutor',
+        documentId: 'doc-1',
+        documentSource: 'client-content',
+        documentTextLength: 'Current draft'.length,
+        documentTextSha256: createHash('sha256')
+          .update('Current draft')
+          .digest('hex'),
+        cmsId: 'cms-1',
+        assignmentTypeId: 'assignment-type-1',
+        assignmentTypeRubricSource: 'assignment-type',
+        assignmentTypeGradingVersion: 7,
+        rubricCategoryKeys: [
+          'thesis_and_content',
+          'grammar_and_mechanics',
+        ],
+        moduleRubricRelationships: {
+          thesis_and_content: 'primary',
+          grammar_and_mechanics: 'not-applicable',
+        },
+        instructionId: 'instruction-1',
+      })
+    );
 
     expect(prisma.assignmentModuleSession.update).toHaveBeenCalledWith(
       expect.objectContaining({

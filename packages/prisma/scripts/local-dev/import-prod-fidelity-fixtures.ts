@@ -19,16 +19,12 @@ export async function loadProdFidelityBundle(): Promise<ProdFidelityBundle> {
   const manifest = await readJson<ProdFidelityManifest>('manifest.json');
   return {
     manifest,
-    gradingAssistantTemplates: await readJson('grading-assistant-templates.json'),
     assignmentTypes: await readJson('assignment-types.json'),
     assignmentTypeImages: await readJson('assignment-type-images.json'),
     assignmentModules: await readJson('assignment-modules.json'),
     assignmentModuleInstructions: await readJson('assignment-module-instructions.json'),
     assignmentModuleInstructionButtons: await readJson(
       'assignment-module-instruction-buttons.json'
-    ),
-    assignmentTypeGradingAssistants: await readJson(
-      'assignment-type-grading-assistants.json'
     ),
     teacherTrainings: await readJson('teacher-trainings.json'),
     teacherTrainingImages: await readJson('teacher-training-images.json'),
@@ -78,12 +74,6 @@ export async function importProdFidelityFixtures(
   prisma: PrismaClient,
   bundle: ProdFidelityBundle
 ) {
-  for (const row of bundle.gradingAssistantTemplates) {
-    await prisma.gradingAssistantTemplate.create({
-      data: withTimestamps(stripProfileRefs(row)) as never,
-    });
-  }
-
   for (const row of bundle.assignmentTypes) {
     await prisma.assignmentType.create({
       data: withTimestamps(stripProfileRefs(row)) as never,
@@ -113,16 +103,6 @@ export async function importProdFidelityFixtures(
   for (const row of bundle.assignmentModuleInstructionButtons) {
     await prisma.assignmentModuleInstructionButton.create({
       data: withTimestamps(row) as never,
-    });
-  }
-
-  for (const row of bundle.assignmentTypeGradingAssistants) {
-    await prisma.assignmentTypeGradingAssistant.create({
-      data: {
-        ...withTimestamps(row),
-        activeFrom: asDate(row.activeFrom),
-        activeTo: row.activeTo ? asDate(row.activeTo) : null,
-      } as never,
     });
   }
 
@@ -180,6 +160,6 @@ export async function importProdFidelityFixtures(
   }
 
   console.log(
-    `Imported prod-fidelity fixtures (${bundle.assignmentTypes.length} assignment types, ${bundle.gradingAssistantTemplates.length} grading assistants, ${bundle.teacherTrainings.length} teacher trainings).`
+    `Imported prod-fidelity fixtures (${bundle.assignmentTypes.length} assignment types, ${bundle.teacherTrainings.length} teacher trainings).`
   );
 }

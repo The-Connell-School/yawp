@@ -39,11 +39,34 @@ describe('production deployment contract', () => {
 
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const generateIndex = ciWorkflow.indexOf('bun prisma generate');
+    const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
+    const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
+    const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
     expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
+    expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
+    expect(ciWorkflow).toContain('backfill-class-art-key');
+    expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
+    expect(generateIndex).toBeGreaterThan(-1);
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(generateIndex).toBeLessThan(migrateIndex);
+    expect(backfillIndex).toBeGreaterThan(migrateIndex);
+    expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
+  });
+
+  test('Prisma package keeps both migration release gates available', () => {
+    const prismaPackage = JSON.parse(readRepoFile('packages/prisma/package.json'));
+
+    expect(prismaPackage.scripts['assignment-type-release-gate']).toBe(
+      'bun run scripts/assignment-type-release-gate.ts'
+    );
+    expect(prismaPackage.scripts['backfill-class-art-key']).toBe(
+      'bun run scripts/backfill-class-art-key.ts'
+    );
   });
 
   test('Docker build uses the Bun version that wrote the lockfile', () => {
@@ -100,20 +123,64 @@ describe('production deployment contract', () => {
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
+    const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
+    const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
+    const deployValidateMigrateIndex = deployWorkflow.indexOf('bun prisma migrate deploy');
+    const deployValidateBackfillIndex = deployWorkflow.indexOf('backfill-class-art-key');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
+    const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
+    const remoteBackfillIndex = migrateRemoteScript.indexOf('backfill-class-art-key.ts');
+    const remoteReleaseGateIndex = migrateRemoteScript.indexOf('assignment-type-release-gate.ts');
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
+    expect(deployWorkflow).toContain('bun prisma generate');
+    expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
     expect(deployWorkflow).toContain('PROD_DB_HOST');
     expect(deployWorkflow).toContain('PROD_DB_NAME');
     expect(deployWorkflow).toContain('PROD_DB_USER');
     expect(deployWorkflow).toContain('PROD_DB_PASSWORD');
+    expect(deployGenerateIndex).toBeGreaterThan(-1);
+    expect(deployValidateMigrateIndex).toBeGreaterThan(deployGenerateIndex);
+    expect(deployValidateBackfillIndex).toBeGreaterThan(deployValidateMigrateIndex);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
+    expect(migrateRemoteScript).toContain('--require-data');
+    expect(remoteMigrateIndex).toBeGreaterThan(-1);
+    expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
+    expect(remoteReleaseGateIndex).toBeGreaterThan(remoteBackfillIndex);
+  });
+});
+
+describe('worktree local setup contract', () => {
+  test('root dev command loads the isolated worktree app port before starting React Router', () => {
+    const rootPackage = JSON.parse(readRepoFile('package.json'));
+
+    expect(rootPackage.scripts.dev).toContain('scripts/worktree-local-setup.sh --no-dev');
+    expect(rootPackage.scripts.dev).toContain('source .worktree-local/config.env');
+    expect(rootPackage.scripts.dev).toContain('PORT="$DEV_PORT"');
+  });
+
+  test('Vite dev server honors the configured app port and fails instead of falling back', () => {
+    const viteConfig = readRepoFile('services/web-app/vite.config.ts');
+
+    expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
+    expect(viteConfig).toContain('strictPort: true');
+  });
+
+  test('worktree setup backfills class art keys before local seed verification', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const migrateIndex = setupScript.indexOf('prisma migrate deploy');
+    const backfillIndex = setupScript.indexOf('backfill-class-art-key');
+    const seedIndex = setupScript.indexOf('db:seed-local-dev');
+
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(backfillIndex).toBeGreaterThan(migrateIndex);
+    expect(seedIndex).toBeGreaterThan(backfillIndex);
   });
 });
 
@@ -146,7 +213,10 @@ describe('PR preview deployment contract', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const templateIndex = deployScript.indexOf('ensure_template_database');
     const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
+    const generateIndex = deployScript.indexOf('bun prisma generate');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const backfillIndex = deployScript.indexOf('bun run scripts/backfill-class-art-key.ts');
+    const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
     expect(deployScript).toContain('PREVIEW_DB_DUMP_S3_URI');
@@ -159,14 +229,21 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('Restoring production dump into template database');
     expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
+    expect(deployScript).toContain('backfill-class-art-key.ts');
+    expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
     expect(deployScript).not.toContain('seed-overlay.ts');
     expect(templateIndex).toBeGreaterThan(-1);
     expect(cloneIndex).toBeGreaterThan(-1);
+    expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
+    expect(releaseGateIndex).toBeGreaterThan(-1);
     expect(webStartIndex).toBeGreaterThan(-1);
     expect(templateIndex).toBeLessThan(cloneIndex);
-    expect(cloneIndex).toBeLessThan(migrateIndex);
-    expect(migrateIndex).toBeLessThan(webStartIndex);
+    expect(cloneIndex).toBeLessThan(generateIndex);
+    expect(generateIndex).toBeLessThan(migrateIndex);
+    expect(migrateIndex).toBeLessThan(backfillIndex);
+    expect(backfillIndex).toBeLessThan(releaseGateIndex);
+    expect(releaseGateIndex).toBeLessThan(webStartIndex);
   });
 
   test('preview deploy caches tooling work but still refreshes web containers', () => {
@@ -174,6 +251,9 @@ describe('PR preview deployment contract', () => {
 
     expect(deployScript).toContain('compute_tooling_fingerprint()');
     expect(deployScript).toContain('TOOLING_FINGERPRINT_FILE="$PREVIEW_DIR/tooling.sha256"');
+    expect(deployScript).toContain('packages/prisma/scripts/assignment-type-release-gate.ts');
+    expect(deployScript).toContain('packages/prisma/scripts/backfill-class-art-key.ts');
+    expect(deployScript).toContain('scripts/preview/deploy.sh');
     expect(deployScript).toContain('Tooling fingerprint unchanged and database already existed; skipping install/generate/migrate.');
     expect(deployScript).toContain('"${compose[@]}" up -d --force-recreate web');
     expect(deployScript).not.toContain('Web container already running; relying on bind-mounted source update.');

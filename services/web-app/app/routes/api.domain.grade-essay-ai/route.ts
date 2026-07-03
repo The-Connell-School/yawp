@@ -13,21 +13,23 @@ import {
 } from '~/domain/grading/gradeMath';
 import { firstNameFromFullName } from '~/domain/grading/personalize';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import type { RubricCategory as GradingRubricCategory } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import {
-  getTemplateInstructions,
-  getTemplateRubricCategories,
-  getTemplateScoreBounds,
-  getTemplateScoringType,
-  resolveGradingAssistantTemplateForAssignmentType,
-  type GradingRubricCategory,
-} from '~/domain/grading/grading-assistant-templates.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
-import { getDocumentSubmissionScope } from '~/utils/document-submission-scope.server';
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  getGradingAssistantStrictnessInstructions,
+  getGradingAssistantStrictnessLabel,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
   parseFirstJsonValue,
 } from '~/utils/llm-json.server';
+import {
+  buildAiContextAuditMetadata,
+  buildAiTextContextAudit,
+} from '~/utils/ai-context-audit.server';
 import {
   buildTeacherClassWhere,
   canManageGrades,
@@ -43,6 +45,7 @@ import {
 const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
+  gradingAssistantStrictnessLevel: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
 });
 
@@ -403,6 +406,8 @@ export async function action({ request }: ActionFunctionArgs) {
         },
         assignment: {
           select: {
+            id: true,
+            gradingAssistantStrictnessLevel: true,
             apHistorySnapshot: true,
           },
         },
@@ -501,40 +506,45 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const isSubmissionEnabled = await isDocumentSubmissionEnabledForScope({
-    ...getDocumentSubmissionScope(submission.document),
-    actorTeacherProfileId: actor.teacherProfileId,
-  });
-  if (!isSubmissionEnabled) {
-    return redirectWithToast('/app/my-classes', {
-      description: 'Grading is currently disabled for this school.',
-      type: 'error',
-    });
-  }
-
-  const resolvedGradingAssistant =
-    await resolveGradingAssistantTemplateForAssignmentType({
+  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
       assignmentTypeId: submission.document.assignmentTypeId,
       assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
       assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
     });
-  const gradingAssistantTemplate = resolvedGradingAssistant.template;
-  const rubricCategories = getTemplateRubricCategories(
-    gradingAssistantTemplate
+  const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
+    ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
+    : null;
+  if (data.gradingAssistantStrictnessLevel && !requestedStrictnessLevel) {
+    return dataResponse(
+      {
+        success: false,
+        message: 'Grading assistant strictness level is invalid.',
+      },
+      { status: 400 }
+    );
+  }
+  const assignmentStrictnessLevel = parseGradingAssistantStrictnessLevel(
+    submission.document.assignment?.gradingAssistantStrictnessLevel
   );
+  const gradingAssistantStrictnessLevel =
+    requestedStrictnessLevel ??
+    assignmentStrictnessLevel ??
+    DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+  const gradingAssistantStrictnessLabel = getGradingAssistantStrictnessLabel(
+    gradingAssistantStrictnessLevel
+  );
+  const gradingAssistantStrictnessInstructions =
+    getGradingAssistantStrictnessInstructions(gradingAssistantStrictnessLevel);
+  const rubricCategories = resolvedGradingConfig.rubricCategories;
   const rubricKeys = rubricCategories.map((category) => category.key);
-  const { minScore, maxScore } = getTemplateScoreBounds(
-    gradingAssistantTemplate
-  );
-  const scoringType = getTemplateScoringType(gradingAssistantTemplate);
+  const { minScore, maxScore, scoringType } = resolvedGradingConfig;
   const rubricConfig = {
     categories: rubricCategories,
     minScore,
     maxScore,
     scoringType,
   };
-  const { rubricInstructions, scoreInstructions, systemInstructions } =
-    getTemplateInstructions(gradingAssistantTemplate);
+  const templateInstructions = resolvedGradingConfig.instructions;
   const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
     rubricKeys,
     minScore,
@@ -563,6 +573,19 @@ export async function action({ request }: ActionFunctionArgs) {
     params: Parameters<typeof getLLMCompletion>[0]
   ) => getLLMCompletion({ ...params, ...llmRetryOptions });
   const useE2EFixture = shouldUseE2EGradingFixture();
+  const documentContext = buildAiTextContextAudit({
+    documentSource: 'submission-snapshot',
+    documentId: submission.document.id,
+    submissionId: submission.id,
+    text: submission.text,
+  });
+  const gradingAiContextMetadata = buildAiContextAuditMetadata({
+    textContext: documentContext,
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeRubricSource: resolvedGradingConfig.source,
+    assignmentTypeGradingVersion: resolvedGradingConfig.version,
+    rubricCategoryKeys: rubricKeys,
+  });
 
   const apHistorySnapshotCandidate =
     submission.document.assignment?.apHistorySnapshot;
@@ -603,6 +626,14 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           kind: 'ap-history-rubric',
           rubricId: apHistorySnapshot.rubric.rubricId,
           essayType: apHistorySnapshot.essayType,
+          ...buildAiContextAuditMetadata({
+            textContext: documentContext,
+            assignmentTypeId: submission.document.assignmentTypeId,
+            assignmentTypeRubricSource: 'ap-history-snapshot',
+            rubricCategoryKeys: [
+              ...apHistoryPointKeysForSnapshot(apHistorySnapshot),
+            ],
+          }),
         },
       });
 
@@ -664,7 +695,9 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         aiMeta: {
           model,
           rubricMode: 'ap_history',
+          gradingAssistantStrictnessLevel,
           gradedAt: now.toISOString(),
+          documentContext,
         } satisfies Prisma.InputJsonValue,
         ...(!submission.gradedAt
           ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
@@ -686,12 +719,36 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   }
 
-  const templateSystemInstructions = systemInstructions
-    ? `${systemInstructions}\n\n`
-    : '';
-  const system = `${templateSystemInstructions}You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  \"categories\": [{\"key\": string, \"score\": ${minScore}-${maxScore}, \"comment\": string}],\n  \"overallComment\": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with \"${studentFirstName},\" and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: \"${studentFirstName}, you ...\").\nDo not use fixed lead-ins like \"Overall grade,\" or \"${studentFirstName}, this is your overall feedback.\"`;
+  const strictnessBlock = `Grading assistant strictness: ${gradingAssistantStrictnessLabel}\n${gradingAssistantStrictnessInstructions}\n\n`;
 
-  const userPrompt = `Student first name: ${studentFirstName}\n\nGrading assistant template: ${gradingAssistantTemplate.name} (${gradingAssistantTemplate.slug})\n\nRubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+  let system = gradingSystemBase;
+  let userPrompt = '';
+
+  if (templateInstructions.mode === 'unified') {
+    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${templateInstructions.gradingInstructions}\n\nEssay:\n${submission.text}`;
+  } else {
+    const rubricInstructions =
+      templateInstructions.mode === 'legacy-split' ||
+      templateInstructions.mode === 'preset'
+        ? templateInstructions.rubricInstructions
+        : '';
+    const scoreInstructions =
+      templateInstructions.mode === 'legacy-split' ||
+      templateInstructions.mode === 'preset'
+        ? templateInstructions.scoreInstructions
+        : '';
+    const systemInstructions =
+      templateInstructions.mode === 'legacy-split'
+        ? templateInstructions.systemInstructions
+        : undefined;
+    const templateSystemInstructions = systemInstructions
+      ? `${systemInstructions}\n\n`
+      : '';
+    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
+    userPrompt = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${resolvedGradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${submission.text}`;
+  }
 
   let responseText = '';
 
@@ -709,6 +766,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         system,
         messages: [{ role: 'user', content: userPrompt }],
         maxTokens: 900,
+        metadata: {
+          feature: 'grading',
+          kind: 'rubric-evaluation',
+          gradingConfigSource: resolvedGradingConfig.source,
+          ...gradingAiContextMetadata,
+          assignmentTypeGradingLabel: resolvedGradingConfig.label,
+          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateSlug:
+            resolvedGradingConfig.sourceTemplateSlug,
+          gradingAssistantStrictnessLevel,
+          assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        },
       });
     } catch (error) {
       if (isLlmFallbackRetrySignal(error)) return retryResponse();
@@ -733,6 +802,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'overall-comment',
+        ...gradingAiContextMetadata,
       },
     });
     const parsedOverallComment = AiOverallCommentSchema.parse(
@@ -789,6 +859,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       metadata: {
         feature: 'grading',
         kind: 'rubric-schema-repair',
+        ...gradingAiContextMetadata,
       },
     });
 
@@ -906,7 +977,11 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         messages: [{ role: 'user', content: grammarUserPrompt }],
         maxTokens: 1600,
         temperature: 0.2,
-        metadata: { feature: 'grading', kind: 'grammar-issues' },
+        metadata: {
+          feature: 'grading',
+          kind: 'grammar-issues',
+          ...gradingAiContextMetadata,
+        },
       });
       let parsedGrammarIssues =
         parseGrammarIssuesFromResponseText(grammarResponseText);
@@ -931,6 +1006,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
             feature: 'grading',
             kind: 'grammar-issues',
             retry: 'schema-repair',
+            ...gradingAiContextMetadata,
           },
         });
         parsedGrammarIssues =
@@ -959,12 +1035,18 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       aiMeta: {
         model,
         gradedAt: now.toISOString(),
-        gradingAssistantTemplateId: gradingAssistantTemplate.id,
-        gradingAssistantTemplateVersion: gradingAssistantTemplate.version,
-        gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
-        gradingAssistantSource: resolvedGradingAssistant.source,
+        gradingConfigSource: resolvedGradingConfig.source,
+        assignmentTypeRubricSource: resolvedGradingConfig.source,
+        assignmentTypeGradingVersion: resolvedGradingConfig.version,
+        assignmentTypeGradingLabel: resolvedGradingConfig.label,
+        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+        rubricCategoryKeys: rubricKeys,
+        documentContext,
       } satisfies Prisma.InputJsonValue,
       ...(!submission.gradedAt
         ? { gradedAt: now, gradedByMembershipId: actor.membershipId }
@@ -976,18 +1058,30 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   await prisma.submissionGradingAssistantRun.create({
     data: {
       submissionId: submission.id,
-      gradingAssistantTemplateId: gradingAssistantTemplate.id,
-      templateVersion: gradingAssistantTemplate.version,
-      source: resolvedGradingAssistant.source,
+      assignmentTypeId: submission.document.assignmentTypeId,
+      assignmentTypeGradingVersion: resolvedGradingConfig.version,
+      assignmentTypeRubricSnapshot:
+        resolvedGradingConfig.rubricSnapshot as Prisma.InputJsonValue,
+      assignmentTypePromptConfigSnapshot:
+        resolvedGradingConfig.promptConfigSnapshot as Prisma.InputJsonValue,
+      source: resolvedGradingConfig.source,
       model,
       status: 'succeeded',
       metadata: {
-        gradingAssistantTemplateSlug: gradingAssistantTemplate.slug,
+        assignmentTypeGradingLabel: resolvedGradingConfig.label,
+        assignmentTypeRubricSource: resolvedGradingConfig.source,
+        assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
+        gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
+        assignmentId: submission.document.assignment?.id ?? null,
         assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
         scoringType,
         rubricKeys,
+        rubricCategoryKeys: rubricKeys,
         gradedAt: now.toISOString(),
+        documentContext,
       } satisfies Prisma.InputJsonValue,
     },
   });
@@ -1003,5 +1097,6 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     score,
     grammarIssues,
     rubricConfig,
+    gradingAssistantStrictnessLevel,
   });
 }
