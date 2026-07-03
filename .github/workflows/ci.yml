@@ -67,6 +67,11 @@ jobs:
           PGPASSWORD: postgres
         run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
 
+      - name: 🧪 Validate teacher training assignment migration data swap
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun test ./packages/prisma/scripts/teacher-training-assignment-migration.test.ts
+
       - name: ⚙️ Generate Prisma Client
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci

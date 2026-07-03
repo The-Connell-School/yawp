@@ -24,12 +24,9 @@ BEGIN
     ALTER TABLE "_TeacherTrainingAssignments"
       DROP CONSTRAINT "_TeacherTrainingAssignments_AB_pkey";
 
-    ALTER TABLE "_TeacherTrainingAssignments" ADD COLUMN "__swap_A" TEXT;
     UPDATE "_TeacherTrainingAssignments"
-    SET "__swap_A" = "A",
-        "A" = "B",
-        "B" = "__swap_A";
-    ALTER TABLE "_TeacherTrainingAssignments" DROP COLUMN "__swap_A";
+    SET "A" = "B",
+        "B" = "A";
 
     ALTER TABLE "_TeacherTrainingAssignments"
       ADD CONSTRAINT "_TeacherTrainingAssignments_AB_pkey"

@@ -3,8 +3,12 @@
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import pg from 'pg';
 
 const prismaRoot = join(import.meta.dir, '..');
+const RECOVERABLE_FAILED_MIGRATIONS = [
+  '20260703195500_realign_teacher_training_assignments',
+];
 
 const ENV = process.argv[2];
 
@@ -54,10 +58,66 @@ function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Pr
   });
 }
 
+async function listRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
+  if (!env.DATABASE_URL) {
+    return [];
+  }
+
+  const client = new pg.Client({ connectionString: env.DATABASE_URL });
+  try {
+    await client.connect();
+    const result = await client.query<{ migration_name: string }>(
+      `
+        SELECT migration_name
+        FROM "_prisma_migrations"
+        WHERE migration_name = ANY($1::text[])
+          AND finished_at IS NULL
+          AND rolled_back_at IS NULL
+        ORDER BY started_at
+      `,
+      [RECOVERABLE_FAILED_MIGRATIONS]
+    );
+
+    return result.rows.map((row) => row.migration_name);
+  } catch (error) {
+    if ((error as { code?: string }).code === '42P01') {
+      return [];
+    }
+
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+async function resolveRecoverableFailedMigrations(env: NodeJS.ProcessEnv) {
+  const failedMigrations = await listRecoverableFailedMigrations(env);
+
+  for (const migrationName of failedMigrations) {
+    console.log(`Marking failed migration ${migrationName} as rolled back before retrying deploy.`);
+    const resolveCode = await runCommand(
+      'bun',
+      ['prisma', 'migrate', 'resolve', '--rolled-back', migrationName],
+      env
+    );
+
+    if (resolveCode !== 0) {
+      return resolveCode;
+    }
+  }
+
+  return 0;
+}
+
 async function runProductionMigrations(env: NodeJS.ProcessEnv) {
   const generateCode = await runCommand('bun', ['prisma', 'generate'], env);
   if (generateCode !== 0) {
     return generateCode;
+  }
+
+  const resolveCode = await resolveRecoverableFailedMigrations(env);
+  if (resolveCode !== 0) {
+    return resolveCode;
   }
 
   const migrateCode = await runCommand('bun', ['prisma', 'migrate', 'deploy'], env);

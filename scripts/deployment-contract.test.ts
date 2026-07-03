@@ -46,6 +46,7 @@ describe('production deployment contract', () => {
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
     expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
+    expect(ciWorkflow).toContain('teacher-training-assignment-migration.test.ts');
     expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
     expect(ciWorkflow).toContain('backfill-class-art-key');
@@ -126,6 +127,9 @@ describe('production deployment contract', () => {
     const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
     const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
     const deployValidateMigrateIndex = deployWorkflow.indexOf('bun prisma migrate deploy');
+    const deployTrainingMigrationTestIndex = deployWorkflow.indexOf(
+      'teacher-training-assignment-migration.test.ts'
+    );
     const deployValidateBackfillIndex = deployWorkflow.indexOf('backfill-class-art-key');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
@@ -136,6 +140,7 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
     expect(deployWorkflow).toContain('bun prisma generate');
+    expect(deployWorkflow).toContain('teacher-training-assignment-migration.test.ts');
     expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
@@ -145,11 +150,15 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('PROD_DB_PASSWORD');
     expect(deployGenerateIndex).toBeGreaterThan(-1);
     expect(deployValidateMigrateIndex).toBeGreaterThan(deployGenerateIndex);
+    expect(deployTrainingMigrationTestIndex).toBeGreaterThan(-1);
+    expect(deployTrainingMigrationTestIndex).toBeLessThan(deployValidateMigrateIndex);
     expect(deployValidateBackfillIndex).toBeGreaterThan(deployValidateMigrateIndex);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
     expect(migrateRemoteScript).toContain('--require-data');
+    expect(migrateRemoteScript).toContain('20260703195500_realign_teacher_training_assignments');
+    expect(migrateRemoteScript).toContain("['prisma', 'migrate', 'resolve', '--rolled-back'");
     expect(migrateRemoteScript).toContain("REMOTE_MIGRATE_TUNNEL: '1'");
     expect(remoteMigrateIndex).toBeGreaterThan(-1);
     expect(remoteBackfillIndex).toBeGreaterThan(remoteMigrateIndex);
