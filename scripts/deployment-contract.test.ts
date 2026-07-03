@@ -132,6 +132,16 @@ describe('worktree local setup contract', () => {
     expect(viteConfig).toContain('Number(process.env.PORT ?? 5176)');
     expect(viteConfig).toContain('strictPort: true');
   });
+
+  test('setup installs dependencies even when the worktree database is already seeded', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const seededDatabaseBranch = setupScript.slice(setupScript.indexOf('else\n  ('));
+
+    expect(seededDatabaseBranch).toContain('bun install');
+    expect(seededDatabaseBranch.indexOf('bun install')).toBeLessThan(
+      seededDatabaseBranch.indexOf('bun prisma:generate'),
+    );
+  });
 });
 
 describe('PR preview deployment contract', () => {

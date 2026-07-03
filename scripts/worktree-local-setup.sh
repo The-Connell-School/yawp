@@ -235,6 +235,7 @@ elif ! database_seeded; then
 else
   (
     cd "$ROOT"
+    bun install
     bun prisma:generate >/dev/null
   )
 fi
