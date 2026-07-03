@@ -39,17 +39,21 @@ describe('production deployment contract', () => {
 
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const generateIndex = ciWorkflow.indexOf('bun prisma generate');
     const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
     const backfillIndex = ciWorkflow.indexOf('backfill-class-art-key');
     const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
     expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
+    expect(ciWorkflow).toContain('bun prisma generate');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
     expect(ciWorkflow).toContain('backfill-class-art-key');
     expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
+    expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
+    expect(generateIndex).toBeLessThan(migrateIndex);
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(releaseGateIndex).toBeGreaterThan(backfillIndex);
   });
@@ -120,6 +124,9 @@ describe('production deployment contract', () => {
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
     const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
+    const deployGenerateIndex = deployWorkflow.indexOf('bun prisma generate');
+    const deployValidateMigrateIndex = deployWorkflow.indexOf('bun prisma migrate deploy');
+    const deployValidateBackfillIndex = deployWorkflow.indexOf('backfill-class-art-key');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
     const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
@@ -128,6 +135,7 @@ describe('production deployment contract', () => {
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
+    expect(deployWorkflow).toContain('bun prisma generate');
     expect(deployWorkflow).toContain('backfill-class-art-key');
     expect(deployWorkflow).toContain('PROD_SSH_PRIVATE_KEY');
     expect(deployWorkflow).toContain('PROD_SSH_KEY_PATH');
@@ -135,6 +143,9 @@ describe('production deployment contract', () => {
     expect(deployWorkflow).toContain('PROD_DB_NAME');
     expect(deployWorkflow).toContain('PROD_DB_USER');
     expect(deployWorkflow).toContain('PROD_DB_PASSWORD');
+    expect(deployGenerateIndex).toBeGreaterThan(-1);
+    expect(deployValidateMigrateIndex).toBeGreaterThan(deployGenerateIndex);
+    expect(deployValidateBackfillIndex).toBeGreaterThan(deployValidateMigrateIndex);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
@@ -202,6 +213,7 @@ describe('PR preview deployment contract', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const templateIndex = deployScript.indexOf('ensure_template_database');
     const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
+    const generateIndex = deployScript.indexOf('bun prisma generate');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
     const backfillIndex = deployScript.indexOf('bun run scripts/backfill-class-art-key.ts');
     const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
@@ -222,11 +234,13 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).not.toContain('seed-overlay.ts');
     expect(templateIndex).toBeGreaterThan(-1);
     expect(cloneIndex).toBeGreaterThan(-1);
+    expect(generateIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(releaseGateIndex).toBeGreaterThan(-1);
     expect(webStartIndex).toBeGreaterThan(-1);
     expect(templateIndex).toBeLessThan(cloneIndex);
-    expect(cloneIndex).toBeLessThan(migrateIndex);
+    expect(cloneIndex).toBeLessThan(generateIndex);
+    expect(generateIndex).toBeLessThan(migrateIndex);
     expect(migrateIndex).toBeLessThan(backfillIndex);
     expect(backfillIndex).toBeLessThan(releaseGateIndex);
     expect(releaseGateIndex).toBeLessThan(webStartIndex);

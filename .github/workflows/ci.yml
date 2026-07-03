@@ -67,6 +67,11 @@ jobs:
           PGPASSWORD: postgres
         run: createdb -h 127.0.0.1 -U postgres yawp_migration_ci
 
+      - name: ⚙️ Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun prisma generate
+
       - name: 🧱 Apply Prisma migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci

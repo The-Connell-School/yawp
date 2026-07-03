@@ -55,6 +55,11 @@ describe('local dev seed fixtures', () => {
     ).toBe(true);
     expect(
       isLocalDatabaseUrl(
+        'postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_184'
+      )
+    ).toBe(true);
+    expect(
+      isLocalDatabaseUrl(
         'postgresql://postgres:postgres@yawp-prod.abc.us-east-1.rds.amazonaws.com:5432/yawp'
       )
     ).toBe(false);
