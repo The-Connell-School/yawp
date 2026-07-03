@@ -151,6 +151,17 @@ test.describe.serial('Student opens a teacher-created assignment', () => {
         );
 
         await expect(page.getByText('E2E Module 1')).toBeVisible();
+        await page.goto('/app');
+        await page.waitForLoadState('networkidle');
+        const createdDocumentTile = page
+          .locator(`a[href*="/app/documents/${documentId}"]`)
+          .first();
+        await expect(createdDocumentTile).toBeVisible({ timeout: 10000 });
+        await expect(createdDocumentTile).toContainText('E2E Module 1');
+        await expect(createdDocumentTile).not.toContainText('E2E Module 2');
+
+        await helpers.openDocument(documentId as string);
+        await expect(page.getByText('E2E Module 1')).toBeVisible();
         await page.getByTestId('tutor-next-module').click();
         await expect(page).toHaveURL(/cmsIdx=1/);
         await expect(page.getByText('E2E Module 2')).toBeVisible();

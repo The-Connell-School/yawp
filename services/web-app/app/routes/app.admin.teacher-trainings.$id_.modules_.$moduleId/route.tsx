@@ -495,7 +495,8 @@ export default function TeacherTrainingModuleRoute() {
                     required
                   />
                   <p className="text-sm text-muted-foreground">
-                    You can select multiple files to upload at once.
+                    You can upload multiple files, including caption files
+                    (.vtt) and transcripts (.txt or .md), at once.
                   </p>
                 </div>
                 <Button

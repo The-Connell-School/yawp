@@ -31,6 +31,9 @@ import { prisma } from '~/utils/db.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import VideoPlayer from './video-player';
 import { cn } from '~/utils/misc';
+import { getTeacherTrainingProgressPercent } from '~/utils/teacher-training-progress';
+import { getTeacherTrainingMediaAccessibilityResources } from '~/utils/teacher-training-media-accessibility';
+import { getTeacherTrainingPlaybackUrl } from '~/utils/teacher-training-video-link.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -109,13 +112,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Module not found', { status: 404 });
   }
 
-  // Derive a signed URL for playback if using S3 key
-  let playbackUrl: string | null = null;
-  if (currentModule?.videoS3Key) {
-    playbackUrl = await (
-      await import('~/services/s3.server')
-    ).getSignedGetUrl(currentModule.videoS3Key);
-  }
+  const playbackUrl = await getTeacherTrainingPlaybackUrl(
+    currentModule.videoS3Key
+  );
 
   return dataResponse({
     teacherTraining,
@@ -271,11 +270,24 @@ export default function TeacherTrainingModuleRoute() {
     document.body.removeChild(link);
   };
 
-  const progressPct = Math.ceil(
-    ((currentSession?.videoTimestamp || 0) /
-      (currentModule.videoDuration || 0)) *
-      100
+  const progressPct = getTeacherTrainingProgressPercent(
+    currentSession?.videoTimestamp,
+    currentModule.videoDuration
   );
+  const { captionResource, transcriptResource } =
+    getTeacherTrainingMediaAccessibilityResources(currentModule.resources);
+  const primaryResources = currentModule.resources.filter(
+    (resource) =>
+      resource.id !== captionResource?.id &&
+      resource.id !== transcriptResource?.id
+  );
+  const captionTrack = captionResource
+    ? {
+        src: `/api/teacher-training-module-resource/${captionResource.id}`,
+        label: 'English captions',
+        srcLang: 'en',
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col h-full">
@@ -311,6 +323,7 @@ export default function TeacherTrainingModuleRoute() {
                       teacherTrainingId={teacherTraining.id}
                       nextModuleId={nextModuleId}
                       initialCurrentTime={currentSession?.videoTimestamp || 0}
+                      captionTrack={captionTrack}
                       onUpdateProgress={(currentTime) => {
                         const formData = new FormData();
                         formData.append('intent', 'updateProgress');
@@ -371,44 +384,91 @@ export default function TeacherTrainingModuleRoute() {
               </CardContent>
             </Card>
 
-            {currentModule.resources.length > 0 && (
-              <Card className="bg-muted">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Resources
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {currentModule.resources.map((resource) => (
-                      <div
-                        key={resource.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{resource.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {resource.contentType}
-                            </p>
+            {(primaryResources.length > 0 ||
+              captionResource ||
+              transcriptResource) && (
+              <div className="space-y-3">
+                {primaryResources.length > 0 && (
+                  <Card
+                    className="bg-muted"
+                    data-testid="teacher-training-primary-resources"
+                  >
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        Resources
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {primaryResources.map((resource) => (
+                          <div
+                            key={resource.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
+                              <div>
+                                <p className="font-medium">{resource.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {resource.contentType}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              onClick={() =>
+                                downloadResource(resource.id, resource.name)
+                              }
+                              size="sm"
+                              variant="outline"
+                            >
+                              <Download className="mr-2 h-4 w-4" />
+                              Download
+                            </Button>
                           </div>
-                        </div>
-                        <Button
-                          onClick={() =>
-                            downloadResource(resource.id, resource.name)
-                          }
-                          size="sm"
-                          variant="outline"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Download
-                        </Button>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(captionResource || transcriptResource) && (
+                  <section
+                    aria-labelledby="teacher-training-media-accessibility-heading"
+                    className="px-1 text-xs text-muted-foreground/80"
+                    data-testid="teacher-training-media-accessibility"
+                  >
+                    <h3
+                      id="teacher-training-media-accessibility-heading"
+                      className="sr-only"
+                    >
+                      Media accessibility files
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="font-medium text-muted-foreground/80">
+                        Media accessibility
+                      </span>
+                      {captionResource ? (
+                        <a
+                          className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          href={`/api/teacher-training-module-resource/${captionResource.id}`}
+                          download
+                        >
+                          Captions
+                        </a>
+                      ) : null}
+                      {transcriptResource ? (
+                        <a
+                          className="rounded-sm underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          href={`/api/teacher-training-module-resource/${transcriptResource.id}`}
+                          download
+                        >
+                          Transcript
+                        </a>
+                      ) : null}
+                    </div>
+                  </section>
+                )}
+              </div>
             )}
           </div>
 
@@ -420,15 +480,10 @@ export default function TeacherTrainingModuleRoute() {
               <CardContent className="space-y-2 max-h-96 overflow-y-auto">
                 {teacherTraining.teacherTrainingModules.map((module, index) => {
                   const isCurrentModule = module.id === currentModule.id;
-                  const moduleProgressPct =
-                    module.teacherTrainingModuleSessions.length > 0
-                      ? Math.ceil(
-                          ((module.teacherTrainingModuleSessions[0]
-                            .videoTimestamp || 0) /
-                            (module.videoDuration || 0)) *
-                            100
-                        )
-                      : 0;
+                  const moduleProgressPct = getTeacherTrainingProgressPercent(
+                    module.teacherTrainingModuleSessions[0]?.videoTimestamp,
+                    module.videoDuration
+                  );
 
                   return (
                     <div

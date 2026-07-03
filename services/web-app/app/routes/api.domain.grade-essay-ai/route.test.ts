@@ -39,6 +39,9 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 
+const { LlmFallbackRetrySignal } = await import(
+  '~/utils/getLLMCompletion/llm-provider-errors.server'
+);
 const { action } = await import('./route');
 
 function buildRubricResponseJson(
@@ -332,6 +335,63 @@ describe('api.domain.grade-essay-ai', () => {
       documentTextSha256:
         '073d1a79b60fbc3caaccdb440a9c17a1e12c9360f209e321e3b0bada66abb5d9',
     });
+  });
+
+  test('returns a retry signal without persisting when fallback retry is requested', async () => {
+    getLLMCompletion.mockReset();
+    getLLMCompletion.mockImplementationOnce(() => {
+      throw new LlmFallbackRetrySignal({
+        reason: 'status:529',
+        retryableStatus: 529,
+        fallbackModel: 'gpt-4o-mini',
+      });
+    });
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-retry' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-retry');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as {
+      init?: { status?: number };
+      data: Record<string, unknown>;
+    };
+
+    expect(response.init?.status).toBe(202);
+    expect(response.data.retrying).toBe(true);
+    expect(prisma.submission.update).not.toHaveBeenCalled();
+    expect(prisma.submissionGradingAssistantRun.create).not.toHaveBeenCalled();
+  });
+
+  test('forces fallback model on retry requests', async () => {
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({ id: 'sub-fallback' })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sub-fallback');
+    form.append('llmRetry', 'fallback');
+
+    await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+
+    expect(getLLMCompletion).toHaveBeenCalled();
+    for (const call of getLLMCompletion.mock.calls) {
+      expect(call[0]).toMatchObject({
+        forceFallback: true,
+        signalFallbackRetry: false,
+      });
+    }
   });
 
   test('filters submission access through assignment class relation', async () => {

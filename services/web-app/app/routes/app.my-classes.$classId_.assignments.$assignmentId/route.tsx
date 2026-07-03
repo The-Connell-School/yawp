@@ -8,6 +8,7 @@ import {
 import { useState, useCallback, useMemo } from 'react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -23,6 +24,7 @@ import { CaretLeftIcon } from '~/components/icons';
 import { timeAgo } from '~/utils/timeAgo';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
+import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -89,6 +91,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const status: StatusFilter = isValidStatus(rawStatus)
     ? rawStatus
     : 'submitted';
+
+  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
+    {
+      schoolIds: [klass.school?.id],
+      organizationIds: [klass.school?.organizationId],
+      teacherProfileIds: [profile.id],
+      classIds: [klass.id],
+    }
+  );
 
   const submissions =
     status !== 'in-progress'
@@ -158,12 +169,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     klass,
     assignment,
     status,
+    isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
   });
 }
 
-type GradingState = 'grading' | 'done' | 'error';
+type GradingState = 'grading' | 'retrying' | 'done' | 'error';
 
 export default function AssignmentSubmissionsRoute() {
   const data = useLoaderData<typeof loader>();
@@ -174,6 +186,7 @@ export default function AssignmentSubmissionsRoute() {
     klass,
     assignment,
     status,
+    isDocumentSubmissionEnabled,
     submissions,
     inProgressDocuments,
   } = data;
@@ -185,6 +198,9 @@ export default function AssignmentSubmissionsRoute() {
   const [isGrading, setIsGrading] = useState(false);
   const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set());
   const [isReleasing, setIsReleasing] = useState(false);
+  const hasRetryingSubmission = Object.values(gradingProgress).some(
+    (state) => state === 'retrying'
+  );
 
   const backUrl = `/app/my-classes/${klass.id}?tab=assignments`;
 
@@ -233,9 +249,14 @@ export default function AssignmentSubmissionsRoute() {
       try {
         const form = new FormData();
         form.append('submissionId', submissionId);
-        const response = await fetch('/api/domain/grade-essay-ai', {
-          method: 'POST',
-          body: form,
+        const { response } = await postFormWithFallbackRetry({
+          action: '/api/domain/grade-essay-ai',
+          formData: form,
+          onRetry: () =>
+            setGradingProgress((prev) => ({
+              ...prev,
+              [submissionId]: 'retrying',
+            })),
         });
         if (response.ok) {
           setGradingProgress((prev) => ({ ...prev, [submissionId]: 'done' }));
@@ -348,13 +369,15 @@ export default function AssignmentSubmissionsRoute() {
           <div className="mb-3 flex items-center gap-3">
             <Button
               size="sm"
-              disabled={selected.size === 0 || isGrading}
+              disabled={
+                !isDocumentSubmissionEnabled || selected.size === 0 || isGrading
+              }
               onClick={gradeWithAI}
             >
               {isGrading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Grading…
+                  {hasRetryingSubmission ? 'Retrying...' : 'Grading…'}
                 </>
               ) : (
                 `Grade with AI${selected.size > 0 ? ` (${selected.size})` : ''}`
@@ -457,7 +480,11 @@ export default function AssignmentSubmissionsRoute() {
                           <Checkbox
                             checked={selected.has(sub.id)}
                             onCheckedChange={() => toggleSelect(sub.id)}
-                            disabled={state === 'grading'}
+                            disabled={
+                              !isDocumentSubmissionEnabled ||
+                              state === 'grading' ||
+                              state === 'retrying'
+                            }
                             aria-label="Select submission"
                           />
                         </TableCell>
@@ -467,7 +494,9 @@ export default function AssignmentSubmissionsRoute() {
                         </TableCell>
                         <TableCell>
                           <Link
-                            to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                            to={`/app/submissions/${sub.id}?${
+                              isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                            }exitTo=${encodeURIComponent(backUrl)}`}
                             className="text-primary hover:underline"
                           >
                             {sub.document.title || sub.title || 'Untitled'}
@@ -481,6 +510,11 @@ export default function AssignmentSubmissionsRoute() {
                             <span className="flex items-center gap-1 text-sm text-blue-600">
                               <Loader2 className="h-3 w-3 animate-spin" />
                               Grading…
+                            </span>
+                          ) : state === 'retrying' ? (
+                            <span className="flex items-center gap-1 text-sm text-blue-600">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Retrying...
                             </span>
                           ) : state === 'error' ? (
                             <Badge className="bg-red-100 text-red-700 border-red-200">
@@ -506,7 +540,11 @@ export default function AssignmentSubmissionsRoute() {
             <div className="mb-3 flex items-center gap-3">
               <Button
                 size="sm"
-                disabled={selected.size === 0 || isReleasing}
+                disabled={
+                  !isDocumentSubmissionEnabled ||
+                  selected.size === 0 ||
+                  isReleasing
+                }
                 onClick={releaseGrades}
               >
                 {isReleasing ? (
@@ -574,7 +612,9 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?${
+                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}
@@ -628,7 +668,9 @@ export default function AssignmentSubmissionsRoute() {
                       </TableCell>
                       <TableCell>
                         <Link
-                          to={`/app/submissions/${sub.id}?edit=1&exitTo=${encodeURIComponent(backUrl)}`}
+                          to={`/app/submissions/${sub.id}?${
+                            isDocumentSubmissionEnabled ? 'edit=1&' : ''
+                          }exitTo=${encodeURIComponent(backUrl)}`}
                           className="text-primary hover:underline"
                         >
                           {sub.document.title || sub.title || 'Untitled'}

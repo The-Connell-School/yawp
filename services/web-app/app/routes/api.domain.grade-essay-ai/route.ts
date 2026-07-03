@@ -5,6 +5,7 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { prisma } from '~/utils/db.server';
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
+import { isLlmFallbackRetrySignal } from '~/utils/getLLMCompletion/llm-provider-errors.server';
 import {
   formatGrade,
   letterFromPercent,
@@ -45,6 +46,7 @@ const POST = z.object({
   documentId: z.string().optional(),
   submissionId: z.string().optional(),
   gradingAssistantStrictnessLevel: z.string().optional(),
+  llmRetry: z.enum(['fallback']).optional(),
 });
 
 function buildAiSchemas({
@@ -560,6 +562,16 @@ export async function action({ request }: ActionFunctionArgs) {
     submission.document.membership?.user?.name
   );
   const model = process.env.AI_MODEL ?? 'claude-sonnet-4-6';
+  const forceFallback = data.llmRetry === 'fallback';
+  const llmRetryOptions = {
+    forceFallback,
+    signalFallbackRetry: !forceFallback,
+  };
+  const retryResponse = () =>
+    dataResponse({ retrying: true }, { status: 202 });
+  const getGradingLlmCompletion = (
+    params: Parameters<typeof getLLMCompletion>[0]
+  ) => getLLMCompletion({ ...params, ...llmRetryOptions });
   const useE2EFixture = shouldUseE2EGradingFixture();
   const documentContext = buildAiTextContextAudit({
     documentSource: 'submission-snapshot',
@@ -603,7 +615,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     let parsedJson: Record<string, unknown>;
     let points: Prisma.InputJsonObject;
     try {
-      const apResponseText = await getLLMCompletion({
+      const apResponseText = await getGradingLlmCompletion({
         model,
         system: apSystem,
         messages: [{ role: 'user', content: apUserPrompt }],
@@ -638,7 +650,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         apHistorySnapshot,
         parsedJsonCandidate.points
       );
-    } catch {
+    } catch (error) {
+      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       return dataResponse(
         {
           success: false,
@@ -748,7 +761,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
     });
   } else {
     try {
-      responseText = await getLLMCompletion({
+      responseText = await getGradingLlmCompletion({
         model,
         system,
         messages: [{ role: 'user', content: userPrompt }],
@@ -767,6 +780,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         },
       });
     } catch (error) {
+      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       throw error;
     }
   }
@@ -774,7 +788,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   const buildAiResponseFromCategories = async (
     categories: z.infer<typeof AiCategoriesSchema>
   ) => {
-    const overallCommentResponseText = await getLLMCompletion({
+    const overallCommentResponseText = await getGradingLlmCompletion({
       model,
       system: `You write the overall feedback sentence for a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "overallComment": string\n}\nRules:\n- overallComment must start with "${studentFirstName},".\n- Keep it warm, professional, and cohesive.\n- Do not include markdown or explanation.`,
       messages: [
@@ -831,7 +845,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       return buildAiResponseFromCategories(parsed.categories);
     }
 
-    const repairedResponseText = await getLLMCompletion({
+    const repairedResponseText = await getGradingLlmCompletion({
       model,
       system: `You repair grading assistant JSON. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nRules:\n- Preserve valid category scores/comments from the original output when possible.\n- Scores must be integers ${minScore}-${maxScore}.\n- Return exactly one category for each rubric key.\n- Use only these rubric keys: ${rubricKeys.join(', ')}.\n- overallComment must start with "${studentFirstName},".\n- Do not include markdown or explanation.`,
       messages: [
@@ -862,7 +876,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
   let parsed: z.infer<typeof AiResponseSchema>;
   try {
     parsed = await parseAiResponse(responseText);
-  } catch {
+  } catch (error) {
+    if (isLlmFallbackRetrySignal(error)) return retryResponse();
     return dataResponse(
       {
         success: false,
@@ -956,7 +971,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
 
       const grammarUserPrompt = `Essay:\n${submission.text}\n\nReturn up to 15 issues.`;
 
-      let grammarResponseText = await getLLMCompletion({
+      let grammarResponseText = await getGradingLlmCompletion({
         model,
         system: grammarSystem,
         messages: [{ role: 'user', content: grammarUserPrompt }],
@@ -976,7 +991,7 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         grammarAndMechanicsScore !== null &&
         grammarAndMechanicsScore <= 4
       ) {
-        grammarResponseText = await getLLMCompletion({
+        grammarResponseText = await getGradingLlmCompletion({
           model,
           system: grammarSystem,
           messages: [
@@ -999,7 +1014,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
       }
 
       grammarIssues = buildGrammarIssuesPayload(parsedGrammarIssues);
-    } catch {
+    } catch (error) {
+      if (isLlmFallbackRetrySignal(error)) return retryResponse();
       grammarIssues = null;
     }
   }

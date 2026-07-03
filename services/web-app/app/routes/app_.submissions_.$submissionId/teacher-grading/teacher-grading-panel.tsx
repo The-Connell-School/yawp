@@ -53,6 +53,10 @@ import { Check, Loader2, TrendingUp } from 'lucide-react';
 import { cn } from '~/utils/misc';
 import { useUpdateSubmission } from './use-update-submission';
 import { hasGradingDraftToReplace } from './has-grading-draft-to-replace';
+import {
+  cloneFormDataWithFallbackRetry,
+  isLlmRetryResponse,
+} from '~/utils/llm-retry-ui';
 
 function normalizePercentage(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -133,8 +137,11 @@ export function TeacherGradingPanel({
   const recalcResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const pendingAiFormRef = useRef<FormData | null>(null);
+  const hasRetriedAiFormRef = useRef(false);
   const lastInitializationKeyRef = useRef<string | null>(null);
   const lastStrictnessInitializationKeyRef = useRef<string | null>(null);
+  const [isAiRetrying, setIsAiRetrying] = useState(false);
   const [recalcUiState, setRecalcUiState] = useState<
     'idle' | 'loading' | 'done'
   >('idle');
@@ -187,7 +194,8 @@ export function TeacherGradingPanel({
   );
   const gradeBadgeClassName =
     'border-purple-300 bg-purple-100 text-purple-800 hover:!bg-purple-100 hover:!text-purple-800 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:!bg-purple-950/40 dark:hover:!text-purple-200';
-  const isGenerating = aiFetcher.state !== 'idle';
+  const isAiRequestInFlight = aiFetcher.state !== 'idle';
+  const isGenerating = isAiRequestInFlight || isAiRetrying;
   const isBusy = isGenerating || autoSaveStatus === 'saving';
 
   const hasDraftToReplace = useMemo(
@@ -290,7 +298,30 @@ export function TeacherGradingPanel({
   }, [computedNumericPercentage, hasManualPercentOverride]);
 
   useEffect(() => {
-    if (!aiFetcher.data?.success || aiFetcher.state !== 'idle') return;
+    if (aiFetcher.state !== 'idle') return;
+
+    if (
+      isLlmRetryResponse(aiFetcher.data) &&
+      pendingAiFormRef.current &&
+      !hasRetriedAiFormRef.current
+    ) {
+      hasRetriedAiFormRef.current = true;
+      setIsAiRetrying(true);
+      aiFetcher.submit(cloneFormDataWithFallbackRetry(pendingAiFormRef.current), {
+        method: 'POST',
+        action: '/api/domain/grade-essay-ai',
+      });
+      return;
+    }
+
+    if (!aiFetcher.data?.success) {
+      if (aiFetcher.data && !isLlmRetryResponse(aiFetcher.data)) {
+        pendingAiFormRef.current = null;
+        hasRetriedAiFormRef.current = false;
+        setIsAiRetrying(false);
+      }
+      return;
+    }
 
     const d = aiFetcher.data;
     const nextRubricConfig = normalizeRubricDisplayConfig(
@@ -331,6 +362,10 @@ export function TeacherGradingPanel({
       rubricScores: d.rubricScores ?? null,
       rubricConfig: nextRubricConfig,
     });
+
+    pendingAiFormRef.current = null;
+    hasRetriedAiFormRef.current = false;
+    setIsAiRetrying(false);
   }, [aiFetcher.data, aiFetcher.state, onGrammarIssuesChange]);
 
   useEffect(() => {
@@ -421,6 +456,9 @@ export function TeacherGradingPanel({
       'gradingAssistantStrictnessLevel',
       gradingAssistantStrictnessLevel
     );
+    pendingAiFormRef.current = aiForm;
+    hasRetriedAiFormRef.current = false;
+    setIsAiRetrying(false);
     aiFetcher.submit(aiForm, {
       method: 'POST',
       action: '/api/domain/grade-essay-ai',
@@ -459,7 +497,7 @@ export function TeacherGradingPanel({
                 autoSaveStatus === 'saving' && 'text-muted-foreground',
                 autoSaveStatus === 'saved' && 'text-green-600',
                 autoSaveStatus === 'error' && 'text-red-600',
-                autoSaveStatus === 'idle' && 'text-muted-foreground/60'
+                autoSaveStatus === 'idle' && 'text-muted-foreground'
               )}
             >
               {statusLabel ?? 'Autosave on'}
@@ -542,7 +580,7 @@ export function TeacherGradingPanel({
                   {isGenerating ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Grading...
+                      {isAiRetrying ? 'Retrying...' : 'Grading...'}
                     </span>
                   ) : (
                     'Grading Assistant Suggestions'
@@ -560,7 +598,7 @@ export function TeacherGradingPanel({
                 {isGenerating ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Grading...
+                    {isAiRetrying ? 'Retrying...' : 'Grading...'}
                   </span>
                 ) : (
                   'Grading Assistant Suggestions'

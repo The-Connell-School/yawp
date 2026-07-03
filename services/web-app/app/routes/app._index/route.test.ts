@@ -12,6 +12,7 @@ const prisma = {
 
 const requireUserId = mock();
 const requireMembership = mock();
+const requireMutableRequest = mock();
 const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
@@ -26,10 +27,12 @@ mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
+  requireMutableRequest,
 }));
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
+  requireMutableRequest,
 }));
 mock.module('~/utils/teacher-class-card-stats.server', () => ({
   getTeacherClassCardStats,
@@ -57,6 +60,8 @@ describe('app index loader assignments', () => {
     }
     requireUserId.mockReset();
     requireMembership.mockReset();
+    requireMutableRequest.mockReset();
+    requireMutableRequest.mockResolvedValue(undefined);
     getTeacherClassCardStats.mockReset();
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
@@ -115,7 +120,65 @@ describe('app index loader assignments', () => {
     );
   });
 
-  test('keeps all teacher classes navigable on the dashboard', async () => {
+  test('orders each student document tile by the current tutor module instead of the last module', async () => {
+    const createdAt = new Date('2026-06-01T12:00:00.000Z');
+    prisma.document.findMany.mockImplementation(async (args: any) => {
+      if (args.where?.archivedAt?.not === null) return [];
+
+      return [
+        {
+          id: 'doc-1',
+          title: 'Essay Draft',
+          html: '<p>Started</p>',
+          text: 'Started',
+          createdAt,
+          updatedAt: createdAt,
+          assignmentModuleSessions: [
+            {
+              id: 'cms-review',
+              createdAt,
+              updatedAt: createdAt,
+              instructionsCompleted: 0,
+              assignmentModuleId: 'module-review',
+              assignmentModule: {
+                id: 'module-review',
+                position: 4,
+                title: 'Review my Essay',
+                instructions: [{ id: 'review-instruction' }],
+              },
+            },
+            {
+              id: 'cms-prewriting',
+              createdAt,
+              updatedAt: createdAt,
+              instructionsCompleted: 0,
+              assignmentModuleId: 'module-prewriting',
+              assignmentModule: {
+                id: 'module-prewriting',
+                position: 1,
+                title: 'Pre-Writing',
+                instructions: [{ id: 'prewriting-instruction' }],
+              },
+            },
+          ],
+          submissions: [],
+        },
+      ];
+    });
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(
+      data.documents[0].assignmentModuleSessions[0].assignmentModule.title
+    ).toBe('Pre-Writing');
+  });
+
+  test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',
       role: 'TEACHER',

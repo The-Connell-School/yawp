@@ -70,6 +70,11 @@ export function Editor({
     content: initialHtml,
     immediatelyRender: false,
     editable: isEditable,
+    editorProps: {
+      attributes: {
+        'aria-label': 'Student document editor',
+      },
+    },
   });
 
   // Reflect prop changes to the editor's editable state
