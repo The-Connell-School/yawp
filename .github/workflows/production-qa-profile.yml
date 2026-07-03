@@ -1,0 +1,50 @@
+name: Production QA Profile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ensure-production-qa-profile:
+    name: Ensure production QA profile
+    runs-on: ubuntu-22.04
+    environment:
+      name: production
+      url: https://yawp.school
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Prepare production bastion SSH key
+        run: |
+          mkdir -p ~/.ssh "$(dirname "${PROD_SSH_KEY_PATH}")"
+          printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${PROD_SSH_KEY_PATH}"
+          chmod 600 "${PROD_SSH_KEY_PATH}"
+          ssh-keyscan -H "${PROD_SSH_HOST}" >> ~/.ssh/known_hosts
+        env:
+          PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+
+      - name: Generate Prisma client
+        run: bun prisma:generate
+
+      - name: Ensure production QA profile
+        run: bun run --cwd packages/prisma production-qa-profile-remote production
+        env:
+          PROD_DB_HOST: ${{ secrets.PROD_DB_HOST }}
+          PROD_DB_NAME: ${{ secrets.PROD_DB_NAME }}
+          PROD_DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          PROD_DB_USER: ${{ secrets.PROD_DB_USER }}
+          PROD_QA_PASSWORD: ${{ secrets.PROD_QA_PASSWORD }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_KEY_PATH: ${{ runner.temp }}/yawp-production-bastion

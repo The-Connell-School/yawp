@@ -21,6 +21,8 @@
     "fixtures:export-prod-fidelity": "bun run scripts/export-prod-fidelity-fixtures.ts",
     "assignment-type-release-gate": "bun run scripts/assignment-type-release-gate.ts",
     "backfill-class-art-key": "bun run scripts/backfill-class-art-key.ts",
+    "production-qa-profile": "bun run scripts/production-qa-profile.ts",
+    "production-qa-profile-remote": "bun run scripts/production-qa-profile-remote.ts",
     "org-membership:precheck": "bun run scripts/org-membership-precheck.ts",
     "org-membership:postcheck": "bun run scripts/org-membership-postcheck.ts",
     "org-membership:staging-verify": "bun run scripts/org-membership-staging-verify.ts",
