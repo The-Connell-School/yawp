@@ -23,6 +23,7 @@ import { Textarea } from '~/components/ui/textarea';
 import {
   assignmentTypeAiSnapshotToWorkbenchInput,
   buildAssignmentTypeAiWorkbench,
+  compareAssignmentTypeAiWorkbenches,
   DEFAULT_WORKBENCH_SAMPLE_ESSAY,
   DEFAULT_WORKBENCH_STUDENT_FIRST_NAME,
   type AssignmentTypeAiWorkbench,
@@ -247,12 +248,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     }),
     ...controls,
   });
+  const currentWorkbench = selectedVersion
+    ? buildAssignmentTypeAiWorkbench({
+        assignmentType,
+        ...controls,
+      })
+    : workbench;
+  const versionComparison = selectedVersion
+    ? compareAssignmentTypeAiWorkbenches({
+        current: currentWorkbench,
+        baseline: workbench,
+      })
+    : null;
 
   return dataResponse({
     assignmentType: stripVersionSnapshots(assignmentType),
     workbench,
     selectedVersion: selectedVersionSummary(selectedVersion),
     selectedRun: selectedRunSummary(selectedRun),
+    versionComparison,
     controls,
   });
 }
@@ -398,9 +412,23 @@ function tutorSnapshotPreviews(value: unknown) {
     .filter((preview) => preview.systemPrompt);
 }
 
+function InlineChangeList({ values }: { values: string[] }) {
+  if (values.length === 0) {
+    return <span className="text-muted-foreground">None</span>;
+  }
+
+  return <span>{values.join(', ')}</span>;
+}
+
 export default function AssignmentTypeAiWorkbenchRoute() {
-  const { assignmentType, workbench, selectedVersion, selectedRun, controls } =
-    useLoaderData<typeof loader>();
+  const {
+    assignmentType,
+    workbench,
+    selectedVersion,
+    selectedRun,
+    versionComparison,
+    controls,
+  } = useLoaderData<typeof loader>();
   const selectedRunSnapshot = selectedRun?.promptSnapshotJson;
   const selectedRunTutorPreviews = tutorSnapshotPreviews(selectedRunSnapshot);
   const selectedRunNotes = stringValue(selectedRun?.notes);
@@ -604,6 +632,69 @@ export default function AssignmentTypeAiWorkbenchRoute() {
               </div>
             </dl>
           </section>
+
+          {selectedVersion && versionComparison ? (
+            <section className="border-t pt-6">
+              <h2 className="mb-3 text-lg font-semibold">Version comparison</h2>
+              <div className="space-y-3 rounded-md border p-4 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">Grading prompt</span>
+                  <Badge
+                    variant={
+                      versionComparison.gradingPromptChanged
+                        ? 'warning-soft'
+                        : 'secondary'
+                    }
+                    size="sm"
+                  >
+                    {versionComparison.gradingPromptChanged
+                      ? 'Changed'
+                      : 'Same'}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium">Rubric</p>
+                  <p className="text-muted-foreground">
+                    Added:{' '}
+                    <InlineChangeList
+                      values={versionComparison.rubricCategories.added}
+                    />
+                  </p>
+                  <p className="text-muted-foreground">
+                    Removed:{' '}
+                    <InlineChangeList
+                      values={versionComparison.rubricCategories.removed}
+                    />
+                  </p>
+                  <p className="text-muted-foreground">
+                    Changed:{' '}
+                    <InlineChangeList
+                      values={versionComparison.rubricCategories.changed}
+                    />
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium">Tutor prompts</p>
+                  <p className="text-muted-foreground">
+                    Added:{' '}
+                    <InlineChangeList values={versionComparison.tutorPrompts.added} />
+                  </p>
+                  <p className="text-muted-foreground">
+                    Removed:{' '}
+                    <InlineChangeList
+                      values={versionComparison.tutorPrompts.removed}
+                    />
+                  </p>
+                  <p className="text-muted-foreground">
+                    Changed:{' '}
+                    <InlineChangeList
+                      values={versionComparison.tutorPrompts.changed}
+                    />
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section className="border-t pt-6">
             <div className="mb-3 flex items-center gap-2">

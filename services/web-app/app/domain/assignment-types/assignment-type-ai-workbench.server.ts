@@ -122,6 +122,21 @@ export type AssignmentTypeAiWorkbench = {
   }>;
 };
 
+export type AssignmentTypeAiWorkbenchComparison = {
+  hasChanges: boolean;
+  gradingPromptChanged: boolean;
+  rubricCategories: {
+    added: string[];
+    removed: string[];
+    changed: string[];
+  };
+  tutorPrompts: {
+    added: string[];
+    removed: string[];
+    changed: string[];
+  };
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -203,6 +218,108 @@ function byPositionThenId<T extends { position: number; id: string }>(
 ) {
   if (left.position !== right.position) return left.position - right.position;
   return left.id.localeCompare(right.id);
+}
+
+function stableString(value: unknown) {
+  return JSON.stringify(value);
+}
+
+function labelsForCategoryChanges({
+  current,
+  baseline,
+}: {
+  current: RubricCategory[];
+  baseline: RubricCategory[];
+}) {
+  const currentByKey = new Map(current.map((category) => [category.key, category]));
+  const baselineByKey = new Map(
+    baseline.map((category) => [category.key, category])
+  );
+  const added = current
+    .filter((category) => !baselineByKey.has(category.key))
+    .map((category) => category.key);
+  const removed = baseline
+    .filter((category) => !currentByKey.has(category.key))
+    .map((category) => category.key);
+  const changed = current
+    .filter((category) => {
+      const previous = baselineByKey.get(category.key);
+      return previous ? stableString(previous) !== stableString(category) : false;
+    })
+    .map((category) => category.key);
+
+  return { added, removed, changed };
+}
+
+function tutorPreviewKey(
+  preview: AssignmentTypeAiWorkbench['tutorPreviews'][number]
+) {
+  return `${preview.moduleId}:${preview.instructionId ?? 'module'}`;
+}
+
+function tutorPreviewLabel(
+  preview: AssignmentTypeAiWorkbench['tutorPreviews'][number]
+) {
+  return [preview.moduleTitle, preview.instructionTitle]
+    .filter(Boolean)
+    .join(' - ');
+}
+
+export function compareAssignmentTypeAiWorkbenches({
+  current,
+  baseline,
+}: {
+  current: AssignmentTypeAiWorkbench;
+  baseline: AssignmentTypeAiWorkbench;
+}): AssignmentTypeAiWorkbenchComparison {
+  const rubricCategories = labelsForCategoryChanges({
+    current: current.assignmentType.rubricCategories,
+    baseline: baseline.assignmentType.rubricCategories,
+  });
+  const gradingPromptChanged =
+    current.gradingPreview.system !== baseline.gradingPreview.system ||
+    current.gradingPreview.userPrompt !== baseline.gradingPreview.userPrompt;
+  const currentTutorByKey = new Map(
+    current.tutorPreviews.map((preview) => [tutorPreviewKey(preview), preview])
+  );
+  const baselineTutorByKey = new Map(
+    baseline.tutorPreviews.map((preview) => [tutorPreviewKey(preview), preview])
+  );
+  const addedTutorPreviews = current.tutorPreviews
+    .filter((preview) => !baselineTutorByKey.has(tutorPreviewKey(preview)))
+    .map(tutorPreviewLabel);
+  const removedTutorPreviews = baseline.tutorPreviews
+    .filter((preview) => !currentTutorByKey.has(tutorPreviewKey(preview)))
+    .map(tutorPreviewLabel);
+  const changedTutorPreviews = current.tutorPreviews
+    .filter((preview) => {
+      const previous = baselineTutorByKey.get(tutorPreviewKey(preview));
+      return previous
+        ? previous.systemPrompt !== preview.systemPrompt ||
+            previous.instructionPrompt !== preview.instructionPrompt
+        : false;
+    })
+    .map(tutorPreviewLabel);
+  const tutorPrompts = {
+    added: addedTutorPreviews,
+    removed: removedTutorPreviews,
+    changed: changedTutorPreviews,
+  };
+  const hasChanges =
+    gradingPromptChanged ||
+    rubricCategories.added.length > 0 ||
+    rubricCategories.removed.length > 0 ||
+    rubricCategories.changed.length > 0 ||
+    tutorPrompts.added.length > 0 ||
+    tutorPrompts.removed.length > 0 ||
+    tutorPrompts.changed.length > 0;
+
+  return {
+    hasChanges,
+    gradingPromptChanged,
+    rubricCategories,
+    tutorPrompts,
+  };
 }
 
 export function buildAssignmentTypeAiWorkbench({

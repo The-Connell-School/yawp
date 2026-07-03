@@ -301,6 +301,15 @@ describe('admin assignment type AI workbench loader', () => {
     expect(data.workbench.gradingPreview.userPrompt).not.toContain(
       'Use the current rubric wording.'
     );
+    expect(data.versionComparison).toMatchObject({
+      hasChanges: true,
+      gradingPromptChanged: true,
+      rubricCategories: {
+        added: ['current'],
+        removed: ['historical'],
+        changed: [],
+      },
+    });
   });
 
   test('saves the current sandbox as an evaluation run', async () => {
