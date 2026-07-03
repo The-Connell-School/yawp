@@ -25,6 +25,7 @@ import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
+import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
@@ -312,6 +313,7 @@ export function AssignmentTypeEditorForm({
           title="Rubric"
           description="The source of truth shared by grading and tutor guidance."
         >
+          <RubricSourceBanner rubric={rubricState} />
           <RubricConfigurationEditor
             key={`rubric-editor-${editorGeneration}`}
             initialScoringScale={scoringScaleState}

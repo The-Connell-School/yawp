@@ -88,14 +88,21 @@ test.describe('Admin assignment type creator', () => {
       await page.goto('/app/admin/assignment-types/new');
       await page.waitForLoadState('networkidle');
 
+      await expect(page.getByTestId('rubric-source-default')).toBeVisible();
+
       await page.getByLabel('Title').fill(title);
       await page.getByTestId('rubric-add-category').click();
       await page.getByTestId('rubric-category-row-0').click();
-      await expect(page.getByRole('heading', { name: 'Edit category' })).toBeVisible();
-      await page.getByLabel('Label', { exact: true }).fill('Thesis');
-      await page.getByLabel('Weight %').fill('100');
-      await page.getByRole('button', { name: 'Done' }).click();
-      await expect(page.getByRole('heading', { name: 'Edit category' })).toHaveCount(0);
+      const categoryDialog = page.getByRole('dialog', { name: 'Edit category' });
+      await expect(categoryDialog).toBeVisible();
+      await categoryDialog.getByLabel('Label', { exact: true }).fill('Thesis');
+      await categoryDialog.getByLabel('Weight %').fill('100');
+      await categoryDialog.getByLabel('Description', { exact: true }).fill(
+        'A clear, defensible thesis.'
+      );
+      await categoryDialog.getByRole('button', { name: 'Done' }).click();
+      await expect(page.getByTestId('rubric-source-default')).toHaveCount(0);
+      await expect(categoryDialog).toHaveCount(0);
 
       await Promise.all([
         page.waitForURL(
@@ -153,12 +160,34 @@ test.describe('Admin assignment type creator', () => {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}`);
       await page.waitForLoadState('networkidle');
+      await expect(page.getByTestId('rubric-source-default')).toBeVisible();
+      await page.getByTestId('rubric-default-preview-trigger').click();
+      const previewDialog = page.getByRole('dialog', {
+        name: 'Thesis-driven essay rubric',
+      });
+      await expect(previewDialog).toBeVisible();
+      await previewDialog.getByRole('button', { name: 'Close' }).click();
+      await expect(previewDialog).toHaveCount(0);
       await expect(page.getByText(OOPS)).toHaveCount(0);
 
       await page.locator('input[name="title"]').fill(`${title} Updated`);
       await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
+      const updateResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' &&
+          response.url().includes(`/app/admin/assignment-types/${assignmentTypeId}.data`)
+      );
       await page.getByRole('button', { name: 'Update' }).click();
-      await page.waitForLoadState('networkidle');
+      expect((await updateResponse).ok()).toBe(true);
+      await expect
+        .poll(async () => {
+          const updated = await prisma.assignmentType.findUnique({
+            where: { id: assignmentTypeId! },
+            select: { title: true },
+          });
+          return updated?.title;
+        })
+        .toBe(`${title} Updated`);
 
       await expect(page.getByText(OOPS)).toHaveCount(0);
       await expect(page.locator('input[name="title"]')).toHaveValue(`${title} Updated`);

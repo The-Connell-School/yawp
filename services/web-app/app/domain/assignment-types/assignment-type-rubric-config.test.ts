@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   MODULE_RUBRIC_RELATIONSHIPS,
+  getThesisDefaultRubricConfig,
+  hasAssignmentTypeOwnedRubric,
   normalizeModuleRubricAlignment,
   parseAssignmentTypeRubricConfig,
 } from './assignment-type-rubric-config';
@@ -67,6 +69,50 @@ describe('parseAssignmentTypeRubricConfig', () => {
       )?.weight
     ).toBe(0.1);
     expect(config.promptConfig.instructionsPreset).toBe('legacy_thesis_driven_essay');
+  });
+});
+
+describe('hasAssignmentTypeOwnedRubric', () => {
+  test('returns false for empty or incomplete categories', () => {
+    expect(hasAssignmentTypeOwnedRubric({ categories: [] })).toBe(false);
+    expect(
+      hasAssignmentTypeOwnedRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: '',
+            weight: 1,
+          },
+        ],
+      })
+    ).toBe(false);
+  });
+
+  test('returns true when at least one category is complete', () => {
+    expect(
+      hasAssignmentTypeOwnedRubric({
+        categories: [
+          {
+            key: 'claim',
+            label: 'Claim',
+            description: 'A clear defensible claim.',
+            weight: 1,
+          },
+        ],
+      })
+    ).toBe(true);
+  });
+});
+
+describe('getThesisDefaultRubricConfig', () => {
+  test('returns the thesis-driven essay fallback rubric', () => {
+    const config = getThesisDefaultRubricConfig();
+
+    expect(config.source).toBe('thesis-default');
+    expect(config.rubric.categories.map((category) => category.key)).toContain(
+      'thesis_and_content'
+    );
   });
 });
 

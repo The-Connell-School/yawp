@@ -467,7 +467,7 @@ function RubricImportPanel({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Copy className="size-4 shrink-0" />
-              Copy rubric
+              Copy rubric from
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-4">

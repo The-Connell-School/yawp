@@ -66,7 +66,7 @@ function parseOutputSchema(raw: unknown): Record<string, unknown> {
   return isRecord(raw) ? raw : { ...DEFAULT_OUTPUT_SCHEMA_JSON };
 }
 
-function hasUsableRubric(rubric: RubricData) {
+export function hasAssignmentTypeOwnedRubric(rubric: RubricData) {
   return rubric.categories.some(
     (category) =>
       category.key.trim() &&
@@ -74,6 +74,14 @@ function hasUsableRubric(rubric: RubricData) {
       category.description.trim() &&
       Number.isFinite(category.weight)
   );
+}
+
+export function getThesisDefaultRubricConfig(): AssignmentTypeRubricConfig {
+  return parseAssignmentTypeRubricConfig({});
+}
+
+function hasUsableRubric(rubric: RubricData) {
+  return hasAssignmentTypeOwnedRubric(rubric);
 }
 
 export function parseAssignmentTypeRubricConfig(
