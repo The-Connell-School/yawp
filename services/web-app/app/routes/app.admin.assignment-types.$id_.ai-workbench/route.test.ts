@@ -392,6 +392,98 @@ describe('admin assignment type AI workbench loader', () => {
     );
   });
 
+  test('returns selected evaluation run details without bloating the run list', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Thesis Essay',
+      kind: 'essay',
+      description: null,
+      scoringScaleJson: {
+        type: 'weighted_0_5',
+        minScore: 0,
+        maxScore: 5,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'thesis',
+            label: 'Thesis',
+            description: 'Defensible and specific thesis.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Use this shared rubric exactly.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [],
+      aiVersions: [],
+      aiEvaluationRuns: [
+        {
+          id: 'run-1',
+          label: 'Advanced thesis check',
+          notes: 'Kevin fixture.',
+          agentKind: 'workbench-preview',
+          status: 'saved',
+          studentFirstName: 'Ava',
+          strictnessLevel: 'advanced',
+          sampleInput: 'This draft has a specific claim.',
+          promptSnapshotJson: {
+            schemaVersion: 1,
+            gradingPreview: {
+              system: 'Saved grading system prompt.',
+              userPrompt: 'Saved grading user prompt.',
+            },
+            tutorPreviews: [
+              {
+                moduleTitle: 'Draft thesis',
+                instructionTitle: 'Revise thesis',
+                systemPrompt: 'Saved tutor prompt.',
+              },
+            ],
+          },
+          createdAt: new Date('2026-07-03T22:00:00.000Z'),
+          createdByUser: {
+            id: 'admin-user-1',
+            name: 'Bryant Brock',
+            email: 'bryant@brock.software',
+          },
+          assignmentTypeAiVersion: {
+            id: 'version-3',
+            versionNumber: 3,
+          },
+        },
+      ],
+    });
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/ai-workbench?runId=run-1'
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.selectedRun).toMatchObject({
+      id: 'run-1',
+      label: 'Advanced thesis check',
+      promptSnapshotJson: expect.objectContaining({
+        gradingPreview: expect.objectContaining({
+          userPrompt: 'Saved grading user prompt.',
+        }),
+      }),
+    });
+    expect(data.assignmentType.aiEvaluationRuns[0].promptSnapshotJson).toBe(
+      undefined
+    );
+  });
+
   test('returns 404 when the assignment type is missing', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue(null);
 

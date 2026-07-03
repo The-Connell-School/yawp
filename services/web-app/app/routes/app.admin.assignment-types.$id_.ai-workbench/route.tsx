@@ -81,9 +81,13 @@ function loadAssignmentTypeForWorkbench(assignmentTypeId: string) {
         select: {
           id: true,
           label: true,
+          notes: true,
           agentKind: true,
           status: true,
+          studentFirstName: true,
           strictnessLevel: true,
+          sampleInput: true,
+          promptSnapshotJson: true,
           createdAt: true,
           createdByUser: {
             select: {
@@ -169,12 +173,31 @@ function selectedVersionSummary(
 }
 
 function stripVersionSnapshots<
-  T extends { aiVersions: Array<Record<string, unknown> & { snapshotJson?: unknown }> },
+  T extends {
+    aiVersions: Array<Record<string, unknown> & { snapshotJson?: unknown }>;
+    aiEvaluationRuns: Array<
+      Record<string, unknown> & { promptSnapshotJson?: unknown }
+    >;
+  },
 >(assignmentType: T) {
   return {
     ...assignmentType,
     aiVersions: assignmentType.aiVersions.map(({ snapshotJson: _snapshotJson, ...row }) => row),
+    aiEvaluationRuns: assignmentType.aiEvaluationRuns.map(
+      ({ promptSnapshotJson: _promptSnapshotJson, ...row }) => row
+    ),
   };
+}
+
+function selectedRunSummary(
+  run:
+    | (Record<string, unknown> & {
+        id: string;
+        promptSnapshotJson?: unknown;
+      })
+    | null
+) {
+  return run ? { ...run } : null;
 }
 
 function workbenchInputFromSelection({
@@ -213,6 +236,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const selectedVersion =
     assignmentType.aiVersions.find((version) => version.id === selectedVersionId) ??
     null;
+  const selectedRunId = url.searchParams.get('runId')?.trim() || null;
+  const selectedRun =
+    assignmentType.aiEvaluationRuns.find((run) => run.id === selectedRunId) ??
+    null;
   const workbench = buildAssignmentTypeAiWorkbench({
     assignmentType: workbenchInputFromSelection({
       assignmentType,
@@ -225,6 +252,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     assignmentType: stripVersionSnapshots(assignmentType),
     workbench,
     selectedVersion: selectedVersionSummary(selectedVersion),
+    selectedRun: selectedRunSummary(selectedRun),
     controls,
   });
 }
@@ -331,9 +359,51 @@ function runActorLabel(run: {
   return run.createdByUser?.name ?? run.createdByUser?.email ?? 'Unknown admin';
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function nestedString(value: unknown, path: string[]) {
+  let current = value;
+  for (const segment of path) {
+    if (!isRecord(current)) return '';
+    current = current[segment];
+  }
+
+  return typeof current === 'string' ? current : '';
+}
+
+function stringValue(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function tutorSnapshotPreviews(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.tutorPreviews)) return [];
+
+  return value.tutorPreviews
+    .filter(isRecord)
+    .map((preview, index) => ({
+      key: `${preview.moduleId ?? 'module'}:${preview.instructionId ?? index}`,
+      label: [
+        typeof preview.moduleTitle === 'string' ? preview.moduleTitle : null,
+        typeof preview.instructionTitle === 'string'
+          ? preview.instructionTitle
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' - '),
+      systemPrompt:
+        typeof preview.systemPrompt === 'string' ? preview.systemPrompt : '',
+    }))
+    .filter((preview) => preview.systemPrompt);
+}
+
 export default function AssignmentTypeAiWorkbenchRoute() {
-  const { assignmentType, workbench, selectedVersion, controls } =
+  const { assignmentType, workbench, selectedVersion, selectedRun, controls } =
     useLoaderData<typeof loader>();
+  const selectedRunSnapshot = selectedRun?.promptSnapshotJson;
+  const selectedRunTutorPreviews = tutorSnapshotPreviews(selectedRunSnapshot);
+  const selectedRunNotes = stringValue(selectedRun?.notes);
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
@@ -608,11 +678,66 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                     <p className="mt-2 text-xs text-muted-foreground">
                       {formatWorkbenchDate(run.createdAt)}
                     </p>
+                    <div className="mt-3">
+                      <Button type="button" variant="outline" size="sm" asChild>
+                        <a
+                          href={`/app/admin/assignment-types/${assignmentType.id}/ai-workbench?runId=${run.id}`}
+                        >
+                          View
+                        </a>
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ol>
             )}
           </section>
+
+          {selectedRun ? (
+            <section className="border-t pt-6">
+              <h2 className="mb-3 text-lg font-semibold">Selected run</h2>
+              <div className="space-y-4 rounded-md border p-4">
+                <div>
+                  <p className="text-sm font-medium">
+                    {stringValue(
+                      selectedRun.label,
+                      'Untitled evaluation case'
+                    )}
+                  </p>
+                  {selectedRunNotes ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedRunNotes}
+                    </p>
+                  ) : null}
+                </div>
+                <PromptBlock
+                  label="Saved sample"
+                  value={stringValue(selectedRun.sampleInput)}
+                />
+                <PromptBlock
+                  label="Saved grading system prompt"
+                  value={nestedString(selectedRunSnapshot, [
+                    'gradingPreview',
+                    'system',
+                  ])}
+                />
+                <PromptBlock
+                  label="Saved grading user prompt"
+                  value={nestedString(selectedRunSnapshot, [
+                    'gradingPreview',
+                    'userPrompt',
+                  ])}
+                />
+                {selectedRunTutorPreviews.map((preview) => (
+                  <PromptBlock
+                    key={preview.key}
+                    label={`Saved tutor prompt: ${preview.label || 'Tutor preview'}`}
+                    value={preview.systemPrompt}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="border-t pt-6">
             <AssignmentTypeAiHistorySection
