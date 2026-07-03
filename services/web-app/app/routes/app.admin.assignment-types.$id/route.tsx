@@ -238,6 +238,7 @@ export default function AssignmentTypeRoute() {
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
+      aiVersions={course.aiVersions}
     />
   );
 }

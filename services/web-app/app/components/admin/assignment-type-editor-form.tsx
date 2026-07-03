@@ -25,6 +25,10 @@ import {
   AssignmentTypeModulesSection,
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
+import {
+  AssignmentTypeAiHistorySection,
+  type AssignmentTypeAiVersionRow,
+} from './assignment-type-ai-history-section';
 import { RubricSourceBanner } from './rubric-source-indicator';
 
 type AssignmentTypeEditorFormProps = {
@@ -38,6 +42,7 @@ type AssignmentTypeEditorFormProps = {
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
+  aiVersions?: AssignmentTypeAiVersionRow[];
 };
 
 function formSnapshot(values: {
@@ -113,6 +118,7 @@ export function AssignmentTypeEditorForm({
   archivedAt = null,
   imageId = null,
   modules = [],
+  aiVersions = [],
 }: AssignmentTypeEditorFormProps) {
   const fetcher = useFetcher();
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -359,6 +365,16 @@ export function AssignmentTypeEditorForm({
             <AssignmentTypeModulesSection
               assignmentTypeId={assignmentTypeId!}
               modules={modules}
+            />
+          </Section>
+
+          <Section
+            title="Version history"
+            description="Saved rubric, grading assistant, and tutor instruction snapshots."
+          >
+            <AssignmentTypeAiHistorySection
+              assignmentTypeId={assignmentTypeId!}
+              aiVersions={aiVersions}
             />
           </Section>
         </div>
