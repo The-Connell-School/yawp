@@ -142,6 +142,15 @@ describe('worktree local setup contract', () => {
       seededDatabaseBranch.indexOf('bun prisma:generate'),
     );
   });
+
+  test('setup derives isolated ports from the ws instance folder when available', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+
+    expect(setupScript).toContain('workspace.instance.yaml');
+    expect(setupScript).toContain('EXPECTED_SLUG="$(detect_slug)"');
+    expect(setupScript).toContain('${SLUG:-}');
+    expect(setupScript).toContain('$EXPECTED_SLUG');
+  });
 });
 
 describe('PR preview deployment contract', () => {

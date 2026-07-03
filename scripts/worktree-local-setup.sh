@@ -2,9 +2,21 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SLUG="$(basename "$ROOT")"
 CONFIG_DIR="$ROOT/.worktree-local"
 CONFIG_FILE="$CONFIG_DIR/config.env"
+
+detect_slug() {
+  local parent
+  parent="$(dirname "$ROOT")"
+  if [[ -f "$parent/workspace.instance.yaml" ]]; then
+    basename "$parent"
+  else
+    basename "$ROOT"
+  fi
+}
+
+EXPECTED_SLUG="$(detect_slug)"
+SLUG="$EXPECTED_SLUG"
 
 usage() {
   cat <<'EOF'
@@ -33,8 +45,12 @@ ensure_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
-    return
+    if [[ "${SLUG:-}" == "$EXPECTED_SLUG" ]]; then
+      return
+    fi
   fi
+
+  SLUG="$EXPECTED_SLUG"
 
   local slot
   slot="$(hash_slot "$SLUG" 70)"
