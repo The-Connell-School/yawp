@@ -2,6 +2,75 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 test.describe.serial('Organization assignment type inheritance', () => {
+  test('owner can assign teacher lounge trainings to a teacher', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    const prisma = createE2EPrismaClient();
+
+    try {
+      await prisma.orgMembership.update({
+        where: { id: e2eContext.teacherMembershipId },
+        data: { assignedTeacherTrainings: { set: [] } },
+      });
+
+      await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+      await page.goto('/app/organization/teachers');
+
+      const teacherRow = page.getByRole('row', {
+        name: new RegExp(
+          `${e2eContext.teacherName}.*${e2eContext.teacherEmail}`
+        ),
+      });
+      await teacherRow.getByRole('button', { name: 'Edit' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Teacher' })
+      ).toBeVisible();
+
+      const trainingCheckbox = page.locator(
+        `#teacher-training-${e2eContext.teacherTrainingId}`
+      );
+      await expect(trainingCheckbox).toHaveAttribute('aria-checked', 'false');
+      await trainingCheckbox.evaluate((node) =>
+        (node as HTMLButtonElement).click()
+      );
+      await expect(trainingCheckbox).toHaveAttribute('aria-checked', 'true');
+
+      const saveResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/app/organization/teachers.data') &&
+          response.request().method() === 'POST'
+      );
+      await page.getByRole('button', { name: 'Update Teacher' }).click();
+      const saveResponse = await saveResponsePromise;
+
+      expect(saveResponse.status()).toBeLessThan(400);
+      await expect(
+        page.getByText("Oops! Something didn't work quite right.")
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'Edit' }).first()
+      ).toBeVisible();
+
+      const teacher = await prisma.orgMembership.findUniqueOrThrow({
+        where: { id: e2eContext.teacherMembershipId },
+        include: {
+          assignedTeacherTrainings: { select: { id: true } },
+        },
+      });
+      expect(
+        teacher.assignedTeacherTrainings.map((course) => course.id)
+      ).toEqual([e2eContext.teacherTrainingId]);
+    } finally {
+      await prisma.orgMembership.update({
+        where: { id: e2eContext.teacherMembershipId },
+        data: { assignedTeacherTrainings: { set: [] } },
+      });
+      await prisma.$disconnect();
+    }
+  });
+
   test('school customize narrows assignment types visible to teachers', async ({
     page,
     e2eContext,
@@ -13,7 +82,9 @@ test.describe.serial('Organization assignment type inheritance', () => {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto('/app/organization/schools');
       await page.getByRole('button', { name: 'Edit' }).click();
-      await expect(page.getByRole('heading', { name: 'Edit School' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Edit School' })
+      ).toBeVisible();
 
       const manager = page.getByTestId('school-assignment-types-manager');
       await manager.getByLabel('Customize for this school').click();
@@ -33,13 +104,17 @@ test.describe.serial('Organization assignment type inheritance', () => {
         },
       });
       expect(school.assignmentTypesCustomized).toBe(true);
-      expect(school.assignmentTypeAssignments.map((row) => row.assignmentTypeId)).toEqual([
-        e2eContext.assignmentTypeId,
-      ]);
+      expect(
+        school.assignmentTypeAssignments.map((row) => row.assignmentTypeId)
+      ).toEqual([e2eContext.assignmentTypeId]);
 
       await page.goto('/app');
-      await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Daily Pages' })).toHaveCount(0);
+      await expect(
+        page.getByRole('link', { name: 'E2E Course' })
+      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Daily Pages' })).toHaveCount(
+        0
+      );
     } finally {
       await prisma.schoolAssignmentType.deleteMany({
         where: { schoolId: e2eContext.schoolId },
@@ -62,8 +137,15 @@ test.describe.serial('Organization assignment type inheritance', () => {
     try {
       await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
       await page.goto('/app/organization/teachers');
-      await page.getByRole('button', { name: 'Edit' }).click();
-      await expect(page.getByRole('heading', { name: 'Edit Teacher' })).toBeVisible();
+      const teacherRow = page.getByRole('row', {
+        name: new RegExp(
+          `${e2eContext.teacherName}.*${e2eContext.teacherEmail}`
+        ),
+      });
+      await teacherRow.getByRole('button', { name: 'Edit' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit Teacher' })
+      ).toBeVisible();
 
       const manager = page.getByTestId('teacher-assignment-types-manager');
       await manager.getByLabel('Customize for this teacher').click();
@@ -74,7 +156,9 @@ test.describe.serial('Organization assignment type inheritance', () => {
         .getByLabel('AP History Essay')
         .setChecked(false, { force: true });
       await page.getByRole('button', { name: 'Update Teacher' }).click();
-      await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+      await expect(
+        teacherRow.getByRole('button', { name: 'Edit' })
+      ).toBeVisible();
 
       const teacher = await prisma.orgMembership.findUniqueOrThrow({
         where: { id: e2eContext.teacherMembershipId },
@@ -88,8 +172,12 @@ test.describe.serial('Organization assignment type inheritance', () => {
       ).toEqual([e2eContext.assignmentTypeId]);
 
       await page.goto('/app');
-      await expect(page.getByRole('link', { name: 'E2E Course' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Daily Pages' })).toHaveCount(0);
+      await expect(
+        page.getByRole('link', { name: 'E2E Course' })
+      ).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Daily Pages' })).toHaveCount(
+        0
+      );
     } finally {
       await prisma.teacherAssignmentType.deleteMany({
         where: { membershipId: e2eContext.teacherMembershipId },
