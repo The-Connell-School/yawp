@@ -58,6 +58,7 @@ model AssignmentType {
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
   image                              AssignmentTypeImage?
+  aiVersions                         AssignmentTypeAiVersion[]
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
   teacherAssignments                 TeacherAssignmentType[]
@@ -161,6 +162,23 @@ model AssignmentTypeImage {
   blob             Bytes
   assignmentTypeId String         @unique
   assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+}
+
+model AssignmentTypeAiVersion {
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+  assignmentTypeId String
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  versionNumber    Int
+  changeSource     String
+  changeSummary    String
+  createdByUserId  String?
+  createdByUser    User?          @relation("AssignmentTypeAiVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  snapshotJson     Json
+
+  @@unique([assignmentTypeId, versionNumber])
+  @@index([assignmentTypeId, createdAt(sort: Desc)])
+  @@index([createdByUserId])
 }
 
 model AssignmentModule {
@@ -488,6 +506,7 @@ model User {
   password     Password?
   sessions     Session[]
   memberships  OrgMembership[]
+  aiVersions   AssignmentTypeAiVersion[] @relation("AssignmentTypeAiVersionCreatedBy")
   isAdmin      Boolean         @default(false)
   isSuperAdmin Boolean         @default(false)
 }
