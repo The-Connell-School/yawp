@@ -222,7 +222,7 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  "${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy'
+  "${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/assignment-type-release-gate.ts --require-data'
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 

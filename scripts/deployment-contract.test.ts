@@ -39,11 +39,16 @@ describe('production deployment contract', () => {
 
   test('CI has a dedicated migration validation job against Postgres', () => {
     const ciWorkflow = readRepoFile('.github/workflows/ci.yml');
+    const migrateIndex = ciWorkflow.indexOf('bun prisma migrate deploy');
+    const releaseGateIndex = ciWorkflow.indexOf('assignment-type-release-gate');
 
     expect(ciWorkflow).toContain('validate-prisma-migrations');
     expect(ciWorkflow).toContain('bun test ./scripts/deployment-contract.test.ts');
     expect(ciWorkflow).toContain('bun prisma migrate deploy');
+    expect(ciWorkflow).toContain('assignment-type-release-gate');
     expect(ciWorkflow).toContain('postgres:16');
+    expect(migrateIndex).toBeGreaterThan(-1);
+    expect(releaseGateIndex).toBeGreaterThan(migrateIndex);
   });
 
   test('Docker build uses the Bun version that wrote the lockfile', () => {
@@ -100,8 +105,11 @@ describe('production deployment contract', () => {
 
   test('main deploy runs production Prisma migrations before publishing the image', () => {
     const deployWorkflow = readRepoFile('.github/workflows/deploy.yml');
+    const migrateRemoteScript = readRepoFile('packages/prisma/scripts/migrate-remote.ts');
     const migrateIndex = deployWorkflow.indexOf('bun prisma:migrate-remote production');
     const pushIndex = deployWorkflow.indexOf('bun web-app:docker:production:push');
+    const remoteMigrateIndex = migrateRemoteScript.indexOf("['prisma', 'migrate', 'deploy']");
+    const remoteReleaseGateIndex = migrateRemoteScript.indexOf('assignment-type-release-gate.ts');
 
     expect(deployWorkflow).toContain('validate-prisma-migrations');
     expect(deployWorkflow).toContain('needs: [validate-prisma-migrations]');
@@ -114,6 +122,9 @@ describe('production deployment contract', () => {
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(pushIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeLessThan(pushIndex);
+    expect(migrateRemoteScript).toContain('--require-data');
+    expect(remoteMigrateIndex).toBeGreaterThan(-1);
+    expect(remoteReleaseGateIndex).toBeGreaterThan(remoteMigrateIndex);
   });
 });
 
@@ -164,6 +175,7 @@ describe('PR preview deployment contract', () => {
     const templateIndex = deployScript.indexOf('ensure_template_database');
     const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
+    const releaseGateIndex = deployScript.indexOf('assignment-type-release-gate.ts');
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
 
     expect(deployScript).toContain('PREVIEW_DB_DUMP_S3_URI');
@@ -176,14 +188,17 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('Restoring production dump into template database');
     expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
+    expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
     expect(deployScript).not.toContain('seed-overlay.ts');
     expect(templateIndex).toBeGreaterThan(-1);
     expect(cloneIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
+    expect(releaseGateIndex).toBeGreaterThan(-1);
     expect(webStartIndex).toBeGreaterThan(-1);
     expect(templateIndex).toBeLessThan(cloneIndex);
     expect(cloneIndex).toBeLessThan(migrateIndex);
-    expect(migrateIndex).toBeLessThan(webStartIndex);
+    expect(migrateIndex).toBeLessThan(releaseGateIndex);
+    expect(releaseGateIndex).toBeLessThan(webStartIndex);
   });
 
   test('preview deploy caches tooling work but still refreshes web containers', () => {

@@ -72,6 +72,11 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
         run: bun prisma migrate deploy
 
+      - name: 🧪 Assignment type release gate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/yawp_migration_ci
+        run: bun run --cwd packages/prisma assignment-type-release-gate
+
   typecheck-web-app:
     name: ʦ TypeScript
     runs-on: ubuntu-22.04
