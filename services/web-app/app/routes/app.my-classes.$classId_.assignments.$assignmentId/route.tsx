@@ -8,7 +8,6 @@ import {
 import { useState, useCallback, useMemo } from 'react';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isDocumentSubmissionEnabledForScope } from '~/utils/feature-flags.server';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Checkbox } from '~/components/ui/checkbox';
@@ -92,14 +91,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     ? rawStatus
     : 'submitted';
 
-  const isDocumentSubmissionEnabled = await isDocumentSubmissionEnabledForScope(
-    {
-      schoolIds: [klass.school?.id],
-      organizationIds: [klass.school?.organizationId],
-      teacherProfileIds: [profile.id],
-      classIds: [klass.id],
-    }
-  );
+  const isDocumentSubmissionEnabled = true;
 
   const submissions =
     status !== 'in-progress'

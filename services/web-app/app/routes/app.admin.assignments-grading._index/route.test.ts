@@ -40,7 +40,7 @@ describe('AssignmentsGrading loader', () => {
     prisma.assignmentType.findMany.mockResolvedValue([mockAssignmentType]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
-    const data = (response as { data: any }).data;
+    const data = (response as unknown as { data: any }).data;
 
     expect(data.assignmentTypes).toHaveLength(1);
     expect(data.assignmentTypes[0].title).toBe('AP History Essay');
@@ -51,7 +51,7 @@ describe('AssignmentsGrading loader', () => {
     prisma.assignmentType.findMany.mockResolvedValue([]);
 
     const response = await loader({ request: mockRequest, params: {}, context: {} } as any);
-    const data = (response as { data: any }).data;
+    const data = (response as unknown as { data: any }).data;
 
     expect(data.assignmentTypes).toHaveLength(0);
   });

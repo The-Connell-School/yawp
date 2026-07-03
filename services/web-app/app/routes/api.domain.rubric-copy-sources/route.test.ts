@@ -44,7 +44,7 @@ describe('api.domain.rubric-copy-sources', () => {
       ),
       params: {},
       context: {} as never,
-    });
+    } as any);
 
     const body = (await readBody(response)) as {
       success: boolean;

@@ -1,4 +1,4 @@
-import { type ChangeEvent, type RefObject } from 'react';
+import { type ChangeEvent, type Ref, type RefObject } from 'react';
 import { ImageIcon, Trash2, Upload } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { cn } from '~/utils/misc';
@@ -107,7 +107,7 @@ export function AssignmentTypeImageThumbnail({
       </div>
 
       <input
-        ref={fileInputRef}
+        ref={fileInputRef as Ref<HTMLInputElement>}
         type="file"
         name="image"
         accept="image/*"
