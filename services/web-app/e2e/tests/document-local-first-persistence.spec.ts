@@ -85,10 +85,8 @@ test.describe.serial('Local-first persistence (Phase 1)', () => {
       { timeout: 15000 },
     );
 
-    // Open the history panel via the Clock icon trigger next to save status
-    const historyTrigger = page.locator('.lucide-clock').first();
-    await expect(historyTrigger).toBeVisible({ timeout: 5000 });
-    await historyTrigger.click();
+    // Open the history panel via the document actions menu
+    await helpers.openDocumentHistory();
 
     const sheet = page.locator('[role="dialog"]').first();
     await expect(sheet).toBeVisible({ timeout: 5000 });

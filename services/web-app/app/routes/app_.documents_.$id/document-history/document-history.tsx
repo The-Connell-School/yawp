@@ -1,4 +1,4 @@
-import { Check, Clock, Copy, Loader2 } from 'lucide-react';
+import { Check, Copy, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher } from 'react-router';
 import { toast } from 'sonner';
@@ -9,12 +9,9 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from '~/components/ui/sheet';
 import { Badge } from '~/components/ui/badge';
 import { cn } from '~/utils/misc';
-import { SaveStatusIndicator } from '~/components/save-status-indicator';
-import type { SyncStatus } from '~/utils/sync-service';
 
 type HistoryEntry = {
   id: string;
@@ -27,7 +24,8 @@ type HistoryEntry = {
 
 type Props = {
   documentId: string;
-  syncStatus: SyncStatus;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -59,8 +57,7 @@ function formatFullDate(dateStr: string): string {
   });
 }
 
-export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
-  const [open, setOpen] = useState(false);
+export const DocumentHistory = ({ documentId, open, onOpenChange }: Props) => {
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null);
   const [allEntries, setAllEntries] = useState<HistoryEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -124,17 +121,7 @@ export const DocumentHistory = ({ documentId, syncStatus }: Props) => {
   const isLoading = fetcher.state === 'loading';
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs hover:bg-muted/70 transition"
-        >
-          <SaveStatusIndicator status={syncStatus} />
-          <div className="h-3.5 w-px bg-border mx-0.5" />
-          <Clock className="h-3 w-3 text-muted-foreground" />
-        </button>
-      </SheetTrigger>
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-full md:max-w-[800px]">
         <SheetHeader className="border-b px-6 py-4 space-y-1">
           <SheetTitle className="text-base">Version History</SheetTitle>

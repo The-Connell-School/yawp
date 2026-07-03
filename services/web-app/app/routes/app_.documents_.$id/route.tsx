@@ -21,12 +21,21 @@ import {
   ExternalLink,
   Archive,
   ArchiveRestore,
+  Clock,
+  EllipsisVertical,
   Printer,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { SaveStatusIndicator } from '~/components/save-status-indicator';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '~/components/ui/dropdown-menu';
 import { Tooltip } from '~/components/ui/tooltip';
 import { Input } from '~/components/ui/input.js';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
@@ -448,6 +457,7 @@ export default function Route() {
   const [submissionTitle, setSubmissionTitle] = useState('');
   const [showOldComments, setShowOldComments] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -874,17 +884,44 @@ export default function Route() {
                 {showOldComments ? 'Hide old comments' : 'Show old comments'}
               </Button>
             )}
-            <Tooltip text="Print / Save as PDF" delayDuration={300}>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handlePrint}
-                aria-label="Print document"
-              >
-                <Printer className="h-4 w-4" />
-              </Button>
-            </Tooltip>
-            <DocumentHistory documentId={data.doc.id} syncStatus={syncStatus} />
+            <div className="flex items-center gap-1.5">
+              <SaveStatusIndicator status={syncStatus} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    aria-label="Document actions"
+                    data-testid="document-actions-menu"
+                  >
+                    <EllipsisVertical className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="gap-2"
+                    data-testid="document-action-history"
+                    onSelect={() => setHistoryOpen(true)}
+                  >
+                    <Clock className="h-4 w-4" />
+                    History
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2"
+                    data-testid="document-action-print"
+                    onSelect={handlePrint}
+                  >
+                    <Printer className="h-4 w-4" />
+                    Print
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <DocumentHistory
+              documentId={data.doc.id}
+              open={historyOpen}
+              onOpenChange={setHistoryOpen}
+            />
           </div>
         </nav>
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
