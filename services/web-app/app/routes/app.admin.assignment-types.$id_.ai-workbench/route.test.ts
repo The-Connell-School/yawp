@@ -401,6 +401,125 @@ describe('admin assignment type AI workbench loader', () => {
     );
   });
 
+  test('runs the current sandbox as a completed deterministic evaluation', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Thesis Essay',
+      kind: 'essay',
+      description: null,
+      scoringScaleJson: {
+        type: 'weighted_0_5',
+        minScore: 0,
+        maxScore: 5,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'thesis',
+            label: 'Thesis',
+            description: 'Defensible and specific thesis.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Use this shared rubric exactly.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [
+        {
+          id: 'module-1',
+          title: 'Draft thesis',
+          position: 0,
+          description: null,
+          tutorInstructions: 'Coach thesis revision.',
+          isSelfGuided: false,
+          rubricAlignmentJson: { thesis: 'primary' },
+          instructions: [
+            {
+              id: 'instruction-1',
+              title: 'Revise thesis',
+              position: 0,
+              prompt: 'Revise your thesis.',
+              tutorInstructions: 'Ask one targeted thesis question.',
+            },
+          ],
+        },
+      ],
+      aiVersions: [
+        {
+          id: 'version-3',
+          versionNumber: 3,
+          changeSource: 'admin.assignment-type.update',
+          changeSummary: 'Updated assignment type rubric and grading assistant',
+          createdAt: new Date('2026-07-03T21:00:00.000Z'),
+          createdByUser: null,
+        },
+      ],
+      aiEvaluationRuns: [],
+    });
+
+    const form = new FormData();
+    form.set('intent', 'runEvaluation');
+    form.set('label', 'Run advanced thesis check');
+    form.set('studentFirstName', 'Ava');
+    form.set('strictnessLevel', 'advanced');
+    form.set('sampleEssay', 'This draft has a specific claim.');
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/ai-workbench',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentTypeAiEvaluationRun.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        assignmentTypeAiVersionId: 'version-3',
+        createdByUserId: 'admin-user-1',
+        agentKind: 'workbench-fixture',
+        status: 'completed',
+        label: 'Run advanced thesis check',
+        studentFirstName: 'Ava',
+        strictnessLevel: 'advanced',
+        sampleInput: 'This draft has a specific claim.',
+        resultJson: expect.objectContaining({
+          schemaVersion: 1,
+          mode: 'deterministic-workbench-fixture',
+          gradingAssistant: expect.objectContaining({
+            categories: [
+              expect.objectContaining({
+                key: 'thesis',
+                score: 5,
+              }),
+            ],
+          }),
+          tutor: expect.objectContaining({
+            responses: [
+              expect.objectContaining({
+                moduleTitle: 'Draft thesis',
+                instructionTitle: 'Revise thesis',
+              }),
+            ],
+          }),
+        }),
+      }),
+    });
+    expect((response as Response).headers.get('Location')).toContain(
+      'runId=run-1'
+    );
+  });
+
   test('returns selected evaluation run details without bloating the run list', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',

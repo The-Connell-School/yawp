@@ -20,6 +20,7 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
+import { buildDeterministicAssignmentTypeAiEvaluationResult } from '~/domain/assignment-types/assignment-type-ai-evaluation-run.server';
 import {
   assignmentTypeAiSnapshotToWorkbenchInput,
   buildAssignmentTypeAiWorkbench,
@@ -89,6 +90,7 @@ function loadAssignmentTypeForWorkbench(assignmentTypeId: string) {
           strictnessLevel: true,
           sampleInput: true,
           promptSnapshotJson: true,
+          resultJson: true,
           createdAt: true,
           createdByUser: {
             select: {
@@ -177,7 +179,10 @@ function stripVersionSnapshots<
   T extends {
     aiVersions: Array<Record<string, unknown> & { snapshotJson?: unknown }>;
     aiEvaluationRuns: Array<
-      Record<string, unknown> & { promptSnapshotJson?: unknown }
+      Record<string, unknown> & {
+        promptSnapshotJson?: unknown;
+        resultJson?: unknown;
+      }
     >;
   },
 >(assignmentType: T) {
@@ -185,7 +190,11 @@ function stripVersionSnapshots<
     ...assignmentType,
     aiVersions: assignmentType.aiVersions.map(({ snapshotJson: _snapshotJson, ...row }) => row),
     aiEvaluationRuns: assignmentType.aiEvaluationRuns.map(
-      ({ promptSnapshotJson: _promptSnapshotJson, ...row }) => row
+      ({
+        promptSnapshotJson: _promptSnapshotJson,
+        resultJson: _resultJson,
+        ...row
+      }) => row
     ),
   };
 }
@@ -280,7 +289,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get('intent');
-  if (intent !== 'saveEvaluationRun') {
+  if (intent !== 'saveEvaluationRun' && intent !== 'runEvaluation') {
     return dataResponse({ status: 'error' }, { status: 400 });
   }
 
@@ -304,20 +313,29 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const label = formData.get('label')?.toString().trim() || null;
   const notes = formData.get('notes')?.toString().trim() || null;
   const latestVersion = assignmentType.aiVersions[0] ?? null;
+  const isCompletedRun = intent === 'runEvaluation';
+  const resultJson = isCompletedRun
+    ? buildDeterministicAssignmentTypeAiEvaluationResult({
+        workbench,
+        sampleInput: controls.sampleEssay,
+        studentFirstName: controls.studentFirstName,
+      })
+    : undefined;
 
   const run = await prisma.assignmentTypeAiEvaluationRun.create({
     data: {
       assignmentTypeId,
       assignmentTypeAiVersionId: selectedVersion?.id ?? latestVersion?.id ?? null,
       createdByUserId: admin.id,
-      agentKind: 'workbench-preview',
-      status: 'saved',
+      agentKind: isCompletedRun ? 'workbench-fixture' : 'workbench-preview',
+      status: isCompletedRun ? 'completed' : 'saved',
       label,
       notes,
       studentFirstName: controls.studentFirstName,
       strictnessLevel: controls.strictnessLevel,
       sampleInput: controls.sampleEssay,
       promptSnapshotJson: buildPromptSnapshot({ workbench, controls }),
+      ...(resultJson ? { resultJson } : {}),
     },
   });
 
@@ -325,8 +343,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     studentFirstName: controls.studentFirstName,
     strictnessLevel: controls.strictnessLevel,
     sampleEssay: controls.sampleEssay,
-    savedRun: run.id,
   });
+  searchParams.set(isCompletedRun ? 'runId' : 'savedRun', run.id);
   if (selectedVersion) {
     searchParams.set('versionId', selectedVersion.id);
   }
@@ -432,6 +450,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
   const selectedRunSnapshot = selectedRun?.promptSnapshotJson;
   const selectedRunTutorPreviews = tutorSnapshotPreviews(selectedRunSnapshot);
   const selectedRunNotes = stringValue(selectedRun?.notes);
+  const selectedRunResultJson = selectedRun?.resultJson;
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
@@ -699,10 +718,9 @@ export default function AssignmentTypeAiWorkbenchRoute() {
           <section className="border-t pt-6">
             <div className="mb-3 flex items-center gap-2">
               <SaveIcon className="size-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Save evaluation case</h2>
+              <h2 className="text-lg font-semibold">Evaluation case</h2>
             </div>
             <Form method="post" className="space-y-3 rounded-md border p-4">
-              <input type="hidden" name="intent" value="saveEvaluationRun" />
               {selectedVersion ? (
                 <input type="hidden" name="versionId" value={selectedVersion.id} />
               ) : null}
@@ -734,9 +752,27 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   placeholder="What this case should prove..."
                 />
               </div>
-              <Button type="submit" size="sm" className="w-full">
-                Save case
-              </Button>
+              <div className="grid gap-2">
+                <Button
+                  type="submit"
+                  name="intent"
+                  value="runEvaluation"
+                  size="sm"
+                  className="w-full"
+                >
+                  Run fixture
+                </Button>
+                <Button
+                  type="submit"
+                  name="intent"
+                  value="saveEvaluationRun"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  Save case
+                </Button>
+              </div>
             </Form>
           </section>
 
@@ -826,6 +862,12 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                     value={preview.systemPrompt}
                   />
                 ))}
+                {selectedRunResultJson ? (
+                  <PromptBlock
+                    label="Evaluation result"
+                    value={JSON.stringify(selectedRunResultJson, null, 2)}
+                  />
+                ) : null}
               </div>
             </section>
           ) : null}
