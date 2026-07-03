@@ -1,9 +1,16 @@
-import { data as dataResponse, Form, Link, useLoaderData } from 'react-router';
-import type { LoaderFunctionArgs } from 'react-router';
+import {
+  data as dataResponse,
+  Form,
+  Link,
+  redirect,
+  useLoaderData,
+} from 'react-router';
+import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
 import {
   ArrowLeft,
   BotIcon,
   ClipboardCheckIcon,
+  SaveIcon,
   Layers3Icon,
 } from 'lucide-react';
 import { AssignmentTypeAiHistorySection } from '~/components/admin/assignment-type-ai-history-section';
@@ -27,15 +34,8 @@ import {
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
-  await requireAdmin(request);
-
-  const assignmentTypeId = params.id;
-  if (!assignmentTypeId) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  const assignmentType = await prisma.assignmentType.findUnique({
+function loadAssignmentTypeForWorkbench(assignmentTypeId: string) {
+  return prisma.assignmentType.findUnique({
     where: { id: assignmentTypeId },
     include: {
       assignmentModules: {
@@ -72,35 +72,160 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           },
         },
       },
+      aiEvaluationRuns: {
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          label: true,
+          agentKind: true,
+          status: true,
+          strictnessLevel: true,
+          createdAt: true,
+          createdByUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          assignmentTypeAiVersion: {
+            select: {
+              id: true,
+              versionNumber: true,
+            },
+          },
+        },
+      },
     },
   });
+}
+
+function parseSandboxControlsFromSearchParams(searchParams: URLSearchParams) {
+  const studentFirstName =
+    searchParams.get('studentFirstName')?.trim() ||
+    DEFAULT_WORKBENCH_STUDENT_FIRST_NAME;
+  const sampleEssay =
+    searchParams.get('sampleEssay')?.trim() || DEFAULT_WORKBENCH_SAMPLE_ESSAY;
+  const strictnessLevel =
+    parseGradingAssistantStrictnessLevel(searchParams.get('strictnessLevel')) ??
+    DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+
+  return { studentFirstName, sampleEssay, strictnessLevel };
+}
+
+function parseSandboxControlsFromFormData(formData: FormData) {
+  const studentFirstName =
+    formData.get('studentFirstName')?.toString().trim() ||
+    DEFAULT_WORKBENCH_STUDENT_FIRST_NAME;
+  const sampleEssay =
+    formData.get('sampleEssay')?.toString().trim() ||
+    DEFAULT_WORKBENCH_SAMPLE_ESSAY;
+  const strictnessLevel =
+    parseGradingAssistantStrictnessLevel(
+      formData.get('strictnessLevel')?.toString()
+    ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+
+  return { studentFirstName, sampleEssay, strictnessLevel };
+}
+
+function buildPromptSnapshot({
+  workbench,
+  controls,
+}: {
+  workbench: AssignmentTypeAiWorkbench;
+  controls: ReturnType<typeof parseSandboxControlsFromFormData>;
+}) {
+  return {
+    schemaVersion: 1,
+    assignmentType: workbench.assignmentType,
+    controls,
+    gradingPreview: workbench.gradingPreview,
+    tutorPreviews: workbench.tutorPreviews,
+  };
+}
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  await requireAdmin(request);
+
+  const assignmentTypeId = params.id;
+  if (!assignmentTypeId) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  const assignmentType = await loadAssignmentTypeForWorkbench(assignmentTypeId);
 
   if (!assignmentType) {
     throw new Response('Not Found', { status: 404 });
   }
 
   const url = new URL(request.url);
-  const studentFirstName =
-    url.searchParams.get('studentFirstName')?.trim() ||
-    DEFAULT_WORKBENCH_STUDENT_FIRST_NAME;
-  const sampleEssay =
-    url.searchParams.get('sampleEssay')?.trim() || DEFAULT_WORKBENCH_SAMPLE_ESSAY;
-  const strictnessLevel =
-    parseGradingAssistantStrictnessLevel(
-      url.searchParams.get('strictnessLevel')
-    ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+  const controls = parseSandboxControlsFromSearchParams(url.searchParams);
   const workbench = buildAssignmentTypeAiWorkbench({
     assignmentType,
-    sampleEssay,
-    studentFirstName,
-    strictnessLevel,
+    ...controls,
   });
 
   return dataResponse({
     assignmentType,
     workbench,
-    controls: { studentFirstName, sampleEssay, strictnessLevel },
+    controls,
   });
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const admin = await requireAdmin(request);
+  const assignmentTypeId = params.id;
+  if (!assignmentTypeId) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get('intent');
+  if (intent !== 'saveEvaluationRun') {
+    return dataResponse({ status: 'error' }, { status: 400 });
+  }
+
+  const assignmentType = await loadAssignmentTypeForWorkbench(assignmentTypeId);
+  if (!assignmentType) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  const controls = parseSandboxControlsFromFormData(formData);
+  const workbench = buildAssignmentTypeAiWorkbench({
+    assignmentType,
+    ...controls,
+  });
+  const label = formData.get('label')?.toString().trim() || null;
+  const notes = formData.get('notes')?.toString().trim() || null;
+  const latestVersion = assignmentType.aiVersions[0] ?? null;
+
+  const run = await prisma.assignmentTypeAiEvaluationRun.create({
+    data: {
+      assignmentTypeId,
+      assignmentTypeAiVersionId: latestVersion?.id ?? null,
+      createdByUserId: admin.id,
+      agentKind: 'workbench-preview',
+      status: 'saved',
+      label,
+      notes,
+      studentFirstName: controls.studentFirstName,
+      strictnessLevel: controls.strictnessLevel,
+      sampleInput: controls.sampleEssay,
+      promptSnapshotJson: buildPromptSnapshot({ workbench, controls }),
+    },
+  });
+
+  const searchParams = new URLSearchParams({
+    studentFirstName: controls.studentFirstName,
+    strictnessLevel: controls.strictnessLevel,
+    sampleEssay: controls.sampleEssay,
+    savedRun: run.id,
+  });
+
+  return redirect(
+    `/app/admin/assignment-types/${assignmentTypeId}/ai-workbench?${searchParams}`
+  );
 }
 
 function PromptBlock({ label, value }: { label: string; value: string }) {
@@ -120,6 +245,24 @@ function instructionModeLabel(
   if (mode === 'unified') return 'Unified instructions';
   if (mode === 'preset') return 'Preset instructions';
   return 'Split instructions';
+}
+
+function formatWorkbenchDate(value: Date | string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function runActorLabel(run: {
+  createdByUser: { name: string | null; email: string | null } | null;
+}) {
+  return run.createdByUser?.name ?? run.createdByUser?.email ?? 'Unknown admin';
 }
 
 export default function AssignmentTypeAiWorkbenchRoute() {
@@ -308,7 +451,89 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   {assignmentType.aiVersions.length}
                 </dd>
               </div>
+              <div className="rounded-md border px-3 py-2">
+                <dt className="text-muted-foreground">Saved runs</dt>
+                <dd className="text-lg font-semibold">
+                  {assignmentType.aiEvaluationRuns.length}
+                </dd>
+              </div>
             </dl>
+          </section>
+
+          <section className="border-t pt-6">
+            <div className="mb-3 flex items-center gap-2">
+              <SaveIcon className="size-4 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">Save evaluation case</h2>
+            </div>
+            <Form method="post" className="space-y-3 rounded-md border p-4">
+              <input type="hidden" name="intent" value="saveEvaluationRun" />
+              <input
+                type="hidden"
+                name="studentFirstName"
+                value={controls.studentFirstName}
+              />
+              <input
+                type="hidden"
+                name="strictnessLevel"
+                value={controls.strictnessLevel}
+              />
+              <input type="hidden" name="sampleEssay" value={controls.sampleEssay} />
+              <div className="space-y-2">
+                <Label htmlFor="evaluationLabel">Label</Label>
+                <Input
+                  id="evaluationLabel"
+                  name="label"
+                  placeholder="Advanced thesis check"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="evaluationNotes">Notes</Label>
+                <Textarea
+                  id="evaluationNotes"
+                  name="notes"
+                  rows={3}
+                  placeholder="What this case should prove..."
+                />
+              </div>
+              <Button type="submit" size="sm" className="w-full">
+                Save case
+              </Button>
+            </Form>
+          </section>
+
+          <section className="border-t pt-6">
+            <h2 className="mb-3 text-lg font-semibold">Saved runs</h2>
+            {assignmentType.aiEvaluationRuns.length === 0 ? (
+              <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+                No saved evaluation cases yet.
+              </div>
+            ) : (
+              <ol className="space-y-3">
+                {assignmentType.aiEvaluationRuns.map((run) => (
+                  <li key={run.id} className="rounded-md border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {run.label ?? 'Untitled evaluation case'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {runActorLabel(run)}
+                          {run.assignmentTypeAiVersion
+                            ? ` on v${run.assignmentTypeAiVersion.versionNumber}`
+                            : ''}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" size="sm">
+                        {run.strictnessLevel ?? 'preview'}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {formatWorkbenchDate(run.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
 
           <section className="border-t pt-6">

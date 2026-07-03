@@ -4,6 +4,9 @@ const prisma = {
   assignmentType: {
     findUnique: mock(),
   },
+  assignmentTypeAiEvaluationRun: {
+    create: mock(),
+  },
 };
 
 const requireAdmin = mock();
@@ -11,14 +14,19 @@ const requireAdmin = mock();
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireAdmin }));
 
-const { loader: routeLoader } = await import('./route');
+const { action: routeAction, loader: routeLoader } = await import('./route');
+const action = routeAction as any;
 const loader = routeLoader as any;
 
 describe('admin assignment type AI workbench loader', () => {
   beforeEach(() => {
     prisma.assignmentType.findUnique.mockReset();
+    prisma.assignmentTypeAiEvaluationRun.create.mockReset();
     requireAdmin.mockReset();
     requireAdmin.mockResolvedValue({ id: 'admin-user-1' });
+    prisma.assignmentTypeAiEvaluationRun.create.mockResolvedValue({
+      id: 'run-1',
+    });
   });
 
   test('loads current assignment type AI config and builds prompt previews', async () => {
@@ -84,6 +92,25 @@ describe('admin assignment type AI workbench loader', () => {
           },
         },
       ],
+      aiEvaluationRuns: [
+        {
+          id: 'run-1',
+          label: 'Advanced thesis check',
+          agentKind: 'workbench-preview',
+          status: 'saved',
+          strictnessLevel: 'advanced',
+          createdAt: new Date('2026-07-03T22:00:00.000Z'),
+          createdByUser: {
+            id: 'admin-user-1',
+            name: 'Bryant Brock',
+            email: 'bryant@brock.software',
+          },
+          assignmentTypeAiVersion: {
+            id: 'version-3',
+            versionNumber: 3,
+          },
+        },
+      ],
     });
 
     const result = await loader({
@@ -102,6 +129,7 @@ describe('admin assignment type AI workbench loader', () => {
           where: { deletedAt: null },
         }),
         aiVersions: expect.objectContaining({ take: 10 }),
+        aiEvaluationRuns: expect.objectContaining({ take: 10 }),
       }),
     });
     expect((result as { data: any }).data.workbench.gradingPreview.userPrompt).toContain(
@@ -113,6 +141,9 @@ describe('admin assignment type AI workbench loader', () => {
     expect((result as { data: any }).data.assignmentType.aiVersions).toHaveLength(
       1
     );
+    expect(
+      (result as { data: any }).data.assignmentType.aiEvaluationRuns
+    ).toHaveLength(1);
   });
 
   test('applies sandbox query parameters to the prompt previews', async () => {
@@ -146,6 +177,7 @@ describe('admin assignment type AI workbench loader', () => {
       gradingAssistantSourceTemplateSlug: null,
       assignmentModules: [],
       aiVersions: [],
+      aiEvaluationRuns: [],
     });
 
     const result = await loader({
@@ -170,6 +202,95 @@ describe('admin assignment type AI workbench loader', () => {
     );
     expect(data.workbench.gradingPreview.userPrompt).toContain(
       'This draft has a specific claim.'
+    );
+  });
+
+  test('saves the current sandbox as an evaluation run', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Thesis Essay',
+      kind: 'essay',
+      description: null,
+      scoringScaleJson: {
+        type: 'weighted_0_5',
+        minScore: 0,
+        maxScore: 5,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'thesis',
+            label: 'Thesis',
+            description: 'Defensible and specific thesis.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Use this shared rubric exactly.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [],
+      aiVersions: [
+        {
+          id: 'version-3',
+          versionNumber: 3,
+          changeSource: 'admin.assignment-type.update',
+          changeSummary: 'Updated assignment type rubric and grading assistant',
+          createdAt: new Date('2026-07-03T21:00:00.000Z'),
+          createdByUser: null,
+        },
+      ],
+      aiEvaluationRuns: [],
+    });
+
+    const form = new FormData();
+    form.set('intent', 'saveEvaluationRun');
+    form.set('label', 'Advanced thesis check');
+    form.set('notes', 'Kevin fixture for strict thesis calibration.');
+    form.set('studentFirstName', 'Ava');
+    form.set('strictnessLevel', 'advanced');
+    form.set('sampleEssay', 'This draft has a specific claim.');
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/ai-workbench',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(prisma.assignmentTypeAiEvaluationRun.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        assignmentTypeAiVersionId: 'version-3',
+        createdByUserId: 'admin-user-1',
+        agentKind: 'workbench-preview',
+        status: 'saved',
+        label: 'Advanced thesis check',
+        notes: 'Kevin fixture for strict thesis calibration.',
+        studentFirstName: 'Ava',
+        strictnessLevel: 'advanced',
+        sampleInput: 'This draft has a specific claim.',
+        promptSnapshotJson: expect.objectContaining({
+          schemaVersion: 1,
+          gradingPreview: expect.objectContaining({
+            userPrompt: expect.stringContaining('Student first name: Ava'),
+          }),
+        }),
+      }),
+    });
+    expect((response as Response).status).toBe(302);
+    expect((response as Response).headers.get('Location')).toContain(
+      'savedRun=run-1'
     );
   });
 
