@@ -1,4 +1,4 @@
-import { data as dataResponse, Link, useLoaderData } from 'react-router';
+import { data as dataResponse, Form, Link, useLoaderData } from 'react-router';
 import type { LoaderFunctionArgs } from 'react-router';
 import {
   ArrowLeft,
@@ -10,10 +10,20 @@ import { AssignmentTypeAiHistorySection } from '~/components/admin/assignment-ty
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import { Textarea } from '~/components/ui/textarea';
 import {
   buildAssignmentTypeAiWorkbench,
+  DEFAULT_WORKBENCH_SAMPLE_ESSAY,
+  DEFAULT_WORKBENCH_STUDENT_FIRST_NAME,
   type AssignmentTypeAiWorkbench,
 } from '~/domain/assignment-types/assignment-type-ai-workbench.server';
+import {
+  DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL,
+  gradingAssistantStrictnessOptions,
+  parseGradingAssistantStrictnessLevel,
+} from '~/domain/grading/grading-assistant-strictness';
 import { requireAdmin } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 
@@ -69,9 +79,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const workbench = buildAssignmentTypeAiWorkbench({ assignmentType });
+  const url = new URL(request.url);
+  const studentFirstName =
+    url.searchParams.get('studentFirstName')?.trim() ||
+    DEFAULT_WORKBENCH_STUDENT_FIRST_NAME;
+  const sampleEssay =
+    url.searchParams.get('sampleEssay')?.trim() || DEFAULT_WORKBENCH_SAMPLE_ESSAY;
+  const strictnessLevel =
+    parseGradingAssistantStrictnessLevel(
+      url.searchParams.get('strictnessLevel')
+    ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL;
+  const workbench = buildAssignmentTypeAiWorkbench({
+    assignmentType,
+    sampleEssay,
+    studentFirstName,
+    strictnessLevel,
+  });
 
-  return dataResponse({ assignmentType, workbench });
+  return dataResponse({
+    assignmentType,
+    workbench,
+    controls: { studentFirstName, sampleEssay, strictnessLevel },
+  });
 }
 
 function PromptBlock({ label, value }: { label: string; value: string }) {
@@ -94,7 +123,7 @@ function instructionModeLabel(
 }
 
 export default function AssignmentTypeAiWorkbenchRoute() {
-  const { assignmentType, workbench } = useLoaderData<typeof loader>();
+  const { assignmentType, workbench, controls } = useLoaderData<typeof loader>();
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
@@ -149,6 +178,47 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 </Badge>
               </div>
             </div>
+            <Form
+              method="get"
+              preventScrollReset
+              className="mb-5 grid gap-4 rounded-md border p-4 lg:grid-cols-[180px_minmax(0,1fr)_160px]"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="studentFirstName">Student name</Label>
+                <Input
+                  id="studentFirstName"
+                  name="studentFirstName"
+                  defaultValue={controls.studentFirstName}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sampleEssay">Sample essay</Label>
+                <Textarea
+                  id="sampleEssay"
+                  name="sampleEssay"
+                  rows={4}
+                  defaultValue={controls.sampleEssay}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="strictnessLevel">Strictness</Label>
+                <select
+                  id="strictnessLevel"
+                  name="strictnessLevel"
+                  defaultValue={controls.strictnessLevel}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {gradingAssistantStrictnessOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" size="sm" className="w-full">
+                  Update preview
+                </Button>
+              </div>
+            </Form>
             <div className="grid gap-4 xl:grid-cols-2">
               <PromptBlock
                 label="System prompt"
