@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   assertLiveRunAllowed,
   buildRunManifest,
+  loadAnthropicSdkForEval,
   parseRunnerArgs,
 } from './live-runner';
 
@@ -41,5 +42,11 @@ describe('AI context eval live runner guardrails', () => {
     expect(manifest.liveApiCallsAllowed).toBe(false);
     expect(manifest.caseCount).toBe(2);
     expect(manifest.strategyCount).toBe(4);
+  });
+
+  test('loads Anthropic SDK through an installed workspace dependency', async () => {
+    const Anthropic = await loadAnthropicSdkForEval();
+
+    expect(typeof Anthropic).toBe('function');
   });
 });

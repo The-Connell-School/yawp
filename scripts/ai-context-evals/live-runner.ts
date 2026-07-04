@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { createRequire } from 'module';
 import { join } from 'path';
 import {
   DEFAULT_STRATEGIES,
@@ -18,6 +19,31 @@ export type RunnerOptions = {
   limitCases: number | null;
   anthropicApiKey: string;
 };
+
+type AnthropicConstructor = new (config: { apiKey: string }) => {
+  messages: {
+    create: (input: {
+      model: string;
+      max_tokens: number;
+      temperature: number;
+      system: string;
+      messages: PlannedTutorRequest['messages'];
+    }) => Promise<{
+      content: Array<{ type: string; text?: string }>;
+      usage: unknown;
+    }>;
+  };
+};
+
+export async function loadAnthropicSdkForEval(): Promise<AnthropicConstructor> {
+  const requireFromWebAppWorkspace = createRequire(
+    new URL('../../services/web-app/package.json', import.meta.url)
+  );
+  const sdk = requireFromWebAppWorkspace('@anthropic-ai/sdk') as {
+    default?: AnthropicConstructor;
+  } & AnthropicConstructor;
+  return sdk.default ?? sdk;
+}
 
 export function parseRunnerArgs(args: string[]): RunnerOptions {
   const options: RunnerOptions = {
@@ -168,7 +194,7 @@ async function runLiveRequest({
   model: string;
   request: PlannedTutorRequest;
 }) {
-  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const Anthropic = await loadAnthropicSdkForEval();
   const anthropic = new Anthropic({ apiKey });
   const message = await anthropic.messages.create({
     model,
