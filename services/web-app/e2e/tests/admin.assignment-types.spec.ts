@@ -141,6 +141,42 @@ test.describe.serial('Admin assignment types', () => {
         thesis_e2e: 'primary',
         grammar_e2e: 'supporting',
       });
+
+      await page.goto(`/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`);
+      await expect(page.getByText('Thesis planning')).toBeVisible();
+      await page.getByLabel('Student name').fill('Ava');
+      await page
+        .getByLabel('Sample essay')
+        .fill('This thesis draft makes a specific claim about the text.');
+      await page.getByLabel('Strictness').selectOption('advanced');
+      await page
+        .locator('#evaluationLabel')
+        .fill('E2E deterministic workbench run');
+      await page.getByRole('button', { name: 'Run fixture' }).click();
+      await page.waitForURL((url) => url.searchParams.has('runId'), {
+        timeout: 15_000,
+      });
+      await expect(page.getByText('Selected run')).toBeVisible();
+      await expect(page.getByText('Evaluation result')).toBeVisible();
+      await expect(page.getByText('deterministic-workbench-fixture')).toBeVisible();
+
+      const run = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
+        where: {
+          assignmentTypeId: assignmentTypeId!,
+          label: 'E2E deterministic workbench run',
+        },
+        select: {
+          agentKind: true,
+          status: true,
+          resultJson: true,
+        },
+      });
+
+      expect(run.agentKind).toBe('workbench-fixture');
+      expect(run.status).toBe('completed');
+      expect(run.resultJson).toMatchObject({
+        mode: 'deterministic-workbench-fixture',
+      });
     } finally {
       if (assignmentTypeId) {
         await prisma.assignmentModule.deleteMany({
