@@ -237,6 +237,7 @@ else
   (
     cd "$ROOT"
     bun prisma:generate >/dev/null
+    bun run --cwd packages/prisma prisma migrate deploy
   )
 fi
 

@@ -193,6 +193,20 @@ describe('worktree local setup contract', () => {
     expect(backfillIndex).toBeGreaterThan(migrateIndex);
     expect(seedIndex).toBeGreaterThan(backfillIndex);
   });
+
+  test('worktree setup applies pending migrations even when the local database is already seeded', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+    const seededBranchIndex = setupScript.indexOf('elif ! database_seeded; then');
+    const pendingMigrationIndex = setupScript.indexOf(
+      'bun run --cwd packages/prisma prisma migrate deploy',
+      seededBranchIndex
+    );
+    const setupCompleteIndex = setupScript.indexOf('if [[ "$START_DEV" -eq 1 ]]');
+
+    expect(seededBranchIndex).toBeGreaterThan(-1);
+    expect(pendingMigrationIndex).toBeGreaterThan(seededBranchIndex);
+    expect(pendingMigrationIndex).toBeLessThan(setupCompleteIndex);
+  });
 });
 
 describe('PR preview deployment contract', () => {
