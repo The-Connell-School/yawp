@@ -20,7 +20,10 @@ import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
-import { buildDeterministicAssignmentTypeAiEvaluationResult } from '~/domain/assignment-types/assignment-type-ai-evaluation-run.server';
+import {
+  buildDeterministicAssignmentTypeAiEvaluationResult,
+  buildLiveAssignmentTypeAiEvaluationResult,
+} from '~/domain/assignment-types/assignment-type-ai-evaluation-run.server';
 import {
   assignmentTypeAiSnapshotToWorkbenchInput,
   buildAssignmentTypeAiWorkbench,
@@ -289,7 +292,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = formData.get('intent');
-  if (intent !== 'saveEvaluationRun' && intent !== 'runEvaluation') {
+  if (
+    intent !== 'saveEvaluationRun' &&
+    intent !== 'runEvaluation' &&
+    intent !== 'runLiveEvaluation'
+  ) {
     return dataResponse({ status: 'error' }, { status: 400 });
   }
 
@@ -313,13 +320,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const label = formData.get('label')?.toString().trim() || null;
   const notes = formData.get('notes')?.toString().trim() || null;
   const latestVersion = assignmentType.aiVersions[0] ?? null;
-  const isCompletedRun = intent === 'runEvaluation';
-  const resultJson = isCompletedRun
+  const isFixtureRun = intent === 'runEvaluation';
+  const isLiveRun = intent === 'runLiveEvaluation';
+  const isCompletedRun = isFixtureRun || isLiveRun;
+  const resultJson = isFixtureRun
     ? buildDeterministicAssignmentTypeAiEvaluationResult({
         workbench,
         sampleInput: controls.sampleEssay,
         studentFirstName: controls.studentFirstName,
       })
+    : isLiveRun
+      ? await buildLiveAssignmentTypeAiEvaluationResult({
+          workbench,
+          sampleInput: controls.sampleEssay,
+        })
     : undefined;
 
   const run = await prisma.assignmentTypeAiEvaluationRun.create({
@@ -327,7 +341,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       assignmentTypeId,
       assignmentTypeAiVersionId: selectedVersion?.id ?? latestVersion?.id ?? null,
       createdByUserId: admin.id,
-      agentKind: isCompletedRun ? 'workbench-fixture' : 'workbench-preview',
+      agentKind: isLiveRun
+        ? 'workbench-live'
+        : isFixtureRun
+          ? 'workbench-fixture'
+          : 'workbench-preview',
       status: isCompletedRun ? 'completed' : 'saved',
       label,
       notes,
@@ -761,6 +779,16 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   className="w-full"
                 >
                   Run fixture
+                </Button>
+                <Button
+                  type="submit"
+                  name="intent"
+                  value="runLiveEvaluation"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  Run live AI
                 </Button>
                 <Button
                   type="submit"

@@ -10,9 +10,11 @@ const prisma = {
 };
 
 const requireAdmin = mock();
+const getLLMCompletion = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireAdmin }));
+mock.module('~/utils/getLLMCompletion', () => ({ getLLMCompletion }));
 
 const { action: routeAction, loader: routeLoader } = await import('./route');
 const action = routeAction as any;
@@ -22,6 +24,7 @@ describe('admin assignment type AI workbench loader', () => {
   beforeEach(() => {
     prisma.assignmentType.findUnique.mockReset();
     prisma.assignmentTypeAiEvaluationRun.create.mockReset();
+    getLLMCompletion.mockReset();
     requireAdmin.mockReset();
     requireAdmin.mockResolvedValue({ id: 'admin-user-1' });
     prisma.assignmentTypeAiEvaluationRun.create.mockResolvedValue({
@@ -509,6 +512,140 @@ describe('admin assignment type AI workbench loader', () => {
               expect.objectContaining({
                 moduleTitle: 'Draft thesis',
                 instructionTitle: 'Revise thesis',
+              }),
+            ],
+          }),
+        }),
+      }),
+    });
+    expect((response as Response).headers.get('Location')).toContain(
+      'runId=run-1'
+    );
+  });
+
+  test('runs the current sandbox as a completed live LLM evaluation', async () => {
+    getLLMCompletion
+      .mockResolvedValueOnce(
+        '{"categories":[{"key":"thesis","score":4,"comment":"Live grading feedback."}],"overallComment":"Ava, live grading feedback."}'
+      )
+      .mockResolvedValueOnce('Live tutor response.');
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-1',
+      title: 'Thesis Essay',
+      kind: 'essay',
+      description: null,
+      scoringScaleJson: {
+        type: 'weighted_0_5',
+        minScore: 0,
+        maxScore: 5,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'thesis',
+            label: 'Thesis',
+            description: 'Defensible and specific thesis.',
+            weight: 1,
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Use this shared rubric exactly.',
+      },
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 3,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [
+        {
+          id: 'module-1',
+          title: 'Draft thesis',
+          position: 0,
+          description: null,
+          tutorInstructions: 'Coach thesis revision.',
+          isSelfGuided: false,
+          rubricAlignmentJson: { thesis: 'primary' },
+          instructions: [
+            {
+              id: 'instruction-1',
+              title: 'Revise thesis',
+              position: 0,
+              prompt: 'Revise your thesis.',
+              tutorInstructions: 'Ask one targeted thesis question.',
+            },
+          ],
+        },
+      ],
+      aiVersions: [
+        {
+          id: 'version-3',
+          versionNumber: 3,
+          changeSource: 'admin.assignment-type.update',
+          changeSummary: 'Updated assignment type rubric and grading assistant',
+          createdAt: new Date('2026-07-03T21:00:00.000Z'),
+          createdByUser: null,
+        },
+      ],
+      aiEvaluationRuns: [],
+    });
+
+    const form = new FormData();
+    form.set('intent', 'runLiveEvaluation');
+    form.set('label', 'Live thesis check');
+    form.set('studentFirstName', 'Ava');
+    form.set('strictnessLevel', 'advanced');
+    form.set('sampleEssay', 'This draft has a specific claim.');
+
+    const response = await action({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-1/ai-workbench',
+        {
+          method: 'POST',
+          body: form,
+        }
+      ),
+      params: { id: 'at-1' },
+      context: {} as never,
+    });
+
+    expect(getLLMCompletion).toHaveBeenCalledTimes(2);
+    expect(getLLMCompletion.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        system: expect.stringContaining('You are a grading assistant'),
+        metadata: expect.objectContaining({
+          feature: 'admin-ai-workbench',
+          kind: 'grading-assistant',
+        }),
+      })
+    );
+    expect(getLLMCompletion.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        system: expect.stringContaining('Coach thesis revision.'),
+        metadata: expect.objectContaining({
+          feature: 'admin-ai-workbench',
+          kind: 'tutor',
+        }),
+      })
+    );
+    expect(prisma.assignmentTypeAiEvaluationRun.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        assignmentTypeId: 'at-1',
+        assignmentTypeAiVersionId: 'version-3',
+        createdByUserId: 'admin-user-1',
+        agentKind: 'workbench-live',
+        status: 'completed',
+        label: 'Live thesis check',
+        resultJson: expect.objectContaining({
+          schemaVersion: 1,
+          mode: 'live-workbench-llm',
+          gradingAssistant: expect.objectContaining({
+            rawResponse: expect.stringContaining('Live grading feedback'),
+          }),
+          tutor: expect.objectContaining({
+            responses: [
+              expect.objectContaining({
+                rawResponse: 'Live tutor response.',
               }),
             ],
           }),
