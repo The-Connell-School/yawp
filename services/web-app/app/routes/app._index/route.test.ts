@@ -19,15 +19,13 @@ const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
 const isWritingPracticeEnabledForOrganization = mock();
 
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
-
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
+  getSessionExpirationDate: () => new Date('2030-01-01T00:00:00.000Z'),
+  sessionKey: 'sessionId',
 }));
 mock.module('~/utils/teacher-class-card-stats.server', () => ({
   getTeacherClassCardStats,
@@ -36,11 +34,12 @@ mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
   getTeacherRecentActiveClassIds,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
-  ...assignmentTypeAccessActual,
   getAvailableAssignmentTypesForScopes,
 }));
 mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
+  studentPreviewModeKey: 'studentPreviewMode',
+  studentPreviewOrgIdKey: 'studentPreviewOrgId',
   shouldUseStudentExperience: (
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
