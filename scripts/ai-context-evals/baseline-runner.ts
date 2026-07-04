@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
 import { mkdirSync, writeFileSync } from 'fs';
+import { createRequire } from 'module';
 import { join } from 'path';
-import pg from 'pg';
 import {
   buildBaselineReport,
   buildTutorBaselineQuery,
@@ -18,6 +18,21 @@ type BaselineOptions = {
   limit: number;
   outputDir: string;
 };
+
+type PgModule = {
+  Client: new (config: { connectionString: string }) => {
+    connect: () => Promise<void>;
+    query: (text: string, values: unknown[]) => Promise<{ rows: unknown[] }>;
+    end: () => Promise<void>;
+  };
+};
+
+export function loadPgModuleForBaseline(): PgModule {
+  const requireFromPrismaWorkspace = createRequire(
+    new URL('../../packages/prisma/package.json', import.meta.url)
+  );
+  return requireFromPrismaWorkspace('pg') as PgModule;
+}
 
 function parseArgs(args: string[]): BaselineOptions {
   const options: BaselineOptions = {
@@ -53,6 +68,7 @@ async function main() {
     throw new Error('DATABASE_URL is required for the baseline runner.');
   }
 
+  const pg = loadPgModuleForBaseline();
   const client = new pg.Client({ connectionString: options.databaseUrl });
   await client.connect();
   try {
