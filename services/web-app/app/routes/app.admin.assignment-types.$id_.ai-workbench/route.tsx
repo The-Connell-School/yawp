@@ -586,7 +586,11 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   name="strictnessLevel"
                   value={sandboxStrictnessLevel}
                   onChange={(event) =>
-                    setSandboxStrictnessLevel(event.currentTarget.value)
+                    setSandboxStrictnessLevel(
+                      parseGradingAssistantStrictnessLevel(
+                        event.currentTarget.value
+                      ) ?? DEFAULT_GRADING_ASSISTANT_STRICTNESS_LEVEL
+                    )
                   }
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
