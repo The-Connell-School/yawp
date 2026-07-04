@@ -156,6 +156,12 @@ test.describe.serial('Admin assignment types', () => {
       await page.waitForURL((url) => url.searchParams.has('runId'), {
         timeout: 15_000,
       });
+      const runUrl = new URL(page.url());
+      expect(runUrl.searchParams.get('studentFirstName')).toBe('Ava');
+      expect(runUrl.searchParams.get('strictnessLevel')).toBe('advanced');
+      expect(runUrl.searchParams.get('sampleEssay')).toContain(
+        'specific claim'
+      );
       await expect(page.getByText('Selected run')).toBeVisible();
       await expect(page.getByText('Evaluation result')).toBeVisible();
       await expect(page.getByText('deterministic-workbench-fixture')).toBeVisible();
@@ -168,12 +174,18 @@ test.describe.serial('Admin assignment types', () => {
         select: {
           agentKind: true,
           status: true,
+          studentFirstName: true,
+          strictnessLevel: true,
+          sampleInput: true,
           resultJson: true,
         },
       });
 
       expect(run.agentKind).toBe('workbench-fixture');
       expect(run.status).toBe('completed');
+      expect(run.studentFirstName).toBe('Ava');
+      expect(run.strictnessLevel).toBe('advanced');
+      expect(run.sampleInput).toContain('specific claim');
       expect(run.resultJson).toMatchObject({
         mode: 'deterministic-workbench-fixture',
       });

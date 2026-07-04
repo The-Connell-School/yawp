@@ -6,6 +6,7 @@ import {
   useLoaderData,
 } from 'react-router';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from 'react-router';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   BotIcon,
@@ -465,10 +466,29 @@ export default function AssignmentTypeAiWorkbenchRoute() {
     versionComparison,
     controls,
   } = useLoaderData<typeof loader>();
+  const [sandboxStudentFirstName, setSandboxStudentFirstName] = useState(
+    controls.studentFirstName
+  );
+  const [sandboxSampleEssay, setSandboxSampleEssay] = useState(
+    controls.sampleEssay
+  );
+  const [sandboxStrictnessLevel, setSandboxStrictnessLevel] = useState(
+    controls.strictnessLevel
+  );
   const selectedRunSnapshot = selectedRun?.promptSnapshotJson;
   const selectedRunTutorPreviews = tutorSnapshotPreviews(selectedRunSnapshot);
   const selectedRunNotes = stringValue(selectedRun?.notes);
   const selectedRunResultJson = selectedRun?.resultJson;
+
+  useEffect(() => {
+    setSandboxStudentFirstName(controls.studentFirstName);
+    setSandboxSampleEssay(controls.sampleEssay);
+    setSandboxStrictnessLevel(controls.strictnessLevel);
+  }, [
+    controls.studentFirstName,
+    controls.sampleEssay,
+    controls.strictnessLevel,
+  ]);
 
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
@@ -541,7 +561,10 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 <Input
                   id="studentFirstName"
                   name="studentFirstName"
-                  defaultValue={controls.studentFirstName}
+                  value={sandboxStudentFirstName}
+                  onChange={(event) =>
+                    setSandboxStudentFirstName(event.currentTarget.value)
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -550,7 +573,10 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   id="sampleEssay"
                   name="sampleEssay"
                   rows={4}
-                  defaultValue={controls.sampleEssay}
+                  value={sandboxSampleEssay}
+                  onChange={(event) =>
+                    setSandboxSampleEssay(event.currentTarget.value)
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -558,7 +584,10 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 <select
                   id="strictnessLevel"
                   name="strictnessLevel"
-                  defaultValue={controls.strictnessLevel}
+                  value={sandboxStrictnessLevel}
+                  onChange={(event) =>
+                    setSandboxStrictnessLevel(event.currentTarget.value)
+                  }
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   {gradingAssistantStrictnessOptions.map((option) => (
@@ -745,14 +774,14 @@ export default function AssignmentTypeAiWorkbenchRoute() {
               <input
                 type="hidden"
                 name="studentFirstName"
-                value={controls.studentFirstName}
+                value={sandboxStudentFirstName}
               />
               <input
                 type="hidden"
                 name="strictnessLevel"
-                value={controls.strictnessLevel}
+                value={sandboxStrictnessLevel}
               />
-              <input type="hidden" name="sampleEssay" value={controls.sampleEssay} />
+              <input type="hidden" name="sampleEssay" value={sandboxSampleEssay} />
               <div className="space-y-2">
                 <Label htmlFor="evaluationLabel">Label</Label>
                 <Input
