@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
   assertLiveRunAllowed,
+  buildLiveErrorLine,
+  buildLiveResultLine,
   buildRunManifest,
   loadAnthropicSdkForEval,
   parseRunnerArgs,
@@ -13,6 +15,13 @@ describe('AI context eval live runner guardrails', () => {
     expect(options.live).toBe(false);
     expect(options.outputDir).toBe('.worktree-local/ai-context-evals/runs');
     expect(options.model).toBe('claude-sonnet-4-6');
+    expect(options.requestTimeoutMs).toBe(45_000);
+  });
+
+  test('parses request timeout override', () => {
+    const options = parseRunnerArgs(['--request-timeout-ms=12000']);
+
+    expect(options.requestTimeoutMs).toBe(12_000);
   });
 
   test('rejects live mode without an Anthropic key', () => {
@@ -48,5 +57,38 @@ describe('AI context eval live runner guardrails', () => {
     const Anthropic = await loadAnthropicSdkForEval();
 
     expect(typeof Anthropic).toBe('function');
+  });
+
+  test('serializes live result and error lines for incremental JSONL writes', () => {
+    expect(
+      JSON.parse(
+        buildLiveResultLine({
+          strategyId: 'full-document-each-turn',
+          evalCaseId: 'case-1',
+          turnIndex: 0,
+          response: 'Looks good.',
+          usage: { input_tokens: 10, output_tokens: 2 },
+        })
+      )
+    ).toMatchObject({
+      status: 'ok',
+      strategyId: 'full-document-each-turn',
+      usage: { input_tokens: 10, output_tokens: 2 },
+    });
+
+    expect(
+      JSON.parse(
+        buildLiveErrorLine({
+          strategyId: 'delta-since-last-turn',
+          evalCaseId: 'case-2',
+          turnIndex: 1,
+          error: new Error('timeout'),
+        })
+      )
+    ).toMatchObject({
+      status: 'error',
+      strategyId: 'delta-since-last-turn',
+      error: 'timeout',
+    });
   });
 });

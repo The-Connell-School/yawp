@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import { createRequire } from 'module';
 import { join } from 'path';
 import {
@@ -18,9 +24,14 @@ export type RunnerOptions = {
   envFile: string;
   limitCases: number | null;
   anthropicApiKey: string;
+  requestTimeoutMs: number;
 };
 
-type AnthropicConstructor = new (config: { apiKey: string }) => {
+type AnthropicConstructor = new (config: {
+  apiKey: string;
+  timeout?: number;
+  maxRetries?: number;
+}) => {
   messages: {
     create: (input: {
       model: string;
@@ -33,6 +44,21 @@ type AnthropicConstructor = new (config: { apiKey: string }) => {
       usage: unknown;
     }>;
   };
+};
+
+type LiveResult = {
+  strategyId: string;
+  evalCaseId: string;
+  turnIndex: number;
+  response: string;
+  usage: unknown;
+};
+
+type LiveError = {
+  strategyId: string;
+  evalCaseId: string;
+  turnIndex: number;
+  error: unknown;
 };
 
 export async function loadAnthropicSdkForEval(): Promise<AnthropicConstructor> {
@@ -53,6 +79,7 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
     envFile: '.worktree-local/ai-context-evals.env',
     limitCases: null,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    requestTimeoutMs: 45_000,
   };
 
   for (const arg of args) {
@@ -67,6 +94,11 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
     } else if (arg.startsWith('--limit-cases=')) {
       const parsed = Number(arg.slice('--limit-cases='.length));
       options.limitCases = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    } else if (arg.startsWith('--request-timeout-ms=')) {
+      const parsed = Number(arg.slice('--request-timeout-ms='.length));
+      if (Number.isFinite(parsed) && parsed > 0) {
+        options.requestTimeoutMs = parsed;
+      }
     }
   }
 
@@ -135,7 +167,29 @@ export function buildRunManifest({
     caseCount,
     strategyCount,
     outputDir: options.outputDir,
+    requestTimeoutMs: options.requestTimeoutMs,
   };
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function buildLiveResultLine(result: LiveResult) {
+  return JSON.stringify({
+    status: 'ok',
+    ...result,
+  });
+}
+
+export function buildLiveErrorLine(result: LiveError) {
+  return JSON.stringify({
+    status: 'error',
+    strategyId: result.strategyId,
+    evalCaseId: result.evalCaseId,
+    turnIndex: result.turnIndex,
+    error: errorMessage(result.error),
+  });
 }
 
 function requestToJsonLine(request: PlannedTutorRequest) {
@@ -189,13 +243,19 @@ async function runLiveRequest({
   apiKey,
   model,
   request,
+  timeoutMs,
 }: {
   apiKey: string;
   model: string;
   request: PlannedTutorRequest;
+  timeoutMs: number;
 }) {
   const Anthropic = await loadAnthropicSdkForEval();
-  const anthropic = new Anthropic({ apiKey });
+  const anthropic = new Anthropic({
+    apiKey,
+    timeout: timeoutMs,
+    maxRetries: 0,
+  });
   const message = await anthropic.messages.create({
     model,
     max_tokens: 500,
@@ -271,21 +331,41 @@ async function main() {
   }
 
   assertLiveRunAllowed(options);
-  const liveResults = [];
-  for (const request of [...requestsByStrategy.values()].flat()) {
-    liveResults.push(
-      await runLiveRequest({
+  const liveResultsPath = join(runDir, 'live-results.jsonl');
+  const allRequests = [...requestsByStrategy.values()].flat();
+  writeFileSync(liveResultsPath, '');
+  let completed = 0;
+  let failed = 0;
+  for (const [index, request] of allRequests.entries()) {
+    try {
+      const result = await runLiveRequest({
         apiKey: options.anthropicApiKey,
         model: options.model,
         request,
-      })
-    );
+        timeoutMs: options.requestTimeoutMs,
+      });
+      appendFileSync(liveResultsPath, `${buildLiveResultLine(result)}\n`);
+      completed += 1;
+      console.log(
+        `[${index + 1}/${allRequests.length}] ok ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}`
+      );
+    } catch (error) {
+      appendFileSync(
+        liveResultsPath,
+        `${buildLiveErrorLine({
+          strategyId: request.strategyId,
+          evalCaseId: request.evalCaseId,
+          turnIndex: request.turnIndex,
+          error,
+        })}\n`
+      );
+      failed += 1;
+      console.log(
+        `[${index + 1}/${allRequests.length}] error ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}: ${errorMessage(error)}`
+      );
+    }
   }
-  writeFileSync(
-    join(runDir, 'live-results.jsonl'),
-    `${liveResults.map((result) => JSON.stringify(result)).join('\n')}\n`
-  );
-  console.log(`Live run complete. Wrote ${runDir}`);
+  console.log(`Live run complete. ok=${completed} error=${failed} Wrote ${runDir}`);
 }
 
 if (import.meta.main) {
