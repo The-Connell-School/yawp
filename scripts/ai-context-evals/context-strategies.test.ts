@@ -32,6 +32,17 @@ describe('AI context eval strategy planning', () => {
     expect(matrix.cases.map((item) => item.documentWordCount)).toContain(1000);
   });
 
+  test('builds scenario-specific cases instead of duplicating the same conversation', () => {
+    const cases = buildEvalMatrix({ wordCounts: [100] }).cases;
+
+    expect(cases.map((evalCase) => [evalCase.scenarioId, evalCase.turns.length])).toEqual([
+      ['local-revision-follow-up', 2],
+      ['specific-detail-question', 3],
+      ['deleted-content-trap', 4],
+      ['whole-draft-review', 5],
+    ]);
+  });
+
   test('full-document strategy includes current canonical draft on every turn', () => {
     const fixture = buildFixtureConversation({ documentWordCount: 100 });
     const requests = buildStrategyRequests({

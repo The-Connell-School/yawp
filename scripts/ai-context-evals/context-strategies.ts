@@ -70,22 +70,27 @@ export type PlannedTutorRequest = {
 const SCENARIOS: Array<{
   id: EvalScenarioId;
   title: string;
+  turnCount: number;
 }> = [
   {
     id: 'local-revision-follow-up',
     title: 'Student asks whether a revised thesis addressed prior feedback',
+    turnCount: 2,
   },
   {
     id: 'specific-detail-question',
     title: 'Student asks about a specific detail added in the current draft',
+    turnCount: 3,
   },
   {
     id: 'deleted-content-trap',
     title: 'Student deletes a bad example and asks for follow-up feedback',
+    turnCount: 4,
   },
   {
     id: 'whole-draft-review',
     title: 'Student asks for a whole-draft review after several edits',
+    turnCount: 5,
   },
 ];
 
@@ -371,7 +376,7 @@ export function buildFixtureConversation({
     title: scenario.title,
     documentWordCount,
     initialDocument,
-    turns,
+    turns: turns.slice(0, scenario.turnCount),
   };
 }
 
