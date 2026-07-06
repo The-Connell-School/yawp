@@ -26,6 +26,7 @@ export type RunnerOptions = {
   anthropicApiKey: string;
   requestTimeoutMs: number;
   requestConcurrency: number;
+  resumeRunDir: string | null;
 };
 
 type AnthropicClient = {
@@ -84,6 +85,7 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
     requestTimeoutMs: 45_000,
     requestConcurrency: 1,
+    resumeRunDir: null,
   };
 
   for (const arg of args) {
@@ -108,6 +110,9 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
       if (Number.isInteger(parsed) && parsed > 0) {
         options.requestConcurrency = parsed;
       }
+    } else if (arg.startsWith('--resume-run-dir=')) {
+      const value = arg.slice('--resume-run-dir='.length).trim();
+      options.resumeRunDir = value || null;
     }
   }
 
@@ -200,6 +205,41 @@ export function buildLiveErrorLine(result: LiveError) {
     turnIndex: result.turnIndex,
     error: errorMessage(result.error),
   });
+}
+
+function requestKey(row: {
+  strategyId: string;
+  evalCaseId: string;
+  turnIndex: number;
+}) {
+  return `${row.strategyId}|${row.evalCaseId}|${row.turnIndex}`;
+}
+
+export function resultKeysFromJsonl(content: string) {
+  return new Set(
+    content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const row = JSON.parse(line) as {
+          strategyId: string;
+          evalCaseId: string;
+          turnIndex: number;
+        };
+        return requestKey(row);
+      })
+  );
+}
+
+export function filterPendingRequests({
+  requests,
+  completedKeys,
+}: {
+  requests: PlannedTutorRequest[];
+  completedKeys: Set<string>;
+}) {
+  return requests.filter((request) => !completedKeys.has(requestKey(request)));
 }
 
 export function requestToJsonLine(request: PlannedTutorRequest) {
@@ -300,38 +340,59 @@ async function main() {
     );
   }
 
-  const runDir = join(
-    options.outputDir,
-    new Date().toISOString().replace(/[:.]/g, '-')
-  );
-  mkdirSync(runDir, { recursive: true });
+  const allRequests = [...requestsByStrategy.values()].flat();
+  const runDir =
+    options.resumeRunDir ??
+    join(options.outputDir, new Date().toISOString().replace(/[:.]/g, '-'));
 
-  const manifest = buildRunManifest({
-    options,
-    caseCount: cases.length,
-    strategyCount: DEFAULT_STRATEGIES.length,
-  });
-  writeFileSync(
-    join(runDir, 'manifest.json'),
-    `${JSON.stringify(manifest, null, 2)}\n`
-  );
-  writeFileSync(
-    join(runDir, 'planned-requests.jsonl'),
-    `${[...requestsByStrategy.values()]
-      .flat()
-      .map(requestToJsonLine)
-      .join('\n')}\n`
-  );
-  writeFileSync(
-    join(runDir, 'summary.md'),
-    `${buildDryRunSummary({
-      requestsByStrategy,
-      model: options.model,
-    })}\n`
-  );
+  let pendingRequests = allRequests;
+  if (options.resumeRunDir) {
+    if (!existsSync(join(runDir, 'manifest.json'))) {
+      throw new Error(`Cannot resume missing run manifest: ${runDir}`);
+    }
+    const liveResultsPath = join(runDir, 'live-results.jsonl');
+    const completedKeys = existsSync(liveResultsPath)
+      ? resultKeysFromJsonl(readFileSync(liveResultsPath, 'utf8'))
+      : new Set<string>();
+    pendingRequests = filterPendingRequests({
+      requests: allRequests,
+      completedKeys,
+    });
+    console.log(
+      `Resuming ${runDir}. Skipping ${allRequests.length - pendingRequests.length}/${allRequests.length} recorded requests.`
+    );
+  } else {
+    mkdirSync(runDir, { recursive: true });
+
+    const manifest = buildRunManifest({
+      options,
+      caseCount: cases.length,
+      strategyCount: DEFAULT_STRATEGIES.length,
+    });
+    writeFileSync(
+      join(runDir, 'manifest.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+    writeFileSync(
+      join(runDir, 'planned-requests.jsonl'),
+      `${allRequests.map(requestToJsonLine).join('\n')}\n`
+    );
+    writeFileSync(
+      join(runDir, 'summary.md'),
+      `${buildDryRunSummary({
+        requestsByStrategy,
+        model: options.model,
+      })}\n`
+    );
+  }
 
   if (!options.live) {
     console.log(`Dry run only. Wrote ${runDir}`);
+    if (options.resumeRunDir) {
+      console.log(
+        `Pending requests: ${pendingRequests.length}/${allRequests.length}`
+      );
+    }
     console.log('No Anthropic API calls were made.');
     return;
   }
@@ -344,8 +405,9 @@ async function main() {
     maxRetries: 0,
   });
   const liveResultsPath = join(runDir, 'live-results.jsonl');
-  const allRequests = [...requestsByStrategy.values()].flat();
-  writeFileSync(liveResultsPath, '');
+  if (!options.resumeRunDir) {
+    writeFileSync(liveResultsPath, '');
+  }
   let completed = 0;
   let failed = 0;
   let nextIndex = 0;
@@ -354,8 +416,8 @@ async function main() {
     while (true) {
       const index = nextIndex;
       nextIndex += 1;
-      if (index >= allRequests.length) return;
-      const request = allRequests[index]!;
+      if (index >= pendingRequests.length) return;
+      const request = pendingRequests[index]!;
 
       try {
         const result = await runLiveRequest({
@@ -366,7 +428,7 @@ async function main() {
         appendFileSync(liveResultsPath, `${buildLiveResultLine(result)}\n`);
         completed += 1;
         console.log(
-          `[${completed + failed}/${allRequests.length}] ok ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}`
+          `[${completed + failed}/${pendingRequests.length}] ok ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}`
         );
       } catch (error) {
         appendFileSync(
@@ -380,13 +442,13 @@ async function main() {
         );
         failed += 1;
         console.log(
-          `[${completed + failed}/${allRequests.length}] error ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}: ${errorMessage(error)}`
+          `[${completed + failed}/${pendingRequests.length}] error ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}: ${errorMessage(error)}`
         );
       }
     }
   }
 
-  const workerCount = Math.min(options.requestConcurrency, allRequests.length);
+  const workerCount = Math.min(options.requestConcurrency, pendingRequests.length);
   await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
   console.log(`Live run complete. ok=${completed} error=${failed} Wrote ${runDir}`);
 }

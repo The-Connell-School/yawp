@@ -4,9 +4,11 @@ import {
   buildLiveErrorLine,
   buildLiveResultLine,
   buildRunManifest,
+  filterPendingRequests,
   loadAnthropicSdkForEval,
   parseRunnerArgs,
   requestToJsonLine,
+  resultKeysFromJsonl,
 } from './live-runner';
 import {
   buildFixtureConversation,
@@ -22,16 +24,21 @@ describe('AI context eval live runner guardrails', () => {
     expect(options.model).toBe('claude-sonnet-4-6');
     expect(options.requestTimeoutMs).toBe(45_000);
     expect(options.requestConcurrency).toBe(1);
+    expect(options.resumeRunDir).toBe(null);
   });
 
   test('parses request timeout override', () => {
     const options = parseRunnerArgs([
       '--request-timeout-ms=12000',
       '--concurrency=4',
+      '--resume-run-dir=.worktree-local/ai-context-evals/runs/example',
     ]);
 
     expect(options.requestTimeoutMs).toBe(12_000);
     expect(options.requestConcurrency).toBe(4);
+    expect(options.resumeRunDir).toBe(
+      '.worktree-local/ai-context-evals/runs/example'
+    );
   });
 
   test('rejects live mode without an Anthropic key', () => {
@@ -101,6 +108,31 @@ describe('AI context eval live runner guardrails', () => {
       strategyId: 'delta-since-last-turn',
       error: 'timeout',
     });
+  });
+
+  test('filters already recorded requests when resuming a live run', () => {
+    const fixture = buildFixtureConversation({
+      documentDomainId: 'school-lunch-argument',
+      scenarioId: 'specific-detail-question',
+      documentWordCount: 100,
+    });
+    const requests = buildStrategyRequests({
+      evalCase: fixture,
+      strategyId: 'full-document-each-turn',
+    });
+    const completedKeys = resultKeysFromJsonl(
+      `${buildLiveResultLine({
+        strategyId: requests[0]!.strategyId,
+        evalCaseId: requests[0]!.evalCaseId,
+        turnIndex: requests[0]!.turnIndex,
+        response: 'Looks good.',
+        usage: { input_tokens: 10, output_tokens: 2 },
+      })}\n`
+    );
+
+    expect(filterPendingRequests({ requests, completedKeys })).toEqual(
+      requests.slice(1)
+    );
   });
 
   test('serializes document domain and tiny-change trap metadata in planned requests', () => {
