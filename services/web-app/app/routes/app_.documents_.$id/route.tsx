@@ -600,6 +600,9 @@ export default function Route() {
       ? `Timed · ${apHistorySnapshot.timing.durationMinutes}m`
       : 'Untimed'
     : null;
+  const apHistoryContextLabel = apHistorySnapshot
+    ? `${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`
+    : null;
   const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
@@ -744,6 +747,14 @@ export default function Route() {
                     : undefined
                 }
               />
+              {apHistoryContextLabel ? (
+                <div
+                  data-testid="ap-history-context-pill"
+                  className="hidden h-8 shrink-0 items-center rounded-full border bg-white px-2.5 text-xs font-semibold text-muted-foreground md:flex"
+                >
+                  {apHistoryContextLabel}
+                </div>
+              ) : null}
             </div>
           </div>
           {hasAnySubmissionRecord && (
