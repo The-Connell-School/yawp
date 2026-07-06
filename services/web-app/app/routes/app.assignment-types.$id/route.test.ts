@@ -30,10 +30,7 @@ const requireMembership = mock();
 const createDocumentForAssignmentType = mock();
 const redirectWithToast = mock();
 const getAvailableAssignmentTypesForScopes = mock();
-
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
+const isAssignmentTypeAvailableForAnyScope = mock();
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({
@@ -48,8 +45,9 @@ mock.module('~/utils/toast.server', () => ({
   redirectWithToast,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
-  ...assignmentTypeAccessActual,
+  AssignmentTypeAccessScope: undefined,
   getAvailableAssignmentTypesForScopes,
+  isAssignmentTypeAvailableForAnyScope,
 }));
 
 const { action, loader } = await import('./route');
@@ -106,6 +104,7 @@ describe('app.assignment-types.$id action', () => {
     requireMembership.mockReset();
     createDocumentForAssignmentType.mockReset();
     redirectWithToast.mockReset();
+    isAssignmentTypeAvailableForAnyScope.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -119,6 +118,25 @@ describe('app.assignment-types.$id action', () => {
     ]);
     prisma.school.findMany.mockResolvedValue([]);
     prisma.orgMembership.findMany.mockResolvedValue([]);
+    isAssignmentTypeAvailableForAnyScope.mockImplementation(
+      async ({
+        assignmentTypeId,
+      }: {
+        assignmentTypeId: string;
+        scopes: unknown[];
+      }) => {
+        const assignmentType = await prisma.assignmentType.findFirst({
+          where: { id: assignmentTypeId, archivedAt: null },
+          select: { id: true },
+        });
+        if (!assignmentType) return false;
+        const assignments = await prisma.organizationAssignmentType.findMany();
+        return assignments.some(
+          (assignment: { assignmentTypeId: string }) =>
+            assignment.assignmentTypeId === assignmentTypeId
+        );
+      }
+    );
     mockActionAssignmentTypeAvailable();
     createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-1' });
     redirectWithToast.mockImplementation((url, toast) => ({

@@ -1,3 +1,15 @@
+export type ApPromptSource = {
+  externalKey: string;
+  title: string;
+  attribution: string;
+  body: string;
+  position: number;
+  caption?: string | null;
+  mediaType?: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
+};
+
 export type ApPrompt = {
   externalKey: string;
   title: string;
@@ -7,7 +19,7 @@ export type ApPrompt = {
   reasoningSkill: string;
   difficulty: string | null;
   prompt: string;
-  sources: Array<unknown>;
+  sources: ApPromptSource[];
 };
 
 export const AP_FACET_KEYS = {
