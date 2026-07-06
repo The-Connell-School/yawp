@@ -178,18 +178,7 @@ export function summarizeTutorBaseline({
       pricing,
     })
   );
-  const perSessionCosts = [...sessions.values()].map((sessionRows) =>
-    sessionRows.reduce(
-      (sum, row) =>
-        sum +
-        estimateUsd({
-          inputTokens: row.inputTokens,
-          outputTokens: row.outputTokens,
-          pricing,
-        }),
-      0
-    )
-  );
+  const totalCostUsd = perCallCosts.reduce((sum, value) => sum + value, 0);
 
   return {
     totalCalls: rows.length,
@@ -211,7 +200,8 @@ export function summarizeTutorBaseline({
       average(rows.map((row) => row.outputTokens))
     ),
     averageCostUsdPerCall: average(perCallCosts),
-    averageCostUsdPerModuleSession: average(perSessionCosts),
+    averageCostUsdPerModuleSession:
+      totalModuleSessions === 0 ? 0 : totalCostUsd / totalModuleSessions,
   };
 }
 

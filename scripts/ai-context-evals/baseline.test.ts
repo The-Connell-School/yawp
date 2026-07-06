@@ -112,6 +112,17 @@ describe('AI context eval production baseline summary', () => {
     expect(summary.averageCostUsdPerModuleSession).toBeGreaterThan(0);
   });
 
+  test('estimates cost per module when only legacy tutor-marker rows exist', () => {
+    const legacyRows = normalizeTutorLogRows([rawRows[2]!]);
+    const summary = summarizeTutorBaseline({
+      rows: legacyRows,
+      pricing: CLAUDE_PRICING['claude-sonnet-4-6'],
+    });
+
+    expect(summary.totalModuleSessions).toBe(1);
+    expect(summary.averageCostUsdPerModuleSession).toBeGreaterThan(0);
+  });
+
   test('renders an operator-readable baseline report', () => {
     const report = buildBaselineReport({
       summary: summarizeTutorBaseline({
