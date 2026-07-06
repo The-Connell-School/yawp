@@ -94,6 +94,14 @@ const SUBMIT_EMPTY_TOOLTIP =
 const DEFAULT_DOCUMENT_TUTOR_WIDTH = 320;
 const DEFAULT_DOCUMENT_SIDEBAR_WIDTH = 320;
 
+function titleCase(value: string) {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
@@ -458,6 +466,73 @@ export function shouldRenderDbqWorkspace(
   return (
     apHistorySnapshot?.essayType === 'dbq' &&
     apHistorySnapshot.sources.length > 0
+  );
+}
+
+export function AssignmentPromptStrip({
+  label,
+  title,
+  prompt,
+  metadata = [],
+}: {
+  label?: string | null;
+  title?: string | null;
+  prompt: string;
+  metadata?: string[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const normalizedPrompt = prompt.trim();
+  const canExpand =
+    normalizedPrompt.length > 180 || normalizedPrompt.includes('\n');
+
+  return (
+    <section
+      data-testid="assignment-prompt-strip"
+      className="border-b bg-amber-50/80 px-3 py-2"
+    >
+      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="info-outlined" size="sm">
+            Assignment Prompt
+          </Badge>
+          {label ? (
+            <span className="text-xs font-semibold uppercase text-muted-foreground">
+              {label}
+            </span>
+          ) : null}
+          {title ? (
+            <span className="text-sm font-medium text-foreground">{title}</span>
+          ) : null}
+          {metadata.map((item) => (
+            <Badge key={item} variant="outline" size="sm">
+              {item}
+            </Badge>
+          ))}
+        </div>
+        <div className="flex items-start gap-2">
+          <p
+            className={
+              expanded
+                ? 'min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90'
+                : 'line-clamp-2 min-w-0 flex-1 whitespace-pre-wrap text-sm leading-6 text-foreground/90'
+            }
+          >
+            {normalizedPrompt}
+          </p>
+          {canExpand ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? 'Show less' : 'Show full prompt'}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -981,6 +1056,25 @@ export default function Route() {
             />
           </div>
         </nav>
+        {showDbqWorkspace && apHistorySnapshot ? (
+          <AssignmentPromptStrip
+            label={`${apHistorySnapshot.essayType.toUpperCase()} · ${apHistorySnapshot.course.toUpperCase()}`}
+            title={assignment?.title?.trim() || 'AP History Essay'}
+            prompt={apHistorySnapshot.prompt}
+            metadata={[
+              `Period ${apHistorySnapshot.periodNumber}`,
+              titleCase(apHistorySnapshot.reasoningSkill),
+              `${apHistorySnapshot.sources.length} ${
+                apHistorySnapshot.sources.length === 1 ? 'source' : 'sources'
+              }`,
+            ]}
+          />
+        ) : editorAssignmentPrompt ? (
+          <AssignmentPromptStrip
+            title={editorAssignmentPrompt.title?.trim() || 'Untitled Assignment'}
+            prompt={editorAssignmentPrompt.prompt}
+          />
+        ) : null}
         {showDbqWorkspace && apHistorySnapshot ? (
           <CommentsSelectionProvider>
             <DbqLayout
