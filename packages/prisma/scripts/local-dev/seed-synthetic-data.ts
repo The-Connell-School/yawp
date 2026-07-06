@@ -9,10 +9,6 @@ import {
   type LocalDevPersona,
 } from './dev-personas';
 
-const WRITING_PRACTICE_FEATURE_KEY = 'writing_practice';
-const WRITING_PRACTICE_FEATURE_DESCRIPTION =
-  'Enable writing practice lessons in seeded environments.';
-
 type PersonaRecord = {
   persona: LocalDevPersona;
   userId: string;
@@ -71,34 +67,9 @@ function pickAssignmentTypeId(
   return rows.find(matcher)?.id ?? null;
 }
 
-export async function enableLocalDevFeatureFlags(prisma: PrismaClient) {
-  await prisma.featureFlag.upsert({
-    where: {
-      key_scopeKind_scopeId: {
-        key: WRITING_PRACTICE_FEATURE_KEY,
-        scopeKind: 'organization',
-        scopeId: LOCAL_DEV_ORG_ID,
-      },
-    },
-    update: {
-      enabled: true,
-      description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
-    },
-    create: {
-      key: WRITING_PRACTICE_FEATURE_KEY,
-      scopeKind: 'organization',
-      scopeId: LOCAL_DEV_ORG_ID,
-      enabled: true,
-      description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
-    },
-  });
-}
-
 export async function seedSyntheticLocalDevData(
   prisma: PrismaClient
 ): Promise<LocalDevSeedContext> {
-  await enableLocalDevFeatureFlags(prisma);
-
   const personaRecords = Object.fromEntries(
     (
       await Promise.all(
