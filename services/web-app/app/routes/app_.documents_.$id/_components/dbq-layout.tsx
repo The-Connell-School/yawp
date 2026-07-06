@@ -4,23 +4,22 @@ import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
 type Props = {
   snapshot: ApHistorySnapshot;
+  editor?: React.ReactNode;
 };
 
 function toDbqSources(sources: ApHistorySnapshot['sources']): DbqSource[] {
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  return sources.map((s, i) => ({
-    id: s.externalKey,
-    label: letters[i] ?? `${i + 1}`,
-    title: s.title,
-    attribution: s.attribution,
-    body: s.body,
-    caption: s.caption ?? undefined,
+  return sources.map((source, index) => ({
+    id: source.externalKey,
+    label: letters[index] ?? `${index + 1}`,
+    title: source.title,
+    attribution: source.attribution,
+    body: source.body,
+    caption: source.caption ?? undefined,
   }));
 }
 
-function getReasoningSkill(
-  value: string
-): DbqPrompt['reasoningSkill'] {
+function getReasoningSkill(value: string): DbqPrompt['reasoningSkill'] {
   const normalized = value.trim().toLowerCase();
   if (normalized === 'comparison') return 'comparison';
   if (normalized === 'continuity-and-change' || normalized === 'ccot') {
@@ -30,7 +29,7 @@ function getReasoningSkill(
   return 'causation';
 }
 
-export function DbqLayout({ snapshot }: Props) {
+export function DbqLayout({ snapshot, editor }: Props) {
   const dbqPrompt: DbqPrompt = {
     id: snapshot.libraryEntryId,
     title: snapshot.period,
@@ -47,6 +46,8 @@ export function DbqLayout({ snapshot }: Props) {
     <DbqAssignmentScreen
       prompt={dbqPrompt}
       initialTimeMode={snapshot.timing.mode}
+      durationMinutes={snapshot.timing.durationMinutes}
+      editor={editor}
     />
   );
 }
