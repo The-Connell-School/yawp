@@ -270,6 +270,11 @@ run_tooling_if_needed() {
 }
 
 reset_preview_login_password() {
+  if [[ "$DATA_MODE" != "production-dump" ]]; then
+    echo "Skipping preview login password reset for seeded preview data."
+    return 0
+  fi
+
   "${compose[@]}" run --rm \
     -e PREVIEW_LOGIN_EMAIL \
     -e PREVIEW_LOGIN_PASSWORD \

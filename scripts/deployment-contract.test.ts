@@ -343,7 +343,7 @@ describe('PR preview deployment contract', () => {
     expect(loginSmokeIndex).toBeLessThan(previewUrlIndex);
   });
 
-  test('preview deploy resets the configured preview login password before smoke', () => {
+  test('preview deploy resets the configured production-dump login password before smoke', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
     const resetIndex = deployScript.indexOf(
@@ -354,6 +354,8 @@ describe('PR preview deployment contract', () => {
 
     expect(deployScript).toContain('PREVIEW_LOGIN_EMAIL');
     expect(deployScript).toContain('PREVIEW_LOGIN_PASSWORD');
+    expect(deployScript).toContain('if [[ "$DATA_MODE" != "production-dump" ]]; then');
+    expect(deployScript).toContain('Skipping preview login password reset for seeded preview data.');
     expect(resetIndex).toBeGreaterThan(-1);
     expect(migrateIndex).toBeGreaterThan(-1);
     expect(webStartIndex).toBeGreaterThan(-1);
