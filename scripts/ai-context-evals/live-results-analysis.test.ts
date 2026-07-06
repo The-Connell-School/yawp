@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   analyzeLiveEvalResults,
   calculateAnthropicUsageCost,
+  evaluateLiveEvalGate,
   parseJsonl,
   renderLiveEvalAnalysis,
+  renderLiveEvalGate,
 } from './live-results-analysis';
 import { CLAUDE_PRICING } from './cost';
 
@@ -205,5 +207,147 @@ describe('AI context eval live results analysis', () => {
     expect(report).toContain('## Document Size Pricing');
     expect(report).toContain('| full-document-each-turn | 100 |');
     expect(report).toContain('$0.0006');
+  });
+
+  test('passes the latest-context regression gate for healthy eval results', () => {
+    const gate = evaluateLiveEvalGate({
+      totalRequests: 2,
+      strategies: [
+        {
+          strategyId: 'full-document-each-turn',
+          requestCount: 2,
+          okCount: 2,
+          errorCount: 0,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0006,
+          canonicalCurrentDocumentRequests: 2,
+          changeSummaryRequests: 0,
+          estimatedInputTokens: 90,
+          mustUseEligibleChecks: 2,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 2,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 1,
+          mustNotViolations: 0,
+        },
+      ],
+      scenarios: [
+        {
+          strategyId: 'full-document-each-turn',
+          scenarioId: 'local-revision-follow-up',
+          documentWordCount: null,
+          requestCount: 1,
+          okCount: 1,
+          errorCount: 0,
+          inputTokens: 50,
+          outputTokens: 10,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0003,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 0,
+          estimatedInputTokens: 45,
+          mustUseEligibleChecks: 1,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 1,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 0,
+          mustNotViolations: 0,
+        },
+        {
+          strategyId: 'full-document-each-turn',
+          scenarioId: 'specific-detail-question',
+          documentWordCount: null,
+          requestCount: 1,
+          okCount: 1,
+          errorCount: 0,
+          inputTokens: 50,
+          outputTokens: 10,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0003,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 0,
+          estimatedInputTokens: 45,
+          mustUseEligibleChecks: 1,
+          exactMustUseAllPasses: 0,
+          exactMustUseAnyPasses: 1,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 1,
+          mustNotViolations: 0,
+        },
+      ],
+      documentSizes: [],
+    });
+
+    expect(gate.passed).toBe(true);
+    expect(renderLiveEvalGate(gate)).toContain('Gate: PASS');
+  });
+
+  test('fails the latest-context regression gate for errors, stale anchors, or weak changed-detail recall', () => {
+    const gate = evaluateLiveEvalGate({
+      totalRequests: 2,
+      strategies: [
+        {
+          strategyId: 'delta-since-last-turn',
+          requestCount: 2,
+          okCount: 1,
+          errorCount: 1,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0006,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 1,
+          estimatedInputTokens: 90,
+          mustUseEligibleChecks: 4,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 2,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 1,
+          mustNotViolations: 1,
+        },
+      ],
+      scenarios: [
+        {
+          strategyId: 'delta-since-last-turn',
+          scenarioId: 'specific-detail-question',
+          documentWordCount: null,
+          requestCount: 2,
+          okCount: 1,
+          errorCount: 1,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0006,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 1,
+          estimatedInputTokens: 90,
+          mustUseEligibleChecks: 4,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 2,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 1,
+          mustNotViolations: 1,
+        },
+      ],
+      documentSizes: [],
+    });
+
+    expect(gate.passed).toBe(false);
+    expect(gate.failures.join('\n')).toContain('delta-since-last-turn had 1 errors');
+    expect(gate.failures.join('\n')).toContain('stale/deleted anchor');
+    expect(gate.failures.join('\n')).toContain('specific-detail-question');
+    expect(renderLiveEvalGate(gate)).toContain('Gate: FAIL');
   });
 });

@@ -76,6 +76,32 @@ export type LiveEvalAnalysis = {
   documentSizes: DocumentSizeLiveAnalysis[];
 };
 
+export type LiveEvalGateOptions = {
+  requireAllRequestsOk: boolean;
+  maxMustNotViolations: number;
+  minStrategyAnyAnchorRate: number;
+  minCriticalScenarioAnyAnchorRate: number;
+  criticalScenarioIds: string[];
+};
+
+export type LiveEvalGate = {
+  passed: boolean;
+  failures: string[];
+  options: LiveEvalGateOptions;
+};
+
+export const DEFAULT_LIVE_EVAL_GATE_OPTIONS: LiveEvalGateOptions = {
+  requireAllRequestsOk: true,
+  maxMustNotViolations: 0,
+  minStrategyAnyAnchorRate: 0.75,
+  minCriticalScenarioAnyAnchorRate: 0.75,
+  criticalScenarioIds: [
+    'local-revision-follow-up',
+    'specific-detail-question',
+    'deleted-content-trap',
+  ],
+};
+
 type UsageCost = {
   inputTokens: number;
   outputTokens: number;
@@ -363,6 +389,14 @@ function ratio(numerator: number, denominator: number) {
   return denominator === 0 ? 'n/a' : `${numerator}/${denominator}`;
 }
 
+function rate(numerator: number, denominator: number) {
+  return denominator === 0 ? 1 : numerator / denominator;
+}
+
+function formatPercent(value: number) {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 function perRequest(value: number, requestCount: number) {
   return requestCount === 0 ? 0 : value / requestCount;
 }
@@ -436,6 +470,110 @@ export function renderLiveEvalAnalysis(summary: LiveEvalAnalysis) {
   return lines.join('\n');
 }
 
+export function evaluateLiveEvalGate(
+  summary: LiveEvalAnalysis,
+  options: Partial<LiveEvalGateOptions> = {}
+): LiveEvalGate {
+  const gateOptions = {
+    ...DEFAULT_LIVE_EVAL_GATE_OPTIONS,
+    ...options,
+  };
+  const failures: string[] = [];
+
+  for (const strategy of summary.strategies) {
+    if (
+      gateOptions.requireAllRequestsOk &&
+      strategy.okCount !== strategy.requestCount
+    ) {
+      failures.push(
+        `${strategy.strategyId} had ${strategy.errorCount} errors (${strategy.okCount}/${strategy.requestCount} ok).`
+      );
+    }
+
+    if (strategy.mustNotViolations > gateOptions.maxMustNotViolations) {
+      failures.push(
+        `${strategy.strategyId} had ${strategy.mustNotViolations} stale/deleted anchor violations across ${strategy.mustNotChecks} checks.`
+      );
+    }
+
+    const anyAnchorRate = rate(
+      strategy.exactMustUseAnyPasses,
+      strategy.mustUseEligibleChecks
+    );
+    if (
+      strategy.mustUseEligibleChecks > 0 &&
+      anyAnchorRate < gateOptions.minStrategyAnyAnchorRate
+    ) {
+      failures.push(
+        `${strategy.strategyId} latest-anchor recall ${formatPercent(anyAnchorRate)} is below ${formatPercent(gateOptions.minStrategyAnyAnchorRate)} (${strategy.exactMustUseAnyPasses}/${strategy.mustUseEligibleChecks}).`
+      );
+    }
+  }
+
+  const criticalScenarioIds = new Set(gateOptions.criticalScenarioIds);
+  for (const scenario of summary.scenarios) {
+    if (!criticalScenarioIds.has(scenario.scenarioId)) continue;
+
+    if (
+      gateOptions.requireAllRequestsOk &&
+      scenario.okCount !== scenario.requestCount
+    ) {
+      failures.push(
+        `${scenario.strategyId} ${scenario.scenarioId} had ${scenario.errorCount} errors (${scenario.okCount}/${scenario.requestCount} ok).`
+      );
+    }
+
+    if (scenario.mustNotViolations > gateOptions.maxMustNotViolations) {
+      failures.push(
+        `${scenario.strategyId} ${scenario.scenarioId} had ${scenario.mustNotViolations} stale/deleted anchor violations.`
+      );
+    }
+
+    const anyAnchorRate = rate(
+      scenario.exactMustUseAnyPasses,
+      scenario.mustUseEligibleChecks
+    );
+    if (
+      scenario.mustUseEligibleChecks > 0 &&
+      anyAnchorRate < gateOptions.minCriticalScenarioAnyAnchorRate
+    ) {
+      failures.push(
+        `${scenario.strategyId} ${scenario.scenarioId} latest-anchor recall ${formatPercent(anyAnchorRate)} is below ${formatPercent(gateOptions.minCriticalScenarioAnyAnchorRate)} (${scenario.exactMustUseAnyPasses}/${scenario.mustUseEligibleChecks}).`
+      );
+    }
+  }
+
+  return {
+    passed: failures.length === 0,
+    failures,
+    options: gateOptions,
+  };
+}
+
+export function renderLiveEvalGate(gate: LiveEvalGate) {
+  const lines = [
+    '# AI Context Live Eval Gate',
+    '',
+    `Gate: ${gate.passed ? 'PASS' : 'FAIL'}`,
+    `Minimum strategy any-anchor recall: ${formatPercent(
+      gate.options.minStrategyAnyAnchorRate
+    )}`,
+    `Minimum critical-scenario any-anchor recall: ${formatPercent(
+      gate.options.minCriticalScenarioAnyAnchorRate
+    )}`,
+    `Maximum stale/deleted anchor violations: ${gate.options.maxMustNotViolations}`,
+  ];
+
+  if (gate.failures.length > 0) {
+    lines.push('', 'Failures:');
+    for (const failure of gate.failures) {
+      lines.push(`- ${failure}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function readManifestModel(runDir: string) {
   const manifestPath = join(runDir, 'manifest.json');
   if (!existsSync(manifestPath)) return 'claude-sonnet-4-6';
@@ -446,10 +584,12 @@ function readManifestModel(runDir: string) {
 }
 
 if (import.meta.main) {
-  const runDir = process.argv[2];
+  const args = process.argv.slice(2);
+  const runDir = args.find((arg) => !arg.startsWith('--'));
+  const shouldGate = args.includes('--gate');
   if (!runDir) {
     console.error(
-      'Usage: bun run scripts/ai-context-evals/live-results-analysis.ts <run-dir>'
+      'Usage: bun run scripts/ai-context-evals/live-results-analysis.ts <run-dir> [--gate]'
     );
     process.exit(1);
   }
@@ -467,4 +607,12 @@ if (import.meta.main) {
   });
 
   console.log(renderLiveEvalAnalysis(summary));
+  if (shouldGate) {
+    const gate = evaluateLiveEvalGate(summary);
+    console.log('');
+    console.log(renderLiveEvalGate(gate));
+    if (!gate.passed) {
+      process.exit(1);
+    }
+  }
 }
