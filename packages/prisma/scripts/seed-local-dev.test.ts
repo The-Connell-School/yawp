@@ -49,6 +49,12 @@ describe('local dev seed fixtures', () => {
     ).toBe(true);
   });
 
+  test('loads the synthetic seed module used by preview seed deploys', async () => {
+    const seedModule = await import('./local-dev/seed-synthetic-data');
+
+    expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
+  });
+
   test('treats localhost database urls as local seed targets', () => {
     expect(
       isLocalDatabaseUrl('postgresql://postgres:postgres@localhost:5432/yawp')

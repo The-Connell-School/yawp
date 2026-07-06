@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { PrismaClient } from '../../generated/prisma';
 import { createPassword } from '../utils';
-import { getClassArtByIndex } from '../../../services/web-app/app/utils/class-art.ts';
+import { getClassArtByIndex } from '../../../../services/web-app/app/utils/class-art.ts';
 import {
   LOCAL_DEV_ORG_ID,
   LOCAL_DEV_ORG_NAME,
