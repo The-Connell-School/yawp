@@ -69,15 +69,20 @@ describe('local dev seed fixtures', () => {
     );
   });
 
-  test('creates the local dev organization with organization-level flags', () => {
-    const source = readFileSync(
+  test('does not create writing practice configuration in local dev seed or schema', () => {
+    const seedSource = readFileSync(
       join(import.meta.dirname, 'seed-local-dev.ts'),
       'utf8'
     );
+    const schemaSource = readFileSync(
+      join(import.meta.dirname, '..', 'schema.prisma'),
+      'utf8'
+    );
 
-    expect(source).toContain('organizationFlags');
-    expect(source).toContain('writing_practice');
-    expect(source).not.toContain(['feature', 'Flag'].join(''));
+    expect(seedSource).not.toContain(['organization', 'Flags'].join(''));
+    expect(seedSource).not.toContain('writing_practice');
+    expect(schemaSource).not.toContain(['Organization', 'Flag'].join(''));
+    expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
   });
 
   test('treats localhost database urls as local seed targets', () => {

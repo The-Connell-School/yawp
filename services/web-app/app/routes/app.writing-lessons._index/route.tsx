@@ -2,7 +2,6 @@ import { BookOpen, ChevronRight, ClipboardList, Compass } from 'lucide-react';
 import {
   Link,
   data as dataResponse,
-  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -17,7 +16,6 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/organization-flags.server';
 import {
   getQuickWritingLessonGroups,
   getQuickWritingPracticePrompts,
@@ -25,14 +23,7 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-
-  if (!enabled) {
-    return redirect('/app');
-  }
+  await requireMembership(request, userId);
 
   const groups = getQuickWritingLessonGroups().map((group) => ({
     ...group,

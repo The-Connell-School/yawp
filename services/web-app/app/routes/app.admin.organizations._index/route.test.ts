@@ -48,7 +48,7 @@ describe('admin organizations index route', () => {
     prisma.organization.create.mockResolvedValue({ id: 'org-1' });
   });
 
-  test('creates each organization with default organization flags', async () => {
+  test('creates organizations without default writing practice configuration', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'create');
     form.set('name', 'New Org');
@@ -67,13 +67,6 @@ describe('admin organizations index route', () => {
         numOfStudentSeats: 30,
         numOfTeacherSeats: 10,
         accessExpiresAt: null,
-        organizationFlags: {
-          create: {
-            key: 'writing_practice',
-            enabled: false,
-            description: 'Enable writing practice lessons for this organization.',
-          },
-        },
       },
     });
   });

@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react';
 import {
   Link,
   data as dataResponse,
-  redirect,
   useLoaderData,
   type LoaderFunctionArgs,
 } from 'react-router';
@@ -19,7 +18,6 @@ import {
 } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/organization-flags.server';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,
@@ -27,14 +25,7 @@ import {
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-
-  if (!enabled) {
-    return redirect('/app');
-  }
+  await requireMembership(request, userId);
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {

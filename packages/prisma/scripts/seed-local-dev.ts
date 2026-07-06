@@ -15,9 +15,6 @@ import {
   LOCAL_DEV_PERSONAS,
 } from './local-dev/dev-personas';
 
-const WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION =
-  'Enable writing practice lessons for this organization.';
-
 assertLocalSeedTarget();
 
 const prisma = createPrismaClient();
@@ -36,13 +33,6 @@ try {
       name: LOCAL_DEV_ORG_NAME,
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
-      organizationFlags: {
-        create: {
-          key: 'writing_practice',
-          enabled: false,
-          description: WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION,
-        },
-      },
     },
   });
   console.timeEnd('organization');
