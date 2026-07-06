@@ -179,6 +179,65 @@ describe('AI context eval live results analysis', () => {
     });
   });
 
+  test('does not count must-not anchors while they are still present in the current prompt', () => {
+    const summary = analyzeLiveEvalResults({
+      pricing: CLAUDE_PRICING['claude-sonnet-4-6'],
+      plannedRows: [
+        {
+          strategyId: 'full-document-each-turn',
+          evalCaseId: 'literary-analysis__local-revision-follow-up-200',
+          documentDomainId: 'literary-analysis',
+          scenarioId: 'local-revision-follow-up',
+          documentWordCount: 200,
+          turnIndex: 1,
+          estimatedInputTokens: 10,
+          contextCoverage: {
+            hasCanonicalCurrentDocument: true,
+            hasChangeSummary: false,
+          },
+          mustUseAnchors: ['Jordan', 'active helper'],
+          mustNotUseAnchors: ['Maya is the narrator'],
+          trapTypes: ['changed-name'],
+          messages: [
+            {
+              role: 'user',
+              content:
+                'Current document says Jordan is active helper. A weak paragraph says Maya is the narrator in every chapter.',
+            },
+          ],
+        },
+      ],
+      resultRows: [
+        {
+          status: 'ok',
+          strategyId: 'full-document-each-turn',
+          evalCaseId: 'literary-analysis__local-revision-follow-up-200',
+          turnIndex: 1,
+          response:
+            'The draft has a consistency issue: Jordan is active helper, but a weak paragraph says Maya is the narrator.',
+          usage: {
+            input_tokens: 100,
+            output_tokens: 20,
+            cache_read_input_tokens: 0,
+          },
+        },
+      ],
+    });
+
+    expect(summary.strategies[0]).toMatchObject({
+      mustNotChecks: 0,
+      mustNotViolations: 0,
+    });
+    expect(summary.scenarios[0]).toMatchObject({
+      mustNotChecks: 0,
+      mustNotViolations: 0,
+    });
+    expect(summary.trapTypes[0]).toMatchObject({
+      mustNotChecks: 0,
+      mustNotViolations: 0,
+    });
+  });
+
   test('renders an operator-readable live analysis report', () => {
     const report = renderLiveEvalAnalysis({
       totalRequests: 1,

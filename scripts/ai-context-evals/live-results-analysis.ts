@@ -340,7 +340,9 @@ function addResultToAnalysis({
     }
   }
 
-  const mustNotUseAnchors = planned.mustNotUseAnchors ?? [];
+  const mustNotUseAnchors = (planned.mustNotUseAnchors ?? []).filter(
+    (anchor) => !normalizedIncludes(promptText, anchor)
+  );
   if (mustNotUseAnchors.length > 0) {
     analysis.mustNotChecks += 1;
     analysis.mustNotViolations += mustNotUseAnchors.filter((anchor) =>

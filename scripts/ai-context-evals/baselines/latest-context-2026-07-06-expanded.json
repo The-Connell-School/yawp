@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-06T16:37:12.717Z",
+  "totalRequests": 1960,
+  "gatePassed": true,
+  "strategies": [
+    {
+      "id": "full-document-each-turn",
+      "requestCount": 490,
+      "okRate": 1,
+      "anyAnchorRate": 0.94,
+      "exactAnchorRate": 0.7511111111111111,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 2.880362999999999
+    },
+    {
+      "id": "delta-since-last-turn",
+      "requestCount": 490,
+      "okRate": 1,
+      "anyAnchorRate": 0.9243697478991597,
+      "exactAnchorRate": 0.7415966386554622,
+      "canonicalCurrentDocumentRate": 0.2857142857142857,
+      "mustNotViolations": 0,
+      "costUsd": 2.1683280000000003
+    },
+    {
+      "id": "hybrid-summary-and-excerpts",
+      "requestCount": 490,
+      "okRate": 1,
+      "anyAnchorRate": 0.950920245398773,
+      "exactAnchorRate": 0.7382413087934561,
+      "canonicalCurrentDocumentRate": 0.35714285714285715,
+      "mustNotViolations": 0,
+      "costUsd": 2.4677070000000025
+    },
+    {
+      "id": "full-document-with-prompt-cache",
+      "requestCount": 490,
+      "okRate": 1,
+      "anyAnchorRate": 0.9088888888888889,
+      "exactAnchorRate": 0.7177777777777777,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 2.8562430000000014
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "full-document-each-turn|local-revision-follow-up",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.9857142857142858,
+      "exactAnchorRate": 0.8857142857142857,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.42236100000000015
+    },
+    {
+      "id": "full-document-each-turn|specific-detail-question",
+      "requestCount": 105,
+      "okRate": 1,
+      "anyAnchorRate": 0.96,
+      "exactAnchorRate": 0.76,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.611982
+    },
+    {
+      "id": "full-document-each-turn|deleted-content-trap",
+      "requestCount": 140,
+      "okRate": 1,
+      "anyAnchorRate": 0.936,
+      "exactAnchorRate": 0.728,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.8206980000000001
+    },
+    {
+      "id": "full-document-each-turn|whole-draft-review",
+      "requestCount": 175,
+      "okRate": 1,
+      "anyAnchorRate": 0.9096774193548387,
+      "exactAnchorRate": 0.7032258064516129,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 1.0253219999999998
+    },
+    {
+      "id": "delta-since-last-turn|local-revision-follow-up",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.9571428571428572,
+      "exactAnchorRate": 0.8857142857142857,
+      "canonicalCurrentDocumentRate": 0.5,
+      "mustNotViolations": 0,
+      "costUsd": 0.3429150000000001
+    },
+    {
+      "id": "delta-since-last-turn|specific-detail-question",
+      "requestCount": 105,
+      "okRate": 1,
+      "anyAnchorRate": 0.9428571428571428,
+      "exactAnchorRate": 0.7714285714285715,
+      "canonicalCurrentDocumentRate": 0.3333333333333333,
+      "mustNotViolations": 0,
+      "costUsd": 0.4749840000000002
+    },
+    {
+      "id": "delta-since-last-turn|deleted-content-trap",
+      "requestCount": 140,
+      "okRate": 1,
+      "anyAnchorRate": 0.9357142857142857,
+      "exactAnchorRate": 0.7428571428571429,
+      "canonicalCurrentDocumentRate": 0.25,
+      "mustNotViolations": 0,
+      "costUsd": 0.6172469999999999
+    },
+    {
+      "id": "delta-since-last-turn|whole-draft-review",
+      "requestCount": 175,
+      "okRate": 1,
+      "anyAnchorRate": 0.8881987577639752,
+      "exactAnchorRate": 0.6583850931677019,
+      "canonicalCurrentDocumentRate": 0.2,
+      "mustNotViolations": 0,
+      "costUsd": 0.7331819999999997
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|local-revision-follow-up",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.9714285714285714,
+      "exactAnchorRate": 0.8142857142857143,
+      "canonicalCurrentDocumentRate": 0.5,
+      "mustNotViolations": 0,
+      "costUsd": 0.374172
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|specific-detail-question",
+      "requestCount": 105,
+      "okRate": 1,
+      "anyAnchorRate": 0.9619047619047619,
+      "exactAnchorRate": 0.7904761904761904,
+      "canonicalCurrentDocumentRate": 0.3333333333333333,
+      "mustNotViolations": 0,
+      "costUsd": 0.5216879999999998
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|deleted-content-trap",
+      "requestCount": 140,
+      "okRate": 1,
+      "anyAnchorRate": 0.9714285714285714,
+      "exactAnchorRate": 0.7071428571428572,
+      "canonicalCurrentDocumentRate": 0.25,
+      "mustNotViolations": 0,
+      "costUsd": 0.6742409999999999
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|whole-draft-review",
+      "requestCount": 175,
+      "okRate": 1,
+      "anyAnchorRate": 0.9195402298850575,
+      "exactAnchorRate": 0.7011494252873564,
+      "canonicalCurrentDocumentRate": 0.4,
+      "mustNotViolations": 0,
+      "costUsd": 0.8976059999999999
+    },
+    {
+      "id": "full-document-with-prompt-cache|local-revision-follow-up",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.9,
+      "exactAnchorRate": 0.8,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.4185359999999999
+    },
+    {
+      "id": "full-document-with-prompt-cache|specific-detail-question",
+      "requestCount": 105,
+      "okRate": 1,
+      "anyAnchorRate": 0.94,
+      "exactAnchorRate": 0.81,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.6111719999999999
+    },
+    {
+      "id": "full-document-with-prompt-cache|deleted-content-trap",
+      "requestCount": 140,
+      "okRate": 1,
+      "anyAnchorRate": 0.912,
+      "exactAnchorRate": 0.64,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.8108429999999998
+    },
+    {
+      "id": "full-document-with-prompt-cache|whole-draft-review",
+      "requestCount": 175,
+      "okRate": 1,
+      "anyAnchorRate": 0.8903225806451613,
+      "exactAnchorRate": 0.6838709677419355,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 1.0156920000000005
+    }
+  ],
+  "trapTypes": [
+    {
+      "id": "full-document-each-turn|reordered-claim",
+      "requestCount": 84,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.9047619047619048,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.5085089999999998
+    },
+    {
+      "id": "full-document-each-turn|changed-number",
+      "requestCount": 63,
+      "okRate": 1,
+      "anyAnchorRate": 0.9814814814814815,
+      "exactAnchorRate": 0.5370370370370371,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.343374
+    },
+    {
+      "id": "full-document-each-turn|deleted-paragraph",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.86,
+      "exactAnchorRate": 0.5,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.4234620000000001
+    },
+    {
+      "id": "full-document-each-turn|changed-name",
+      "requestCount": 49,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.8695652173913043,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.260805
+    },
+    {
+      "id": "full-document-each-turn|changed-date",
+      "requestCount": 21,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.10410900000000001
+    },
+    {
+      "id": "full-document-each-turn|negation-flip",
+      "requestCount": 28,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.25,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.15359700000000004
+    },
+    {
+      "id": "delta-since-last-turn|reordered-claim",
+      "requestCount": 84,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.7261904761904762,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.287367
+    },
+    {
+      "id": "delta-since-last-turn|changed-number",
+      "requestCount": 63,
+      "okRate": 1,
+      "anyAnchorRate": 0.7777777777777778,
+      "exactAnchorRate": 0.4126984126984127,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.251316
+    },
+    {
+      "id": "delta-since-last-turn|deleted-paragraph",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.9571428571428572,
+      "exactAnchorRate": 0.6571428571428571,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.292311
+    },
+    {
+      "id": "delta-since-last-turn|changed-name",
+      "requestCount": 49,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.17299799999999996
+    },
+    {
+      "id": "delta-since-last-turn|changed-date",
+      "requestCount": 21,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.066276
+    },
+    {
+      "id": "delta-since-last-turn|negation-flip",
+      "requestCount": 28,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.10692899999999997
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|reordered-claim",
+      "requestCount": 84,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.7976190476190477,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.35886300000000004
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|changed-number",
+      "requestCount": 63,
+      "okRate": 1,
+      "anyAnchorRate": 0.9365079365079365,
+      "exactAnchorRate": 0.36507936507936506,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.290811
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|deleted-paragraph",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.8857142857142857,
+      "exactAnchorRate": 0.5714285714285714,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.298146
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|changed-name",
+      "requestCount": 49,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.19681499999999993
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|changed-date",
+      "requestCount": 21,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 1,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.05871600000000001
+    },
+    {
+      "id": "hybrid-summary-and-excerpts|negation-flip",
+      "requestCount": 28,
+      "okRate": 1,
+      "anyAnchorRate": 0.8214285714285714,
+      "exactAnchorRate": 0.25,
+      "canonicalCurrentDocumentRate": 0,
+      "mustNotViolations": 0,
+      "costUsd": 0.11504699999999998
+    },
+    {
+      "id": "full-document-with-prompt-cache|reordered-claim",
+      "requestCount": 84,
+      "okRate": 1,
+      "anyAnchorRate": 0.9880952380952381,
+      "exactAnchorRate": 0.8095238095238095,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.502053
+    },
+    {
+      "id": "full-document-with-prompt-cache|changed-number",
+      "requestCount": 63,
+      "okRate": 1,
+      "anyAnchorRate": 0.9259259259259259,
+      "exactAnchorRate": 0.48148148148148145,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.333432
+    },
+    {
+      "id": "full-document-with-prompt-cache|deleted-paragraph",
+      "requestCount": 70,
+      "okRate": 1,
+      "anyAnchorRate": 0.88,
+      "exactAnchorRate": 0.52,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.4094070000000001
+    },
+    {
+      "id": "full-document-with-prompt-cache|changed-name",
+      "requestCount": 49,
+      "okRate": 1,
+      "anyAnchorRate": 0.9347826086956522,
+      "exactAnchorRate": 0.7391304347826086,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.25284899999999993
+    },
+    {
+      "id": "full-document-with-prompt-cache|changed-date",
+      "requestCount": 21,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.9444444444444444,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.10555500000000001
+    },
+    {
+      "id": "full-document-with-prompt-cache|negation-flip",
+      "requestCount": 28,
+      "okRate": 1,
+      "anyAnchorRate": 1,
+      "exactAnchorRate": 0.39285714285714285,
+      "canonicalCurrentDocumentRate": 1,
+      "mustNotViolations": 0,
+      "costUsd": 0.157365
+    }
+  ]
+}
