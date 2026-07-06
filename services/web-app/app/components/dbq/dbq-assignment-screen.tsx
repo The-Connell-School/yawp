@@ -1,5 +1,11 @@
 import { useRef, useState } from 'react';
-import { PanelLeftOpen, Sparkles } from 'lucide-react';
+import {
+  FileText,
+  MessageSquareText,
+  PanelLeftOpen,
+  Sparkles,
+} from 'lucide-react';
+import { cn } from '~/utils/misc';
 import { EditorColumn } from './editor-column';
 import { PromptBanner } from './prompt-banner';
 import { ResizeHandle } from './resize-handle';
@@ -15,6 +21,7 @@ const SNAP_READ_PCT = 75;
 const SNAP_WRITE_PCT = 25;
 const BALANCED_PCT = 50;
 const SNAP_TOLERANCE = 5;
+const DEFAULT_SIDE_RAIL_WIDTH = 360;
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -47,6 +54,7 @@ export function DbqAssignmentScreen({
 
   const [tutorCollapsed, setTutorCollapsed] = useState(false);
   const [tutorWidth, setTutorWidth] = useState(320);
+  const [sideRailWidth, setSideRailWidth] = useState(DEFAULT_SIDE_RAIL_WIDTH);
   const [splitPct, setSplitPct] = useState(BALANCED_PCT);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -60,8 +68,12 @@ export function DbqAssignmentScreen({
     setSplitPct((p) => clamp(p + (dx / w) * 100, 25, 75));
   }
 
+  function handleSideRailDrag(dx: number) {
+    setSideRailWidth((w) => clamp(w - dx, 300, 560));
+  }
+
   return (
-    <div className="flex h-screen min-h-0 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {tutorCollapsed ? (
           <CollapsedTutorRail onExpand={() => setTutorCollapsed(false)} />
@@ -87,30 +99,128 @@ export function DbqAssignmentScreen({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <PromptBanner state={state} showSubmit={!editor} />
+          <PromptBanner
+            state={state}
+            showSubmit={!editor}
+            showTimeControls={!editor}
+          />
 
           {state.view === 'drafting' ? (
-            <DraftingPane
-              state={state}
-              splitPct={splitPct}
-              setSplitPct={setSplitPct}
-              onSplitDrag={handleSplitDrag}
-              splitContainerRef={splitContainerRef}
-              editor={editor}
-              allowLocalDraftTools={!isProductionDocument}
-            />
+            isProductionDocument ? (
+              <ProductionDraftingPane
+                state={state}
+                editor={editor}
+                comments={comments}
+                sideRailWidth={sideRailWidth}
+                onSideRailDrag={handleSideRailDrag}
+              />
+            ) : (
+              <DraftingPane
+                state={state}
+                splitPct={splitPct}
+                setSplitPct={setSplitPct}
+                onSplitDrag={handleSplitDrag}
+                splitContainerRef={splitContainerRef}
+                editor={editor}
+                allowLocalDraftTools={!isProductionDocument}
+              />
+            )
           ) : (
             <SubmittedView state={state} />
           )}
         </div>
-
-        {comments ? (
-          <aside className="hidden min-h-0 w-80 shrink-0 border-l bg-background xl:block">
-            {comments}
-          </aside>
-        ) : null}
       </div>
     </div>
+  );
+}
+
+function ProductionDraftingPane({
+  state,
+  editor,
+  comments,
+  sideRailWidth,
+  onSideRailDrag,
+}: {
+  state: DbqState;
+  editor?: React.ReactNode;
+  comments?: React.ReactNode;
+  sideRailWidth: number;
+  onSideRailDrag: (dx: number) => void;
+}) {
+  const [sideRailTab, setSideRailTab] = useState<'documents' | 'comments'>(
+    'documents'
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 overflow-hidden">
+      <main className="min-h-0 flex-1 overflow-hidden">{editor}</main>
+      <ResizeHandle
+        onDrag={onSideRailDrag}
+        ariaLabel="Resize document sidebar"
+        className="hidden xl:block"
+      />
+      <aside
+        role="complementary"
+        aria-label="Document resources"
+        style={{ width: `${sideRailWidth}px` }}
+        className="hidden min-h-0 shrink-0 flex-col border-l bg-background xl:flex"
+      >
+        <div className="flex shrink-0 items-center gap-1 border-b p-1">
+          <SideRailTabButton
+            label="Documents"
+            icon={<FileText size={14} />}
+            active={sideRailTab === 'documents'}
+            onClick={() => setSideRailTab('documents')}
+          />
+          <SideRailTabButton
+            label="Comments"
+            icon={<MessageSquareText size={14} />}
+            active={sideRailTab === 'comments'}
+            onClick={() => setSideRailTab('comments')}
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {sideRailTab === 'documents' ? (
+            <SourcesColumn
+              state={state}
+              allowSourceTools={false}
+              className="rounded-none border-0"
+            />
+          ) : (
+            comments
+          )}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function SideRailTabButton({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
+        active
+          ? 'bg-muted text-foreground'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+      )}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -160,10 +270,7 @@ function DraftingPane({
         />
       </div>
 
-      <ResizeHandle
-        onDrag={onSplitDrag}
-        ariaLabel="Resize sources vs editor"
-      />
+      <ResizeHandle onDrag={onSplitDrag} ariaLabel="Resize sources vs editor" />
 
       <div className="min-h-0 flex-1 pl-1.5">
         <EditorColumn
