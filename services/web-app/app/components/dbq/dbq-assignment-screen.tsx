@@ -99,11 +99,9 @@ export function DbqAssignmentScreen({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <PromptBanner
-            state={state}
-            showSubmit={!editor}
-            showTimeControls={!editor}
-          />
+          {isProductionDocument ? null : (
+            <PromptBanner state={state} showSubmit showTimeControls />
+          )}
 
           {state.view === 'drafting' ? (
             isProductionDocument ? (
@@ -163,9 +161,9 @@ function ProductionDraftingPane({
         role="complementary"
         aria-label="Document resources"
         style={{ width: `${sideRailWidth}px` }}
-        className="hidden min-h-0 shrink-0 flex-col border-l bg-background xl:flex"
+        className="hidden min-h-0 shrink-0 flex-col border-l bg-white xl:flex"
       >
-        <div className="flex shrink-0 items-center gap-1 border-b p-1">
+        <div className="flex shrink-0 items-center border-b bg-white px-3">
           <SideRailTabButton
             label="Documents"
             icon={<FileText size={14} />}
@@ -179,12 +177,12 @@ function ProductionDraftingPane({
             onClick={() => setSideRailTab('comments')}
           />
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-hidden bg-white">
           {sideRailTab === 'documents' ? (
             <SourcesColumn
               state={state}
               allowSourceTools={false}
-              className="rounded-none border-0"
+              className="rounded-none border-0 bg-white"
             />
           ) : (
             comments
@@ -212,10 +210,10 @@ function SideRailTabButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
+        'inline-flex h-9 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-medium',
         active
-          ? 'bg-muted text-foreground'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          ? 'border-primary text-foreground'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
       )}
     >
       {icon}
