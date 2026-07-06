@@ -85,6 +85,7 @@ import {
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
+import { DbqLayout } from './_components/dbq-layout';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
 
 const SUBMIT_EMPTY_TOOLTIP =
@@ -444,6 +445,15 @@ export function getGenericAssignmentPromptForEditor<T>(
     : null;
 }
 
+export function shouldRenderDbqWorkspace(
+  apHistorySnapshot: ApHistorySnapshot | null
+): apHistorySnapshot is ApHistorySnapshot & { essayType: 'dbq' } {
+  return (
+    apHistorySnapshot?.essayType === 'dbq' &&
+    apHistorySnapshot.sources.length > 0
+  );
+}
+
 export default function Route() {
   const data = useLoaderData<typeof loader>();
   const user = useUser();
@@ -473,6 +483,7 @@ export default function Route() {
   const isDocumentEditable = true;
   const assignment = data.doc.assignment;
   const apHistorySnapshot = getRenderableApHistorySnapshot(assignment);
+  const showDbqWorkspace = shouldRenderDbqWorkspace(apHistorySnapshot);
   const editorAssignmentPrompt = getGenericAssignmentPromptForEditor(
     assignment,
     apHistorySnapshot
@@ -672,7 +683,7 @@ export default function Route() {
   return (
     <>
       <main className="flex h-screen w-screen flex-col overflow-hidden bg-white">
-        {apHistorySnapshot ? (
+        {apHistorySnapshot && !showDbqWorkspace ? (
           <ApHistoryAssignmentPanel snapshot={apHistorySnapshot} />
         ) : null}
         <nav className="mx-auto flex w-full max-w-screen-2xl items-center gap-4 border-b px-3 py-2">
@@ -924,67 +935,73 @@ export default function Route() {
             />
           </div>
         </nav>
-        <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
-          <TabsList className="w-full rounded-none border-b px-3">
-            <TabsTrigger value="tutor" className="w-full">
-              Tutor
-            </TabsTrigger>
-            <TabsTrigger value="editor" className="w-full">
-              Editor
-            </TabsTrigger>
-            <TabsTrigger value="comments" className="w-full">
-              Comments
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <CommentsSelectionProvider>
-          <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
-            {isMobile && tab !== 'tutor' ? null : (
-              <Tutor
-                docId={data.doc.id}
-                cms={(tutor.cms ?? data.currentCms) as any}
-                cmsIdx={cmsIdx}
-                nextCmId={data.nextCmId}
-                hasPreviousCms={tutorHasPreviousCms}
-                isSessionLocked={auth.isLocked}
-                beforeRespond={handleTutorBeforeRespond}
-                onCmsUpdate={tutor.updateCms}
-                getCurrentDocumentText={() =>
-                  editorBridgeRef.current?.getContent().text ??
-                  data.doc.text ??
-                  ''
-                }
-              />
-            )}
-            {isMobile && tab !== 'editor' ? null : (
-              <DocumentEditor
-                docId={data.doc.id}
-                assignment={editorAssignmentPrompt}
-                serverHtml={editorServerHtml}
-                serverText={editorServerText}
-                serverUpdatedAt={data.doc.updatedAt}
-                initialRevision={data.doc.revision}
-                isEditable={isEditorEditable}
-                onBridgeReady={(b) => {
-                  editorBridgeRef.current = b;
-                }}
-                onSyncStatusChange={setSyncStatus}
-                onSubmittableContentChange={handleSubmittableContentChange}
-                onCommentCreated={(c) => commentsState.addComment(c as any)}
-              />
-            )}
-            {isMobile && tab !== 'comments' ? null : (
-              <Comments
-                className="md:w-3/5"
-                comments={visibleComments as any}
-                readOnly={!isDocumentEditable}
-                onCommentRemoved={commentsState.removeComment}
-                onResponseAdded={commentsState.addResponse}
-                autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
-              />
-            )}
-          </div>
-        </CommentsSelectionProvider>
+        {showDbqWorkspace && apHistorySnapshot ? (
+          <DbqLayout snapshot={apHistorySnapshot} />
+        ) : (
+          <>
+            <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
+              <TabsList className="w-full rounded-none border-b px-3">
+                <TabsTrigger value="tutor" className="w-full">
+                  Tutor
+                </TabsTrigger>
+                <TabsTrigger value="editor" className="w-full">
+                  Editor
+                </TabsTrigger>
+                <TabsTrigger value="comments" className="w-full">
+                  Comments
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <CommentsSelectionProvider>
+              <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
+                {isMobile && tab !== 'tutor' ? null : (
+                  <Tutor
+                    docId={data.doc.id}
+                    cms={(tutor.cms ?? data.currentCms) as any}
+                    cmsIdx={cmsIdx}
+                    nextCmId={data.nextCmId}
+                    hasPreviousCms={tutorHasPreviousCms}
+                    isSessionLocked={auth.isLocked}
+                    beforeRespond={handleTutorBeforeRespond}
+                    onCmsUpdate={tutor.updateCms}
+                    getCurrentDocumentText={() =>
+                      editorBridgeRef.current?.getContent().text ??
+                      data.doc.text ??
+                      ''
+                    }
+                  />
+                )}
+                {isMobile && tab !== 'editor' ? null : (
+                  <DocumentEditor
+                    docId={data.doc.id}
+                    assignment={editorAssignmentPrompt}
+                    serverHtml={editorServerHtml}
+                    serverText={editorServerText}
+                    serverUpdatedAt={data.doc.updatedAt}
+                    initialRevision={data.doc.revision}
+                    isEditable={isEditorEditable}
+                    onBridgeReady={(b) => {
+                      editorBridgeRef.current = b;
+                    }}
+                    onSyncStatusChange={setSyncStatus}
+                    onSubmittableContentChange={handleSubmittableContentChange}
+                    onCommentCreated={(c) => commentsState.addComment(c as any)}
+                  />
+                )}
+                {isMobile && tab !== 'comments' ? null : (
+                  <Comments
+                    className="md:w-3/5"
+                    comments={visibleComments as any}
+                    readOnly={!isDocumentEditable}
+                    onCommentRemoved={commentsState.removeComment}
+                    onResponseAdded={commentsState.addResponse}
+                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  />
+                )}
+              </div>
+            </CommentsSelectionProvider>
+          </>
+        )}
       </main>
       <Dialog
         open={isFinalizeDialogOpen}

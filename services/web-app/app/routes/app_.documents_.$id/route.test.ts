@@ -92,6 +92,7 @@ const {
   getGenericAssignmentPromptForEditor,
   getRenderableApHistorySnapshot,
   loader,
+  shouldRenderDbqWorkspace,
   shouldShowGenericAssignmentPrompt,
 } = await import('./route');
 const { ApHistoryAssignmentPanel } =
@@ -390,6 +391,22 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(
       getGenericAssignmentPromptForEditor(assignment, renderableSnapshot)
     ).toBe(assignment);
+  });
+
+  test('uses the DBQ workspace only for source-backed DBQ snapshots', () => {
+    expect(shouldRenderDbqWorkspace(apHistorySnapshot)).toBe(true);
+    expect(
+      shouldRenderDbqWorkspace({
+        ...apHistorySnapshot,
+        essayType: 'leq',
+      })
+    ).toBe(false);
+    expect(
+      shouldRenderDbqWorkspace({
+        ...apHistorySnapshot,
+        sources: [],
+      })
+    ).toBe(false);
   });
 
   test('renders AP History source content inside a bounded scroll area', () => {
