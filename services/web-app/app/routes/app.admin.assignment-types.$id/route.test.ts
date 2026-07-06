@@ -282,7 +282,7 @@ describe('admin assignment type detail action', () => {
     });
   });
 
-  test('loads assignment type details without external rubric links', async () => {
+  test('loads assignment type details without visible AI history data', async () => {
     prisma.assignmentType.findUnique.mockResolvedValue({
       id: 'at-1',
       title: 'ACT Writing',
@@ -291,20 +291,6 @@ describe('admin assignment type detail action', () => {
       description: null,
       archivedAt: null,
       assignmentModules: [],
-      aiVersions: [
-        {
-          id: 'version-2',
-          versionNumber: 2,
-          changeSource: 'admin.assignment-type.update',
-          changeSummary: 'Updated assignment type rubric and grading assistant',
-          createdAt: new Date('2026-07-03T21:00:00.000Z'),
-          createdByUser: {
-            id: 'admin-user-1',
-            name: 'Bryant Brock',
-            email: 'bryant@brock.software',
-          },
-        },
-      ],
       image: null,
     });
 
@@ -319,13 +305,9 @@ describe('admin assignment type detail action', () => {
     expect((result as { data: any }).data.course.title).toBe('ACT Writing');
     expect(prisma.assignmentType.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
-        include: expect.objectContaining({
-          aiVersions: expect.objectContaining({
-            take: 10,
-          }),
-        }),
+        include: expect.not.objectContaining({ aiVersions: expect.anything() }),
       })
     );
-    expect((result as { data: any }).data.course.aiVersions).toHaveLength(1);
+    expect((result as { data: any }).data.course.aiVersions).toBeUndefined();
   });
 });

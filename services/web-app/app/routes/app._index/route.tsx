@@ -156,7 +156,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         membershipId: profile.id,
         deletedAt: null,
         archivedAt: null,
-        isAiSandbox: false,
       },
       include: {
         assignmentModuleSessions: {
@@ -170,7 +169,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
-          where: { archivedAt: null, isAiSandbox: false },
+          where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
@@ -187,7 +186,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         membershipId: profile.id,
         deletedAt: null,
         archivedAt: { not: null },
-        isAiSandbox: false,
       },
       include: {
         assignmentModuleSessions: {
@@ -201,7 +199,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
-          where: { archivedAt: null, isAiSandbox: false },
+          where: { archivedAt: null },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,

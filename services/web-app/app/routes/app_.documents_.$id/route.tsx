@@ -193,8 +193,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       title: true,
       html: true,
       text: true,
-      isAiSandbox: true,
-      aiSandboxRunId: true,
       assignmentType: {
         select: {
           id: true,
@@ -926,23 +924,6 @@ export default function Route() {
             />
           </div>
         </nav>
-        {data.doc.isAiSandbox ? (
-          <div
-            className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
-            data-testid="ai-sandbox-banner"
-            role="status"
-          >
-            <div className="mx-auto flex w-full max-w-screen-2xl flex-wrap items-center justify-between gap-2">
-              <span>
-                <span className="font-semibold">Sandbox test.</span> This
-                document is isolated from real student work.
-              </span>
-              <Button type="button" variant="outline" size="sm" asChild>
-                <Link to={exitTarget}>Back to assignment type</Link>
-              </Button>
-            </div>
-          </div>
-        ) : null}
         <Tabs onValueChange={changeTab} value={tab} className="md:hidden">
           <TabsList className="w-full rounded-none border-b px-3">
             <TabsTrigger value="tutor" className="w-full">

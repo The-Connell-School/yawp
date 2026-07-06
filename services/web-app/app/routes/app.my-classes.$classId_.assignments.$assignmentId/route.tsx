@@ -97,11 +97,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     status !== 'in-progress'
       ? await prisma.submission.findMany({
           where: {
-            isAiSandbox: false,
             document: {
               classAssignmentId: classAssignment.id,
               deletedAt: null,
-              isAiSandbox: false,
             },
             ...(status === 'submitted'
               ? { gradedAt: null, releasedAt: null }
@@ -142,7 +140,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
             classAssignmentId: classAssignment.id,
             deletedAt: null,
             archivedAt: null,
-            isAiSandbox: false,
             submissions: { none: {} },
           },
           select: {

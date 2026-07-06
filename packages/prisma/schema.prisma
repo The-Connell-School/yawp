@@ -36,30 +36,29 @@ model Class {
 }
 
 model AssignmentType {
-  id                                 String                          @id @default(cuid())
-  createdAt                          DateTime                        @default(now()) @db.Timestamptz(6)
-  updatedAt                          DateTime                        @default(now()) @db.Timestamptz(6)
+  id                                 String                        @id @default(cuid())
+  createdAt                          DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                          DateTime                      @default(now()) @db.Timestamptz(6)
   title                              String
-  kind                               String?                         @unique
+  kind                               String?                       @unique
   description                        String?
   position                           Int
-  systemKey                          String?                         @unique
-  archivedAt                         DateTime?                       @db.Timestamptz(6)
+  systemKey                          String?                       @unique
+  archivedAt                         DateTime?                     @db.Timestamptz(6)
   ownerOrgId                         String?
-  ownerOrg                           Organization?                   @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
+  ownerOrg                           Organization?                 @relation(fields: [ownerOrgId], references: [id], onDelete: Cascade)
   ownerMembershipId                  String?
-  ownerMembership                    OrgMembership?                  @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
+  ownerMembership                    OrgMembership?                @relation("AssignmentTypeOwner", fields: [ownerMembershipId], references: [id], onDelete: Cascade)
   scoringScaleJson                   Json?
   rubricJson                         Json?
   gradingPromptConfigJson            Json?
   gradingOutputSchemaJson            Json?
   gradingCalibrationNotes            String?
-  gradingAssistantVersion            Int                             @default(1)
+  gradingAssistantVersion            Int                           @default(1)
   gradingAssistantSourceTemplateId   String?
   gradingAssistantSourceTemplateSlug String?
   image                              AssignmentTypeImage?
   aiVersions                         AssignmentTypeAiVersion[]
-  aiEvaluationRuns                   AssignmentTypeAiEvaluationRun[]
   organizationAssignments            OrganizationAssignmentType[]
   schoolAssignments                  SchoolAssignmentType[]
   teacherAssignments                 TeacherAssignmentType[]
@@ -166,48 +165,20 @@ model AssignmentTypeImage {
 }
 
 model AssignmentTypeAiVersion {
-  id               String                          @id @default(cuid())
-  createdAt        DateTime                        @default(now()) @db.Timestamptz(6)
+  id               String         @id @default(cuid())
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
   assignmentTypeId String
-  assignmentType   AssignmentType                  @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
+  assignmentType   AssignmentType @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
   versionNumber    Int
   changeSource     String
   changeSummary    String
   createdByUserId  String?
-  createdByUser    User?                           @relation("AssignmentTypeAiVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUser    User?          @relation("AssignmentTypeAiVersionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   snapshotJson     Json
-  evaluationRuns   AssignmentTypeAiEvaluationRun[]
 
   @@unique([assignmentTypeId, versionNumber])
   @@index([assignmentTypeId, createdAt(sort: Desc)])
   @@index([createdByUserId])
-}
-
-model AssignmentTypeAiEvaluationRun {
-  id                        String                   @id @default(cuid())
-  createdAt                 DateTime                 @default(now()) @db.Timestamptz(6)
-  assignmentTypeId          String
-  assignmentType            AssignmentType           @relation(fields: [assignmentTypeId], references: [id], onDelete: Cascade)
-  assignmentTypeAiVersionId String?
-  assignmentTypeAiVersion   AssignmentTypeAiVersion? @relation(fields: [assignmentTypeAiVersionId], references: [id], onDelete: SetNull)
-  createdByUserId           String?
-  createdByUser             User?                    @relation("AssignmentTypeAiEvaluationRunCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  agentKind                 String
-  status                    String                   @default("saved")
-  label                     String?
-  notes                     String?
-  studentFirstName          String?
-  strictnessLevel           String?
-  sampleInput               String
-  promptSnapshotJson        Json
-  resultJson                Json?
-  sandboxDocument           Document?                @relation("AiSandboxDocument")
-  sandboxSubmission         Submission?              @relation("AiSandboxSubmission")
-
-  @@index([assignmentTypeId, createdAt(sort: Desc)])
-  @@index([assignmentTypeAiVersionId])
-  @@index([createdByUserId])
-  @@index([agentKind, status])
 }
 
 model AssignmentModule {
@@ -280,26 +251,23 @@ model AssignmentModuleSessionMessage {
 }
 
 model Document {
-  id                       String                         @id @default(cuid())
-  createdAt                DateTime                       @default(now()) @db.Timestamptz(6)
-  updatedAt                DateTime                       @default(now()) @db.Timestamptz(6)
-  revision                 Int                            @default(0)
-  deletedAt                DateTime?                      @db.Timestamptz(6)
-  archivedAt               DateTime?                      @db.Timestamptz(6)
-  title                    String                         @default("Untitled")
+  id                       String                    @id @default(cuid())
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  revision                 Int                       @default(0)
+  deletedAt                DateTime?                 @db.Timestamptz(6)
+  archivedAt               DateTime?                 @db.Timestamptz(6)
+  title                    String                    @default("Untitled")
   text                     String?
   html                     String?
-  isAiSandbox              Boolean                        @default(false)
-  aiSandboxRunId           String?                        @unique
-  aiSandboxRun             AssignmentTypeAiEvaluationRun? @relation("AiSandboxDocument", fields: [aiSandboxRunId], references: [id], onDelete: SetNull)
-  membership               OrgMembership                  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   membershipId             String
   assignmentTypeId         String
-  assignmentType           AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
+  assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?
-  assignment               Assignment?                    @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   classAssignmentId        String?
-  classAssignment          ClassAssignment?               @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
+  classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -311,7 +279,6 @@ model Document {
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
-  @@index([isAiSandbox])
 }
 
 model DocumentClassForensic {
@@ -531,18 +498,17 @@ model Setting {
 // Upload table removed. Videos will be stored in S3 and referenced by key.
 
 model User {
-  id               String                          @id @default(cuid())
-  createdAt        DateTime                        @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime                        @default(now()) @db.Timestamptz(6)
-  email            String                          @unique
-  name             String?
-  password         Password?
-  sessions         Session[]
-  memberships      OrgMembership[]
-  aiVersions       AssignmentTypeAiVersion[]       @relation("AssignmentTypeAiVersionCreatedBy")
-  aiEvaluationRuns AssignmentTypeAiEvaluationRun[] @relation("AssignmentTypeAiEvaluationRunCreatedBy")
-  isAdmin          Boolean                         @default(false)
-  isSuperAdmin     Boolean                         @default(false)
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  email        String                    @unique
+  name         String?
+  password     Password?
+  sessions     Session[]
+  memberships  OrgMembership[]
+  aiVersions   AssignmentTypeAiVersion[] @relation("AssignmentTypeAiVersionCreatedBy")
+  isAdmin      Boolean                   @default(false)
+  isSuperAdmin Boolean                   @default(false)
 }
 
 model Invitation {
@@ -679,9 +645,6 @@ model Submission {
   releasedAt           DateTime?                       @db.Timestamptz(6)
   /// When set, hidden from the student's active submission list (teachers unaffected).
   archivedAt           DateTime?                       @db.Timestamptz(6)
-  isAiSandbox          Boolean                         @default(false)
-  aiSandboxRunId       String?                         @unique
-  aiSandboxRun         AssignmentTypeAiEvaluationRun?  @relation("AiSandboxSubmission", fields: [aiSandboxRunId], references: [id], onDelete: SetNull)
   documentId           String
   document             Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments             SubmissionComment[]
@@ -691,7 +654,6 @@ model Submission {
   @@index([documentId, archivedAt])
   @@index([gradedByMembershipId])
   @@index([releasedAt])
-  @@index([isAiSandbox])
 }
 
 model SubmissionGradingAssistantRun {

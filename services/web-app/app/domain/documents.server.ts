@@ -10,8 +10,6 @@ type CreateDocumentInput = {
   initialTitle?: string;
   initialText?: string;
   initialHtml?: string;
-  isAiSandbox?: boolean;
-  aiSandboxRunId?: string | null;
 };
 
 type CreatedDocument = {
@@ -99,10 +97,6 @@ export async function createDocumentForAssignmentType(
       text: input.initialText ?? '',
       html: input.initialHtml ?? '',
       title: input.initialTitle ?? '',
-      isAiSandbox: input.isAiSandbox ?? false,
-      ...(input.aiSandboxRunId
-        ? { aiSandboxRunId: input.aiSandboxRunId }
-        : {}),
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       ...(input.classAssignmentId

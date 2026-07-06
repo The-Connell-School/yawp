@@ -130,14 +130,12 @@ describe('class detail loader document visibility', () => {
       is: {
         ...expectedScope,
         deletedAt: null,
-        isAiSandbox: false,
       },
     });
     expect(prisma.document.findMany.mock.calls[0][0].where).toEqual({
       ...expectedScope,
       deletedAt: null,
       archivedAt: null,
-      isAiSandbox: false,
       submissions: { none: {} },
     });
   });

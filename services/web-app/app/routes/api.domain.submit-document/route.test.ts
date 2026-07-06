@@ -63,8 +63,6 @@ describe('api.domain.submit-document', () => {
       html: '<p>Draft</p>',
       text: 'Draft',
       title: 'Essay',
-      isAiSandbox: false,
-      aiSandboxRunId: null,
       submissions: [],
       revision: 4,
       classAssignment: null,
@@ -117,45 +115,6 @@ describe('api.domain.submit-document', () => {
     };
 
     expect(response.data.success).toBe(true);
-  });
-
-  test('marks submissions from AI sandbox documents as sandbox records', async () => {
-    prisma.document.findFirst.mockResolvedValue({
-      id: 'doc-1',
-      html: '<p>Draft</p>',
-      text: 'Draft',
-      title: 'Essay',
-      isAiSandbox: true,
-      aiSandboxRunId: 'run-1',
-      submissions: [],
-      revision: 4,
-      classAssignment: null,
-      membership: { classesAsStudent: [] },
-    });
-
-    const form = new FormData();
-    form.append('documentId', 'doc-1');
-
-    const response = (await action({
-      request: new Request('https://example.com/api/domain/submit-document', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any)) as {
-      data: {
-        success: boolean;
-      };
-    };
-
-    expect(response.data.success).toBe(true);
-    expect(txSubmissionCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        documentId: 'doc-1',
-        isAiSandbox: true,
-        aiSandboxRunId: 'run-1',
-      }),
-      select: { id: true, title: true, submittedAt: true },
-    });
   });
 
   test('records a document submit journal entry with the full document payload', async () => {

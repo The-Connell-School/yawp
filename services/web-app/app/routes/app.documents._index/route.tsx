@@ -148,7 +148,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       classIds,
       legacyDocumentIds: forensicRows.map((row) => row.documentId),
     }),
-    isAiSandbox: false,
   };
 
   const allDocuments = await prisma.document.findMany({
@@ -193,7 +192,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       submissions: {
-        where: { isAiSandbox: false },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,

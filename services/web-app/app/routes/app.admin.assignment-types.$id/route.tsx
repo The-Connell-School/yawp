@@ -39,24 +39,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         orderBy: { position: 'asc' },
       },
       image: { select: { id: true } },
-      aiVersions: {
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          versionNumber: true,
-          changeSource: true,
-          changeSummary: true,
-          createdAt: true,
-          createdByUser: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
     },
   });
 
@@ -238,7 +220,6 @@ export default function AssignmentTypeRoute() {
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}
-      aiVersions={course.aiVersions}
     />
   );
 }

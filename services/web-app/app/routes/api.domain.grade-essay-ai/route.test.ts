@@ -84,7 +84,6 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     document: {
       id: 'doc-1',
       membershipId: 'student-profile-1',
-      isAiSandbox: false,
       assignmentTypeId: 'assignment-type-legacy',
       assignmentType: {
         id: 'assignment-type-legacy',
@@ -435,51 +434,7 @@ describe('api.domain.grade-essay-ai', () => {
     );
   });
 
-  test('allows an admin to grade their own AI sandbox submission', async () => {
-    getGradingActor.mockResolvedValue({
-      membershipId: 'admin-membership-1',
-      teacherProfileId: null,
-      isTeacher: false,
-      isAdmin: true,
-    });
-    prisma.submission.findFirst.mockResolvedValue(
-      mockSubmission({
-        id: 'sandbox-sub-1',
-        document: {
-          id: 'sandbox-doc-1',
-          membershipId: 'admin-membership-1',
-          isAiSandbox: true,
-          assignmentTypeId: 'assignment-type-legacy',
-          assignmentType: {
-            id: 'assignment-type-legacy',
-            kind: null,
-            title: 'Critical Essay',
-          },
-          classAssignment: null,
-          membership: {
-            classesAsStudent: [],
-            user: { name: 'Admin Sandbox' },
-          },
-        },
-      })
-    );
-
-    const form = new FormData();
-    form.append('submissionId', 'sandbox-sub-1');
-
-    const response = await action({
-      request: new Request('https://example.com/api/domain/grade-essay-ai', {
-        method: 'POST',
-        body: form,
-      }),
-    } as any);
-    const payload = (response as { data: Record<string, unknown> }).data;
-
-    expect(payload.success).toBe(true);
-    expect(prisma.submission.update).toHaveBeenCalled();
-  });
-
-  test('still blocks an admin from grading their own normal submission', async () => {
+  test('blocks an admin from grading their own normal submission', async () => {
     getGradingActor.mockResolvedValue({
       membershipId: 'admin-membership-1',
       teacherProfileId: null,
@@ -492,7 +447,6 @@ describe('api.domain.grade-essay-ai', () => {
         document: {
           id: 'normal-doc-1',
           membershipId: 'admin-membership-1',
-          isAiSandbox: false,
           assignmentTypeId: 'assignment-type-legacy',
           assignmentType: {
             id: 'assignment-type-legacy',

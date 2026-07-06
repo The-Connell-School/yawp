@@ -612,10 +612,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         is: {
           ...classDocumentScope,
           deletedAt: null,
-          isAiSandbox: false,
         },
       },
-      isAiSandbox: false,
     },
     select: {
       id: true,
@@ -672,7 +670,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       ...classDocumentScope,
       deletedAt: null,
       archivedAt: null,
-      isAiSandbox: false,
       submissions: { none: {} },
     },
     select: {
