@@ -19,7 +19,7 @@ import {
 } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
+import { isWritingPracticeEnabledForOrganization } from '~/utils/organization-flags.server';
 import {
   getQuickWritingLessonBySlug,
   getQuickWritingPracticePrompts,

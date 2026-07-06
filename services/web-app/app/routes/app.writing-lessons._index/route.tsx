@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
+import { isWritingPracticeEnabledForOrganization } from '~/utils/organization-flags.server';
 import {
   getQuickWritingLessonGroups,
   getQuickWritingPracticePrompts,

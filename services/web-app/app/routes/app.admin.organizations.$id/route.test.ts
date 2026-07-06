@@ -5,7 +5,7 @@ const prisma = {
   assignmentType: {
     findMany: mock(),
   },
-  featureFlag: {
+  organizationFlag: {
     findUnique: mock(),
     upsert: mock(),
   },
@@ -83,8 +83,8 @@ describe('admin organization detail route', () => {
   beforeEach(() => {
     prisma.$transaction.mockReset();
     prisma.assignmentType.findMany.mockReset();
-    prisma.featureFlag.findUnique.mockReset();
-    prisma.featureFlag.upsert.mockReset();
+    prisma.organizationFlag.findUnique.mockReset();
+    prisma.organizationFlag.upsert.mockReset();
     prisma.invitation.findMany.mockReset();
     prisma.organization.count.mockReset();
     prisma.organization.delete.mockReset();
@@ -103,7 +103,7 @@ describe('admin organization detail route', () => {
       organization: { id: 'admin-org' },
     });
     prisma.assignmentType.findMany.mockResolvedValue([]);
-    prisma.featureFlag.findUnique.mockResolvedValue(null);
+    prisma.organizationFlag.findUnique.mockResolvedValue(null);
     prisma.invitation.findMany.mockResolvedValue([]);
     prisma.organization.count.mockResolvedValue(2);
     prisma.organization.findUnique.mockResolvedValue(organizationFixture());
@@ -111,14 +111,14 @@ describe('admin organization detail route', () => {
     prisma.organizationAssignmentType.deleteMany.mockReturnValue({
       operation: 'delete-org-assignment-types',
     });
-    prisma.featureFlag.upsert.mockReturnValue({
-      operation: 'upsert-writing-practice-flag',
+    prisma.organizationFlag.upsert.mockReturnValue({
+      operation: 'upsert-writing-practice-organization-flag',
     });
     prisma.user.findUnique.mockResolvedValue({ isAdmin: true });
     prisma.$transaction.mockResolvedValue([]);
   });
 
-  test('loads writing practice as disabled when the organization has no flag row', async () => {
+  test('loads writing practice as disabled when the organization has no organization flag row', async () => {
     const response = await loader({
       request: new Request('https://example.test/app/admin/organizations/org-1'),
       params: { id: 'org-1' },
@@ -126,12 +126,11 @@ describe('admin organization detail route', () => {
     });
 
     expect(response.data.writingPracticeEnabled).toBe(false);
-    expect(prisma.featureFlag.findUnique).toHaveBeenCalledWith({
+    expect(prisma.organizationFlag.findUnique).toHaveBeenCalledWith({
       where: {
-        key_scopeKind_scopeId: {
+        key_organizationId: {
           key: 'writing_practice',
-          scopeKind: 'organization',
-          scopeId: 'org-1',
+          organizationId: 'org-1',
         },
       },
       select: { enabled: true },
@@ -139,7 +138,7 @@ describe('admin organization detail route', () => {
   });
 
   test('loads writing practice as enabled from the organization flag row', async () => {
-    prisma.featureFlag.findUnique.mockResolvedValue({ enabled: true });
+    prisma.organizationFlag.findUnique.mockResolvedValue({ enabled: true });
 
     const response = await loader({
       request: new Request('https://example.test/app/admin/organizations/org-1'),
@@ -150,7 +149,7 @@ describe('admin organization detail route', () => {
     expect(response.data.writingPracticeEnabled).toBe(true);
   });
 
-  test('updates the organization-scoped writing practice flag from the edit sheet', async () => {
+  test('updates the writing practice organization flag from the edit sheet', async () => {
     const form = new URLSearchParams();
     form.set('intent', 'update');
     form.set('name', 'Test Org');
@@ -164,12 +163,11 @@ describe('admin organization detail route', () => {
       context: {} as never,
     });
 
-    expect(prisma.featureFlag.upsert).toHaveBeenCalledWith({
+    expect(prisma.organizationFlag.upsert).toHaveBeenCalledWith({
       where: {
-        key_scopeKind_scopeId: {
+        key_organizationId: {
           key: 'writing_practice',
-          scopeKind: 'organization',
-          scopeId: 'org-1',
+          organizationId: 'org-1',
         },
       },
       update: {
@@ -178,8 +176,7 @@ describe('admin organization detail route', () => {
       },
       create: {
         key: 'writing_practice',
-        scopeKind: 'organization',
-        scopeId: 'org-1',
+        organizationId: 'org-1',
         enabled: true,
         description: 'Enable writing practice lessons for this organization.',
       },
@@ -199,7 +196,7 @@ describe('admin organization detail route', () => {
       context: {} as never,
     });
 
-    expect(prisma.featureFlag.upsert).toHaveBeenCalledWith(
+    expect(prisma.organizationFlag.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         update: expect.objectContaining({ enabled: false }),
         create: expect.objectContaining({ enabled: false }),

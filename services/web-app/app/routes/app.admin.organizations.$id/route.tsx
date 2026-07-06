@@ -40,9 +40,9 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
-import { FEATURE_KEYS } from '~/utils/feature-gates.server';
+import { ORGANIZATION_FLAG_KEYS } from '~/utils/organization-flags.server';
 
-const WRITING_PRACTICE_FEATURE_DESCRIPTION =
+const WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION =
   'Enable writing practice lessons for this organization.';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -86,12 +86,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: { id: true, title: true, description: true },
       orderBy: { position: 'asc' },
     }),
-    prisma.featureFlag.findUnique({
+    prisma.organizationFlag.findUnique({
       where: {
-        key_scopeKind_scopeId: {
-          key: FEATURE_KEYS.WRITING_PRACTICE,
-          scopeKind: 'organization',
-          scopeId: params.id!,
+        key_organizationId: {
+          key: ORGANIZATION_FLAG_KEYS.WRITING_PRACTICE,
+          organizationId: params.id!,
         },
       },
       select: { enabled: true },
@@ -224,24 +223,22 @@ export async function action({ request, params }: ActionFunctionArgs) {
             }),
           ]
         : []),
-      prisma.featureFlag.upsert({
+      prisma.organizationFlag.upsert({
         where: {
-          key_scopeKind_scopeId: {
-            key: FEATURE_KEYS.WRITING_PRACTICE,
-            scopeKind: 'organization',
-            scopeId: params.id!,
+          key_organizationId: {
+            key: ORGANIZATION_FLAG_KEYS.WRITING_PRACTICE,
+            organizationId: params.id!,
           },
         },
         update: {
           enabled: writingPracticeEnabled,
-          description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
+          description: WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION,
         },
         create: {
-          key: FEATURE_KEYS.WRITING_PRACTICE,
-          scopeKind: 'organization',
-          scopeId: params.id!,
+          key: ORGANIZATION_FLAG_KEYS.WRITING_PRACTICE,
+          organizationId: params.id!,
           enabled: writingPracticeEnabled,
-          description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
+          description: WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION,
         },
       }),
     ]);

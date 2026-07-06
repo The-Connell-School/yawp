@@ -16,7 +16,7 @@ import {
   getStudentPreviewState,
   shouldUseStudentExperience,
 } from '~/utils/student-preview.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
+import { isWritingPracticeEnabledForOrganization } from '~/utils/organization-flags.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';

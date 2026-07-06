@@ -9,7 +9,14 @@ import {
 } from './local-dev/import-prod-fidelity-fixtures';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
-import { LOCAL_DEV_ORG_ID, LOCAL_DEV_ORG_NAME, LOCAL_DEV_PERSONAS } from './local-dev/dev-personas';
+import {
+  LOCAL_DEV_ORG_ID,
+  LOCAL_DEV_ORG_NAME,
+  LOCAL_DEV_PERSONAS,
+} from './local-dev/dev-personas';
+
+const WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION =
+  'Enable writing practice lessons for this organization.';
 
 assertLocalSeedTarget();
 
@@ -29,6 +36,13 @@ try {
       name: LOCAL_DEV_ORG_NAME,
       numOfStudentSeats: 200,
       numOfTeacherSeats: 40,
+      organizationFlags: {
+        create: {
+          key: 'writing_practice',
+          enabled: false,
+          description: WRITING_PRACTICE_ORGANIZATION_FLAG_DESCRIPTION,
+        },
+      },
     },
   });
   console.timeEnd('organization');

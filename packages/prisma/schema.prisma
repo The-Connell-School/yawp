@@ -367,6 +367,7 @@ model Organization {
   schools                   School[]
   assignmentTypes           AssignmentType[]
   assignmentTypeAssignments OrganizationAssignmentType[]
+  organizationFlags         OrganizationFlag[]
 }
 
 model OrganizationAssignmentType {
@@ -477,19 +478,19 @@ model Setting {
   valueType   String   @default("string")
 }
 
-model FeatureFlag {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
-  key         String
-  scopeKind   String   @default("global")
-  scopeId     String   @default("*")
-  enabled     Boolean  @default(false)
-  description String?
+model OrganizationFlag {
+  id             String       @id @default(cuid())
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+  key            String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  enabled        Boolean      @default(false)
+  description    String?
 
-  @@unique([key, scopeKind, scopeId])
+  @@unique([key, organizationId])
   @@index([key, enabled])
-  @@index([scopeKind, scopeId])
+  @@index([organizationId])
 }
 
 // Upload table removed. Videos will be stored in S3 and referenced by key.

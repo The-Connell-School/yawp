@@ -42,6 +42,7 @@ import { requireAdmin } from '~/utils/auth.server';
 import { z } from 'zod';
 import { parseFormData, useForm, validationError } from '@rvf/react-router';
 import { FormInput } from '~/components/forms/form-input-2';
+import { ORGANIZATION_FLAG_KEYS } from '~/utils/organization-flags.server';
 
 type Stats = {
   total_organizations: number;
@@ -156,6 +157,13 @@ export async function action({ request }: ActionFunctionArgs) {
         accessExpiresAt: data.accessExpiresAt
           ? new Date(data.accessExpiresAt)
           : null,
+        organizationFlags: {
+          create: {
+            key: ORGANIZATION_FLAG_KEYS.WRITING_PRACTICE,
+            enabled: false,
+            description: 'Enable writing practice lessons for this organization.',
+          },
+        },
       },
     });
 

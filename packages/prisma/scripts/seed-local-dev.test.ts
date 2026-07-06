@@ -69,6 +69,17 @@ describe('local dev seed fixtures', () => {
     );
   });
 
+  test('creates the local dev organization with organization-level flags', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('organizationFlags');
+    expect(source).toContain('writing_practice');
+    expect(source).not.toContain(['feature', 'Flag'].join(''));
+  });
+
   test('treats localhost database urls as local seed targets', () => {
     expect(
       isLocalDatabaseUrl('postgresql://postgres:postgres@localhost:5432/yawp')

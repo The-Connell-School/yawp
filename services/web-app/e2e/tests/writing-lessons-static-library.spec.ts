@@ -1,7 +1,7 @@
 import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
-const WRITING_PRACTICE_FEATURE_KEY = 'writing_practice';
+const WRITING_PRACTICE_ORGANIZATION_FLAG_KEY = 'writing_practice';
 
 async function setWritingPracticeForOrganization(params: {
   organizationId: string;
@@ -9,18 +9,16 @@ async function setWritingPracticeForOrganization(params: {
 }) {
   const prisma = createE2EPrismaClient();
   try {
-    await prisma.featureFlag.upsert({
+    await prisma.organizationFlag.upsert({
       where: {
-        key_scopeKind_scopeId: {
-          key: WRITING_PRACTICE_FEATURE_KEY,
-          scopeKind: 'organization',
-          scopeId: params.organizationId,
+        key_organizationId: {
+          key: WRITING_PRACTICE_ORGANIZATION_FLAG_KEY,
+          organizationId: params.organizationId,
         },
       },
       create: {
-        key: WRITING_PRACTICE_FEATURE_KEY,
-        scopeKind: 'organization',
-        scopeId: params.organizationId,
+        key: WRITING_PRACTICE_ORGANIZATION_FLAG_KEY,
+        organizationId: params.organizationId,
         enabled: params.enabled,
         description: 'E2E writing practice access',
       },
@@ -41,7 +39,7 @@ test.describe.serial('Writing practice prototype', () => {
     });
   });
 
-  test('hides practice from the student dashboard when the feature flag is off', async ({
+  test('hides practice from the student dashboard when the organization flag is off', async ({
     page,
     e2eContext,
     signIn,
@@ -60,7 +58,7 @@ test.describe.serial('Writing practice prototype', () => {
     ).toHaveCount(0);
   });
 
-  test('shows lessons and supports a self-guided practice check when the feature flag is on', async ({
+  test('shows lessons and supports a self-guided practice check when the organization flag is on', async ({
     page,
     e2eContext,
     signIn,
