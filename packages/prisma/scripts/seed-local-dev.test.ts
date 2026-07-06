@@ -57,6 +57,44 @@ describe('local dev seed fixtures', () => {
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
   });
 
+  test('enables writing practice for seeded preview and local dev orgs', async () => {
+    const { enableLocalDevFeatureFlags } = await import(
+      './local-dev/seed-synthetic-data'
+    );
+    const upserts: unknown[] = [];
+    const prisma = {
+      featureFlag: {
+        upsert: (args: unknown) => {
+          upserts.push(args);
+          return Promise.resolve(args);
+        },
+      },
+    };
+
+    await enableLocalDevFeatureFlags(prisma as never);
+
+    expect(upserts).toContainEqual({
+      where: {
+        key_scopeKind_scopeId: {
+          key: 'writing_practice',
+          scopeKind: 'organization',
+          scopeId: 'local-dev-org',
+        },
+      },
+      update: {
+        enabled: true,
+        description: 'Enable writing practice lessons in seeded environments.',
+      },
+      create: {
+        key: 'writing_practice',
+        scopeKind: 'organization',
+        scopeId: 'local-dev-org',
+        enabled: true,
+        description: 'Enable writing practice lessons in seeded environments.',
+      },
+    });
+  });
+
   test('writes teacher training assignments as membership then training', () => {
     const source = readFileSync(
       join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),
