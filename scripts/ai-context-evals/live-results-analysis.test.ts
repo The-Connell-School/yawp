@@ -40,7 +40,7 @@ describe('AI context eval live results analysis', () => {
       plannedRows: [
         {
           strategyId: 'full-document-each-turn',
-          evalCaseId: 'case-100',
+          evalCaseId: 'local-revision-follow-up-100',
           turnIndex: 0,
           estimatedInputTokens: 10,
           contextCoverage: {
@@ -53,7 +53,7 @@ describe('AI context eval live results analysis', () => {
         },
         {
           strategyId: 'full-document-each-turn',
-          evalCaseId: 'case-100',
+          evalCaseId: 'local-revision-follow-up-100',
           turnIndex: 1,
           estimatedInputTokens: 10,
           contextCoverage: {
@@ -69,7 +69,7 @@ describe('AI context eval live results analysis', () => {
         {
           status: 'ok',
           strategyId: 'full-document-each-turn',
-          evalCaseId: 'case-100',
+          evalCaseId: 'local-revision-follow-up-100',
           turnIndex: 0,
           response: 'The survey statistic works. Avoid the deleted example.',
           usage: {
@@ -81,7 +81,7 @@ describe('AI context eval live results analysis', () => {
         {
           status: 'ok',
           strategyId: 'full-document-each-turn',
-          evalCaseId: 'case-100',
+          evalCaseId: 'local-revision-follow-up-100',
           turnIndex: 1,
           response: 'Looks good.',
           usage: {
@@ -103,6 +103,21 @@ describe('AI context eval live results analysis', () => {
       exactMustUseAllPasses: 1,
       mustUseAnchorsAbsentFromPrompt: 1,
       mustNotViolations: 1,
+    });
+    expect(summary.scenarios).toHaveLength(1);
+    expect(summary.scenarios[0]).toMatchObject({
+      strategyId: 'full-document-each-turn',
+      scenarioId: 'local-revision-follow-up',
+      documentWordCount: 100,
+      okCount: 2,
+      mustUseEligibleChecks: 1,
+      mustNotViolations: 1,
+    });
+    expect(summary.documentSizes).toHaveLength(1);
+    expect(summary.documentSizes[0]).toMatchObject({
+      strategyId: 'full-document-each-turn',
+      documentWordCount: 100,
+      requestCount: 2,
     });
   });
 
@@ -132,10 +147,63 @@ describe('AI context eval live results analysis', () => {
           mustNotViolations: 0,
         },
       ],
+      scenarios: [
+        {
+          strategyId: 'full-document-each-turn',
+          scenarioId: 'local-revision-follow-up',
+          documentWordCount: 100,
+          requestCount: 1,
+          okCount: 1,
+          errorCount: 0,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0006,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 0,
+          estimatedInputTokens: 90,
+          mustUseEligibleChecks: 1,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 1,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 0,
+          mustNotViolations: 0,
+        },
+      ],
+      documentSizes: [
+        {
+          strategyId: 'full-document-each-turn',
+          documentWordCount: 100,
+          requestCount: 1,
+          okCount: 1,
+          errorCount: 0,
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheWrite5mInputTokens: 0,
+          cacheWrite1hInputTokens: 0,
+          cacheReadInputTokens: 0,
+          costUsd: 0.0006,
+          canonicalCurrentDocumentRequests: 1,
+          changeSummaryRequests: 0,
+          estimatedInputTokens: 90,
+          mustUseEligibleChecks: 1,
+          exactMustUseAllPasses: 1,
+          exactMustUseAnyPasses: 1,
+          mustUseAnchorsAbsentFromPrompt: 0,
+          mustNotChecks: 0,
+          mustNotViolations: 0,
+        },
+      ],
     });
 
     expect(report).toContain('# AI Context Live Eval Analysis');
     expect(report).toContain('full-document-each-turn');
+    expect(report).toContain('## Scenario Reliability');
+    expect(report).toContain('local-revision-follow-up');
+    expect(report).toContain('## Document Size Pricing');
+    expect(report).toContain('| full-document-each-turn | 100 |');
     expect(report).toContain('$0.0006');
   });
 });
