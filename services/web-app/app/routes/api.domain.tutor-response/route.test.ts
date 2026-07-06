@@ -24,6 +24,7 @@ mock.module('~/utils/getLLMCompletion', () => ({
 const { LlmFallbackRetrySignal } = await import(
   '~/utils/getLLMCompletion/llm-provider-errors.server'
 );
+const { buildApHistorySnapshot } = await import('~/domain/ap-history/schema');
 const { action } = await import('./route');
 
 describe('api.domain.tutor-response read-only impersonation', () => {
@@ -36,7 +37,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     prisma.assignmentModuleSession.update.mockReset();
   });
 
-  function mockCms() {
+  function mockCms({
+    apHistorySnapshot = null,
+  }: { apHistorySnapshot?: unknown } = {}) {
     prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
       id: 'cms-1',
       instructionsCompleted: 0,
@@ -77,6 +80,9 @@ describe('api.domain.tutor-response read-only impersonation', () => {
       document: {
         id: 'doc-1',
         text: 'Original draft',
+        assignment: {
+          apHistorySnapshot,
+        },
       },
     });
   }
@@ -189,6 +195,79 @@ describe('api.domain.tutor-response read-only impersonation', () => {
         }),
       })
     );
+  });
+
+  test('uses AP History snapshot tutor prompt while preserving explicit document context', async () => {
+    const snapshot = buildApHistorySnapshot({
+      externalKey: 'apush-dbq-new-deal-federal-power',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt: 'Evaluate the extent to which the New Deal changed federal power.',
+      period: '1932-1980',
+      periodNumber: 7,
+      reasoningSkill: 'causation',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [
+        {
+          externalKey: 'apush-dbq-new-deal-federal-power-doc-1',
+          position: 1,
+          title: 'Document 1',
+          attribution: 'Franklin D. Roosevelt, first inaugural address, 1933',
+          body: 'This Nation asks for action, and action now.',
+          caption: 'Roosevelt outlines the federal response.',
+          mediaType: 'text',
+          imageUrl: null,
+          imageAlt: null,
+          provenanceUrl: null,
+        },
+      ],
+    });
+
+    getLLMCompletion.mockResolvedValue('What is your line of reasoning?');
+    mockCms({ apHistorySnapshot: snapshot });
+    prisma.assignmentModuleSession.findUnique.mockResolvedValueOnce({
+      id: 'cms-1',
+      messages: [],
+      assignmentModule: {
+        instructions: [],
+        assignmentType: { assignmentModules: [] },
+      },
+    });
+
+    const body = new FormData();
+    body.set('response', 'Can you coach my DBQ?');
+    body.set('cmsId', 'cms-1');
+    body.set('content', 'Current AP draft');
+
+    await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+
+    expect(
+      prisma.assignmentModuleSession.findUnique.mock.calls[0]?.[0].include
+        .document.select.assignment.select.apHistorySnapshot
+    ).toBe(true);
+
+    const completionArgs = getLLMCompletion.mock.calls[0]?.[0] as any;
+    expect(completionArgs.tools).toBeUndefined();
+    expect(completionArgs.handleToolCall).toBeUndefined();
+    expect(completionArgs.system).toContain('DBQ Rubric (7 points');
+    expect(completionArgs.system).toContain(snapshot.prompt);
+    expect(completionArgs.system).toContain('Document 1');
+    expect(completionArgs.system).toContain('This Nation asks for action');
+    expect(completionArgs.system).toContain('student_document_context');
+    expect(completionArgs.system).not.toContain('Module rubric guidance');
+
+    const documentContextMessage = completionArgs.messages.find(
+      (message: { role: string; content: string }) =>
+        message.role === 'user' &&
+        message.content.includes('<student_document_context')
+    );
+    expect(documentContextMessage.content).toContain('Current AP draft');
   });
 
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {

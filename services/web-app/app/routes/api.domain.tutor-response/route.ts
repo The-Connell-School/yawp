@@ -9,6 +9,8 @@ import {
   buildModuleRubricGuidance,
   buildTutorSystemPrompt,
 } from './build-system-prompt';
+import { isApHistorySnapshot } from '~/domain/ap-history/schema';
+import { buildApHistoryTutorSystemPrompt } from '~/domain/ap-history/tutor-prompt';
 import { parseRubric } from '~/domain/assignment-types/assignment-type-rubric.shared';
 import { normalizeModuleRubricAlignment } from '~/domain/assignment-types/assignment-type-rubric-config';
 import {
@@ -75,6 +77,9 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            assignment: {
+              select: { apHistorySnapshot: true },
+            },
           },
         },
       },
@@ -104,11 +109,17 @@ export async function action({ request }: ActionFunctionArgs) {
       alignment: cms.assignmentModule.rubricAlignmentJson,
     });
 
-    const system = buildTutorSystemPrompt({
-      tutorInstructions: cms.assignmentModule.tutorInstructions,
-      instructionTutorInstructions: instruction.tutorInstructions,
-      moduleRubricGuidance,
-    });
+    // AP History assignments carry an immutable snapshot; when present, the
+    // tutor coaches against the AP rubric/sources instead of the generic
+    // assignment-type tutor instructions.
+    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    const system = isApHistorySnapshot(apHistorySnapshot)
+      ? buildApHistoryTutorSystemPrompt(apHistorySnapshot)
+      : buildTutorSystemPrompt({
+          tutorInstructions: cms.assignmentModule.tutorInstructions,
+          instructionTutorInstructions: instruction.tutorInstructions,
+          moduleRubricGuidance,
+        });
 
     const documentSource =
       data.content === undefined ? 'db-document-text' : 'client-content';
