@@ -33,8 +33,10 @@ jobs:
       PREVIEW_SSH_USER: ${{ vars.PREVIEW_SSH_USER || 'ec2-user' }}
       PREVIEW_TLS: ${{ vars.PREVIEW_TLS || 'true' }}
       PREVIEW_RUNTIME: ${{ vars.PREVIEW_RUNTIME || 'fast' }}
+      PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}
       PREVIEW_DB_DUMP_S3_URI: ${{ vars.PREVIEW_DB_DUMP_S3_URI || 's3://yawp-preview-videos/production.dump' }}
       PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}
+      PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}
       PREVIEW_LOGIN_EMAIL: ${{ secrets.PREVIEW_LOGIN_EMAIL }}
       PREVIEW_LOGIN_PASSWORD: ${{ secrets.PREVIEW_LOGIN_PASSWORD }}
     steps:
@@ -46,9 +48,18 @@ jobs:
           test -n "$PREVIEW_HOST" || { echo "Missing repository variable PREVIEW_HOST"; exit 1; }
           test -n "$PREVIEW_DOMAIN" || { echo "Missing repository variable PREVIEW_DOMAIN"; exit 1; }
           test -n "$PREVIEW_SSH_PRIVATE_KEY" || { echo "Missing repository secret PREVIEW_SSH_PRIVATE_KEY"; exit 1; }
-          test -n "$PREVIEW_DB_DUMP_S3_URI" || { echo "Missing repository variable PREVIEW_DB_DUMP_S3_URI"; exit 1; }
-          test -n "$PREVIEW_LOGIN_EMAIL" || { echo "Missing repository secret PREVIEW_LOGIN_EMAIL"; exit 1; }
-          test -n "$PREVIEW_LOGIN_PASSWORD" || { echo "Missing repository secret PREVIEW_LOGIN_PASSWORD"; exit 1; }
+          case "$PREVIEW_DATA_MODE" in
+            seed) ;;
+            production-dump)
+              [[ -n "$PREVIEW_DB_DUMP_S3_URI" ]] || { echo "Missing repository variable PREVIEW_DB_DUMP_S3_URI"; exit 1; }
+              [[ -n "$PREVIEW_LOGIN_EMAIL" ]] || { echo "Missing repository secret PREVIEW_LOGIN_EMAIL"; exit 1; }
+              [[ -n "$PREVIEW_LOGIN_PASSWORD" ]] || { echo "Missing repository secret PREVIEW_LOGIN_PASSWORD"; exit 1; }
+              ;;
+            *)
+              echo "PREVIEW_DATA_MODE must be seed or production-dump"
+              exit 1
+              ;;
+          esac
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,8 +107,10 @@ jobs:
             "PREVIEW_ROOT=$(shell_quote "$PREVIEW_ROOT")"
             "PREVIEW_TLS=$(shell_quote "$PREVIEW_TLS")"
             "PREVIEW_RUNTIME=$(shell_quote "$PREVIEW_RUNTIME")"
+            "PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")"
             "PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")"
             "PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")"
+            "PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")"
             "PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")"
             "SOURCE_DIR=$(shell_quote "$remote_source")"
@@ -121,9 +134,9 @@ jobs:
 
             - **URL:** ${{ steps.deploy.outputs.url }}
             - **Runtime:** Docker Compose on the preview environment host
-            - **Data:** cloned from the shared production-dump template into an isolated PR database
+            - **Data:** seeded local-dev data in an isolated PR database
             - **Deploy elapsed:** `${{ steps.deploy.outputs.elapsed_ms }}ms`
-            - **Smoke:** healthcheck + login
+            - **Smoke:** healthcheck + dev login
 
   preview-destroy:
     if: >-

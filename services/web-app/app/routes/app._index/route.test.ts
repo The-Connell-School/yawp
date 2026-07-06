@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findMany: mock() },
@@ -17,22 +17,15 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
-
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
+const isWritingPracticeEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
-}));
-mock.module('~/utils/auth.server', () => ({
-  requireUserId,
-  requireMembership,
-  requireMutableRequest,
+  getSessionExpirationDate: () => new Date('2030-01-01T00:00:00.000Z'),
+  sessionKey: 'sessionId',
 }));
 mock.module('~/utils/teacher-class-card-stats.server', () => ({
   getTeacherClassCardStats,
@@ -41,17 +34,26 @@ mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
   getTeacherRecentActiveClassIds,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
-  ...assignmentTypeAccessActual,
   getAvailableAssignmentTypesForScopes,
 }));
 mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
+  studentPreviewModeKey: 'studentPreviewMode',
+  studentPreviewOrgIdKey: 'studentPreviewOrgId',
   shouldUseStudentExperience: (
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
+mock.module('~/utils/feature-gates.server', () => ({
+  FEATURE_KEYS: { WRITING_PRACTICE: 'writing_practice' },
+  isWritingPracticeEnabledForOrganization,
+}));
 
 const { loader } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+});
 
 describe('app index loader assignments', () => {
   beforeEach(() => {
@@ -66,6 +68,7 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
+    isWritingPracticeEnabledForOrganization.mockReset();
     getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
@@ -73,6 +76,7 @@ describe('app index loader assignments', () => {
       gradedUnreleasedCount: 0,
     });
     getTeacherRecentActiveClassIds.mockResolvedValue([]);
+    isWritingPracticeEnabledForOrganization.mockResolvedValue(false);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -176,6 +180,22 @@ describe('app index loader assignments', () => {
     expect(
       data.documents[0].assignmentModuleSessions[0].assignmentModule.title
     ).toBe('Pre-Writing');
+  });
+
+  test('returns the writing practice feature state for the current organization', async () => {
+    isWritingPracticeEnabledForOrganization.mockResolvedValue(true);
+
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(isWritingPracticeEnabledForOrganization).toHaveBeenCalledWith(
+      'org-1'
+    );
+    expect(data.writingPracticeEnabled).toBe(true);
   });
 
   test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {

@@ -26,6 +26,7 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain('DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"');
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
+    expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
     expect(compose).not.toContain('target: production');
     expect(compose).toContain('traefik.enable=true');
     expect(compose).toContain('Host(`pr-142.preview.yawp.school`)');

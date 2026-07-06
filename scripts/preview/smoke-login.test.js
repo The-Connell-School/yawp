@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import http from 'node:http';
-import { runLoginSmoke } from './smoke-login.mjs';
+import { runDevLoginSmoke, runLoginSmoke } from './smoke-login.mjs';
 
 const servers = [];
 
@@ -149,5 +149,51 @@ describe('runLoginSmoke', () => {
     ).resolves.toMatchObject({ ok: true });
 
     expect(seen.redirectedCookie).toContain('auth_session=preview-ok');
+  });
+});
+
+describe('runDevLoginSmoke', () => {
+  test('passes when a seeded dev persona can reach /app with a session cookie', async () => {
+    const seen = { loginBody: '', appCookie: '' };
+    const server = await startServer((req, res) => {
+      if (req.url === '/auth/dev-login' && req.method === 'POST') {
+        req.on('data', (chunk) => {
+          seen.loginBody += chunk;
+        });
+        req.on('end', () => {
+          res.writeHead(302, {
+            location: '/app',
+            'set-cookie': 'auth_session=preview-dev-ok; Path=/; HttpOnly',
+          });
+          res.end();
+        });
+        return;
+      }
+
+      if (req.url === '/app' && req.method === 'GET') {
+        seen.appCookie = req.headers.cookie || '';
+        res.writeHead(
+          seen.appCookie.includes('auth_session=preview-dev-ok') ? 200 : 401,
+        );
+        res.end('app');
+        return;
+      }
+
+      res.writeHead(404);
+      res.end();
+    });
+
+    await expect(
+      runDevLoginSmoke({
+        baseUrl: server.url,
+        email: 'dev.teacher@yawp.local',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+
+    expect(decodeURIComponent(seen.loginBody)).toContain(
+      'email=dev.teacher@yawp.local',
+    );
+    expect(seen.loginBody).not.toContain('password=');
+    expect(seen.appCookie).toContain('auth_session=preview-dev-ok');
   });
 });

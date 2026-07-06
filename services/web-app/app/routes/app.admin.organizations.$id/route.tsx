@@ -40,12 +40,22 @@ import { generateTOTP } from '~/utils/totp.server';
 import { getDomainUrl } from '~/utils/misc';
 import { Prisma } from '@app/prisma';
 import { normalizeEmail } from '~/utils/normalize-email';
+import { FEATURE_KEYS } from '~/utils/feature-gates.server';
+
+const WRITING_PRACTICE_FEATURE_DESCRIPTION =
+  'Enable writing practice lessons for this organization.';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [organization, invitations, totalOrganizations, assignmentTypes] =
+  const [
+    organization,
+    invitations,
+    totalOrganizations,
+    assignmentTypes,
+    writingPracticeFlag,
+  ] =
     await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
@@ -76,6 +86,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       select: { id: true, title: true, description: true },
       orderBy: { position: 'asc' },
     }),
+    prisma.featureFlag.findUnique({
+      where: {
+        key_scopeKind_scopeId: {
+          key: FEATURE_KEYS.WRITING_PRACTICE,
+          scopeKind: 'organization',
+          scopeId: params.id!,
+        },
+      },
+      select: { enabled: true },
+    }),
   ]);
 
   if (!organization) {
@@ -91,6 +111,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     organization,
     invitations,
     assignmentTypes,
+    writingPracticeEnabled: writingPracticeFlag?.enabled ?? false,
     canDelete: !isUserAssignedToOrg && !isOnlyOrganization,
   });
 }
@@ -162,6 +183,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
           .filter(Boolean)
       )
     );
+    const writingPracticeEnabled =
+      formData.get('writingPracticeEnabled') === 'true';
 
     if (!name) {
       throw new Response('Name is required', { status: 400 });
@@ -201,6 +224,26 @@ export async function action({ request, params }: ActionFunctionArgs) {
             }),
           ]
         : []),
+      prisma.featureFlag.upsert({
+        where: {
+          key_scopeKind_scopeId: {
+            key: FEATURE_KEYS.WRITING_PRACTICE,
+            scopeKind: 'organization',
+            scopeId: params.id!,
+          },
+        },
+        update: {
+          enabled: writingPracticeEnabled,
+          description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
+        },
+        create: {
+          key: FEATURE_KEYS.WRITING_PRACTICE,
+          scopeKind: 'organization',
+          scopeId: params.id!,
+          enabled: writingPracticeEnabled,
+          description: WRITING_PRACTICE_FEATURE_DESCRIPTION,
+        },
+      }),
     ]);
 
     return dataResponse({ status: 'success' });
@@ -338,7 +381,13 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations, assignmentTypes, canDelete } =
+  const {
+    organization,
+    invitations,
+    assignmentTypes,
+    writingPracticeEnabled,
+    canDelete,
+  } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -485,6 +534,39 @@ export default function OrganizationRoute() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                <div
+                  className="border-t pt-5"
+                  data-testid="organization-writing-practice-manager"
+                >
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold">
+                      Writing Practice
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      Enable quick writing lessons and practice drills for this
+                      organization.
+                    </p>
+                  </div>
+                  <label className="mt-3 flex min-h-12 items-start gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="writingPracticeEnabled"
+                      value="true"
+                      defaultChecked={writingPracticeEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">
+                        Enable writing practice
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Shows the Writing practice lessons entry point for
+                        students in this organization.
+                      </span>
+                    </span>
+                  </label>
                 </div>
                 <Button
                   type="submit"

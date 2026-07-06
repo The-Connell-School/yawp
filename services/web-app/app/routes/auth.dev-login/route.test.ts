@@ -13,18 +13,32 @@ const authSessionStorage = {
 const setMembershipId = mock();
 const isLocalDevAuthEnabled = mock();
 
-mock.module('~/utils/db.server', () => ({ prisma }));
-mock.module('~/utils/auth.server', () => ({
+const authServerMock = () => ({
   getSessionExpirationDate,
   sessionKey: 'sessionId',
-}));
-mock.module('~/cookie-session-storages/authentication.server', () => ({
+});
+const authSessionStorageMock = () => ({
   authSessionStorage,
-}));
-mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
-mock.module('~/utils/local-dev-auth.server', () => ({
+});
+const localDevAuthMock = () => ({
   isLocalDevAuthEnabled,
-}));
+});
+
+mock.module('~/utils/db.server', () => ({ prisma }));
+mock.module('~/utils/db.server.ts', () => ({ prisma }));
+mock.module('~/utils/db.server.js', () => ({ prisma }));
+mock.module('~/utils/auth.server', authServerMock);
+mock.module('~/utils/auth.server.ts', authServerMock);
+mock.module('~/utils/auth.server.js', authServerMock);
+mock.module('~/cookie-session-storages/authentication.server', authSessionStorageMock);
+mock.module('~/cookie-session-storages/authentication.server.ts', authSessionStorageMock);
+mock.module('~/cookie-session-storages/authentication.server.js', authSessionStorageMock);
+mock.module('~/cookies/membership-id.server', () => ({ setMembershipId }));
+mock.module('~/cookies/membership-id.server.ts', () => ({ setMembershipId }));
+mock.module('~/cookies/membership-id.server.js', () => ({ setMembershipId }));
+mock.module('~/utils/local-dev-auth.server', localDevAuthMock);
+mock.module('~/utils/local-dev-auth.server.ts', localDevAuthMock);
+mock.module('~/utils/local-dev-auth.server.js', localDevAuthMock);
 
 const { action } = await import('./route');
 

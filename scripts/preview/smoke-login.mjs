@@ -114,14 +114,62 @@ export async function runLoginSmoke({
   return { ok: true, status: app.status };
 }
 
+export async function runDevLoginSmoke({
+  baseUrl,
+  email = 'dev.teacher@yawp.local',
+} = {}) {
+  if (!baseUrl) throw new Error('baseUrl is required');
+  if (!email) throw new Error('email is required');
+
+  const form = new URLSearchParams({
+    email,
+    redirectTo: '/app',
+  }).toString();
+
+  const login = await request(appendPath(baseUrl, '/auth/dev-login'), {
+    method: 'POST',
+    body: form,
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+  });
+
+  if (login.status < 300 || login.status >= 400) {
+    throw new Error(`Expected dev login redirect, got HTTP ${login.status}`);
+  }
+
+  const cookies = getCookies(login.headers);
+  if (!cookies) {
+    throw new Error('Expected dev login to set an auth cookie');
+  }
+
+  const app = await getWithRedirects(appendPath(baseUrl, '/app'), {
+    cookie: cookies,
+  });
+
+  if (app.status !== 200) {
+    throw new Error(`Expected /app to return HTTP 200 after dev login, got ${app.status}`);
+  }
+
+  return { ok: true, status: app.status };
+}
+
 async function main() {
   const baseUrl = (process.env.PREVIEW_BASE_URL || '').replace(/\/$/, '');
-  const email = process.env.PREVIEW_LOGIN_EMAIL;
-  const password = process.env.PREVIEW_LOGIN_PASSWORD;
+  const dataMode = process.env.PREVIEW_DATA_MODE || 'seed';
 
   try {
-    await runLoginSmoke({ baseUrl, email, password });
-    console.log(`OK preview login smoke: ${email} -> /app`);
+    if (dataMode === 'seed') {
+      const email =
+        process.env.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local';
+      await runDevLoginSmoke({ baseUrl, email });
+      console.log(`OK preview dev login smoke: ${email} -> /app`);
+    } else {
+      const email = process.env.PREVIEW_LOGIN_EMAIL;
+      const password = process.env.PREVIEW_LOGIN_PASSWORD;
+      await runLoginSmoke({ baseUrl, email, password });
+      console.log(`OK preview login smoke: ${email} -> /app`);
+    }
   } catch (error) {
     console.error(`Preview login smoke failed: ${error.message || error}`);
     process.exitCode = 1;
