@@ -16,6 +16,7 @@ bun run scripts/ai-context-evals/live-runner.ts --limit-cases=2
 bun run scripts/ai-context-evals/live-runner.ts
 DATABASE_URL=postgresql://... bun run scripts/ai-context-evals/baseline-runner.ts --days=60 --limit=1000
 bun --env-file=.worktree-local/ai-context-evals.env run scripts/ai-context-evals/live-runner.ts --live --limit-cases=1
+bun --env-file=.worktree-local/ai-context-evals.env run scripts/ai-context-evals/live-runner.ts --live --concurrency=4
 bun run scripts/ai-context-evals/live-results-analysis.ts .worktree-local/ai-context-evals/runs/<run-id> --gate
 bun run scripts/ai-context-evals/live-results-analysis.ts .worktree-local/ai-context-evals/runs/<run-id> --gate --compare-baseline=scripts/ai-context-evals/baselines/latest-context-2026-07-04-legacy.json
 bun run scripts/ai-context-evals/live-results-analysis.ts .worktree-local/ai-context-evals/runs/<run-id> --gate --write-baseline=scripts/ai-context-evals/baselines/latest-context-<date>.json

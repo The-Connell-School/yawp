@@ -21,12 +21,17 @@ describe('AI context eval live runner guardrails', () => {
     expect(options.outputDir).toBe('.worktree-local/ai-context-evals/runs');
     expect(options.model).toBe('claude-sonnet-4-6');
     expect(options.requestTimeoutMs).toBe(45_000);
+    expect(options.requestConcurrency).toBe(1);
   });
 
   test('parses request timeout override', () => {
-    const options = parseRunnerArgs(['--request-timeout-ms=12000']);
+    const options = parseRunnerArgs([
+      '--request-timeout-ms=12000',
+      '--concurrency=4',
+    ]);
 
     expect(options.requestTimeoutMs).toBe(12_000);
+    expect(options.requestConcurrency).toBe(4);
   });
 
   test('rejects live mode without an Anthropic key', () => {
@@ -56,6 +61,7 @@ describe('AI context eval live runner guardrails', () => {
     expect(manifest.liveApiCallsAllowed).toBe(false);
     expect(manifest.caseCount).toBe(2);
     expect(manifest.strategyCount).toBe(4);
+    expect(manifest.requestConcurrency).toBe(1);
   });
 
   test('loads Anthropic SDK through an installed workspace dependency', async () => {

@@ -25,13 +25,10 @@ export type RunnerOptions = {
   limitCases: number | null;
   anthropicApiKey: string;
   requestTimeoutMs: number;
+  requestConcurrency: number;
 };
 
-type AnthropicConstructor = new (config: {
-  apiKey: string;
-  timeout?: number;
-  maxRetries?: number;
-}) => {
+type AnthropicClient = {
   messages: {
     create: (input: {
       model: string;
@@ -45,6 +42,12 @@ type AnthropicConstructor = new (config: {
     }>;
   };
 };
+
+type AnthropicConstructor = new (config: {
+  apiKey: string;
+  timeout?: number;
+  maxRetries?: number;
+}) => AnthropicClient;
 
 type LiveResult = {
   strategyId: string;
@@ -80,6 +83,7 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
     limitCases: null,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
     requestTimeoutMs: 45_000,
+    requestConcurrency: 1,
   };
 
   for (const arg of args) {
@@ -98,6 +102,11 @@ export function parseRunnerArgs(args: string[]): RunnerOptions {
       const parsed = Number(arg.slice('--request-timeout-ms='.length));
       if (Number.isFinite(parsed) && parsed > 0) {
         options.requestTimeoutMs = parsed;
+      }
+    } else if (arg.startsWith('--concurrency=')) {
+      const parsed = Number(arg.slice('--concurrency='.length));
+      if (Number.isInteger(parsed) && parsed > 0) {
+        options.requestConcurrency = parsed;
       }
     }
   }
@@ -168,6 +177,7 @@ export function buildRunManifest({
     strategyCount,
     outputDir: options.outputDir,
     requestTimeoutMs: options.requestTimeoutMs,
+    requestConcurrency: options.requestConcurrency,
   };
 }
 
@@ -244,22 +254,14 @@ function buildDryRunSummary({
 }
 
 async function runLiveRequest({
-  apiKey,
+  anthropic,
   model,
   request,
-  timeoutMs,
 }: {
-  apiKey: string;
+  anthropic: AnthropicClient;
   model: string;
   request: PlannedTutorRequest;
-  timeoutMs: number;
 }) {
-  const Anthropic = await loadAnthropicSdkForEval();
-  const anthropic = new Anthropic({
-    apiKey,
-    timeout: timeoutMs,
-    maxRetries: 0,
-  });
   const message = await anthropic.messages.create({
     model,
     max_tokens: 500,
@@ -335,40 +337,57 @@ async function main() {
   }
 
   assertLiveRunAllowed(options);
+  const Anthropic = await loadAnthropicSdkForEval();
+  const anthropic = new Anthropic({
+    apiKey: options.anthropicApiKey,
+    timeout: options.requestTimeoutMs,
+    maxRetries: 0,
+  });
   const liveResultsPath = join(runDir, 'live-results.jsonl');
   const allRequests = [...requestsByStrategy.values()].flat();
   writeFileSync(liveResultsPath, '');
   let completed = 0;
   let failed = 0;
-  for (const [index, request] of allRequests.entries()) {
-    try {
-      const result = await runLiveRequest({
-        apiKey: options.anthropicApiKey,
-        model: options.model,
-        request,
-        timeoutMs: options.requestTimeoutMs,
-      });
-      appendFileSync(liveResultsPath, `${buildLiveResultLine(result)}\n`);
-      completed += 1;
-      console.log(
-        `[${index + 1}/${allRequests.length}] ok ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}`
-      );
-    } catch (error) {
-      appendFileSync(
-        liveResultsPath,
-        `${buildLiveErrorLine({
-          strategyId: request.strategyId,
-          evalCaseId: request.evalCaseId,
-          turnIndex: request.turnIndex,
-          error,
-        })}\n`
-      );
-      failed += 1;
-      console.log(
-        `[${index + 1}/${allRequests.length}] error ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}: ${errorMessage(error)}`
-      );
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= allRequests.length) return;
+      const request = allRequests[index]!;
+
+      try {
+        const result = await runLiveRequest({
+          anthropic,
+          model: options.model,
+          request,
+        });
+        appendFileSync(liveResultsPath, `${buildLiveResultLine(result)}\n`);
+        completed += 1;
+        console.log(
+          `[${completed + failed}/${allRequests.length}] ok ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}`
+        );
+      } catch (error) {
+        appendFileSync(
+          liveResultsPath,
+          `${buildLiveErrorLine({
+            strategyId: request.strategyId,
+            evalCaseId: request.evalCaseId,
+            turnIndex: request.turnIndex,
+            error,
+          })}\n`
+        );
+        failed += 1;
+        console.log(
+          `[${completed + failed}/${allRequests.length}] error ${request.strategyId} ${request.evalCaseId} turn ${request.turnIndex}: ${errorMessage(error)}`
+        );
+      }
     }
   }
+
+  const workerCount = Math.min(options.requestConcurrency, allRequests.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
   console.log(`Live run complete. ok=${completed} error=${failed} Wrote ${runDir}`);
 }
 
