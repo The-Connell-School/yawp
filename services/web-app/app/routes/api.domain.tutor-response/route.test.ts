@@ -191,6 +191,29 @@ describe('api.domain.tutor-response read-only impersonation', () => {
     );
   });
 
+  test('rejects tutor calls without explicit client document content', async () => {
+    getLLMCompletion.mockResolvedValue('Draft a clearer thesis.');
+    mockCms();
+
+    const body = new FormData();
+    body.set('response', 'Can you review this?');
+    body.set('cmsId', 'cms-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/tutor-response', {
+        method: 'POST',
+        body,
+      }),
+    } as any);
+    const payload = response as {
+      init?: { status?: number };
+    };
+
+    expect(payload.init?.status).toBe(422);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(prisma.assignmentModuleSession.update).not.toHaveBeenCalled();
+  });
+
   test('returns a retry signal without writing messages when fallback retry is requested', async () => {
     mockCms();
     getLLMCompletion.mockImplementationOnce(() => {

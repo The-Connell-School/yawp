@@ -21,7 +21,7 @@ const LLM_FAILED = 'Failed to get a response from the tutor. Please try again.';
 const POST = z.object({
   response: z.string().min(1),
   cmsId: z.string().min(1),
-  content: z.string().optional(),
+  content: z.string(),
   llmRetry: z.enum(['fallback']).optional(),
 });
 
@@ -110,9 +110,8 @@ export async function action({ request }: ActionFunctionArgs) {
       moduleRubricGuidance,
     });
 
-    const documentSource =
-      data.content === undefined ? 'db-document-text' : 'client-content';
-    const documentText = data.content ?? cms.document.text ?? '';
+    const documentSource = 'client-content';
+    const documentText = data.content;
     const documentContext = buildAiTextContextAudit({
       documentSource,
       documentId: cms.document.id,
