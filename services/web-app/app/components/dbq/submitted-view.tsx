@@ -11,11 +11,6 @@ export function SubmittedView({ state }: { state: DbqState }) {
           <CheckCircle2 size={18} />
           <h2 className="text-base font-semibold">Submitted</h2>
         </div>
-        <p className="mt-1 text-sm">
-          In production this hands off to the GA for retrospective coaching
-          (rubric panel, failure-mode flags, suggested edits). Prototype stops
-          here.
-        </p>
         <div className="mt-3">
           <Button
             variant="outline"

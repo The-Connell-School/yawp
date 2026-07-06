@@ -37,7 +37,7 @@ test.describe.serial('AP History library-first assignment flow', () => {
         page.getByRole('heading', { name: 'AP History Essay', level: 1 })
       ).toBeVisible();
       await expect(
-        page.getByRole('heading', { name: 'APUSH Prompt Library' })
+        page.getByRole('heading', { name: 'Prompt Library' })
       ).toBeVisible();
       await expect(page.getByText('Upload PDF', { exact: true })).toHaveCount(
         0
@@ -55,13 +55,18 @@ test.describe.serial('AP History library-first assignment flow', () => {
       ).toHaveCount(0);
       await expect(page.getByText('New +', { exact: true })).toHaveCount(0);
 
-      await page.getByRole('button', { name: dbqEntry.title }).click();
+      await page
+        .getByRole('button', { name: new RegExp(dbqEntry.title) })
+        .click();
 
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText('Selected APUSH Prompt')).toBeVisible();
       await expect(dialog.getByText(dbqEntry.title)).toBeVisible();
       await expect(dialog.getByText(dbqEntry.prompt)).toBeVisible();
+      await expect(
+        dialog.getByText(`${dbqEntry.sourceCount} Sources`)
+      ).toBeVisible();
       await expect(
         dialog.locator('label').filter({ hasText: /^Prompt$/ })
       ).toHaveCount(0);
@@ -138,9 +143,12 @@ test.describe.serial('AP History library-first assignment flow', () => {
       await page.waitForURL('**/app/documents/**', { timeout: 15000 });
       await helpers.waitForEditorReady();
 
-      await expect(page.getByText(/APUSH Period/)).toBeVisible();
+      await expect(page.getByText(/DBQ · APUSH/)).toBeVisible();
       await expect(
         page.getByText(dbqEntry.prompt, { exact: true })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: firstSource!.title })
       ).toBeVisible();
       await expect(page.getByText(mutatedPrompt, { exact: true })).toHaveCount(
         0
@@ -152,7 +160,10 @@ test.describe.serial('AP History library-first assignment flow', () => {
         page.getByText(mutatedSourceBody, { exact: true })
       ).toHaveCount(0);
       await expect(
-        page.getByText(`${dbqEntry.sourceCount} sources`, { exact: true })
+        page.getByText(
+          `${dbqEntry.sourceCount} sources · click a thumbnail`,
+          { exact: true }
+        )
       ).toBeVisible();
     } finally {
       await prisma.apHistoryPromptLibraryEntry.updateMany({

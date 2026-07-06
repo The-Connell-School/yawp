@@ -4,7 +4,9 @@ import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
 type Props = {
   snapshot: ApHistorySnapshot;
+  tutor?: React.ReactNode;
   editor?: React.ReactNode;
+  comments?: React.ReactNode;
 };
 
 function toDbqSources(sources: ApHistorySnapshot['sources']): DbqSource[] {
@@ -29,7 +31,7 @@ function getReasoningSkill(value: string): DbqPrompt['reasoningSkill'] {
   return 'causation';
 }
 
-export function DbqLayout({ snapshot, editor }: Props) {
+export function DbqLayout({ snapshot, tutor, editor, comments }: Props) {
   const dbqPrompt: DbqPrompt = {
     id: snapshot.libraryEntryId,
     title: snapshot.period,
@@ -47,7 +49,9 @@ export function DbqLayout({ snapshot, editor }: Props) {
       prompt={dbqPrompt}
       initialTimeMode={snapshot.timing.mode}
       durationMinutes={snapshot.timing.durationMinutes}
+      tutor={tutor}
       editor={editor}
+      comments={comments}
     />
   );
 }

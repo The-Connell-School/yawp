@@ -10,14 +10,23 @@ export function EditorColumn({
   isMaximized,
   onToggleMaximize,
   editor,
+  allowDraftTools = true,
 }: {
   state: DbqState;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   editor?: React.ReactNode;
+  allowDraftTools?: boolean;
 }) {
-  const { prompt, essay, setEssay, editorRef, insertCitation, planning, setPlanning } =
-    state;
+  const {
+    prompt,
+    essay,
+    setEssay,
+    editorRef,
+    insertCitation,
+    planning,
+    setPlanning,
+  } = state;
   const [planningOpen, setPlanningOpen] = useState(false);
 
   return (
@@ -25,23 +34,27 @@ export function EditorColumn({
       <header className="flex shrink-0 items-center justify-between border-b px-3 py-2">
         <div>
           <h2 className="text-sm font-semibold">Your essay</h2>
-          <p className="text-[11px] text-muted-foreground">
-            {wordCount(essay)} words
-          </p>
+          {allowDraftTools ? (
+            <p className="text-[11px] text-muted-foreground">
+              {wordCount(essay)} words
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setPlanningOpen((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-          >
-            {planningOpen ? (
-              <ChevronDown size={12} />
-            ) : (
-              <ChevronRight size={12} />
-            )}
-            Planning
-          </button>
+          {allowDraftTools ? (
+            <button
+              type="button"
+              onClick={() => setPlanningOpen((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+            >
+              {planningOpen ? (
+                <ChevronDown size={12} />
+              ) : (
+                <ChevronRight size={12} />
+              )}
+              Planning
+            </button>
+          ) : null}
           {onToggleMaximize ? (
             <button
               type="button"
@@ -66,30 +79,32 @@ export function EditorColumn({
         </div>
       </header>
 
-      {planningOpen ? (
+      {allowDraftTools && planningOpen ? (
         <div className="shrink-0 border-b p-3">
           <PlanningSidebar planning={planning} setPlanning={setPlanning} />
         </div>
       ) : null}
 
-      <div className="flex shrink-0 flex-wrap items-center gap-1 border-b bg-muted/30 px-3 py-1.5">
-        <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-          Cite
-        </span>
-        {prompt.sources.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => insertCitation(s.label)}
-            className="rounded-full border border-primary/40 bg-background px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
-          >
-            Doc {s.label}
-          </button>
-        ))}
-        <span className="ml-1 text-[10px] text-muted-foreground">
-          inserts at cursor
-        </span>
-      </div>
+      {allowDraftTools ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b bg-muted/30 px-3 py-1.5">
+          <span className="mr-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+            Cite
+          </span>
+          {prompt.sources.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => insertCitation(s.label)}
+              className="rounded-full border border-primary/40 bg-background px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+            >
+              Doc {s.label}
+            </button>
+          ))}
+          <span className="ml-1 text-[10px] text-muted-foreground">
+            inserts at cursor
+          </span>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
         {editor ? (
@@ -111,7 +126,9 @@ export function EditorColumn({
             )}
           />
         )}
-        <CitedSources essay={essay} sources={prompt.sources} />
+        {allowDraftTools ? (
+          <CitedSources essay={essay} sources={prompt.sources} />
+        ) : null}
       </div>
     </section>
   );

@@ -9,10 +9,12 @@ export function SourcesColumn({
   state,
   isMaximized,
   onToggleMaximize,
+  allowSourceTools = true,
 }: {
   state: DbqState;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
+  allowSourceTools?: boolean;
 }) {
   const { prompt, annotations, addAnnotation, removeAnnotation, insertCitation } =
     state;
@@ -117,6 +119,7 @@ export function SourcesColumn({
         onAddAnnotation={addAnnotation}
         onRemoveAnnotation={removeAnnotation}
         onInsertCitation={insertCitation}
+        allowSourceTools={allowSourceTools}
       />
     </section>
   );
@@ -128,12 +131,14 @@ function ActiveSourceViewer({
   onAddAnnotation,
   onRemoveAnnotation,
   onInsertCitation,
+  allowSourceTools,
 }: {
   source: DbqSource;
   annotations: SourceAnnotation[];
   onAddAnnotation: (sourceId: string, text: string) => void;
   onRemoveAnnotation: (id: string) => void;
   onInsertCitation: (label: string) => void;
+  allowSourceTools: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
@@ -164,25 +169,27 @@ function ActiveSourceViewer({
               {source.attribution}
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
-              onClick={() => onInsertCitation(source.label)}
-            >
-              Cite [Doc {source.label}]
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setAdding((v) => !v)}
-            >
-              <MessageSquarePlus size={13} className="mr-1" />
-              Note
-            </Button>
-          </div>
+          {allowSourceTools ? (
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => onInsertCitation(source.label)}
+              >
+                Cite [Doc {source.label}]
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setAdding((v) => !v)}
+              >
+                <MessageSquarePlus size={13} className="mr-1" />
+                Note
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -196,7 +203,7 @@ function ActiveSourceViewer({
           </p>
         ) : null}
 
-        {adding ? (
+        {allowSourceTools && adding ? (
           <div className="mt-4 rounded-md border bg-muted/30 p-2">
             <textarea
               value={draft}
@@ -229,7 +236,7 @@ function ActiveSourceViewer({
           </div>
         ) : null}
 
-        {annotations.length > 0 ? (
+        {allowSourceTools && annotations.length > 0 ? (
           <div className="mt-4">
             <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Your notes on this document
