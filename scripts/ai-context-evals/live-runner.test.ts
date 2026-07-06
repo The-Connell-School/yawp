@@ -6,7 +6,12 @@ import {
   buildRunManifest,
   loadAnthropicSdkForEval,
   parseRunnerArgs,
+  requestToJsonLine,
 } from './live-runner';
+import {
+  buildFixtureConversation,
+  buildStrategyRequests,
+} from './context-strategies';
 
 describe('AI context eval live runner guardrails', () => {
   test('defaults to dry-run mode', () => {
@@ -89,6 +94,28 @@ describe('AI context eval live runner guardrails', () => {
       status: 'error',
       strategyId: 'delta-since-last-turn',
       error: 'timeout',
+    });
+  });
+
+  test('serializes document domain and tiny-change trap metadata in planned requests', () => {
+    const fixture = buildFixtureConversation({
+      documentDomainId: 'ap-history-dbq',
+      scenarioId: 'specific-detail-question',
+      documentWordCount: 100,
+    });
+    const request = buildStrategyRequests({
+      evalCase: fixture,
+      strategyId: 'full-document-each-turn',
+    })[2]!;
+    const row = JSON.parse(requestToJsonLine(request));
+
+    expect(row).toMatchObject({
+      strategyId: 'full-document-each-turn',
+      evalCaseId: 'ap-history-dbq__specific-detail-question-100',
+      documentDomainId: 'ap-history-dbq',
+      scenarioId: 'specific-detail-question',
+      documentWordCount: 100,
+      trapTypes: ['changed-date'],
     });
   });
 });

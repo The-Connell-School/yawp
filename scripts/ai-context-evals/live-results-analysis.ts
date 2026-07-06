@@ -1,12 +1,15 @@
 #!/usr/bin/env bun
 
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { CLAUDE_PRICING, formatUsd, type ModelPricing } from './cost';
 
 type PlannedJsonlRow = {
   strategyId: string;
   evalCaseId: string;
+  documentDomainId?: string;
+  scenarioId?: string;
+  documentWordCount?: number;
   turnIndex: number;
   estimatedInputTokens?: number;
   contextCoverage?: {
@@ -15,6 +18,7 @@ type PlannedJsonlRow = {
   };
   mustUseAnchors?: string[];
   mustNotUseAnchors?: string[];
+  trapTypes?: string[];
   messages?: Array<{ role: string; content: string }>;
 };
 
@@ -65,6 +69,10 @@ export type ScenarioLiveAnalysis = StrategyLiveAnalysis & {
   documentWordCount: number | null;
 };
 
+export type TrapTypeLiveAnalysis = StrategyLiveAnalysis & {
+  trapType: string;
+};
+
 export type DocumentSizeLiveAnalysis = StrategyLiveAnalysis & {
   documentWordCount: number;
 };
@@ -73,6 +81,7 @@ export type LiveEvalAnalysis = {
   totalRequests: number;
   strategies: StrategyLiveAnalysis[];
   scenarios: ScenarioLiveAnalysis[];
+  trapTypes: TrapTypeLiveAnalysis[];
   documentSizes: DocumentSizeLiveAnalysis[];
 };
 
@@ -82,6 +91,11 @@ export type LiveEvalGateOptions = {
   minStrategyAnyAnchorRate: number;
   minCriticalScenarioAnyAnchorRate: number;
   criticalScenarioIds: string[];
+  minCriticalTrapAnyAnchorRate: number;
+  criticalTrapTypes: string[];
+  fullDocumentControlStrategyId: string;
+  minFullDocumentControlAnyAnchorRate: number;
+  requireFullDocumentControlCanonicalEveryRequest: boolean;
 };
 
 export type LiveEvalGate = {
@@ -95,11 +109,23 @@ export const DEFAULT_LIVE_EVAL_GATE_OPTIONS: LiveEvalGateOptions = {
   maxMustNotViolations: 0,
   minStrategyAnyAnchorRate: 0.75,
   minCriticalScenarioAnyAnchorRate: 0.75,
+  minCriticalTrapAnyAnchorRate: 0.75,
   criticalScenarioIds: [
     'local-revision-follow-up',
     'specific-detail-question',
     'deleted-content-trap',
   ],
+  criticalTrapTypes: [
+    'changed-name',
+    'changed-date',
+    'changed-number',
+    'negation-flip',
+    'deleted-paragraph',
+    'reordered-claim',
+  ],
+  fullDocumentControlStrategyId: 'full-document-each-turn',
+  minFullDocumentControlAnyAnchorRate: 0.85,
+  requireFullDocumentControlCanonicalEveryRequest: true,
 };
 
 type UsageCost = {
@@ -212,6 +238,20 @@ function makeScenario({
   };
 }
 
+function makeTrapType({
+  strategyId,
+  trapType,
+}: {
+  strategyId: string;
+  trapType: string;
+}): TrapTypeLiveAnalysis {
+  return {
+    strategyId,
+    trapType,
+    ...makeCounts(),
+  };
+}
+
 function makeDocumentSize({
   strategyId,
   documentWordCount,
@@ -226,18 +266,20 @@ function makeDocumentSize({
   };
 }
 
-function parseEvalCaseId(evalCaseId: string) {
-  const match = /^(.*)-(\d+)$/.exec(evalCaseId);
+export function parseEvalCaseId(evalCaseId: string) {
+  const match = /^(?:(.*?)__)?(.+)-(\d+)$/.exec(evalCaseId);
   if (!match) {
     return {
+      documentDomainId: null,
       scenarioId: evalCaseId,
       documentWordCount: null,
     };
   }
 
   return {
-    scenarioId: match[1]!,
-    documentWordCount: Number(match[2]),
+    documentDomainId: match[1] ?? null,
+    scenarioId: match[2]!,
+    documentWordCount: Number(match[3]),
   };
 }
 
@@ -321,11 +363,15 @@ export function analyzeLiveEvalResults({
   );
   const strategies = new Map<string, StrategyLiveAnalysis>();
   const scenarios = new Map<string, ScenarioLiveAnalysis>();
+  const trapTypes = new Map<string, TrapTypeLiveAnalysis>();
   const documentSizes = new Map<string, DocumentSizeLiveAnalysis>();
 
   for (const result of resultRows) {
     const planned = plannedByKey.get(resultKey(result));
-    const { scenarioId, documentWordCount } = parseEvalCaseId(result.evalCaseId);
+    const parsedEvalCaseId = parseEvalCaseId(result.evalCaseId);
+    const scenarioId = planned?.scenarioId ?? parsedEvalCaseId.scenarioId;
+    const documentWordCount =
+      planned?.documentWordCount ?? parsedEvalCaseId.documentWordCount;
     const strategy =
       strategies.get(result.strategyId) ?? makeStrategy(result.strategyId);
     strategies.set(result.strategyId, strategy);
@@ -359,6 +405,23 @@ export function analyzeLiveEvalResults({
       pricing,
     });
 
+    for (const trapType of planned?.trapTypes ?? []) {
+      const trapTypeKey = `${result.strategyId}|${trapType}`;
+      const trapTypeAnalysis =
+        trapTypes.get(trapTypeKey) ??
+        makeTrapType({
+          strategyId: result.strategyId,
+          trapType,
+        });
+      trapTypes.set(trapTypeKey, trapTypeAnalysis);
+      addResultToAnalysis({
+        analysis: trapTypeAnalysis,
+        result,
+        planned,
+        pricing,
+      });
+    }
+
     if (documentWordCount !== null) {
       const documentSizeKey = `${result.strategyId}|${documentWordCount}`;
       const documentSize =
@@ -381,6 +444,7 @@ export function analyzeLiveEvalResults({
     totalRequests: resultRows.length,
     strategies: [...strategies.values()],
     scenarios: [...scenarios.values()],
+    trapTypes: [...trapTypes.values()],
     documentSizes: [...documentSizes.values()],
   };
 }
@@ -421,6 +485,16 @@ function sortByStrategyAndDocumentSize(
   );
 }
 
+function sortByStrategyAndTrapType(
+  a: { strategyId: string; trapType: string },
+  b: { strategyId: string; trapType: string }
+) {
+  return (
+    a.strategyId.localeCompare(b.strategyId) ||
+    a.trapType.localeCompare(b.trapType)
+  );
+}
+
 export function renderLiveEvalAnalysis(summary: LiveEvalAnalysis) {
   const lines = [
     '# AI Context Live Eval Analysis',
@@ -448,6 +522,20 @@ export function renderLiveEvalAnalysis(summary: LiveEvalAnalysis) {
   for (const scenario of [...summary.scenarios].sort(sortByStrategyAndScenario)) {
     lines.push(
       `| ${scenario.strategyId} | ${scenario.scenarioId} | ${scenario.okCount}/${scenario.requestCount} | ${ratio(scenario.exactMustUseAllPasses, scenario.mustUseEligibleChecks)} | ${ratio(scenario.exactMustUseAnyPasses, scenario.mustUseEligibleChecks)} | ${ratio(scenario.mustNotViolations, scenario.mustNotChecks)} | ${formatUsd(scenario.costUsd)} |`
+    );
+  }
+
+  lines.push(
+    '',
+    '## Tiny-Change Trap Reliability',
+    '',
+    '| Strategy | Trap type | OK | Exact anchors | Any anchor | Must-not violations | Cost |',
+    '| --- | --- | ---: | ---: | ---: | ---: | ---: |'
+  );
+
+  for (const trapType of [...summary.trapTypes].sort(sortByStrategyAndTrapType)) {
+    lines.push(
+      `| ${trapType.strategyId} | ${trapType.trapType} | ${trapType.okCount}/${trapType.requestCount} | ${ratio(trapType.exactMustUseAllPasses, trapType.mustUseEligibleChecks)} | ${ratio(trapType.exactMustUseAnyPasses, trapType.mustUseEligibleChecks)} | ${ratio(trapType.mustNotViolations, trapType.mustNotChecks)} | ${formatUsd(trapType.costUsd)} |`
     );
   }
 
@@ -510,6 +598,38 @@ export function evaluateLiveEvalGate(
     }
   }
 
+  const fullDocumentControl = summary.strategies.find(
+    (strategy) => strategy.strategyId === gateOptions.fullDocumentControlStrategyId
+  );
+  if (!fullDocumentControl) {
+    failures.push(
+      `${gateOptions.fullDocumentControlStrategyId} control strategy did not run.`
+    );
+  } else {
+    if (
+      gateOptions.requireFullDocumentControlCanonicalEveryRequest &&
+      fullDocumentControl.canonicalCurrentDocumentRequests !==
+        fullDocumentControl.requestCount
+    ) {
+      failures.push(
+        `${fullDocumentControl.strategyId} control included the canonical current document on ${fullDocumentControl.canonicalCurrentDocumentRequests}/${fullDocumentControl.requestCount} requests.`
+      );
+    }
+
+    const anyAnchorRate = rate(
+      fullDocumentControl.exactMustUseAnyPasses,
+      fullDocumentControl.mustUseEligibleChecks
+    );
+    if (
+      fullDocumentControl.mustUseEligibleChecks > 0 &&
+      anyAnchorRate < gateOptions.minFullDocumentControlAnyAnchorRate
+    ) {
+      failures.push(
+        `${fullDocumentControl.strategyId} control latest-anchor recall ${formatPercent(anyAnchorRate)} is below ${formatPercent(gateOptions.minFullDocumentControlAnyAnchorRate)} (${fullDocumentControl.exactMustUseAnyPasses}/${fullDocumentControl.mustUseEligibleChecks}).`
+      );
+    }
+  }
+
   const criticalScenarioIds = new Set(gateOptions.criticalScenarioIds);
   for (const scenario of summary.scenarios) {
     if (!criticalScenarioIds.has(scenario.scenarioId)) continue;
@@ -543,6 +663,39 @@ export function evaluateLiveEvalGate(
     }
   }
 
+  const criticalTrapTypes = new Set(gateOptions.criticalTrapTypes);
+  for (const trapType of summary.trapTypes) {
+    if (!criticalTrapTypes.has(trapType.trapType)) continue;
+
+    if (
+      gateOptions.requireAllRequestsOk &&
+      trapType.okCount !== trapType.requestCount
+    ) {
+      failures.push(
+        `${trapType.strategyId} ${trapType.trapType} trap had ${trapType.errorCount} errors (${trapType.okCount}/${trapType.requestCount} ok).`
+      );
+    }
+
+    if (trapType.mustNotViolations > gateOptions.maxMustNotViolations) {
+      failures.push(
+        `${trapType.strategyId} ${trapType.trapType} trap had ${trapType.mustNotViolations} stale/deleted anchor violations.`
+      );
+    }
+
+    const anyAnchorRate = rate(
+      trapType.exactMustUseAnyPasses,
+      trapType.mustUseEligibleChecks
+    );
+    if (
+      trapType.mustUseEligibleChecks > 0 &&
+      anyAnchorRate < gateOptions.minCriticalTrapAnyAnchorRate
+    ) {
+      failures.push(
+        `${trapType.strategyId} ${trapType.trapType} trap latest-anchor recall ${formatPercent(anyAnchorRate)} is below ${formatPercent(gateOptions.minCriticalTrapAnyAnchorRate)} (${trapType.exactMustUseAnyPasses}/${trapType.mustUseEligibleChecks}).`
+      );
+    }
+  }
+
   return {
     passed: failures.length === 0,
     failures,
@@ -561,6 +714,13 @@ export function renderLiveEvalGate(gate: LiveEvalGate) {
     `Minimum critical-scenario any-anchor recall: ${formatPercent(
       gate.options.minCriticalScenarioAnyAnchorRate
     )}`,
+    `Minimum critical-trap any-anchor recall: ${formatPercent(
+      gate.options.minCriticalTrapAnyAnchorRate
+    )}`,
+    `Full-document control: ${gate.options.fullDocumentControlStrategyId}`,
+    `Minimum full-document control any-anchor recall: ${formatPercent(
+      gate.options.minFullDocumentControlAnyAnchorRate
+    )}`,
     `Maximum stale/deleted anchor violations: ${gate.options.maxMustNotViolations}`,
   ];
 
@@ -570,6 +730,254 @@ export function renderLiveEvalGate(gate: LiveEvalGate) {
       lines.push(`- ${failure}`);
     }
   }
+
+  return lines.join('\n');
+}
+
+export type LiveEvalBaselineMetric = {
+  id: string;
+  requestCount: number;
+  okRate: number;
+  anyAnchorRate: number;
+  exactAnchorRate: number;
+  canonicalCurrentDocumentRate: number;
+  mustNotViolations: number;
+  costUsd: number;
+};
+
+export type LiveEvalBenchmarkBaseline = {
+  schemaVersion: 1;
+  createdAt: string;
+  totalRequests: number;
+  gatePassed: boolean;
+  strategies: LiveEvalBaselineMetric[];
+  scenarios: LiveEvalBaselineMetric[];
+  trapTypes: LiveEvalBaselineMetric[];
+};
+
+export type LiveEvalBaselineDiffOptions = {
+  maxAnyAnchorRateDrop: number;
+  maxOkRateDrop: number;
+  maxCanonicalCurrentDocumentRateDrop: number;
+  maxMustNotViolationIncrease: number;
+};
+
+export type LiveEvalBaselineDiff = {
+  passed: boolean;
+  failures: string[];
+  lines: string[];
+  options: LiveEvalBaselineDiffOptions;
+};
+
+export const DEFAULT_LIVE_EVAL_BASELINE_DIFF_OPTIONS: LiveEvalBaselineDiffOptions =
+  {
+    maxAnyAnchorRateDrop: 0.05,
+    maxOkRateDrop: 0,
+    maxCanonicalCurrentDocumentRateDrop: 0,
+    maxMustNotViolationIncrease: 0,
+  };
+
+function baselineMetric(
+  id: string,
+  analysis: StrategyLiveAnalysis
+): LiveEvalBaselineMetric {
+  return {
+    id,
+    requestCount: analysis.requestCount,
+    okRate: rate(analysis.okCount, analysis.requestCount),
+    anyAnchorRate: rate(
+      analysis.exactMustUseAnyPasses,
+      analysis.mustUseEligibleChecks
+    ),
+    exactAnchorRate: rate(
+      analysis.exactMustUseAllPasses,
+      analysis.mustUseEligibleChecks
+    ),
+    canonicalCurrentDocumentRate: rate(
+      analysis.canonicalCurrentDocumentRequests,
+      analysis.requestCount
+    ),
+    mustNotViolations: analysis.mustNotViolations,
+    costUsd: analysis.costUsd,
+  };
+}
+
+export function buildLiveEvalBenchmarkBaseline({
+  summary,
+  gate,
+  createdAt = new Date().toISOString(),
+}: {
+  summary: LiveEvalAnalysis;
+  gate: LiveEvalGate;
+  createdAt?: string;
+}): LiveEvalBenchmarkBaseline {
+  return {
+    schemaVersion: 1,
+    createdAt,
+    totalRequests: summary.totalRequests,
+    gatePassed: gate.passed,
+    strategies: summary.strategies.map((strategy) =>
+      baselineMetric(strategy.strategyId, strategy)
+    ),
+    scenarios: summary.scenarios.map((scenario) =>
+      baselineMetric(`${scenario.strategyId}|${scenario.scenarioId}`, scenario)
+    ),
+    trapTypes: summary.trapTypes.map((trapType) =>
+      baselineMetric(`${trapType.strategyId}|${trapType.trapType}`, trapType)
+    ),
+  };
+}
+
+function signedPercentPoints(value: number) {
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${(value * 100).toFixed(1)} pts`;
+}
+
+function compareBaselineMetric({
+  label,
+  previous,
+  current,
+  options,
+  failures,
+  lines,
+}: {
+  label: string;
+  previous: LiveEvalBaselineMetric;
+  current?: LiveEvalBaselineMetric;
+  options: LiveEvalBaselineDiffOptions;
+  failures: string[];
+  lines: string[];
+}) {
+  if (!current) {
+    const failure = `${label} is missing from the current run.`;
+    failures.push(failure);
+    lines.push(`- ${failure}`);
+    return;
+  }
+
+  const anyAnchorDelta = current.anyAnchorRate - previous.anyAnchorRate;
+  const okDelta = current.okRate - previous.okRate;
+  const canonicalDelta =
+    current.canonicalCurrentDocumentRate -
+    previous.canonicalCurrentDocumentRate;
+  const mustNotDelta =
+    current.mustNotViolations - previous.mustNotViolations;
+  const costDelta = current.costUsd - previous.costUsd;
+
+  lines.push(
+    `- ${label}: any-anchor ${formatPercent(previous.anyAnchorRate)} -> ${formatPercent(current.anyAnchorRate)} (${signedPercentPoints(anyAnchorDelta)}), ok ${formatPercent(previous.okRate)} -> ${formatPercent(current.okRate)} (${signedPercentPoints(okDelta)}), canonical ${formatPercent(previous.canonicalCurrentDocumentRate)} -> ${formatPercent(current.canonicalCurrentDocumentRate)} (${signedPercentPoints(canonicalDelta)}), must-not ${previous.mustNotViolations} -> ${current.mustNotViolations}, cost ${formatUsd(previous.costUsd)} -> ${formatUsd(current.costUsd)} (${formatUsd(costDelta)})`
+  );
+
+  if (previous.anyAnchorRate - current.anyAnchorRate > options.maxAnyAnchorRateDrop) {
+    failures.push(
+      `${label} any-anchor recall dropped by ${signedPercentPoints(anyAnchorDelta)}.`
+    );
+  }
+  if (previous.okRate - current.okRate > options.maxOkRateDrop) {
+    failures.push(`${label} OK rate dropped by ${signedPercentPoints(okDelta)}.`);
+  }
+  if (
+    previous.canonicalCurrentDocumentRate -
+      current.canonicalCurrentDocumentRate >
+    options.maxCanonicalCurrentDocumentRateDrop
+  ) {
+    failures.push(
+      `${label} canonical-current-document rate dropped by ${signedPercentPoints(canonicalDelta)}.`
+    );
+  }
+  if (mustNotDelta > options.maxMustNotViolationIncrease) {
+    failures.push(
+      `${label} stale/deleted anchor violations increased by ${mustNotDelta}.`
+    );
+  }
+}
+
+function metricMap(metrics: LiveEvalBaselineMetric[]) {
+  return new Map(metrics.map((metric) => [metric.id, metric]));
+}
+
+export function diffLiveEvalBenchmarkBaseline({
+  baseline,
+  current,
+  options = {},
+}: {
+  baseline: LiveEvalBenchmarkBaseline;
+  current: LiveEvalBenchmarkBaseline;
+  options?: Partial<LiveEvalBaselineDiffOptions>;
+}): LiveEvalBaselineDiff {
+  const diffOptions = {
+    ...DEFAULT_LIVE_EVAL_BASELINE_DIFF_OPTIONS,
+    ...options,
+  };
+  const failures: string[] = [];
+  const lines: string[] = [];
+
+  if (!current.gatePassed) {
+    failures.push('Current run failed the latest-context gate.');
+  }
+
+  const metricGroups = [
+    {
+      label: 'strategy',
+      baselineMetrics: baseline.strategies,
+      currentMetrics: metricMap(current.strategies),
+    },
+    {
+      label: 'scenario',
+      baselineMetrics: baseline.scenarios,
+      currentMetrics: metricMap(current.scenarios),
+    },
+    {
+      label: 'trap',
+      baselineMetrics: baseline.trapTypes,
+      currentMetrics: metricMap(current.trapTypes),
+    },
+  ];
+
+  for (const group of metricGroups) {
+    for (const previous of group.baselineMetrics) {
+      compareBaselineMetric({
+        label: `${group.label} ${previous.id}`,
+        previous,
+        current: group.currentMetrics.get(previous.id),
+        options: diffOptions,
+        failures,
+        lines,
+      });
+    }
+  }
+
+  return {
+    passed: failures.length === 0,
+    failures,
+    lines,
+    options: diffOptions,
+  };
+}
+
+export function renderLiveEvalBaselineDiff(diff: LiveEvalBaselineDiff) {
+  const lines = [
+    '# AI Context Blessed Baseline Diff',
+    '',
+    `Baseline diff: ${diff.passed ? 'PASS' : 'FAIL'}`,
+    `Allowed any-anchor recall drop: ${signedPercentPoints(
+      -diff.options.maxAnyAnchorRateDrop
+    )}`,
+    `Allowed OK-rate drop: ${signedPercentPoints(-diff.options.maxOkRateDrop)}`,
+    `Allowed canonical-current-document drop: ${signedPercentPoints(
+      -diff.options.maxCanonicalCurrentDocumentRateDrop
+    )}`,
+    `Allowed stale/deleted anchor violation increase: ${diff.options.maxMustNotViolationIncrease}`,
+  ];
+
+  if (diff.failures.length > 0) {
+    lines.push('', 'Failures:');
+    for (const failure of diff.failures) {
+      lines.push(`- ${failure}`);
+    }
+  }
+
+  lines.push('', 'Metric changes:', ...diff.lines);
 
   return lines.join('\n');
 }
@@ -587,9 +995,15 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const runDir = args.find((arg) => !arg.startsWith('--'));
   const shouldGate = args.includes('--gate');
+  const baselineWritePath = args
+    .find((arg) => arg.startsWith('--write-baseline='))
+    ?.slice('--write-baseline='.length);
+  const baselineComparePath = args
+    .find((arg) => arg.startsWith('--compare-baseline='))
+    ?.slice('--compare-baseline='.length);
   if (!runDir) {
     console.error(
-      'Usage: bun run scripts/ai-context-evals/live-results-analysis.ts <run-dir> [--gate]'
+      'Usage: bun run scripts/ai-context-evals/live-results-analysis.ts <run-dir> [--gate] [--write-baseline=<path>] [--compare-baseline=<path>]'
     );
     process.exit(1);
   }
@@ -607,12 +1021,53 @@ if (import.meta.main) {
   });
 
   console.log(renderLiveEvalAnalysis(summary));
-  if (shouldGate) {
-    const gate = evaluateLiveEvalGate(summary);
+  const gate =
+    shouldGate || baselineWritePath || baselineComparePath
+      ? evaluateLiveEvalGate(summary)
+      : null;
+  let shouldExitWithFailure = false;
+
+  if (gate && shouldGate) {
     console.log('');
     console.log(renderLiveEvalGate(gate));
     if (!gate.passed) {
-      process.exit(1);
+      shouldExitWithFailure = true;
     }
+  }
+
+  const currentBaseline = gate
+    ? buildLiveEvalBenchmarkBaseline({
+        summary,
+        gate,
+      })
+    : null;
+
+  if (baselineWritePath && currentBaseline) {
+    mkdirSync(dirname(baselineWritePath), { recursive: true });
+    writeFileSync(
+      baselineWritePath,
+      `${JSON.stringify(currentBaseline, null, 2)}\n`
+    );
+    console.log('');
+    console.log(`Wrote baseline: ${baselineWritePath}`);
+  }
+
+  if (baselineComparePath && currentBaseline) {
+    const baseline = JSON.parse(
+      readFileSync(baselineComparePath, 'utf8')
+    ) as LiveEvalBenchmarkBaseline;
+    const diff = diffLiveEvalBenchmarkBaseline({
+      baseline,
+      current: currentBaseline,
+    });
+    console.log('');
+    console.log(renderLiveEvalBaselineDiff(diff));
+    if (!diff.passed) {
+      shouldExitWithFailure = true;
+    }
+  }
+
+  if (shouldExitWithFailure) {
+    process.exit(1);
   }
 }

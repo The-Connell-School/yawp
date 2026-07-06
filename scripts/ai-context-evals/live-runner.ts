@@ -192,10 +192,13 @@ export function buildLiveErrorLine(result: LiveError) {
   });
 }
 
-function requestToJsonLine(request: PlannedTutorRequest) {
+export function requestToJsonLine(request: PlannedTutorRequest) {
   return JSON.stringify({
     strategyId: request.strategyId,
     evalCaseId: request.evalCaseId,
+    documentDomainId: request.documentDomainId,
+    scenarioId: request.scenarioId,
+    documentWordCount: request.documentWordCount,
     turnIndex: request.turnIndex,
     estimatedInputTokens: request.estimatedInputTokens,
     contextCoverage: request.contextCoverage,
@@ -203,6 +206,7 @@ function requestToJsonLine(request: PlannedTutorRequest) {
     expectedBehavior: request.turn.expectedBehavior,
     mustUseAnchors: request.turn.mustUseAnchors,
     mustNotUseAnchors: request.turn.mustNotUseAnchors,
+    trapTypes: request.turn.trapTypes,
     messages: request.messages,
   });
 }

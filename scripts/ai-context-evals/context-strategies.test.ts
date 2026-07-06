@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  DEFAULT_DOCUMENT_DOMAINS,
   DEFAULT_DOCUMENT_WORD_COUNTS,
   DEFAULT_STRATEGIES,
   buildEvalMatrix,
@@ -28,12 +29,24 @@ describe('AI context eval strategy planning', () => {
       'hybrid-summary-and-excerpts',
       'full-document-with-prompt-cache',
     ]);
-    expect(matrix.cases).toHaveLength(DEFAULT_DOCUMENT_WORD_COUNTS.length * 4);
+    expect(matrix.documentDomainIds).toEqual([
+      'school-lunch-argument',
+      'literary-analysis',
+      'ap-history-dbq',
+      'science-claim-evidence',
+      'personal-narrative',
+    ]);
+    expect(matrix.cases).toHaveLength(
+      DEFAULT_DOCUMENT_WORD_COUNTS.length * DEFAULT_DOCUMENT_DOMAINS.length * 4
+    );
     expect(matrix.cases.map((item) => item.documentWordCount)).toContain(1000);
   });
 
   test('builds scenario-specific cases instead of duplicating the same conversation', () => {
-    const cases = buildEvalMatrix({ wordCounts: [100] }).cases;
+    const cases = buildEvalMatrix({
+      wordCounts: [100],
+      documentDomainIds: ['school-lunch-argument'],
+    }).cases;
 
     expect(cases.map((evalCase) => [evalCase.scenarioId, evalCase.turns.length])).toEqual([
       ['local-revision-follow-up', 2],
@@ -41,6 +54,47 @@ describe('AI context eval strategy planning', () => {
       ['deleted-content-trap', 4],
       ['whole-draft-review', 5],
     ]);
+  });
+
+  test('builds multiple document domains with explicit tiny-change traps', () => {
+    const cases = buildEvalMatrix({ wordCounts: [100] }).cases;
+    const domains = new Set(cases.map((evalCase) => evalCase.documentDomainId));
+    const trapTypes = new Set(
+      cases.flatMap((evalCase) =>
+        evalCase.turns.flatMap((turn) => turn.trapTypes)
+      )
+    );
+
+    expect(domains).toEqual(
+      new Set([
+        'school-lunch-argument',
+        'literary-analysis',
+        'ap-history-dbq',
+        'science-claim-evidence',
+        'personal-narrative',
+      ])
+    );
+    for (const trapType of [
+      'changed-name',
+      'changed-date',
+      'changed-number',
+      'negation-flip',
+      'deleted-paragraph',
+      'reordered-claim',
+    ]) {
+      expect(trapTypes.has(trapType)).toBe(true);
+    }
+  });
+
+  test('case ids include domain so results remain comparable across domains', () => {
+    const fixture = buildFixtureConversation({
+      documentWordCount: 100,
+      documentDomainId: 'ap-history-dbq',
+      scenarioId: 'specific-detail-question',
+    });
+
+    expect(fixture.id).toBe('ap-history-dbq__specific-detail-question-100');
+    expect(fixture.documentDomainId).toBe('ap-history-dbq');
   });
 
   test('full-document strategy includes current canonical draft on every turn', () => {
