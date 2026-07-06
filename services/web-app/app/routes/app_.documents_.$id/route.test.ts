@@ -97,6 +97,7 @@ const {
 } = await import('./route');
 const { ApHistoryAssignmentPanel } =
   await import('./ap-history-assignment-panel');
+const { DbqLayout } = await import('./_components/dbq-layout');
 
 const assignmentModules = [
   { id: 'module-prewriting', position: 1 },
@@ -393,20 +394,46 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     ).toBe(assignment);
   });
 
-  test('uses the DBQ workspace only for source-backed DBQ snapshots', () => {
+  test('uses the DBQ workspace only for DBQ snapshots with source documents', () => {
+    const leqSnapshot: ApHistorySnapshot = {
+      ...apHistorySnapshot,
+      essayType: 'leq',
+      sources: [],
+      rubric: {
+        rubricId: 'ap-history-leq-2026',
+        totalPoints: 6,
+      },
+    };
+
     expect(shouldRenderDbqWorkspace(apHistorySnapshot)).toBe(true);
     expect(
-      shouldRenderDbqWorkspace({
-        ...apHistorySnapshot,
-        essayType: 'leq',
-      })
+      shouldRenderDbqWorkspace({ ...apHistorySnapshot, sources: [] })
     ).toBe(false);
-    expect(
-      shouldRenderDbqWorkspace({
-        ...apHistorySnapshot,
-        sources: [],
+    expect(shouldRenderDbqWorkspace(leqSnapshot)).toBe(false);
+    expect(shouldRenderDbqWorkspace(null)).toBe(false);
+  });
+
+  test('maps DBQ snapshots into the student workspace with the production editor slot', () => {
+    const html = renderToStaticMarkup(
+      createElement(DbqLayout, {
+        snapshot: apHistorySnapshot,
+        tutor: createElement('div', {}, 'Production tutor'),
+        editor: createElement('div', {}, 'Production document editor'),
+        comments: createElement('div', {}, 'Production comments'),
       })
-    ).toBe(false);
+    );
+
+    expect(html).toContain('DBQ · APUSH');
+    expect(html).toContain('Evaluate the extent');
+    expect(html).toContain('Source 1');
+    expect(html).toContain('Resolved, that');
+    expect(html).toContain('Production tutor');
+    expect(html).toContain('Production document editor');
+    expect(html).toContain('Production comments');
+    expect(html).not.toContain('Cite [Doc');
+    expect(html).not.toContain('Planning');
+    expect(html).not.toContain('prototype');
+    expect(html).not.toContain('No persistence');
   });
 
   test('renders AP History source content inside a bounded scroll area', () => {

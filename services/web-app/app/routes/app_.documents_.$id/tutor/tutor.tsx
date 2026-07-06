@@ -20,6 +20,7 @@ import { getNextAssignmentModuleId } from './assignment-module-navigation';
 import { postTutorResponseWithFallbackRetry } from './tutor-response-retry';
 
 type Props = {
+  className?: string;
   docId: string;
   nextCmId?: string;
   hasPreviousCms?: boolean;
@@ -53,6 +54,7 @@ type Props = {
 };
 
 export const Tutor = ({
+  className,
   cms,
   nextCmId,
   docId,
@@ -280,7 +282,12 @@ export const Tutor = ({
   }, [messages.length]);
 
   return (
-    <div className="flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5">
+    <div
+      className={cn(
+        'flex w-full flex-col border-r bg-muted/30 pb-2 md:w-3/5',
+        className
+      )}
+    >
       <div
         className={cn(
           'flex items-center justify-between gap-8 py-1 pl-4 pr-2',

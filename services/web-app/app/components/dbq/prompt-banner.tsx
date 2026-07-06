@@ -10,7 +10,13 @@ function fmt(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function PromptBanner({ state }: { state: DbqState }) {
+export function PromptBanner({
+  state,
+  showSubmit = true,
+}: {
+  state: DbqState;
+  showSubmit?: boolean;
+}) {
   const {
     prompt,
     timeMode,
@@ -113,15 +119,17 @@ export function PromptBanner({ state }: { state: DbqState }) {
           </div>
         ) : null}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={submit}
-          disabled={view === 'submitted'}
-        >
-          <Send size={13} className="mr-1.5" />
-          {view === 'submitted' ? 'Submitted' : 'Submit'}
-        </Button>
+        {showSubmit ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={submit}
+            disabled={view === 'submitted'}
+          >
+            <Send size={13} className="mr-1.5" />
+            {view === 'submitted' ? 'Submitted' : 'Submit'}
+          </Button>
+        ) : null}
       </div>
     </div>
   );
