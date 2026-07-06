@@ -6,13 +6,15 @@ const prisma = {
   },
 };
 
+mock.restore();
 mock.module('~/utils/db.server', () => ({ prisma }));
 
+const featureGatesModulePath = './feature-gates.server.ts?feature-gates-test';
 const {
   FEATURE_KEYS,
   isFeatureEnabledForOrganization,
   isWritingPracticeEnabledForOrganization,
-} = await import('./feature-gates.server');
+} = await import(featureGatesModulePath);
 
 describe('feature gates', () => {
   beforeEach(() => {

@@ -220,15 +220,39 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).not.toMatch(/(^|\s)\/preview(\s|$)/);
   });
 
-  test('preview deploy clones per-PR databases from a shared production dump template', () => {
+  test('preview deploy resets per-PR databases and seeds local dev data by default', () => {
     const deployScript = readRepoFile('scripts/preview/deploy.sh');
-    const templateIndex = deployScript.indexOf('ensure_template_database');
-    const cloneIndex = deployScript.indexOf('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
+    const resetIndex = deployScript.indexOf('reset_seed_preview_database');
+    const dropIndex = deployScript.indexOf('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
     const generateIndex = deployScript.indexOf('bun prisma generate');
     const migrateIndex = deployScript.indexOf('bun prisma migrate deploy');
     const backfillIndex = deployScript.indexOf('bun run scripts/backfill-class-art-key.ts');
+    const seedIndex = deployScript.indexOf('bun run seed-local-dev');
     const releaseGateIndex = deployScript.indexOf('bun run scripts/assignment-type-release-gate.ts --require-data');
     const webStartIndex = deployScript.indexOf('start_or_refresh_web');
+
+    expect(deployScript).toContain('PREVIEW_DATA_MODE');
+    expect(deployScript).toContain('DATA_MODE');
+    expect(deployScript).toContain('reset_seed_preview_database');
+    expect(deployScript).toContain('dropdb -U postgres --force --if-exists "$DATABASE_NAME"');
+    expect(deployScript).toContain('createdb -U postgres "$DATABASE_NAME"');
+    expect(deployScript).toContain('bun run seed-local-dev');
+    expect(deployScript).toContain('PREVIEW_DEV_LOGIN_EMAIL');
+    expect(deployScript).toContain('backfill-class-art-key.ts');
+    expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
+    expect(deployScript).not.toContain('seed-overlay.ts');
+    expect(resetIndex).toBeGreaterThan(-1);
+    expect(dropIndex).toBeGreaterThan(resetIndex);
+    expect(generateIndex).toBeGreaterThan(-1);
+    expect(migrateIndex).toBeGreaterThan(generateIndex);
+    expect(backfillIndex).toBeGreaterThan(migrateIndex);
+    expect(seedIndex).toBeGreaterThan(backfillIndex);
+    expect(releaseGateIndex).toBeGreaterThan(seedIndex);
+    expect(webStartIndex).toBeGreaterThan(releaseGateIndex);
+  });
+
+  test('preview deploy still supports opt-in production dump template clones', () => {
+    const deployScript = readRepoFile('scripts/preview/deploy.sh');
 
     expect(deployScript).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(deployScript).toContain('stream_preview_dump()');
@@ -240,21 +264,8 @@ describe('PR preview deployment contract', () => {
     expect(deployScript).toContain('Restoring production dump into template database');
     expect(deployScript).toContain('DATABASE_NAME="yawp_pr_${PR_NUMBER}"');
     expect(deployScript).toContain('Preview database $DATABASE_NAME already exists; skipping clone.');
-    expect(deployScript).toContain('backfill-class-art-key.ts');
-    expect(deployScript).toContain('assignment-type-release-gate.ts --require-data');
-    expect(deployScript).not.toContain('seed-overlay.ts');
-    expect(templateIndex).toBeGreaterThan(-1);
-    expect(cloneIndex).toBeGreaterThan(-1);
-    expect(generateIndex).toBeGreaterThan(-1);
-    expect(migrateIndex).toBeGreaterThan(-1);
-    expect(releaseGateIndex).toBeGreaterThan(-1);
-    expect(webStartIndex).toBeGreaterThan(-1);
-    expect(templateIndex).toBeLessThan(cloneIndex);
-    expect(cloneIndex).toBeLessThan(generateIndex);
-    expect(generateIndex).toBeLessThan(migrateIndex);
-    expect(migrateIndex).toBeLessThan(backfillIndex);
-    expect(backfillIndex).toBeLessThan(releaseGateIndex);
-    expect(releaseGateIndex).toBeLessThan(webStartIndex);
+    expect(deployScript).toContain('production-dump)');
+    expect(deployScript).toContain('createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"');
   });
 
   test('preview deploy caches tooling work but still refreshes web containers', () => {
@@ -288,18 +299,20 @@ describe('PR preview deployment contract', () => {
     expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
   });
 
-  test('preview workflow passes dump location and login credentials to remote deploy', () => {
+  test('preview workflow passes seeded preview mode to remote deploy', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
+    expect(previewWorkflow).toContain("PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}");
+    expect(previewWorkflow).toContain("PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}");
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}');
-    expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_EMAIL');
-    expect(previewWorkflow).toContain('secrets.PREVIEW_LOGIN_PASSWORD');
     expect(previewWorkflow).toContain('shell_quote()');
+    expect(previewWorkflow).toContain('PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")');
+    expect(previewWorkflow).toContain('PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")');
-    expect(previewWorkflow).toContain('PREVIEW_LOGIN_EMAIL=$(shell_quote "$PREVIEW_LOGIN_EMAIL")');
-    expect(previewWorkflow).toContain('PREVIEW_LOGIN_PASSWORD=$(shell_quote "$PREVIEW_LOGIN_PASSWORD")');
+    expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_EMAIL"');
+    expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_PASSWORD"');
   });
 
   test('preview workflow does not require runner AWS credentials for dump restores', () => {
@@ -387,8 +400,12 @@ describe('PR preview deployment contract', () => {
     expect(configScript).toContain('PREVIEW_HOST');
     expect(configScript).toContain('PREVIEW_DOMAIN');
     expect(configScript).toContain('PREVIEW_ROOT');
+    expect(configScript).toContain('PREVIEW_DATA_MODE');
+    expect(configScript).toContain('PREVIEW_DEV_LOGIN_EMAIL');
     expect(configScript).toContain('PREVIEW_SSH_PRIVATE_KEY');
     expect(configScript).not.toContain(`${deprecatedPreviewEnvPrefix}_`);
+    expect(configScript).toContain('gh_var PREVIEW_DATA_MODE');
+    expect(configScript).toContain('gh_var PREVIEW_DEV_LOGIN_EMAIL');
     expect(configScript).toContain('gh_var PREVIEW_DB_DUMP_S3_URI');
     expect(configScript).toContain('gh_sec PREVIEW_DB_PASSWORD');
     expect(configScript).toContain('gh_sec PREVIEW_LOGIN_EMAIL');
@@ -421,13 +438,13 @@ describe('PR preview deployment contract', () => {
     }
   });
 
-  test('preview comment describes production data and login smoke', () => {
+  test('preview comment describes seeded data and dev-login smoke', () => {
     const previewWorkflow = readRepoFile('.github/workflows/preview-environments.yml');
 
     expect(previewWorkflow).toContain(
-      '- **Data:** cloned from the shared production-dump template into an isolated PR database',
+      '- **Data:** seeded local-dev data in an isolated PR database',
     );
-    expect(previewWorkflow).toContain('- **Smoke:** healthcheck + login');
+    expect(previewWorkflow).toContain('- **Smoke:** healthcheck + dev login');
     expect(previewWorkflow).not.toContain('seed overlay');
   });
 });

@@ -36,6 +36,14 @@ function requireRuntime(value) {
   return runtime;
 }
 
+function requireDataMode(value) {
+  const dataMode = String(value || 'seed').trim().toLowerCase();
+  if (!['seed', 'production-dump'].includes(dataMode)) {
+    throw new Error('PREVIEW_DATA_MODE must be seed or production-dump');
+  }
+  return dataMode;
+}
+
 export function buildPreviewEnv({
   prNumber = process.env.PR_NUMBER,
   domain = process.env.PREVIEW_DOMAIN,
@@ -44,6 +52,7 @@ export function buildPreviewEnv({
   directPort = process.env.PREVIEW_DIRECT_PORT,
   tls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
+  dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
   databaseHost = process.env.PREVIEW_DB_HOST || DEFAULT_DATABASE_HOST,
   databaseUser = process.env.PREVIEW_DB_USER || DEFAULT_DATABASE_USER,
   databasePassword =
@@ -56,6 +65,7 @@ export function buildPreviewEnv({
   const safePrNumber = requirePositiveInteger(prNumber);
   const safeDomain = requireDomain(domain);
   const safeRuntime = requireRuntime(runtime);
+  const safeDataMode = requireDataMode(dataMode);
   const safeRoot = trimSlashes(String(root || DEFAULT_ROOT));
   const slug = `pr-${safePrNumber}`;
   const composeProject = `yawp-${slug}`;
@@ -91,6 +101,7 @@ export function buildPreviewEnv({
     directPort: directPort ? String(directPort) : '',
     tls,
     runtime: safeRuntime,
+    dataMode: safeDataMode,
     databaseUrl: resolvedDatabaseUrl,
   };
 }

@@ -7,6 +7,8 @@ export SOURCE_DIR
 
 source "$SCRIPT_DIR/tooling-artifacts.sh"
 
+export PREVIEW_DATA_MODE="${PREVIEW_DATA_MODE:-seed}"
+export PREVIEW_DEV_LOGIN_EMAIL="${PREVIEW_DEV_LOGIN_EMAIL:-dev.teacher@yawp.local}"
 eval "$(node "$SCRIPT_DIR/preview-env.mjs" --shell)"
 
 DATABASE_NAME="yawp_pr_${PR_NUMBER}"
@@ -138,7 +140,7 @@ ensure_template_database() {
   ) 9>"$lock_file"
 }
 
-ensure_preview_database() {
+ensure_production_dump_preview_database() {
   validate_database_name "$DATABASE_NAME"
   if database_exists "$DATABASE_NAME"; then
     echo "Preview database $DATABASE_NAME already exists; skipping clone."
@@ -147,6 +149,31 @@ ensure_preview_database() {
 
   docker exec "$POSTGRES_CONTAINER" createdb -U postgres -T "$TEMPLATE_DB" "$DATABASE_NAME"
   DATABASE_CREATED=1
+}
+
+reset_seed_preview_database() {
+  validate_database_name "$DATABASE_NAME"
+  echo "Resetting preview database $DATABASE_NAME for seeded local-dev data..."
+  "${compose[@]}" down --remove-orphans >/dev/null 2>&1 || true
+  docker exec "$POSTGRES_CONTAINER" dropdb -U postgres --force --if-exists "$DATABASE_NAME"
+  docker exec "$POSTGRES_CONTAINER" createdb -U postgres "$DATABASE_NAME"
+  DATABASE_CREATED=1
+}
+
+ensure_preview_database() {
+  case "$DATA_MODE" in
+    seed)
+      reset_seed_preview_database
+      ;;
+    production-dump)
+      ensure_template_database
+      ensure_production_dump_preview_database
+      ;;
+    *)
+      echo "Unsupported PREVIEW_DATA_MODE: $DATA_MODE" >&2
+      exit 1
+      ;;
+  esac
 }
 
 sha256_file() {
@@ -179,6 +206,9 @@ compute_tooling_fingerprint() {
         packages/prisma/prisma.config.ts \
         packages/prisma/scripts/assignment-type-release-gate.ts \
         packages/prisma/scripts/backfill-class-art-key.ts \
+        packages/prisma/scripts/seed-local-dev.ts \
+        packages/prisma/scripts/local-dev/dev-personas.ts \
+        packages/prisma/scripts/local-dev/seed-synthetic-data.ts \
         scripts/preview/deploy.sh
       do
         if [[ -f "$file" ]]; then
@@ -225,7 +255,17 @@ run_tooling_if_needed() {
     "${compose[@]}" pull --quiet toolbox web || true
   fi
 
-  "${compose[@]}" run --rm toolbox bash -lc 'bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
+  local tooling_command
+  case "$DATA_MODE" in
+    seed)
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run seed-local-dev && bun run scripts/assignment-type-release-gate.ts --require-data'
+      ;;
+    production-dump)
+      tooling_command='bun install --ignore-scripts && bun prisma generate && cd packages/prisma && bun prisma migrate deploy && bun run scripts/backfill-class-art-key.ts && bun run scripts/assignment-type-release-gate.ts --require-data'
+      ;;
+  esac
+
+  "${compose[@]}" run --rm toolbox bash -lc "$tooling_command"
   printf '%s\n' "$fingerprint" > "$TOOLING_FINGERPRINT_FILE"
 }
 
@@ -240,7 +280,6 @@ refresh_web_container_if_needed() {
 }
 
 ensure_shared_postgres
-ensure_template_database
 ensure_preview_database
 run_tooling_if_needed
 start_or_refresh_web() {
@@ -257,7 +296,7 @@ fi
 
 for attempt in $(seq 1 90); do
   if curl -fsS --connect-timeout 1 --max-time 2 "$health_url" >/dev/null; then
-    PREVIEW_BASE_URL="$login_url" node "$SCRIPT_DIR/smoke-login.mjs"
+    PREVIEW_BASE_URL="$login_url" PREVIEW_DATA_MODE="$DATA_MODE" node "$SCRIPT_DIR/smoke-login.mjs"
     end_ms="$(date +%s%3N)"
     elapsed_ms="$((end_ms - start_ms))"
     echo "PREVIEW_URL=$URL"

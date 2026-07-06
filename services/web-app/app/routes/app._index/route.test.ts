@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findMany: mock() },
@@ -24,6 +24,8 @@ mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
+  getSessionExpirationDate: () => new Date('2030-01-01T00:00:00.000Z'),
+  sessionKey: 'sessionId',
 }));
 mock.module('~/utils/teacher-class-card-stats.server', () => ({
   getTeacherClassCardStats,
@@ -36,15 +38,22 @@ mock.module('~/utils/assignment-type-access.server', () => ({
 }));
 mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
+  studentPreviewModeKey: 'studentPreviewMode',
+  studentPreviewOrgIdKey: 'studentPreviewOrgId',
   shouldUseStudentExperience: (
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
 mock.module('~/utils/feature-gates.server', () => ({
+  FEATURE_KEYS: { WRITING_PRACTICE: 'writing_practice' },
   isWritingPracticeEnabledForOrganization,
 }));
 
 const { loader } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+});
 
 describe('app index loader assignments', () => {
   beforeEach(() => {
