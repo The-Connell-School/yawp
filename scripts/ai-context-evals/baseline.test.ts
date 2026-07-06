@@ -37,6 +37,23 @@ describe('AI context eval production baseline summary', () => {
     },
     {
       id: 'llm-3',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      inputTokens: 2200,
+      outputTokens: 210,
+      metadata: null,
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Get started! Begin your message by introducing me. Pretend I am a person you are talking to.',
+        },
+        { role: 'user', content: 'This is my draft.' },
+        { role: 'user', content: 'Can you help?' },
+      ],
+    },
+    {
+      id: 'llm-4',
       model: 'gpt-4o-mini',
       provider: 'openai',
       inputTokens: 999,
@@ -48,7 +65,7 @@ describe('AI context eval production baseline summary', () => {
       },
     },
     {
-      id: 'llm-4',
+      id: 'llm-5',
       model: 'claude-sonnet-4-6',
       provider: 'anthropic',
       inputTokens: 800,
@@ -63,8 +80,17 @@ describe('AI context eval production baseline summary', () => {
   test('normalizes only successful Anthropic tutor logs', () => {
     const rows = normalizeTutorLogRows(rawRows);
 
-    expect(rows).toHaveLength(2);
-    expect(rows.map((row) => row.cmsId)).toEqual(['cms-a', 'cms-a']);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.cmsId)).toEqual(['cms-a', 'cms-a', null]);
+    expect(rows.map((row) => row.source)).toEqual([
+      'tagged-metadata',
+      'tagged-metadata',
+      'legacy-tutor-marker',
+    ]);
+    expect(rows[2]).toMatchObject({
+      messageCount: 3,
+      isFirstTurn: true,
+    });
   });
 
   test('summarizes average turns, document size, and cost per module session', () => {
@@ -73,12 +99,16 @@ describe('AI context eval production baseline summary', () => {
       pricing: CLAUDE_PRICING['claude-sonnet-4-6'],
     });
 
-    expect(summary.totalCalls).toBe(2);
-    expect(summary.totalModuleSessions).toBe(1);
-    expect(summary.averageTurnsPerModuleSession).toBe(2);
+    expect(summary.totalCalls).toBe(3);
+    expect(summary.taggedTutorCalls).toBe(2);
+    expect(summary.legacyTutorMarkerCalls).toBe(1);
+    expect(summary.totalModuleSessions).toBe(2);
+    expect(summary.averageTurnsPerModuleSession).toBe(1.5);
     expect(summary.averageDocumentWordsPerCall).toBe(520);
-    expect(summary.averageInputTokensPerCall).toBe(1300);
-    expect(summary.averageOutputTokensPerCall).toBe(160);
+    expect(summary.documentSizedCalls).toBe(2);
+    expect(summary.averageMessagesPerCall).toBe(3);
+    expect(summary.averageInputTokensPerCall).toBe(1600);
+    expect(summary.averageOutputTokensPerCall).toBe(177);
     expect(summary.averageCostUsdPerModuleSession).toBeGreaterThan(0);
   });
 
@@ -93,7 +123,9 @@ describe('AI context eval production baseline summary', () => {
 
     expect(report).toContain('Tutor Baseline');
     expect(report).toContain('sample rows');
-    expect(report).toContain('Average turns/module: 2.00');
+    expect(report).toContain('Tagged tutor calls: 2');
+    expect(report).toContain('Legacy tutor-marker calls: 1');
+    expect(report).toContain('Average turns/module: 1.50');
     expect(report).toContain('Average document words/call: 520');
   });
 
@@ -103,6 +135,7 @@ describe('AI context eval production baseline summary', () => {
     expect(query.text).toContain('FROM "LlmLog"');
     expect(query.text).toContain("metadata->>'feature' = 'tutor'");
     expect(query.text).toContain("metadata->>'kind' = 'assignment-module-tutor'");
+    expect(query.text).toContain('messages::text ILIKE');
     expect(query.values).toEqual([60, 250]);
   });
 });

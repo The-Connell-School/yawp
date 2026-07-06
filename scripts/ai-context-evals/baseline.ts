@@ -8,23 +8,31 @@ type RawLogRow = {
   outputTokens?: unknown;
   error?: unknown;
   metadata?: unknown;
+  messages?: unknown;
 };
 
 export type TutorBaselineRow = {
   id: string;
   model: string;
   provider: 'anthropic';
-  cmsId: string;
+  cmsId: string | null;
   inputTokens: number;
   outputTokens: number;
   documentTextLength: number | null;
+  messageCount: number | null;
+  isFirstTurn: boolean;
+  source: 'tagged-metadata' | 'legacy-tutor-marker';
 };
 
 export type TutorBaselineSummary = {
   totalCalls: number;
+  taggedTutorCalls: number;
+  legacyTutorMarkerCalls: number;
   totalModuleSessions: number;
   averageTurnsPerModuleSession: number;
+  documentSizedCalls: number;
   averageDocumentWordsPerCall: number;
+  averageMessagesPerCall: number;
   averageInputTokensPerCall: number;
   averageOutputTokensPerCall: number;
   averageCostUsdPerCall: number;
@@ -47,13 +55,19 @@ export function buildTutorBaselineQuery({
         "inputTokens",
         "outputTokens",
         error,
-        metadata
+        metadata,
+        messages
       FROM "LlmLog"
       WHERE "createdAt" >= now() - ($1::int * interval '1 day')
         AND provider = 'anthropic'
         AND error IS NULL
-        AND metadata->>'feature' = 'tutor'
-        AND metadata->>'kind' = 'assignment-module-tutor'
+        AND (
+          (
+            metadata->>'feature' = 'tutor'
+            AND metadata->>'kind' = 'assignment-module-tutor'
+          )
+          OR messages::text ILIKE '%Get started! Begin your message%'
+        )
       ORDER BY "createdAt" DESC
       LIMIT $2
     `,
@@ -73,22 +87,40 @@ function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value : null;
 }
 
+function messageCount(messages: unknown) {
+  return Array.isArray(messages) ? messages.length : null;
+}
+
+function hasLegacyTutorMarker(messages: unknown) {
+  return JSON.stringify(messages ?? '').includes(
+    'Get started! Begin your message'
+  );
+}
+
 export function normalizeTutorLogRows(rows: RawLogRow[]): TutorBaselineRow[] {
   return rows.flatMap((row) => {
     if (row.provider !== 'anthropic') return [];
     if (row.error) return [];
-    if (!isRecord(row.metadata)) return [];
-    if (row.metadata.feature !== 'tutor') return [];
-    if (row.metadata.kind !== 'assignment-module-tutor') return [];
+    const metadata = isRecord(row.metadata) ? row.metadata : {};
+    const isTaggedTutor =
+      metadata.feature === 'tutor' &&
+      metadata.kind === 'assignment-module-tutor';
+    const isLegacyTutor = !isTaggedTutor && hasLegacyTutorMarker(row.messages);
+    if (!isTaggedTutor && !isLegacyTutor) return [];
 
     const inputTokens = numberValue(row.inputTokens);
     const outputTokens = numberValue(row.outputTokens);
     const model = stringValue(row.model);
-    const cmsId = stringValue(row.metadata.cmsId);
+    const cmsId = stringValue(metadata.cmsId);
 
-    if (inputTokens == null || outputTokens == null || !model || !cmsId) {
+    if (inputTokens == null || outputTokens == null || !model) {
       return [];
     }
+
+    const source = isTaggedTutor
+      ? ('tagged-metadata' as const)
+      : ('legacy-tutor-marker' as const);
+    const count = messageCount(row.messages);
 
     return [
       {
@@ -98,7 +130,10 @@ export function normalizeTutorLogRows(rows: RawLogRow[]): TutorBaselineRow[] {
         cmsId,
         inputTokens,
         outputTokens,
-        documentTextLength: numberValue(row.metadata.documentTextLength),
+        documentTextLength: numberValue(metadata.documentTextLength),
+        messageCount: count,
+        isFirstTurn: source === 'legacy-tutor-marker' && count === 3,
+        source,
       },
     ];
   });
@@ -123,8 +158,18 @@ export function summarizeTutorBaseline({
 }): TutorBaselineSummary {
   const sessions = new Map<string, TutorBaselineRow[]>();
   for (const row of rows) {
-    sessions.set(row.cmsId, [...(sessions.get(row.cmsId) ?? []), row]);
+    if (row.source === 'tagged-metadata' && row.cmsId) {
+      sessions.set(row.cmsId, [...(sessions.get(row.cmsId) ?? []), row]);
+    }
   }
+  const legacySessionCount = rows.filter((row) => row.isFirstTurn).length;
+  const totalModuleSessions = sessions.size + legacySessionCount;
+  const documentWordEstimates = rows
+    .map((row) => estimateDocumentWordsFromChars(row.documentTextLength))
+    .filter((value) => value > 0);
+  const messageCounts = rows.flatMap((row) =>
+    row.messageCount == null ? [] : [row.messageCount]
+  );
 
   const perCallCosts = rows.map((row) =>
     estimateUsd({
@@ -148,14 +193,17 @@ export function summarizeTutorBaseline({
 
   return {
     totalCalls: rows.length,
-    totalModuleSessions: sessions.size,
+    taggedTutorCalls: rows.filter((row) => row.source === 'tagged-metadata')
+      .length,
+    legacyTutorMarkerCalls: rows.filter(
+      (row) => row.source === 'legacy-tutor-marker'
+    ).length,
+    totalModuleSessions,
     averageTurnsPerModuleSession:
-      sessions.size === 0 ? 0 : rows.length / sessions.size,
-    averageDocumentWordsPerCall: Math.round(
-      average(
-        rows.map((row) => estimateDocumentWordsFromChars(row.documentTextLength))
-      )
-    ),
+      totalModuleSessions === 0 ? 0 : rows.length / totalModuleSessions,
+    documentSizedCalls: documentWordEstimates.length,
+    averageDocumentWordsPerCall: Math.round(average(documentWordEstimates)),
+    averageMessagesPerCall: average(messageCounts),
     averageInputTokensPerCall: Math.round(
       average(rows.map((row) => row.inputTokens))
     ),
@@ -179,9 +227,13 @@ export function buildBaselineReport({
     '',
     `Source: ${sourceLabel}`,
     `Tutor calls: ${summary.totalCalls}`,
+    `Tagged tutor calls: ${summary.taggedTutorCalls}`,
+    `Legacy tutor-marker calls: ${summary.legacyTutorMarkerCalls}`,
     `Module sessions: ${summary.totalModuleSessions}`,
     `Average turns/module: ${summary.averageTurnsPerModuleSession.toFixed(2)}`,
+    `Document-sized calls: ${summary.documentSizedCalls}`,
     `Average document words/call: ${summary.averageDocumentWordsPerCall}`,
+    `Average messages/call: ${summary.averageMessagesPerCall.toFixed(2)}`,
     `Average input tokens/call: ${summary.averageInputTokensPerCall}`,
     `Average output tokens/call: ${summary.averageOutputTokensPerCall}`,
     `Average cost/call: ${formatUsd(summary.averageCostUsdPerCall)}`,
