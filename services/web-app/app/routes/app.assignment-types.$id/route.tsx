@@ -489,6 +489,13 @@ export default function AppAssignmentTypesIdRoute() {
     title: string;
     prompt: string;
     essayType: string;
+    sources?: Array<{
+      externalKey: string;
+      title: string;
+      attribution: string;
+      body: string;
+      position: number;
+    }>;
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =
