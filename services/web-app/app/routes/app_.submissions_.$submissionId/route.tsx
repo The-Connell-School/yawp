@@ -127,6 +127,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           id: true,
           title: true,
           assignmentTypeId: true,
+          isAiSandbox: true,
           assignment: {
             select: {
               submitForGrade: true,
@@ -188,8 +189,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  // Determine if viewer is the owner (student) or a teacher
-  const isOwner = submission.document.membership.id === profile.id;
+  const isAdmin = user?.isAdmin ?? false;
+
+  // Determine if viewer is the owner (student) or a teacher. Admin-owned
+  // sandbox submissions should behave like teacher grading, not student review.
+  const isOwner =
+    submission.document.membership.id === profile.id &&
+    !(isAdmin && submission.document.isAiSandbox);
 
   const isTeacher =
     !isOwner &&
@@ -200,8 +206,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       submission.document.membership.classesAsStudent.some((klass) =>
         klass.teachers.some((teacher) => teacher.id === profile.id)
       ));
-
-  const isAdmin = user?.isAdmin ?? false;
 
   if (isOwner && editParam) {
     const next = new URL(request.url);
@@ -833,6 +837,24 @@ export default function SubmissionRoute() {
           ) : null}
         </div>
       </nav>
+
+      {submission.document.isAiSandbox ? (
+        <div
+          className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+          data-testid="ai-sandbox-banner"
+          role="status"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>
+              <span className="font-semibold">Sandbox test.</span> This
+              submission is isolated from real student work.
+            </span>
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link to={exitTarget}>Back to assignment type</Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {isGradingOther && submission.archivedAt ? (
         <div

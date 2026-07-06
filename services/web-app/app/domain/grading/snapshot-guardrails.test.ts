@@ -33,6 +33,15 @@ describe('submission guardrails', () => {
     );
   });
 
+  test('documents and submissions can be marked as AI sandbox records', () => {
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+
+    expect(schema).toMatch(/model Document \{[\s\S]*isAiSandbox\s+Boolean\s+@default\(false\)/);
+    expect(schema).toMatch(/model Document \{[\s\S]*aiSandboxRunId\s+String\?\s+@unique/);
+    expect(schema).toMatch(/model Submission \{[\s\S]*isAiSandbox\s+Boolean\s+@default\(false\)/);
+    expect(schema).toMatch(/model Submission \{[\s\S]*aiSandboxRunId\s+String\?\s+@unique/);
+  });
+
   test('old Grade/DocumentSnapshot models are removed from schema', () => {
     const schema = fs.readFileSync(schemaPath, 'utf8');
 

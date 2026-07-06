@@ -51,6 +51,8 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
       html: true,
       text: true,
       title: true,
+      isAiSandbox: true,
+      aiSandboxRunId: true,
       revision: true,
       classAssignment: {
         select: {
@@ -132,6 +134,10 @@ const actionImpl = async ({ request }: ActionFunctionArgs) => {
             html,
             text,
             submittedAt: now,
+            isAiSandbox: document.isAiSandbox,
+            ...(document.aiSandboxRunId
+              ? { aiSandboxRunId: document.aiSandboxRunId }
+              : {}),
           },
           select: { id: true, title: true, submittedAt: true },
         });

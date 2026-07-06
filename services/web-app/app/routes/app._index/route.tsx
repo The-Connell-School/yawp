@@ -152,7 +152,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
         }),
     prisma.document.findMany({
       orderBy: { createdAt: 'desc' },
-      where: { membershipId: profile.id, deletedAt: null, archivedAt: null },
+      where: {
+        membershipId: profile.id,
+        deletedAt: null,
+        archivedAt: null,
+        isAiSandbox: false,
+      },
       include: {
         assignmentModuleSessions: {
           include: {
@@ -165,7 +170,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, isAiSandbox: false },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,
@@ -182,6 +187,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         membershipId: profile.id,
         deletedAt: null,
         archivedAt: { not: null },
+        isAiSandbox: false,
       },
       include: {
         assignmentModuleSessions: {
@@ -195,7 +201,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           orderBy: { assignmentModule: { position: 'desc' } },
         },
         submissions: {
-          where: { archivedAt: null },
+          where: { archivedAt: null, isAiSandbox: false },
           orderBy: { submittedAt: 'desc' },
           select: {
             id: true,

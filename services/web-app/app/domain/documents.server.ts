@@ -7,6 +7,11 @@ type CreateDocumentInput = {
   assignmentTypeId: string;
   assignmentId?: string | null;
   classAssignmentId?: string | null;
+  initialTitle?: string;
+  initialText?: string;
+  initialHtml?: string;
+  isAiSandbox?: boolean;
+  aiSandboxRunId?: string | null;
 };
 
 type CreatedDocument = {
@@ -91,9 +96,13 @@ export async function createDocumentForAssignmentType(
   const document = await prisma.document.create({
     data: {
       membershipId: input.membershipId,
-      text: '',
-      html: '',
-      title: '',
+      text: input.initialText ?? '',
+      html: input.initialHtml ?? '',
+      title: input.initialTitle ?? '',
+      isAiSandbox: input.isAiSandbox ?? false,
+      ...(input.aiSandboxRunId
+        ? { aiSandboxRunId: input.aiSandboxRunId }
+        : {}),
       assignmentTypeId: input.assignmentTypeId,
       ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
       ...(input.classAssignmentId

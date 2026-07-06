@@ -201,6 +201,8 @@ model AssignmentTypeAiEvaluationRun {
   sampleInput               String
   promptSnapshotJson        Json
   resultJson                Json?
+  sandboxDocument           Document?                @relation("AiSandboxDocument")
+  sandboxSubmission         Submission?              @relation("AiSandboxSubmission")
 
   @@index([assignmentTypeId, createdAt(sort: Desc)])
   @@index([assignmentTypeAiVersionId])
@@ -278,23 +280,26 @@ model AssignmentModuleSessionMessage {
 }
 
 model Document {
-  id                       String                    @id @default(cuid())
-  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
-  updatedAt                DateTime                  @default(now()) @db.Timestamptz(6)
-  revision                 Int                       @default(0)
-  deletedAt                DateTime?                 @db.Timestamptz(6)
-  archivedAt               DateTime?                 @db.Timestamptz(6)
-  title                    String                    @default("Untitled")
+  id                       String                         @id @default(cuid())
+  createdAt                DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                       @default(now()) @db.Timestamptz(6)
+  revision                 Int                            @default(0)
+  deletedAt                DateTime?                      @db.Timestamptz(6)
+  archivedAt               DateTime?                      @db.Timestamptz(6)
+  title                    String                         @default("Untitled")
   text                     String?
   html                     String?
-  membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  isAiSandbox              Boolean                        @default(false)
+  aiSandboxRunId           String?                        @unique
+  aiSandboxRun             AssignmentTypeAiEvaluationRun? @relation("AiSandboxDocument", fields: [aiSandboxRunId], references: [id], onDelete: SetNull)
+  membership               OrgMembership                  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   membershipId             String
   assignmentTypeId         String
-  assignmentType           AssignmentType            @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
+  assignmentType           AssignmentType                 @relation(fields: [assignmentTypeId], references: [id], onDelete: Restrict)
   assignmentId             String?
-  assignment               Assignment?               @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  assignment               Assignment?                    @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   classAssignmentId        String?
-  classAssignment          ClassAssignment?          @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
+  classAssignment          ClassAssignment?               @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
   assignmentModuleSessions AssignmentModuleSession[]
   comments                 DocumentComment[]
   writeJournals            DocumentWriteJournal[]
@@ -306,6 +311,7 @@ model Document {
   @@index([classAssignmentId])
   @@index([assignmentTypeId])
   @@index([membershipId])
+  @@index([isAiSandbox])
 }
 
 model DocumentClassForensic {
@@ -673,6 +679,9 @@ model Submission {
   releasedAt           DateTime?                       @db.Timestamptz(6)
   /// When set, hidden from the student's active submission list (teachers unaffected).
   archivedAt           DateTime?                       @db.Timestamptz(6)
+  isAiSandbox          Boolean                         @default(false)
+  aiSandboxRunId       String?                         @unique
+  aiSandboxRun         AssignmentTypeAiEvaluationRun?  @relation("AiSandboxSubmission", fields: [aiSandboxRunId], references: [id], onDelete: SetNull)
   documentId           String
   document             Document                        @relation(fields: [documentId], references: [id], onDelete: Restrict)
   comments             SubmissionComment[]
@@ -682,6 +691,7 @@ model Submission {
   @@index([documentId, archivedAt])
   @@index([gradedByMembershipId])
   @@index([releasedAt])
+  @@index([isAiSandbox])
 }
 
 model SubmissionGradingAssistantRun {

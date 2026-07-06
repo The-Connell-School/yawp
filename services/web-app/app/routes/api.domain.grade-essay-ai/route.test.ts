@@ -84,6 +84,7 @@ function mockSubmission(overrides: Record<string, unknown> = {}) {
     document: {
       id: 'doc-1',
       membershipId: 'student-profile-1',
+      isAiSandbox: false,
       assignmentTypeId: 'assignment-type-legacy',
       assignmentType: {
         id: 'assignment-type-legacy',
@@ -432,6 +433,97 @@ describe('api.domain.grade-essay-ai', () => {
         }),
       })
     );
+  });
+
+  test('allows an admin to grade their own AI sandbox submission', async () => {
+    getGradingActor.mockResolvedValue({
+      membershipId: 'admin-membership-1',
+      teacherProfileId: null,
+      isTeacher: false,
+      isAdmin: true,
+    });
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'sandbox-sub-1',
+        document: {
+          id: 'sandbox-doc-1',
+          membershipId: 'admin-membership-1',
+          isAiSandbox: true,
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          classAssignment: null,
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Admin Sandbox' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'sandbox-sub-1');
+
+    const response = await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any);
+    const payload = (response as { data: Record<string, unknown> }).data;
+
+    expect(payload.success).toBe(true);
+    expect(prisma.submission.update).toHaveBeenCalled();
+  });
+
+  test('still blocks an admin from grading their own normal submission', async () => {
+    getGradingActor.mockResolvedValue({
+      membershipId: 'admin-membership-1',
+      teacherProfileId: null,
+      isTeacher: false,
+      isAdmin: true,
+    });
+    prisma.submission.findFirst.mockResolvedValue(
+      mockSubmission({
+        id: 'normal-sub-1',
+        document: {
+          id: 'normal-doc-1',
+          membershipId: 'admin-membership-1',
+          isAiSandbox: false,
+          assignmentTypeId: 'assignment-type-legacy',
+          assignmentType: {
+            id: 'assignment-type-legacy',
+            kind: null,
+            title: 'Critical Essay',
+          },
+          classAssignment: null,
+          membership: {
+            classesAsStudent: [],
+            user: { name: 'Admin Normal' },
+          },
+        },
+      })
+    );
+
+    const form = new FormData();
+    form.append('submissionId', 'normal-sub-1');
+
+    const response = (await action({
+      request: new Request('https://example.com/api/domain/grade-essay-ai', {
+        method: 'POST',
+        body: form,
+      }),
+    } as any)) as { data: Record<string, unknown>; init?: { status?: number } };
+
+    expect(response.init?.status).toBe(403);
+    expect(response.data).toEqual({
+      success: false,
+      message: 'You cannot run AI grading on your own submission.',
+    });
+    expect(prisma.submission.update).not.toHaveBeenCalled();
   });
 
   test('uses the updated rubric instructions in the grading prompt', async () => {

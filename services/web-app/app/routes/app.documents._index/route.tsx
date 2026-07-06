@@ -143,11 +143,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     forensicRows.map((row) => [row.documentId, row.oldClassId])
   );
 
-  const documentWhere: Prisma.DocumentWhereInput =
-    buildTeacherClassWorkDocumentWhere({
+  const documentWhere: Prisma.DocumentWhereInput = {
+    ...buildTeacherClassWorkDocumentWhere({
       classIds,
       legacyDocumentIds: forensicRows.map((row) => row.documentId),
-    });
+    }),
+    isAiSandbox: false,
+  };
 
   const allDocuments = await prisma.document.findMany({
     where: documentWhere,
@@ -191,6 +193,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
       },
       submissions: {
+        where: { isAiSandbox: false },
         orderBy: { submittedAt: 'desc' },
         select: {
           id: true,

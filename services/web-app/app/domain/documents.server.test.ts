@@ -110,6 +110,37 @@ describe('createDocumentForAssignmentType', () => {
     );
   });
 
+  test('can seed an AI sandbox document with initial text and run provenance', async () => {
+    prisma.assignmentModule.findMany.mockResolvedValue([
+      {
+        id: 'module-1',
+        instructions: [{ id: 'instruction-1', prompt: 'Prompt 1' }],
+      },
+    ]);
+
+    await createDocumentForAssignmentType({
+      membershipId: 'membership-1',
+      assignmentTypeId: 'assignment-type-1',
+      initialTitle: 'AI sandbox: Thesis Essay',
+      initialText: 'This draft has a specific claim.',
+      initialHtml: '<p>This draft has a specific claim.</p>',
+      isAiSandbox: true,
+      aiSandboxRunId: 'run-1',
+    });
+
+    expect(prisma.document.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'AI sandbox: Thesis Essay',
+          text: 'This draft has a specific claim.',
+          html: '<p>This draft has a specific claim.</p>',
+          isAiSandbox: true,
+          aiSandboxRunId: 'run-1',
+        }),
+      })
+    );
+  });
+
   test('does not create a document for an archived assignment type', async () => {
     prisma.assignmentType.findFirst.mockResolvedValue(null);
 

@@ -159,66 +159,88 @@ test.describe.serial('Admin assignment types', () => {
         grammar_e2e: 'supporting',
       });
 
-      await page.goto(
-        `/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`
+      const workbenchPath = `/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`;
+      await page.goto(workbenchPath);
+      await expect(
+        page.getByRole('heading', { name: `Test assignment type: ${title}` })
+      ).toBeVisible();
+      await expect(page.getByText('Sandbox launch')).toBeVisible();
+      await expect(page.getByText('Tutor test', { exact: true })).toHaveCount(
+        0
       );
       await expect(
-        page.getByRole('heading', { name: `Tutor test: ${title}` })
-      ).toBeVisible();
-      await expect(page.getByText('Assignment Prompt')).toBeVisible();
-      await expect(
-        page.getByTestId('ai-workbench-test-document')
-      ).toBeVisible();
-      await expect(page.getByTestId('ai-workbench-tutor-panel')).toBeVisible();
-      await expect(page.getByText('Tutor sandbox')).toHaveCount(0);
-      await expect(page.getByText('Grading sandbox')).toHaveCount(0);
-      await expect(page.getByText('Run a test')).toHaveCount(0);
-      await expect(
-        page.getByRole('link', { name: 'Grading test' })
-      ).toBeVisible();
-
-      await page.getByRole('link', { name: 'Grading test' }).click();
-      await expect(
-        page.getByRole('heading', { name: `Grading test: ${title}` })
-      ).toBeVisible();
-      await expect(page.getByText('Grade Summary')).toBeVisible();
-      await expect(
-        page.getByText('Grading Assistant Suggestions')
-      ).toBeVisible();
-      await expect(page.getByText('Thesis planning')).toBeVisible();
-      await expect(page.getByText('Thesis E2E', { exact: true })).toBeVisible();
+        page.getByText('Grading test', { exact: true })
+      ).toHaveCount(0);
       await expect(page.getByText('System prompt')).toHaveCount(0);
       await expect(page.getByText('User prompt')).toHaveCount(0);
 
-      await page.getByRole('link', { name: 'Tutor test' }).click();
       await page.getByLabel('Student name').fill('Ava');
       await page
         .getByLabel('Test document')
         .fill('This thesis draft makes a specific claim about the text.');
       await page.getByLabel('Strictness').selectOption('advanced');
-      await page
-        .getByLabel('Test name')
-        .fill('E2E deterministic workbench run');
-      await page.getByRole('button', { name: 'Run safe tutor test' }).click();
-      await page.waitForURL((url) => url.searchParams.has('runId'), {
-        timeout: 15_000,
-      });
-      const runUrl = new URL(page.url());
-      expect(runUrl.searchParams.get('studentFirstName')).toBe('Ava');
-      expect(runUrl.searchParams.get('strictnessLevel')).toBe('advanced');
-      expect(runUrl.searchParams.get('sampleEssay')).toContain(
-        'specific claim'
-      );
-      await expect(page.getByText('Tutor feedback')).toBeVisible();
-      await expect(page.getByText('Grading feedback')).toHaveCount(0);
-      await expect(
-        page.getByText('deterministic-workbench-fixture')
-      ).toHaveCount(0);
+      await page.getByLabel('Test name').fill('E2E real tutor sandbox');
+      await Promise.all([
+        page.waitForURL(
+          (url) =>
+            url.pathname.startsWith('/app/documents/') &&
+            url.searchParams.has('aiWorkbenchRunId'),
+          { timeout: 15_000 }
+        ),
+        page.getByRole('button', { name: 'Open tutor test' }).click(),
+      ]);
 
-      const run = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
+      const tutorUrl = new URL(page.url());
+      const tutorDocumentId = tutorUrl.pathname.split('/').pop();
+      expect(tutorDocumentId).toBeTruthy();
+      expect(tutorUrl.searchParams.get('exitTo')).toBe(workbenchPath);
+      await expect(page.getByTestId('ai-sandbox-banner')).toBeVisible();
+      await expect(page.getByTestId('document-title-input')).toHaveValue(
+        `AI sandbox: ${title}`
+      );
+      await expect(
+        page
+          .getByText('This thesis draft makes a specific claim about the text.')
+          .first()
+      ).toBeVisible();
+      await expect(page.getByText('Grade Summary')).toHaveCount(0);
+
+      await page.goto(workbenchPath);
+      await page.getByLabel('Student name').fill('Ava');
+      await page
+        .getByLabel('Test document')
+        .fill('This thesis draft makes a specific claim about the text.');
+      await page.getByLabel('Strictness').selectOption('advanced');
+      await page.getByLabel('Test name').fill('E2E real grading sandbox');
+      await Promise.all([
+        page.waitForURL(
+          (url) =>
+            url.pathname.startsWith('/app/submissions/') &&
+            url.searchParams.get('edit') === '1' &&
+            url.searchParams.has('aiWorkbenchRunId'),
+          { timeout: 15_000 }
+        ),
+        page.getByRole('button', { name: 'Open grading test' }).click(),
+      ]);
+
+      const gradingUrl = new URL(page.url());
+      const gradingSubmissionId = gradingUrl.pathname.split('/').pop();
+      expect(gradingSubmissionId).toBeTruthy();
+      expect(gradingUrl.searchParams.get('exitTo')).toBe(workbenchPath);
+      await expect(page.getByTestId('ai-sandbox-banner')).toBeVisible();
+      await expect(page.getByText('Grade Summary')).toBeVisible();
+      await expect(page.getByTestId('grading-assistant-generate')).toBeVisible();
+      await expect(page.getByText('Thesis E2E', { exact: true })).toBeVisible();
+      await expect(
+        page
+          .getByText('This thesis draft makes a specific claim about the text.')
+          .first()
+      ).toBeVisible();
+
+      const tutorRun = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
         where: {
           assignmentTypeId: assignmentTypeId!,
-          label: 'E2E deterministic workbench run',
+          label: 'E2E real tutor sandbox',
         },
         select: {
           agentKind: true,
@@ -227,19 +249,112 @@ test.describe.serial('Admin assignment types', () => {
           strictnessLevel: true,
           sampleInput: true,
           resultJson: true,
+          sandboxDocument: {
+            select: {
+              id: true,
+              title: true,
+              text: true,
+              isAiSandbox: true,
+            },
+          },
+          sandboxSubmission: {
+            select: {
+              id: true,
+            },
+          },
         },
       });
 
-      expect(run.agentKind).toBe('workbench-fixture');
-      expect(run.status).toBe('completed');
-      expect(run.studentFirstName).toBe('Ava');
-      expect(run.strictnessLevel).toBe('advanced');
-      expect(run.sampleInput).toContain('specific claim');
-      expect(run.resultJson).toMatchObject({
-        mode: 'deterministic-workbench-fixture',
+      expect(tutorRun.agentKind).toBe('workbench-real-page-sandbox');
+      expect(tutorRun.status).toBe('open');
+      expect(tutorRun.studentFirstName).toBe('Ava');
+      expect(tutorRun.strictnessLevel).toBe('advanced');
+      expect(tutorRun.sampleInput).toContain('specific claim');
+      expect(tutorRun.sandboxDocument).toMatchObject({
+        id: tutorDocumentId,
+        title: `AI sandbox: ${title}`,
+        isAiSandbox: true,
+      });
+      expect(tutorRun.sandboxSubmission).toBeNull();
+      expect(tutorRun.resultJson).toMatchObject({
+        mode: 'real-page-sandbox',
+        launchMode: 'tutor',
+        documentId: tutorDocumentId,
+        submissionId: null,
+      });
+
+      const gradingRun = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
+        where: {
+          assignmentTypeId: assignmentTypeId!,
+          label: 'E2E real grading sandbox',
+        },
+        select: {
+          agentKind: true,
+          status: true,
+          studentFirstName: true,
+          strictnessLevel: true,
+          sampleInput: true,
+          resultJson: true,
+          sandboxDocument: {
+            select: {
+              id: true,
+              title: true,
+              text: true,
+              isAiSandbox: true,
+            },
+          },
+          sandboxSubmission: {
+            select: {
+              id: true,
+              title: true,
+              text: true,
+              isAiSandbox: true,
+              document: {
+                select: {
+                  id: true,
+                  isAiSandbox: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      expect(gradingRun.agentKind).toBe('workbench-real-page-sandbox');
+      expect(gradingRun.status).toBe('open');
+      expect(gradingRun.studentFirstName).toBe('Ava');
+      expect(gradingRun.strictnessLevel).toBe('advanced');
+      expect(gradingRun.sampleInput).toContain('specific claim');
+      expect(gradingRun.sandboxDocument).toMatchObject({
+        title: `AI sandbox: ${title}`,
+        isAiSandbox: true,
+      });
+      expect(gradingRun.sandboxSubmission).toMatchObject({
+        id: gradingSubmissionId,
+        title: `AI sandbox: ${title}`,
+        isAiSandbox: true,
+        text: expect.stringContaining('specific claim'),
+        document: {
+          isAiSandbox: true,
+        },
+      });
+      expect(gradingRun.resultJson).toMatchObject({
+        mode: 'real-page-sandbox',
+        launchMode: 'grading',
+        documentId: gradingRun.sandboxDocument?.id,
+        submissionId: gradingSubmissionId,
       });
     } finally {
       if (assignmentTypeId) {
+        await prisma.submission.deleteMany({
+          where: { document: { assignmentTypeId } },
+        });
+        await prisma.document.deleteMany({
+          where: { assignmentTypeId },
+        });
+        await prisma.assignmentTypeAiEvaluationRun.deleteMany({
+          where: { assignmentTypeId },
+        });
         await prisma.assignmentModule.deleteMany({
           where: { assignmentTypeId },
         });

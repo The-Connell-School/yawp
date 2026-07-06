@@ -396,6 +396,7 @@ export async function action({ request }: ActionFunctionArgs) {
       select: {
         id: true,
         membershipId: true,
+        isAiSandbox: true,
         assignmentTypeId: true,
         assignmentType: {
           select: {
@@ -480,12 +481,14 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
-  ) {
+  const isOwnDocument = isGradingOwnDocument(
+    actor.membershipId,
+    submission.document.membershipId
+  );
+  const canGradeOwnSandboxDocument =
+    actor.isAdmin && submission.document.isAiSandbox;
+
+  if (isOwnDocument && !canGradeOwnSandboxDocument) {
     return dataResponse(
       {
         success: false,
