@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { isLocalDatabaseUrl } from './local-dev/connection';
 import { LOCAL_DEV_PERSONAS } from './local-dev/dev-personas';
 import { loadProdFidelityBundle } from './local-dev/import-prod-fidelity-fixtures';
@@ -53,6 +55,18 @@ describe('local dev seed fixtures', () => {
     const seedModule = await import('./local-dev/seed-synthetic-data');
 
     expect(typeof seedModule.seedSyntheticLocalDevData).toBe('function');
+  });
+
+  test('writes teacher training assignments as membership then training', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('VALUES (${teacherMembershipId}, ${training.id})');
+    expect(source).not.toContain(
+      'VALUES (${training.id}, ${teacherMembershipId})'
+    );
   });
 
   test('treats localhost database urls as local seed targets', () => {

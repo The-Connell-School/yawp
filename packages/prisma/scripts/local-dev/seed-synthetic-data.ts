@@ -253,7 +253,7 @@ export async function seedSyntheticLocalDevData(
     if (!training) break;
     await prisma.$executeRaw`
       INSERT INTO "_TeacherTrainingAssignments" ("A", "B")
-      VALUES (${training.id}, ${teacherMembershipId})
+      VALUES (${teacherMembershipId}, ${training.id})
       ON CONFLICT DO NOTHING
     `;
   }
