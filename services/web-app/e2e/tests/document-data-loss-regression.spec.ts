@@ -6,6 +6,50 @@ function uniqueText(prefix: string) {
 }
 
 test.describe.serial('Data Loss Regression Tests', () => {
+  test('tutor request payload includes an unsaved last-second editor change', async ({
+    page,
+    helpers,
+    signIn,
+    e2eContext,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+
+    await helpers.openDocument(e2eContext.editedDocumentId);
+    const editor = helpers.getEditor();
+    await editor.click();
+
+    const marker = uniqueText('fresh-tutor-payload');
+    await editor.pressSequentially(` ${marker}`, { delay: 20 });
+    await expect(editor).toContainText(marker);
+
+    let tutorPostBody = '';
+    await page.route('**/api/domain/tutor-response', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+
+      tutorPostBody = route.request().postData() ?? '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ cms: null }),
+      });
+    });
+
+    await page.getByTestId('tutor-chat-open').click();
+    await page
+      .getByTestId('tutor-chat-input')
+      .fill('Use my latest draft text.');
+    await page.getByTestId('tutor-chat-send').click();
+
+    await expect
+      .poll(() => tutorPostBody, { timeout: 15000 })
+      .toContain(marker);
+    expect(tutorPostBody).toContain('name="content"');
+    expect(tutorPostBody).toContain('Use my latest draft text.');
+  });
+
   test('content survives tutor interaction during unsaved edits', async ({
     page,
     helpers,
