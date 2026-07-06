@@ -429,7 +429,12 @@ describe('app_.documents_.$id AP History assignment rendering', () => {
     expect(html).toContain('Resolved, that');
     expect(html).toContain('Production tutor');
     expect(html).toContain('Production document editor');
-    expect(html).toContain('Production comments');
+    expect(html).toContain('Document resources');
+    expect(html).toContain('Resize document sidebar');
+    expect(html).toContain('Documents');
+    expect(html).toContain('Comments');
+    expect(html).not.toContain('Production comments');
+    expect(html).not.toContain('Your essay');
     expect(html).not.toContain('Cite [Doc');
     expect(html).not.toContain('Planning');
     expect(html).not.toContain('prototype');

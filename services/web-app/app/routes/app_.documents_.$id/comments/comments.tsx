@@ -15,6 +15,7 @@ type Props = {
   onCommentRemoved?: (commentId: string) => void;
   onResponseAdded?: (commentId: string, response: unknown) => void;
   autoFocusReplyCommentId?: string | null;
+  showCollapseControl?: boolean;
 };
 
 type ExtendedProps = Props & { className?: string };
@@ -22,11 +23,12 @@ type ExtendedProps = Props & { className?: string };
 export const Comments = ({
   comments,
   readOnly = false,
-  showCollapsibleHeader = true,
+  showCollapsibleHeader,
   className,
   onCommentRemoved,
   onResponseAdded,
   autoFocusReplyCommentId,
+  showCollapseControl,
 }: ExtendedProps) => {
   const user = useUser();
   const fetcher = useFetchers().find(
@@ -76,7 +78,9 @@ export const Comments = ({
           documentId: '',
         }
       : [];
-  const isExpanded = showCollapsibleHeader ? commentsExpanded : true;
+  const shouldShowCollapseControl =
+    showCollapseControl ?? showCollapsibleHeader ?? true;
+  const isExpanded = shouldShowCollapseControl ? commentsExpanded : true;
 
   return (
     <div
@@ -85,7 +89,7 @@ export const Comments = ({
         className
       )}
     >
-      {showCollapsibleHeader ? (
+      {shouldShowCollapseControl ? (
         <Button
           variant="ghost"
           size="sm"

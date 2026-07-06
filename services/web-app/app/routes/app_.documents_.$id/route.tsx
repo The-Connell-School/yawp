@@ -87,9 +87,16 @@ import {
 import { ApHistoryAssignmentPanel } from './ap-history-assignment-panel';
 import { DbqLayout } from './_components/dbq-layout';
 import { pickLatestReleasedSubmission } from '~/utils/document-link-target';
+import { ResizeHandle } from '~/components/dbq/resize-handle';
 
 const SUBMIT_EMPTY_TOOLTIP =
   "You can't submit an empty document. Add text first.";
+const DEFAULT_DOCUMENT_TUTOR_WIDTH = 320;
+const DEFAULT_DOCUMENT_SIDEBAR_WIDTH = 320;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
+}
 
 function escapePrintHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => {
@@ -469,6 +476,12 @@ export default function Route() {
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [localSubmissions, setLocalSubmissions] = useState<SubmissionRow[]>([]);
+  const [documentTutorWidth, setDocumentTutorWidth] = useState(
+    DEFAULT_DOCUMENT_TUTOR_WIDTH
+  );
+  const [documentSidebarWidth, setDocumentSidebarWidth] = useState(
+    DEFAULT_DOCUMENT_SIDEBAR_WIDTH
+  );
   const isMobile = ['base', 'sm', 'md'].includes(breakpoint ?? '');
   const [searchParams, setSearchParams] = useSearchParams();
   const fallbackCmsIdx = parseInt(searchParams.get('cmsIdx') ?? '0') || 0;
@@ -582,6 +595,11 @@ export default function Route() {
       ? allComments
       : activeComments
     : activeComments;
+  const apHistoryTimingLabel = apHistorySnapshot
+    ? apHistorySnapshot.timing.mode === 'timed'
+      ? `Timed · ${apHistorySnapshot.timing.durationMinutes}m`
+      : 'Untimed'
+    : null;
   const studentName = data.doc.membership.user.name?.trim() || 'Unknown student';
   const cannotSubmitEmpty = !editorSubmittable;
   const isSubmitting = submit.isSubmitting;
@@ -597,6 +615,14 @@ export default function Route() {
     params.set('tab', value);
     setSearchParams(params, { replace: true });
   };
+
+  const handleDocumentTutorDrag = useCallback((dx: number) => {
+    setDocumentTutorWidth((w) => clamp(w + dx, 240, 560));
+  }, []);
+
+  const handleDocumentSidebarDrag = useCallback((dx: number) => {
+    setDocumentSidebarWidth((w) => clamp(w - dx, 280, 520));
+  }, []);
 
   const handleTutorBeforeRespond = useCallback(async () => {
     if (auth.isLocked) return false;
@@ -845,6 +871,15 @@ export default function Route() {
             </p>
           ) : null}
           <div className="ml-auto flex items-center gap-4">
+            {apHistoryTimingLabel ? (
+              <div
+                data-testid="ap-history-timing-pill"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                <span>{apHistoryTimingLabel}</span>
+              </div>
+            ) : null}
             {!isViewingAsTeacher && (
               <>
                 {cannotSubmitEmpty && !isSubmitting ? (
@@ -981,6 +1016,7 @@ export default function Route() {
                   onCommentRemoved={commentsState.removeComment}
                   onResponseAdded={commentsState.addResponse}
                   autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                  showCollapseControl={false}
                 />
               }
             />
@@ -1003,48 +1039,95 @@ export default function Route() {
             <CommentsSelectionProvider>
               <div className="mx-auto flex min-h-0 flex-1 w-full max-w-screen-2xl overflow-hidden">
                 {isMobile && tab !== 'tutor' ? null : (
-                  <Tutor
-                    docId={data.doc.id}
-                    cms={(tutor.cms ?? data.currentCms) as any}
-                    cmsIdx={cmsIdx}
-                    nextCmId={data.nextCmId}
-                    hasPreviousCms={tutorHasPreviousCms}
-                    isSessionLocked={auth.isLocked}
-                    beforeRespond={handleTutorBeforeRespond}
-                    onCmsUpdate={tutor.updateCms}
-                    getCurrentDocumentText={() =>
-                      editorBridgeRef.current?.getContent().text ??
-                      data.doc.text ??
-                      ''
+                  <div
+                    style={
+                      isMobile
+                        ? undefined
+                        : { width: `${documentTutorWidth}px` }
                     }
-                  />
+                    className={isMobile ? 'contents' : 'min-h-0 shrink-0'}
+                  >
+                    <Tutor
+                      className={
+                        isMobile ? undefined : 'h-full border-r-0 md:w-full'
+                      }
+                      docId={data.doc.id}
+                      cms={(tutor.cms ?? data.currentCms) as any}
+                      cmsIdx={cmsIdx}
+                      nextCmId={data.nextCmId}
+                      hasPreviousCms={tutorHasPreviousCms}
+                      isSessionLocked={auth.isLocked}
+                      beforeRespond={handleTutorBeforeRespond}
+                      onCmsUpdate={tutor.updateCms}
+                      getCurrentDocumentText={() =>
+                        editorBridgeRef.current?.getContent().text ??
+                        data.doc.text ??
+                        ''
+                      }
+                    />
+                  </div>
                 )}
+                {!isMobile ? (
+                  <ResizeHandle
+                    onDrag={handleDocumentTutorDrag}
+                    ariaLabel="Resize tutor panel"
+                  />
+                ) : null}
                 {isMobile && tab !== 'editor' ? null : (
-                  <DocumentEditor
-                    docId={data.doc.id}
-                    assignment={editorAssignmentPrompt}
-                    serverHtml={editorServerHtml}
-                    serverText={editorServerText}
-                    serverUpdatedAt={data.doc.updatedAt}
-                    initialRevision={data.doc.revision}
-                    isEditable={isEditorEditable}
-                    onBridgeReady={(b) => {
-                      editorBridgeRef.current = b;
-                    }}
-                    onSyncStatusChange={setSyncStatus}
-                    onSubmittableContentChange={handleSubmittableContentChange}
-                    onCommentCreated={(c) => commentsState.addComment(c as any)}
-                  />
+                  <div
+                    className={
+                      isMobile ? 'contents' : 'min-h-0 flex-1 overflow-hidden'
+                    }
+                  >
+                    <DocumentEditor
+                      docId={data.doc.id}
+                      assignment={editorAssignmentPrompt}
+                      serverHtml={editorServerHtml}
+                      serverText={editorServerText}
+                      serverUpdatedAt={data.doc.updatedAt}
+                      initialRevision={data.doc.revision}
+                      isEditable={isEditorEditable}
+                      onBridgeReady={(b) => {
+                        editorBridgeRef.current = b;
+                      }}
+                      onSyncStatusChange={setSyncStatus}
+                      onSubmittableContentChange={
+                        handleSubmittableContentChange
+                      }
+                      onCommentCreated={(c) =>
+                        commentsState.addComment(c as any)
+                      }
+                    />
+                  </div>
                 )}
-                {isMobile && tab !== 'comments' ? null : (
-                  <Comments
-                    className="md:w-3/5"
-                    comments={visibleComments as any}
-                    readOnly={!isDocumentEditable}
-                    onCommentRemoved={commentsState.removeComment}
-                    onResponseAdded={commentsState.addResponse}
-                    autoFocusReplyCommentId={commentsState.pendingFocusCommentId}
+                {!isMobile ? (
+                  <ResizeHandle
+                    onDrag={handleDocumentSidebarDrag}
+                    ariaLabel="Resize document sidebar"
                   />
+                ) : null}
+                {isMobile && tab !== 'comments' ? null : (
+                  <div
+                    style={
+                      isMobile
+                        ? undefined
+                        : { width: `${documentSidebarWidth}px` }
+                    }
+                    className={isMobile ? 'contents' : 'min-h-0 shrink-0'}
+                  >
+                    <Comments
+                      className={
+                        isMobile ? undefined : 'h-full border-l md:w-full'
+                      }
+                      comments={visibleComments as any}
+                      readOnly={!isDocumentEditable}
+                      onCommentRemoved={commentsState.removeComment}
+                      onResponseAdded={commentsState.addResponse}
+                      autoFocusReplyCommentId={
+                        commentsState.pendingFocusCommentId
+                      }
+                    />
+                  </div>
                 )}
               </div>
             </CommentsSelectionProvider>

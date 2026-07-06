@@ -10,14 +10,21 @@ export function SourcesColumn({
   isMaximized,
   onToggleMaximize,
   allowSourceTools = true,
+  className,
 }: {
   state: DbqState;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   allowSourceTools?: boolean;
+  className?: string;
 }) {
-  const { prompt, annotations, addAnnotation, removeAnnotation, insertCitation } =
-    state;
+  const {
+    prompt,
+    annotations,
+    addAnnotation,
+    removeAnnotation,
+    insertCitation,
+  } = state;
   const [selectedId, setSelectedId] = useState(prompt.sources[0]?.id ?? '');
 
   const active =
@@ -33,7 +40,12 @@ export function SourcesColumn({
   }, [annotations]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-background">
+    <section
+      className={cn(
+        'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-background',
+        className
+      )}
+    >
       <header className="shrink-0 border-b">
         <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2">
           <h2 className="text-sm font-semibold">Documents</h2>
