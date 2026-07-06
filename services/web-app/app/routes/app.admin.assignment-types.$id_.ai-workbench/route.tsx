@@ -11,12 +11,18 @@ import {
   ArrowLeft,
   BotIcon,
   ClipboardCheckIcon,
+  HistoryIcon,
   SaveIcon,
-  Layers3Icon,
 } from 'lucide-react';
-import { AssignmentTypeAiHistorySection } from '~/components/admin/assignment-type-ai-history-section';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '~/components/ui/card';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -373,25 +379,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
   );
 }
 
-function PromptBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-medium">{label}</h3>
-      <pre className="max-h-[360px] overflow-auto rounded-md border bg-muted/30 p-4 text-xs leading-relaxed whitespace-pre-wrap">
-        {value || 'No prompt content.'}
-      </pre>
-    </div>
-  );
-}
-
-function instructionModeLabel(
-  mode: AssignmentTypeAiWorkbench['gradingPreview']['instructions']['mode']
-) {
-  if (mode === 'unified') return 'Unified instructions';
-  if (mode === 'preset') return 'Preset instructions';
-  return 'Split instructions';
-}
-
 function formatWorkbenchDate(value: Date | string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown date';
@@ -414,47 +401,150 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
-function nestedString(value: unknown, path: string[]) {
-  let current = value;
-  for (const segment of path) {
-    if (!isRecord(current)) return '';
-    current = current[segment];
-  }
-
-  return typeof current === 'string' ? current : '';
-}
-
 function stringValue(value: unknown, fallback = '') {
   return typeof value === 'string' ? value : fallback;
 }
 
-function tutorSnapshotPreviews(value: unknown) {
-  if (!isRecord(value) || !Array.isArray(value.tutorPreviews)) return [];
-
-  return value.tutorPreviews
-    .filter(isRecord)
-    .map((preview, index) => ({
-      key: `${preview.moduleId ?? 'module'}:${preview.instructionId ?? index}`,
-      label: [
-        typeof preview.moduleTitle === 'string' ? preview.moduleTitle : null,
-        typeof preview.instructionTitle === 'string'
-          ? preview.instructionTitle
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' - '),
-      systemPrompt:
-        typeof preview.systemPrompt === 'string' ? preview.systemPrompt : '',
-    }))
-    .filter((preview) => preview.systemPrompt);
+function numberValue(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }
 
-function InlineChangeList({ values }: { values: string[] }) {
-  if (values.length === 0) {
-    return <span className="text-muted-foreground">None</span>;
+function objectArray(value: unknown) {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function parseJsonObject(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function gradingCategoriesFrom(value: unknown) {
+  if (!isRecord(value)) return [];
+  return objectArray(value.categories).map((category) => ({
+    key: stringValue(category.key),
+    label: stringValue(category.label, stringValue(category.key, 'Category')),
+    score: numberValue(category.score),
+    comment: stringValue(category.comment),
+  }));
+}
+
+function tutorResponsesFrom(value: unknown) {
+  if (!isRecord(value)) return [];
+  return objectArray(value.responses).map((response, index) => ({
+    key: `${stringValue(response.moduleId, 'module')}:${stringValue(
+      response.instructionId,
+      String(index)
+    )}`,
+    moduleTitle: stringValue(response.moduleTitle, 'Tutor'),
+    instructionTitle: stringValue(response.instructionTitle, 'Response'),
+    response:
+      stringValue(response.response) || stringValue(response.rawResponse),
+  }));
+}
+
+function EvaluationResult({ result }: { result: unknown }) {
+  if (!isRecord(result)) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Run a test to see tutor and grading feedback here.
+      </p>
+    );
   }
 
-  return <span>{values.join(', ')}</span>;
+  const mode = stringValue(result.mode);
+  const gradingAssistant = isRecord(result.gradingAssistant)
+    ? result.gradingAssistant
+    : {};
+  const tutor = isRecord(result.tutor) ? result.tutor : {};
+  const rawGrading = stringValue(gradingAssistant.rawResponse);
+  const parsedLiveGrading = rawGrading ? parseJsonObject(rawGrading) : null;
+  const gradingSource =
+    parsedLiveGrading ?? (isRecord(gradingAssistant) ? gradingAssistant : {});
+  const gradingCategories = gradingCategoriesFrom(gradingSource);
+  const overallComment =
+    stringValue((gradingSource as Record<string, unknown>).overallComment) ||
+    rawGrading;
+  const tutorResponses = tutorResponsesFrom(tutor);
+
+  return (
+    <div className="space-y-6" aria-live="polite">
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <ClipboardCheckIcon className="size-4 text-muted-foreground" />
+          <h3 className="text-base font-semibold">Grading feedback</h3>
+          {mode === 'live-workbench-llm' ? (
+            <Badge variant="info-soft" size="sm">
+              Live AI
+            </Badge>
+          ) : (
+            <Badge variant="secondary" size="sm">
+              Safe test
+            </Badge>
+          )}
+        </div>
+        {overallComment ? (
+          <p className="rounded-md border bg-muted/20 p-3 text-sm leading-6 whitespace-pre-wrap">
+            {overallComment}
+          </p>
+        ) : null}
+        {gradingCategories.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            {gradingCategories.map((category) => (
+              <div key={category.key || category.label} className="rounded-md border p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium">{category.label}</p>
+                  {category.score === null ? null : (
+                    <Badge variant="outline" size="sm">
+                      {category.score}
+                    </Badge>
+                  )}
+                </div>
+                {category.comment ? (
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {category.comment}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <BotIcon className="size-4 text-muted-foreground" />
+          <h3 className="text-base font-semibold">Tutor feedback</h3>
+        </div>
+        {tutorResponses.length === 0 ? (
+          <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+            No tutor feedback was returned for this run.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {tutorResponses.map((response) => (
+              <div key={response.key} className="rounded-md border p-3">
+                <p className="text-sm font-medium">
+                  {response.moduleTitle} - {response.instructionTitle}
+                </p>
+                <p className="mt-2 text-sm leading-6 whitespace-pre-wrap text-muted-foreground">
+                  {response.response}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
 export default function AssignmentTypeAiWorkbenchRoute() {
@@ -475,10 +565,10 @@ export default function AssignmentTypeAiWorkbenchRoute() {
   const [sandboxStrictnessLevel, setSandboxStrictnessLevel] = useState(
     controls.strictnessLevel
   );
-  const selectedRunSnapshot = selectedRun?.promptSnapshotJson;
-  const selectedRunTutorPreviews = tutorSnapshotPreviews(selectedRunSnapshot);
   const selectedRunNotes = stringValue(selectedRun?.notes);
   const selectedRunResultJson = selectedRun?.resultJson;
+  const rubricCategories = workbench.assignmentType.rubricCategories;
+  const latestVersion = assignmentType.aiVersions[0] ?? null;
 
   useEffect(() => {
     setSandboxStudentFirstName(controls.studentFirstName);
@@ -493,7 +583,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
   return (
     <div className="mx-auto max-w-6xl px-3 py-5 pb-16 md:px-6">
       <header className="flex flex-wrap items-start justify-between gap-4 pb-6">
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4">
           <Button type="button" variant="outline" size="sm" asChild>
             <Link to={`/app/admin/assignment-types/${assignmentType.id}`}>
               <ArrowLeft className="mr-2 size-4 shrink-0" />
@@ -502,56 +592,48 @@ export default function AssignmentTypeAiWorkbenchRoute() {
           </Button>
           <div>
             <p className="text-sm font-medium text-muted-foreground">
-              Assignment type AI workbench
+              Assignment type test area
             </p>
             <h1 className="mt-1 text-3xl font-semibold">
-              {assignmentType.title}
+              Sandbox: {assignmentType.title}
             </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Try this assignment type with sample writing before using it with
+              students. Tests saved here do not create submissions, grades, or
+              tutor messages for real students.
+            </p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" size="sm">
-            Grading v{workbench.assignmentType.gradingAssistantVersion}
-          </Badge>
-          <Badge variant="outline" size="sm">
-            {workbench.assignmentType.source}
+            {selectedVersion
+              ? `Replaying v${selectedVersion.versionNumber}`
+              : 'Current version'}
           </Badge>
           <Badge variant="outline" size="sm">
             {workbench.assignmentType.rubricCategories.length} rubric categories
           </Badge>
-          {selectedVersion ? (
-            <Badge variant="info-soft" size="sm">
-              Replaying v{selectedVersion.versionNumber}
-            </Badge>
-          ) : null}
+          <Badge variant="outline" size="sm">
+            {workbench.tutorPreviews.length} tutor moments
+          </Badge>
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <section className="border-t pt-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <ClipboardCheckIcon className="size-4 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Grading assistant</h2>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary" size="sm">
-                  {workbench.gradingPreview.strictnessLabel}
-                </Badge>
-                <Badge variant="outline" size="sm">
-                  {workbench.gradingPreview.minScore}-
-                  {workbench.gradingPreview.maxScore}
-                </Badge>
-                <Badge variant="outline" size="sm">
-                  {instructionModeLabel(workbench.gradingPreview.instructions.mode)}
-                </Badge>
-              </div>
-            </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Test draft</CardTitle>
+              <CardDescription>
+                Paste a representative piece of writing and choose how strict the
+                grading assistant should be for this test.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
             <Form
               method="get"
               preventScrollReset
-              className="mb-5 grid gap-4 rounded-md border p-4 lg:grid-cols-[180px_minmax(0,1fr)_160px]"
+              className="grid gap-4 lg:grid-cols-[180px_minmax(0,1fr)_170px]"
             >
               {selectedVersion ? (
                 <input type="hidden" name="versionId" value={selectedVersion.id} />
@@ -568,7 +650,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="sampleEssay">Sample essay</Label>
+                <Label htmlFor="sampleEssay">Test draft</Label>
                 <Textarea
                   id="sampleEssay"
                   name="sampleEssay"
@@ -601,32 +683,29 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   ))}
                 </select>
                 <Button type="submit" size="sm" className="w-full">
-                  Update preview
+                  Update draft
                 </Button>
               </div>
             </Form>
-            <div className="grid gap-4 xl:grid-cols-2">
-              <PromptBlock
-                label="System prompt"
-                value={workbench.gradingPreview.system}
-              />
-              <PromptBlock
-                label="User prompt"
-                value={workbench.gradingPreview.userPrompt}
-              />
-            </div>
-          </section>
+            </CardContent>
+          </Card>
 
-          <section className="border-t pt-6">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <BotIcon className="size-4 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Tutor</h2>
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Tutor sandbox</CardTitle>
+                  <CardDescription>
+                    Check how the tutor will guide a student through this
+                    assignment type.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" size="sm">
+                  {workbench.tutorPreviews.length} tutor moments
+                </Badge>
               </div>
-              <Badge variant="outline" size="sm">
-                {workbench.tutorPreviews.length} previews
-              </Badge>
-            </div>
+            </CardHeader>
+            <CardContent>
 
             {workbench.tutorPreviews.length === 0 ? (
               <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
@@ -657,121 +736,96 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                       </Button>
                     </div>
                     {preview.instructionPrompt ? (
-                      <PromptBlock
-                        label="Student-facing instruction"
-                        value={preview.instructionPrompt}
-                      />
+                      <div className="rounded-md bg-muted/30 p-3 text-sm leading-6">
+                        <p className="font-medium">Student instruction</p>
+                        <p className="mt-1 text-muted-foreground">
+                          {preview.instructionPrompt}
+                        </p>
+                      </div>
                     ) : null}
-                    <div className="mt-4">
-                      <PromptBlock
-                        label="Tutor system prompt"
-                        value={preview.systemPrompt}
-                      />
-                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </section>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>Grading sandbox</CardTitle>
+                  <CardDescription>
+                    Check the rubric categories and run this sample draft through
+                    the grading assistant.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary" size="sm">
+                    {workbench.gradingPreview.strictnessLabel}
+                  </Badge>
+                  <Badge variant="outline" size="sm">
+                    Scores {workbench.gradingPreview.minScore}-
+                    {workbench.gradingPreview.maxScore}
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {rubricCategories.length === 0 ? (
+                <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+                  No rubric categories have been configured yet.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {rubricCategories.map((category) => (
+                    <div key={category.key} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium">{category.label}</p>
+                        <Badge variant="outline" size="sm">
+                          {Math.round(category.weight * 100)}%
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        {category.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {selectedRun ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Latest result</CardTitle>
+                <CardDescription>
+                  {stringValue(selectedRun.label, 'Untitled test')}
+                  {selectedRunNotes ? ` - ${selectedRunNotes}` : ''}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EvaluationResult result={selectedRunResultJson} />
+              </CardContent>
+            </Card>
+          ) : null}
         </div>
 
         <aside className="space-y-6">
-          <section className="border-t pt-6">
-            <div className="mb-3 flex items-center gap-2">
-              <Layers3Icon className="size-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Current shape</h2>
-            </div>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-md border px-3 py-2">
-                <dt className="text-muted-foreground">Modules</dt>
-                <dd className="text-lg font-semibold">
-                  {assignmentType.assignmentModules.length}
-                </dd>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <SaveIcon className="size-4 text-muted-foreground" />
+                <CardTitle>Run a test</CardTitle>
               </div>
-              <div className="rounded-md border px-3 py-2">
-                <dt className="text-muted-foreground">Snapshots</dt>
-                <dd className="text-lg font-semibold">
-                  {assignmentType.aiVersions.length}
-                </dd>
-              </div>
-              <div className="rounded-md border px-3 py-2">
-                <dt className="text-muted-foreground">Saved runs</dt>
-                <dd className="text-lg font-semibold">
-                  {assignmentType.aiEvaluationRuns.length}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          {selectedVersion && versionComparison ? (
-            <section className="border-t pt-6">
-              <h2 className="mb-3 text-lg font-semibold">Version comparison</h2>
-              <div className="space-y-3 rounded-md border p-4 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">Grading prompt</span>
-                  <Badge
-                    variant={
-                      versionComparison.gradingPromptChanged
-                        ? 'warning-soft'
-                        : 'secondary'
-                    }
-                    size="sm"
-                  >
-                    {versionComparison.gradingPromptChanged
-                      ? 'Changed'
-                      : 'Same'}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium">Rubric</p>
-                  <p className="text-muted-foreground">
-                    Added:{' '}
-                    <InlineChangeList
-                      values={versionComparison.rubricCategories.added}
-                    />
-                  </p>
-                  <p className="text-muted-foreground">
-                    Removed:{' '}
-                    <InlineChangeList
-                      values={versionComparison.rubricCategories.removed}
-                    />
-                  </p>
-                  <p className="text-muted-foreground">
-                    Changed:{' '}
-                    <InlineChangeList
-                      values={versionComparison.rubricCategories.changed}
-                    />
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium">Tutor prompts</p>
-                  <p className="text-muted-foreground">
-                    Added:{' '}
-                    <InlineChangeList values={versionComparison.tutorPrompts.added} />
-                  </p>
-                  <p className="text-muted-foreground">
-                    Removed:{' '}
-                    <InlineChangeList
-                      values={versionComparison.tutorPrompts.removed}
-                    />
-                  </p>
-                  <p className="text-muted-foreground">
-                    Changed:{' '}
-                    <InlineChangeList
-                      values={versionComparison.tutorPrompts.changed}
-                    />
-                  </p>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="border-t pt-6">
-            <div className="mb-3 flex items-center gap-2">
-              <SaveIcon className="size-4 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">Evaluation case</h2>
-            </div>
-            <Form method="post" className="space-y-3 rounded-md border p-4">
+              <CardDescription>
+                Safe tests use predictable sample output. Live AI tests call the
+                model with this draft.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+            <Form method="post" className="space-y-3">
               {selectedVersion ? (
                 <input type="hidden" name="versionId" value={selectedVersion.id} />
               ) : null}
@@ -787,7 +841,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
               />
               <input type="hidden" name="sampleEssay" value={sandboxSampleEssay} />
               <div className="space-y-2">
-                <Label htmlFor="evaluationLabel">Label</Label>
+                <Label htmlFor="evaluationLabel">Test name</Label>
                 <Input
                   id="evaluationLabel"
                   name="label"
@@ -795,12 +849,12 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="evaluationNotes">Notes</Label>
+                <Label htmlFor="evaluationNotes">What are you checking?</Label>
                 <Textarea
                   id="evaluationNotes"
                   name="notes"
                   rows={3}
-                  placeholder="What this case should prove..."
+                  placeholder="Example: Does the tutor notice the thesis is specific?"
                 />
               </div>
               <div className="grid gap-2">
@@ -811,7 +865,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   size="sm"
                   className="w-full"
                 >
-                  Run fixture
+                  Run safe test
                 </Button>
                 <Button
                   type="submit"
@@ -831,17 +885,28 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                   size="sm"
                   className="w-full"
                 >
-                  Save case
+                  Save test for later
                 </Button>
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                This is a safe sandbox. It will not change student documents,
+                submissions, grades, or tutor conversations.
+              </p>
             </Form>
-          </section>
+            </CardContent>
+          </Card>
 
-          <section className="border-t pt-6">
-            <h2 className="mb-3 text-lg font-semibold">Saved runs</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>Saved tests</CardTitle>
+              <CardDescription>
+                Reopen earlier checks for this assignment type.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
             {assignmentType.aiEvaluationRuns.length === 0 ? (
               <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-                No saved evaluation cases yet.
+                No saved tests yet.
               </div>
             ) : (
               <ol className="space-y-3">
@@ -850,7 +915,7 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm font-medium">
-                          {run.label ?? 'Untitled evaluation case'}
+                          {run.label ?? 'Untitled test'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {runActorLabel(run)}
@@ -879,66 +944,63 @@ export default function AssignmentTypeAiWorkbenchRoute() {
                 ))}
               </ol>
             )}
-          </section>
+            </CardContent>
+          </Card>
 
-          {selectedRun ? (
-            <section className="border-t pt-6">
-              <h2 className="mb-3 text-lg font-semibold">Selected run</h2>
-              <div className="space-y-4 rounded-md border p-4">
-                <div>
-                  <p className="text-sm font-medium">
-                    {stringValue(
-                      selectedRun.label,
-                      'Untitled evaluation case'
-                    )}
-                  </p>
-                  {selectedRunNotes ? (
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {selectedRunNotes}
-                    </p>
-                  ) : null}
-                </div>
-                <PromptBlock
-                  label="Saved sample"
-                  value={stringValue(selectedRun.sampleInput)}
-                />
-                <PromptBlock
-                  label="Saved grading system prompt"
-                  value={nestedString(selectedRunSnapshot, [
-                    'gradingPreview',
-                    'system',
-                  ])}
-                />
-                <PromptBlock
-                  label="Saved grading user prompt"
-                  value={nestedString(selectedRunSnapshot, [
-                    'gradingPreview',
-                    'userPrompt',
-                  ])}
-                />
-                {selectedRunTutorPreviews.map((preview) => (
-                  <PromptBlock
-                    key={preview.key}
-                    label={`Saved tutor prompt: ${preview.label || 'Tutor preview'}`}
-                    value={preview.systemPrompt}
-                  />
-                ))}
-                {selectedRunResultJson ? (
-                  <PromptBlock
-                    label="Evaluation result"
-                    value={JSON.stringify(selectedRunResultJson, null, 2)}
-                  />
-                ) : null}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <HistoryIcon className="size-4 text-muted-foreground" />
+                <CardTitle>Version history</CardTitle>
               </div>
-            </section>
-          ) : null}
-
-          <section className="border-t pt-6">
-            <AssignmentTypeAiHistorySection
-              assignmentTypeId={assignmentType.id}
-              aiVersions={assignmentType.aiVersions}
-            />
-          </section>
+              <CardDescription>
+                Replay a prior configuration if a newer version needs checking.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {assignmentType.aiVersions.length === 0 ? (
+                <div className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+                  No AI snapshots have been recorded yet.
+                </div>
+              ) : (
+                <ol className="space-y-3">
+                  {assignmentType.aiVersions.map((version) => (
+                    <li key={version.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium">
+                            v{version.versionNumber}
+                            {latestVersion?.id === version.id ? ' - Current' : ''}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {version.changeSummary ?? 'AI configuration updated'}
+                          </p>
+                        </div>
+                        <Badge variant="secondary" size="sm">
+                          {formatWorkbenchDate(version.createdAt)}
+                        </Badge>
+                      </div>
+                      <div className="mt-3">
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <a
+                            href={`/app/admin/assignment-types/${assignmentType.id}/ai-workbench?versionId=${version.id}`}
+                          >
+                            Replay
+                          </a>
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {selectedVersion && versionComparison?.hasChanges ? (
+                <div className="mt-4 rounded-md border bg-muted/20 p-3 text-sm leading-6 text-muted-foreground">
+                  You are replaying v{selectedVersion.versionNumber}. The
+                  current version has changes to compare against this test.
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
         </aside>
       </div>
     </div>

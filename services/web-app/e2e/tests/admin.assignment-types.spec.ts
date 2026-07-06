@@ -143,16 +143,30 @@ test.describe.serial('Admin assignment types', () => {
       });
 
       await page.goto(`/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`);
+      await expect(
+        page.getByRole('heading', { name: `Sandbox: ${title}` })
+      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Test draft' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Tutor sandbox' })
+      ).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Grading sandbox' })
+      ).toBeVisible();
       await expect(page.getByText('Thesis planning')).toBeVisible();
+      await expect(page.getByText('Thesis E2E', { exact: true })).toBeVisible();
+      await expect(page.getByText('System prompt')).toHaveCount(0);
+      await expect(page.getByText('User prompt')).toHaveCount(0);
+
       await page.getByLabel('Student name').fill('Ava');
       await page
-        .getByLabel('Sample essay')
+        .getByLabel('Test draft')
         .fill('This thesis draft makes a specific claim about the text.');
       await page.getByLabel('Strictness').selectOption('advanced');
       await page
-        .locator('#evaluationLabel')
+        .getByLabel('Test name')
         .fill('E2E deterministic workbench run');
-      await page.getByRole('button', { name: 'Run fixture' }).click();
+      await page.getByRole('button', { name: 'Run safe test' }).click();
       await page.waitForURL((url) => url.searchParams.has('runId'), {
         timeout: 15_000,
       });
@@ -162,9 +176,12 @@ test.describe.serial('Admin assignment types', () => {
       expect(runUrl.searchParams.get('sampleEssay')).toContain(
         'specific claim'
       );
-      await expect(page.getByText('Selected run')).toBeVisible();
-      await expect(page.getByText('Evaluation result')).toBeVisible();
-      await expect(page.getByText('deterministic-workbench-fixture')).toBeVisible();
+      await expect(page.getByText('Latest result')).toBeVisible();
+      await expect(page.getByText('Tutor feedback')).toBeVisible();
+      await expect(page.getByText('Grading feedback')).toBeVisible();
+      await expect(page.getByText('deterministic-workbench-fixture')).toHaveCount(
+        0
+      );
 
       const run = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
         where: {

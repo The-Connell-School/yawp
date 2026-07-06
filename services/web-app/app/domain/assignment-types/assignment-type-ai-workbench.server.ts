@@ -21,7 +21,7 @@ import type { RubricCategory } from './assignment-type-rubric.shared';
 
 export const DEFAULT_WORKBENCH_STUDENT_FIRST_NAME = 'Student';
 export const DEFAULT_WORKBENCH_SAMPLE_ESSAY =
-  'Paste a representative student draft here to inspect the grading assistant prompt against this assignment type.';
+  'Paste a representative student draft here to test this assignment type.';
 
 type AssignmentTypeAiWorkbenchInstructionInput = {
   id: string;
