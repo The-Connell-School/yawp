@@ -17,7 +17,9 @@ test.describe.serial('Admin assignment types', () => {
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignments');
-      await expect(page.getByRole('heading', { name: 'Assignment Types' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Assignment Types' })
+      ).toBeVisible();
 
       await page.getByRole('link', { name: 'Create assignment type' }).click();
       await expect(
@@ -35,20 +37,26 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByTestId('rubric-category-row-0').click();
       await page.getByLabel('Label', { exact: true }).fill('Thesis E2E');
       await page.getByLabel('Weight %').fill('60');
-      await page.locator('#category-edit-description').fill('Clear, defensible thesis for the essay.');
+      await page
+        .locator('#category-edit-description')
+        .fill('Clear, defensible thesis for the essay.');
       await page.getByRole('button', { name: 'Done' }).click();
 
       await page.getByTestId('rubric-category-row-1').click();
       await page.getByLabel('Label', { exact: true }).fill('Grammar E2E');
       await page.getByLabel('Weight %').fill('40');
-      await page.locator('#category-edit-description').fill('Grammar and syntax support clarity.');
+      await page
+        .locator('#category-edit-description')
+        .fill('Grammar and syntax support clarity.');
       await page.getByRole('button', { name: 'Done' }).click();
 
       await page
         .getByPlaceholder(
           'Tell the AI how to grade this assignment. Include scoring rules, tone, and how to interpret each rubric category.'
         )
-        .fill('Grade against the rubric categories and give concise, actionable feedback.');
+        .fill(
+          'Grade against the rubric categories and give concise, actionable feedback.'
+        );
 
       await Promise.all([
         page.waitForURL(
@@ -63,7 +71,9 @@ test.describe.serial('Admin assignment types', () => {
       expect(assignmentTypeId).toBeTruthy();
 
       await expect(page.locator('input[name="title"]')).toHaveValue(title);
-      await expect(page.getByRole('heading', { name: 'Edit assignment type' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
@@ -116,13 +126,18 @@ test.describe.serial('Admin assignment types', () => {
       await expect(page.getByRole('link', { name: 'View' })).toBeVisible();
 
       const createdModule = await prisma.assignmentModule.findFirstOrThrow({
-        where: { assignmentTypeId: assignmentTypeId!, title: 'Thesis planning' },
+        where: {
+          assignmentTypeId: assignmentTypeId!,
+          title: 'Thesis planning',
+        },
         select: { id: true },
       });
       moduleId = createdModule.id;
 
       await page.getByRole('link', { name: 'View' }).click();
-      await expect(page.getByRole('heading', { name: 'Module Details' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Module Details' })
+      ).toBeVisible();
 
       await page.getByRole('button', { name: 'Edit Module' }).click();
       await expect(page.getByText('Rubric relationships')).toBeVisible();
@@ -130,7 +145,9 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByLabel('Grammar E2E').selectOption('supporting');
       await page.getByRole('button', { name: 'Save Changes' }).click();
 
-      await expect(page.getByRole('button', { name: 'Edit Module' })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Edit Module' })
+      ).toBeVisible();
 
       const updatedModule = await prisma.assignmentModule.findUniqueOrThrow({
         where: { id: moduleId },
@@ -142,31 +159,47 @@ test.describe.serial('Admin assignment types', () => {
         grammar_e2e: 'supporting',
       });
 
-      await page.goto(`/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`);
+      await page.goto(
+        `/app/admin/assignment-types/${assignmentTypeId}/ai-workbench`
+      );
       await expect(
-        page.getByRole('heading', { name: `Sandbox: ${title}` })
+        page.getByRole('heading', { name: `Tutor test: ${title}` })
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Test draft' })).toBeVisible();
+      await expect(page.getByText('Assignment Prompt')).toBeVisible();
       await expect(
-        page.getByRole('heading', { name: 'Tutor sandbox' })
+        page.getByTestId('ai-workbench-test-document')
       ).toBeVisible();
+      await expect(page.getByTestId('ai-workbench-tutor-panel')).toBeVisible();
+      await expect(page.getByText('Tutor sandbox')).toHaveCount(0);
+      await expect(page.getByText('Grading sandbox')).toHaveCount(0);
+      await expect(page.getByText('Run a test')).toHaveCount(0);
       await expect(
-        page.getByRole('heading', { name: 'Grading sandbox' })
+        page.getByRole('link', { name: 'Grading test' })
+      ).toBeVisible();
+
+      await page.getByRole('link', { name: 'Grading test' }).click();
+      await expect(
+        page.getByRole('heading', { name: `Grading test: ${title}` })
+      ).toBeVisible();
+      await expect(page.getByText('Grade Summary')).toBeVisible();
+      await expect(
+        page.getByText('Grading Assistant Suggestions')
       ).toBeVisible();
       await expect(page.getByText('Thesis planning')).toBeVisible();
       await expect(page.getByText('Thesis E2E', { exact: true })).toBeVisible();
       await expect(page.getByText('System prompt')).toHaveCount(0);
       await expect(page.getByText('User prompt')).toHaveCount(0);
 
+      await page.getByRole('link', { name: 'Tutor test' }).click();
       await page.getByLabel('Student name').fill('Ava');
       await page
-        .getByLabel('Test draft')
+        .getByLabel('Test document')
         .fill('This thesis draft makes a specific claim about the text.');
       await page.getByLabel('Strictness').selectOption('advanced');
       await page
         .getByLabel('Test name')
         .fill('E2E deterministic workbench run');
-      await page.getByRole('button', { name: 'Run safe test' }).click();
+      await page.getByRole('button', { name: 'Run safe tutor test' }).click();
       await page.waitForURL((url) => url.searchParams.has('runId'), {
         timeout: 15_000,
       });
@@ -176,12 +209,11 @@ test.describe.serial('Admin assignment types', () => {
       expect(runUrl.searchParams.get('sampleEssay')).toContain(
         'specific claim'
       );
-      await expect(page.getByText('Latest result')).toBeVisible();
       await expect(page.getByText('Tutor feedback')).toBeVisible();
-      await expect(page.getByText('Grading feedback')).toBeVisible();
-      await expect(page.getByText('deterministic-workbench-fixture')).toHaveCount(
-        0
-      );
+      await expect(page.getByText('Grading feedback')).toHaveCount(0);
+      await expect(
+        page.getByText('deterministic-workbench-fixture')
+      ).toHaveCount(0);
 
       const run = await prisma.assignmentTypeAiEvaluationRun.findFirstOrThrow({
         where: {
