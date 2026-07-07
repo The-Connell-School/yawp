@@ -26,7 +26,7 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('heading', { name: /writing practice/i })
     ).toBeVisible();
-    await expect(page.getByText(/self-guided practice/i)).toBeVisible();
+    await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
     ).toBeVisible();

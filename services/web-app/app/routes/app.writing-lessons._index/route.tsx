@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, ClipboardList, Compass } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import {
   Link,
   data as dataResponse,
@@ -36,19 +36,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
     })),
   }));
-  const lessonCount = groups.reduce(
-    (count, group) => count + group.lessons.length,
-    0
-  );
-  const promptCount = groups.reduce(
-    (count, group) =>
-      count +
-      group.lessons.reduce(
-        (lessonTotal, lesson) => lessonTotal + lesson.promptCount,
-        0
-      ),
-    0
-  );
+
+  const isTeacher = profile.role === 'TEACHER';
 
   const assignedPractice =
     profile.role === 'STUDENT'
@@ -88,8 +77,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return dataResponse({
     groups,
-    lessonCount,
-    promptCount,
+    isTeacher,
     assignedPractice,
     assignedByTeacher,
   });
@@ -103,14 +91,38 @@ function formatDueDate(iso: string): string {
   });
 }
 
+function TeacherDirections() {
+  return (
+    <section className="rounded-lg border bg-muted/40 p-4">
+      <h3 className="mb-2 text-base font-semibold">
+        How writing practice works
+      </h3>
+      <p className="mb-3 max-w-[70ch] text-sm text-muted-foreground">
+        Open any lesson and choose “Assign to your classes” to send a short set
+        of targeted rewrite drills. Students get instant, skill-specific
+        feedback from the tutor — it guides them toward the fix without handing
+        it over — and every attempt is saved. Track who has practiced and how
+        they are doing under “Assigned by you.”
+      </p>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        When to use it
+      </p>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
+        <li>
+          Warm-ups or bell-ringers on a single skill (comma splices, passive
+          voice…)
+        </li>
+        <li>Reteaching after you notice a recurring error in student essays</li>
+        <li>Low-stakes practice between larger, graded writing assignments</li>
+        <li>Mixed review that combines several skills at once</li>
+      </ul>
+    </section>
+  );
+}
+
 export default function WritingLessonsIndexRoute() {
-  const {
-    groups,
-    lessonCount,
-    promptCount,
-    assignedPractice,
-    assignedByTeacher,
-  } = useLoaderData<typeof loader>();
+  const { groups, isTeacher, assignedPractice, assignedByTeacher } =
+    useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -130,35 +142,7 @@ export default function WritingLessonsIndexRoute() {
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-8 px-3 py-6 pb-24 sm:px-5">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-base font-medium sm:text-sm">
-              <BookOpen className="h-5 w-5 shrink-0 text-primary sm:h-4 sm:w-4" />
-              <span>{lessonCount} lesson families</span>
-            </div>
-            <p className="mt-2 text-base text-muted-foreground sm:text-sm">
-              Recovered Yawp grammar, sentence, and revision lessons.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-base font-medium sm:text-sm">
-              <ClipboardList className="h-5 w-5 shrink-0 text-primary sm:h-4 sm:w-4" />
-              <span>{promptCount} self-guided practice prompts</span>
-            </div>
-            <p className="mt-2 text-base text-muted-foreground sm:text-sm">
-              Students can answer a prompt and check a first-pass score.
-            </p>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center gap-2 text-base font-medium sm:text-sm">
-              <Compass className="h-5 w-5 shrink-0 text-primary sm:h-4 sm:w-4" />
-              <span>Teacher-assigned ready</span>
-            </div>
-            <p className="mt-2 text-base text-muted-foreground sm:text-sm">
-              The prototype leaves room for class and student targeting.
-            </p>
-          </div>
-        </div>
+        {isTeacher ? <TeacherDirections /> : null}
 
         {assignedByTeacher.length > 0 ? (
           <section className="flex flex-col gap-3">
