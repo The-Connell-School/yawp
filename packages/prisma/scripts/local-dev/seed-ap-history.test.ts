@@ -33,11 +33,11 @@ describe('buildApHistoryAssignmentTypeCreateInput', () => {
     expect(seededKeys).toEqual(sourceKeys);
   });
 
-  test('attaches the stick-figure hero image as an SVG blob', () => {
+  test('attaches the history-collage hero image as an image blob', () => {
     const image = input.image?.create;
     expect(image).toBeTruthy();
-    expect(image?.contentType).toBe('image/svg+xml');
-    expect(image?.altText).toContain('stick-figure');
+    expect(image?.contentType).toBe('image/webp');
+    expect(image?.altText).toContain('history');
     expect(Buffer.isBuffer(image?.blob)).toBe(true);
     expect((image?.blob as Buffer).length).toBeGreaterThan(0);
   });
