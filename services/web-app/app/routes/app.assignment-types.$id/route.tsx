@@ -40,6 +40,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
+import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
 import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
@@ -582,6 +583,7 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
+        {data.apHistoryLibrary ? <ApHistoryTeacherDirections /> : null}
         {hasModules ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
