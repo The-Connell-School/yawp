@@ -24,8 +24,8 @@ import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
 import {
-  buildAssignedPracticeSequence,
   getAssignedPracticeForStudentById,
+  getOrCreateStudentPracticeSet,
   recordWritingPracticeAttempt,
 } from '~/utils/writing-lessons/practice-assignments.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
@@ -33,10 +33,7 @@ import {
   practiceFeedbackStatusLabel,
   type PracticeFeedbackResult,
 } from '~/utils/writing-lessons/practice-feedback.shared';
-import {
-  getQuickWritingLessonContext,
-  getQuickWritingPracticePrompts,
-} from '~/utils/writing-lessons/static-lessons.server';
+import { getQuickWritingLessonContext } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -57,10 +54,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 
   const { assignment } = classAssignment;
-  const sequence = buildAssignedPracticeSequence(
-    assignment.lessonSlugs,
-    assignment.problemCount
-  );
+  const sequence = await getOrCreateStudentPracticeSet({
+    classAssignmentId: classAssignment.id,
+    membershipId: profile.id,
+    lessonSlugs: assignment.lessonSlugs,
+    problemCount: assignment.problemCount,
+  });
   const completedCount = Math.min(
     classAssignment.attempts.length,
     assignment.problemCount
@@ -107,17 +106,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const promptId = String(formData.get('promptId') ?? '');
   const response = String(formData.get('response') ?? '');
 
-  // The lesson must belong to this assignment, and the prompt to that lesson.
-  if (!classAssignment.assignment.lessonSlugs.includes(lessonSlug)) {
-    throw new Response('That prompt is not part of this assignment', {
-      status: 400,
-    });
-  }
-  const context = getQuickWritingLessonContext(lessonSlug);
-  const prompt = getQuickWritingPracticePrompts(lessonSlug).find(
-    (item) => item.id === promptId
+  // The prompt must belong to this student's stored set for the assignment.
+  const sequence = await getOrCreateStudentPracticeSet({
+    classAssignmentId: classAssignment.id,
+    membershipId: profile.id,
+    lessonSlugs: classAssignment.assignment.lessonSlugs,
+    problemCount: classAssignment.assignment.problemCount,
+  });
+  const item = sequence.find(
+    (candidate) =>
+      candidate.prompt.id === promptId && candidate.lessonSlug === lessonSlug
   );
-  if (!context || !prompt) {
+  const context = getQuickWritingLessonContext(lessonSlug);
+  if (!item || !context) {
     throw new Response('Unknown practice prompt', { status: 400 });
   }
 
@@ -125,8 +126,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     lessonTitle: context.title,
     skill: context.skill,
     rule: context.rule,
-    exercise: prompt.exercise,
-    instruction: prompt.instruction,
+    exercise: item.prompt.exercise,
+    instruction: item.prompt.instruction,
     response,
   });
 
@@ -138,8 +139,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
       membershipId: profile.id,
       lessonSlug,
       promptId,
-      exercise: prompt.exercise,
-      instruction: prompt.instruction,
+      exercise: item.prompt.exercise,
+      instruction: item.prompt.instruction,
       response,
       feedback,
     });

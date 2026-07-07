@@ -5,13 +5,20 @@ import type { PracticeFeedbackResult } from './practice-feedback.shared';
 const writingPracticeAssignment = { create: mock() };
 const writingPracticeAttempt = { create: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
+const writingPracticePromptSet = { findUnique: mock(), create: mock() };
+const getLLMCompletion = mock();
 
 mock.module('~/utils/db.server', () => ({
   prisma: {
     writingPracticeAssignment,
     writingPracticeAttempt,
     writingPracticeClassAssignment,
+    writingPracticePromptSet,
   },
+}));
+mock.module('~/utils/getLLMCompletion', () => ({
+  AgentType: { Assistant: 'assistant', User: 'user' },
+  getLLMCompletion,
 }));
 
 const {
@@ -20,6 +27,8 @@ const {
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
   summarizeWritingPracticeResults,
+  buildGeneratedPracticeSequence,
+  getOrCreateStudentPracticeSet,
 } = await import('./practice-assignments.server');
 
 beforeEach(() => {
@@ -27,7 +36,21 @@ beforeEach(() => {
   writingPracticeAttempt.create.mockReset();
   writingPracticeClassAssignment.findMany.mockReset();
   writingPracticeClassAssignment.findFirst.mockReset();
+  writingPracticePromptSet.findUnique.mockReset();
+  writingPracticePromptSet.create.mockReset();
+  getLLMCompletion.mockReset();
 });
+
+function mockGeneratedPrompts(prompts: Array<{ exercise: string }>) {
+  getLLMCompletion.mockResolvedValue(
+    JSON.stringify({
+      prompts: prompts.map((prompt) => ({
+        exercise: prompt.exercise,
+        instruction: 'Fix it.',
+      })),
+    })
+  );
+}
 
 describe('createWritingPracticeAssignmentForClasses', () => {
   test('creates one assignment and deploys to de-duplicated classes', async () => {
@@ -139,6 +162,97 @@ describe('buildAssignedPracticeSequence', () => {
       []
     );
     expect(buildAssignedPracticeSequence(['not-a-lesson'], 3)).toEqual([]);
+  });
+});
+
+describe('buildGeneratedPracticeSequence', () => {
+  test('uses generated prompts, interleaved across skills', async () => {
+    mockGeneratedPrompts([
+      { exercise: 'generated one' },
+      { exercise: 'generated two' },
+    ]);
+
+    const { items, source } = await buildGeneratedPracticeSequence(
+      ['fixing-comma-splices', 'passive-voice'],
+      4
+    );
+
+    expect(source).toBe('ai');
+    expect(items.map((item) => item.lessonSlug)).toEqual([
+      'fixing-comma-splices',
+      'passive-voice',
+      'fixing-comma-splices',
+      'passive-voice',
+    ]);
+    expect(items[0].prompt.exercise).toContain('generated');
+    expect(items[0].prompt.id).toContain('-gen-');
+  });
+
+  test('falls back to the static bank when generation returns nothing', async () => {
+    getLLMCompletion.mockRejectedValue(new Error('no provider'));
+
+    const { items, source } = await buildGeneratedPracticeSequence(
+      ['fixing-comma-splices'],
+      3
+    );
+
+    expect(source).toBe('static');
+    expect(items).toHaveLength(3);
+    // Static prompt ids look like "fixing-comma-splices-1", not "-gen-".
+    expect(items[0].prompt.id).not.toContain('-gen-');
+  });
+});
+
+describe('getOrCreateStudentPracticeSet', () => {
+  test('returns the stored set without regenerating when one exists', async () => {
+    const stored = [
+      {
+        position: 1,
+        lessonSlug: 'fixing-comma-splices',
+        lessonTitle: 'Fixing Comma Splices',
+        prompt: { id: 'x', exercise: 'A, B.', instruction: 'Fix.' },
+      },
+    ];
+    writingPracticePromptSet.findUnique.mockResolvedValueOnce({
+      promptsJson: stored,
+    });
+
+    const items = await getOrCreateStudentPracticeSet({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+      lessonSlugs: ['fixing-comma-splices'],
+      problemCount: 5,
+    });
+
+    expect(items).toEqual(stored);
+    expect(getLLMCompletion).not.toHaveBeenCalled();
+    expect(writingPracticePromptSet.create).not.toHaveBeenCalled();
+  });
+
+  test('generates and persists a set on first access', async () => {
+    writingPracticePromptSet.findUnique.mockResolvedValueOnce(null);
+    mockGeneratedPrompts([
+      { exercise: 'Generated one.' },
+      { exercise: 'Generated two.' },
+    ]);
+    writingPracticePromptSet.create.mockImplementationOnce(
+      async ({ data }) => ({
+        promptsJson: data.promptsJson,
+      })
+    );
+
+    const items = await getOrCreateStudentPracticeSet({
+      classAssignmentId: 'ca-1',
+      membershipId: 'student-1',
+      lessonSlugs: ['fixing-comma-splices'],
+      problemCount: 2,
+    });
+
+    expect(writingPracticePromptSet.create).toHaveBeenCalledTimes(1);
+    const createArg = writingPracticePromptSet.create.mock.calls[0][0];
+    expect(createArg.data.source).toBe('ai');
+    expect(items).toHaveLength(2);
+    expect(items[0].prompt.exercise).toContain('Generated');
   });
 });
 

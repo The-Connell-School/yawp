@@ -1,8 +1,10 @@
 import { prisma } from '~/utils/db.server';
 
 import type { PracticeFeedbackResult } from './practice-feedback.shared';
+import { generatePracticePrompts } from './practice-prompt-generation.server';
 import {
   getQuickWritingLessonBySlug,
+  getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
   type QuickWritingPracticePrompt,
 } from './static-lessons.server';
@@ -68,6 +70,142 @@ export function buildAssignedPracticeSequence(
     sequence.push({ position: i + 1, ...source });
   }
   return sequence;
+}
+
+export type WritingPracticeSetSource = 'ai' | 'static' | 'mixed';
+
+/**
+ * Builds a fresh practice sequence for an assignment: generates novel prompts
+ * per skill (grounded in its rule + existing prompts), interleaves them across
+ * the selected skills, and falls back to the static bank for any skill the
+ * generator couldn't produce. Returns the items plus which source(s) were used.
+ */
+export async function buildGeneratedPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): Promise<{
+  items: AssignedPracticeItem[];
+  source: WritingPracticeSetSource;
+}> {
+  const lessons = lessonSlugs
+    .map((slug) => {
+      const context = getQuickWritingLessonContext(slug);
+      if (!context) return null;
+      return {
+        slug,
+        title: context.title,
+        skill: context.skill,
+        rule: context.rule,
+        staticPrompts: getQuickWritingPracticePrompts(slug),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  if (lessons.length === 0 || problemCount <= 0) {
+    return { items: [], source: 'static' };
+  }
+
+  const perLesson = Math.ceil(problemCount / lessons.length);
+  let anyAi = false;
+  let anyStatic = false;
+
+  const pools = await Promise.all(
+    lessons.map(async (lesson) => {
+      const generated = await generatePracticePrompts({
+        skill: lesson.skill,
+        lessonTitle: lesson.title,
+        rule: lesson.rule,
+        exampleExercises: lesson.staticPrompts.map((prompt) => prompt.exercise),
+        count: perLesson,
+      });
+
+      if (generated.length > 0) {
+        anyAi = true;
+        return {
+          lesson,
+          prompts: generated.map((prompt, index) => ({
+            id: `${lesson.slug}-gen-${index + 1}`,
+            exercise: prompt.exercise,
+            instruction: prompt.instruction,
+          })),
+        };
+      }
+
+      anyStatic = true;
+      return { lesson, prompts: lesson.staticPrompts };
+    })
+  );
+
+  const items: AssignedPracticeItem[] = [];
+  let round = 0;
+  while (items.length < problemCount) {
+    let addedThisRound = false;
+    for (const { lesson, prompts } of pools) {
+      if (items.length >= problemCount) break;
+      if (prompts.length === 0) continue;
+      items.push({
+        position: items.length + 1,
+        lessonSlug: lesson.slug,
+        lessonTitle: lesson.title,
+        prompt: prompts[round % prompts.length],
+      });
+      addedThisRound = true;
+    }
+    if (!addedThisRound) break;
+    round += 1;
+  }
+
+  const source: WritingPracticeSetSource = anyAi
+    ? anyStatic
+      ? 'mixed'
+      : 'ai'
+    : 'static';
+  return { items, source };
+}
+
+/**
+ * Returns the student's stored practice sequence for an assignment, generating
+ * and persisting it on first access so their prompts stay stable across reloads
+ * and don't repeat across the assignment.
+ */
+export async function getOrCreateStudentPracticeSet(params: {
+  classAssignmentId: string;
+  membershipId: string;
+  lessonSlugs: string[];
+  problemCount: number;
+}): Promise<AssignedPracticeItem[]> {
+  const where = {
+    classAssignmentId_membershipId: {
+      classAssignmentId: params.classAssignmentId,
+      membershipId: params.membershipId,
+    },
+  };
+
+  const existing = await prisma.writingPracticePromptSet.findUnique({ where });
+  if (existing) {
+    return existing.promptsJson as unknown as AssignedPracticeItem[];
+  }
+
+  const { items, source } = await buildGeneratedPracticeSequence(
+    params.lessonSlugs,
+    params.problemCount
+  );
+
+  try {
+    const created = await prisma.writingPracticePromptSet.create({
+      data: {
+        classAssignmentId: params.classAssignmentId,
+        membershipId: params.membershipId,
+        source,
+        promptsJson: items as unknown as object,
+      },
+    });
+    return created.promptsJson as unknown as AssignedPracticeItem[];
+  } catch {
+    // A concurrent request may have created the set first; re-read it.
+    const raced = await prisma.writingPracticePromptSet.findUnique({ where });
+    return (raced?.promptsJson as unknown as AssignedPracticeItem[]) ?? items;
+  }
 }
 
 export type CreateWritingPracticeAssignmentInput = {

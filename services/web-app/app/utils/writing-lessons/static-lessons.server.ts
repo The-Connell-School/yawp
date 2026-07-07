@@ -130,12 +130,11 @@ export function getQuickWritingLessonGroups() {
 }
 
 /**
- * TODO (student side, next up): add WAY more practice prompts per skill.
- * Today each lesson only exposes the handful of exercises (~4-6) recovered from
- * the archived markdown, so students who want to drill a skill run out of fresh
- * material fast. We want a much deeper prompt bank per lesson — authored and/or
- * AI-generated — so self-serve practice and assigned sets (with higher problem
- * counts) never repeat the same few sentences.
+ * These are the ~4-6 archived exercises per lesson. Teacher-assigned practice
+ * now generates a fresh, non-repeating set per student via
+ * practice-prompt-generation.server (falling back to this bank when AI is
+ * unavailable). TODO (remaining): give the self-serve lesson panel the same
+ * AI-generated depth so drilling a skill on your own never runs dry either.
  */
 export function getQuickWritingPracticePrompts(
   slug: string | undefined
