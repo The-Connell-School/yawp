@@ -295,6 +295,14 @@ describe('PR preview deployment contract', () => {
     expect(cleanupScript).toContain('PREVIEW_TTL_HOURS');
     expect(cleanupScript).toContain('dropdb -U postgres --if-exists "$database_name"');
     expect(cleanupScript).toContain('docker volume rm "${project}_${project}-postgres-data"');
+    expect(cleanupScript).toContain('remove_preview_path()');
+    expect(cleanupScript).toContain('sudo -n rm -rf -- "$path"');
+    expect(cleanupScript).toContain('docker run --rm');
+    expect(cleanupScript).toContain('remove_preview_path "$preview_path"');
+    expect(cleanupScript).toContain('remove_preview_path "$ROOT/sources/pr-${pr_number}"');
+    expect(cleanupScript).toContain('remove_preview_path "$source_path"');
+    expect(cleanupScript).not.toContain('rm -rf "$preview_path" "$ROOT/sources/pr-${pr_number}"');
+    expect(cleanupScript).not.toContain('rm -rf "$source_path"');
     expect(previewWorkflow).toContain('schedule:');
     expect(previewWorkflow).toContain('bash -s < scripts/preview/cleanup.sh');
   });

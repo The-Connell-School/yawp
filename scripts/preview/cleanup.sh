@@ -41,6 +41,36 @@ remove_legacy_postgres_volume() {
   docker volume rm "${project}_${project}-postgres-data" >/dev/null 2>&1 || true
 }
 
+remove_preview_path() {
+  local path="$1"
+
+  [[ -e "$path" || -L "$path" ]] || return 0
+
+  if rm -rf -- "$path" 2>/dev/null; then
+    return 0
+  fi
+
+  echo "Direct removal failed for $path; retrying with elevated cleanup." >&2
+
+  if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    if sudo -n rm -rf -- "$path"; then
+      return 0
+    fi
+  fi
+
+  if docker info >/dev/null 2>&1; then
+    local parent
+    local basename
+    parent="$(dirname -- "$path")"
+    basename="$(basename -- "$path")"
+    if docker run --rm -v "$parent:/cleanup-parent" alpine:3.20 sh -c 'rm -rf -- "/cleanup-parent/$1"' sh "$basename"; then
+      return 0
+    fi
+  fi
+
+  rm -rf -- "$path"
+}
+
 destroy_preview_path() {
   local preview_path="$1"
   local pr_number="$2"
@@ -55,7 +85,8 @@ destroy_preview_path() {
 
   drop_preview_database "$pr_number"
   remove_legacy_postgres_volume "$project"
-  rm -rf "$preview_path" "$ROOT/sources/pr-${pr_number}"
+  remove_preview_path "$preview_path"
+  remove_preview_path "$ROOT/sources/pr-${pr_number}"
   echo "Cleaned preview pr-${pr_number}"
 }
 
@@ -105,7 +136,7 @@ cleanup_sources() {
       continue
     fi
 
-    rm -rf "$source_path"
+    remove_preview_path "$source_path"
     echo "Cleaned source pr-${pr_number}"
   done
 }
