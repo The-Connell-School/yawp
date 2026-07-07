@@ -19,6 +19,7 @@ const {
   recordWritingPracticeAttempt,
   getAssignedPracticeForStudent,
   buildAssignedPracticeSequence,
+  summarizeWritingPracticeResults,
 } = await import('./practice-assignments.server');
 
 beforeEach(() => {
@@ -138,5 +139,57 @@ describe('buildAssignedPracticeSequence', () => {
       []
     );
     expect(buildAssignedPracticeSequence(['not-a-lesson'], 3)).toEqual([]);
+  });
+});
+
+describe('summarizeWritingPracticeResults', () => {
+  const students = [
+    { id: 's-2', user: { name: 'Bianca', email: 'bianca@example.com' } },
+    { id: 's-1', user: { name: 'Aaron', email: 'aaron@example.com' } },
+    { id: 's-3', user: { name: null, email: 'cara@example.com' } },
+  ];
+
+  test('rolls attempts up per student, sorted by email, marking completion', () => {
+    const results = summarizeWritingPracticeResults({
+      students,
+      problemCount: 2,
+      attempts: [
+        {
+          membershipId: 's-1',
+          status: 'developing',
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+        {
+          membershipId: 's-1',
+          status: 'strong',
+          createdAt: new Date('2026-07-01T11:00:00Z'),
+        },
+        {
+          membershipId: 's-2',
+          status: 'needs_revision',
+          createdAt: new Date('2026-07-01T09:00:00Z'),
+        },
+      ],
+    });
+
+    expect(results.map((r) => r.email)).toEqual([
+      'aaron@example.com',
+      'bianca@example.com',
+      'cara@example.com',
+    ]);
+
+    const aaron = results[0];
+    expect(aaron.attemptCount).toBe(2);
+    expect(aaron.completed).toBe(true);
+    expect(aaron.latestStatus).toBe('strong'); // most recent wins
+
+    const bianca = results[1];
+    expect(bianca.attemptCount).toBe(1);
+    expect(bianca.completed).toBe(false);
+
+    const cara = results[2];
+    expect(cara.attemptCount).toBe(0);
+    expect(cara.completed).toBe(false);
+    expect(cara.latestStatus).toBeNull();
   });
 });

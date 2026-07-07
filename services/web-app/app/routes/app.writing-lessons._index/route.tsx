@@ -16,7 +16,10 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { getAssignedPracticeForStudent } from '~/utils/writing-lessons/practice-assignments.server';
+import {
+  getAssignedPracticeForStudent,
+  getWritingPracticeAssignmentsForTeacher,
+} from '~/utils/writing-lessons/practice-assignments.server';
 import {
   getQuickWritingLessonGroups,
   getQuickWritingPracticePrompts,
@@ -65,7 +68,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
         )
       : [];
 
-  return dataResponse({ groups, lessonCount, promptCount, assignedPractice });
+  const assignedByTeacher =
+    profile.role === 'TEACHER'
+      ? (await getWritingPracticeAssignmentsForTeacher(profile.id)).map(
+          (classAssignment) => ({
+            id: classAssignment.id,
+            title: classAssignment.assignment.title,
+            problemCount: classAssignment.assignment.problemCount,
+            dueAt: classAssignment.assignment.dueAt
+              ? classAssignment.assignment.dueAt.toISOString()
+              : null,
+            classLabel:
+              classAssignment.class.title ??
+              `Grade ${classAssignment.class.grade} · Period ${classAssignment.class.period}`,
+            attemptCount: classAssignment._count.attempts,
+          })
+        )
+      : [];
+
+  return dataResponse({
+    groups,
+    lessonCount,
+    promptCount,
+    assignedPractice,
+    assignedByTeacher,
+  });
 }
 
 function formatDueDate(iso: string): string {
@@ -77,8 +104,13 @@ function formatDueDate(iso: string): string {
 }
 
 export default function WritingLessonsIndexRoute() {
-  const { groups, lessonCount, promptCount, assignedPractice } =
-    useLoaderData<typeof loader>();
+  const {
+    groups,
+    lessonCount,
+    promptCount,
+    assignedPractice,
+    assignedByTeacher,
+  } = useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -127,6 +159,49 @@ export default function WritingLessonsIndexRoute() {
             </p>
           </div>
         </div>
+
+        {assignedByTeacher.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold">Assigned by you</h3>
+              <Badge variant="secondary" size="sm">
+                {assignedByTeacher.length}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {assignedByTeacher.map((assignment) => (
+                <Link
+                  key={assignment.id}
+                  to={`/app/writing-lessons/results/${assignment.id}`}
+                  className="block h-full"
+                  data-testid="assigned-by-teacher-card"
+                >
+                  <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base leading-snug">
+                        {assignment.title ?? 'Writing practice'}
+                      </CardTitle>
+                      <CardDescription className="text-base sm:text-sm">
+                        {assignment.classLabel} · {assignment.problemCount}{' '}
+                        problems
+                        {assignment.dueAt
+                          ? ` · Due ${formatDueDate(assignment.dueAt)}`
+                          : ''}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
+                      <span>{assignment.attemptCount} attempts</span>
+                      <span className="inline-flex items-center gap-1">
+                        View progress
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      </span>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         {assignedPractice.length > 0 ? (
           <section className="flex flex-col gap-3">

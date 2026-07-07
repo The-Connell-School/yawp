@@ -205,3 +205,108 @@ export async function getWritingPracticeAssignmentsForTeacher(
     orderBy: { createdAt: 'desc' },
   });
 }
+
+export type WritingPracticeStudentResult = {
+  membershipId: string;
+  name: string | null;
+  email: string;
+  attemptCount: number;
+  completed: boolean;
+  latestStatus: string | null;
+};
+
+/**
+ * Rolls a class-assignment's attempts up into one row per enrolled student:
+ * how many problems they have submitted, whether they've met the target, and
+ * their most recent feedback status. Students with no attempts are included
+ * (so teachers can see who hasn't started), sorted by email.
+ */
+export function summarizeWritingPracticeResults(params: {
+  students: Array<{ id: string; user: { name: string | null; email: string } }>;
+  attempts: Array<{ membershipId: string; status: string; createdAt: Date }>;
+  problemCount: number;
+}): WritingPracticeStudentResult[] {
+  const byStudent = new Map<
+    string,
+    { count: number; latestStatus: string; latestAt: Date }
+  >();
+  for (const attempt of params.attempts) {
+    const existing = byStudent.get(attempt.membershipId);
+    if (!existing) {
+      byStudent.set(attempt.membershipId, {
+        count: 1,
+        latestStatus: attempt.status,
+        latestAt: attempt.createdAt,
+      });
+      continue;
+    }
+    existing.count += 1;
+    if (attempt.createdAt >= existing.latestAt) {
+      existing.latestStatus = attempt.status;
+      existing.latestAt = attempt.createdAt;
+    }
+  }
+
+  return params.students
+    .map((student) => {
+      const summary = byStudent.get(student.id);
+      const attemptCount = summary?.count ?? 0;
+      return {
+        membershipId: student.id,
+        name: student.user.name,
+        email: student.user.email,
+        attemptCount,
+        completed: attemptCount >= params.problemCount,
+        latestStatus: summary?.latestStatus ?? null,
+      };
+    })
+    .sort((a, b) => a.email.localeCompare(b.email));
+}
+
+/**
+ * A teacher's view of one deployment: the assignment/class plus a per-student
+ * progress roll-up. Returns `null` if the class-assignment does not belong to a
+ * class this teacher teaches.
+ */
+export async function getWritingPracticeResultsForTeacher(
+  classAssignmentId: string,
+  teacherMembershipId: string
+) {
+  const classAssignment = await prisma.writingPracticeClassAssignment.findFirst(
+    {
+      where: {
+        id: classAssignmentId,
+        class: { teachers: { some: { id: teacherMembershipId } } },
+      },
+      include: {
+        assignment: true,
+        class: {
+          select: {
+            id: true,
+            title: true,
+            grade: true,
+            period: true,
+            students: {
+              select: {
+                id: true,
+                user: { select: { name: true, email: true } },
+              },
+            },
+          },
+        },
+        attempts: {
+          select: { membershipId: true, status: true, createdAt: true },
+        },
+      },
+    }
+  );
+  if (!classAssignment) return null;
+
+  const results = summarizeWritingPracticeResults({
+    students: classAssignment.class.students,
+    attempts: classAssignment.attempts,
+    problemCount: classAssignment.assignment.problemCount,
+  });
+
+  return { classAssignment, results };
+}

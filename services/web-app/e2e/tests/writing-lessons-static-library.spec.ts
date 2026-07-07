@@ -146,5 +146,16 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('heading', { name: /problem 2 of/i })
     ).toBeVisible();
+
+    // Teacher can see that the student has started (1 of 4 problems).
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+    await page.getByTestId('assigned-by-teacher-card').first().click();
+    await expect(
+      page.getByRole('heading', { name: /student progress/i })
+    ).toBeVisible();
+    await expect(
+      page.getByTestId('student-progress-row').filter({ hasText: '1/4' })
+    ).toBeVisible();
   });
 });
