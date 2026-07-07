@@ -61,7 +61,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -93,14 +98,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: `DEV-SCH-${index + 1}`,
-          organizationId: LOCAL_DEV_ORG_ID,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: `DEV-SCH-${index + 1}`,
+            organizationId: LOCAL_DEV_ORG_ID,
+          },
+        })
     )
   );
 
@@ -238,7 +244,8 @@ export async function seedSyntheticLocalDevData(
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
       },
     });
     await prisma.classAssignment.create({
@@ -433,6 +440,51 @@ export async function seedSyntheticLocalDevData(
       occurrence: 1,
     },
   });
+
+  // Writing practice: add a sample teacher-assigned practice (with one student
+  // attempt) so every surface — student "Assigned to you", teacher "Assigned
+  // by you", and the results view — is populated out of the box in
+  // seeded/preview environments.
+  const writingPracticeAssignment =
+    await prisma.writingPracticeAssignment.create({
+      data: {
+        title: 'Comma splices warm-up',
+        lessonSlugs: ['fixing-comma-splices'],
+        problemCount: 4,
+        instructions:
+          'Fix each comma splice, then check your work with the tutor.',
+        createdByMembershipId: primaryTeacher.membershipId,
+        classAssignments: { create: [{ classId: primaryClass.id }] },
+      },
+      include: { classAssignments: true },
+    });
+
+  const writingPracticeClassAssignment =
+    writingPracticeAssignment.classAssignments[0];
+  if (writingPracticeClassAssignment) {
+    await prisma.writingPracticeAttempt.create({
+      data: {
+        classAssignmentId: writingPracticeClassAssignment.id,
+        membershipId: personaRecords['student-graded'].membershipId,
+        lessonSlug: 'fixing-comma-splices',
+        promptId: 'fixing-comma-splices-1',
+        exercise:
+          'The new phone costs over a thousand dollars, most students can’t afford it.',
+        instruction: 'Fix this comma splice using any method you prefer.',
+        response:
+          'The new phone costs over a thousand dollars; most students can’t afford it.',
+        status: 'strong',
+        feedbackJson: {
+          status: 'strong',
+          summary: 'You fixed the splice cleanly with a semicolon.',
+          strengths: ['The semicolon joins two independent clauses correctly.'],
+          focus: ['Try a period or a conjunction next time for variety.'],
+          encouragement: 'Nice control — keep it up.',
+          degraded: false,
+        },
+      },
+    });
+  }
 
   return {
     organizationId: LOCAL_DEV_ORG_ID,

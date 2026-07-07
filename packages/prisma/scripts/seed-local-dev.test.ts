@@ -114,9 +114,13 @@ describe('local dev seed fixtures', () => {
     );
   });
 
-  test('does not create writing practice configuration in local dev seed or schema', () => {
+  test('does not create writing practice feature-flag configuration', () => {
     const seedSource = readFileSync(
       join(import.meta.dirname, 'seed-local-dev.ts'),
+      'utf8'
+    );
+    const syntheticSeedSource = readFileSync(
+      join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),
       'utf8'
     );
     const schemaSource = readFileSync(
@@ -126,8 +130,20 @@ describe('local dev seed fixtures', () => {
 
     expect(seedSource).not.toContain(['organization', 'Flags'].join(''));
     expect(seedSource).not.toContain('writing_practice');
+    expect(syntheticSeedSource).not.toContain('prisma.featureFlag');
+    expect(syntheticSeedSource).not.toContain('writing_practice');
     expect(schemaSource).not.toContain(['Organization', 'Flag'].join(''));
     expect(schemaSource).not.toContain(['feature', 'Flag'].join(''));
+  });
+
+  test('seeds a sample writing-practice assignment and attempt', () => {
+    const source = readFileSync(
+      join(import.meta.dirname, 'local-dev/seed-synthetic-data.ts'),
+      'utf8'
+    );
+
+    expect(source).toContain('prisma.writingPracticeAssignment.create');
+    expect(source).toContain('prisma.writingPracticeAttempt.create');
   });
 
   test('treats localhost database urls as local seed targets', () => {
