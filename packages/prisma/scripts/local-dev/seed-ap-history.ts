@@ -1,6 +1,10 @@
 /* eslint-disable no-console */
 import type { Prisma, PrismaClient } from '../../generated/prisma';
 import { AP_HISTORY_LIBRARY_ENTRIES } from '../ap-history-library-data';
+import {
+  AP_HISTORY_HERO_IMAGE,
+  apHistoryHeroImageBytes,
+} from './ap-history-hero-image';
 import { LOCAL_DEV_ORG_ID } from './dev-personas';
 
 export const AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY = 'ap_history_essay';
@@ -21,6 +25,13 @@ export function buildApHistoryAssignmentTypeCreateInput(
     ownerOrgId: organizationId,
     organizationAssignments: {
       create: { organizationId },
+    },
+    image: {
+      create: {
+        contentType: AP_HISTORY_HERO_IMAGE.contentType,
+        altText: AP_HISTORY_HERO_IMAGE.altText,
+        blob: apHistoryHeroImageBytes(),
+      },
     },
     assignmentModules: {
       create: [

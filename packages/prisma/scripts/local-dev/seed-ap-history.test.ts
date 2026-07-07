@@ -33,6 +33,15 @@ describe('buildApHistoryAssignmentTypeCreateInput', () => {
     expect(seededKeys).toEqual(sourceKeys);
   });
 
+  test('attaches the stick-figure hero image as an SVG blob', () => {
+    const image = input.image?.create;
+    expect(image).toBeTruthy();
+    expect(image?.contentType).toBe('image/svg+xml');
+    expect(image?.altText).toContain('stick-figure');
+    expect(Buffer.isBuffer(image?.blob)).toBe(true);
+    expect((image?.blob as Buffer).length).toBeGreaterThan(0);
+  });
+
   test('preserves DBQ sources and keeps LEQs source-free', () => {
     const entries = input.apHistoryLibraryEntries?.create ?? [];
     for (const entry of entries) {
