@@ -1,4 +1,10 @@
-import { ArrowLeft, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ClipboardCheck,
+  Loader2,
+  RotateCcw,
+} from 'lucide-react';
 import { useState } from 'react';
 import {
   Link,
@@ -15,6 +21,7 @@ import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { prisma } from '~/utils/db.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
 import {
   practiceFeedbackStatusLabel,
@@ -24,20 +31,39 @@ import {
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
+  type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
+
+type TeacherClass = {
+  id: string;
+  title: string | null;
+  period: string;
+  grade: string;
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
 
   const lesson = getQuickWritingLessonBySlug(params.lessonSlug);
   if (!lesson) {
     throw new Response('Lesson not found', { status: 404 });
   }
 
+  const isTeacher = profile.role === 'TEACHER';
+  const teacherClasses: TeacherClass[] = isTeacher
+    ? await prisma.class.findMany({
+        where: { teachers: { some: { id: profile.id } }, isArchived: false },
+        select: { id: true, title: true, period: true, grade: true },
+        orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+      })
+    : [];
+
   return dataResponse({
     lesson,
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
+    isTeacher,
+    teacherClasses,
   });
 }
 
@@ -84,26 +110,8 @@ const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
 };
 
 export default function WritingLessonDetailRoute() {
-  const { lesson, practicePrompts } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher<ActionData>();
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [response, setResponse] = useState('');
-  const activePrompt = practicePrompts[promptIndex] ?? null;
-  const responseReady = response.trim().length > 0;
-  const isChecking = fetcher.state !== 'idle';
-
-  // Only show feedback that belongs to the prompt currently on screen, so
-  // switching prompts never leaves stale feedback behind.
-  const feedback =
-    fetcher.data && fetcher.data.promptId === activePrompt?.id
-      ? fetcher.data.feedback
-      : null;
-
-  function showNextPrompt() {
-    if (practicePrompts.length === 0) return;
-    setPromptIndex((current) => (current + 1) % practicePrompts.length);
-    setResponse('');
-  }
+  const { lesson, practicePrompts, isTeacher, teacherClasses } =
+    useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -133,89 +141,264 @@ export default function WritingLessonDetailRoute() {
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <Card className="shadow-none">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-xl">Practice prompt</CardTitle>
-                <Badge variant="secondary" size="sm">
-                  {practicePrompts.length} prompts
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {activePrompt ? (
-                <fetcher.Form method="post" className="space-y-4">
-                  <input
-                    type="hidden"
-                    name="promptId"
-                    value={activePrompt.id}
-                  />
-                  <div className="rounded-lg border bg-muted/50 p-3">
-                    <p className="text-base text-foreground sm:text-sm">
-                      {activePrompt.exercise}
-                    </p>
-                    <p className="mt-3 text-base text-muted-foreground sm:text-sm">
-                      {activePrompt.instruction}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="practice-response"
-                      className="text-base font-medium text-foreground sm:text-sm"
-                    >
-                      Your practice response
-                    </label>
-                    <Textarea
-                      id="practice-response"
-                      name="response"
-                      value={response}
-                      onChange={(event) =>
-                        setResponse(event.currentTarget.value)
-                      }
-                      placeholder="Rewrite the sentence here."
-                      className="min-h-28 text-base sm:text-sm"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={!responseReady || isChecking}
-                    >
-                      {isChecking ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                      )}
-                      {isChecking ? 'Checking…' : 'Check response'}
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={showNextPrompt}
-                    >
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Try another prompt
-                    </Button>
-                  </div>
-
-                  {feedback ? (
-                    <PracticeFeedbackPanel feedback={feedback} />
-                  ) : null}
-                </fetcher.Form>
-              ) : (
-                <p className="text-base text-muted-foreground sm:text-sm">
-                  This lesson does not have extracted practice prompts yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          {isTeacher ? (
+            <TeacherAssignPanel
+              lessonSlug={lesson.slug}
+              classes={teacherClasses}
+              promptCount={practicePrompts.length}
+            />
+          ) : (
+            <StudentPracticePanel practicePrompts={practicePrompts} />
+          )}
         </aside>
       </div>
     </section>
+  );
+}
+
+function StudentPracticePanel({
+  practicePrompts,
+}: {
+  practicePrompts: QuickWritingPracticePrompt[];
+}) {
+  const fetcher = useFetcher<ActionData>();
+  const [promptIndex, setPromptIndex] = useState(0);
+  const [response, setResponse] = useState('');
+  const activePrompt = practicePrompts[promptIndex] ?? null;
+  const responseReady = response.trim().length > 0;
+  const isChecking = fetcher.state !== 'idle';
+
+  // Only show feedback that belongs to the prompt currently on screen, so
+  // switching prompts never leaves stale feedback behind.
+  const feedback =
+    fetcher.data && fetcher.data.promptId === activePrompt?.id
+      ? fetcher.data.feedback
+      : null;
+
+  function showNextPrompt() {
+    if (practicePrompts.length === 0) return;
+    setPromptIndex((current) => (current + 1) % practicePrompts.length);
+    setResponse('');
+  }
+
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-xl">Practice prompt</CardTitle>
+          <Badge variant="secondary" size="sm">
+            {practicePrompts.length} prompts
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {activePrompt ? (
+          <fetcher.Form method="post" className="space-y-4">
+            <input type="hidden" name="promptId" value={activePrompt.id} />
+            <div className="rounded-lg border bg-muted/50 p-3">
+              <p className="text-base text-foreground sm:text-sm">
+                {activePrompt.exercise}
+              </p>
+              <p className="mt-3 text-base text-muted-foreground sm:text-sm">
+                {activePrompt.instruction}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="practice-response"
+                className="text-base font-medium text-foreground sm:text-sm"
+              >
+                Your practice response
+              </label>
+              <Textarea
+                id="practice-response"
+                name="response"
+                value={response}
+                onChange={(event) => setResponse(event.currentTarget.value)}
+                placeholder="Rewrite the sentence here."
+                className="min-h-28 text-base sm:text-sm"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!responseReady || isChecking}
+              >
+                {isChecking ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                {isChecking ? 'Checking…' : 'Check response'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={showNextPrompt}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Try another prompt
+              </Button>
+            </div>
+
+            {feedback ? <PracticeFeedbackPanel feedback={feedback} /> : null}
+          </fetcher.Form>
+        ) : (
+          <p className="text-base text-muted-foreground sm:text-sm">
+            This lesson does not have extracted practice prompts yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type AssignResult = {
+  success: boolean;
+  message: string;
+  classCount?: number;
+};
+
+function classLabel(cls: TeacherClass): string {
+  if (cls.title && cls.title.trim().length > 0) return cls.title;
+  return `Grade ${cls.grade} · Period ${cls.period}`;
+}
+
+function TeacherAssignPanel({
+  lessonSlug,
+  classes,
+  promptCount,
+}: {
+  lessonSlug: string;
+  classes: TeacherClass[];
+  promptCount: number;
+}) {
+  const fetcher = useFetcher<AssignResult>();
+  const isSubmitting = fetcher.state !== 'idle';
+  const result = fetcher.data;
+  const defaultProblemCount = Math.min(promptCount || 5, 5) || 1;
+
+  return (
+    <Card className="shadow-none">
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <ClipboardCheck className="h-5 w-5 text-primary" />
+          <CardTitle className="text-xl">Assign to your classes</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {classes.length === 0 ? (
+          <p className="text-base text-muted-foreground sm:text-sm">
+            You are not listed as a teacher on any active class yet, so there is
+            nowhere to assign this practice.
+          </p>
+        ) : (
+          <fetcher.Form
+            method="post"
+            action="/app/writing-lessons/assign"
+            className="space-y-4"
+          >
+            <input type="hidden" name="lessonSlugs" value={lessonSlug} />
+
+            <fieldset className="space-y-2">
+              <legend className="text-base font-medium text-foreground sm:text-sm">
+                Classes
+              </legend>
+              <div className="space-y-1.5">
+                {classes.map((cls) => (
+                  <label
+                    key={cls.id}
+                    className="flex items-center gap-2 text-base sm:text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      name="classIds"
+                      value={cls.id}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <span>{classLabel(cls)}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="problemCount"
+                className="text-base font-medium text-foreground sm:text-sm"
+              >
+                Number of problems
+              </label>
+              <input
+                id="problemCount"
+                name="problemCount"
+                type="number"
+                min={1}
+                max={20}
+                defaultValue={defaultProblemCount}
+                className="h-9 w-24 rounded-md border border-input bg-background px-3 text-base sm:text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="dueAt"
+                className="text-base font-medium text-foreground sm:text-sm"
+              >
+                Due date{' '}
+                <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <input
+                id="dueAt"
+                name="dueAt"
+                type="date"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-base sm:text-sm"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="instructions"
+                className="text-base font-medium text-foreground sm:text-sm"
+              >
+                Instructions{' '}
+                <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <Textarea
+                id="instructions"
+                name="instructions"
+                placeholder="A note your students will see with this practice."
+                className="min-h-20 text-base sm:text-sm"
+              />
+            </div>
+
+            <Button type="submit" size="sm" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+              )}
+              {isSubmitting ? 'Assigning…' : 'Assign practice'}
+            </Button>
+
+            {result ? (
+              <p
+                data-testid="assign-result"
+                className={`text-base sm:text-sm ${
+                  result.success ? 'text-emerald-700' : 'text-rose-700'
+                }`}
+              >
+                {result.message}
+              </p>
+            ) : null}
+          </fetcher.Form>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -68,4 +68,34 @@ test.describe.serial('Writing practice prototype', () => {
       page.getByRole('complementary').getByText(/weak construction/i)
     ).toBeVisible();
   });
+
+  test('lets a teacher assign a lesson to one of their classes', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setWritingPracticeForOrganization({
+      organizationId: e2eContext.organizationId,
+      enabled: true,
+    });
+
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/fixing-comma-splices');
+
+    // Teachers get the assign panel instead of the student practice panel.
+    const assignPanel = page.getByRole('complementary');
+    await expect(
+      assignPanel.getByRole('heading', { name: /assign to your classes/i })
+    ).toBeVisible();
+    await expect(page.getByTestId('practice-feedback')).toHaveCount(0);
+
+    const classCheckbox = page.locator('input[name="classIds"]').first();
+    await classCheckbox.check();
+    await page.locator('input[name="problemCount"]').fill('4');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to 1 class/i
+    );
+  });
 });
