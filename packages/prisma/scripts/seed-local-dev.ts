@@ -7,9 +7,14 @@ import {
   importProdFidelityFixtures,
   loadProdFidelityBundle,
 } from './local-dev/import-prod-fidelity-fixtures';
+import { seedApHistoryLocalDev } from './local-dev/seed-ap-history';
 import { seedSyntheticLocalDevData } from './local-dev/seed-synthetic-data';
 import { truncateAllPublicTables } from './local-dev/truncate-all';
-import { LOCAL_DEV_ORG_ID, LOCAL_DEV_ORG_NAME, LOCAL_DEV_PERSONAS } from './local-dev/dev-personas';
+import {
+  LOCAL_DEV_ORG_ID,
+  LOCAL_DEV_ORG_NAME,
+  LOCAL_DEV_PERSONAS,
+} from './local-dev/dev-personas';
 
 assertLocalSeedTarget();
 
@@ -41,6 +46,19 @@ try {
   console.time('synthetic');
   const context = await seedSyntheticLocalDevData(prisma);
   console.timeEnd('synthetic');
+
+  // Additive AP History seed. Isolated in its own try/catch so a failure here
+  // can never abort or corrupt the rest of the local-dev/preview seed data.
+  console.time('ap-history');
+  try {
+    await seedApHistoryLocalDev(prisma, context.organizationId);
+  } catch (apHistoryError) {
+    console.warn(
+      '⚠️  AP History seed skipped (non-fatal); other seed data is unaffected:',
+      apHistoryError
+    );
+  }
+  console.timeEnd('ap-history');
 
   console.log('🌱 Local dev seed complete.');
   console.log(
