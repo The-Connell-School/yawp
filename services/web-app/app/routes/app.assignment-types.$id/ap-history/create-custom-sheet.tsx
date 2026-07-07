@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { ImageIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { FileUpIcon, ImageIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -94,6 +94,8 @@ export function CreateCustomApHistorySheet({
   const [timeMode, setTimeMode] = useState<'untimed' | 'timed'>('untimed');
   const [durationMinutes, setDurationMinutes] = useState(isDbq ? '60' : '40');
   const [sources, setSources] = useState<SourceDraft[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   // Reset the form whenever the sheet opens or the essay type changes.
   useEffect(() => {
@@ -106,6 +108,8 @@ export function CreateCustomApHistorySheet({
     setTimeMode('untimed');
     setDurationMinutes(isDbq ? '60' : '40');
     setSources(isDbq ? [emptySource(1)] : []);
+    setExtracting(false);
+    setExtractError(null);
   }, [open, essayType, isDbq, teacherClasses]);
 
   useEffect(() => {
@@ -182,6 +186,58 @@ export function CreateCustomApHistorySheet({
     }
   }
 
+  async function extractFromPdf(file: File) {
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch('/api/ap-history/extract-document', {
+        method: 'POST',
+        body: form,
+      });
+      const result = (await response.json()) as {
+        success?: boolean;
+        message?: string;
+        title?: string;
+        prompt?: string;
+        periodNumber?: number | null;
+        reasoningSkill?: string | null;
+        sources?: Array<{ title: string; attribution: string; body: string }>;
+      };
+      if (!result.success) {
+        setExtractError(result.message ?? 'Could not read that PDF.');
+        setExtracting(false);
+        return;
+      }
+      if (result.title) setTitle(result.title);
+      if (result.prompt) setPrompt(result.prompt);
+      if (result.periodNumber && APUSH_PERIOD_LABEL[result.periodNumber]) {
+        setPeriodNumber(String(result.periodNumber));
+      }
+      if (
+        result.reasoningSkill &&
+        REASONING_SKILLS.some((s) => s.value === result.reasoningSkill)
+      ) {
+        setReasoningSkill(result.reasoningSkill);
+      }
+      if (isDbq && result.sources && result.sources.length > 0) {
+        setSources(
+          result.sources.map((source, index) => ({
+            ...emptySource(index + 1),
+            title: source.title || `Document ${index + 1}`,
+            attribution: source.attribution || '',
+            body: source.body || '',
+          }))
+        );
+      }
+      setExtracting(false);
+    } catch {
+      setExtractError('Could not read that PDF. Please try again.');
+      setExtracting(false);
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
@@ -214,6 +270,33 @@ export function CreateCustomApHistorySheet({
             name="apHistorySourcesJson"
             value={sourcesJson}
           />
+
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed bg-muted/30 p-3">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary">
+              <FileUpIcon className="h-4 w-4" />
+              {extracting ? 'Reading PDF…' : 'Upload a PDF to auto-fill'}
+              <input
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                disabled={isSaving || extracting}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void extractFromPdf(file);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <span className="text-xs text-muted-foreground">
+              Pulls the prompt{isDbq ? ' and documents' : ''} from an existing
+              {isDbq ? ' DBQ' : ' LEQ'}. Review before creating.
+            </span>
+            {extractError ? (
+              <span className="w-full text-xs text-destructive">
+                {extractError}
+              </span>
+            ) : null}
+          </div>
 
           <div className="space-y-2">
             <Label>Class</Label>
