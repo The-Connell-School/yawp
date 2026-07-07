@@ -5,7 +5,6 @@ import {
   AP_HISTORY_HERO_IMAGE,
   apHistoryHeroImageBytes,
 } from './ap-history-hero-image';
-import { AP_HISTORY_SOURCE_IMAGES } from './ap-history-source-images';
 import { LOCAL_DEV_ORG_ID } from './dev-personas';
 
 export const AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY = 'ap_history_essay';
@@ -111,21 +110,7 @@ export async function seedApHistoryLocalDev(
     select: { id: true },
   });
 
-  // Attach self-hosted image bytes to the curated visual sources so they render
-  // reliably from our own origin instead of hotlinking external hosts.
-  let imagesSeeded = 0;
-  for (const [externalKey, image] of Object.entries(AP_HISTORY_SOURCE_IMAGES)) {
-    const updated = await prisma.apHistoryPromptLibrarySource.updateMany({
-      where: { externalKey },
-      data: {
-        imageBlob: Buffer.from(image.svg, 'utf8'),
-        imageContentType: image.contentType,
-      },
-    });
-    imagesSeeded += updated.count;
-  }
-
   console.log(
-    `Seeded AP History Essay type with ${AP_HISTORY_LIBRARY_ENTRIES.length} curated library entries and ${imagesSeeded} self-hosted source images.`
+    `Seeded AP History Essay type with ${AP_HISTORY_LIBRARY_ENTRIES.length} curated library entries.`
   );
 }

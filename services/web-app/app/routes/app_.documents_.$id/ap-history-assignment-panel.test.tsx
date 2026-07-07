@@ -96,10 +96,8 @@ describe('ApHistoryAssignmentPanel image sources', () => {
     });
 
     expect(container.querySelector('img')).toBeNull();
-    expect(container.textContent).toContain('Image could not be loaded');
+    expect(container.textContent).toContain('view the original image');
     const link = container.querySelector('a[href]');
-    expect(link?.getAttribute('href')).toBe(
-      'https://example.test/freedmens-school.jpg'
-    );
+    expect(link?.getAttribute('href')).toBe('https://www.loc.gov/item/example');
   });
 });

@@ -52,6 +52,7 @@ export function ApHistorySourceCard({
   const activeSrc = imageCandidates[srcIndex];
   const exhausted = srcIndex >= imageCandidates.length;
   const showImage = isImageSource && Boolean(activeSrc) && !exhausted;
+  const viewOriginalUrl = source.provenanceUrl ?? source.imageUrl ?? null;
 
   return (
     <section className="rounded-md border bg-white p-3">
@@ -93,21 +94,24 @@ export function ApHistorySourceCard({
         </figure>
       ) : null}
 
-      {isImageSource && exhausted ? (
-        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <p className="font-medium">Image could not be loaded</p>
-          {source.imageUrl ? (
-            <a
-              href={source.imageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-xs underline underline-offset-2"
-            >
-              Open source image directly
-              <ExternalLinkIcon className="h-3 w-3" />
-            </a>
-          ) : null}
-        </div>
+      {isImageSource && exhausted && viewOriginalUrl ? (
+        <a
+          href={viewOriginalUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 flex items-center gap-3 rounded-md border border-dashed bg-muted/30 px-3 py-3 text-sm transition-colors hover:bg-muted/60"
+        >
+          <ImageIcon className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <span className="flex-1 text-muted-foreground">
+            This visual source is held in an outside archive. Read the
+            description below, or{' '}
+            <span className="font-medium text-foreground underline underline-offset-2">
+              view the original image
+            </span>
+            .
+          </span>
+          <ExternalLinkIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </a>
       ) : null}
 
       {source.caption ? (
