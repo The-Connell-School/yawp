@@ -1,25 +1,28 @@
-import { ArrowLeft, CheckCircle2, RotateCcw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, Loader2, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
 import {
   Link,
   data as dataResponse,
+  useFetcher,
   useLoaderData,
+  type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '~/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import {
+  practiceFeedbackStatusLabel,
+  type PracticeFeedbackResult,
+} from '~/utils/writing-lessons/practice-feedback.shared';
 import {
   getQuickWritingLessonBySlug,
+  getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
 } from '~/utils/writing-lessons/static-lessons.server';
 
@@ -38,29 +41,68 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
+type ActionData = {
+  promptId: string;
+  feedback: PracticeFeedbackResult;
+};
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const userId = await requireUserId(request);
+  await requireMembership(request, userId);
+
+  const context = getQuickWritingLessonContext(params.lessonSlug);
+  if (!context) {
+    throw new Response('Lesson not found', { status: 404 });
+  }
+
+  const formData = await request.formData();
+  const promptId = String(formData.get('promptId') ?? '');
+  const response = String(formData.get('response') ?? '');
+
+  const prompts = getQuickWritingPracticePrompts(params.lessonSlug);
+  const prompt = prompts.find((item) => item.id === promptId);
+  if (!prompt) {
+    throw new Response('Unknown practice prompt', { status: 400 });
+  }
+
+  const feedback = await generatePracticeFeedback({
+    lessonTitle: context.title,
+    skill: context.skill,
+    rule: context.rule,
+    exercise: prompt.exercise,
+    instruction: prompt.instruction,
+    response,
+  });
+
+  return dataResponse<ActionData>({ promptId: prompt.id, feedback });
+}
+
+const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
+  strong: 'bg-emerald-100 text-emerald-900',
+  developing: 'bg-amber-100 text-amber-900',
+  needs_revision: 'bg-rose-100 text-rose-900',
+};
+
 export default function WritingLessonDetailRoute() {
   const { lesson, practicePrompts } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<ActionData>();
   const [promptIndex, setPromptIndex] = useState(0);
   const [response, setResponse] = useState('');
-  const [score, setScore] = useState<number | null>(null);
   const activePrompt = practicePrompts[promptIndex] ?? null;
   const responseReady = response.trim().length > 0;
-  const scoreLabel = useMemo(() => {
-    if (score === null) return null;
-    if (score >= 80) return 'Ready for tutor review';
-    if (score >= 55) return 'Good start';
-    return 'Add more revision';
-  }, [score]);
+  const isChecking = fetcher.state !== 'idle';
 
-  function checkResponse() {
-    setScore(getPrototypeScore(response));
-  }
+  // Only show feedback that belongs to the prompt currently on screen, so
+  // switching prompts never leaves stale feedback behind.
+  const feedback =
+    fetcher.data && fetcher.data.promptId === activePrompt?.id
+      ? fetcher.data.feedback
+      : null;
 
   function showNextPrompt() {
     if (practicePrompts.length === 0) return;
     setPromptIndex((current) => (current + 1) % practicePrompts.length);
     setResponse('');
-    setScore(null);
   }
 
   return (
@@ -102,7 +144,12 @@ export default function WritingLessonDetailRoute() {
             </CardHeader>
             <CardContent className="space-y-4">
               {activePrompt ? (
-                <>
+                <fetcher.Form method="post" className="space-y-4">
+                  <input
+                    type="hidden"
+                    name="promptId"
+                    value={activePrompt.id}
+                  />
                   <div className="rounded-lg border bg-muted/50 p-3">
                     <p className="text-base text-foreground sm:text-sm">
                       {activePrompt.exercise}
@@ -121,12 +168,11 @@ export default function WritingLessonDetailRoute() {
                     </label>
                     <Textarea
                       id="practice-response"
-                      name="practice-response"
+                      name="response"
                       value={response}
-                      onChange={(event) => {
-                        setResponse(event.currentTarget.value);
-                        setScore(null);
-                      }}
+                      onChange={(event) =>
+                        setResponse(event.currentTarget.value)
+                      }
                       placeholder="Rewrite the sentence here."
                       className="min-h-28 text-base sm:text-sm"
                     />
@@ -134,13 +180,16 @@ export default function WritingLessonDetailRoute() {
 
                   <div className="flex flex-wrap gap-2">
                     <Button
-                      type="button"
+                      type="submit"
                       size="sm"
-                      onClick={checkResponse}
-                      disabled={!responseReady}
+                      disabled={!responseReady || isChecking}
                     >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Check response
+                      {isChecking ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                      )}
+                      {isChecking ? 'Checking…' : 'Check response'}
                     </Button>
                     <Button
                       type="button"
@@ -153,28 +202,10 @@ export default function WritingLessonDetailRoute() {
                     </Button>
                   </div>
 
-                  {score !== null ? (
-                    <div className="rounded-lg border bg-card p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-base font-medium sm:text-sm">
-                          Score preview
-                        </p>
-                        <p className="text-2xl font-semibold text-primary">
-                          {score}
-                        </p>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-secondary">
-                        <div
-                          className="h-2 rounded-full bg-primary"
-                          style={{ width: `${score}%` }}
-                        />
-                      </div>
-                      <p className="mt-3 text-base text-muted-foreground sm:text-sm">
-                        {scoreLabel}
-                      </p>
-                    </div>
+                  {feedback ? (
+                    <PracticeFeedbackPanel feedback={feedback} />
                   ) : null}
-                </>
+                </fetcher.Form>
               ) : (
                 <p className="text-base text-muted-foreground sm:text-sm">
                   This lesson does not have extracted practice prompts yet.
@@ -185,6 +216,62 @@ export default function WritingLessonDetailRoute() {
         </aside>
       </div>
     </section>
+  );
+}
+
+function PracticeFeedbackPanel({
+  feedback,
+}: {
+  feedback: PracticeFeedbackResult;
+}) {
+  return (
+    <div
+      data-testid="practice-feedback"
+      className="space-y-3 rounded-lg border bg-card p-3"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[feedback.status]}`}
+        >
+          {practiceFeedbackStatusLabel(feedback.status)}
+        </span>
+        {feedback.degraded ? (
+          <span className="text-xs text-muted-foreground">
+            Quick self-check · tutor offline
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Tutor feedback</span>
+        )}
+      </div>
+
+      <p className="text-base text-foreground sm:text-sm">{feedback.summary}</p>
+
+      {feedback.strengths.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-base font-medium sm:text-sm">What worked</p>
+          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
+            {feedback.strengths.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {feedback.focus.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-base font-medium sm:text-sm">Focus next on</p>
+          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
+            {feedback.focus.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <p className="text-base italic text-muted-foreground sm:text-sm">
+        {feedback.encouragement}
+      </p>
+    </div>
   );
 }
 
@@ -233,27 +320,6 @@ function MarkdownLesson({ content }: { content: string }) {
 
 function cleanMarkdown(value: string) {
   return value.replace(/\*\*/g, '').replace(/`/g, '').replace(/\*/g, '');
-}
-
-function getPrototypeScore(response: string) {
-  const trimmed = response.trim();
-  if (!trimmed) return 0;
-
-  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-  const hasEndingPunctuation = /[.!?]$/.test(trimmed);
-  const isConcise = wordCount <= 14;
-  const hasRevisionShape = !/\b(at this point in time|has the ability to|in order to)\b/i.test(
-    trimmed
-  );
-
-  return Math.min(
-    100,
-    35 +
-      Math.min(wordCount, 10) * 4 +
-      (hasEndingPunctuation ? 15 : 0) +
-      (isConcise ? 10 : 0) +
-      (hasRevisionShape ? 12 : 0)
-  );
 }
 
 export function ErrorBoundary() {

@@ -26,9 +26,7 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('heading', { name: /writing practice/i })
     ).toBeVisible();
-    await expect(
-      page.getByText(/self-guided practice/i)
-    ).toBeVisible();
+    await expect(page.getByText(/self-guided practice/i)).toBeVisible();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
     ).toBeVisible();
@@ -46,9 +44,7 @@ test.describe.serial('Writing practice prototype', () => {
     ).toBeVisible();
     await expect(page.getByText(/practice prompt/i)).toBeVisible();
     await expect(
-      page
-        .getByRole('complementary')
-        .getByText('At this point in time')
+      page.getByRole('complementary').getByText('At this point in time')
     ).toBeVisible();
 
     await page
@@ -56,9 +52,20 @@ test.describe.serial('Writing practice prototype', () => {
       .fill('We cannot accept new applications now.');
     await page.getByRole('button', { name: /check response/i }).click();
 
-    await expect(page.getByText(/score preview/i)).toBeVisible();
-    await expect(page.getByText(/ready for tutor review/i)).toBeVisible();
+    // Feedback is returned by the practice-feedback service. In E2E there is no
+    // ANTHROPIC_API_KEY, so it uses the deterministic degraded fallback, which
+    // still grounds its guidance in the lesson's skill.
+    const feedback = page.getByTestId('practice-feedback');
+    await expect(feedback).toBeVisible();
+    await expect(feedback.getByText(/coming along/i)).toBeVisible();
+    await expect(feedback.getByText(/revising for wordiness/i)).toBeVisible();
+    await expect(feedback.getByText(/tutor offline/i)).toBeVisible();
+
+    // Switching prompts clears the previous feedback.
     await page.getByRole('button', { name: /try another prompt/i }).click();
-    await expect(page.getByText(/weak construction/i)).toBeVisible();
+    await expect(page.getByTestId('practice-feedback')).toHaveCount(0);
+    await expect(
+      page.getByRole('complementary').getByText(/weak construction/i)
+    ).toBeVisible();
   });
 });
