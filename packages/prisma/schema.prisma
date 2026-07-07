@@ -147,6 +147,8 @@ model ApHistoryPromptLibrarySource {
   mediaType            String                      @default("text")
   imageUrl             String?
   imageAlt             String?
+  imageBlob            Bytes?
+  imageContentType     String?
   provenanceUrl        String?
 
   @@index([promptLibraryEntryId, position])

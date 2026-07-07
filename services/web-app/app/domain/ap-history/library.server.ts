@@ -6,7 +6,9 @@ import {
   buildApHistorySnapshot,
 } from './schema';
 
-export async function findApHistoryAssignmentTypeForOrg(organizationId: string) {
+export async function findApHistoryAssignmentTypeForOrg(
+  organizationId: string
+) {
   return prisma.assignmentType.findFirst({
     where: {
       systemKey: AP_HISTORY_ASSIGNMENT_TYPE_KEY,
@@ -17,11 +19,32 @@ export async function findApHistoryAssignmentTypeForOrg(organizationId: string) 
   });
 }
 
+// Source fields safe to send to the client / copy into the snapshot. The
+// image bytes (imageBlob) and content type stay server-side and are streamed
+// only through the dedicated /api/image/ap-history-source route.
+const AP_HISTORY_SOURCE_SELECT = {
+  externalKey: true,
+  position: true,
+  title: true,
+  attribution: true,
+  body: true,
+  caption: true,
+  mediaType: true,
+  imageUrl: true,
+  imageAlt: true,
+  provenanceUrl: true,
+} satisfies Prisma.ApHistoryPromptLibrarySourceSelect;
+
 export async function listApHistoryLibraryEntries(assignmentTypeId: string) {
   return prisma.apHistoryPromptLibraryEntry.findMany({
     where: { assignmentTypeId, archivedAt: null, course: 'apush' },
     orderBy: [{ essayType: 'asc' }, { periodNumber: 'asc' }, { title: 'asc' }],
-    include: { sources: { orderBy: { position: 'asc' } } },
+    include: {
+      sources: {
+        orderBy: { position: 'asc' },
+        select: AP_HISTORY_SOURCE_SELECT,
+      },
+    },
   });
 }
 
@@ -36,7 +59,12 @@ export async function getApHistoryLibraryEntryForSnapshot(params: {
       archivedAt: null,
       course: 'apush',
     },
-    include: { sources: { orderBy: { position: 'asc' } } },
+    include: {
+      sources: {
+        orderBy: { position: 'asc' },
+        select: AP_HISTORY_SOURCE_SELECT,
+      },
+    },
   });
 }
 
