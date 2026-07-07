@@ -1,5 +1,5 @@
 import { Badge } from '~/components/ui/badge';
-import { ApHistorySourceCard } from '~/components/ap-history/source-card';
+import { ApHistorySourceCarousel } from '~/components/ap-history/source-card';
 import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
 type Props = {
@@ -54,15 +54,8 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
             <summary className="cursor-pointer text-sm font-medium text-foreground marker:text-muted-foreground">
               {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
             </summary>
-            <div className="mt-2 grid max-h-[min(20rem,35vh)] gap-2 overflow-y-auto pr-1">
-              {[...snapshot.sources]
-                .sort((a, b) => a.position - b.position)
-                .map((source) => (
-                  <ApHistorySourceCard
-                    key={`${source.position}-${source.externalKey}`}
-                    source={source}
-                  />
-                ))}
+            <div className="mt-2">
+              <ApHistorySourceCarousel sources={snapshot.sources} />
             </div>
           </details>
         ) : null}

@@ -26,7 +26,7 @@ import {
 } from '~/components/ui/sheet';
 import { FileTextIcon } from 'lucide-react';
 import {
-  ApHistorySourceCard,
+  ApHistorySourceCarousel,
   type ApHistorySourceCardData,
 } from '~/components/ap-history/source-card';
 
@@ -187,15 +187,10 @@ export function CreateAssignmentSheet({
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="grid gap-2 pb-2">
-                      {[...apHistoryEntry.sources]
-                        .sort((a, b) => a.position - b.position)
-                        .map((source) => (
-                          <ApHistorySourceCard
-                            key={source.externalKey}
-                            source={source}
-                          />
-                        ))}
+                    <div className="pb-2">
+                      <ApHistorySourceCarousel
+                        sources={apHistoryEntry.sources}
+                      />
                     </div>
                   </AccordionContent>
                 </AccordionItem>

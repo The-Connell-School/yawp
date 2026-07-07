@@ -1,5 +1,11 @@
-import { useMemo, useState } from 'react';
-import { ExternalLinkIcon, ImageIcon, ZoomInIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+  ImageIcon,
+  ZoomInIcon,
+} from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 
 export type ApHistorySourceCardData = {
@@ -110,7 +116,9 @@ export function ApHistorySourceCard({
         </p>
       ) : null}
 
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{source.body}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6">
+        {source.body}
+      </p>
 
       {source.provenanceUrl ? (
         <p className="mt-1.5">
@@ -126,5 +134,85 @@ export function ApHistorySourceCard({
         </p>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Steps through DBQ sources one at a time with prev/next controls, instead of
+ * stacking every source in one long list. Shared by the teacher review preview
+ * and the student runtime panel.
+ */
+export function ApHistorySourceCarousel({
+  sources,
+}: {
+  sources: ApHistorySourceCardData[];
+}) {
+  const ordered = useMemo(
+    () => [...sources].sort((a, b) => a.position - b.position),
+    [sources]
+  );
+  const [index, setIndex] = useState(0);
+
+  // Reset to the first source when the set of sources changes (e.g. a
+  // different prompt is selected).
+  const firstKey = ordered[0]?.externalKey;
+  useEffect(() => {
+    setIndex(0);
+  }, [ordered.length, firstKey]);
+
+  if (ordered.length === 0) return null;
+
+  const safeIndex = Math.min(index, ordered.length - 1);
+  const source = ordered[safeIndex];
+  const atStart = safeIndex === 0;
+  const atEnd = safeIndex === ordered.length - 1;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setIndex((i) => Math.max(0, i - 1))}
+          disabled={atStart}
+          aria-label="Previous source"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </button>
+        <span className="text-xs font-medium text-muted-foreground">
+          Source {safeIndex + 1} of {ordered.length}
+        </span>
+        <button
+          type="button"
+          onClick={() => setIndex((i) => Math.min(ordered.length - 1, i + 1))}
+          disabled={atEnd}
+          aria-label="Next source"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full border bg-background text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      <ApHistorySourceCard key={source.externalKey} source={source} />
+
+      {ordered.length > 1 ? (
+        <div className="flex flex-wrap justify-center gap-1.5 pt-1">
+          {ordered.map((candidate, dotIndex) => (
+            <button
+              key={candidate.externalKey}
+              type="button"
+              onClick={() => setIndex(dotIndex)}
+              aria-label={`Go to source ${dotIndex + 1}`}
+              aria-current={dotIndex === safeIndex}
+              className={`h-2 w-2 rounded-full transition-colors ${
+                dotIndex === safeIndex
+                  ? 'bg-foreground'
+                  : 'bg-foreground/25 hover:bg-foreground/50'
+              }`}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
