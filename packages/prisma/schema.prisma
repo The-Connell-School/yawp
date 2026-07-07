@@ -31,6 +31,8 @@ model Class {
   school           School            @relation(fields: [schoolId], references: [id])
   classAssignments ClassAssignment[]
 
+  writingPracticeClassAssignments WritingPracticeClassAssignment[]
+
   @@unique([schoolId, code])
   @@index([schoolId, schoolYear, period, grade])
 }
@@ -409,6 +411,9 @@ model OrgMembership {
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
 
+  writingPracticeAssignmentsCreated WritingPracticeAssignment[] @relation("WritingPracticeAssignmentCreator")
+  writingPracticeAttempts           WritingPracticeAttempt[]    @relation("WritingPracticeAttemptStudent")
+
   @@unique([userId, organizationId])
   @@map("OrgMembership")
 }
@@ -697,4 +702,64 @@ model LlmLog {
   @@index([createdAt(sort: Desc)])
   @@index([model])
   @@index([provider])
+}
+
+/// A teacher-authored writing-practice assignment (the template/config).
+/// One lesson slug = massed practice on a single skill; multiple slugs =
+/// interleaved practice mixing skills.
+model WritingPracticeAssignment {
+  id                    String                           @id @default(cuid())
+  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                         @default(now()) @updatedAt @db.Timestamptz(6)
+  title                 String?
+  lessonSlugs           String[]
+  /// How many practice prompts each student should complete.
+  problemCount          Int                              @default(5)
+  dueAt                 DateTime?                        @db.Timestamptz(6)
+  instructions          String?
+  createdByMembershipId String?
+  createdByMembership   OrgMembership?                   @relation("WritingPracticeAssignmentCreator", fields: [createdByMembershipId], references: [id], onDelete: SetNull)
+  classAssignments      WritingPracticeClassAssignment[]
+
+  @@index([createdByMembershipId])
+}
+
+/// Per-class deployment of a writing-practice assignment (the join row),
+/// mirroring the Assignment -> ClassAssignment split.
+model WritingPracticeClassAssignment {
+  id           String                    @id @default(cuid())
+  createdAt    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
+  assignmentId String
+  assignment   WritingPracticeAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  classId      String
+  class        Class                     @relation(fields: [classId], references: [id], onDelete: Cascade)
+  attempts     WritingPracticeAttempt[]
+
+  @@unique([assignmentId, classId])
+  @@index([classId, createdAt(sort: Desc)])
+}
+
+/// A single student's persisted response to one practice prompt, with the
+/// tutor feedback it produced. Snapshots the prompt text so history survives
+/// lesson-content changes.
+model WritingPracticeAttempt {
+  id                String                         @id @default(cuid())
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                       @default(now()) @updatedAt @db.Timestamptz(6)
+  classAssignmentId String
+  classAssignment   WritingPracticeClassAssignment @relation(fields: [classAssignmentId], references: [id], onDelete: Cascade)
+  membershipId      String
+  membership        OrgMembership                  @relation("WritingPracticeAttemptStudent", fields: [membershipId], references: [id], onDelete: Cascade)
+  lessonSlug        String
+  promptId          String
+  exercise          String
+  instruction       String
+  response          String
+  /// Feedback status: 'strong' | 'developing' | 'needs_revision'.
+  status            String
+  feedbackJson      Json
+
+  @@index([classAssignmentId, membershipId, createdAt(sort: Desc)])
+  @@index([membershipId, createdAt(sort: Desc)])
 }
