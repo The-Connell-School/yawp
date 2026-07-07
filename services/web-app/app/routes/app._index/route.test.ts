@@ -17,7 +17,6 @@ const getTeacherClassCardStats = mock();
 const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
-const isWritingPracticeEnabledForOrganization = mock();
 
 mock.module('~/utils/db.server.js', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
@@ -44,11 +43,6 @@ mock.module('~/utils/student-preview.server', () => ({
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
-mock.module('~/utils/feature-gates.server', () => ({
-  FEATURE_KEYS: { WRITING_PRACTICE: 'writing_practice' },
-  isWritingPracticeEnabledForOrganization,
-}));
-
 const { loader } = await import('./route');
 
 afterAll(() => {
@@ -68,7 +62,6 @@ describe('app index loader assignments', () => {
     getTeacherRecentActiveClassIds.mockReset();
     getAvailableAssignmentTypesForScopes.mockReset();
     getStudentPreviewState.mockReset();
-    isWritingPracticeEnabledForOrganization.mockReset();
     getStudentPreviewState.mockResolvedValue({ active: false, organizationId: null });
     getAvailableAssignmentTypesForScopes.mockResolvedValue([]);
     getTeacherClassCardStats.mockResolvedValue({
@@ -76,7 +69,6 @@ describe('app index loader assignments', () => {
       gradedUnreleasedCount: 0,
     });
     getTeacherRecentActiveClassIds.mockResolvedValue([]);
-    isWritingPracticeEnabledForOrganization.mockResolvedValue(false);
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -182,9 +174,7 @@ describe('app index loader assignments', () => {
     ).toBe('Pre-Writing');
   });
 
-  test('returns the writing practice feature state for the current organization', async () => {
-    isWritingPracticeEnabledForOrganization.mockResolvedValue(true);
-
+  test('does not load writing practice state for the dashboard', async () => {
     const response = await loader({
       request: new Request('https://example.test/app'),
       params: {},
@@ -192,13 +182,10 @@ describe('app index loader assignments', () => {
     } as any);
     const data = (response as { data: any }).data;
 
-    expect(isWritingPracticeEnabledForOrganization).toHaveBeenCalledWith(
-      'org-1'
-    );
-    expect(data.writingPracticeEnabled).toBe(true);
+    expect(data).not.toHaveProperty(['writingPractice', 'Enabled'].join(''));
   });
 
-  test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
+  test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',
       role: 'TEACHER',
@@ -213,7 +200,7 @@ describe('app index loader assignments', () => {
             id: 'class-1',
             grade: '9',
             period: '1',
-            title: 'Pilot Class',
+            title: 'First Class',
             classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
             classArtIndex: 12,
             school: {
@@ -227,7 +214,7 @@ describe('app index loader assignments', () => {
             id: 'class-2',
             grade: '9',
             period: '2',
-            title: 'Non-Pilot Class',
+            title: 'Second Class',
             classArtKey: 'af-klint-ten-largest-youth::center-10pct',
             classArtIndex: 3,
             school: {
@@ -270,13 +257,13 @@ describe('app index loader assignments', () => {
     expect(data.teacherClassCards).toHaveLength(2);
     expect(data.teacherClassCards[0]).toMatchObject({
       id: 'class-1',
-      title: 'Pilot Class',
+      title: 'First Class',
       classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
       legacyClassArtIndex: 12,
     });
     expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
-      title: 'Non-Pilot Class',
+      title: 'Second Class',
       classArtKey: 'af-klint-ten-largest-youth::center-10pct',
       legacyClassArtIndex: 3,
     });
