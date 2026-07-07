@@ -1,4 +1,5 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ClipboardPlus } from 'lucide-react';
+import { useState } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -6,8 +7,13 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 
+import {
+  AssignmentCreationSheet,
+  WRITING_PRACTICE_TYPE_ID,
+} from '~/components/assignments/assignment-creation-sheet';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
 import { Badge } from '~/components/ui/badge';
+import { Button } from '~/components/ui/button';
 import {
   Card,
   CardContent,
@@ -16,6 +22,7 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { prisma } from '~/utils/db.server';
 import {
   getAssignedPracticeForStudent,
   getWritingPracticeAssignmentsForTeacher,
@@ -38,6 +45,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }));
 
   const isTeacher = profile.role === 'TEACHER';
+
+  const teacherClasses = isTeacher
+    ? (
+        await prisma.class.findMany({
+          where: { teachers: { some: { id: profile.id } }, isArchived: false },
+          select: { id: true, title: true, grade: true, period: true },
+          orderBy: [{ grade: 'asc' }, { period: 'asc' }],
+        })
+      ).map((klass) => ({
+        id: klass.id,
+        title: klass.title,
+        grade: klass.grade,
+        period: klass.period,
+      }))
+    : [];
+  const writingPracticeLessons = isTeacher
+    ? groups.flatMap((group) =>
+        group.lessons.map((lesson) => ({
+          slug: lesson.slug,
+          title: lesson.title,
+          category: lesson.category,
+        }))
+      )
+    : [];
 
   const assignedPractice =
     profile.role === 'STUDENT'
@@ -78,6 +109,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return dataResponse({
     groups,
     isTeacher,
+    teacherClasses,
+    writingPracticeLessons,
     assignedPractice,
     assignedByTeacher,
   });
@@ -121,22 +154,52 @@ function TeacherDirections() {
 }
 
 export default function WritingLessonsIndexRoute() {
-  const { groups, isTeacher, assignedPractice, assignedByTeacher } =
-    useLoaderData<typeof loader>();
+  const {
+    groups,
+    isTeacher,
+    teacherClasses,
+    writingPracticeLessons,
+    assignedPractice,
+    assignedByTeacher,
+  } = useLoaderData<typeof loader>();
+  const [isAssignOpen, setIsAssignOpen] = useState(false);
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <div className="flex flex-col">
-            <p className="text-base font-medium text-primary sm:text-sm">
-              Practice
-            </p>
-            <h2 className="mt-1">Writing practice</h2>
-            <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
-              Focused lessons and quick rewrite drills for sentence control,
-              grammar, and revision habits.
-            </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col">
+              <p className="text-base font-medium text-primary sm:text-sm">
+                Practice
+              </p>
+              <h2 className="mt-1">Writing practice</h2>
+              <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
+                Focused lessons and quick rewrite drills for sentence control,
+                grammar, and revision habits.
+              </p>
+            </div>
+            {isTeacher ? (
+              <>
+                <Button
+                  className="shrink-0 rounded-full"
+                  onClick={() => setIsAssignOpen(true)}
+                >
+                  <ClipboardPlus className="mr-2 h-4 w-4" />
+                  New practice assignment
+                </Button>
+                <AssignmentCreationSheet
+                  open={isAssignOpen}
+                  onOpenChange={setIsAssignOpen}
+                  entryPoint="dashboard"
+                  assignmentTypes={[]}
+                  teacherClasses={teacherClasses}
+                  initialAssignmentTypeId={WRITING_PRACTICE_TYPE_ID}
+                  writingPracticeEnabled
+                  writingPracticeLessons={writingPracticeLessons}
+                />
+              </>
+            ) : null}
           </div>
         </div>
       </div>

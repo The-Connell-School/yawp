@@ -196,4 +196,27 @@ test.describe.serial('Writing practice prototype', () => {
       page.getByRole('button', { name: /assign practice/i })
     ).toHaveCount(0);
   });
+
+  test('the writing-practice page has a direct "New practice assignment" entry point', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setWritingPracticeForOrganization({
+      organizationId: e2eContext.organizationId,
+      enabled: true,
+    });
+
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons');
+
+    await page
+      .getByRole('button', { name: /new practice assignment/i })
+      .click();
+
+    // Opens straight into the writing-practice builder.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
+    await expect(dialog.getByText(/how many problems/i)).toBeVisible();
+  });
 });
