@@ -197,6 +197,31 @@ test.describe.serial('Writing practice prototype', () => {
     ).toHaveCount(0);
   });
 
+  test('offers "Writing practice" in the Assignments page type dropdown', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setWritingPracticeForOrganization({
+      organizationId: e2eContext.organizationId,
+      enabled: true,
+    });
+
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/assignments');
+
+    await page.getByRole('button', { name: /new assignment/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    // Open the assignment-type dropdown and choose writing practice.
+    await dialog.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: /writing practice/i }).click();
+
+    // The sheet body swaps to the writing-practice builder.
+    await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
+    await expect(dialog.getByText(/how many problems/i)).toBeVisible();
+  });
+
   test('the writing-practice page has a direct "New practice assignment" entry point', async ({
     page,
     e2eContext,

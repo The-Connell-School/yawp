@@ -44,6 +44,7 @@ import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-ac
 import { parseAssignmentGradingIntent } from '~/utils/assignment-grading-intent.server';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
+import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
 
 export const handle = { breadcrumb: 'Assignments' };
 
@@ -359,6 +360,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (type) => type.systemKey !== AP_HISTORY_ASSIGNMENT_TYPE_KEY
   );
 
+  const writingPracticeLessons = hasActiveClasses
+    ? getQuickWritingLessonGroups().flatMap((group) =>
+        group.lessons.map((lesson) => ({
+          slug: lesson.slug,
+          title: lesson.title,
+          category: lesson.category,
+        }))
+      )
+    : [];
+
   return dataResponse({
     assignments,
     classes: classes.map((klass) => ({
@@ -382,6 +393,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     })),
     assignmentsEnabled: hasActiveClasses,
     hasActiveClasses,
+    writingPracticeLessons,
   });
 }
 
@@ -857,6 +869,8 @@ export default function AssignmentsRoute() {
             : undefined
         }
         initialPrompt={duplicateAssignment?.prompt}
+        writingPracticeEnabled
+        writingPracticeLessons={data.writingPracticeLessons}
       />
 
       {editingAssignment ? (
