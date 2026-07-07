@@ -5,8 +5,9 @@ export function ApHistoryTeacherDirections() {
         How AP History Essays work
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
-        Browse the curated APUSH library below, open a prompt to preview it,
-        then hit New → Assignment to assign it to a class. The prompt, source
+        Assign a curated APUSH prompt from the library below, or use{' '}
+        <span className="font-medium text-foreground">Create assignment</span>{' '}
+        (top right) to build your own DBQ or LEQ. Either way, the prompt, source
         set, and AP rubric are locked in when you assign, so every student
         writes from the same material and you review consistent, rubric-aligned
         feedback.
@@ -36,8 +37,10 @@ export function ApHistoryTeacherDirections() {
           feedback and can override it before releasing grades.
         </li>
         <li>
-          The library is curated for AP alignment — there&rsquo;s no prompt
-          editing, PDF upload, or custom tutor to manage.
+          <span className="font-medium text-foreground">Build your own</span> —
+          use Create assignment to write a custom DBQ or LEQ, choose the period
+          and reasoning skill, and add your own documents. Uploading document
+          files is coming soon.
         </li>
       </ul>
     </section>

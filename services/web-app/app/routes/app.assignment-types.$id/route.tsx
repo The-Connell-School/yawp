@@ -41,6 +41,10 @@ import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
 import { ApHistoryTeacherDirections } from './ap-history/teacher-directions';
+import {
+  CreateCustomApHistorySheet,
+  type CustomEssayType,
+} from './ap-history/create-custom-sheet';
 import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
@@ -486,6 +490,8 @@ export default function AppAssignmentTypesIdRoute() {
   const isLoading = navigation.state !== 'idle';
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
+  const [customEssayType, setCustomEssayType] =
+    useState<CustomEssayType | null>(null);
   const [libraryPrompt, setLibraryPrompt] = useState('');
   const [apHistoryEntry, setApHistoryEntry] = useState<{
     externalKey: string;
@@ -544,6 +550,32 @@ export default function AppAssignmentTypesIdRoute() {
                   </DropdownMenu>
                 </>
               ) : null}
+              {isApHistoryAssignmentType ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      className="w-fit"
+                      disabled={assignmentSheetClasses.length === 0}
+                    >
+                      Create assignment{' '}
+                      <ChevronDownIcon className="ml-1 h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => setCustomEssayType('dbq')}
+                    >
+                      New DBQ (document-based)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => setCustomEssayType('leq')}
+                    >
+                      New LEQ (long essay)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
               <CreateAssignmentSheet
                 assignmentTypeId={data.assignmentType.id}
                 assignmentTypeTitle={data.assignmentType.title}
@@ -553,6 +585,17 @@ export default function AppAssignmentTypesIdRoute() {
                 initialPrompt={libraryPrompt}
                 apHistoryEntry={apHistoryEntry}
               />
+              {isApHistoryAssignmentType ? (
+                <CreateCustomApHistorySheet
+                  assignmentTypeId={data.assignmentType.id}
+                  teacherClasses={assignmentSheetClasses}
+                  open={customEssayType !== null}
+                  onOpenChange={(o) => {
+                    if (!o) setCustomEssayType(null);
+                  }}
+                  essayType={customEssayType ?? 'dbq'}
+                />
+              ) : null}
             </>
           ) : canCreateDirectDocument ? (
             <Form method="post">

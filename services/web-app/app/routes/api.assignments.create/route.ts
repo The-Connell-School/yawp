@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { type ActionFunctionArgs, data as dataResponse } from 'react-router';
+import { z } from 'zod';
 import {
   buildAssignmentCreateInputFromApHistoryEntry,
+  buildAssignmentCreateInputFromCustomApHistory,
   getApHistoryLibraryEntryForSnapshot,
 } from '~/domain/ap-history/library.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -18,7 +21,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  if (profile.role !== "TEACHER") {
+  if (profile.role !== 'TEACHER') {
     return dataResponse(
       { success: false, message: 'Only teachers can create assignments.' },
       { status: 403 }
@@ -131,6 +134,31 @@ export async function action({ request }: ActionFunctionArgs) {
   const deployClassIds = classes.map((klass) => klass.id);
 
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    if (formData.get('apHistoryMode')?.toString() === 'custom') {
+      const parsed = parseCustomApHistoryPayload(formData);
+      if (!parsed.success) {
+        return dataResponse(
+          { success: false, message: parsed.message },
+          { status: 400 }
+        );
+      }
+
+      await createAssignmentDeployedToClasses({
+        data: buildAssignmentCreateInputFromCustomApHistory({
+          assignmentTypeId: assignmentType.id,
+          title,
+          gradingAssistantStrictnessLevel,
+          custom: { key: `custom-${randomUUID()}`, ...parsed.data },
+        }),
+        classIds: deployClassIds,
+      });
+
+      return dataResponse({
+        success: true,
+        message: 'Assignment created and applied to classes.',
+      });
+    }
+
     if (!apHistoryLibraryEntryId) {
       return dataResponse(
         { success: false, message: 'AP History library entry is required.' },
@@ -192,4 +220,71 @@ export async function action({ request }: ActionFunctionArgs) {
     success: true,
     message: 'Assignment created and applied to classes.',
   });
+}
+
+const CustomApHistorySourceSchema = z.object({
+  position: z.number().int().positive(),
+  title: z.string().trim().min(1),
+  attribution: z.string().trim().min(1),
+  body: z.string().trim().min(1),
+  caption: z.string().trim().nullish(),
+  mediaType: z.enum(['text', 'image']).optional(),
+  imageUrl: z.string().trim().nullish(),
+  imageAlt: z.string().trim().nullish(),
+  provenanceUrl: z.string().trim().nullish(),
+});
+
+const CustomApHistoryPayloadSchema = z.object({
+  essayType: z.enum(['dbq', 'leq']),
+  prompt: z.string().trim().min(1),
+  period: z.string().trim().min(1),
+  periodNumber: z.coerce.number().int().positive(),
+  reasoningSkill: z.string().trim().min(1),
+  timeMode: z.enum(['untimed', 'timed']),
+  durationMinutes: z.coerce.number().int().positive(),
+  sources: z.array(CustomApHistorySourceSchema).default([]),
+});
+
+type CustomApHistoryPayload = z.infer<typeof CustomApHistoryPayloadSchema>;
+
+function parseCustomApHistoryPayload(
+  formData: FormData
+):
+  | { success: true; data: CustomApHistoryPayload }
+  | { success: false; message: string } {
+  let sources: unknown = [];
+  const sourcesRaw = formData.get('apHistorySourcesJson')?.toString();
+  if (sourcesRaw) {
+    try {
+      sources = JSON.parse(sourcesRaw);
+    } catch {
+      return { success: false, message: 'Sources are not valid JSON.' };
+    }
+  }
+
+  const result = CustomApHistoryPayloadSchema.safeParse({
+    essayType: formData.get('essayType')?.toString(),
+    prompt: formData.get('prompt')?.toString() ?? '',
+    period: formData.get('period')?.toString(),
+    periodNumber: formData.get('periodNumber')?.toString(),
+    reasoningSkill: formData.get('reasoningSkill')?.toString(),
+    timeMode: formData.get('timeMode')?.toString() ?? 'untimed',
+    durationMinutes: formData.get('durationMinutes')?.toString() ?? '60',
+    sources,
+  });
+
+  if (!result.success) {
+    return {
+      success: false,
+      message:
+        result.error.issues[0]?.message ??
+        'Custom AP History input is invalid.',
+    };
+  }
+
+  if (result.data.essayType === 'dbq' && result.data.sources.length === 0) {
+    return { success: false, message: 'A DBQ needs at least one source.' };
+  }
+
+  return { success: true, data: result.data };
 }
