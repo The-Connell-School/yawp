@@ -174,8 +174,19 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('heading', { name: /student progress/i })
     ).toBeVisible();
+    const studentRow = page
+      .getByTestId('student-progress-row')
+      .filter({ hasText: '1/4' });
+    await expect(studentRow).toBeVisible();
+
+    // And can expand that student to read the exact answer and its feedback.
+    await studentRow.click();
+    const attempts = page.getByTestId('student-attempts');
+    await expect(attempts).toBeVisible();
+    await expect(attempts.getByText(/student answer/i)).toBeVisible();
+    // The student's fix (semicolon) is distinct from the prompt (comma splice).
     await expect(
-      page.getByTestId('student-progress-row').filter({ hasText: '1/4' })
+      attempts.getByText(/thousand dollars; most students/i)
     ).toBeVisible();
   });
 

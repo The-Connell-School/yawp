@@ -29,6 +29,7 @@ const {
   summarizeWritingPracticeResults,
   buildGeneratedPracticeSequence,
   getOrCreateStudentPracticeSet,
+  getWritingPracticeResultsForTeacher,
 } = await import('./practice-assignments.server');
 
 beforeEach(() => {
@@ -253,6 +254,68 @@ describe('getOrCreateStudentPracticeSet', () => {
     expect(createArg.data.source).toBe('ai');
     expect(items).toHaveLength(2);
     expect(items[0].prompt.exercise).toContain('Generated');
+  });
+});
+
+describe('getWritingPracticeResultsForTeacher', () => {
+  test('groups each student’s full attempts with prompt, answer, and feedback', async () => {
+    const feedback: PracticeFeedbackResult = {
+      status: 'strong',
+      summary: 'Clean fix.',
+      strengths: ['Semicolon joins two clauses.'],
+      focus: [],
+      encouragement: 'Nice.',
+      degraded: false,
+    };
+    writingPracticeClassAssignment.findFirst.mockResolvedValueOnce({
+      id: 'wpca-1',
+      assignment: {
+        problemCount: 2,
+        lessonSlugs: ['fixing-comma-splices'],
+        title: 'Comma week',
+        dueAt: null,
+      },
+      class: {
+        id: 'class-1',
+        title: 'Period 1',
+        grade: '9',
+        period: '1',
+        students: [{ id: 's-1', user: { name: 'Aaron', email: 'a@x.com' } }],
+      },
+      attempts: [
+        {
+          id: 'att-1',
+          membershipId: 's-1',
+          lessonSlug: 'fixing-comma-splices',
+          promptId: 'fixing-comma-splices-1',
+          exercise: 'A, B.',
+          instruction: 'Fix it.',
+          response: 'A; B.',
+          status: 'strong',
+          feedbackJson: feedback,
+          createdAt: new Date('2026-07-01T10:00:00Z'),
+        },
+      ],
+    });
+
+    const data = await getWritingPracticeResultsForTeacher('wpca-1', 'teacher-1');
+
+    expect(data).not.toBeNull();
+    const attempts = data!.attemptsByStudent['s-1'];
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].exercise).toBe('A, B.');
+    expect(attempts[0].response).toBe('A; B.');
+    expect(attempts[0].feedback).toEqual(feedback);
+    // Scoped to a class this teacher owns.
+    const where = writingPracticeClassAssignment.findFirst.mock.calls[0][0].where;
+    expect(where.class.teachers.some.id).toBe('teacher-1');
+  });
+
+  test('returns null when the deployment is not the teacher’s', async () => {
+    writingPracticeClassAssignment.findFirst.mockResolvedValueOnce(null);
+    expect(
+      await getWritingPracticeResultsForTeacher('wpca-x', 'teacher-1')
+    ).toBeNull();
   });
 });
 

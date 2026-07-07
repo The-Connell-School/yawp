@@ -353,6 +353,19 @@ export type WritingPracticeStudentResult = {
   latestStatus: string | null;
 };
 
+/** One recorded student attempt, with the prompt, their answer, and feedback. */
+export type WritingPracticeAttemptDetail = {
+  id: string;
+  lessonSlug: string;
+  promptId: string;
+  exercise: string;
+  instruction: string;
+  response: string;
+  status: string;
+  feedback: PracticeFeedbackResult;
+  createdAt: Date;
+};
+
 /**
  * Rolls a class-assignment's attempts up into one row per enrolled student:
  * how many problems they have submitted, whether they've met the target, and
@@ -433,7 +446,19 @@ export async function getWritingPracticeResultsForTeacher(
           },
         },
         attempts: {
-          select: { membershipId: true, status: true, createdAt: true },
+          select: {
+            id: true,
+            membershipId: true,
+            lessonSlug: true,
+            promptId: true,
+            exercise: true,
+            instruction: true,
+            response: true,
+            status: true,
+            feedbackJson: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
         },
       },
     }
@@ -446,5 +471,23 @@ export async function getWritingPracticeResultsForTeacher(
     problemCount: classAssignment.assignment.problemCount,
   });
 
-  return { classAssignment, results };
+  // Group each student's full attempts (prompt + answer + feedback) so the
+  // teacher can read exactly what a student wrote and how the tutor responded.
+  const attemptsByStudent: Record<string, WritingPracticeAttemptDetail[]> = {};
+  for (const attempt of classAssignment.attempts) {
+    const detail: WritingPracticeAttemptDetail = {
+      id: attempt.id,
+      lessonSlug: attempt.lessonSlug,
+      promptId: attempt.promptId,
+      exercise: attempt.exercise,
+      instruction: attempt.instruction,
+      response: attempt.response,
+      status: attempt.status,
+      feedback: attempt.feedbackJson as PracticeFeedbackResult,
+      createdAt: attempt.createdAt,
+    };
+    (attemptsByStudent[attempt.membershipId] ??= []).push(detail);
+  }
+
+  return { classAssignment, results, attemptsByStudent };
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Sparkles } from 'lucide-react';
 import {
   Link,
   data as dataResponse,
@@ -8,6 +8,12 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '~/components/ui/accordion';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -16,6 +22,7 @@ import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.s
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   practiceFeedbackStatusLabel,
+  type PracticeFeedbackResult,
   type PracticeFeedbackStatus,
 } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
@@ -41,13 +48,29 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Assigned practice not found', { status: 404 });
   }
 
-  const { classAssignment, results } = data;
+  const { classAssignment, results, attemptsByStudent } = data;
   const lessonTitles = classAssignment.assignment.lessonSlugs
     .map((slug) => getQuickWritingLessonBySlug(slug)?.title)
     .filter((title): title is string => Boolean(title));
 
   const completedCount = results.filter((row) => row.completed).length;
   const startedCount = results.filter((row) => row.attemptCount > 0).length;
+
+  // Attach each student's attempts (prompt + answer + feedback) to their row.
+  const resultsWithAttempts = results.map((row) => ({
+    ...row,
+    attempts: (attemptsByStudent[row.membershipId] ?? []).map((attempt) => ({
+      id: attempt.id,
+      lessonTitle:
+        getQuickWritingLessonBySlug(attempt.lessonSlug)?.title ?? 'Practice',
+      exercise: attempt.exercise,
+      instruction: attempt.instruction,
+      response: attempt.response,
+      status: attempt.status,
+      feedback: attempt.feedback,
+      createdAt: attempt.createdAt.toISOString(),
+    })),
+  }));
 
   return dataResponse({
     classLabel:
@@ -59,7 +82,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     dueAt: classAssignment.assignment.dueAt
       ? classAssignment.assignment.dueAt.toISOString()
       : null,
-    results,
+    results: resultsWithAttempts,
     completedCount,
     startedCount,
   });
@@ -135,60 +158,164 @@ export default function WritingPracticeResultsRoute() {
             <CardTitle className="text-xl">Student progress</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <ul className="divide-y">
-              {results.map((row) => (
-                <li
-                  key={row.membershipId}
-                  data-testid="student-progress-row"
-                  className="flex items-center justify-between gap-3 px-4 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    {row.completed ? (
-                      <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-                    ) : (
-                      <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-medium sm:text-sm">
-                        {row.name ?? row.email}
-                      </p>
-                      {row.name ? (
-                        <p className="truncate text-xs text-muted-foreground">
-                          {row.email}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    {row.latestStatus ? (
-                      <span
-                        className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
-                          STATUS_STYLES[
-                            row.latestStatus as PracticeFeedbackStatus
-                          ] ?? 'bg-muted text-muted-foreground'
-                        }`}
-                      >
-                        {practiceFeedbackStatusLabel(
-                          row.latestStatus as PracticeFeedbackStatus
+            {results.length === 0 ? (
+              <p className="px-4 py-6 text-base text-muted-foreground sm:text-sm">
+                No students are enrolled in this class yet.
+              </p>
+            ) : (
+              <Accordion type="multiple" className="border-t">
+                {results.map((row) => (
+                  <AccordionItem
+                    key={row.membershipId}
+                    value={row.membershipId}
+                    disabled={row.attempts.length === 0}
+                  >
+                    <AccordionTrigger
+                      data-testid="student-progress-row"
+                      className="gap-3 px-4 py-3 hover:no-underline data-[disabled]:opacity-70 [&[data-disabled]>svg]:hidden"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        {row.completed ? (
+                          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                        ) : (
+                          <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />
                         )}
-                      </span>
-                    ) : null}
-                    <span className="text-base tabular-nums text-muted-foreground sm:text-sm">
-                      {row.attemptCount}/{problemCount}
-                    </span>
-                  </div>
-                </li>
-              ))}
-              {results.length === 0 ? (
-                <li className="px-4 py-6 text-base text-muted-foreground sm:text-sm">
-                  No students are enrolled in this class yet.
-                </li>
-              ) : null}
-            </ul>
+                        <div className="min-w-0">
+                          <p className="truncate text-base font-medium sm:text-sm">
+                            {row.name ?? row.email}
+                          </p>
+                          {row.name ? (
+                            <p className="truncate text-xs font-normal text-muted-foreground">
+                              {row.email}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {row.latestStatus ? (
+                          <span
+                            className={`hidden items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
+                              STATUS_STYLES[
+                                row.latestStatus as PracticeFeedbackStatus
+                              ] ?? 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {practiceFeedbackStatusLabel(
+                              row.latestStatus as PracticeFeedbackStatus
+                            )}
+                          </span>
+                        ) : null}
+                        <span className="text-base tabular-nums text-muted-foreground sm:text-sm">
+                          {row.attemptCount}/{problemCount}
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="bg-muted/30 px-4">
+                      <div
+                        className="space-y-3 pt-1"
+                        data-testid="student-attempts"
+                      >
+                        {row.attempts.map((attempt, index) => (
+                          <AttemptCard
+                            key={attempt.id}
+                            position={index + 1}
+                            attempt={attempt}
+                          />
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
           </CardContent>
         </Card>
       </div>
     </section>
+  );
+}
+
+type AttemptView = {
+  id: string;
+  lessonTitle: string;
+  exercise: string;
+  instruction: string;
+  response: string;
+  status: string;
+  feedback: PracticeFeedbackResult;
+  createdAt: string;
+};
+
+function AttemptCard({
+  position,
+  attempt,
+}: {
+  position: number;
+  attempt: AttemptView;
+}) {
+  const { feedback } = attempt;
+  return (
+    <div className="rounded-lg border border-border/70 bg-background p-3.5">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Problem {position} · {attempt.lessonTitle}
+        </span>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            STATUS_STYLES[attempt.status as PracticeFeedbackStatus] ??
+            'bg-muted text-muted-foreground'
+          }`}
+        >
+          {practiceFeedbackStatusLabel(attempt.status as PracticeFeedbackStatus)}
+        </span>
+      </div>
+
+      <div className="space-y-2 text-sm">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Prompt
+          </p>
+          <p className="text-foreground">{attempt.exercise}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Student answer
+          </p>
+          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2.5 py-1.5 text-foreground">
+            {attempt.response}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2 border-t border-border/60 pt-2.5">
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {feedback.degraded ? 'Quick self-check' : 'Tutor feedback'}
+          </p>
+        </div>
+        <p className="text-sm text-foreground">{feedback.summary}</p>
+        {feedback.strengths.length > 0 ? (
+          <ul className="space-y-1 text-sm text-muted-foreground">
+            {feedback.strengths.map((item) => (
+              <li key={item} className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {feedback.focus.length > 0 ? (
+          <ul className="space-y-1 text-sm text-muted-foreground">
+            {feedback.focus.map((item) => (
+              <li key={item} className="flex gap-2">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
