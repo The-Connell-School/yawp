@@ -98,4 +98,53 @@ test.describe.serial('Writing practice prototype', () => {
       /assigned to 1 class/i
     );
   });
+
+  test('a teacher assignment reaches the student and records attempts', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setWritingPracticeForOrganization({
+      organizationId: e2eContext.organizationId,
+      enabled: true,
+    });
+
+    // Teacher assigns the lesson to their (and the student's) class.
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/fixing-comma-splices');
+    await page.locator('input[name="classIds"]').first().check();
+    await page.locator('input[name="problemCount"]').fill('4');
+    await page.getByRole('button', { name: /assign practice/i }).click();
+    await expect(page.getByTestId('assign-result')).toContainText(
+      /assigned to/i
+    );
+
+    // Student sees it under "Assigned to you" and works a problem.
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    const assignedCard = page.getByTestId('assigned-practice-card').first();
+    await expect(assignedCard).toBeVisible();
+    await assignedCard.click();
+
+    await expect(
+      page.getByRole('heading', { name: /problem 1 of/i })
+    ).toBeVisible();
+
+    await page
+      .getByLabel(/your practice response/i)
+      .fill(
+        'The new phone costs over a thousand dollars; most students can’t afford it.'
+      );
+    await page.getByRole('button', { name: /check & save/i }).click();
+
+    // Feedback appears and the attempt is recorded (progress advances).
+    await expect(page.getByTestId('practice-feedback')).toBeVisible();
+    await expect(page.getByText(/1 of 4 done/i)).toBeVisible();
+
+    await page.getByRole('button', { name: /next problem/i }).click();
+    await expect(
+      page.getByRole('heading', { name: /problem 2 of/i })
+    ).toBeVisible();
+  });
 });

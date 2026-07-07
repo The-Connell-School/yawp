@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import { getAssignedPracticeForStudent } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   getQuickWritingLessonGroups,
   getQuickWritingPracticePrompts,
@@ -23,7 +24,7 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
-  await requireMembership(request, userId);
+  const profile = await requireMembership(request, userId);
 
   const groups = getQuickWritingLessonGroups().map((group) => ({
     ...group,
@@ -46,11 +47,38 @@ export async function loader({ request }: LoaderFunctionArgs) {
     0
   );
 
-  return dataResponse({ groups, lessonCount, promptCount });
+  const assignedPractice =
+    profile.role === 'STUDENT'
+      ? (await getAssignedPracticeForStudent(profile.id)).map(
+          (classAssignment) => ({
+            id: classAssignment.id,
+            title: classAssignment.assignment.title,
+            problemCount: classAssignment.assignment.problemCount,
+            dueAt: classAssignment.assignment.dueAt
+              ? classAssignment.assignment.dueAt.toISOString()
+              : null,
+            completedCount: Math.min(
+              classAssignment.attempts.length,
+              classAssignment.assignment.problemCount
+            ),
+          })
+        )
+      : [];
+
+  return dataResponse({ groups, lessonCount, promptCount, assignedPractice });
+}
+
+function formatDueDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 export default function WritingLessonsIndexRoute() {
-  const { groups, lessonCount, promptCount } = useLoaderData<typeof loader>();
+  const { groups, lessonCount, promptCount, assignedPractice } =
+    useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -99,6 +127,58 @@ export default function WritingLessonsIndexRoute() {
             </p>
           </div>
         </div>
+
+        {assignedPractice.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold">Assigned to you</h3>
+              <Badge variant="secondary" size="sm">
+                {assignedPractice.length}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {assignedPractice.map((assignment) => {
+                const complete =
+                  assignment.completedCount >= assignment.problemCount;
+                return (
+                  <Link
+                    key={assignment.id}
+                    to={`/app/writing-lessons/assigned/${assignment.id}`}
+                    className="block h-full"
+                    data-testid="assigned-practice-card"
+                  >
+                    <Card className="flex h-full flex-col border-primary/40 shadow-none hover:shadow-sm">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base leading-snug">
+                          {assignment.title ?? 'Writing practice'}
+                        </CardTitle>
+                        <CardDescription className="text-base sm:text-sm">
+                          {assignment.completedCount} of{' '}
+                          {assignment.problemCount} problems done
+                          {assignment.dueAt
+                            ? ` · Due ${formatDueDate(assignment.dueAt)}`
+                            : ''}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
+                        <Badge
+                          variant={complete ? 'secondary' : 'default'}
+                          size="sm"
+                        >
+                          {complete ? 'Complete' : 'Continue'}
+                        </Badge>
+                        <span className="inline-flex items-center gap-1">
+                          {complete ? 'Review' : 'Start'}
+                          <ChevronRight className="h-4 w-4 shrink-0" />
+                        </span>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         {groups.map((group) => (
           <section key={group.category} className="flex flex-col gap-3">

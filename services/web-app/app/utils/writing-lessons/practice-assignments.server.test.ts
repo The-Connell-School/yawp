@@ -18,6 +18,7 @@ const {
   createWritingPracticeAssignmentForClasses,
   recordWritingPracticeAttempt,
   getAssignedPracticeForStudent,
+  buildAssignedPracticeSequence,
 } = await import('./practice-assignments.server');
 
 beforeEach(() => {
@@ -95,5 +96,47 @@ describe('getAssignedPracticeForStudent', () => {
     const arg = writingPracticeClassAssignment.findMany.mock.calls[0][0];
     expect(arg.where.class.students.some.id).toBe('student-1');
     expect(arg.include.attempts.where.membershipId).toBe('student-1');
+  });
+});
+
+describe('buildAssignedPracticeSequence', () => {
+  test('produces the requested number of problems from a single lesson', () => {
+    const sequence = buildAssignedPracticeSequence(['fixing-comma-splices'], 3);
+
+    expect(sequence).toHaveLength(3);
+    expect(sequence.map((item) => item.position)).toEqual([1, 2, 3]);
+    expect(
+      sequence.every((item) => item.lessonSlug === 'fixing-comma-splices')
+    ).toBe(true);
+    expect(sequence[0].lessonTitle).toBe('Fixing Comma Splices');
+  });
+
+  test('cycles prompts when problemCount exceeds available prompts', () => {
+    const sequence = buildAssignedPracticeSequence(['fixing-comma-splices'], 6);
+
+    // Only 4 distinct prompts exist, so #5 reuses the first prompt.
+    expect(sequence).toHaveLength(6);
+    expect(sequence[4].prompt.id).toBe(sequence[0].prompt.id);
+  });
+
+  test('interleaves prompts across multiple lessons', () => {
+    const sequence = buildAssignedPracticeSequence(
+      ['fixing-comma-splices', 'revising-for-wordiness'],
+      4
+    );
+
+    expect(sequence.map((item) => item.lessonSlug)).toEqual([
+      'fixing-comma-splices',
+      'revising-for-wordiness',
+      'fixing-comma-splices',
+      'revising-for-wordiness',
+    ]);
+  });
+
+  test('returns an empty sequence for no problems or unknown lessons', () => {
+    expect(buildAssignedPracticeSequence(['fixing-comma-splices'], 0)).toEqual(
+      []
+    );
+    expect(buildAssignedPracticeSequence(['not-a-lesson'], 3)).toEqual([]);
   });
 });

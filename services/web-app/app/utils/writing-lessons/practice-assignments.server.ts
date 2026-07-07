@@ -1,6 +1,74 @@
 import { prisma } from '~/utils/db.server';
 
 import type { PracticeFeedbackResult } from './practice-feedback.shared';
+import {
+  getQuickWritingLessonBySlug,
+  getQuickWritingPracticePrompts,
+  type QuickWritingPracticePrompt,
+} from './static-lessons.server';
+
+export type AssignedPracticeItem = {
+  /** 1-based position within the assignment. */
+  position: number;
+  lessonSlug: string;
+  lessonTitle: string;
+  prompt: QuickWritingPracticePrompt;
+};
+
+/**
+ * Expands an assignment (lesson slugs + how many problems) into an ordered
+ * practice sequence. Prompts from multiple lessons are interleaved round-robin
+ * so mixed-skill assignments alternate skills; the sequence cycles if the
+ * requested problem count exceeds the number of distinct prompts available.
+ */
+export function buildAssignedPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): AssignedPracticeItem[] {
+  const perLesson = lessonSlugs
+    .map((slug) => {
+      const lesson = getQuickWritingLessonBySlug(slug);
+      if (!lesson) return null;
+      return {
+        slug,
+        title: lesson.title,
+        prompts: getQuickWritingPracticePrompts(slug),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  const interleaved: Array<{
+    lessonSlug: string;
+    lessonTitle: string;
+    prompt: QuickWritingPracticePrompt;
+  }> = [];
+  let round = 0;
+  let addedThisRound = true;
+  while (addedThisRound) {
+    addedThisRound = false;
+    for (const lesson of perLesson) {
+      const prompt = lesson.prompts[round];
+      if (prompt) {
+        interleaved.push({
+          lessonSlug: lesson.slug,
+          lessonTitle: lesson.title,
+          prompt,
+        });
+        addedThisRound = true;
+      }
+    }
+    round += 1;
+  }
+
+  if (interleaved.length === 0 || problemCount <= 0) return [];
+
+  const sequence: AssignedPracticeItem[] = [];
+  for (let i = 0; i < problemCount; i += 1) {
+    const source = interleaved[i % interleaved.length];
+    sequence.push({ position: i + 1, ...source });
+  }
+  return sequence;
+}
 
 export type CreateWritingPracticeAssignmentInput = {
   createdByMembershipId: string;
