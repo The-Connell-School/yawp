@@ -303,10 +303,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const classIds = classes.map((klass) => klass.id);
-  const assignmentsEnabled = classIds.length > 0;
+  const hasActiveClasses = classIds.length > 0;
 
   const [assignments, allowedAssignmentTypes] = await Promise.all([
-    assignmentsEnabled
+    hasActiveClasses
       ? prisma.assignment.findMany({
           where: {
             classAssignments: {
@@ -338,7 +338,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
             orderBy: [{ createdAt: 'desc' }],
           })
         : [],
-    assignmentsEnabled
+    hasActiveClasses
       ? getAvailableAssignmentTypesForScopes<{
           id: string;
           title: string;
@@ -380,7 +380,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       id: type.id,
       title: type.title,
     })),
-    assignmentsEnabled,
+    assignmentsEnabled: hasActiveClasses,
+    hasActiveClasses,
   });
 }
 
@@ -530,14 +531,14 @@ export default function AssignmentsRoute() {
       </div>
 
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-4 px-3 py-4 pb-24 sm:px-5">
-        {!data.assignmentsEnabled ? (
+        {!data.hasActiveClasses ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-muted p-12 text-center">
             <ClipboardList className="h-8 w-8 text-muted-foreground" />
             <span className="text-lg font-bold">
-              Assignments are not enabled
+              No active classes
             </span>
             <span className="text-sm text-muted-foreground">
-              Assignments are not enabled for your organization yet.
+              You are not assigned to any active classes yet.
             </span>
           </div>
         ) : (
