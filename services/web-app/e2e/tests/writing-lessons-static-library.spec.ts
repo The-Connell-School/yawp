@@ -158,4 +158,42 @@ test.describe.serial('Writing practice prototype', () => {
       page.getByTestId('student-progress-row').filter({ hasText: '1/4' })
     ).toBeVisible();
   });
+
+  test('a teacher assigns interleaved writing practice from the create-assignment sheet', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await setWritingPracticeForOrganization({
+      organizationId: e2eContext.organizationId,
+      enabled: true,
+    });
+
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app');
+    await expect(page.getByTestId('app._index')).toBeVisible();
+
+    await page
+      .getByRole('button', { name: /create assignment|new assignment/i })
+      .first()
+      .click();
+
+    // Pick "Writing practice" as the assignment type.
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: /writing practice/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    // First checkbox is the class; then pick two skills to interleave.
+    await dialog.getByRole('checkbox').first().click();
+    await dialog.getByText('Fixing Comma Splices', { exact: true }).click();
+    await dialog.getByText('Passive Voice', { exact: true }).click();
+    await dialog.getByRole('button', { name: '10', exact: true }).click();
+
+    await dialog.getByRole('button', { name: /assign practice/i }).click();
+
+    // The sheet closes on a successful assign.
+    await expect(
+      page.getByRole('button', { name: /assign practice/i })
+    ).toHaveCount(0);
+  });
 });

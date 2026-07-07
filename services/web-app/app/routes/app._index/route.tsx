@@ -22,6 +22,7 @@ import {
   getStudentPreviewState,
   shouldUseStudentExperience,
 } from '~/utils/student-preview.server';
+import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
 import { prisma } from '~/utils/db.server.js';
 import { getAvailableAssignmentTypesForScopes } from '~/utils/assignment-type-access.server';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
@@ -136,6 +137,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     useStudentExperience
       ? studentAssignmentClassIds.length > 0
       : teacherAssignmentClassScopes.length > 0;
+  const writingPracticeLessons =
+    !useStudentExperience
+      ? getQuickWritingLessonGroups().flatMap((group) =>
+          group.lessons.map((lesson) => ({
+            slug: lesson.slug,
+            title: lesson.title,
+            category: lesson.category,
+          }))
+        )
+      : [];
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
@@ -403,6 +414,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       name: formatClassLabel(klass),
     })),
     assignmentCreationTypes,
+    writingPracticeLessons,
   });
 }
 
@@ -480,6 +492,8 @@ export default function AppRoute() {
                 assignmentTypes={data.assignmentCreationTypes}
                 teacherClasses={data.assignmentCreationClasses}
                 initialAssignmentTypeId={createAssignmentTypeId}
+                writingPracticeEnabled
+                writingPracticeLessons={data.writingPracticeLessons}
               />
             </>
           ) : null}
