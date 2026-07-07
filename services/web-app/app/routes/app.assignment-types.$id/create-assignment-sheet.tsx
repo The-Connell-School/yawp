@@ -25,6 +25,10 @@ import {
   SheetTitle,
 } from '~/components/ui/sheet';
 import { FileTextIcon } from 'lucide-react';
+import {
+  ApHistorySourceCard,
+  type ApHistorySourceCardData,
+} from '~/components/ap-history/source-card';
 
 type TeacherClass = {
   id: string;
@@ -45,13 +49,7 @@ type Props = {
     title: string;
     prompt: string;
     essayType: string;
-    sources?: Array<{
-      externalKey: string;
-      title: string;
-      attribution: string;
-      body: string;
-      position: number;
-    }>;
+    sources?: ApHistorySourceCardData[];
   } | null;
 };
 
@@ -174,7 +172,7 @@ export function CreateAssignmentSheet({
               {apHistoryEntry.prompt}
             </p>
             {apHistoryEntry.sources && apHistoryEntry.sources.length > 0 ? (
-              <Accordion type="single" collapsible>
+              <Accordion type="single" collapsible defaultValue="sources">
                 <AccordionItem
                   value="sources"
                   className="rounded-md border bg-background px-3"
@@ -189,26 +187,16 @@ export function CreateAssignmentSheet({
                     </span>
                   </AccordionTrigger>
                   <AccordionContent>
-                    <ul className="space-y-4 pb-2">
-                      {apHistoryEntry.sources.map((source) => (
-                        <li
-                          key={source.externalKey}
-                          className="border-t pt-3 first:border-t-0 first:pt-0"
-                        >
-                          <p className="text-sm font-medium">
-                            Source {source.position}: {source.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {source.attribution}
-                          </p>
-                          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground/80">
-                            {source.body.length > 300
-                              ? `${source.body.slice(0, 300)}...`
-                              : source.body}
-                          </p>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="grid gap-2 pb-2">
+                      {[...apHistoryEntry.sources]
+                        .sort((a, b) => a.position - b.position)
+                        .map((source) => (
+                          <ApHistorySourceCard
+                            key={source.externalKey}
+                            source={source}
+                          />
+                        ))}
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>

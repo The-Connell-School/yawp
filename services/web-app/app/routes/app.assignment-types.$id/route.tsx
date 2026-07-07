@@ -40,6 +40,7 @@ import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { redirectWithToast } from '~/utils/toast.server';
 import { ApPromptsLibrary } from './ap-history/ap-prompts-library';
+import type { ApHistorySourceCardData } from '~/components/ap-history/source-card';
 import { CreateAssignmentSheet } from './create-assignment-sheet';
 import { PromptsLibrary } from './prompts-library/prompts-library';
 import { TeacherDirections } from './prompts-library/teacher-directions';
@@ -301,7 +302,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         },
       },
     }),
-    profile.role === "TEACHER"
+    profile.role === 'TEACHER'
       ? prisma.class.findMany({
           where: {
             teachers: { some: { id: profile.id } },
@@ -360,7 +361,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const isApHistory =
     assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY;
   const promptLibrary =
-    profile.role === "TEACHER" && isDailyPages
+    profile.role === 'TEACHER' && isDailyPages
       ? {
           prompts: applyFilters(ALL_PROMPTS, readFilters(new URL(request.url))),
           facets: ALL_FACETS,
@@ -368,14 +369,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           totalCount: ALL_PROMPTS.length,
         }
       : null;
-  const enabledTeacherClassIds = profile.role === "TEACHER"
-    ? new Set(teacherClasses.map((klass) => klass.id))
-    : new Set<string>();
-  const assignmentEnabledTeacherClasses = profile.role === "TEACHER"
-    ? teacherClasses
-    : [];
+  const enabledTeacherClassIds =
+    profile.role === 'TEACHER'
+      ? new Set(teacherClasses.map((klass) => klass.id))
+      : new Set<string>();
+  const assignmentEnabledTeacherClasses =
+    profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
-  if (profile.role === "TEACHER" && isApHistory) {
+  if (profile.role === 'TEACHER' && isApHistory) {
     if (assignmentEnabledTeacherClasses.length > 0) {
       apHistoryLibrary = {
         entries: await listApHistoryLibraryEntries(assignmentType.id),
@@ -396,18 +397,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const teacherClasses = profile.role === "TEACHER"
-    ? await prisma.class.findMany({
-        where: {
-          teachers: { some: { id: profile.id } },
-          isArchived: false,
-        },
-        select: {
-          id: true,
-          school: { select: { id: true, organizationId: true } },
-        },
-      })
-    : [];
+  const teacherClasses =
+    profile.role === 'TEACHER'
+      ? await prisma.class.findMany({
+          where: {
+            teachers: { some: { id: profile.id } },
+            isArchived: false,
+          },
+          select: {
+            id: true,
+            school: { select: { id: true, organizationId: true } },
+          },
+        })
+      : [];
   const assignmentTypeAvailable = params.id
     ? await isAssignmentTypeAvailableForAnyScope({
         assignmentTypeId: params.id,
@@ -489,13 +491,7 @@ export default function AppAssignmentTypesIdRoute() {
     title: string;
     prompt: string;
     essayType: string;
-    sources?: Array<{
-      externalKey: string;
-      title: string;
-      attribution: string;
-      body: string;
-      position: number;
-    }>;
+    sources?: ApHistorySourceCardData[];
   } | null>(null);
   const showPromptsLibrary = data.promptLibrary != null;
   const isApHistoryAssignmentType =

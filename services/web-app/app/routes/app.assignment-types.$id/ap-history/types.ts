@@ -8,6 +8,7 @@ export type ApPromptSource = {
   mediaType?: string;
   imageUrl?: string | null;
   imageAlt?: string | null;
+  provenanceUrl?: string | null;
 };
 
 export type ApPrompt = {

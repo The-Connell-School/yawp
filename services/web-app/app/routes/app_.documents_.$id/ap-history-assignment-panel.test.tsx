@@ -56,34 +56,50 @@ function render(element: Parameters<Root['render']>[0]) {
 }
 
 describe('ApHistoryAssignmentPanel image sources', () => {
-  it('renders an image element for visual sources with alt text and lazy loading', () => {
+  it('serves visual sources from our own origin first, with alt text and lazy loading', () => {
     render(<ApHistoryAssignmentPanel snapshot={imageSnapshot} />);
 
     const img = container.querySelector('img');
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe(
-      'https://example.test/freedmens-school.jpg',
+      '/api/image/ap-history-source/apush-dbq-reconstruction-doc-1'
     );
     expect(img?.getAttribute('alt')).toBe(
-      'Black students gathered outside a wooden schoolhouse',
+      'Black students gathered outside a wooden schoolhouse'
     );
     expect(img?.getAttribute('loading')).toBe('lazy');
     expect(container.textContent).toContain('Visual source');
   });
 
-  it('falls back to a direct link when the image fails to load', () => {
+  it('falls back to the external URL if the self-hosted image fails', () => {
     render(<ApHistoryAssignmentPanel snapshot={imageSnapshot} />);
 
-    const img = container.querySelector('img');
     act(() => {
-      img?.dispatchEvent(new Event('error'));
+      container.querySelector('img')?.dispatchEvent(new Event('error'));
+    });
+
+    const img = container.querySelector('img');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute('src')).toBe(
+      'https://example.test/freedmens-school.jpg'
+    );
+  });
+
+  it('falls back to a direct link when every image source fails to load', () => {
+    render(<ApHistoryAssignmentPanel snapshot={imageSnapshot} />);
+
+    act(() => {
+      container.querySelector('img')?.dispatchEvent(new Event('error'));
+    });
+    act(() => {
+      container.querySelector('img')?.dispatchEvent(new Event('error'));
     });
 
     expect(container.querySelector('img')).toBeNull();
     expect(container.textContent).toContain('Image could not be loaded');
     const link = container.querySelector('a[href]');
     expect(link?.getAttribute('href')).toBe(
-      'https://example.test/freedmens-school.jpg',
+      'https://example.test/freedmens-school.jpg'
     );
   });
 });
