@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFetcher } from 'react-router';
-import { PlusIcon, Trash2Icon } from 'lucide-react';
+import { ImageIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
@@ -46,6 +46,10 @@ type SourceDraft = {
   title: string;
   attribution: string;
   body: string;
+  imageUrl: string | null;
+  imageAlt: string;
+  uploading: boolean;
+  uploadError: string | null;
 };
 
 function classLabel(klass: TeacherClass) {
@@ -58,6 +62,10 @@ function emptySource(index: number): SourceDraft {
     title: `Document ${index}`,
     attribution: '',
     body: '',
+    imageUrl: null,
+    imageAlt: '',
+    uploading: false,
+    uploadError: null,
   };
 }
 
@@ -114,7 +122,9 @@ export function CreateCustomApHistorySheet({
           title: source.title.trim(),
           attribution: source.attribution.trim(),
           body: source.body.trim(),
-          mediaType: 'text',
+          mediaType: source.imageUrl ? 'image' : 'text',
+          imageUrl: source.imageUrl,
+          imageAlt: source.imageAlt.trim() || null,
         }))
       ),
     [sources]
@@ -140,6 +150,36 @@ export function CreateCustomApHistorySheet({
     setSources((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
     );
+  }
+
+  async function uploadSourceImage(id: string, file: File) {
+    updateSource(id, { uploading: true, uploadError: null });
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch('/api/ap-history/upload-source-image', {
+        method: 'POST',
+        body: form,
+      });
+      const result = (await response.json()) as {
+        success?: boolean;
+        url?: string;
+        message?: string;
+      };
+      if (!result.success || !result.url) {
+        updateSource(id, {
+          uploading: false,
+          uploadError: result.message ?? 'Upload failed.',
+        });
+        return;
+      }
+      updateSource(id, { uploading: false, imageUrl: result.url });
+    } catch {
+      updateSource(id, {
+        uploading: false,
+        uploadError: 'Upload failed. Please try again.',
+      });
+    }
   }
 
   return (
@@ -372,15 +412,72 @@ export function CreateCustomApHistorySheet({
                     onChange={(e) =>
                       updateSource(source.id, { body: e.target.value })
                     }
-                    placeholder="Paste the document text students will analyze…"
+                    placeholder={
+                      source.imageUrl
+                        ? 'Describe the image (what students should analyze)…'
+                        : 'Paste the document text students will analyze…'
+                    }
                     rows={4}
                     disabled={isSaving}
                   />
+
+                  {source.imageUrl ? (
+                    <div className="space-y-2 rounded-md border bg-muted/30 p-2">
+                      <img
+                        src={source.imageUrl}
+                        alt={source.imageAlt || source.title}
+                        className="max-h-48 w-full rounded object-contain"
+                      />
+                      <Input
+                        value={source.imageAlt}
+                        onChange={(e) =>
+                          updateSource(source.id, { imageAlt: e.target.value })
+                        }
+                        placeholder="Alt text (describe the image for accessibility)"
+                        disabled={isSaving}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateSource(source.id, {
+                            imageUrl: null,
+                            imageAlt: '',
+                          })
+                        }
+                        className="text-xs text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                      >
+                        Remove image
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+                        <ImageIcon className="h-4 w-4" />
+                        {source.uploading ? 'Uploading…' : 'Add an image'}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                          className="hidden"
+                          disabled={isSaving || source.uploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) void uploadSourceImage(source.id, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                      {source.uploadError ? (
+                        <span className="text-xs text-destructive">
+                          {source.uploadError}
+                        </span>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">
-                Paste each document&rsquo;s text here. Uploading files is coming
-                soon.
+                Paste each document&rsquo;s text, or add an image (political
+                cartoon, map, chart) with a short description.
               </p>
             </div>
           ) : null}

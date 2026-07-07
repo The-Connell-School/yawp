@@ -154,6 +154,18 @@ model ApHistoryPromptLibrarySource {
   @@index([promptLibraryEntryId, position])
 }
 
+model ApHistoryCustomSourceImage {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  key         String   @unique
+  contentType String
+  blob        Bytes
+  altText     String?
+  createdById String?
+
+  @@index([createdById])
+}
+
 model AssignmentTypeImage {
   id               String         @id @default(cuid())
   createdAt        DateTime       @default(now()) @db.Timestamptz(6)

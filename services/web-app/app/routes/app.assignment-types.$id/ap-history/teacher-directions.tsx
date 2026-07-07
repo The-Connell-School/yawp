@@ -39,8 +39,9 @@ export function ApHistoryTeacherDirections() {
         <li>
           <span className="font-medium text-foreground">Build your own</span> —
           use Create assignment to write a custom DBQ or LEQ, choose the period
-          and reasoning skill, and add your own documents. Uploading document
-          files is coming soon.
+          and reasoning skill, and add your own documents by pasting text or
+          uploading an image (cartoon, map, chart). Uploading document PDFs is
+          coming soon.
         </li>
       </ul>
     </section>
