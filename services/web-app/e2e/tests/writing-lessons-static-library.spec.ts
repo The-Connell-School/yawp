@@ -42,15 +42,15 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('heading', { name: 'Revising for Wordiness' })
     ).toBeVisible();
-    await expect(page.getByText(/practice prompt/i)).toBeVisible();
+    await expect(page.getByText(/try it yourself/i)).toBeVisible();
     await expect(
       page.getByRole('complementary').getByText('At this point in time')
     ).toBeVisible();
 
     await page
-      .getByLabel(/your practice response/i)
+      .getByLabel(/your answer/i)
       .fill('We cannot accept new applications now.');
-    await page.getByRole('button', { name: /check response/i }).click();
+    await page.getByRole('button', { name: /check my answer/i }).click();
 
     // Feedback is returned by the practice-feedback service. In E2E there is no
     // ANTHROPIC_API_KEY, so it uses the deterministic degraded fallback, which
@@ -59,13 +59,15 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(feedback).toBeVisible();
     await expect(feedback.getByText(/coming along/i)).toBeVisible();
     await expect(feedback.getByText(/revising for wordiness/i)).toBeVisible();
-    await expect(feedback.getByText(/tutor offline/i)).toBeVisible();
+    await expect(
+      feedback.getByText('Quick self-check', { exact: true })
+    ).toBeVisible();
 
     // Switching prompts clears the previous feedback.
-    await page.getByRole('button', { name: /try another prompt/i }).click();
+    await page.getByRole('button', { name: /new prompt/i }).click();
     await expect(page.getByTestId('practice-feedback')).toHaveCount(0);
     await expect(
-      page.getByRole('complementary').getByText(/weak construction/i)
+      page.getByRole('complementary').getByText(/the ability to speak/i)
     ).toBeVisible();
   });
 
@@ -120,6 +122,8 @@ test.describe.serial('Writing practice prototype', () => {
     );
 
     // Student sees it under "Assigned to you" and works a problem.
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app/writing-lessons');
 
@@ -148,6 +152,8 @@ test.describe.serial('Writing practice prototype', () => {
     ).toBeVisible();
 
     // Teacher can see that the student has started (1 of 4 problems).
+    await page.request.post('/auth/logout');
+    await page.context().clearCookies();
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons');
     await page.getByTestId('assigned-by-teacher-card').first().click();
