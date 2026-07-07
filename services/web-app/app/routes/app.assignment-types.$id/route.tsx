@@ -584,7 +584,7 @@ export default function AppAssignmentTypesIdRoute() {
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
         {data.apHistoryLibrary ? <ApHistoryTeacherDirections /> : null}
-        {hasModules ? (
+        {hasModules && !isApHistoryAssignmentType ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
             <div className="border-b" />
