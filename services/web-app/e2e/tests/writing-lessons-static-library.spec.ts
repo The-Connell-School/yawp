@@ -69,6 +69,20 @@ test.describe.serial('Writing practice prototype', () => {
     await expect(
       page.getByRole('complementary').getByText(/the ability to speak/i)
     ).toBeVisible();
+
+    // "New prompt" keeps serving fresh drills without ever dead-ending. In E2E
+    // there is no LLM key, so AI generation degrades to an empty batch and the
+    // panel cycles the static bank — but it must always show a prompt.
+    const promptCounter = page
+      .getByRole('complementary')
+      .getByText(/^Prompt \d+$/);
+    for (let i = 0; i < 8; i++) {
+      await page.getByRole('button', { name: /new prompt/i }).click();
+      await expect(promptCounter).toBeVisible();
+      await expect(
+        page.getByRole('complementary').getByText('Rewrite this')
+      ).toBeVisible();
+    }
   });
 
   test('lets a teacher assign a lesson to one of their classes', async ({

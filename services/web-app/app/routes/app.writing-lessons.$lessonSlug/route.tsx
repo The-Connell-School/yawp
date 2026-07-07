@@ -8,7 +8,7 @@ import {
   RotateCcw,
   Sparkles,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -26,6 +26,7 @@ import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
+import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt-generation.server';
 import {
   practiceFeedbackStatusLabel,
   type PracticeFeedbackResult,
@@ -72,9 +73,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 }
 
-type ActionData = {
+type CheckActionData = {
   promptId: string;
   feedback: PracticeFeedbackResult;
+};
+
+type GenerateActionData = {
+  intent: 'generate';
+  prompts: QuickWritingPracticePrompt[];
 };
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -87,12 +93,43 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+  const intent = String(formData.get('intent') ?? 'check');
+  const staticPrompts = getQuickWritingPracticePrompts(params.lessonSlug);
+
+  // Self-serve students can keep drilling a skill indefinitely: once they work
+  // through the static bank we generate fresh AI items grounded in the same
+  // rule and examples, so the panel never runs dry.
+  if (intent === 'generate') {
+    const requested = Number(formData.get('count') ?? 5);
+    const count = Number.isFinite(requested)
+      ? Math.min(Math.max(Math.trunc(requested), 1), 8)
+      : 5;
+    const generated = await generatePracticePrompts({
+      skill: context.skill,
+      lessonTitle: context.title,
+      rule: context.rule,
+      exampleExercises: staticPrompts.slice(0, 3).map((item) => item.exercise),
+      count,
+    });
+    const prompts: QuickWritingPracticePrompt[] = generated.map((item) => ({
+      id: `${params.lessonSlug}-gen-${crypto.randomUUID()}`,
+      exercise: item.exercise,
+      instruction: item.instruction,
+    }));
+    return dataResponse<GenerateActionData>({ intent: 'generate', prompts });
+  }
+
   const promptId = String(formData.get('promptId') ?? '');
   const response = String(formData.get('response') ?? '');
 
-  const prompts = getQuickWritingPracticePrompts(params.lessonSlug);
-  const prompt = prompts.find((item) => item.id === promptId);
-  if (!prompt) {
+  // Prefer the trusted static prompt when the id is one of ours; otherwise the
+  // prompt was AI-generated on the client, so use the exercise it carries. The
+  // feedback itself is always grounded server-side in the lesson's rule/skill.
+  const staticPrompt = staticPrompts.find((item) => item.id === promptId);
+  const exercise = staticPrompt?.exercise ?? String(formData.get('exercise') ?? '');
+  const instruction =
+    staticPrompt?.instruction ?? String(formData.get('instruction') ?? '');
+  if (!promptId || !exercise) {
     throw new Response('Unknown practice prompt', { status: 400 });
   }
 
@@ -100,12 +137,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
     lessonTitle: context.title,
     skill: context.skill,
     rule: context.rule,
-    exercise: prompt.exercise,
-    instruction: prompt.instruction,
+    exercise,
+    instruction,
     response,
   });
 
-  return dataResponse<ActionData>({ promptId: prompt.id, feedback });
+  return dataResponse<CheckActionData>({ promptId, feedback });
 }
 
 const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
@@ -172,12 +209,21 @@ function StudentPracticePanel({
 }: {
   practicePrompts: QuickWritingPracticePrompt[];
 }) {
-  const fetcher = useFetcher<ActionData>();
+  const fetcher = useFetcher<CheckActionData>();
+  const generateFetcher = useFetcher<GenerateActionData>();
+  const [extraPrompts, setExtraPrompts] = useState<
+    QuickWritingPracticePrompt[]
+  >([]);
   const [promptIndex, setPromptIndex] = useState(0);
   const [response, setResponse] = useState('');
-  const activePrompt = practicePrompts[promptIndex] ?? null;
+
+  // Static bank first (instant), then fresh AI items appended as the student
+  // works through them, so the well never runs dry.
+  const allPrompts = [...practicePrompts, ...extraPrompts];
+  const activePrompt = allPrompts[promptIndex] ?? null;
   const responseReady = response.trim().length > 0;
   const isChecking = fetcher.state !== 'idle';
+  const isGenerating = generateFetcher.state !== 'idle';
 
   // Only show feedback that belongs to the prompt currently on screen, so
   // switching prompts never leaves stale feedback behind.
@@ -186,9 +232,40 @@ function StudentPracticePanel({
       ? fetcher.data.feedback
       : null;
 
+  // Append freshly generated prompts, skipping any ids we already hold.
+  useEffect(() => {
+    const generated = generateFetcher.data;
+    if (generated?.intent !== 'generate' || generated.prompts.length === 0) {
+      return;
+    }
+    setExtraPrompts((current) => {
+      const seen = new Set([
+        ...practicePrompts.map((item) => item.id),
+        ...current.map((item) => item.id),
+      ]);
+      const fresh = generated.prompts.filter((item) => !seen.has(item.id));
+      return fresh.length > 0 ? [...current, ...fresh] : current;
+    });
+  }, [generateFetcher.data, practicePrompts]);
+
+  function requestMorePrompts() {
+    if (isGenerating) return;
+    generateFetcher.submit(
+      { intent: 'generate', count: '5' },
+      { method: 'post' }
+    );
+  }
+
   function showNextPrompt() {
-    if (practicePrompts.length === 0) return;
-    setPromptIndex((current) => (current + 1) % practicePrompts.length);
+    if (allPrompts.length === 0) return;
+    const nextIndex = promptIndex + 1;
+    // Pull a fresh batch before the student reaches the end of what's loaded.
+    if (nextIndex >= allPrompts.length - 2) {
+      requestMorePrompts();
+    }
+    // Advance if a next prompt is loaded; otherwise wrap so it never dead-ends
+    // while the next batch is still generating.
+    setPromptIndex(nextIndex < allPrompts.length ? nextIndex : 0);
     setResponse('');
   }
 
@@ -204,7 +281,7 @@ function StudentPracticePanel({
           </div>
           {activePrompt ? (
             <span className="text-xs font-medium text-muted-foreground">
-              Prompt {promptIndex + 1} of {practicePrompts.length}
+              Prompt {promptIndex + 1}
             </span>
           ) : null}
         </div>
@@ -212,7 +289,14 @@ function StudentPracticePanel({
       <CardContent className="space-y-4 p-5">
         {activePrompt ? (
           <fetcher.Form method="post" className="space-y-4">
+            <input type="hidden" name="intent" value="check" />
             <input type="hidden" name="promptId" value={activePrompt.id} />
+            <input type="hidden" name="exercise" value={activePrompt.exercise} />
+            <input
+              type="hidden"
+              name="instruction"
+              value={activePrompt.instruction}
+            />
             <div className="space-y-2 rounded-xl border border-border/70 bg-background p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Rewrite this
@@ -262,7 +346,11 @@ function StudentPracticePanel({
                 className="rounded-full text-muted-foreground"
                 onClick={showNextPrompt}
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
+                {isGenerating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                )}
                 New prompt
               </Button>
             </div>
