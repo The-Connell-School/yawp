@@ -85,12 +85,15 @@ describe('generatePracticeFeedback', () => {
     expect(result.status).toBe('needs_revision');
   });
 
-  test('falls back deterministically when no API key is configured', async () => {
+  test('still attempts the tutor even without an Anthropic key (provider fallback is getLLMCompletion’s job)', async () => {
     delete process.env.ANTHROPIC_API_KEY;
+    getLLMCompletion.mockRejectedValueOnce(new Error('no provider configured'));
 
     const result = await generatePracticeFeedback(baseInput);
 
-    expect(getLLMCompletion).not.toHaveBeenCalled();
+    // We no longer short-circuit on a missing Anthropic key; we call through and
+    // only fall back when the call actually fails.
+    expect(getLLMCompletion).toHaveBeenCalledTimes(1);
     expect(result.degraded).toBe(true);
     expect(result.focus.join(' ')).toContain('comma splices');
   });

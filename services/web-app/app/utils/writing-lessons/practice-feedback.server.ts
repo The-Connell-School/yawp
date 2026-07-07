@@ -69,10 +69,9 @@ export async function generatePracticeFeedback(
   const guardrail = detectPracticeGuardrail(input);
   if (guardrail) return { ...guardrail, degraded: false };
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { ...buildFallbackPracticeFeedback(input), degraded: true };
-  }
-
+  // Delegate provider selection (and Anthropic->OpenAI fallback) to
+  // getLLMCompletion, exactly like the rest of the site's AI. If no provider is
+  // configured or the call fails, the catch below returns degraded feedback.
   try {
     const responseText = await getLLMCompletion({
       system: SYSTEM_PROMPT,
