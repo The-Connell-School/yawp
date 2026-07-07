@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingLessons,
@@ -65,5 +66,19 @@ describe('Quick Writing Lessons static lesson archive', () => {
 
   test('returns null context for an unknown slug', () => {
     expect(getQuickWritingLessonContext('not-a-lesson')).toBeNull();
+  });
+
+  test('lesson body drops the redundant Practice Time section', () => {
+    const lesson = getQuickWritingLessonBySlug('fixing-comma-splices');
+    const body = getQuickWritingLessonBody(lesson!.content);
+
+    // Keeps the teaching content...
+    expect(body).toContain('Why This Matters');
+    expect(body).toContain('The Rule');
+    expect(body).toContain('Quick Tip');
+    // ...but not the practice exercises (the side panel owns those).
+    expect(body).not.toContain('Practice Time');
+    expect(body).not.toContain('Your turn');
+    expect(body).not.toContain('[Your response here]');
   });
 });

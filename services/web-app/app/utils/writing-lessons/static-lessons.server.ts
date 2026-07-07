@@ -162,6 +162,21 @@ function extractRuleSection(content: string): string {
   return (match?.[1] ?? '').trim();
 }
 
+/**
+ * Returns just the teaching portion of a lesson — everything before the
+ * "## Practice Time" section. Those exercises are redundant with the
+ * interactive practice panel, so they should not be rendered in the lesson
+ * body. Falls back to the full content if no practice section is present.
+ */
+export function getQuickWritingLessonBody(content: string): string {
+  const index = content.search(/^##\s+Practice Time\s*$/m);
+  if (index === -1) return content.trim();
+  return content
+    .slice(0, index)
+    .replace(/\n+---\s*$/, '\n')
+    .trim();
+}
+
 function parseArchivedLessons(content: string): QuickWritingLesson[] {
   const lessons: QuickWritingLesson[] = [];
 

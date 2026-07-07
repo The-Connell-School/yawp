@@ -2,10 +2,13 @@ import {
   ArrowLeft,
   CheckCircle2,
   ClipboardCheck,
+  Lightbulb,
   Loader2,
+  PenLine,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Link,
   data as dataResponse,
@@ -28,6 +31,7 @@ import {
   type PracticeFeedbackResult,
 } from '~/utils/writing-lessons/practice-feedback.shared';
 import {
+  getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
@@ -61,6 +65,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   return dataResponse({
     lesson,
+    lessonBody: getQuickWritingLessonBody(lesson.content),
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
     isTeacher,
     teacherClasses,
@@ -110,34 +115,40 @@ const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
 };
 
 export default function WritingLessonDetailRoute() {
-  const { lesson, practicePrompts, isTeacher, teacherClasses } =
+  const { lesson, lessonBody, practicePrompts, isTeacher, teacherClasses } =
     useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
-      <div className="flex w-full justify-between border-b bg-secondary">
+      <div className="w-full border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
-          <Button asChild variant="outline" size="sm" className="mb-5">
+          <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
             <Link to="/app/writing-lessons">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to practice
             </Link>
           </Button>
           <div className="flex flex-col">
-            <p className="text-base font-medium text-primary sm:text-sm">
+            <Badge
+              variant="secondary"
+              size="sm"
+              className="w-fit uppercase tracking-wide"
+            >
               {lesson.category}
-            </p>
-            <h2 className="mt-1">{lesson.title}</h2>
-            <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
+            </Badge>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              {lesson.title}
+            </h2>
+            <p className="mt-2 max-w-[620px] text-base text-muted-foreground sm:text-sm">
               {lesson.description}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto grid w-full max-w-screen-lg gap-6 px-3 py-6 pb-24 sm:px-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="mx-auto grid w-full max-w-screen-lg gap-8 px-3 py-8 pb-24 sm:px-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0">
-          <MarkdownLesson content={lesson.content} />
+          <LessonBody content={lessonBody} />
         </div>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
@@ -182,24 +193,35 @@ function StudentPracticePanel({
   }
 
   return (
-    <Card className="shadow-none">
-      <CardHeader className="pb-3">
+    <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
+      <CardHeader className="border-b bg-muted/40 pb-4">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-xl">Practice prompt</CardTitle>
-          <Badge variant="secondary" size="sm">
-            {practicePrompts.length} prompts
-          </Badge>
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <PenLine className="h-4 w-4" />
+            </span>
+            <CardTitle className="text-lg">Try it yourself</CardTitle>
+          </div>
+          {activePrompt ? (
+            <span className="text-xs font-medium text-muted-foreground">
+              Prompt {promptIndex + 1} of {practicePrompts.length}
+            </span>
+          ) : null}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-5">
         {activePrompt ? (
           <fetcher.Form method="post" className="space-y-4">
             <input type="hidden" name="promptId" value={activePrompt.id} />
-            <div className="rounded-lg border bg-muted/50 p-3">
-              <p className="text-base text-foreground sm:text-sm">
+            <div className="space-y-2 rounded-xl border border-border/70 bg-background p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Rewrite this
+              </p>
+              <p className="text-base font-medium leading-relaxed text-foreground">
                 {activePrompt.exercise}
               </p>
-              <p className="mt-3 text-base text-muted-foreground sm:text-sm">
+              <p className="flex items-start gap-1.5 pt-1 text-sm text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
                 {activePrompt.instruction}
               </p>
             </div>
@@ -207,24 +229,24 @@ function StudentPracticePanel({
             <div className="space-y-2">
               <label
                 htmlFor="practice-response"
-                className="text-base font-medium text-foreground sm:text-sm"
+                className="text-sm font-medium text-foreground"
               >
-                Your practice response
+                Your answer
               </label>
               <Textarea
                 id="practice-response"
                 name="response"
                 value={response}
                 onChange={(event) => setResponse(event.currentTarget.value)}
-                placeholder="Rewrite the sentence here."
-                className="min-h-28 text-base sm:text-sm"
+                placeholder="Rewrite the sentence here…"
+                className="min-h-32 resize-none rounded-xl text-base leading-relaxed sm:text-sm"
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="submit"
-                size="sm"
+                className="rounded-full"
                 disabled={!responseReady || isChecking}
               >
                 {isChecking ? (
@@ -232,16 +254,16 @@ function StudentPracticePanel({
                 ) : (
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                 )}
-                {isChecking ? 'Checking…' : 'Check response'}
+                {isChecking ? 'Checking…' : 'Check my answer'}
               </Button>
               <Button
                 type="button"
-                size="sm"
-                variant="outline"
+                variant="ghost"
+                className="rounded-full text-muted-foreground"
                 onClick={showNextPrompt}
               >
                 <RotateCcw className="mr-2 h-4 w-4" />
-                Try another prompt
+                New prompt
               </Button>
             </div>
 
@@ -410,99 +432,273 @@ function PracticeFeedbackPanel({
   return (
     <div
       data-testid="practice-feedback"
-      className="space-y-3 rounded-lg border bg-card p-3"
+      className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4"
     >
       <div className="flex items-center justify-between gap-3">
         <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[feedback.status]}`}
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[feedback.status]}`}
         >
           {practiceFeedbackStatusLabel(feedback.status)}
         </span>
-        {feedback.degraded ? (
-          <span className="text-xs text-muted-foreground">
-            Quick self-check · tutor offline
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">Tutor feedback</span>
-        )}
+        <span className="text-xs text-muted-foreground">
+          {feedback.degraded ? 'Quick self-check' : 'Tutor feedback'}
+        </span>
       </div>
 
-      <p className="text-base text-foreground sm:text-sm">{feedback.summary}</p>
+      <p className="text-sm leading-relaxed text-foreground">
+        {feedback.summary}
+      </p>
 
       {feedback.strengths.length > 0 ? (
-        <div className="space-y-1">
-          <p className="text-base font-medium sm:text-sm">What worked</p>
-          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            What worked
+          </p>
+          <ul className="space-y-1 text-sm text-muted-foreground">
             {feedback.strengths.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item} className="flex gap-2">
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                <span>{item}</span>
+              </li>
             ))}
           </ul>
         </div>
       ) : null}
 
       {feedback.focus.length > 0 ? (
-        <div className="space-y-1">
-          <p className="text-base font-medium sm:text-sm">Focus next on</p>
-          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+            Focus next on
+          </p>
+          <ul className="space-y-1 text-sm text-muted-foreground">
             {feedback.focus.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item} className="flex gap-2">
+                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>{item}</span>
+              </li>
             ))}
           </ul>
         </div>
       ) : null}
 
-      <p className="text-base italic text-muted-foreground sm:text-sm">
+      <p className="border-t border-border/60 pt-2 text-sm italic text-muted-foreground">
         {feedback.encouragement}
       </p>
     </div>
   );
 }
 
-function MarkdownLesson({ content }: { content: string }) {
-  return (
-    <article className="flex flex-col gap-3 text-base leading-7">
-      {content.split('\n').map((rawLine, index) => {
-        const line = rawLine.trim();
-        if (!line) return <div key={index} className="h-2" />;
-        if (line === '---') return <hr key={index} className="my-3" />;
-        if (line.startsWith('# ')) {
-          return (
-            <h3 key={index} className="mt-2 text-2xl font-semibold">
-              {cleanMarkdown(line.slice(2))}
-            </h3>
-          );
-        }
-        if (line.startsWith('## ')) {
-          return (
-            <h4 key={index} className="mt-6 text-xl font-semibold">
-              {cleanMarkdown(line.slice(3))}
-            </h4>
-          );
-        }
-        if (line.startsWith('### ')) {
-          return (
-            <h5 key={index} className="mt-4 text-lg font-semibold">
-              {cleanMarkdown(line.slice(4))}
-            </h5>
-          );
-        }
-        if (line.startsWith('- ')) {
-          return (
-            <p key={index} className="pl-4">
-              <span aria-hidden="true">• </span>
-              {cleanMarkdown(line.slice(2))}
-            </p>
-          );
-        }
+/**
+ * Renders a lesson's teaching content with real structure: section headings,
+ * before/after example cards, and a highlighted Quick Tip — instead of a flat
+ * wall of stripped-markdown paragraphs.
+ */
+function LessonBody({ content }: { content: string }) {
+  const blocks = content
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
 
-        return <p key={index}>{cleanMarkdown(line)}</p>;
-      })}
+  return (
+    <article className="max-w-[68ch] space-y-6">
+      {blocks.map((block, index) => (
+        <LessonBlock key={index} block={block} />
+      ))}
     </article>
   );
 }
 
-function cleanMarkdown(value: string) {
-  return value.replace(/\*\*/g, '').replace(/`/g, '').replace(/\*/g, '');
+function LessonBlock({ block }: { block: string }) {
+  const lines = block.split('\n').map((line) => line.trim());
+  const first = lines[0] ?? '';
+
+  // The top-level "# Title" is already shown in the page header.
+  if (first.startsWith('# ') && lines.length === 1) return null;
+  if (block === '---') return null;
+
+  // Before/after example blocks become tinted cards.
+  if (lines.some((line) => /^-\s*(❌|✅|⚠️)/.test(line))) {
+    return <ExampleCard lines={lines} />;
+  }
+
+  if (first.startsWith('## ')) {
+    const heading = stripInlineMarks(first.slice(3));
+    const rest = lines.slice(1).join('\n').trim();
+    if (/quick tip/i.test(heading)) {
+      return (
+        <div className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          <div className="space-y-1.5">
+            <p className="font-semibold text-foreground">{heading}</p>
+            <Prose text={rest} />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <section className="space-y-2.5">
+        <h3 className="text-lg font-semibold tracking-tight text-foreground">
+          {heading}
+        </h3>
+        {rest ? <Prose text={rest} /> : null}
+      </section>
+    );
+  }
+
+  if (first.startsWith('### ')) {
+    const heading = stripInlineMarks(first.slice(4));
+    const rest = lines.slice(1).join('\n').trim();
+    return (
+      <section className="space-y-2">
+        <h4 className="text-base font-semibold text-foreground">{heading}</h4>
+        {rest ? <Prose text={rest} /> : null}
+      </section>
+    );
+  }
+
+  return <Prose text={block} />;
+}
+
+function ExampleCard({ lines }: { lines: string[] }) {
+  const titleLine = lines.find((line) => /^\*\*Example/i.test(line));
+  const title = titleLine
+    ? stripInlineMarks(titleLine).replace(/:$/, '')
+    : 'Example';
+  const rows = lines.filter((line) => line.startsWith('- '));
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-border/70 bg-card p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-2">
+        {rows.map((row, index) => (
+          <ExampleRow key={index} row={row} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExampleRow({ row }: { row: string }) {
+  const body = row.replace(/^-\s*/, '');
+
+  const whyMatch = body.match(/^\*?Why:\*?\s*(.*)$/i);
+  if (whyMatch) {
+    return (
+      <p className="flex gap-2 pt-1 text-sm text-muted-foreground">
+        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+        <span>
+          <span className="font-medium text-foreground">Why: </span>
+          {renderInline(whyMatch[1])}
+        </span>
+      </p>
+    );
+  }
+
+  const emojiMatch = body.match(/^(❌|✅|⚠️)\s*(.*)$/);
+  if (emojiMatch) {
+    const [, emoji, rest] = emojiMatch;
+    const tone =
+      emoji === '✅'
+        ? 'border-emerald-200 bg-emerald-50'
+        : emoji === '❌'
+          ? 'border-rose-200 bg-rose-50'
+          : 'border-amber-200 bg-amber-50';
+    return (
+      <div className={`flex gap-2 rounded-lg border px-3 py-2 text-sm ${tone}`}>
+        <span aria-hidden="true">{emoji}</span>
+        <p className="leading-relaxed text-foreground">{renderInline(rest)}</p>
+      </div>
+    );
+  }
+
+  return <p className="text-sm leading-relaxed">{renderInline(body)}</p>;
+}
+
+function Prose({ text }: { text: string }) {
+  const lines = text.split('\n').map((line) => line.trim());
+  const nodes: ReactNode[] = [];
+  let bullets: string[] = [];
+
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    const items = bullets;
+    bullets = [];
+    nodes.push(
+      <ul
+        key={`ul-${nodes.length}`}
+        className="ml-1 space-y-1.5 border-l-2 border-border pl-4 text-[15px] leading-relaxed text-muted-foreground"
+      >
+        {items.map((item, index) => (
+          <li key={index}>{renderInline(item)}</li>
+        ))}
+      </ul>
+    );
+  };
+
+  for (const line of lines) {
+    if (!line) continue;
+    if (line.startsWith('- ')) {
+      bullets.push(line.slice(2));
+      continue;
+    }
+    flushBullets();
+    nodes.push(
+      <p
+        key={`p-${nodes.length}`}
+        className="text-[15px] leading-relaxed text-muted-foreground"
+      >
+        {renderInline(line)}
+      </p>
+    );
+  }
+  flushBullets();
+
+  return <div className="space-y-3">{nodes}</div>;
+}
+
+/** Renders inline **bold**, *italic*, and `code`, stripping the markers. */
+function renderInline(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**')) {
+      nodes.push(
+        <strong key={key++} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith('`')) {
+      nodes.push(
+        <code
+          key={key++}
+          className="rounded bg-muted px-1 py-0.5 text-[0.85em] text-foreground"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else {
+      nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+  return nodes;
+}
+
+function stripInlineMarks(value: string): string {
+  return value.replace(/\*\*/g, '').replace(/`/g, '').replace(/\*/g, '').trim();
 }
 
 export function ErrorBoundary() {
