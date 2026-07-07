@@ -1,4 +1,4 @@
-import { ChevronRight, ClipboardPlus } from 'lucide-react';
+import { ChevronRight, ClipboardPlus, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import {
   Link,
@@ -27,22 +27,13 @@ import {
   getAssignedPracticeForStudent,
   getWritingPracticeAssignmentsForTeacher,
 } from '~/utils/writing-lessons/practice-assignments.server';
-import {
-  getQuickWritingLessonGroups,
-  getQuickWritingPracticePrompts,
-} from '~/utils/writing-lessons/static-lessons.server';
+import { getQuickWritingLessonGroups } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
 
-  const groups = getQuickWritingLessonGroups().map((group) => ({
-    ...group,
-    lessons: group.lessons.map((lesson) => ({
-      ...lesson,
-      promptCount: getQuickWritingPracticePrompts(lesson.slug).length,
-    })),
-  }));
+  const groups = getQuickWritingLessonGroups();
 
   const isTeacher = profile.role === 'TEACHER';
 
@@ -327,7 +318,10 @@ export default function WritingLessonsIndexRoute() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="mt-auto flex items-center justify-between gap-3 text-base text-muted-foreground sm:text-sm">
-                      <span>{lesson.promptCount} prompts</span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                        Endless drills
+                      </span>
                       <span className="inline-flex items-center gap-1">
                         Start practice
                         <ChevronRight className="h-4 w-4 shrink-0" />
