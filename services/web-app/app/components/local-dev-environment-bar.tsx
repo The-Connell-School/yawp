@@ -24,7 +24,7 @@ export type LocalDevLoginOption = {
 };
 
 type LocalDevEnvironmentBarProps = {
-  bannerWarning: 'staging' | 'localhost' | null;
+  bannerWarning: 'staging' | 'localhost' | 'preview' | null;
   localDevQuickLogin?: {
     enabled: boolean;
     options: LocalDevLoginOption[];
@@ -55,15 +55,16 @@ function groupOptions(options: LocalDevLoginOption[]) {
 function EnvironmentIcon({
   bannerWarning,
 }: {
-  bannerWarning: 'staging' | 'localhost';
+  bannerWarning: 'staging' | 'localhost' | 'preview';
 }) {
   const isStaging = bannerWarning === 'staging';
+  const isPreview = bannerWarning === 'preview';
 
   return (
     <div
       className={cn(
         'rounded-full p-2.5',
-        isStaging ? 'bg-yellow-400' : 'bg-red-300'
+        isStaging ? 'bg-yellow-400' : isPreview ? 'bg-sky-300' : 'bg-red-300'
       )}
       aria-hidden="true"
     >
@@ -203,7 +204,9 @@ export function LocalDevEnvironmentBar({
   const environmentLabel =
     bannerWarning === 'staging'
       ? 'Staging environment'
-      : 'Local development environment';
+      : bannerWarning === 'preview'
+        ? 'Preview environment'
+        : 'Local development environment';
 
   if (!showQuickLogin) {
     return (
@@ -212,7 +215,9 @@ export function LocalDevEnvironmentBar({
           text={
             bannerWarning === 'staging'
               ? 'This is a staging environment. Do not use real data.'
-              : 'This is a local environment. Do not use real data.'
+              : bannerWarning === 'preview'
+                ? 'This is a preview environment. Use seeded data only.'
+                : 'This is a local environment. Do not use real data.'
           }
           delayDuration={0}
         >

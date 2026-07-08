@@ -26,6 +26,8 @@ describe('renderPreviewCompose', () => {
     expect(compose).toContain('PORT: "8080"');
     expect(compose).toContain('DATABASE_URL: "postgresql://postgres:postgres@preview-postgres:5432/yawp_pr_142"');
     expect(compose).toContain('AWS_EC2_METADATA_DISABLED: "true"');
+    expect(compose).toContain('YAWP_ENVIRONMENT: "preview"');
+    expect(compose).toContain('AI_MODEL: "claude-sonnet-4-6"');
     expect(compose).not.toContain('target: production');
     expect(compose).toContain('traefik.enable=true');
     expect(compose).toContain('Host(`pr-142.preview.yawp.school`)');
@@ -57,5 +59,34 @@ describe('renderPreviewCompose', () => {
 
     expect(compose).toContain('traefik.docker.network=preview');
     expect(compose).not.toContain(deprecatedPreviewSlug);
+  });
+
+  test('passes preview Anthropic credentials into app containers', () => {
+    const previousAnthropicKey = process.env.PREVIEW_ANTHROPIC_API_KEY;
+    const previousModel = process.env.PREVIEW_AI_MODEL;
+    process.env.PREVIEW_ANTHROPIC_API_KEY = 'anthropic-preview-key';
+    process.env.PREVIEW_AI_MODEL = 'claude-opus-test';
+
+    try {
+      const compose = renderPreviewCompose({
+        prNumber: '142',
+        domain: 'preview.yawp.school',
+        sourceDir: '/srv/yawp-preview/sources/pr-142',
+      });
+
+      expect(compose).toContain('ANTHROPIC_API_KEY: "anthropic-preview-key"');
+      expect(compose).toContain('AI_MODEL: "claude-opus-test"');
+    } finally {
+      if (previousAnthropicKey === undefined) {
+        delete process.env.PREVIEW_ANTHROPIC_API_KEY;
+      } else {
+        process.env.PREVIEW_ANTHROPIC_API_KEY = previousAnthropicKey;
+      }
+      if (previousModel === undefined) {
+        delete process.env.PREVIEW_AI_MODEL;
+      } else {
+        process.env.PREVIEW_AI_MODEL = previousModel;
+      }
+    }
   });
 });

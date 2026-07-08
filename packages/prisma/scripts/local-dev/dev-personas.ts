@@ -30,9 +30,10 @@ export const LOCAL_DEV_PERSONAS: LocalDevPersona[] = [
     email: 'dev.admin@yawp.local',
     name: 'Dev Admin',
     label: 'Admin',
-    description: 'Platform admin with org access.',
+    description: 'Platform admin, org owner, and multi-class teacher.',
     password: LOCAL_DEV_PASSWORD,
     isAdmin: true,
+    isOrgOwner: true,
     role: 'TEACHER',
   },
   {

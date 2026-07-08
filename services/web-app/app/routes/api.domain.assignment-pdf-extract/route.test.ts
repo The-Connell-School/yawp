@@ -15,7 +15,6 @@ const prisma = {
 };
 const requireUserId = mock();
 const requireMembership = mock();
-const isAssignmentsEnabledForContext = mock();
 
 mock.module('~/services/anthropic', () => ({ anthropic }));
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -23,10 +22,6 @@ mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
 }));
-mock.module('~/utils/feature-flags.server', () => ({
-  isAssignmentsEnabledForContext,
-}));
-
 const { action } = await import('./route');
 
 async function readBody(response: any) {
@@ -40,7 +35,6 @@ describe('api.domain.assignment-pdf-extract', () => {
     prisma.llmLog.create.mockReset();
     requireUserId.mockReset();
     requireMembership.mockReset();
-    isAssignmentsEnabledForContext.mockReset();
 
     requireUserId.mockResolvedValue('user-1');
     requireMembership.mockResolvedValue({
@@ -52,7 +46,6 @@ describe('api.domain.assignment-pdf-extract', () => {
       school: { id: 'school-1', organizationId: 'org-1' },
     });
     prisma.llmLog.create.mockResolvedValue({ id: 'log-1' });
-    isAssignmentsEnabledForContext.mockResolvedValue(true);
   });
 
   test('extracts only title and student prompt from assignment PDFs', async () => {

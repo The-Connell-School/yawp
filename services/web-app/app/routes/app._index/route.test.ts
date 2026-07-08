@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   classAssignment: { findMany: mock() },
@@ -18,21 +18,13 @@ const getTeacherRecentActiveClassIds = mock();
 const getAvailableAssignmentTypesForScopes = mock();
 const getStudentPreviewState = mock();
 
-const assignmentTypeAccessActual = await import(
-  '~/utils/assignment-type-access.server'
-);
-
 mock.module('~/utils/db.server.js', () => ({ prisma }));
-mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server.js', () => ({
   requireUserId,
   requireMembership,
   requireMutableRequest,
-}));
-mock.module('~/utils/auth.server', () => ({
-  requireUserId,
-  requireMembership,
-  requireMutableRequest,
+  getSessionExpirationDate: () => new Date('2030-01-01T00:00:00.000Z'),
+  sessionKey: 'sessionId',
 }));
 mock.module('~/utils/teacher-class-card-stats.server', () => ({
   getTeacherClassCardStats,
@@ -41,17 +33,21 @@ mock.module('~/utils/teacher-dashboard-recent-classes.server', () => ({
   getTeacherRecentActiveClassIds,
 }));
 mock.module('~/utils/assignment-type-access.server', () => ({
-  ...assignmentTypeAccessActual,
   getAvailableAssignmentTypesForScopes,
 }));
 mock.module('~/utils/student-preview.server', () => ({
   getStudentPreviewState,
+  studentPreviewModeKey: 'studentPreviewMode',
+  studentPreviewOrgIdKey: 'studentPreviewOrgId',
   shouldUseStudentExperience: (
     args: { membershipRole: string; previewActive: boolean }
   ) => args.membershipRole === 'STUDENT' || args.previewActive,
 }));
-
 const { loader } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+});
 
 describe('app index loader assignments', () => {
   beforeEach(() => {
@@ -178,7 +174,18 @@ describe('app index loader assignments', () => {
     ).toBe('Pre-Writing');
   });
 
-  test('keeps all teacher classes navigable while scoping assignment data to enabled pilot classes', async () => {
+  test('does not load writing practice state for the dashboard', async () => {
+    const response = await loader({
+      request: new Request('https://example.test/app'),
+      params: {},
+      context: {} as never,
+    } as any);
+    const data = (response as { data: any }).data;
+
+    expect(data).not.toHaveProperty(['writingPractice', 'Enabled'].join(''));
+  });
+
+  test('keeps all teacher classes navigable while scoping assignment data to available classes', async () => {
     requireMembership.mockResolvedValue({
       id: 'teacher-profile-1',
       role: 'TEACHER',
@@ -193,7 +200,7 @@ describe('app index loader assignments', () => {
             id: 'class-1',
             grade: '9',
             period: '1',
-            title: 'Pilot Class',
+            title: 'First Class',
             classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
             classArtIndex: 12,
             school: {
@@ -207,7 +214,7 @@ describe('app index loader assignments', () => {
             id: 'class-2',
             grade: '9',
             period: '2',
-            title: 'Non-Pilot Class',
+            title: 'Second Class',
             classArtKey: 'af-klint-ten-largest-youth::center-10pct',
             classArtIndex: 3,
             school: {
@@ -250,13 +257,13 @@ describe('app index loader assignments', () => {
     expect(data.teacherClassCards).toHaveLength(2);
     expect(data.teacherClassCards[0]).toMatchObject({
       id: 'class-1',
-      title: 'Pilot Class',
+      title: 'First Class',
       classArtKey: 'van-gogh-wheat-field-cypresses::center-0pct',
       legacyClassArtIndex: 12,
     });
     expect(data.teacherClassCards[1]).toMatchObject({
       id: 'class-2',
-      title: 'Non-Pilot Class',
+      title: 'Second Class',
       classArtKey: 'af-klint-ten-largest-youth::center-10pct',
       legacyClassArtIndex: 3,
     });

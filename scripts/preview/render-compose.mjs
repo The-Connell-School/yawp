@@ -17,6 +17,7 @@ export function renderPreviewCompose({
   directPort = process.env.PREVIEW_DIRECT_PORT,
   enableTls = process.env.PREVIEW_TLS !== 'false',
   runtime = process.env.PREVIEW_RUNTIME || 'fast',
+  dataMode = process.env.PREVIEW_DATA_MODE || 'seed',
 } = {}) {
   const env = buildPreviewEnv({
     prNumber,
@@ -26,6 +27,7 @@ export function renderPreviewCompose({
     directPort,
     tls: enableTls,
     runtime,
+    dataMode,
   });
   const routerBase = env.composeProject;
   const directPortBlock = env.directPort
@@ -38,6 +40,8 @@ export function renderPreviewCompose({
   const commonEnvironment = `      DATABASE_URL: ${q(env.databaseUrl)}
       DATABASE_SSL_REJECT_UNAUTHORIZED: "false"
       NODE_ENV: ${env.runtime === 'fast' ? 'development' : 'production'}
+      YAWP_ENVIRONMENT: "preview"
+      PREVIEW_DATA_MODE: ${q(env.dataMode)}
       PORT: "8080"
       COOKIE_SECURE: ${cookieSecure}
       AWS_EC2_METADATA_DISABLED: "true"
@@ -51,7 +55,7 @@ export function renderPreviewCompose({
       OPENAI_ORGANIZATION_ID: ${q(optionalEnv('PREVIEW_OPENAI_ORGANIZATION_ID'))}
       OPENAI_API_KEY: ${q(optionalEnv('PREVIEW_OPENAI_API_KEY'))}
       ANTHROPIC_API_KEY: ${q(optionalEnv('PREVIEW_ANTHROPIC_API_KEY'))}
-      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'gpt-4o-mini'))}`;
+      AI_MODEL: ${q(optionalEnv('PREVIEW_AI_MODEL', 'claude-sonnet-4-6'))}`;
   const fastVolumes = `    volumes:
       - ${q(`${env.sourceDir}:/app`)}
       - ${env.composeProject}-node-modules:/app/node_modules

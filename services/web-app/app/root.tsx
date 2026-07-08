@@ -40,6 +40,10 @@ import { LocalDevEnvironmentBar } from './components/local-dev-environment-bar.t
 import { isLocalDevAuthEnabled } from './utils/local-dev-auth.server.ts';
 import { getLocalDevLoginOptions } from './routes/auth.dev-login/route.tsx';
 import { useContrastPreference } from './routes/api.preferences.contrast/route.tsx';
+import {
+  getEnvironmentBannerWarning,
+  shouldEnableLocalDevQuickLogin,
+} from './utils/environment-banner.server.ts';
 
 export const links: LinksFunction = () => {
   return [
@@ -166,13 +170,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     './utils/student-preview.server.ts'
   );
   const studentPreview = await getStudentPreviewState(request);
-  const bannerWarning = request.url.includes('staging')
-    ? ('staging' as const)
-    : request.url.includes('localhost') || request.url.includes('127.0.0.1')
-      ? ('localhost' as const)
-      : null;
-  const localDevQuickLoginEnabled =
-    isLocalDevAuthEnabled() && bannerWarning === 'localhost';
+  const bannerWarning = getEnvironmentBannerWarning(request.url);
+  const localDevQuickLoginEnabled = shouldEnableLocalDevQuickLogin({
+    bannerWarning,
+    localDevAuthEnabled: isLocalDevAuthEnabled(),
+  });
 
   return data(
     {

@@ -45,7 +45,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const currentUser = await requireAdmin(request);
   const profile = await requireMembership(request, currentUser.id);
 
-  const [organization, invitations, totalOrganizations, assignmentTypes] =
+  const [
+    organization,
+    invitations,
+    totalOrganizations,
+    assignmentTypes,
+  ] =
     await Promise.all([
     prisma.organization.findUnique({
       where: { id: params.id },
@@ -162,7 +167,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
           .filter(Boolean)
       )
     );
-
     if (!name) {
       throw new Response('Name is required', { status: 400 });
     }
@@ -338,7 +342,12 @@ function OrganizationInviteEmail({
 }
 
 export default function OrganizationRoute() {
-  const { organization, invitations, assignmentTypes, canDelete } =
+  const {
+    organization,
+    invitations,
+    assignmentTypes,
+    canDelete,
+  } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const inviteFetcher = useFetcher();
@@ -486,6 +495,7 @@ export default function OrganizationRoute() {
                     </div>
                   )}
                 </div>
+
                 <Button
                   type="submit"
                   className="w-full"

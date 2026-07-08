@@ -14,6 +14,7 @@ describe('buildPreviewEnv', () => {
     expect(env.hostname).toBe('pr-142.preview.yawp.school');
     expect(env.url).toBe('https://pr-142.preview.yawp.school');
     expect(env.runtime).toBe('fast');
+    expect(env.dataMode).toBe('seed');
     expect(env.previewDir).toBe('/srv/yawp-preview/previews/pr-142');
     expect(env.sourceDir).toBe('/srv/yawp-preview/sources/pr-142');
     expect(env.databaseName).toBe('yawp_pr_142');
@@ -69,5 +70,25 @@ describe('buildPreviewEnv', () => {
         runtime: 'apprunner',
       }),
     ).toThrow('PREVIEW_RUNTIME must be fast or production');
+  });
+
+  test('still supports production dump data mode when explicitly requested', () => {
+    const env = buildPreviewEnv({
+      prNumber: '142',
+      domain: 'preview.yawp.school',
+      dataMode: 'production-dump',
+    });
+
+    expect(env.dataMode).toBe('production-dump');
+  });
+
+  test('rejects unsupported data modes', () => {
+    expect(() =>
+      buildPreviewEnv({
+        prNumber: '142',
+        domain: 'preview.yawp.school',
+        dataMode: 'prod',
+      }),
+    ).toThrow('PREVIEW_DATA_MODE must be seed or production-dump');
   });
 });
