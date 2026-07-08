@@ -19,6 +19,7 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { PracticePrompt } from '~/components/writing-lessons/practice-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -297,18 +298,10 @@ function StudentPracticePanel({
               name="instruction"
               value={activePrompt.instruction}
             />
-            <div className="space-y-2 rounded-xl border border-border/70 bg-background p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Rewrite this
-              </p>
-              <p className="text-base font-medium leading-relaxed text-foreground">
-                {activePrompt.exercise}
-              </p>
-              <p className="flex items-start gap-1.5 pt-1 text-sm text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                {activePrompt.instruction}
-              </p>
-            </div>
+            <PracticePrompt
+              exercise={activePrompt.exercise}
+              instruction={activePrompt.instruction}
+            />
 
             <div className="space-y-2">
               <label

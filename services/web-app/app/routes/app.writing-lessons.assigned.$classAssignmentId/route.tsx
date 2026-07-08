@@ -16,6 +16,7 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
+import { PracticePrompt } from '~/components/writing-lessons/practice-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
@@ -270,14 +271,11 @@ export default function AssignedPracticeRoute() {
                   value={currentItem.prompt.id}
                 />
 
-                <div className="rounded-lg border bg-muted/50 p-3">
-                  <p className="text-base text-foreground sm:text-sm">
-                    {currentItem.prompt.exercise}
-                  </p>
-                  <p className="mt-3 text-base text-muted-foreground sm:text-sm">
-                    {currentItem.prompt.instruction}
-                  </p>
-                </div>
+                <PracticePrompt
+                  exercise={currentItem.prompt.exercise}
+                  instruction={currentItem.prompt.instruction}
+                  skillLabel={currentItem.lessonTitle}
+                />
 
                 <div className="space-y-2">
                   <label
