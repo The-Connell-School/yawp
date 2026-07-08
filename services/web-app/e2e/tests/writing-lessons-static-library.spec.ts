@@ -90,11 +90,6 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons/fixing-comma-splices');
 
@@ -120,11 +115,6 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     // Teacher assigns the lesson to their (and the student's) class.
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons/fixing-comma-splices');
@@ -195,11 +185,6 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
@@ -233,11 +218,6 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/assignments');
 
@@ -258,11 +238,6 @@ test.describe.serial('Writing practice prototype', () => {
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons');
 
