@@ -1,7 +1,7 @@
 import { test, expect } from '../test-setup';
 
 test.describe.serial('Writing practice prototype', () => {
-  test('keeps writing practice off the student dashboard', async ({
+  test('lets a student discover writing practice from the dashboard', async ({
     page,
     e2eContext,
     signIn,
@@ -10,9 +10,19 @@ test.describe.serial('Writing practice prototype', () => {
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
+    // Students get a discovery entry point to self-start practice.
+    const practiceLink = page.getByRole('link', {
+      name: /writing practice/i,
+    });
+    await expect(practiceLink).toBeVisible();
+
+    await practiceLink.click();
     await expect(
-      page.getByRole('link', { name: /writing practice/i })
-    ).toHaveCount(0);
+      page.getByRole('heading', { name: /writing practice/i })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: /revising for wordiness/i })
+    ).toBeVisible();
   });
 
   test('loads lessons by direct URL and supports a self-guided practice check', async ({

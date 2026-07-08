@@ -655,6 +655,28 @@ export default function AppRoute() {
           )}
         </div>
         <div className="mt-8 flex flex-col">
+          <p className="my-2 text-foreground/60">Practice</p>
+          <Link
+            to="/app/writing-lessons"
+            className="group flex flex-col gap-3 rounded-lg border bg-muted p-4 text-left hover:shadow"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Writing practice
+                </h3>
+                <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
+                  Browse focused grammar and revision lessons and practice on
+                  your own — you&rsquo;ll get instant feedback on every rewrite.
+                </p>
+              </div>
+            </div>
+          </Link>
+        </div>
+        <div className="mt-8 flex flex-col">
           <p className="my-2 text-foreground/60">Documents</p>
           {data.documents.length ? (
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
