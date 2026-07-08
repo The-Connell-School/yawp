@@ -83,11 +83,13 @@ export async function seedSyntheticLocalDevData(
   const primaryTeacher = personaRecords.teacher;
   const multiTeacher = personaRecords['teacher-multi'];
   const ownerTeacher = personaRecords.owner;
+  const adminTeacher = personaRecords.admin;
 
   const teacherMembershipIds = [
     primaryTeacher.membershipId,
-    multiTeacher.membershipId,
     ownerTeacher.membershipId,
+    adminTeacher.membershipId,
+    multiTeacher.membershipId,
   ];
 
   const schools = await Promise.all(
@@ -132,6 +134,7 @@ export async function seedSyntheticLocalDevData(
         connect: [
           { id: primaryTeacher.membershipId },
           { id: ownerTeacher.membershipId },
+          { id: adminTeacher.membershipId },
           { id: multiTeacher.membershipId },
         ],
       },
@@ -152,8 +155,10 @@ export async function seedSyntheticLocalDevData(
       schoolId: schools[1].id,
       teachers: {
         connect: [
-          { id: multiTeacher.membershipId },
           { id: primaryTeacher.membershipId },
+          { id: ownerTeacher.membershipId },
+          { id: adminTeacher.membershipId },
+          { id: multiTeacher.membershipId },
         ],
       },
       students: {

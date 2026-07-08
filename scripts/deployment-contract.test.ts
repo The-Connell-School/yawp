@@ -304,13 +304,18 @@ describe('PR preview deployment contract', () => {
 
     expect(previewWorkflow).toContain("PREVIEW_DATA_MODE: ${{ vars.PREVIEW_DATA_MODE || 'seed' }}");
     expect(previewWorkflow).toContain("PREVIEW_DEV_LOGIN_EMAIL: ${{ vars.PREVIEW_DEV_LOGIN_EMAIL || 'dev.teacher@yawp.local' }}");
+    expect(previewWorkflow).toContain("PREVIEW_AI_MODEL: ${{ vars.PREVIEW_AI_MODEL || 'claude-sonnet-4-6' }}");
+    expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY: ${{ secrets.PREVIEW_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD: ${{ secrets.PREVIEW_DB_PASSWORD }}');
     expect(previewWorkflow).toContain('shell_quote()');
     expect(previewWorkflow).toContain('PREVIEW_DATA_MODE=$(shell_quote "$PREVIEW_DATA_MODE")');
     expect(previewWorkflow).toContain('PREVIEW_DEV_LOGIN_EMAIL=$(shell_quote "$PREVIEW_DEV_LOGIN_EMAIL")');
+    expect(previewWorkflow).toContain('PREVIEW_AI_MODEL=$(shell_quote "$PREVIEW_AI_MODEL")');
+    expect(previewWorkflow).toContain('PREVIEW_ANTHROPIC_API_KEY=$(shell_quote "$PREVIEW_ANTHROPIC_API_KEY")');
     expect(previewWorkflow).toContain('PREVIEW_DB_DUMP_S3_URI=$(shell_quote "$PREVIEW_DB_DUMP_S3_URI")');
     expect(previewWorkflow).toContain('PREVIEW_DB_PASSWORD=$(shell_quote "$PREVIEW_DB_PASSWORD")');
+    expect(previewWorkflow).toContain('test -n "$PREVIEW_ANTHROPIC_API_KEY"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_EMAIL"');
     expect(previewWorkflow).not.toContain('test -n "$PREVIEW_LOGIN_PASSWORD"');
   });
@@ -424,11 +429,15 @@ describe('PR preview deployment contract', () => {
     expect(configScript).toContain('PREVIEW_ROOT');
     expect(configScript).toContain('PREVIEW_DATA_MODE');
     expect(configScript).toContain('PREVIEW_DEV_LOGIN_EMAIL');
+    expect(configScript).toContain('PREVIEW_AI_MODEL');
     expect(configScript).toContain('PREVIEW_SSH_PRIVATE_KEY');
+    expect(configScript).toContain('PREVIEW_ANTHROPIC_API_KEY');
     expect(configScript).not.toContain(`${deprecatedPreviewEnvPrefix}_`);
     expect(configScript).toContain('gh_var PREVIEW_DATA_MODE');
     expect(configScript).toContain('gh_var PREVIEW_DEV_LOGIN_EMAIL');
+    expect(configScript).toContain('gh_var PREVIEW_AI_MODEL');
     expect(configScript).toContain('gh_var PREVIEW_DB_DUMP_S3_URI');
+    expect(configScript).toContain('gh_sec PREVIEW_ANTHROPIC_API_KEY');
     expect(configScript).toContain('gh_sec PREVIEW_DB_PASSWORD');
     expect(configScript).toContain('gh_sec PREVIEW_LOGIN_EMAIL');
     expect(configScript).toContain('gh_sec PREVIEW_LOGIN_PASSWORD');
