@@ -24,6 +24,11 @@ import { timeAgo } from '~/utils/timeAgo';
 import { formatAssignmentGrade } from '~/domain/grading/gradeMath';
 import { Loader2 } from 'lucide-react';
 import { postFormWithFallbackRetry } from '~/utils/llm-retry-ui';
+import {
+  ClassInsightsPanel,
+  type ClassInsight,
+  type ClassInsightSummary,
+} from './class-insights-panel';
 
 type StatusFilter = 'submitted' | 'graded' | 'released' | 'in-progress';
 
@@ -84,6 +89,27 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
   if (!classAssignment) throw new Response('Not Found', { status: 404 });
   const assignment = classAssignment.assignment;
+
+  const insightRow = await prisma.classAssignmentInsight.findUnique({
+    where: { classAssignmentId: classAssignment.id },
+    select: {
+      status: true,
+      submissionCount: true,
+      generatedAt: true,
+      summaryJson: true,
+    },
+  });
+  const insight: ClassInsight | null =
+    insightRow && insightRow.status === 'ready' && insightRow.summaryJson
+      ? {
+          status: 'ready',
+          submissionCount: insightRow.submissionCount,
+          generatedAt: insightRow.generatedAt
+            ? insightRow.generatedAt.toISOString()
+            : null,
+          summary: insightRow.summaryJson as unknown as ClassInsightSummary,
+        }
+      : null;
 
   const url = new URL(request.url);
   const rawStatus = url.searchParams.get('status');
@@ -160,6 +186,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     klass,
     assignment,
+    classAssignmentId: classAssignment.id,
+    insight,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -177,6 +205,8 @@ export default function AssignmentSubmissionsRoute() {
   const {
     klass,
     assignment,
+    classAssignmentId,
+    insight,
     status,
     isDocumentSubmissionEnabled,
     submissions,
@@ -337,6 +367,14 @@ export default function AssignmentSubmissionsRoute() {
           <div className="mt-1 flex gap-4 text-sm text-muted-foreground">
             <span>{assignment.assignmentType.title}</span>
           </div>
+        </div>
+
+        {/* Class-wide, assignment-level feedback for the teacher */}
+        <div className="mb-6">
+          <ClassInsightsPanel
+            classAssignmentId={classAssignmentId}
+            initialInsight={insight}
+          />
         </div>
 
         {/* Status tabs */}
