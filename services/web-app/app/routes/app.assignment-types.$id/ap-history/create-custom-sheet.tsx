@@ -48,6 +48,7 @@ type SourceDraft = {
   body: string;
   imageUrl: string | null;
   imageAlt: string;
+  needsImage: boolean;
   uploading: boolean;
   uploadError: string | null;
 };
@@ -64,6 +65,7 @@ function emptySource(index: number): SourceDraft {
     body: '',
     imageUrl: null,
     imageAlt: '',
+    needsImage: false,
     uploading: false,
     uploadError: null,
   };
@@ -177,7 +179,11 @@ export function CreateCustomApHistorySheet({
         });
         return;
       }
-      updateSource(id, { uploading: false, imageUrl: result.url });
+      updateSource(id, {
+        uploading: false,
+        imageUrl: result.url,
+        needsImage: false,
+      });
     } catch {
       updateSource(id, {
         uploading: false,
@@ -203,7 +209,12 @@ export function CreateCustomApHistorySheet({
         prompt?: string;
         periodNumber?: number | null;
         reasoningSkill?: string | null;
-        sources?: Array<{ title: string; attribution: string; body: string }>;
+        sources?: Array<{
+          title: string;
+          attribution: string;
+          body: string;
+          isVisual?: boolean;
+        }>;
       };
       if (!result.success) {
         setExtractError(result.message ?? 'Could not read that PDF.');
@@ -228,6 +239,7 @@ export function CreateCustomApHistorySheet({
             title: source.title || `Document ${index + 1}`,
             attribution: source.attribution || '',
             body: source.body || '',
+            needsImage: source.isVisual === true,
           }))
         );
       }
@@ -533,27 +545,41 @@ export function CreateCustomApHistorySheet({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-3">
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                        <ImageIcon className="h-4 w-4" />
-                        {source.uploading ? 'Uploading…' : 'Add an image'}
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                          className="hidden"
-                          disabled={isSaving || source.uploading}
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) void uploadSourceImage(source.id, file);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
-                      {source.uploadError ? (
-                        <span className="text-xs text-destructive">
-                          {source.uploadError}
-                        </span>
+                    <div className="space-y-1.5">
+                      {source.needsImage ? (
+                        <p className="text-xs font-medium text-amber-700">
+                          This looks like a visual document — add the image
+                          students should analyze.
+                        </p>
                       ) : null}
+                      <div className="flex items-center gap-3">
+                        <label
+                          className={`inline-flex cursor-pointer items-center gap-1.5 text-sm hover:text-foreground ${
+                            source.needsImage
+                              ? 'font-medium text-amber-700'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          <ImageIcon className="h-4 w-4" />
+                          {source.uploading ? 'Uploading…' : 'Add an image'}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                            className="hidden"
+                            disabled={isSaving || source.uploading}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) void uploadSourceImage(source.id, file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        {source.uploadError ? (
+                          <span className="text-xs text-destructive">
+                            {source.uploadError}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   )}
                 </div>

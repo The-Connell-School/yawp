@@ -19,6 +19,7 @@ const ExtractedApHistorySchema = z.object({
         title: z.string().trim().min(1),
         attribution: z.string().trim().default(''),
         body: z.string().trim().min(1),
+        isVisual: z.boolean().optional(),
       })
     )
     .default([]),
@@ -69,10 +70,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const system = [
     'You extract APUSH (AP U.S. History) DBQ and LEQ writing assignments from PDFs.',
     'Return only valid JSON in this exact shape:',
-    '{"title":"string?","essayType":"dbq|leq","prompt":"string","periodNumber":number?,"reasoningSkill":"string?","sources":[{"title":"string","attribution":"string","body":"string"}]}',
+    '{"title":"string?","essayType":"dbq|leq","prompt":"string","periodNumber":number?,"reasoningSkill":"string?","sources":[{"title":"string","attribution":"string","body":"string","isVisual":boolean}]}',
     'prompt is the full essay prompt students must answer.',
     'essayType is "dbq" if the assignment includes source documents to analyze, otherwise "leq".',
     'For a DBQ, put every document in sources: title (e.g. "Document 1"), attribution (author, source, date), and body (the full transcribed document text).',
+    'Set isVisual true when a document is primarily an image (political cartoon, map, chart, photograph, painting); for a visual document, body should describe what the image depicts.',
     'For an LEQ, sources must be an empty array.',
     'periodNumber is the APUSH period 1-9 if identifiable, otherwise omit it.',
     'Never include markdown fences or explanatory text.',
@@ -151,6 +153,7 @@ export async function action({ request }: ActionFunctionArgs) {
         title: source.title.trim(),
         attribution: source.attribution.trim(),
         body: source.body.trim(),
+        isVisual: source.isVisual ?? false,
       })),
     });
   } catch (error) {

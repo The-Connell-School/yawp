@@ -62,6 +62,12 @@ describe('api.ap-history.extract-document', () => {
                 attribution: 'Frederick Douglass, 1866',
                 body: 'The work does not end with the abolition of slavery...',
               },
+              {
+                title: 'Document 2',
+                attribution: 'Thomas Nast, Harper’s Weekly, 1874',
+                body: 'A political cartoon on Reconstruction-era politics.',
+                isVisual: true,
+              },
             ],
           }),
         },
@@ -76,11 +82,13 @@ describe('api.ap-history.extract-document', () => {
     expect(body.essayType).toBe('dbq');
     expect(body.prompt).toContain('Reconstruction');
     expect(body.periodNumber).toBe(6);
-    expect(body.sources).toHaveLength(1);
+    expect(body.sources).toHaveLength(2);
     expect(body.sources[0]).toMatchObject({
       position: 1,
       attribution: 'Frederick Douglass, 1866',
+      isVisual: false,
     });
+    expect(body.sources[1]).toMatchObject({ position: 2, isVisual: true });
     expect(prisma.llmLog.create).toHaveBeenCalled();
   });
 
