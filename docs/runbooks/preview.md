@@ -60,8 +60,10 @@ Required repository settings:
 - Variable `PREVIEW_SSH_USER`
 - Variable `PREVIEW_TLS`
 - Variable `PREVIEW_RUNTIME`
+- Variable `PREVIEW_AI_MODEL`
 - Variable `PREVIEW_DB_DUMP_S3_URI`
 - Secret `PREVIEW_SSH_PRIVATE_KEY`
+- Secret `PREVIEW_ANTHROPIC_API_KEY` or repository secret `ANTHROPIC_API_KEY`
 - Secret `PREVIEW_DB_PASSWORD` if the shared preview Postgres password is not the default
 - Secret `PREVIEW_LOGIN_EMAIL`
 - Secret `PREVIEW_LOGIN_PASSWORD`
