@@ -256,6 +256,7 @@ model Document {
   title                    String                    @default("Untitled")
   text                     String?
   html                     String?
+  apHistorySnapshot        Json?
   membership               OrgMembership             @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   membershipId             String
   assignmentTypeId         String

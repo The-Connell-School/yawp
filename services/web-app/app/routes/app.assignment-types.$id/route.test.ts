@@ -22,6 +22,7 @@ const prisma = {
   },
   apHistoryPromptLibraryEntry: {
     findMany: mock(),
+    findFirst: mock(),
   },
 };
 
@@ -86,9 +87,7 @@ function mockActionAssignmentTypeAvailable({
   systemKey = null as string | null,
 } = {}) {
   prisma.assignmentType.findFirst.mockImplementation(async (args: any) =>
-    args.select?.systemKey !== undefined
-      ? { id, systemKey }
-      : { id }
+    args.select?.systemKey !== undefined ? { id, systemKey } : { id }
   );
 }
 
@@ -189,7 +188,7 @@ describe('app.assignment-types.$id action', () => {
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
   });
 
-  test('rejects direct document creation for AP History assignment types', async () => {
+  test('prompts for an APUSH selection when none is provided', async () => {
     mockActionAssignmentTypeAvailable({
       id: 'ap-history-type',
       systemKey: 'ap_history_essay',
@@ -210,10 +209,53 @@ describe('app.assignment-types.$id action', () => {
       redirectedTo: '/app/assignment-types/ap-history-type',
       toast: {
         type: 'error',
-        description: 'Choose an APUSH prompt from the library first.',
+        description: 'Choose an APUSH prompt to start practicing.',
       },
     });
     expect(createDocumentForAssignmentType).not.toHaveBeenCalled();
+  });
+
+  test('creates a student practice document from an APUSH prompt', async () => {
+    mockActionAssignmentTypeAvailable({
+      id: 'ap-history-type',
+      systemKey: 'ap_history_essay',
+    });
+    prisma.organizationAssignmentType.findMany.mockResolvedValue([
+      { organizationId: 'org-1', assignmentTypeId: 'ap-history-type' },
+    ]);
+    prisma.apHistoryPromptLibraryEntry.findFirst.mockResolvedValue({
+      externalKey: 'apush-dbq-american-independence',
+      course: 'apush',
+      essayType: 'dbq',
+      prompt: 'Evaluate the extent of change in ideas about independence.',
+      period: '1754-1800',
+      periodNumber: 3,
+      reasoningSkill: 'continuity-and-change',
+      defaultTimeMode: 'untimed',
+      defaultDurationMinutes: 60,
+      sources: [],
+    });
+    createDocumentForAssignmentType.mockResolvedValue({ documentId: 'doc-9' });
+
+    const form = new FormData();
+    form.append('apHistoryLibraryEntryId', 'apush-dbq-american-independence');
+
+    const response = (await action({
+      request: new Request(
+        'https://example.test/app/assignment-types/ap-history-type',
+        { method: 'POST', body: form }
+      ),
+      params: { id: 'ap-history-type' },
+    } as never)) as unknown as { redirectedTo: string };
+
+    expect(response.redirectedTo).toContain('/app/documents/doc-9');
+    const createArg = createDocumentForAssignmentType.mock.calls[0][0];
+    expect(createArg.assignmentTypeId).toBe('ap-history-type');
+    expect(createArg.apHistorySnapshot).toMatchObject({
+      schemaVersion: 1,
+      essayType: 'dbq',
+      libraryEntryId: 'apush-dbq-american-independence',
+    });
   });
 });
 

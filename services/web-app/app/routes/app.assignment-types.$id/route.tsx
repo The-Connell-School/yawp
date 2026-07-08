@@ -5,7 +5,7 @@ import {
   type ActionFunctionArgs,
   Form,
 } from 'react-router';
-import { Link, useLoaderData, useNavigation } from 'react-router';
+import { Link, useLoaderData, useNavigation, useSubmit } from 'react-router';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { DocumentLink } from '~/components/document-link.js';
 import { GeneralErrorBoundary } from '~/components/error-boundary';
@@ -29,8 +29,14 @@ import {
   createDocumentForAssignmentType,
   DocumentCreationError,
 } from '~/domain/documents.server';
-import { listApHistoryLibraryEntries } from '~/domain/ap-history/library.server';
-import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+import {
+  getApHistoryLibraryEntryForSnapshot,
+  listApHistoryLibraryEntries,
+} from '~/domain/ap-history/library.server';
+import {
+  AP_HISTORY_ASSIGNMENT_TYPE_KEY,
+  buildApHistorySnapshot,
+} from '~/domain/ap-history/schema';
 import {
   getAvailableAssignmentTypesForScopes,
   isAssignmentTypeAvailableForAnyScope,
@@ -381,11 +387,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const assignmentEnabledTeacherClasses =
     profile.role === 'TEACHER' ? teacherClasses : [];
   let apHistoryLibrary = null;
-  if (profile.role === 'TEACHER' && isApHistory) {
-    if (assignmentEnabledTeacherClasses.length > 0) {
+  if (isApHistory) {
+    if (
+      profile.role === 'TEACHER' &&
+      assignmentEnabledTeacherClasses.length > 0
+    ) {
       apHistoryLibrary = {
+        mode: 'teacher' as const,
         entries: await listApHistoryLibraryEntries(assignmentType.id),
         teacherClasses: assignmentEnabledTeacherClasses,
+      };
+    } else if (profile.role === 'STUDENT') {
+      apHistoryLibrary = {
+        mode: 'student' as const,
+        entries: await listApHistoryLibraryEntries(assignmentType.id),
+        teacherClasses: [],
       };
     }
   }
@@ -442,11 +458,35 @@ export async function action({ request, params }: ActionFunctionArgs) {
     });
   }
 
+  let apHistorySnapshotForDocument: ReturnType<
+    typeof buildApHistorySnapshot
+  > | null = null;
   if (assignmentType.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
-    return redirectWithToast(`/app/assignment-types/${params.id}`, {
-      type: 'error',
-      description: 'Choose an APUSH prompt from the library first.',
+    const formData = await request.formData().catch(() => new FormData());
+    const apHistoryLibraryEntryId = formData
+      .get('apHistoryLibraryEntryId')
+      ?.toString()
+      .trim();
+
+    if (!apHistoryLibraryEntryId) {
+      return redirectWithToast(`/app/assignment-types/${params.id}`, {
+        type: 'error',
+        description: 'Choose an APUSH prompt to start practicing.',
+      });
+    }
+
+    const entry = await getApHistoryLibraryEntryForSnapshot({
+      assignmentTypeId: assignmentType.id,
+      externalKey: apHistoryLibraryEntryId,
     });
+    if (!entry) {
+      return redirectWithToast(`/app/assignment-types/${params.id}`, {
+        type: 'error',
+        description: 'That APUSH prompt is unavailable.',
+      });
+    }
+
+    apHistorySnapshotForDocument = buildApHistorySnapshot(entry);
   }
 
   let documentId = '';
@@ -454,6 +494,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const created = await createDocumentForAssignmentType({
       membershipId: profile.id,
       assignmentTypeId: assignmentType.id,
+      ...(apHistorySnapshotForDocument
+        ? { apHistorySnapshot: apHistorySnapshotForDocument }
+        : {}),
     });
     documentId = created.documentId;
   } catch (creationError) {
@@ -488,6 +531,7 @@ export default function AppAssignmentTypesIdRoute() {
   const hasModules = data.assignmentType.assignmentModules.length > 0;
   const navigation = useNavigation();
   const isLoading = navigation.state !== 'idle';
+  const submit = useSubmit();
   const docFormRef = useRef<HTMLFormElement>(null);
   const [isAssignmentSheetOpen, setIsAssignmentSheetOpen] = useState(false);
   const [customEssayType, setCustomEssayType] =
@@ -626,7 +670,21 @@ export default function AppAssignmentTypesIdRoute() {
           </div>
         </div>
         {showPromptsLibrary ? <TeacherDirections /> : null}
-        {data.apHistoryLibrary ? <ApHistoryTeacherDirections /> : null}
+        {data.apHistoryLibrary?.mode === 'teacher' ? (
+          <ApHistoryTeacherDirections />
+        ) : null}
+        {data.apHistoryLibrary?.mode === 'student' ? (
+          <section className="mb-6 rounded-lg border bg-muted/40 p-4">
+            <h3 className="mb-2 text-base font-semibold">
+              Practice APUSH essays
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Pick a DBQ or LEQ below to start a practice essay. You&rsquo;ll
+              get the prompt, any sources, and an AP tutor that coaches you on
+              the rubric while you write.
+            </p>
+          </section>
+        ) : null}
         {hasModules && !isApHistoryAssignmentType ? (
           <>
             <h3 className="mb-2 text-foreground/75">Modules</h3>
@@ -665,6 +723,13 @@ export default function AppAssignmentTypesIdRoute() {
             <ApPromptsLibrary
               entries={data.apHistoryLibrary.entries}
               onSelectEntry={(entry) => {
+                if (data.apHistoryLibrary?.mode === 'student') {
+                  submit(
+                    { apHistoryLibraryEntryId: entry.externalKey },
+                    { method: 'post' }
+                  );
+                  return;
+                }
                 setApHistoryEntry(entry);
                 setLibraryPrompt('');
                 setIsAssignmentSheetOpen(true);
@@ -723,6 +788,8 @@ export default function AppAssignmentTypesIdRoute() {
                   Hit the <code className="px-1">New +</code> button above to
                   create your first document.
                 </>
+              ) : data.apHistoryLibrary?.mode === 'student' ? (
+                'Choose a prompt from the APUSH library above to start practicing.'
               ) : (
                 'Choose a prompt from the APUSH library to create an assignment.'
               )

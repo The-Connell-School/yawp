@@ -77,6 +77,7 @@ export async function action({ request }: ActionFunctionArgs) {
           select: {
             id: true,
             text: true,
+            apHistorySnapshot: true,
             assignment: {
               select: { apHistorySnapshot: true },
             },
@@ -112,7 +113,9 @@ export async function action({ request }: ActionFunctionArgs) {
     // AP History assignments carry an immutable snapshot; when present, the
     // tutor coaches against the AP rubric/sources instead of the generic
     // assignment-type tutor instructions.
-    const apHistorySnapshot = cms.document.assignment?.apHistorySnapshot;
+    const apHistorySnapshot =
+      cms.document.apHistorySnapshot ??
+      cms.document.assignment?.apHistorySnapshot;
     const system = isApHistorySnapshot(apHistorySnapshot)
       ? buildApHistoryTutorSystemPrompt(apHistorySnapshot)
       : buildTutorSystemPrompt({
@@ -140,7 +143,9 @@ export async function action({ request }: ActionFunctionArgs) {
         moduleRubric.categories.length > 0 ? 'assignment-type' : 'missing',
       assignmentTypeGradingVersion:
         cms.assignmentModule.assignmentType?.gradingAssistantVersion ?? null,
-      rubricCategoryKeys: moduleRubric.categories.map((category) => category.key),
+      rubricCategoryKeys: moduleRubric.categories.map(
+        (category) => category.key
+      ),
     });
 
     const currentMessages = cms.messages.map((m) => ({

@@ -184,7 +184,9 @@ function buildApHistoryPrompt({
     snapshot.essayType === 'dbq'
       ? snapshot.sources
           .map((source) => {
-            const caption = source.caption ? `\nCaption: ${source.caption}` : '';
+            const caption = source.caption
+              ? `\nCaption: ${source.caption}`
+              : '';
             return `Document ${source.position}: ${source.title}\nAttribution: ${source.attribution}${caption}\nBody: ${source.body}`;
           })
           .join('\n\n')
@@ -397,6 +399,7 @@ export async function action({ request }: ActionFunctionArgs) {
         id: true,
         membershipId: true,
         assignmentTypeId: true,
+        apHistorySnapshot: true,
         assignmentType: {
           select: {
             id: true,
@@ -481,10 +484,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (
-    isGradingOwnDocument(
-      actor.membershipId,
-      submission.document.membershipId
-    )
+    isGradingOwnDocument(actor.membershipId, submission.document.membershipId)
   ) {
     return dataResponse(
       {
@@ -507,10 +507,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
-      assignmentTypeId: submission.document.assignmentTypeId,
-      assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
-      assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
-    });
+    assignmentTypeId: submission.document.assignmentTypeId,
+    assignmentTypeKind: submission.document.assignmentType?.kind ?? null,
+    assignmentTypeTitle: submission.document.assignmentType?.title ?? null,
+  });
   const requestedStrictnessLevel = data.gradingAssistantStrictnessLevel
     ? parseGradingAssistantStrictnessLevel(data.gradingAssistantStrictnessLevel)
     : null;
@@ -567,8 +567,7 @@ export async function action({ request }: ActionFunctionArgs) {
     forceFallback,
     signalFallbackRetry: !forceFallback,
   };
-  const retryResponse = () =>
-    dataResponse({ retrying: true }, { status: 202 });
+  const retryResponse = () => dataResponse({ retrying: true }, { status: 202 });
   const getGradingLlmCompletion = (
     params: Parameters<typeof getLLMCompletion>[0]
   ) => getLLMCompletion({ ...params, ...llmRetryOptions });
@@ -588,6 +587,7 @@ export async function action({ request }: ActionFunctionArgs) {
   });
 
   const apHistorySnapshotCandidate =
+    submission.document.apHistorySnapshot ??
     submission.document.assignment?.apHistorySnapshot;
   const apHistorySnapshot = isApHistorySnapshot(apHistorySnapshotCandidate)
     ? parseApHistorySnapshot(apHistorySnapshotCandidate)
@@ -772,7 +772,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
           gradingConfigSource: resolvedGradingConfig.source,
           ...gradingAiContextMetadata,
           assignmentTypeGradingLabel: resolvedGradingConfig.label,
-          assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
+          assignmentTypeSourceTemplateId:
+            resolvedGradingConfig.sourceTemplateId,
           assignmentTypeSourceTemplateSlug:
             resolvedGradingConfig.sourceTemplateSlug,
           gradingAssistantStrictnessLevel,
@@ -1040,7 +1041,8 @@ In overallComment, start with "${studentFirstName}," and continue with concise, 
         assignmentTypeGradingVersion: resolvedGradingConfig.version,
         assignmentTypeGradingLabel: resolvedGradingConfig.label,
         assignmentTypeSourceTemplateId: resolvedGradingConfig.sourceTemplateId,
-        assignmentTypeSourceTemplateSlug: resolvedGradingConfig.sourceTemplateSlug,
+        assignmentTypeSourceTemplateSlug:
+          resolvedGradingConfig.sourceTemplateSlug,
         gradingAssistantStrictnessLevel,
         assignmentTypeId: submission.document.assignmentTypeId,
         assignmentId: submission.document.assignment?.id ?? null,
