@@ -7,6 +7,8 @@ export type DbqSource = {
   attribution: string;
   body: string;
   caption?: string;
+  imageUrl?: string | null;
+  imageAlt?: string | null;
 };
 
 export type DbqPrompt = {

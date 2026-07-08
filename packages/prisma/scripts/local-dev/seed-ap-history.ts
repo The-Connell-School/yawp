@@ -5,6 +5,7 @@ import {
   AP_HISTORY_HERO_IMAGE,
   apHistoryHeroImageBytes,
 } from './ap-history-hero-image';
+import { apHistorySourceImageAsset } from './ap-history-source-assets';
 import { LOCAL_DEV_ORG_ID } from './dev-personas';
 
 export const AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY = 'ap_history_essay';
@@ -110,7 +111,26 @@ export async function seedApHistoryLocalDev(
     select: { id: true },
   });
 
+  // Attach real public-domain source images (committed JPEG assets) to their
+  // curated library sources so they serve reliably from our own origin.
+  let imagesSeeded = 0;
+  for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
+    for (const source of entry.sources) {
+      if (source.mediaType !== 'image') continue;
+      const asset = apHistorySourceImageAsset(source.externalKey);
+      if (!asset) continue;
+      const updated = await prisma.apHistoryPromptLibrarySource.updateMany({
+        where: { externalKey: source.externalKey },
+        data: {
+          imageBlob: asset.blob,
+          imageContentType: asset.contentType,
+        },
+      });
+      imagesSeeded += updated.count;
+    }
+  }
+
   console.log(
-    `Seeded AP History Essay type with ${AP_HISTORY_LIBRARY_ENTRIES.length} curated library entries.`
+    `Seeded AP History Essay type with ${AP_HISTORY_LIBRARY_ENTRIES.length} curated library entries and ${imagesSeeded} self-hosted source images.`
   );
 }

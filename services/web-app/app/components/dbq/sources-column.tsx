@@ -206,6 +206,14 @@ function ActiveSourceViewer({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        {source.imageUrl ? (
+          <img
+            src={source.imageUrl}
+            alt={source.imageAlt ?? source.title}
+            loading="lazy"
+            className="mb-3 w-full rounded-md border bg-slate-50 object-contain"
+          />
+        ) : null}
         <p className="whitespace-pre-line text-[13px] leading-relaxed text-foreground/90">
           {source.body}
         </p>

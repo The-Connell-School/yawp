@@ -13,20 +13,25 @@ describe('AP History library seed data', () => {
     ).toBe(true);
   });
 
-  test('curated sources are text-based (image DBQs come from teacher uploads)', () => {
+  test('every source has a mediaType and non-empty body', () => {
+    for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
+      for (const source of entry.sources) {
+        expect(['text', 'image']).toContain(source.mediaType);
+        expect(source.body.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test('image sources carry alt text and a self-hosted asset (no hotlinks)', () => {
     const imageSources = AP_HISTORY_LIBRARY_ENTRIES.flatMap((entry) =>
       entry.sources.filter((source) => source.mediaType === 'image')
     );
 
-    // The curated library is deliberately all text primary sources. Real
-    // historical images enter through teacher-uploaded custom DBQs, which are
-    // self-hosted and served reliably from our own origin.
-    expect(imageSources).toHaveLength(0);
-    for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
-      for (const source of entry.sources) {
-        expect(source.mediaType).toBe('text');
-        expect(source.body.trim().length).toBeGreaterThan(0);
-      }
+    for (const source of imageSources) {
+      // Curated images are served from our own origin by externalKey, never
+      // hotlinked from an external host.
+      expect(source.imageUrl).toBeNull();
+      expect((source.imageAlt ?? '').trim().length).toBeGreaterThan(0);
     }
   });
 

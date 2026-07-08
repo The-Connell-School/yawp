@@ -1,5 +1,6 @@
 import { DbqAssignmentScreen } from '~/components/dbq/dbq-assignment-screen';
 import type { DbqPrompt, DbqSource } from '~/components/dbq/types';
+import { apHistorySourceImageUrl } from '~/components/ap-history/source-card';
 import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
 
 type Props = {
@@ -18,6 +19,11 @@ function toDbqSources(sources: ApHistorySnapshot['sources']): DbqSource[] {
     attribution: source.attribution,
     body: source.body,
     caption: source.caption ?? undefined,
+    imageUrl:
+      source.mediaType === 'image'
+        ? (apHistorySourceImageUrl(source.externalKey) ?? source.imageUrl)
+        : null,
+    imageAlt: source.imageAlt ?? null,
   }));
 }
 
