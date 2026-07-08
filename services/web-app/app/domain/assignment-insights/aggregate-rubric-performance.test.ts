@@ -122,6 +122,36 @@ describe('aggregateRubricPerformance', () => {
     expect(evidence.sampleComments.every((c) => c.trim().length > 0)).toBe(true);
   });
 
+  test('handles the legacy flat-number rubricScores shape', () => {
+    // Older/seeded submissions store scores as { key: number } rather than
+    // { key: { score, comment } }. Both must aggregate.
+    const result = aggregateRubricPerformance([
+      {
+        submissionId: 'legacy',
+        rubricScores: {
+          thesis_and_content: 5,
+          evidence_and_support: 2,
+        } as unknown as GradedSubmissionInput['rubricScores'],
+      },
+      submission('nested', {
+        thesis_and_content: { score: 3 },
+        evidence_and_support: { score: 2 },
+      }),
+    ]);
+
+    const thesis = result.categories.find(
+      (c) => c.key === 'thesis_and_content'
+    )!;
+    expect(thesis.scoredCount).toBe(2);
+    expect(thesis.averageScore).toBe(4);
+
+    const evidence = result.categories.find(
+      (c) => c.key === 'evidence_and_support'
+    )!;
+    expect(evidence.scoredCount).toBe(2);
+    expect(evidence.averageScore).toBe(2);
+  });
+
   test('handles empty input', () => {
     const result = aggregateRubricPerformance([]);
     expect(result.submissionCount).toBe(0);

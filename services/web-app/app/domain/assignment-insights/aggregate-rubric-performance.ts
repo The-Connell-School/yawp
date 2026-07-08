@@ -13,10 +13,13 @@ export type SubmissionRubricScore = {
   isAi?: unknown;
 };
 
+/** A category entry is either a bare score (legacy) or a scored object. */
+export type SubmissionRubricEntry = SubmissionRubricScore | number;
+
 export type GradedSubmissionInput = {
   submissionId: string;
   studentName?: string | null;
-  rubricScores?: Record<string, SubmissionRubricScore> | null;
+  rubricScores?: Record<string, SubmissionRubricEntry> | null;
   overallComment?: string | null;
 };
 
@@ -69,9 +72,21 @@ export function aggregateRubricPerformance(
 
     for (const submission of submissions) {
       const entry = submission.rubricScores?.[category.key];
-      if (!entry || typeof entry !== 'object') continue;
+      if (entry === undefined || entry === null) continue;
 
-      const score = toFiniteScore(entry.score);
+      // Support both the legacy flat shape ({ key: number }) and the current
+      // nested shape ({ key: { score, comment } }).
+      let score: number | null;
+      let comment = '';
+      if (typeof entry === 'number') {
+        score = toFiniteScore(entry);
+      } else if (typeof entry === 'object') {
+        score = toFiniteScore(entry.score);
+        comment = typeof entry.comment === 'string' ? entry.comment.trim() : '';
+      } else {
+        continue;
+      }
+
       if (score !== null) {
         scores.push(score);
         const band = toBand(score);
@@ -80,8 +95,6 @@ export function aggregateRubricPerformance(
         if (score >= HIGH_SCORE_THRESHOLD) highCount += 1;
       }
 
-      const comment =
-        typeof entry.comment === 'string' ? entry.comment.trim() : '';
       if (comment && comments.length < SAMPLE_COMMENT_CAP) {
         comments.push(comment);
       }
