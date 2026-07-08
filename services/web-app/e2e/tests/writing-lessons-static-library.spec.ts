@@ -25,6 +25,38 @@ test.describe.serial('Writing practice prototype', () => {
     ).toBeVisible();
   });
 
+  test('lets a student create their own mixed practice set', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.userEmail, 'johndoe');
+    await page.goto('/app/writing-lessons');
+
+    await page.getByRole('button', { name: /create practice/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
+    await dialog.getByText('Fixing Comma Splices', { exact: true }).click();
+    await dialog.getByText('Passive Voice', { exact: true }).click();
+    await dialog.getByRole('button', { name: '10', exact: true }).click();
+    await dialog.getByRole('button', { name: /start practice/i }).click();
+
+    // Lands in a self-directed session with the chosen skills.
+    await expect(
+      page.getByRole('heading', { name: /grammar practice/i })
+    ).toBeVisible();
+    await expect(page.getByText(/try it yourself/i)).toBeVisible();
+    await expect(page.getByText(/^Problem 1$/)).toBeVisible();
+
+    // Answering a problem returns feedback.
+    await page
+      .getByLabel(/your answer/i)
+      .fill('The album dropped; fans went wild.');
+    await page.getByRole('button', { name: /check my answer/i }).click();
+    await expect(page.getByTestId('practice-feedback')).toBeVisible();
+  });
+
   test('loads lessons by direct URL and supports a self-guided practice check', async ({
     page,
     e2eContext,

@@ -1,9 +1,10 @@
 import { ChevronRight, ClipboardPlus, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Link,
   data as dataResponse,
   useLoaderData,
+  useNavigate,
   type LoaderFunctionArgs,
 } from 'react-router';
 
@@ -21,6 +22,16 @@ import {
   CardHeader,
   CardTitle,
 } from '~/components/ui/card';
+import { Checkbox } from '~/components/ui/checkbox';
+import { Input } from '~/components/ui/input';
+import { Label } from '~/components/ui/label';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '~/components/ui/sheet';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
 import {
@@ -34,6 +45,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const profile = await requireMembership(request, userId);
 
   const groups = getQuickWritingLessonGroups();
+
+  // Flat skill list for the student "Create practice" builder.
+  const practiceSkillOptions = groups.flatMap((group) =>
+    group.lessons.map((lesson) => ({
+      slug: lesson.slug,
+      title: lesson.title,
+      category: lesson.category,
+    }))
+  );
 
   const isTeacher = profile.role === 'TEACHER';
 
@@ -102,9 +122,153 @@ export async function loader({ request }: LoaderFunctionArgs) {
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
+    practiceSkillOptions,
     assignedPractice,
     assignedByTeacher,
   });
+}
+
+const PRACTICE_PROBLEM_PRESETS = [3, 5, 10, 15] as const;
+
+type PracticeSkillOption = { slug: string; title: string; category: string };
+
+function StudentPracticeBuilder({
+  open,
+  onOpenChange,
+  skills,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  skills: PracticeSkillOption[];
+}) {
+  const navigate = useNavigate();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [problemCount, setProblemCount] = useState('5');
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, PracticeSkillOption[]>();
+    for (const skill of skills) {
+      const list = map.get(skill.category) ?? [];
+      list.push(skill);
+      map.set(skill.category, list);
+    }
+    return Array.from(map, ([category, items]) => ({ category, items }));
+  }, [skills]);
+
+  function toggle(slug: string) {
+    setSelected((current) =>
+      current.includes(slug)
+        ? current.filter((value) => value !== slug)
+        : [...current, slug]
+    );
+  }
+
+  const parsedCount = Number(problemCount);
+  const countValid =
+    Number.isInteger(parsedCount) && parsedCount >= 1 && parsedCount <= 20;
+  const canStart = selected.length > 0 && countValid;
+
+  function start() {
+    if (!canStart) return;
+    const params = new URLSearchParams({
+      skills: selected.join(','),
+      count: String(parsedCount),
+    });
+    navigate(`/app/writing-lessons/practice?${params.toString()}`);
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Create practice</SheetTitle>
+          <SheetDescription>
+            Pick the skills you want to work on and how many problems. We&rsquo;ll
+            build a mixed set and give you feedback on every rewrite.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="mt-6 space-y-5">
+          <div className="space-y-2">
+            <Label>Skills to practice</Label>
+            <p className="text-sm text-muted-foreground">
+              Pick one, or several to mix them into one set.
+            </p>
+            <div className="max-h-72 space-y-3 overflow-y-auto rounded-md border p-3">
+              {grouped.map((group) => (
+                <div key={group.category} className="space-y-1.5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {group.category}
+                  </p>
+                  {group.items.map((skill) => (
+                    <div key={skill.slug} className="flex items-center gap-2.5">
+                      <Checkbox
+                        id={`practice-skill-${skill.slug}`}
+                        checked={selected.includes(skill.slug)}
+                        onCheckedChange={() => toggle(skill.slug)}
+                      />
+                      <Label
+                        htmlFor={`practice-skill-${skill.slug}`}
+                        className="cursor-pointer font-normal"
+                      >
+                        {skill.title}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>How many problems?</Label>
+            <div className="flex flex-wrap items-center gap-2">
+              {PRACTICE_PROBLEM_PRESETS.map((preset) => {
+                const isSelected = problemCount === String(preset);
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setProblemCount(String(preset))}
+                    aria-pressed={isSelected}
+                    className={`h-9 w-12 rounded-md border text-sm transition ${
+                      isSelected
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border bg-background hover:bg-muted'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                inputMode="numeric"
+                aria-label="Custom number of problems"
+                value={problemCount}
+                onChange={(event) => setProblemCount(event.target.value)}
+                className="h-9 w-20"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              You can keep going past this — the set never runs dry.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={start} disabled={!canStart}>
+              Start practice
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 function formatDueDate(iso: string): string {
@@ -150,10 +314,12 @@ export default function WritingLessonsIndexRoute() {
     isTeacher,
     teacherClasses,
     writingPracticeLessons,
+    practiceSkillOptions,
     assignedPractice,
     assignedByTeacher,
   } = useLoaderData<typeof loader>();
   const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -190,7 +356,22 @@ export default function WritingLessonsIndexRoute() {
                   writingPracticeLessons={writingPracticeLessons}
                 />
               </>
-            ) : null}
+            ) : (
+              <>
+                <Button
+                  className="shrink-0 rounded-full"
+                  onClick={() => setIsBuilderOpen(true)}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Create practice
+                </Button>
+                <StudentPracticeBuilder
+                  open={isBuilderOpen}
+                  onOpenChange={setIsBuilderOpen}
+                  skills={practiceSkillOptions}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
