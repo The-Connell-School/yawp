@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 const prisma = {
   assignment: {
@@ -21,6 +22,9 @@ const prisma = {
   orgMembership: {
     findMany: mock(),
   },
+  class: {
+    findMany: mock(),
+  },
   document: {
     update: mock(),
     updateMany: mock(),
@@ -35,7 +39,9 @@ const requireMembership = mock();
 mock.module('~/utils/db.server', () => ({ prisma }));
 mock.module('~/utils/auth.server', () => ({ requireUserId, requireMembership }));
 
-const { action, sanitizeAssignmentCreateReturnTo } = await import('./route');
+const { action, loader, sanitizeAssignmentCreateReturnTo } = await import(
+  './route'
+);
 
 function requestFor(body: Record<string, string>) {
   const form = new FormData();
@@ -297,5 +303,47 @@ describe('app.assignments action', () => {
     expect(responseStatus(response)).toBe(400);
     expect(prisma.assignment.update).not.toHaveBeenCalled();
   });
+});
 
+describe('app.assignments loader', () => {
+  beforeEach(() => {
+    for (const model of Object.values(prisma)) {
+      for (const fn of Object.values(model)) fn.mockReset();
+    }
+    requireUserId.mockReset();
+    requireMembership.mockReset();
+
+    requireUserId.mockResolvedValue('user-1');
+    requireMembership.mockResolvedValue({
+      id: 'teacher-1',
+      role: 'TEACHER',
+      organization: { id: 'org-1', name: 'Org' },
+    });
+  });
+
+  test('reports missing active classes separately from assignment type availability', async () => {
+    prisma.class.findMany.mockResolvedValue([]);
+
+    const response = await loader({
+      request: new Request('https://example.com/app/assignments'),
+      params: {},
+    } as any);
+
+    const body = await readBody(response);
+
+    expect(body.hasActiveClasses).toBe(false);
+    expect(body.assignmentsEnabled).toBe(false);
+    expect(prisma.assignment.findMany).not.toHaveBeenCalled();
+    expect(prisma.assignmentType.findMany).not.toHaveBeenCalled();
+    expect(prisma.organizationAssignmentType.findMany).not.toHaveBeenCalled();
+  });
+
+  test('does not describe teachers without classes as missing organization enablement', () => {
+    const source = readFileSync(new URL('./route.tsx', import.meta.url), 'utf8');
+
+    expect(source).not.toContain(
+      'Assignments are not enabled for your organization yet.'
+    );
+    expect(source).toContain('You are not assigned to any active classes yet.');
+  });
 });

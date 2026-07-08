@@ -1,56 +1,11 @@
 import { test, expect } from '../test-setup';
-import { createE2EPrismaClient } from '../prisma-client';
-
-const WRITING_PRACTICE_FEATURE_KEY = 'writing_practice';
-
-async function setWritingPracticeForOrganization(params: {
-  organizationId: string;
-  enabled: boolean;
-}) {
-  const prisma = createE2EPrismaClient();
-  try {
-    await prisma.featureFlag.upsert({
-      where: {
-        key_scopeKind_scopeId: {
-          key: WRITING_PRACTICE_FEATURE_KEY,
-          scopeKind: 'organization',
-          scopeId: params.organizationId,
-        },
-      },
-      create: {
-        key: WRITING_PRACTICE_FEATURE_KEY,
-        scopeKind: 'organization',
-        scopeId: params.organizationId,
-        enabled: params.enabled,
-        description: 'E2E writing practice access',
-      },
-      update: {
-        enabled: params.enabled,
-      },
-    });
-  } finally {
-    await prisma.$disconnect();
-  }
-}
 
 test.describe.serial('Writing practice prototype', () => {
-  test.afterEach(async ({ e2eContext }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: false,
-    });
-  });
-
-  test('hides practice from the student dashboard when the feature flag is off', async ({
+  test('keeps writing practice off the student dashboard', async ({
     page,
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: false,
-    });
-
     await signIn(e2eContext.userEmail, 'johndoe');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
@@ -60,21 +15,13 @@ test.describe.serial('Writing practice prototype', () => {
     ).toHaveCount(0);
   });
 
-  test('shows lessons and supports a self-guided practice check when the feature flag is on', async ({
+  test('loads lessons by direct URL and supports a self-guided practice check', async ({
     page,
     e2eContext,
     signIn,
   }) => {
-    await setWritingPracticeForOrganization({
-      organizationId: e2eContext.organizationId,
-      enabled: true,
-    });
-
     await signIn(e2eContext.userEmail, 'johndoe');
-    await page.goto('/app');
-    await expect(page.getByTestId('app._index')).toBeVisible();
-
-    await page.getByRole('link', { name: /writing practice/i }).click();
+    await page.goto('/app/writing-lessons');
 
     await expect(
       page.getByRole('heading', { name: /writing practice/i })
