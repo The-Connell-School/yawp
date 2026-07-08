@@ -13,20 +13,27 @@ describe('AP History library seed data', () => {
     ).toBe(true);
   });
 
-  test('image sources carry an imageUrl and alt text', () => {
+  test('curated sources are text-based (image DBQs come from teacher uploads)', () => {
     const imageSources = AP_HISTORY_LIBRARY_ENTRIES.flatMap((entry) =>
       entry.sources.filter((source) => source.mediaType === 'image')
     );
 
-    expect(imageSources.length).toBeGreaterThan(0);
-    for (const source of imageSources) {
-      expect(source.imageUrl).toBeTruthy();
-      expect(source.imageAlt).toBeTruthy();
+    // The curated library is deliberately all text primary sources. Real
+    // historical images enter through teacher-uploaded custom DBQs, which are
+    // self-hosted and served reliably from our own origin.
+    expect(imageSources).toHaveLength(0);
+    for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
+      for (const source of entry.sources) {
+        expect(source.mediaType).toBe('text');
+        expect(source.body.trim().length).toBeGreaterThan(0);
+      }
     }
   });
 
   test('entry external keys are unique APUSH DBQ or LEQ keys', () => {
-    const externalKeys = AP_HISTORY_LIBRARY_ENTRIES.map((entry) => entry.externalKey);
+    const externalKeys = AP_HISTORY_LIBRARY_ENTRIES.map(
+      (entry) => entry.externalKey
+    );
 
     expect(new Set(externalKeys).size).toBe(externalKeys.length);
     for (const externalKey of externalKeys) {
@@ -42,7 +49,9 @@ describe('AP History library seed data', () => {
     expect(new Set(sourceKeys).size).toBe(sourceKeys.length);
     for (const entry of AP_HISTORY_LIBRARY_ENTRIES) {
       for (const source of entry.sources) {
-        expect(source.externalKey.startsWith(`${entry.externalKey}-doc-`)).toBe(true);
+        expect(source.externalKey.startsWith(`${entry.externalKey}-doc-`)).toBe(
+          true
+        );
       }
     }
   });
