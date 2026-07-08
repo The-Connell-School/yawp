@@ -9,7 +9,6 @@ import { useState } from 'react';
 import {
   Link,
   data as dataResponse,
-  redirect,
   useFetcher,
   useLoaderData,
   type ActionFunctionArgs,
@@ -22,7 +21,6 @@ import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
@@ -38,12 +36,6 @@ import { getQuickWritingLessonContext } from '~/utils/writing-lessons/static-les
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-  if (!enabled) {
-    return redirect('/app');
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',
@@ -85,12 +77,6 @@ type AssignedActionData = {
 export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-  if (!enabled) {
-    return redirect('/app');
-  }
 
   const classAssignment = await getAssignedPracticeForStudentById(
     params.classAssignmentId ?? '',

@@ -18,7 +18,6 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   practiceFeedbackStatusLabel,
@@ -30,12 +29,6 @@ import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-less
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-  if (!enabled) {
-    return redirect('/app');
-  }
   if (profile.role !== 'TEACHER') {
     return redirect('/app/writing-lessons');
   }

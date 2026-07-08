@@ -2,16 +2,12 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const requireUserId = mock();
 const requireMembership = mock();
-const isWritingPracticeEnabledForOrganization = mock();
 const createWritingPracticeAssignmentForClasses = mock();
 const classFindMany = mock();
 
 mock.module('~/utils/auth.server', () => ({
   requireUserId,
   requireMembership,
-}));
-mock.module('~/utils/feature-gates.server', () => ({
-  isWritingPracticeEnabledForOrganization,
 }));
 mock.module('~/utils/db.server', () => ({
   prisma: { class: { findMany: classFindMany } },
@@ -46,7 +42,6 @@ async function run(fields: Record<string, string | string[]>) {
 beforeEach(() => {
   requireUserId.mockReset();
   requireMembership.mockReset();
-  isWritingPracticeEnabledForOrganization.mockReset();
   createWritingPracticeAssignmentForClasses.mockReset();
   classFindMany.mockReset();
 
@@ -56,7 +51,6 @@ beforeEach(() => {
     role: 'TEACHER',
     organization: { id: 'org-1', name: 'Org' },
   });
-  isWritingPracticeEnabledForOrganization.mockResolvedValue(true);
   classFindMany.mockResolvedValue([{ id: 'class-a' }]);
   createWritingPracticeAssignmentForClasses.mockResolvedValue({ id: 'wpa-1' });
 });

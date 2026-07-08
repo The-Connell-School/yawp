@@ -2,7 +2,6 @@ import { data as dataResponse, type ActionFunctionArgs } from 'react-router';
 
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { isWritingPracticeEnabledForOrganization } from '~/utils/feature-gates.server';
 import { createWritingPracticeAssignmentForClasses } from '~/utils/writing-lessons/practice-assignments.server';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
 
@@ -18,12 +17,6 @@ function fail(message: string, status = 400) {
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const profile = await requireMembership(request, userId);
-  const enabled = await isWritingPracticeEnabledForOrganization(
-    profile.organization.id
-  );
-  if (!enabled) {
-    return fail('Writing practice is not enabled for your organization.', 404);
-  }
 
   if (profile.role !== 'TEACHER') {
     return fail('Only teachers can assign writing practice.', 403);
