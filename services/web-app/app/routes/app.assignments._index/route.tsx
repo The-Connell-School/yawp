@@ -806,7 +806,7 @@ export default function AssignmentsRoute() {
                                 {assignment.classAssignments.map((deployment) => (
                                   <Link
                                     key={deployment.id}
-                                    to={`/app/my-classes/${deployment.class.id}/assignments/${deployment.id}`}
+                                    to={`/app/my-classes/${deployment.class.id}/assignments/${assignment.id}`}
                                     title={`Class performance summary — ${formatClassLabel(
                                       deployment.class
                                     )}`}
