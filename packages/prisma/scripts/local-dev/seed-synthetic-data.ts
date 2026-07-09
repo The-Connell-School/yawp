@@ -434,6 +434,253 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
+  // A graded cohort on the thesis assignment so the class-wide performance
+  // summary has enough real papers to aggregate. The four personas above only
+  // yield a single graded submission with rubric scores, which makes the
+  // insight look empty. These students do not log in — they exist to fill the
+  // roster and give the assignment-level insight a believable spread of
+  // strengths (thesis, organization) and gaps (evidence, grammar).
+  const gradedCohort: Array<{
+    name: string;
+    percentage: number;
+    letterGrade: string;
+    overallComment: string;
+    excerpt: string;
+    body: string;
+    rubricScores: {
+      thesis_and_content: number;
+      organization_and_structure: number;
+      evidence_and_support: number;
+      voice_and_style: number;
+      grammar_and_mechanics: number;
+    };
+  }> = [
+    {
+      name: 'Ava Thompson',
+      percentage: 90,
+      letterGrade: 'A-',
+      overallComment:
+        'Sharp, arguable thesis and clean structure. Push for one more concrete example per body paragraph.',
+      excerpt: 'Schools shape citizens as much as scholars.',
+      body: 'Schools shape citizens as much as scholars. A civics-minded classroom teaches students to weigh evidence and argue in good faith before they ever cast a vote.',
+      rubricScores: {
+        thesis_and_content: 5,
+        organization_and_structure: 5,
+        evidence_and_support: 3,
+        voice_and_style: 4,
+        grammar_and_mechanics: 4,
+      },
+    },
+    {
+      name: 'Marcus Lee',
+      percentage: 84,
+      letterGrade: 'B',
+      overallComment:
+        'Confident thesis; your evidence is thin and a few run-on sentences muddy the argument.',
+      excerpt: 'A democracy is only as strong as its youngest voters.',
+      body: 'A democracy is only as strong as its youngest voters. If schools want responsible citizens they must model debate, disagreement, and compromise every single day.',
+      rubricScores: {
+        thesis_and_content: 4,
+        organization_and_structure: 4,
+        evidence_and_support: 2,
+        voice_and_style: 4,
+        grammar_and_mechanics: 2,
+      },
+    },
+    {
+      name: 'Priya Nair',
+      percentage: 78,
+      letterGrade: 'C+',
+      overallComment:
+        'Good ideas, but the essay jumps between points. Outline first, and support each claim with a source.',
+      excerpt: 'Civic responsibility starts long before the ballot box.',
+      body: 'Civic responsibility starts long before the ballot box. Group projects, student government, and honest classroom debate all teach the habits a healthy democracy needs.',
+      rubricScores: {
+        thesis_and_content: 4,
+        organization_and_structure: 3,
+        evidence_and_support: 2,
+        voice_and_style: 3,
+        grammar_and_mechanics: 3,
+      },
+    },
+    {
+      name: 'Diego Ramirez',
+      percentage: 88,
+      letterGrade: 'B+',
+      overallComment:
+        'Strong voice and organization. Cite the historical examples you allude to so the argument lands harder.',
+      excerpt: 'The classroom is a rehearsal for the republic.',
+      body: 'The classroom is a rehearsal for the republic. When students practice listening to opposing views, they build the patience that self-government demands.',
+      rubricScores: {
+        thesis_and_content: 4,
+        organization_and_structure: 5,
+        evidence_and_support: 3,
+        voice_and_style: 5,
+        grammar_and_mechanics: 4,
+      },
+    },
+    {
+      name: 'Sofia Rossi',
+      percentage: 72,
+      letterGrade: 'C',
+      overallComment:
+        'Thesis is present but general. Focus one paragraph on a single example and fix the comma splices.',
+      excerpt: 'Schools teach more than facts.',
+      body: 'Schools teach more than facts, they teach how to be part of something bigger, and that is what prepares students for civic life.',
+      rubricScores: {
+        thesis_and_content: 3,
+        organization_and_structure: 3,
+        evidence_and_support: 2,
+        voice_and_style: 3,
+        grammar_and_mechanics: 2,
+      },
+    },
+    {
+      name: 'Jamal Carter',
+      percentage: 86,
+      letterGrade: 'B',
+      overallComment:
+        'Well organized with a clear throughline. Deepen the analysis of your evidence instead of just naming it.',
+      excerpt: 'Citizenship is a skill, not a birthday.',
+      body: 'Citizenship is a skill, not a birthday. Schools that treat students as participants rather than spectators graduate adults ready to govern themselves.',
+      rubricScores: {
+        thesis_and_content: 4,
+        organization_and_structure: 4,
+        evidence_and_support: 3,
+        voice_and_style: 4,
+        grammar_and_mechanics: 4,
+      },
+    },
+    {
+      name: 'Hannah Kim',
+      percentage: 94,
+      letterGrade: 'A',
+      overallComment:
+        'Excellent — arguable thesis, layered evidence, and controlled prose. A model essay for the class.',
+      excerpt: 'Preparation for citizenship is the quiet work of every school day.',
+      body: 'Preparation for citizenship is the quiet work of every school day. In discussion, in disagreement, and in revision, students learn the give-and-take democracy runs on.',
+      rubricScores: {
+        thesis_and_content: 5,
+        organization_and_structure: 5,
+        evidence_and_support: 4,
+        voice_and_style: 5,
+        grammar_and_mechanics: 5,
+      },
+    },
+    {
+      name: 'Owen Walsh',
+      percentage: 68,
+      letterGrade: 'D+',
+      overallComment:
+        'Hard to follow the argument. Start with a single clear thesis sentence and build one point at a time.',
+      excerpt: 'Being a citizen is important for everyone in the world today.',
+      body: 'Being a citizen is important for everyone in the world today and schools should help with that because it matters a lot for the future of the country.',
+      rubricScores: {
+        thesis_and_content: 2,
+        organization_and_structure: 2,
+        evidence_and_support: 2,
+        voice_and_style: 2,
+        grammar_and_mechanics: 3,
+      },
+    },
+    {
+      name: 'Lucia Fernandez',
+      percentage: 82,
+      letterGrade: 'B-',
+      overallComment:
+        'Nice momentum and a clear stance. Tighten your topic sentences and add one primary source.',
+      excerpt: 'Democracy is a habit before it is a right.',
+      body: 'Democracy is a habit before it is a right. The students who learn to question, to listen, and to revise become the neighbors a community can count on.',
+      rubricScores: {
+        thesis_and_content: 4,
+        organization_and_structure: 3,
+        evidence_and_support: 3,
+        voice_and_style: 4,
+        grammar_and_mechanics: 3,
+      },
+    },
+  ];
+
+  for (const [index, essay] of gradedCohort.entries()) {
+    const cohortUser = await prisma.user.create({
+      data: {
+        email: `dev.cohort.${index + 1}@yawp.local`,
+        name: essay.name,
+        password: { create: createPassword('cohort-password') },
+        memberships: {
+          create: {
+            organizationId: LOCAL_DEV_ORG_ID,
+            role: 'STUDENT',
+          },
+        },
+      },
+      include: { memberships: true },
+    });
+    const cohortMembershipId = cohortUser.memberships[0]?.id;
+    if (!cohortMembershipId) {
+      throw new Error(`Membership not created for ${essay.name}`);
+    }
+
+    await prisma.orgMembership.update({
+      where: { id: cohortMembershipId },
+      data: {
+        school: schools[0].name,
+        grade: '10',
+        period: '3',
+        schoolTeacher: primaryTeacher.persona.name,
+      },
+    });
+    await prisma.class.update({
+      where: { id: primaryClass.id },
+      data: { students: { connect: { id: cohortMembershipId } } },
+    });
+
+    const cohortHtml = `<p>${essay.body}</p>`;
+    const cohortDocument = await prisma.document.create({
+      data: {
+        title: `Civic essay — ${essay.name}`,
+        text: essay.body,
+        html: cohortHtml,
+        revision: 3,
+        membershipId: cohortMembershipId,
+        assignmentTypeId: thesisAssignmentTypeId,
+        assignmentId: thesisAssignment.id,
+        classAssignmentId: thesisClassAssignment.id,
+      },
+    });
+    const scoreValues = Object.values(essay.rubricScores);
+    const overallScore = Math.round(
+      scoreValues.reduce((total, score) => total + score, 0) /
+        scoreValues.length
+    );
+    const cohortSubmission = await prisma.submission.create({
+      data: {
+        documentId: cohortDocument.id,
+        html: cohortHtml,
+        text: essay.body,
+        title: `Civic essay — ${essay.name}`,
+        submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
+        gradedByMembershipId: primaryTeacher.membershipId,
+        gradedAt: new Date(Date.now() - 1000 * 60 * 60 * 24),
+        numericPercentage: essay.percentage,
+        letterGrade: essay.letterGrade,
+        overallScore,
+        overallComment: essay.overallComment,
+        rubricScores: essay.rubricScores,
+        releasedAt: new Date(),
+      },
+    });
+    await prisma.submissionComment.create({
+      data: {
+        submissionId: cohortSubmission.id,
+        membershipId: primaryTeacher.membershipId,
+        content: essay.overallComment,
+        excerpt: essay.excerpt,
+        occurrence: 1,
+      },
+    });
+  }
+
   return {
     organizationId: LOCAL_DEV_ORG_ID,
     schoolIds: schools.map((school) => school.id),
