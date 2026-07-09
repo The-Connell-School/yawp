@@ -3,13 +3,10 @@ import { AP_HISTORY_LIBRARY_ENTRIES } from './ap-history-library-data';
 import { readFileSync } from 'node:fs';
 
 describe('AP History library seed data', () => {
-  test('exports a curated library with both DBQ and LEQ entries', () => {
-    expect(AP_HISTORY_LIBRARY_ENTRIES.length).toBeGreaterThanOrEqual(2);
+  test('exports a curated library of DBQ entries', () => {
+    expect(AP_HISTORY_LIBRARY_ENTRIES.length).toBeGreaterThanOrEqual(1);
     expect(
       AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'dbq')
-    ).toBe(true);
-    expect(
-      AP_HISTORY_LIBRARY_ENTRIES.some((entry) => entry.essayType === 'leq')
     ).toBe(true);
   });
 

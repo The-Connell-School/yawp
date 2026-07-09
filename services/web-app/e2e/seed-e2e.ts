@@ -97,7 +97,6 @@ export type E2EContext = {
   dailyPagesAssignmentTypeId: string;
   apHistoryAssignmentTypeId: string;
   apHistoryDbqEntryKey: string;
-  apHistoryLeqEntryKey: string;
   assignmentId: string;
   classAssignmentId: string;
   teacherTrainingId: string;
@@ -287,12 +286,9 @@ export async function seedE2E(): Promise<E2EContext> {
   const apHistoryDbqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
     (entry) => entry.essayType === 'dbq'
   );
-  const apHistoryLeqEntry = AP_HISTORY_LIBRARY_ENTRIES.find(
-    (entry) => entry.essayType === 'leq'
-  );
 
-  if (!apHistoryDbqEntry || !apHistoryLeqEntry) {
-    throw new Error('E2E AP History seed requires both DBQ and LEQ entries.');
+  if (!apHistoryDbqEntry) {
+    throw new Error('E2E AP History seed requires a DBQ entry.');
   }
 
   const apHistoryAssignmentType = await prisma.assignmentType.create({
@@ -618,7 +614,6 @@ export async function seedE2E(): Promise<E2EContext> {
     dailyPagesAssignmentTypeId: dailyPagesAssignmentType.id,
     apHistoryAssignmentTypeId: apHistoryAssignmentType.id,
     apHistoryDbqEntryKey: apHistoryDbqEntry.externalKey,
-    apHistoryLeqEntryKey: apHistoryLeqEntry.externalKey,
     assignmentId: seededAssignment.id,
     classAssignmentId: seededClassAssignment.id,
     teacherTrainingId: teacherTraining.id,
