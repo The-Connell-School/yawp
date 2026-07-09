@@ -22,6 +22,7 @@ export const meta: MetaFunction = () => [
 const loginUrl = '/app';
 const signupUrl = '/auth/inv/signup';
 const infoUrl = '/info';
+const itemNumber = '[Item #: AP1030]';
 
 export default function IndexRoute() {
   return (
@@ -72,6 +73,10 @@ export default function IndexRoute() {
         <a className="yawp-entry-learn-more" href={infoUrl}>
           Learn more
         </a>
+
+        <footer className="yawp-entry-footer" aria-label="Site item number">
+          {itemNumber}
+        </footer>
       </section>
     </main>
   );
