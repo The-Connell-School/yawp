@@ -60,6 +60,20 @@ async function upsertPersona(
   };
 }
 
+/** Wrap a plain-text essay (paragraphs separated by blank lines) in <p> tags. */
+function paragraphsToHtml(text: string): string {
+  return text
+    .split(/\n\n+/)
+    .map((paragraph) => `<p>${paragraph.trim()}</p>`)
+    .filter((paragraph) => paragraph !== '<p></p>')
+    .join('');
+}
+
+/** The first sentence of an essay, used as the highlighted grader excerpt. */
+function firstSentence(text: string): string {
+  return (text.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? text).trim();
+}
+
 function pickAssignmentTypeId(
   rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
   matcher: (row: (typeof rows)[number]) => boolean
@@ -348,9 +362,12 @@ export async function seedSyntheticLocalDevData(
     },
   });
 
-  const gradedText =
-    'Education is the foundation of society. Through learning, students develop critical thinking skills.';
-  const gradedHtml = `<p>${gradedText}</p>`;
+  const gradedText = [
+    'Education is the foundation of society. Through learning, students develop the critical thinking skills that let them question claims, weigh evidence, and reach their own conclusions instead of simply accepting what they are told.',
+    'A school that takes civic responsibility seriously does more than deliver facts. It gives students real chances to practice democracy in miniature: debating classroom rules, working through disagreements on group projects, and defending an argument when a classmate pushes back. These everyday habits are exactly the ones a healthy democracy depends on.',
+    'If we want graduates who actually participate in public life, we should treat every discussion as a rehearsal for citizenship. When young people are trusted with real responsibility in student government and service projects, they tend to rise to meet it.',
+  ].join('\n\n');
+  const gradedHtml = paragraphsToHtml(gradedText);
   const gradedDocument = await prisma.document.create({
     data: {
       title: 'Graded civic essay',
@@ -445,7 +462,6 @@ export async function seedSyntheticLocalDevData(
     percentage: number;
     letterGrade: string;
     overallComment: string;
-    excerpt: string;
     body: string;
     rubricScores: {
       thesis_and_content: number;
@@ -461,8 +477,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'A-',
       overallComment:
         'Sharp, arguable thesis and clean structure. Push for one more concrete example per body paragraph.',
-      excerpt: 'Schools shape citizens as much as scholars.',
-      body: 'Schools shape citizens as much as scholars. A civics-minded classroom teaches students to weigh evidence and argue in good faith before they ever cast a vote.',
+      body: [
+        'Schools shape citizens as much as scholars. Long before a student casts a first vote, the classroom is where they learn to weigh evidence, listen to an opponent, and change their mind when the argument demands it.',
+        'Consider how a simple graded debate works. Students must research a position they may not personally hold, anticipate the strongest counterargument, and respond without resorting to insults. That is civic life in miniature, and it is far more durable than a memorized list of amendments.',
+        'A school serious about citizenship should build these rehearsals into every subject rather than quarantine them in a single government unit. The habits of a good neighbor are practiced, not announced.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 5,
         organization_and_structure: 5,
@@ -477,8 +496,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'B',
       overallComment:
         'Confident thesis; your evidence is thin and a few run-on sentences muddy the argument.',
-      excerpt: 'A democracy is only as strong as its youngest voters.',
-      body: 'A democracy is only as strong as its youngest voters. If schools want responsible citizens they must model debate, disagreement, and compromise every single day.',
+      body: [
+        'A democracy is only as strong as its youngest voters, and that means schools carry a responsibility most people never stop to think about.',
+        'If schools want responsible citizens they must model debate and disagreement every single day, they cannot just talk about it once a year, because students learn from what adults actually do and not from what a poster on the wall says. This is why the way a teacher handles a classroom conflict matters so much and teaches more than the assigned lesson does.',
+        'Schools should give students real decisions to make so they can practice being wrong and trying again.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 4,
         organization_and_structure: 4,
@@ -493,8 +515,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'C+',
       overallComment:
         'Good ideas, but the essay jumps between points. Outline first, and support each claim with a source.',
-      excerpt: 'Civic responsibility starts long before the ballot box.',
-      body: 'Civic responsibility starts long before the ballot box. Group projects, student government, and honest classroom debate all teach the habits a healthy democracy needs.',
+      body: [
+        'Civic responsibility starts long before the ballot box. Group projects, student government, and honest classroom debate all teach the habits a healthy democracy needs.',
+        'Voting is important too, and so is knowing history, and students should also learn how local government works because a lot of decisions happen there. Sometimes the most important things are the small ones, like showing up and listening to people you disagree with.',
+        'If schools focused on these skills, students would be more ready for the responsibilities of adult life.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 4,
         organization_and_structure: 3,
@@ -509,8 +534,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'B+',
       overallComment:
         'Strong voice and organization. Cite the historical examples you allude to so the argument lands harder.',
-      excerpt: 'The classroom is a rehearsal for the republic.',
-      body: 'The classroom is a rehearsal for the republic. When students practice listening to opposing views, they build the patience that self-government demands.',
+      body: [
+        'The classroom is a rehearsal for the republic. Every seminar, every disagreement handled with grace, is a small audition for the harder work of self-government.',
+        'When students practice listening to opposing views, they build the patience that democracy quietly demands. I once watched a heated argument about a class rule turn into a genuine compromise, and it looked a great deal like the messy, necessary work of a town meeting.',
+        'That is the promise of a civic education: not that students will always agree, but that they will know how to disagree and still build something together.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 4,
         organization_and_structure: 5,
@@ -525,8 +553,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'C',
       overallComment:
         'Thesis is present but general. Focus one paragraph on a single example and fix the comma splices.',
-      excerpt: 'Schools teach more than facts.',
-      body: 'Schools teach more than facts, they teach how to be part of something bigger, and that is what prepares students for civic life.',
+      body: [
+        'Schools teach more than facts, they teach how to be part of something bigger, and that is what prepares students for civic life.',
+        'Students learn to work together on projects, they learn to share their ideas, they learn to listen even when they disagree. These things matter a lot for being a good citizen later on.',
+        'A school that cares about this will give students more chances to practice, and that will help them in the future.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 3,
         organization_and_structure: 3,
@@ -541,8 +572,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'B',
       overallComment:
         'Well organized with a clear throughline. Deepen the analysis of your evidence instead of just naming it.',
-      excerpt: 'Citizenship is a skill, not a birthday.',
-      body: 'Citizenship is a skill, not a birthday. Schools that treat students as participants rather than spectators graduate adults ready to govern themselves.',
+      body: [
+        'Citizenship is a skill, not a birthday. Schools that treat students as participants rather than spectators graduate adults ready to govern themselves.',
+        'Student government is a good example. So are service projects and classroom debates. These experiences give students practice with responsibility, and studies show that engaged students tend to stay engaged as adults.',
+        'For that reason, schools should make participation a habit rather than an extracurricular, so that every student leaves prepared for public life.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 4,
         organization_and_structure: 4,
@@ -557,8 +591,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'A',
       overallComment:
         'Excellent — arguable thesis, layered evidence, and controlled prose. A model essay for the class.',
-      excerpt: 'Preparation for citizenship is the quiet work of every school day.',
-      body: 'Preparation for citizenship is the quiet work of every school day. In discussion, in disagreement, and in revision, students learn the give-and-take democracy runs on.',
+      body: [
+        'Preparation for citizenship is the quiet work of every school day. It happens not in grand civics lectures but in the ordinary friction of discussion, disagreement, and revision.',
+        'Take a single graded seminar. A student advances a claim, a classmate produces a counterexample, and the first student must decide whether to defend the point or revise it. That decision — made honestly, in public, with evidence on the table — is the exact muscle a citizen uses when a cherished belief meets an inconvenient fact.',
+        'Democracy runs on that give-and-take, and it cannot be assigned as homework. The most civic thing a school can do is make the practice constant: to treat every classroom as a place where reasons matter more than volume, and where changing your mind is a sign of strength rather than defeat.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 5,
         organization_and_structure: 5,
@@ -573,8 +610,9 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'D+',
       overallComment:
         'Hard to follow the argument. Start with a single clear thesis sentence and build one point at a time.',
-      excerpt: 'Being a citizen is important for everyone in the world today.',
-      body: 'Being a citizen is important for everyone in the world today and schools should help with that because it matters a lot for the future of the country.',
+      body: [
+        'Being a citizen is important for everyone in the world today and schools should help with that because it matters a lot for the future of the country and also for the students themselves. There are many reasons for this and schools already do a lot of things but they could probably do more things too. In conclusion being a good citizen is important and school helps with it.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 2,
         organization_and_structure: 2,
@@ -589,8 +627,11 @@ export async function seedSyntheticLocalDevData(
       letterGrade: 'B-',
       overallComment:
         'Nice momentum and a clear stance. Tighten your topic sentences and add one primary source.',
-      excerpt: 'Democracy is a habit before it is a right.',
-      body: 'Democracy is a habit before it is a right. The students who learn to question, to listen, and to revise become the neighbors a community can count on.',
+      body: [
+        'Democracy is a habit before it is a right. The students who learn to question, to listen, and to revise become the neighbors a community can count on.',
+        'This shows up in small ways. A group project forces compromise; a class debate rewards preparation over volume; a peer-review session teaches students to take criticism without taking offense. Each is a rehearsal for the kind of citizen who can disagree without contempt.',
+        'Schools should protect these moments rather than crowd them out, because the habits formed in a tenth-grade classroom tend to outlast the facts.',
+      ].join('\n\n'),
       rubricScores: {
         thesis_and_content: 4,
         organization_and_structure: 3,
@@ -635,7 +676,8 @@ export async function seedSyntheticLocalDevData(
       data: { students: { connect: { id: cohortMembershipId } } },
     });
 
-    const cohortHtml = `<p>${essay.body}</p>`;
+    const cohortHtml = paragraphsToHtml(essay.body);
+    const cohortExcerpt = firstSentence(essay.body);
     const cohortDocument = await prisma.document.create({
       data: {
         title: `Civic essay — ${essay.name}`,
@@ -675,7 +717,7 @@ export async function seedSyntheticLocalDevData(
         submissionId: cohortSubmission.id,
         membershipId: primaryTeacher.membershipId,
         content: essay.overallComment,
-        excerpt: essay.excerpt,
+        excerpt: cohortExcerpt,
         occurrence: 1,
       },
     });
