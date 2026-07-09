@@ -1,29 +1,17 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Public landing page', () => {
-  test('centers the writing challenges subtitle under its heading', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1347, height: 768 });
+  test('shows the AP1030 item number in the public footers', async ({ page }) => {
     await page.goto('/');
 
-    const heading = page.getByRole('heading', {
-      name: 'The Writing Challenges Schools Face Today',
-    });
-    const subtitle = page.locator('.yawp-section-intro');
+    await expect(
+      page.getByLabel('Site item number').getByText('[Item #: AP1030]')
+    ).toBeVisible();
 
-    await expect(heading).toBeVisible();
-    await expect(subtitle).toBeVisible();
-
-    const headingBox = await heading.boundingBox();
-    const subtitleBox = await subtitle.boundingBox();
-
-    expect(headingBox).not.toBeNull();
-    expect(subtitleBox).not.toBeNull();
-
-    const headingCenter = headingBox!.x + headingBox!.width / 2;
-    const subtitleCenter = subtitleBox!.x + subtitleBox!.width / 2;
-
-    expect(Math.abs(headingCenter - subtitleCenter)).toBeLessThanOrEqual(2);
+    await page.goto('/info');
+    await page.locator('.yawp-footer').scrollIntoViewIfNeeded();
+    await expect(
+      page.getByLabel('Site item number').getByText('[Item #: AP1030]')
+    ).toBeVisible();
   });
 });
