@@ -100,7 +100,9 @@ const BLOCKED_TERMS: string[] = [
 // Multi-word entries need their internal spaces preserved; single words get a
 // word boundary on each side so "ass" never matches inside "class" or "pass".
 const BLOCKED_PATTERNS: RegExp[] = BLOCKED_TERMS.map((term) => {
-  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  const escaped = term
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+');
   return new RegExp(`\\b${escaped}\\b`, 'i');
 });
 
@@ -121,7 +123,9 @@ type PromptLike = { exercise: string; instruction: string };
  * Callers fall back to the static, human-authored bank when this returns fewer
  * items than requested (or none).
  */
-export function filterAppropriatePrompts<T extends PromptLike>(prompts: T[]): T[] {
+export function filterAppropriatePrompts<T extends PromptLike>(
+  prompts: T[]
+): T[] {
   return prompts.filter(
     (prompt) =>
       isSchoolAppropriate(prompt.exercise) &&

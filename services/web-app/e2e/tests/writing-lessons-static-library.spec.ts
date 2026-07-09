@@ -259,7 +259,9 @@ test.describe.serial('Writing Fundamentals Practice', () => {
 
     // Pick "Writing Fundamentals Practice" as the assignment type.
     await page.getByRole('combobox').first().click();
-    await page.getByRole('option', { name: /writing fundamentals practice/i }).click();
+    await page
+      .getByRole('option', { name: /writing fundamentals practice/i })
+      .click();
 
     const dialog = page.getByRole('dialog');
     // First checkbox is the class; then pick two skills to interleave.
@@ -289,7 +291,9 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     const dialog = page.getByRole('dialog');
     // Open the assignment-type dropdown and choose writing practice.
     await dialog.getByRole('combobox').first().click();
-    await page.getByRole('option', { name: /writing fundamentals practice/i }).click();
+    await page
+      .getByRole('option', { name: /writing fundamentals practice/i })
+      .click();
 
     // The sheet body swaps to the writing-practice builder.
     await expect(dialog.getByText(/skills to practice/i)).toBeVisible();
