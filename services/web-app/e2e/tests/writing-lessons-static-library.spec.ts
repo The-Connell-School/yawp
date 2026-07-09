@@ -135,7 +135,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons/fixing-comma-splices');
 
-    // Teachers get the assign panel instead of the student practice panel.
+    // Teachers get the assign panel (and, below it, the practice panel).
     const assignPanel = page.getByRole('complementary');
     await expect(
       assignPanel.getByRole('heading', { name: /assign to your classes/i })
@@ -150,6 +150,27 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(page.getByTestId('assign-result')).toContainText(
       /assigned to 1 class/i
     );
+  });
+
+  test('lets a teacher try the practice themselves and check with Enter', async ({
+    page,
+    e2eContext,
+    signIn,
+  }) => {
+    await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
+    await page.goto('/app/writing-lessons/fixing-comma-splices');
+
+    // Teachers can now test-drive the lesson, not just assign it: the same
+    // "Try it yourself" panel students get sits alongside the assign panel.
+    const panel = page.getByRole('complementary');
+    await expect(panel.getByText(/try it yourself/i)).toBeVisible();
+
+    const answer = page.getByLabel(/your answer/i);
+    await answer.fill('The album dropped; fans went wild.');
+    // Pressing Enter checks the answer without clicking the button.
+    await answer.press('Enter');
+
+    await expect(page.getByTestId('practice-feedback')).toBeVisible();
   });
 
   test('a teacher assignment reaches the student and records attempts', async ({

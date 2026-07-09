@@ -191,11 +191,17 @@ export default function WritingLessonDetailRoute() {
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
           {isTeacher ? (
-            <TeacherAssignPanel
-              lessonSlug={lesson.slug}
-              classes={teacherClasses}
-              promptCount={practicePrompts.length}
-            />
+            // Teachers get the assign panel plus the same "Try it yourself"
+            // practice students see, so they can test-drive a lesson before
+            // assigning it.
+            <div className="space-y-6">
+              <TeacherAssignPanel
+                lessonSlug={lesson.slug}
+                classes={teacherClasses}
+                promptCount={practicePrompts.length}
+              />
+              <StudentPracticePanel practicePrompts={practicePrompts} />
+            </div>
           ) : (
             <StudentPracticePanel practicePrompts={practicePrompts} />
           )}
@@ -315,9 +321,29 @@ function StudentPracticePanel({
                 name="response"
                 value={response}
                 onChange={(event) => setResponse(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  // Enter checks the answer; Shift+Enter still adds a newline.
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    if (responseReady && !isChecking) {
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }
+                }}
                 placeholder="Rewrite the sentence here…"
                 className="min-h-32 resize-none rounded-xl text-base leading-relaxed sm:text-sm"
               />
+              <p className="text-xs text-muted-foreground">
+                Press{' '}
+                <kbd className="rounded border bg-muted px-1 font-sans">
+                  Enter
+                </kbd>{' '}
+                to check ·{' '}
+                <kbd className="rounded border bg-muted px-1 font-sans">
+                  Shift + Enter
+                </kbd>{' '}
+                for a new line
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
