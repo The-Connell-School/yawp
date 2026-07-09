@@ -54,6 +54,20 @@ function toFiniteScore(value: unknown): number | null {
   return value;
 }
 
+/**
+ * Read the numeric score for a single rubric entry, supporting both the legacy
+ * flat shape (`key: number`) and the current nested shape (`key: { score }`).
+ * Returns null when the entry is missing or unscored.
+ */
+export function readRubricEntryScore(
+  entry: SubmissionRubricEntry | undefined | null
+): number | null {
+  if (entry === undefined || entry === null) return null;
+  if (typeof entry === 'number') return toFiniteScore(entry);
+  if (typeof entry === 'object') return toFiniteScore(entry.score);
+  return null;
+}
+
 function toBand(score: number): ScoreBand | null {
   const rounded = Math.round(score);
   if (rounded >= 1 && rounded <= 5) return rounded as ScoreBand;

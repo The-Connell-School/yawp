@@ -13,10 +13,17 @@ import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 const submit = mock();
-const fetcher: { state: string; data: unknown; submit: typeof submit } = {
+const load = mock();
+const fetcher: {
+  state: string;
+  data: unknown;
+  submit: typeof submit;
+  load: typeof load;
+} = {
   state: 'idle',
   data: null,
   submit,
+  load,
 };
 
 const actualReactRouter = await import('react-router');
@@ -74,6 +81,7 @@ function render(element: ReactElement) {
 
 beforeEach(() => {
   submit.mockReset();
+  load.mockReset();
   fetcher.state = 'idle';
   fetcher.data = null;
 });
@@ -152,5 +160,31 @@ describe('ClassInsightsPanel', () => {
     );
     const button = el.querySelector('button')!;
     expect(button.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('lazy-loads student examples when a category box is expanded', () => {
+    const el = render(
+      <ClassInsightsPanel
+        classAssignmentId="ca-1"
+        initialInsight={READY_INSIGHT}
+      />
+    );
+    const categoryButton = Array.from(el.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('Evidence/Support')
+    )!;
+    expect(categoryButton).toBeTruthy();
+    expect(categoryButton.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => {
+      categoryButton.dispatchEvent(new Event('click', { bubbles: true }));
+    });
+
+    expect(load).toHaveBeenCalledTimes(1);
+    const url = load.mock.calls[0][0] as string;
+    expect(url).toContain('/api/domain/assignment-insights/examples');
+    expect(url).toContain('classAssignmentId=ca-1');
+    expect(url).toContain('category=evidence_and_support');
+    expect(url).toContain('status=gap');
+    expect(categoryButton.getAttribute('aria-expanded')).toBe('true');
   });
 });

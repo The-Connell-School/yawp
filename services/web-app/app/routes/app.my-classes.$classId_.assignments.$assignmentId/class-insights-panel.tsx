@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useFetcher } from 'react-router';
 import {
+  ChevronDown,
   Minus,
   Sparkles,
   TrendingUp,
@@ -42,6 +44,9 @@ type InsightActionData =
   | { success: true; insight: ClassInsight }
   | { success: false; message: string };
 
+type ClassInsightExample = { snippet: string; score: number };
+type ExamplesData = { examples: ClassInsightExample[]; message?: string };
+
 const STATUS_META: Record<
   CategoryStatus,
   {
@@ -82,29 +87,103 @@ function humanizeCategoryKey(key: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function CategoryCard({ category }: { category: CategoryInsight }) {
+function CategoryCard({
+  category,
+  classAssignmentId,
+}: {
+  category: CategoryInsight;
+  classAssignmentId: string;
+}) {
   const meta = STATUS_META[category.status] ?? STATUS_META.mixed;
   const { Icon } = meta;
+  const [expanded, setExpanded] = useState(false);
+  const fetcher = useFetcher<ExamplesData>();
+
+  const toggle = () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !fetcher.data && fetcher.state === 'idle') {
+      const params = new URLSearchParams({
+        classAssignmentId,
+        category: category.key,
+        status: category.status,
+      });
+      fetcher.load(
+        `/api/domain/assignment-insights/examples?${params.toString()}`
+      );
+    }
+  };
+
+  const isLoading = fetcher.state !== 'idle';
+  const examples = fetcher.data?.examples ?? [];
+
   return (
-    <li
-      className={`flex gap-3 rounded-lg border border-l-4 bg-card p-3.5 ${meta.accent}`}
-    >
-      <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.iconWrap}`}
+    <li className={`rounded-lg border border-l-4 bg-card p-3.5 ${meta.accent}`}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="flex w-full items-start gap-3 text-left"
       >
-        <Icon className="h-4 w-4" aria-hidden />
-      </span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium leading-none">{category.label}</span>
-          <Badge variant={meta.badge} size="sm">
-            {meta.label}
-          </Badge>
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.iconWrap}`}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium leading-none">{category.label}</span>
+            <Badge variant={meta.badge} size="sm">
+              {meta.label}
+            </Badge>
+            <ChevronDown
+              className={`ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                expanded ? 'rotate-180' : ''
+              }`}
+              aria-hidden
+            />
+          </div>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {category.summary}
+          </p>
+          <span className="text-xs font-medium text-primary/80">
+            {expanded ? 'Hide student examples' : 'Show student examples'}
+          </span>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {category.summary}
-        </p>
-      </div>
+      </button>
+
+      {expanded && (
+        <div className="ml-11 mt-3 border-t pt-3">
+          {isLoading && (
+            <div className="flex flex-col gap-2" aria-hidden>
+              <div className="h-10 animate-pulse rounded-md bg-muted" />
+              <div className="h-10 animate-pulse rounded-md bg-muted" />
+            </div>
+          )}
+          {!isLoading && examples.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No clear example to show from the graded work yet.
+            </p>
+          )}
+          {!isLoading && examples.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {examples.map((example, index) => (
+                <li
+                  key={index}
+                  className="rounded-md border-l-2 border-muted-foreground/25 bg-muted/40 p-2.5"
+                >
+                  <p className="text-sm italic leading-relaxed text-foreground/90">
+                    “{example.snippet}”
+                  </p>
+                  <span className="mt-1 inline-block text-xs text-muted-foreground">
+                    Scored {example.score}/5 on {category.label.toLowerCase()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </li>
   );
 }
@@ -128,7 +207,13 @@ function StatChip({
   );
 }
 
-function InsightBody({ insight }: { insight: ClassInsight }) {
+function InsightBody({
+  insight,
+  classAssignmentId,
+}: {
+  insight: ClassInsight;
+  classAssignmentId: string;
+}) {
   const summary = insight.summary;
   if (!summary) return null;
 
@@ -174,7 +259,11 @@ function InsightBody({ insight }: { insight: ClassInsight }) {
           </h4>
           <ul className="grid gap-2.5 sm:grid-cols-2">
             {summary.categories.map((category) => (
-              <CategoryCard key={category.key} category={category} />
+              <CategoryCard
+                key={category.key}
+                category={category}
+                classAssignmentId={classAssignmentId}
+              />
             ))}
           </ul>
         </div>
@@ -310,7 +399,12 @@ export function ClassInsightsPanel({
           </p>
         )}
 
-        {hasInsight && <InsightBody insight={insight!} />}
+        {hasInsight && (
+          <InsightBody
+            insight={insight!}
+            classAssignmentId={classAssignmentId}
+          />
+        )}
       </div>
     </section>
   );

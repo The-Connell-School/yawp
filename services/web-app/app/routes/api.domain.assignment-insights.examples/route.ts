@@ -1,0 +1,139 @@
+import { data as dataResponse, type LoaderFunctionArgs } from 'react-router';
+import {
+  readRubricEntryScore,
+  type SubmissionRubricEntry,
+} from '~/domain/assignment-insights/aggregate-rubric-performance';
+import { rubricKeys } from '~/domain/grading/rubric';
+import { prisma } from '~/utils/db.server';
+import { canManageGrades, getGradingActor } from '~/utils/grading-auth.server';
+
+/** How many example snippets to surface per category. */
+const MAX_EXAMPLES = 3;
+/** Trim snippets so the panel stays scannable. */
+const SNIPPET_MAX_CHARS = 240;
+
+const rubricKeySet = new Set<string>(rubricKeys);
+
+type CategoryStatus = 'strength' | 'mixed' | 'gap';
+
+const STATUS_VALUES: CategoryStatus[] = ['strength', 'mixed', 'gap'];
+
+export type ClassInsightExample = {
+  snippet: string;
+  score: number;
+};
+
+function toSnippet(raw: string): string {
+  const text = raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= SNIPPET_MAX_CHARS) return text;
+  const truncated = text.slice(0, SNIPPET_MAX_CHARS);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return `${truncated.slice(0, lastSpace > 60 ? lastSpace : SNIPPET_MAX_CHARS).trim()}…`;
+}
+
+/**
+ * Rank submissions by how well they exemplify a category's status: strongest
+ * scores first for a strength, weakest first for a gap, closest-to-middle for
+ * a mixed category.
+ */
+function exemplarComparator(status: CategoryStatus) {
+  return (a: { score: number }, b: { score: number }) => {
+    if (status === 'gap') return a.score - b.score;
+    if (status === 'strength') return b.score - a.score;
+    return Math.abs(a.score - 3) - Math.abs(b.score - 3);
+  };
+}
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const actor = await getGradingActor(request);
+  if (!canManageGrades(actor)) {
+    return dataResponse(
+      { examples: [], message: 'Only teachers can view class insights.' },
+      { status: 403 }
+    );
+  }
+
+  const url = new URL(request.url);
+  const classAssignmentId = url.searchParams.get('classAssignmentId');
+  const category = url.searchParams.get('category');
+  const rawStatus = url.searchParams.get('status');
+  const status: CategoryStatus = STATUS_VALUES.includes(
+    rawStatus as CategoryStatus
+  )
+    ? (rawStatus as CategoryStatus)
+    : 'mixed';
+
+  if (
+    typeof classAssignmentId !== 'string' ||
+    !classAssignmentId.trim() ||
+    typeof category !== 'string' ||
+    !rubricKeySet.has(category)
+  ) {
+    return dataResponse(
+      { examples: [], message: 'A class assignment and rubric category are required.' },
+      { status: 400 }
+    );
+  }
+
+  // Authorization mirrors the summary route: the actor must teach this class
+  // (admins bypass the scope).
+  const classAssignment = await prisma.classAssignment.findFirst({
+    where: {
+      id: classAssignmentId,
+      ...(actor.isAdmin
+        ? {}
+        : { class: { teachers: { some: { id: actor.membershipId } } } }),
+    },
+    select: { id: true },
+  });
+  if (!classAssignment) {
+    return dataResponse(
+      { examples: [], message: 'Assignment not found.' },
+      { status: 404 }
+    );
+  }
+
+  // Latest graded submission per student document, with the graded text.
+  const documents = await prisma.document.findMany({
+    where: { classAssignmentId: classAssignment.id, deletedAt: null },
+    select: {
+      id: true,
+      submissions: {
+        where: { gradedAt: { not: null } },
+        orderBy: { submittedAt: 'desc' },
+        take: 1,
+        select: { id: true, text: true, html: true, rubricScores: true },
+      },
+    },
+  });
+
+  const scored: Array<{ score: number; snippet: string }> = [];
+  for (const doc of documents) {
+    const submission = doc.submissions[0];
+    if (!submission) continue;
+    const rubricScores = submission.rubricScores as Record<
+      string,
+      SubmissionRubricEntry
+    > | null;
+    const score = readRubricEntryScore(rubricScores?.[category]);
+    if (score === null) continue;
+    const raw =
+      (typeof submission.text === 'string' && submission.text.trim()) ||
+      (typeof submission.html === 'string' && submission.html) ||
+      '';
+    const snippet = toSnippet(raw);
+    if (!snippet) continue;
+    scored.push({ score, snippet });
+  }
+
+  scored.sort(exemplarComparator(status));
+
+  const examples: ClassInsightExample[] = scored
+    .slice(0, MAX_EXAMPLES)
+    .map((row) => ({ snippet: row.snippet, score: row.score }));
+
+  return dataResponse({ examples });
+}
