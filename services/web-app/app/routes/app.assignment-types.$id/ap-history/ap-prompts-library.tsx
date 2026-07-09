@@ -397,12 +397,14 @@ function ApPromptRow({
           <span className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-medium">
             {ESSAY_TYPE_LABEL[prompt.essayType] ?? prompt.essayType}
           </span>
-          {prompt.periodNumber ? (
+          {prompt.period || prompt.periodNumber ? (
             <>
               <span aria-hidden>·</span>
               <span>
-                {APUSH_PERIOD_LABEL[prompt.periodNumber] ??
-                  `Period ${prompt.periodNumber}`}
+                {prompt.course === 'apush'
+                  ? (APUSH_PERIOD_LABEL[prompt.periodNumber] ??
+                    `Period ${prompt.periodNumber}`)
+                  : prompt.period}
               </span>
             </>
           ) : null}

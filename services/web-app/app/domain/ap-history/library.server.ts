@@ -37,8 +37,13 @@ const AP_HISTORY_SOURCE_SELECT = {
 
 export async function listApHistoryLibraryEntries(assignmentTypeId: string) {
   return prisma.apHistoryPromptLibraryEntry.findMany({
-    where: { assignmentTypeId, archivedAt: null, course: 'apush' },
-    orderBy: [{ essayType: 'asc' }, { periodNumber: 'asc' }, { title: 'asc' }],
+    where: { assignmentTypeId, archivedAt: null },
+    orderBy: [
+      { course: 'asc' },
+      { essayType: 'asc' },
+      { periodNumber: 'asc' },
+      { title: 'asc' },
+    ],
     include: {
       sources: {
         orderBy: { position: 'asc' },
@@ -57,7 +62,6 @@ export async function getApHistoryLibraryEntryForSnapshot(params: {
       assignmentTypeId: params.assignmentTypeId,
       externalKey: params.externalKey,
       archivedAt: null,
-      course: 'apush',
     },
     include: {
       sources: {

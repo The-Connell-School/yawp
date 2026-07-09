@@ -32,14 +32,14 @@ describe('AP History library seed data', () => {
     }
   });
 
-  test('entry external keys are unique APUSH DBQ or LEQ keys', () => {
+  test('entry external keys are unique AP history DBQ or LEQ keys', () => {
     const externalKeys = AP_HISTORY_LIBRARY_ENTRIES.map(
       (entry) => entry.externalKey
     );
 
     expect(new Set(externalKeys).size).toBe(externalKeys.length);
     for (const externalKey of externalKeys) {
-      expect(externalKey).toMatch(/^apush-(dbq|leq)-/);
+      expect(externalKey).toMatch(/^ap(ush|euro|world)-(dbq|leq)-/);
     }
   });
 

@@ -4,7 +4,7 @@ export const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay' as const;
 export const AP_HISTORY_SNAPSHOT_VERSION = 1 as const;
 
 const EssayTypeSchema = z.enum(['dbq', 'leq']);
-const CourseSchema = z.literal('apush');
+const CourseSchema = z.enum(['apush', 'euro', 'world']);
 const TimeModeSchema = z.enum(['untimed', 'timed']);
 
 export const ApHistorySourceSnapshotSchema = z.object({
