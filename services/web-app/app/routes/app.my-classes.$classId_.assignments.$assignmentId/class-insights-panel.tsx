@@ -1,5 +1,5 @@
 import { useFetcher } from 'react-router';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 
@@ -148,16 +148,11 @@ export function ClassInsightsPanel({
           disabled={isWorking}
           isLoading={isWorking}
         >
-          {isWorking ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-              Analyzing…
-            </>
-          ) : hasInsight ? (
-            'Regenerate'
-          ) : (
-            'Summarize class performance'
-          )}
+          {isWorking
+            ? 'Analyzing…'
+            : hasInsight
+              ? 'Regenerate'
+              : 'Summarize class performance'}
         </Button>
       </div>
 
