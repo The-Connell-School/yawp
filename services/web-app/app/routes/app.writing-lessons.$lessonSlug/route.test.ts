@@ -59,7 +59,7 @@ describe('writing lesson detail route', () => {
     });
   });
 
-  test('loads a lesson by direct URL', async () => {
+  test('loads a lesson by direct URL with its ACT questions', async () => {
     const response = await loader({
       request: new Request(
         'https://example.test/app/writing-lessons/revising-for-wordiness'
@@ -69,81 +69,56 @@ describe('writing lesson detail route', () => {
     } as never);
 
     expect(response.data.lesson.slug).toBe('revising-for-wordiness');
-    expect(response.data.practicePrompts.length).toBeGreaterThan(0);
+    expect(response.data.actQuestions.length).toBeGreaterThan(0);
+    expect(response.data.actQuestions[0].choices).toHaveLength(4);
   });
 });
 
-describe('writing lesson practice action - generate intent', () => {
-  test('returns AI prompts tagged with generated ids', async () => {
+describe('writing lesson practice action - generate-act intent', () => {
+  const validQuestion = {
+    sentence: 'The comet appeared at dawn, observers gasped in wonder.',
+    underline: 'dawn, observers',
+    choices: [
+      'dawn, observers',
+      'dawn; observers',
+      'dawn observers',
+      'dawn, and, observers',
+    ],
+    correctChoiceIndex: 1,
+    explanation: 'A semicolon correctly joins the two independent clauses.',
+  };
+
+  test('returns AI ACT questions tagged with generated ids', async () => {
     getLLMCompletion.mockResolvedValueOnce(
-      JSON.stringify({
-        prompts: [
-          { exercise: 'The band played, the crowd sang.', instruction: 'Fix.' },
-          { exercise: 'It rained, we stayed home.', instruction: 'Fix.' },
-        ],
-      })
+      JSON.stringify({ questions: [validQuestion, validQuestion] })
     );
 
-    const result = (await run({ intent: 'generate', count: '2' })) as {
+    const result = (await run({ intent: 'generate-act', count: '2' })) as {
       intent: string;
-      prompts: Array<{ id: string; exercise: string }>;
+      questions: Array<{ id: string; correctChoiceIndex: number }>;
     };
 
-    expect(result.intent).toBe('generate');
-    expect(result.prompts).toHaveLength(2);
-    expect(result.prompts[0].id).toContain('fixing-comma-splices-gen-');
-    expect(result.prompts[0].exercise).toContain('band played');
+    expect(result.intent).toBe('generate-act');
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions[0].id).toContain('fixing-comma-splices-act-gen-');
+    expect(result.questions[0].correctChoiceIndex).toBe(1);
   });
 
   test('degrades to an empty set when generation fails', async () => {
     getLLMCompletion.mockRejectedValueOnce(new Error('no provider'));
 
-    const result = (await run({ intent: 'generate', count: '5' })) as {
+    const result = (await run({ intent: 'generate-act', count: '5' })) as {
       intent: string;
-      prompts: unknown[];
+      questions: unknown[];
     };
 
-    expect(result.intent).toBe('generate');
-    expect(result.prompts).toEqual([]);
-  });
-});
-
-describe('writing lesson practice action - check intent', () => {
-  test('grades a static prompt looked up by id', async () => {
-    getLLMCompletion.mockRejectedValueOnce(new Error('offline'));
-
-    const result = (await run({
-      intent: 'check',
-      promptId: 'fixing-comma-splices-1',
-      response: 'The album dropped; fans went wild.',
-    })) as { promptId: string; feedback: { degraded: boolean } };
-
-    expect(result.promptId).toBe('fixing-comma-splices-1');
-    expect(result.feedback.degraded).toBe(true);
+    expect(result.intent).toBe('generate-act');
+    expect(result.questions).toEqual([]);
   });
 
-  test('grades a generated prompt using the exercise the client carries', async () => {
-    getLLMCompletion.mockRejectedValueOnce(new Error('offline'));
-
-    const result = (await run({
-      intent: 'check',
-      promptId: 'fixing-comma-splices-gen-abc123',
-      exercise: 'She sang, the crowd cheered.',
-      instruction: 'Fix the comma splice.',
-      response: 'She sang; the crowd cheered.',
-    })) as { promptId: string; feedback: { degraded: boolean } };
-
-    expect(result.promptId).toBe('fixing-comma-splices-gen-abc123');
-    expect(result.feedback.degraded).toBe(true);
-  });
-
-  test('rejects a generated prompt that arrives without its exercise', async () => {
-    await expect(
-      run({
-        intent: 'check',
-        promptId: 'fixing-comma-splices-gen-missing',
-        response: 'Whatever.',
-      })
-    ).rejects.toMatchObject({ status: 400 });
+  test('rejects an unsupported intent (grading is client-side)', async () => {
+    await expect(run({ intent: 'check', promptId: 'x' })).rejects.toMatchObject(
+      { status: 400 }
+    );
   });
 });

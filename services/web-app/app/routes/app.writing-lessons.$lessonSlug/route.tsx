@@ -6,7 +6,7 @@ import {
   Loader2,
   PenLine,
   RotateCcw,
-  Sparkles,
+  XCircle,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
@@ -19,25 +19,26 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { PracticePrompt } from '~/components/writing-lessons/practice-prompt';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
 import { prisma } from '~/utils/db.server';
-import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
-import { generatePracticePrompts } from '~/utils/writing-lessons/practice-prompt-generation.server';
+import { getActPracticeQuestions } from '~/utils/writing-lessons/act-practice-bank';
+import { generateActPracticeQuestions } from '~/utils/writing-lessons/act-practice-generation.server';
 import {
-  practiceFeedbackStatusLabel,
-  type PracticeFeedbackResult,
-} from '~/utils/writing-lessons/practice-feedback.shared';
+  NO_CHANGE_LABEL,
+  gradeActAnswer,
+  splitAroundUnderline,
+  type ActGradeResult,
+  type ActPracticeQuestion,
+} from '~/utils/writing-lessons/act-practice.shared';
 import {
   getQuickWritingLessonBody,
   getQuickWritingLessonBySlug,
   getQuickWritingLessonContext,
   getQuickWritingPracticePrompts,
-  type QuickWritingPracticePrompt,
 } from '~/utils/writing-lessons/static-lessons.server';
 
 type TeacherClass = {
@@ -68,20 +69,19 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return dataResponse({
     lesson,
     lessonBody: getQuickWritingLessonBody(lesson.content),
+    // Kept for the teacher assign panel's default problem count.
     practicePrompts: getQuickWritingPracticePrompts(params.lessonSlug),
+    // The offline ACT bank powers the "Try it yourself" panel and is the
+    // fallback whenever AI generation is unavailable.
+    actQuestions: getActPracticeQuestions(params.lessonSlug),
     isTeacher,
     teacherClasses,
   });
 }
 
-type CheckActionData = {
-  promptId: string;
-  feedback: PracticeFeedbackResult;
-};
-
-type GenerateActionData = {
-  intent: 'generate';
-  prompts: QuickWritingPracticePrompt[];
+type ActGenerateActionData = {
+  intent: 'generate-act';
+  questions: ActPracticeQuestion[];
 };
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -94,67 +94,47 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
-  const intent = String(formData.get('intent') ?? 'check');
-  const staticPrompts = getQuickWritingPracticePrompts(params.lessonSlug);
+  const intent = String(formData.get('intent') ?? '');
 
   // Self-serve students can keep drilling a skill indefinitely: once they work
-  // through the static bank we generate fresh AI items grounded in the same
-  // rule and examples, so the panel never runs dry.
-  if (intent === 'generate') {
-    const requested = Number(formData.get('count') ?? 5);
-    const count = Number.isFinite(requested)
-      ? Math.min(Math.max(Math.trunc(requested), 1), 8)
-      : 5;
-    const generated = await generatePracticePrompts({
-      skill: context.skill,
-      lessonTitle: context.title,
-      rule: context.rule,
-      exampleExercises: staticPrompts.slice(0, 3).map((item) => item.exercise),
-      count,
-    });
-    const prompts: QuickWritingPracticePrompt[] = generated.map((item) => ({
-      id: `${params.lessonSlug}-gen-${crypto.randomUUID()}`,
-      exercise: item.exercise,
-      instruction: item.instruction,
-    }));
-    return dataResponse<GenerateActionData>({ intent: 'generate', prompts });
+  // through the offline ACT bank we generate fresh items grounded in the same
+  // rule and examples, so the panel never runs dry. Grading itself is done on
+  // the client (a deterministic index comparison), so there is no check intent.
+  if (intent !== 'generate-act') {
+    throw new Response('Unsupported action', { status: 400 });
   }
 
-  const promptId = String(formData.get('promptId') ?? '');
-  const response = String(formData.get('response') ?? '');
-
-  // Prefer the trusted static prompt when the id is one of ours; otherwise the
-  // prompt was AI-generated on the client, so use the exercise it carries. The
-  // feedback itself is always grounded server-side in the lesson's rule/skill.
-  const staticPrompt = staticPrompts.find((item) => item.id === promptId);
-  const exercise = staticPrompt?.exercise ?? String(formData.get('exercise') ?? '');
-  const instruction =
-    staticPrompt?.instruction ?? String(formData.get('instruction') ?? '');
-  if (!promptId || !exercise) {
-    throw new Response('Unknown practice prompt', { status: 400 });
-  }
-
-  const feedback = await generatePracticeFeedback({
-    lessonTitle: context.title,
+  const requested = Number(formData.get('count') ?? 5);
+  const count = Number.isFinite(requested)
+    ? Math.min(Math.max(Math.trunc(requested), 1), 8)
+    : 5;
+  const exampleSentences = getActPracticeQuestions(context.slug)
+    .slice(0, 3)
+    .map((question) => question.sentence);
+  const questions = await generateActPracticeQuestions({
+    lessonSlug: context.slug,
     skill: context.skill,
+    lessonTitle: context.title,
     rule: context.rule,
-    exercise,
-    instruction,
-    response,
+    exampleSentences,
+    count,
   });
 
-  return dataResponse<CheckActionData>({ promptId, feedback });
+  return dataResponse<ActGenerateActionData>({
+    intent: 'generate-act',
+    questions,
+  });
 }
 
-const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
-  strong: 'bg-emerald-100 text-emerald-900',
-  developing: 'bg-amber-100 text-amber-900',
-  needs_revision: 'bg-rose-100 text-rose-900',
-};
-
 export default function WritingLessonDetailRoute() {
-  const { lesson, lessonBody, practicePrompts, isTeacher, teacherClasses } =
-    useLoaderData<typeof loader>();
+  const {
+    lesson,
+    lessonBody,
+    practicePrompts,
+    actQuestions,
+    isTeacher,
+    teacherClasses,
+  } = useLoaderData<typeof loader>();
 
   return (
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
@@ -200,10 +180,10 @@ export default function WritingLessonDetailRoute() {
                 classes={teacherClasses}
                 promptCount={practicePrompts.length}
               />
-              <StudentPracticePanel practicePrompts={practicePrompts} />
+              <StudentPracticePanel actQuestions={actQuestions} />
             </div>
           ) : (
-            <StudentPracticePanel practicePrompts={practicePrompts} />
+            <StudentPracticePanel actQuestions={actQuestions} />
           )}
         </aside>
       </div>
@@ -212,69 +192,76 @@ export default function WritingLessonDetailRoute() {
 }
 
 function StudentPracticePanel({
-  practicePrompts,
+  actQuestions,
 }: {
-  practicePrompts: QuickWritingPracticePrompt[];
+  actQuestions: ActPracticeQuestion[];
 }) {
-  const fetcher = useFetcher<CheckActionData>();
-  const generateFetcher = useFetcher<GenerateActionData>();
-  const [extraPrompts, setExtraPrompts] = useState<
-    QuickWritingPracticePrompt[]
-  >([]);
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [response, setResponse] = useState('');
+  const generateFetcher = useFetcher<ActGenerateActionData>();
+  const [extraQuestions, setExtraQuestions] = useState<ActPracticeQuestion[]>(
+    []
+  );
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [grade, setGrade] = useState<ActGradeResult | null>(null);
 
-  // Static bank first (instant), then fresh AI items appended as the student
+  // Offline bank first (instant), then fresh AI items appended as the student
   // works through them, so the well never runs dry.
-  const allPrompts = [...practicePrompts, ...extraPrompts];
-  const activePrompt = allPrompts[promptIndex] ?? null;
-  const responseReady = response.trim().length > 0;
-  const isChecking = fetcher.state !== 'idle';
+  const allQuestions = [...actQuestions, ...extraQuestions];
+  const activeQuestion = allQuestions[questionIndex] ?? null;
   const isGenerating = generateFetcher.state !== 'idle';
+  const isGraded = grade !== null;
 
-  // Only show feedback that belongs to the prompt currently on screen, so
-  // switching prompts never leaves stale feedback behind.
-  const feedback =
-    fetcher.data && fetcher.data.promptId === activePrompt?.id
-      ? fetcher.data.feedback
-      : null;
-
-  // Append freshly generated prompts, skipping any ids we already hold.
+  // Append freshly generated questions, skipping any ids we already hold.
   useEffect(() => {
     const generated = generateFetcher.data;
-    if (generated?.intent !== 'generate' || generated.prompts.length === 0) {
+    if (
+      generated?.intent !== 'generate-act' ||
+      generated.questions.length === 0
+    ) {
       return;
     }
-    setExtraPrompts((current) => {
+    setExtraQuestions((current) => {
       const seen = new Set([
-        ...practicePrompts.map((item) => item.id),
+        ...actQuestions.map((item) => item.id),
         ...current.map((item) => item.id),
       ]);
-      const fresh = generated.prompts.filter((item) => !seen.has(item.id));
+      const fresh = generated.questions.filter((item) => !seen.has(item.id));
       return fresh.length > 0 ? [...current, ...fresh] : current;
     });
-  }, [generateFetcher.data, practicePrompts]);
+  }, [generateFetcher.data, actQuestions]);
 
-  function requestMorePrompts() {
+  function requestMoreQuestions() {
     if (isGenerating) return;
     generateFetcher.submit(
-      { intent: 'generate', count: '5' },
+      { intent: 'generate-act', count: '5' },
       { method: 'post' }
     );
   }
 
-  function showNextPrompt() {
-    if (allPrompts.length === 0) return;
-    const nextIndex = promptIndex + 1;
-    // Pull a fresh batch before the student reaches the end of what's loaded.
-    if (nextIndex >= allPrompts.length - 2) {
-      requestMorePrompts();
+  function checkAnswer() {
+    if (activeQuestion === null || selectedIndex === null || grade !== null) {
+      return;
     }
-    // Advance if a next prompt is loaded; otherwise wrap so it never dead-ends
-    // while the next batch is still generating.
-    setPromptIndex(nextIndex < allPrompts.length ? nextIndex : 0);
-    setResponse('');
+    setGrade(gradeActAnswer(activeQuestion, selectedIndex));
   }
+
+  function showNextQuestion() {
+    if (allQuestions.length === 0) return;
+    const nextIndex = questionIndex + 1;
+    // Pull a fresh batch before the student reaches the end of what's loaded.
+    if (nextIndex >= allQuestions.length - 2) {
+      requestMoreQuestions();
+    }
+    // Advance if a next question is loaded; otherwise wrap so it never
+    // dead-ends while the next batch is still generating.
+    setQuestionIndex(nextIndex < allQuestions.length ? nextIndex : 0);
+    setSelectedIndex(null);
+    setGrade(null);
+  }
+
+  const parts = activeQuestion
+    ? splitAroundUnderline(activeQuestion.sentence, activeQuestion.underline)
+    : null;
 
   return (
     <Card className="overflow-hidden rounded-2xl border-border/70 shadow-sm">
@@ -286,99 +273,114 @@ function StudentPracticePanel({
             </span>
             <CardTitle className="text-lg">Try it yourself</CardTitle>
           </div>
-          {activePrompt ? (
+          {activeQuestion ? (
             <span className="text-xs font-medium text-muted-foreground">
-              Prompt {promptIndex + 1}
+              Question {questionIndex + 1}
             </span>
           ) : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-4 p-5">
-        {activePrompt ? (
-          <fetcher.Form method="post" className="space-y-4">
-            <input type="hidden" name="intent" value="check" />
-            <input type="hidden" name="promptId" value={activePrompt.id} />
-            <input type="hidden" name="exercise" value={activePrompt.exercise} />
-            <input
-              type="hidden"
-              name="instruction"
-              value={activePrompt.instruction}
-            />
-            <PracticePrompt
-              exercise={activePrompt.exercise}
-              instruction={activePrompt.instruction}
-            />
-
-            <div className="space-y-2">
-              <label
-                htmlFor="practice-response"
-                className="text-sm font-medium text-foreground"
-              >
-                Your answer
-              </label>
-              <Textarea
-                id="practice-response"
-                name="response"
-                value={response}
-                onChange={(event) => setResponse(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  // Enter checks the answer; Shift+Enter still adds a newline.
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    if (responseReady && !isChecking) {
-                      event.currentTarget.form?.requestSubmit();
-                    }
-                  }
-                }}
-                placeholder="Rewrite the sentence here…"
-                className="min-h-32 resize-none rounded-xl text-base leading-relaxed sm:text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Press{' '}
-                <kbd className="rounded border bg-muted px-1 font-sans">
-                  Enter
-                </kbd>{' '}
-                to check ·{' '}
-                <kbd className="rounded border bg-muted px-1 font-sans">
-                  Shift + Enter
-                </kbd>{' '}
-                for a new line
+        {activeQuestion && parts ? (
+          <div
+            className="space-y-4"
+            onKeyDown={(event) => {
+              // Enter checks the answer once a choice is picked — the
+              // keyboard-first flow students expect on the ACT.
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                checkAnswer();
+              }
+            }}
+          >
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Choose the best answer
+              </p>
+              <p className="mt-2 text-base leading-relaxed text-foreground">
+                {parts.before}
+                {parts.underlined ? (
+                  <span className="font-semibold underline decoration-primary decoration-2 underline-offset-4">
+                    {parts.underlined}
+                  </span>
+                ) : null}
+                {parts.after}
               </p>
             </div>
 
+            <fieldset className="space-y-2" disabled={isGraded}>
+              <legend className="sr-only">Answer choices</legend>
+              {activeQuestion.choices.map((choice, index) => {
+                const label = index === 0 ? NO_CHANGE_LABEL : choice;
+                const isSelected = selectedIndex === index;
+                const isCorrect = index === activeQuestion.correctChoiceIndex;
+                // After grading, tint the correct row green and a wrong pick red.
+                const tone = isGraded
+                  ? isCorrect
+                    ? 'border-emerald-400 bg-emerald-50'
+                    : isSelected
+                      ? 'border-rose-300 bg-rose-50'
+                      : 'border-border/70'
+                  : isSelected
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border/70 hover:border-primary/50';
+                return (
+                  <label
+                    key={index}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-base transition-colors sm:text-sm ${tone}`}
+                  >
+                    <input
+                      type="radio"
+                      name="act-choice"
+                      className="mt-0.5 h-4 w-4"
+                      checked={isSelected}
+                      onChange={() => setSelectedIndex(index)}
+                    />
+                    <span className="flex-1">
+                      <span className="mr-1.5 font-semibold text-muted-foreground">
+                        {String.fromCharCode(65 + index)}.
+                      </span>
+                      {label}
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="submit"
-                className="rounded-full"
-                disabled={!responseReady || isChecking}
-              >
-                {isChecking ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
+              {!isGraded ? (
+                <Button
+                  type="button"
+                  className="rounded-full"
+                  disabled={selectedIndex === null}
+                  onClick={checkAnswer}
+                >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
-                )}
-                {isChecking ? 'Checking…' : 'Check my answer'}
-              </Button>
+                  Check my answer
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
                 className="rounded-full text-muted-foreground"
-                onClick={showNextPrompt}
+                onClick={showNextQuestion}
               >
                 {isGenerating ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
                   <RotateCcw className="mr-2 h-4 w-4" />
                 )}
-                New prompt
+                New question
               </Button>
             </div>
 
-            {feedback ? <PracticeFeedbackPanel feedback={feedback} /> : null}
-          </fetcher.Form>
+            {grade ? (
+              <ActResultPanel question={activeQuestion} grade={grade} />
+            ) : null}
+          </div>
         ) : (
           <p className="text-base text-muted-foreground sm:text-sm">
-            This lesson does not have extracted practice prompts yet.
+            This lesson does not have practice questions yet.
           </p>
         )}
       </CardContent>
@@ -531,65 +533,51 @@ function TeacherAssignPanel({
   );
 }
 
-function PracticeFeedbackPanel({
-  feedback,
+function ActResultPanel({
+  question,
+  grade,
 }: {
-  feedback: PracticeFeedbackResult;
+  question: ActPracticeQuestion;
+  grade: ActGradeResult;
 }) {
+  const correctLabel =
+    grade.correctChoiceIndex === 0
+      ? NO_CHANGE_LABEL
+      : question.choices[grade.correctChoiceIndex];
+  const correctLetter = String.fromCharCode(65 + grade.correctChoiceIndex);
+
   return (
     <div
-      data-testid="practice-feedback"
-      className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4"
+      data-testid="act-result"
+      className={`space-y-2 rounded-xl border p-4 ${
+        grade.correct
+          ? 'border-emerald-300 bg-emerald-50'
+          : 'border-rose-300 bg-rose-50'
+      }`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[feedback.status]}`}
-        >
-          {practiceFeedbackStatusLabel(feedback.status)}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {feedback.degraded ? 'Quick self-check' : 'Tutor feedback'}
+      <div className="flex items-center gap-2">
+        {grade.correct ? (
+          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        ) : (
+          <XCircle className="h-4 w-4 text-rose-600" />
+        )}
+        <span className="text-sm font-semibold text-foreground">
+          {grade.correct ? 'Correct!' : 'Not quite'}
         </span>
       </div>
 
-      <p className="text-sm leading-relaxed text-foreground">
-        {feedback.summary}
-      </p>
-
-      {feedback.strengths.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-            What worked
-          </p>
-          <ul className="space-y-1 text-sm text-muted-foreground">
-            {feedback.strengths.map((item) => (
-              <li key={item} className="flex gap-2">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {!grade.correct ? (
+        <p className="text-sm text-foreground">
+          The best answer is{' '}
+          <span className="font-semibold">
+            {correctLetter}. {correctLabel}
+          </span>
+          .
+        </p>
       ) : null}
 
-      {feedback.focus.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-            Focus next on
-          </p>
-          <ul className="space-y-1 text-sm text-muted-foreground">
-            {feedback.focus.map((item) => (
-              <li key={item} className="flex gap-2">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <p className="border-t border-border/60 pt-2 text-sm italic text-muted-foreground">
-        {feedback.encouragement}
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {grade.explanation}
       </p>
     </div>
   );
