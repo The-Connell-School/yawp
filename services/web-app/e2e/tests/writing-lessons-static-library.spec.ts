@@ -1,6 +1,6 @@
 import { test, expect } from '../test-setup';
 
-test.describe.serial('Writing practice prototype', () => {
+test.describe.serial('Writing Fundamentals Practice', () => {
   test('lets a student discover writing practice from the dashboard', async ({
     page,
     e2eContext,
@@ -12,13 +12,13 @@ test.describe.serial('Writing practice prototype', () => {
 
     // Students get a discovery entry point to self-start practice.
     const practiceLink = page.getByRole('link', {
-      name: /writing practice/i,
+      name: /writing fundamentals practice/i,
     });
     await expect(practiceLink).toBeVisible();
 
     await practiceLink.click();
     await expect(
-      page.getByRole('heading', { name: /writing practice/i })
+      page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
     await expect(
       page.getByRole('link', { name: /revising for wordiness/i })
@@ -66,7 +66,7 @@ test.describe.serial('Writing practice prototype', () => {
     await page.goto('/app/writing-lessons');
 
     await expect(
-      page.getByRole('heading', { name: /writing practice/i })
+      page.getByRole('heading', { name: /writing fundamentals practice/i })
     ).toBeVisible();
     await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
     await expect(
@@ -236,9 +236,9 @@ test.describe.serial('Writing practice prototype', () => {
       .first()
       .click();
 
-    // Pick "Writing practice" as the assignment type.
+    // Pick "Writing Fundamentals Practice" as the assignment type.
     await page.getByRole('combobox').first().click();
-    await page.getByRole('option', { name: /writing practice/i }).click();
+    await page.getByRole('option', { name: /writing fundamentals practice/i }).click();
 
     const dialog = page.getByRole('dialog');
     // First checkbox is the class; then pick two skills to interleave.
@@ -255,7 +255,7 @@ test.describe.serial('Writing practice prototype', () => {
     ).toHaveCount(0);
   });
 
-  test('offers "Writing practice" in the Assignments page type dropdown', async ({
+  test('offers "Writing Fundamentals Practice" in the Assignments page type dropdown', async ({
     page,
     e2eContext,
     signIn,
@@ -268,7 +268,7 @@ test.describe.serial('Writing practice prototype', () => {
     const dialog = page.getByRole('dialog');
     // Open the assignment-type dropdown and choose writing practice.
     await dialog.getByRole('combobox').first().click();
-    await page.getByRole('option', { name: /writing practice/i }).click();
+    await page.getByRole('option', { name: /writing fundamentals practice/i }).click();
 
     // The sheet body swaps to the writing-practice builder.
     await expect(dialog.getByText(/skills to practice/i)).toBeVisible();

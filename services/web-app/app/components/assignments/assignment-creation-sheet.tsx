@@ -538,7 +538,7 @@ export function AssignmentCreationSheetContent({
               ))}
               {writingPracticeEnabled ? (
                 <SelectItem value={WRITING_PRACTICE_TYPE_ID}>
-                  Writing practice
+                  Writing Fundamentals Practice
                 </SelectItem>
               ) : null}
             </SelectContent>

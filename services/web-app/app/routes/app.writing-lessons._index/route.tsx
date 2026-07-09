@@ -330,7 +330,7 @@ export default function WritingLessonsIndexRoute() {
               <p className="text-base font-medium text-primary sm:text-sm">
                 Practice
               </p>
-              <h2 className="mt-1">Writing practice</h2>
+              <h2 className="mt-1">Writing Fundamentals Practice</h2>
               <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
                 Focused lessons and quick rewrite drills for sentence control,
                 grammar, and revision habits.
@@ -398,7 +398,7 @@ export default function WritingLessonsIndexRoute() {
                   <Card className="flex h-full flex-col shadow-none hover:shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base leading-snug">
-                        {assignment.title ?? 'Writing practice'}
+                        {assignment.title ?? 'Writing Fundamentals Practice'}
                       </CardTitle>
                       <CardDescription className="text-base sm:text-sm">
                         {assignment.classLabel} · {assignment.problemCount}{' '}
@@ -444,7 +444,7 @@ export default function WritingLessonsIndexRoute() {
                     <Card className="flex h-full flex-col border-primary/40 shadow-none hover:shadow-sm">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base leading-snug">
-                          {assignment.title ?? 'Writing practice'}
+                          {assignment.title ?? 'Writing Fundamentals Practice'}
                         </CardTitle>
                         <CardDescription className="text-base sm:text-sm">
                           {assignment.completedCount} of{' '}

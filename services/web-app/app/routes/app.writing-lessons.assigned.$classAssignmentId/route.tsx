@@ -206,7 +206,7 @@ export default function AssignedPracticeRoute() {
             <p className="text-base font-medium text-primary sm:text-sm">
               Assigned practice
             </p>
-            <h2 className="mt-1">{title ?? 'Writing practice'}</h2>
+            <h2 className="mt-1">{title ?? 'Writing Fundamentals Practice'}</h2>
             {instructions ? (
               <p className="mt-3 max-w-full text-base text-muted-foreground sm:max-w-[620px] sm:text-sm">
                 {instructions}

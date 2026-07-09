@@ -121,7 +121,7 @@ export default function WritingPracticeResultsRoute() {
             <p className="text-base font-medium text-primary sm:text-sm">
               Assigned practice · {classLabel}
             </p>
-            <h2 className="mt-1">{title ?? 'Writing practice'}</h2>
+            <h2 className="mt-1">{title ?? 'Writing Fundamentals Practice'}</h2>
             <p className="mt-2 text-base text-muted-foreground sm:text-sm">
               {lessonTitles.join(' · ') || 'Practice'}
             </p>

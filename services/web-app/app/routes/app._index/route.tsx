@@ -514,7 +514,7 @@ export default function AppRoute() {
                   </span>
                   <div className="min-w-0">
                     <h3 className="text-lg font-semibold text-foreground">
-                      Writing practice
+                      Writing Fundamentals Practice
                     </h3>
                     <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
                       Browse focused grammar and revision lessons, then assign
@@ -666,7 +666,7 @@ export default function AppRoute() {
               </span>
               <div className="min-w-0">
                 <h3 className="text-lg font-semibold text-foreground">
-                  Writing practice
+                  Writing Fundamentals Practice
                 </h3>
                 <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
                   Browse focused grammar and revision lessons and practice on
