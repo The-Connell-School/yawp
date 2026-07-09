@@ -1,7 +1,14 @@
 import { useFetcher } from 'react-router';
-import { Sparkles } from 'lucide-react';
+import {
+  Minus,
+  Sparkles,
+  TrendingUp,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react';
 import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
+import { timeAgo } from '~/utils/timeAgo';
 
 type CategoryStatus = 'strength' | 'mixed' | 'gap';
 
@@ -37,43 +44,137 @@ type InsightActionData =
 
 const STATUS_META: Record<
   CategoryStatus,
-  { label: string; variant: 'success' | 'secondary' | 'warning-soft' }
+  {
+    label: string;
+    badge: 'success' | 'secondary' | 'warning-soft';
+    Icon: LucideIcon;
+    accent: string;
+    iconWrap: string;
+  }
 > = {
-  strength: { label: 'Strength', variant: 'success' },
-  mixed: { label: 'Mixed', variant: 'secondary' },
-  gap: { label: 'Needs work', variant: 'warning-soft' },
+  strength: {
+    label: 'Strength',
+    badge: 'success',
+    Icon: TrendingUp,
+    accent: 'border-l-green-500',
+    iconWrap: 'bg-green-500/10 text-green-600 dark:text-green-400',
+  },
+  mixed: {
+    label: 'Mixed',
+    badge: 'secondary',
+    Icon: Minus,
+    accent: 'border-l-muted-foreground/30',
+    iconWrap: 'bg-muted text-muted-foreground',
+  },
+  gap: {
+    label: 'Needs work',
+    badge: 'warning-soft',
+    Icon: TriangleAlert,
+    accent: 'border-l-orange-500',
+    iconWrap: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  },
 };
 
-function CategoryRow({ category }: { category: CategoryInsight }) {
+function humanizeCategoryKey(key: string) {
+  return key
+    .replace(/_and_/g, ' & ')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function CategoryCard({ category }: { category: CategoryInsight }) {
   const meta = STATUS_META[category.status] ?? STATUS_META.mixed;
+  const { Icon } = meta;
   return (
-    <li className="flex flex-col gap-1 rounded-lg border bg-card p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium">{category.label}</span>
-        <Badge variant={meta.variant} size="sm">
-          {meta.label}
-        </Badge>
+    <li
+      className={`flex gap-3 rounded-lg border border-l-4 bg-card p-3.5 ${meta.accent}`}
+    >
+      <span
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.iconWrap}`}
+      >
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-medium leading-none">{category.label}</span>
+          <Badge variant={meta.badge} size="sm">
+            {meta.label}
+          </Badge>
+        </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {category.summary}
+        </p>
       </div>
-      <p className="text-sm text-muted-foreground">{category.summary}</p>
     </li>
+  );
+}
+
+function StatChip({
+  value,
+  label,
+  className,
+}: {
+  value: number;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1">
+      <span className={`text-sm font-semibold tabular-nums ${className ?? ''}`}>
+        {value}
+      </span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+    </div>
   );
 }
 
 function InsightBody({ insight }: { insight: ClassInsight }) {
   const summary = insight.summary;
   if (!summary) return null;
+
+  const strengthCount = summary.categories.filter(
+    (category) => category.status === 'strength'
+  ).length;
+  const gapCount = summary.categories.filter(
+    (category) => category.status === 'gap'
+  ).length;
+
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm">{summary.overview}</p>
+    <div className="flex flex-col gap-5">
+      {/* Stat row */}
+      <div className="flex flex-wrap items-center gap-2">
+        <StatChip value={insight.submissionCount} label="submissions" />
+        {strengthCount > 0 && (
+          <StatChip
+            value={strengthCount}
+            label={strengthCount === 1 ? 'strength' : 'strengths'}
+            className="text-green-600 dark:text-green-400"
+          />
+        )}
+        {gapCount > 0 && (
+          <StatChip
+            value={gapCount}
+            label={gapCount === 1 ? 'area to grow' : 'areas to grow'}
+            className="text-orange-600 dark:text-orange-400"
+          />
+        )}
+      </div>
+
+      {/* Overview lede */}
+      <div className="rounded-lg border border-primary/15 bg-primary/5 p-4">
+        <p className="text-sm leading-relaxed text-foreground">
+          {summary.overview}
+        </p>
+      </div>
 
       {summary.categories.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
+          <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             How the class did
           </h4>
-          <ul className="flex flex-col gap-2">
+          <ul className="grid gap-2.5 sm:grid-cols-2">
             {summary.categories.map((category) => (
-              <CategoryRow key={category.key} category={category} />
+              <CategoryCard key={category.key} category={category} />
             ))}
           </ul>
         </div>
@@ -81,19 +182,39 @@ function InsightBody({ insight }: { insight: ClassInsight }) {
 
       {summary.nextSteps.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
+          <h4 className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Suggested next steps
           </h4>
-          <ol className="flex flex-col gap-2">
-            {summary.nextSteps.map((step, index) => (
-              <li
-                key={`${step.rubricCategory}-${index}`}
-                className="rounded-lg border-l-2 border-primary bg-muted/40 p-3"
-              >
-                <p className="text-sm font-medium">{step.title}</p>
-                <p className="text-sm text-muted-foreground">{step.detail}</p>
-              </li>
-            ))}
+          <ol className="flex flex-col gap-2.5">
+            {summary.nextSteps.map((step, index) => {
+              const categoryLabel =
+                summary.categories.find(
+                  (category) => category.key === step.rubricCategory
+                )?.label ?? humanizeCategoryKey(step.rubricCategory);
+              return (
+                <li
+                  key={`${step.rubricCategory}-${index}`}
+                  className="flex gap-3 rounded-lg border bg-card p-3.5"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                    {index + 1}
+                  </span>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{step.title}</p>
+                      {step.rubricCategory && (
+                        <Badge variant="outline" size="sm">
+                          {categoryLabel}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {step.detail}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </div>
       )}
@@ -118,6 +239,7 @@ export function ClassInsightsPanel({
 
   const insight = fetcherInsight ?? initialInsight;
   const hasInsight = Boolean(insight?.summary);
+  const generatedAt = insight?.generatedAt ?? null;
 
   const generate = () => {
     fetcher.submit(
@@ -127,18 +249,25 @@ export function ClassInsightsPanel({
   };
 
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="flex items-center gap-2 text-base font-semibold">
-            <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-            Class performance summary
-          </h3>
-          <p className="text-sm text-muted-foreground">
-            {hasInsight
-              ? `Based on ${insight!.submissionCount} submissions.`
-              : 'See how the whole class did on this assignment — strengths, gaps, and what to teach next.'}
-          </p>
+    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      {/* Header band */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b bg-gradient-to-r from-primary/[0.07] to-transparent p-4">
+        <div className="flex min-w-0 gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Sparkles className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold leading-tight">
+              Class performance summary
+            </h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {hasInsight
+                ? `Based on ${insight!.submissionCount} submissions${
+                    generatedAt ? ` · updated ${timeAgo(generatedAt)}` : ''
+                  }.`
+                : 'See how the whole class did on this assignment — strengths, gaps, and what to teach next.'}
+            </p>
+          </div>
         </div>
         <Button
           type="button"
@@ -156,17 +285,33 @@ export function ClassInsightsPanel({
         </Button>
       </div>
 
-      {errorMessage && (
-        <p className="mt-3 rounded-md bg-destructive/10 p-2 text-sm text-destructive">
-          {errorMessage}
-        </p>
-      )}
+      <div className="p-4">
+        {errorMessage && (
+          <div className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
-      {hasInsight && (
-        <div className="mt-4">
-          <InsightBody insight={insight!} />
-        </div>
-      )}
+        {isWorking && !hasInsight && (
+          <div className="flex flex-col gap-3" aria-hidden>
+            <div className="h-16 animate-pulse rounded-lg bg-muted" />
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="h-20 animate-pulse rounded-lg bg-muted" />
+              <div className="h-20 animate-pulse rounded-lg bg-muted" />
+            </div>
+          </div>
+        )}
+
+        {!isWorking && !hasInsight && !errorMessage && (
+          <p className="text-sm text-muted-foreground">
+            No summary yet. Generate one to see class-wide strengths, gaps, and
+            teaching next steps.
+          </p>
+        )}
+
+        {hasInsight && <InsightBody insight={insight!} />}
+      </div>
     </section>
   );
 }
