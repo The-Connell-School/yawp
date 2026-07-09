@@ -132,3 +132,25 @@ export function filterAppropriatePrompts<T extends PromptLike>(
       isSchoolAppropriate(prompt.instruction)
   );
 }
+
+type ActQuestionLike = {
+  sentence: string;
+  choices: string[];
+  explanation: string;
+};
+
+/**
+ * Keeps only the ACT questions whose every student-visible field — the
+ * sentence, all answer choices, and the explanation — clears the safety screen.
+ * A single off-policy choice drops the whole item, since students see all four.
+ */
+export function filterAppropriateActQuestions<T extends ActQuestionLike>(
+  questions: T[]
+): T[] {
+  return questions.filter(
+    (question) =>
+      isSchoolAppropriate(question.sentence) &&
+      isSchoolAppropriate(question.explanation) &&
+      question.choices.every((choice) => isSchoolAppropriate(choice))
+  );
+}
