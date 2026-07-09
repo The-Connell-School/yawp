@@ -42,7 +42,12 @@ export function DbqLayout({ snapshot, tutor, editor, comments }: Props) {
     id: snapshot.libraryEntryId,
     title: snapshot.period,
     essayType: 'dbq',
-    period: 'ap-ush',
+    period:
+      snapshot.course === 'euro'
+        ? 'ap-euro'
+        : snapshot.course === 'world'
+          ? 'ap-world'
+          : 'ap-ush',
     era: [],
     reasoningSkill: getReasoningSkill(snapshot.reasoningSkill),
     dateWindow: { from: 1600, to: 1980 },

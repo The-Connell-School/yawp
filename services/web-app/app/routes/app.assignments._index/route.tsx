@@ -236,7 +236,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return dataResponse(
       {
         success: false,
-        message: 'Choose an APUSH prompt from the library first.',
+        message: 'Choose an AP History prompt from the library first.',
       },
       { status: 400 }
     );
@@ -603,7 +603,7 @@ export default function AssignmentsRoute() {
                       canEditSelectedAssignment
                         ? 'Edit assignment'
                         : selectedAssignments.length === 1
-                          ? 'Edit this assignment from the APUSH library'
+                          ? 'Edit this assignment from the AP History library'
                           : 'Select one assignment to edit'
                     }
                   >

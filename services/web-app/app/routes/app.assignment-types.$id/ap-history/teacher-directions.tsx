@@ -5,7 +5,8 @@ export function ApHistoryTeacherDirections() {
         How AP History Essays work
       </h3>
       <p className="mb-3 text-sm text-muted-foreground">
-        Assign a curated APUSH prompt from the library below, or use{' '}
+        Assign a curated AP U.S., European, or World History prompt from the
+        library below, or use{' '}
         <span className="font-medium text-foreground">Create assignment</span>{' '}
         (top right) to build your own DBQ or LEQ. Either way, the prompt, source
         set, and AP rubric are locked in when you assign, so every student

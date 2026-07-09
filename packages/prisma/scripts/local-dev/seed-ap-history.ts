@@ -21,7 +21,8 @@ export function buildApHistoryAssignmentTypeCreateInput(
   return {
     title: 'AP History Essay',
     systemKey: AP_HISTORY_ASSIGNMENT_TYPE_SYSTEM_KEY,
-    description: 'Curated APUSH DBQ and LEQ practice with AP rubric coaching.',
+    description:
+      'Curated AP U.S., European, and World History DBQ and LEQ practice with AP rubric coaching.',
     position: 50,
     ownerOrgId: organizationId,
     organizationAssignments: {
@@ -39,13 +40,13 @@ export function buildApHistoryAssignmentTypeCreateInput(
         {
           title: 'AP History Essay',
           position: 1,
-          description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
+          description: 'Write an AP History DBQ or LEQ with AP-specific coaching.',
           instructions: {
             create: [
               {
                 title: 'Write',
                 prompt:
-                  'Use the selected APUSH prompt and source panel to draft your response.',
+                  'Use the selected AP History prompt and source panel to draft your response.',
                 position: 1,
                 showChatButton: true,
               },

@@ -39,6 +39,7 @@ import {
 import {
   isApHistorySnapshot,
   parseApHistorySnapshot,
+  apHistoryCourseLabel,
   type ApHistorySnapshot,
 } from '~/domain/ap-history/schema';
 
@@ -194,8 +195,8 @@ function buildApHistoryPrompt({
 
   return `Student first name: ${studentFirstName}
 
-AP History assignment: APUSH ${essayType}
-Course: APUSH
+AP History assignment: ${apHistoryCourseLabel(snapshot.course)} ${essayType}
+Course: ${apHistoryCourseLabel(snapshot.course)}
 Essay type: ${essayType}
 Assignment prompt: ${snapshot.prompt}
 Period: ${snapshot.period} (Period ${snapshot.periodNumber})
@@ -600,7 +601,7 @@ export async function action({ request }: ActionFunctionArgs) {
   "points": {"point_key": {"earned": boolean, "comment": string}},
   "overallComment": string
 }
-Grade the APUSH ${apHistorySnapshot.essayType.toUpperCase()} using the supplied immutable assignment snapshot and AP point-style rubric.
+Grade the ${apHistoryCourseLabel(apHistorySnapshot.course)} ${apHistorySnapshot.essayType.toUpperCase()} using the supplied immutable assignment snapshot and AP point-style rubric.
 Use only evidence from the essay and snapshot.
 For DBQ, score these point keys: ${apHistoryDbqPointKeys.join(', ')}.
 For LEQ, score these point keys: ${apHistoryLeqPointKeys.join(', ')}.

@@ -1,6 +1,9 @@
 import { Badge } from '~/components/ui/badge';
 import { ApHistorySourceCarousel } from '~/components/ap-history/source-card';
-import type { ApHistorySnapshot } from '~/domain/ap-history/schema';
+import {
+  type ApHistorySnapshot,
+  apHistoryCourseLabel,
+} from '~/domain/ap-history/schema';
 
 type Props = {
   snapshot: ApHistorySnapshot;
@@ -25,7 +28,12 @@ export function ApHistoryAssignmentPanel({ snapshot }: Props) {
             {snapshot.essayType.toUpperCase()}
           </Badge>
           <Badge variant="outline" size="sm">
-            APUSH Period {snapshot.periodNumber}
+            {apHistoryCourseLabel(snapshot.course)}
+          </Badge>
+          <Badge variant="outline" size="sm">
+            {snapshot.course === 'apush'
+              ? `Period ${snapshot.periodNumber}`
+              : snapshot.period}
           </Badge>
           <Badge variant="outline" size="sm">
             {titleCase(snapshot.reasoningSkill)}

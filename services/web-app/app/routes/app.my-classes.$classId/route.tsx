@@ -293,7 +293,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return dataResponse(
         {
           success: false,
-          message: 'Choose an APUSH prompt from the library first.',
+          message: 'Choose an AP History prompt from the library first.',
         },
         { status: 400 }
       );

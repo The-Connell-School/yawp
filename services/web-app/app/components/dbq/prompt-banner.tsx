@@ -39,7 +39,13 @@ export function PromptBanner({
     <div className="flex items-center gap-4 border-b bg-background px-4 py-2.5">
       <div className="flex min-w-0 flex-1 items-baseline gap-3">
         <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-          DBQ · APUSH{prompt.title ? ` · ${prompt.title}` : ''}
+          {prompt.essayType.toUpperCase()} ·{' '}
+          {prompt.period === 'ap-euro'
+            ? 'AP Euro'
+            : prompt.period === 'ap-world'
+              ? 'AP World'
+              : 'APUSH'}
+          {prompt.title ? ` · ${prompt.title}` : ''}
         </span>
         <p className="truncate text-sm font-medium text-foreground">
           {prompt.prompt}

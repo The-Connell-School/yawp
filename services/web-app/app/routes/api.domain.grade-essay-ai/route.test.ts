@@ -871,7 +871,7 @@ describe('api.domain.grade-essay-ai', () => {
     const prompt = firstCallArgs?.messages?.[0]?.content;
     expect(system).toContain('Return ONLY valid JSON with the schema');
     expect(system).toContain('"rubricVersion": "ap-history-dbq-2026"');
-    expect(prompt).toContain('APUSH DBQ');
+    expect(prompt).toContain('AP U.S. History DBQ');
     expect(prompt).toContain(dbqSnapshot.prompt);
     expect(prompt).toContain('Period: Period 5: 1844-1877 (Period 5)');
     expect(prompt).toContain('Reasoning skill: Causation');

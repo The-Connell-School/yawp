@@ -471,7 +471,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (!apHistoryLibraryEntryId) {
       return redirectWithToast(`/app/assignment-types/${params.id}`, {
         type: 'error',
-        description: 'Choose an APUSH prompt to start practicing.',
+        description: 'Choose an AP History prompt to start practicing.',
       });
     }
 
@@ -482,7 +482,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (!entry) {
       return redirectWithToast(`/app/assignment-types/${params.id}`, {
         type: 'error',
-        description: 'That APUSH prompt is unavailable.',
+        description: 'That AP History prompt is unavailable.',
       });
     }
 
@@ -676,7 +676,7 @@ export default function AppAssignmentTypesIdRoute() {
         {data.apHistoryLibrary?.mode === 'student' ? (
           <section className="mb-6 rounded-lg border bg-muted/40 p-4">
             <h3 className="mb-2 text-base font-semibold">
-              Practice APUSH essays
+              Practice AP History essays
             </h3>
             <p className="text-sm text-muted-foreground">
               Pick a DBQ or LEQ below to start a practice essay. You&rsquo;ll
@@ -789,9 +789,9 @@ export default function AppAssignmentTypesIdRoute() {
                   create your first document.
                 </>
               ) : data.apHistoryLibrary?.mode === 'student' ? (
-                'Choose a prompt from the APUSH library above to start practicing.'
+                'Choose a prompt from the AP History library above to start practicing.'
               ) : (
-                'Choose a prompt from the APUSH library to create an assignment.'
+                'Choose a prompt from the AP History library to create an assignment.'
               )
             }
           />

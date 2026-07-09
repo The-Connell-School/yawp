@@ -3,6 +3,17 @@ import { z } from 'zod';
 export const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay' as const;
 export const AP_HISTORY_SNAPSHOT_VERSION = 1 as const;
 
+// Full course names for the AP history courses carried by the library.
+export const AP_HISTORY_COURSE_LABEL: Record<string, string> = {
+  apush: 'AP U.S. History',
+  euro: 'AP European History',
+  world: 'AP World History',
+};
+
+export function apHistoryCourseLabel(course: string): string {
+  return AP_HISTORY_COURSE_LABEL[course] ?? 'AP History';
+}
+
 const EssayTypeSchema = z.enum(['dbq', 'leq']);
 const CourseSchema = z.enum(['apush', 'euro', 'world']);
 const TimeModeSchema = z.enum(['untimed', 'timed']);

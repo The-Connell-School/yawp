@@ -106,7 +106,7 @@ export function CreateAssignmentSheet({
         <SheetHeader>
           <SheetTitle>New Assignment</SheetTitle>
           <SheetDescription>
-            Create an APUSH assignment from the selected prompt.
+            Create an AP History assignment from the selected prompt.
           </SheetDescription>
         </SheetHeader>
 
@@ -162,7 +162,7 @@ export function CreateAssignmentSheet({
 
           <div className="space-y-2 rounded-lg border bg-muted/40 p-4">
             <div className="flex items-center justify-between gap-3">
-              <Label>Selected APUSH Prompt</Label>
+              <Label>Selected Prompt</Label>
               <span className="text-xs font-medium uppercase text-muted-foreground">
                 {apHistoryEntry.essayType}
               </span>

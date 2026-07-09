@@ -8,7 +8,7 @@ import {
   BEHIND_THE_SCENES_INSTRUCTION,
   DOCUMENT_CONTEXT_INSTRUCTION,
 } from '~/routes/api.domain.tutor-response/build-system-prompt';
-import type { ApHistorySnapshot } from './schema';
+import { type ApHistorySnapshot, apHistoryCourseLabel } from './schema';
 
 const VOICE_RULES = `You are a Socratic AP History essay tutor. Your job is to help the student earn every rubric point, not to write the essay for them.
 
@@ -98,7 +98,7 @@ export function buildApHistoryTutorSystemPrompt(
   const arc = isDbq ? DBQ_COACHING_ARC : LEQ_COACHING_ARC;
 
   const assignmentContext = [
-    `Essay type: ${snapshot.essayType.toUpperCase()} (APUSH).`,
+    `Essay type: ${snapshot.essayType.toUpperCase()} (${apHistoryCourseLabel(snapshot.course)}).`,
     `Period: ${snapshot.period} (Period ${snapshot.periodNumber}).`,
     `Reasoning skill: ${snapshot.reasoningSkill}.`,
     `The student's assignment prompt:\n"${snapshot.prompt}"`,

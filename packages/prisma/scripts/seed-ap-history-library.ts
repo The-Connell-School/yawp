@@ -8,14 +8,15 @@ const AP_HISTORY_ASSIGNMENT_TYPE_KEY = 'ap_history_essay';
 
 const ASSIGNMENT_TYPE_DATA = {
   title: 'AP History Essay',
-  description: 'Curated APUSH DBQ and LEQ practice with AP rubric coaching.',
+  description:
+    'Curated AP U.S., European, and World History DBQ and LEQ practice with AP rubric coaching.',
   position: 50,
 } as const;
 
 const MODULE_DATA = {
   title: 'AP History Essay',
   position: 1,
-  description: 'Write an APUSH DBQ or LEQ with AP-specific coaching.',
+  description: 'Write an AP History DBQ or LEQ with AP-specific coaching.',
 } as const;
 
 const INSTRUCTION_DATA = {
