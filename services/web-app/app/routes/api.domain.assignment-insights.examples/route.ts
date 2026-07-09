@@ -21,6 +21,8 @@ const STATUS_VALUES: CategoryStatus[] = ['strength', 'mixed', 'gap'];
 export type ClassInsightExample = {
   snippet: string;
   score: number;
+  studentName: string;
+  href: string;
 };
 
 function toSnippet(raw: string): string {
@@ -96,11 +98,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
 
-  // Latest graded submission per student document, with the graded text.
+  // Latest graded submission per student document, with the graded text and
+  // the student's identity — the teacher owns this data and wants to know who
+  // the exemplars are and open their full paper.
   const documents = await prisma.document.findMany({
     where: { classAssignmentId: classAssignment.id, deletedAt: null },
     select: {
       id: true,
+      membership: {
+        select: { user: { select: { name: true, email: true } } },
+      },
       submissions: {
         where: { gradedAt: { not: null } },
         orderBy: { submittedAt: 'desc' },
@@ -110,7 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  const scored: Array<{ score: number; snippet: string }> = [];
+  const scored: Array<ClassInsightExample> = [];
   for (const doc of documents) {
     const submission = doc.submissions[0];
     if (!submission) continue;
@@ -126,14 +133,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       '';
     const snippet = toSnippet(raw);
     if (!snippet) continue;
-    scored.push({ score, snippet });
+    const studentName =
+      doc.membership?.user?.name?.trim() ||
+      doc.membership?.user?.email?.trim() ||
+      'Unknown student';
+    scored.push({
+      snippet,
+      score,
+      studentName,
+      href: `/app/submissions/${submission.id}`,
+    });
   }
 
   scored.sort(exemplarComparator(status));
 
-  const examples: ClassInsightExample[] = scored
-    .slice(0, MAX_EXAMPLES)
-    .map((row) => ({ snippet: row.snippet, score: row.score }));
+  const examples: ClassInsightExample[] = scored.slice(0, MAX_EXAMPLES);
 
   return dataResponse({ examples });
 }

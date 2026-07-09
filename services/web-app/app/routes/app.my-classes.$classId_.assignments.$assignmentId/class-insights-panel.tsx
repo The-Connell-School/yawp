@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useFetcher } from 'react-router';
+import { Link, useFetcher } from 'react-router';
 import {
+  ArrowUpRight,
   ChevronDown,
   Minus,
   Sparkles,
@@ -44,7 +45,12 @@ type InsightActionData =
   | { success: true; insight: ClassInsight }
   | { success: false; message: string };
 
-type ClassInsightExample = { snippet: string; score: number };
+type ClassInsightExample = {
+  snippet: string;
+  score: number;
+  studentName: string;
+  href: string;
+};
 type ExamplesData = { examples: ClassInsightExample[]; message?: string };
 
 const STATUS_META: Record<
@@ -175,9 +181,18 @@ function CategoryCard({
                   <p className="text-sm italic leading-relaxed text-foreground/90">
                     “{example.snippet}”
                   </p>
-                  <span className="mt-1 inline-block text-xs text-muted-foreground">
-                    Scored {example.score}/5 on {category.label.toLowerCase()}
-                  </span>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                    <Link
+                      to={example.href}
+                      className="inline-flex items-center gap-0.5 font-medium text-primary hover:underline"
+                    >
+                      {example.studentName}
+                      <ArrowUpRight className="h-3 w-3" aria-hidden />
+                    </Link>
+                    <span className="text-muted-foreground">
+                      Scored {example.score}/5 on {category.label.toLowerCase()}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -26,7 +26,15 @@ function getRequest(params: Record<string, string>) {
 
 function payloadOf(response: unknown) {
   return response as {
-    data: { examples: Array<{ snippet: string; score: number }>; message?: string };
+    data: {
+      examples: Array<{
+        snippet: string;
+        score: number;
+        studentName: string;
+        href: string;
+      }>;
+      message?: string;
+    };
     init?: { status?: number };
   };
 }
@@ -90,6 +98,7 @@ describe('api.domain.assignment-insights.examples', () => {
     prisma.document.findMany.mockResolvedValue([
       {
         id: 'd-strong',
+        membership: { user: { name: 'Ada Strong', email: 'ada@example.com' } },
         submissions: [
           {
             id: 's-strong',
@@ -101,6 +110,7 @@ describe('api.domain.assignment-insights.examples', () => {
       },
       {
         id: 'd-weak',
+        membership: { user: { name: 'Ben Weak', email: 'ben@example.com' } },
         submissions: [
           {
             id: 's-weak',
@@ -112,6 +122,7 @@ describe('api.domain.assignment-insights.examples', () => {
       },
       {
         id: 'd-unscored',
+        membership: { user: { name: 'Cara None', email: 'cara@example.com' } },
         submissions: [
           {
             id: 's-unscored',
@@ -138,7 +149,54 @@ describe('api.domain.assignment-insights.examples', () => {
     expect(response.data.examples).toHaveLength(2);
     expect(response.data.examples[0].score).toBe(2);
     expect(response.data.examples[0].snippet).toContain('dropped in');
+    expect(response.data.examples[0].studentName).toBe('Ben Weak');
+    expect(response.data.examples[0].href).toBe('/app/submissions/s-weak');
     expect(response.data.examples[1].score).toBe(5);
+    expect(response.data.examples[1].studentName).toBe('Ada Strong');
+  });
+
+  test('falls back to email, then a placeholder, when a name is missing', async () => {
+    prisma.classAssignment.findFirst.mockResolvedValue({ id: 'ca-1' });
+    prisma.document.findMany.mockResolvedValue([
+      {
+        id: 'd-email',
+        membership: { user: { name: null, email: 'noname@example.com' } },
+        submissions: [
+          {
+            id: 's-email',
+            text: 'Essay text from a student with no display name.',
+            html: null,
+            rubricScores: { evidence_and_support: 3 },
+          },
+        ],
+      },
+      {
+        id: 'd-anon',
+        membership: { user: { name: null, email: null } },
+        submissions: [
+          {
+            id: 's-anon',
+            text: 'Essay text with no identity at all.',
+            html: null,
+            rubricScores: { evidence_and_support: 3 },
+          },
+        ],
+      },
+    ]);
+
+    const response = payloadOf(
+      await loader({
+        request: getRequest({
+          classAssignmentId: 'ca-1',
+          category: 'evidence_and_support',
+          status: 'mixed',
+        }),
+      } as never)
+    );
+
+    const names = response.data.examples.map((example) => example.studentName);
+    expect(names).toContain('noname@example.com');
+    expect(names).toContain('Unknown student');
   });
 
   test('reads the nested rubric-score shape and strips html', async () => {
