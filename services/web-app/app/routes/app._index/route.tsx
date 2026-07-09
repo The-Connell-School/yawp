@@ -10,7 +10,7 @@ import {
   useRouteLoaderData,
   useSearchParams,
 } from 'react-router';
-import { BookOpen, ChevronRight } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -133,20 +133,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
           }))
         )
     : [];
-  const assignmentsEnabled =
-    useStudentExperience
-      ? studentAssignmentClassIds.length > 0
-      : teacherAssignmentClassScopes.length > 0;
-  const writingPracticeLessons =
-    !useStudentExperience
-      ? getQuickWritingLessonGroups().flatMap((group) =>
-          group.lessons.map((lesson) => ({
-            slug: lesson.slug,
-            title: lesson.title,
-            category: lesson.category,
-          }))
-        )
-      : [];
+  const assignmentsEnabled = useStudentExperience
+    ? studentAssignmentClassIds.length > 0
+    : teacherAssignmentClassScopes.length > 0;
+  const writingPracticeLessons = !useStudentExperience
+    ? getQuickWritingLessonGroups().flatMap((group) =>
+        group.lessons.map((lesson) => ({
+          slug: lesson.slug,
+          title: lesson.title,
+          category: lesson.category,
+        }))
+      )
+    : [];
 
   const [courses, documents, archivedDocuments, teacherClasses, assignments] =
     await Promise.all([
@@ -471,6 +469,7 @@ export default function AppRoute() {
             <>
               <AssignmentsAtAGlance
                 assignmentTypes={data.teacherAssignmentTypes}
+                writingPracticeTo="/app/writing-lessons"
                 onCreateAssignment={() => {
                   setCreateAssignmentTypeId(undefined);
                   setIsCreateSheetOpen(true);
@@ -501,36 +500,6 @@ export default function AppRoute() {
             needsGradingCount={needsGradingCount}
             readyToReleaseCount={readyToReleaseCount}
           />
-          <div className="flex flex-col">
-            <p className="my-2 text-foreground/60">Practice</p>
-            <Link
-              to="/app/writing-lessons"
-              className="group flex flex-col gap-3 rounded-lg border bg-muted p-4 text-left hover:shadow"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                    <BookOpen className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-foreground">
-                      Writing Fundamentals Practice
-                    </h3>
-                    <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
-                      Browse focused grammar and revision lessons, then assign
-                      practice to your classes.
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-              </div>
-              <div className="grid gap-2 text-base text-muted-foreground sm:grid-cols-3 sm:text-sm">
-                <span>10 lesson families</span>
-                <span>AI-checked practice</span>
-                <span>Assign to a class</span>
-              </div>
-            </Link>
-          </div>
         </div>
       </section>
     );

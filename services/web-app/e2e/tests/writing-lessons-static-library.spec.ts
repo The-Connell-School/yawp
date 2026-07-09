@@ -10,7 +10,12 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
 
-    // Students get a discovery entry point to self-start practice.
+    // Students get a persistent "Practice" entry in the side menu.
+    await expect(
+      page.locator('nav a[href="/app/writing-lessons"]').first()
+    ).toBeVisible();
+
+    // ...plus a discovery card on the dashboard.
     const practiceLink = page.getByRole('link', {
       name: /writing fundamentals practice/i,
     });
@@ -243,6 +248,14 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app');
     await expect(page.getByTestId('app._index')).toBeVisible();
+
+    // Teachers reach writing practice under the Assignments section (as a tile),
+    // not a standalone Practice section.
+    await expect(
+      page
+        .getByTestId('teacher-assignments-grid')
+        .getByText(/writing fundamentals practice/i)
+    ).toBeVisible();
 
     await page
       .getByRole('button', { name: /create assignment|new assignment/i })
