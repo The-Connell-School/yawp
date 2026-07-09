@@ -2,11 +2,11 @@ import { test, expect } from '../test-setup';
 import { createE2EPrismaClient } from '../prisma-client';
 
 const dbqEntry = {
-  externalKey: 'apush-dbq-new-deal-federal-power',
-  title: 'New Deal and Federal Power DBQ',
+  externalKey: 'apush-dbq-civil-war-reconstruction',
+  title: 'Civil War & Reconstruction',
   prompt:
-    'Evaluate the extent to which the New Deal changed the role of the federal government in the United States.',
-  sourceCount: 2,
+    'Evaluate the extent to which the Civil War and Reconstruction changed the social and political status of African Americans in the period from 1861 to 1877.',
+  sourceCount: 7,
 } as const;
 
 test.describe.serial('AP History library-first assignment flow', () => {
