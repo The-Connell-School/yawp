@@ -41,9 +41,9 @@ export const ESSAY_TYPE_LABEL: Record<string, string> = {
 // today, but the course facet always offers all three so teachers can filter
 // (and see what is coming) before Euro and World prompts are added.
 export const COURSE_LABEL: Record<string, string> = {
-  apush: 'AP U.S. History',
-  euro: 'AP European History',
-  world: 'AP World History',
+  apush: 'AP US History',
+  euro: 'AP Euro',
+  world: 'AP World',
 };
 
 export const COURSE_ORDER = ['apush', 'euro', 'world'] as const;
