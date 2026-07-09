@@ -85,45 +85,33 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: 'Revising for Wordiness' })
     ).toBeVisible();
     await expect(page.getByText(/try it yourself/i)).toBeVisible();
-    await expect(
-      page.getByRole('complementary').getByText('At this point in time')
-    ).toBeVisible();
 
-    await page
-      .getByLabel(/your answer/i)
-      .fill('We cannot accept new applications now.');
+    // The self-serve panel now serves ACT English–style multiple choice: a
+    // sentence with an underlined portion and four answer choices.
+    const panel = page.getByRole('complementary');
+    await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
+    // The first offline question drills a padded opening phrase.
+    await expect(panel.getByText(/committee has not reached/i)).toBeVisible();
+
+    // Pick the concise correct answer and check — grading is deterministic and
+    // works with no ANTHROPIC_API_KEY (E2E runs offline against the static bank).
+    await panel.getByRole('radio', { name: /currently/i }).check();
     await page.getByRole('button', { name: /check my answer/i }).click();
 
-    // Feedback is returned by the practice-feedback service. In E2E there is no
-    // ANTHROPIC_API_KEY, so it uses the deterministic degraded fallback, which
-    // still grounds its guidance in the lesson's skill.
-    const feedback = page.getByTestId('practice-feedback');
-    await expect(feedback).toBeVisible();
-    await expect(feedback.getByText(/coming along/i)).toBeVisible();
-    await expect(feedback.getByText(/revising for wordiness/i)).toBeVisible();
-    await expect(
-      feedback.getByText('Quick self-check', { exact: true })
-    ).toBeVisible();
+    const result = page.getByTestId('act-result');
+    await expect(result).toBeVisible();
+    await expect(result.getByText(/correct!/i)).toBeVisible();
+    await expect(result.getByText(/currently/i)).toBeVisible();
 
-    // Switching prompts clears the previous feedback.
-    await page.getByRole('button', { name: /new prompt/i }).click();
-    await expect(page.getByTestId('practice-feedback')).toHaveCount(0);
-    await expect(
-      page.getByRole('complementary').getByText(/the ability to speak/i)
-    ).toBeVisible();
-
-    // "New prompt" keeps serving fresh drills without ever dead-ending. In E2E
-    // there is no LLM key, so AI generation degrades to an empty batch and the
-    // panel cycles the static bank — but it must always show a prompt.
-    const promptCounter = page
-      .getByRole('complementary')
-      .getByText(/^Prompt \d+$/);
+    // "New question" clears the result and serves a fresh item without ever
+    // dead-ending. AI generation degrades to an empty batch offline, so the
+    // panel cycles the static bank — but it must always show a question.
+    const questionCounter = panel.getByText(/^Question \d+$/);
     for (let i = 0; i < 8; i++) {
-      await page.getByRole('button', { name: /new prompt/i }).click();
-      await expect(promptCounter).toBeVisible();
-      await expect(
-        page.getByRole('complementary').getByText('Rewrite this')
-      ).toBeVisible();
+      await page.getByRole('button', { name: /new question/i }).click();
+      await expect(page.getByTestId('act-result')).toHaveCount(0);
+      await expect(questionCounter).toBeVisible();
+      await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
     }
   });
 
@@ -140,7 +128,7 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(
       assignPanel.getByRole('heading', { name: /assign to your classes/i })
     ).toBeVisible();
-    await expect(page.getByTestId('practice-feedback')).toHaveCount(0);
+    await expect(page.getByTestId('act-result')).toHaveCount(0);
 
     const classCheckbox = page.locator('input[name="classIds"]').first();
     await classCheckbox.check();
@@ -160,17 +148,21 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await signIn(e2eContext.teacherEmail, 'teacher-e2e-password');
     await page.goto('/app/writing-lessons/fixing-comma-splices');
 
-    // Teachers can now test-drive the lesson, not just assign it: the same
+    // Teachers can now test-drive the lesson, not just assign it: the same ACT
     // "Try it yourself" panel students get sits alongside the assign panel.
     const panel = page.getByRole('complementary');
     await expect(panel.getByText(/try it yourself/i)).toBeVisible();
+    await expect(panel.getByText(/choose the best answer/i)).toBeVisible();
 
-    const answer = page.getByLabel(/your answer/i);
-    await answer.fill('The album dropped; fans went wild.');
-    // Pressing Enter checks the answer without clicking the button.
-    await answer.press('Enter');
+    // The first comma-splice item is fixed with a semicolon. Select it and
+    // press Enter to check — no button click needed.
+    const correct = panel.getByRole('radio', { name: /week; students/i });
+    await correct.check();
+    await correct.press('Enter');
 
-    await expect(page.getByTestId('practice-feedback')).toBeVisible();
+    const result = page.getByTestId('act-result');
+    await expect(result).toBeVisible();
+    await expect(result.getByText(/correct!/i)).toBeVisible();
   });
 
   test('a teacher assignment reaches the student and records attempts', async ({

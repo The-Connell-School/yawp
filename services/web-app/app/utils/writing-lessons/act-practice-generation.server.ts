@@ -101,7 +101,9 @@ export async function generateActPracticeQuestions(input: {
       },
     });
 
-    const parsed = generationSchema.safeParse(parseFirstJsonValue(responseText));
+    const parsed = generationSchema.safeParse(
+      parseFirstJsonValue(responseText)
+    );
     if (!parsed.success) return [];
 
     const candidates = parsed.data.questions.map((question) => ({
@@ -121,7 +123,10 @@ export async function generateActPracticeQuestions(input: {
         question.choices[0] === question.underline
     );
 
-    const safe = filterAppropriateActQuestions(wellFormed).slice(0, input.count);
+    const safe = filterAppropriateActQuestions(wellFormed).slice(
+      0,
+      input.count
+    );
 
     return safe.map((question, index) => ({
       id: `${input.lessonSlug}-act-gen-${index + 1}-${crypto.randomUUID()}`,

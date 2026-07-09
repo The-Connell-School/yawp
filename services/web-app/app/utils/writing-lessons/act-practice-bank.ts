@@ -18,7 +18,12 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
       sentence:
         'The library extended its hours during finals week, students packed every table by noon.',
       underline: 'week, students',
-      choices: ['week, students', 'week; students', 'week students', 'week, and, students'],
+      choices: [
+        'week, students',
+        'week; students',
+        'week students',
+        'week, and, students',
+      ],
       correctChoiceIndex: 1,
       explanation:
         'Two complete sentences joined by only a comma is a comma splice. A semicolon correctly links the closely related independent clauses.',
@@ -36,7 +41,12 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
       sentence:
         'The robotics team tested the design all weekend, they still missed the deadline.',
       underline: 'weekend, they',
-      choices: ['weekend, they', 'weekend, but they', 'weekend they', 'weekend, but, they'],
+      choices: [
+        'weekend, they',
+        'weekend, but they',
+        'weekend they',
+        'weekend, but, they',
+      ],
       correctChoiceIndex: 1,
       explanation:
         'A comma alone cannot join two independent clauses. Adding the conjunction "but" fixes the splice and signals the contrast.',
@@ -100,7 +110,12 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
       sentence:
         'The recipe calls for three cups of flour. For example, it also needs two eggs.',
       underline: 'For example,',
-      choices: ['For example,', 'In addition,', 'Nevertheless,', 'On the contrary,'],
+      choices: [
+        'For example,',
+        'In addition,',
+        'Nevertheless,',
+        'On the contrary,',
+      ],
       correctChoiceIndex: 1,
       explanation:
         'The second sentence adds another ingredient rather than giving an example, so an additive transition ("In addition") is correct.',
@@ -117,8 +132,7 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
   ],
   'the-oxford-comma': [
     {
-      sentence:
-        'For the trip we packed sandwiches, water and a first-aid kit.',
+      sentence: 'For the trip we packed sandwiches, water and a first-aid kit.',
       underline: 'water and a first-aid kit',
       choices: [
         'water and a first-aid kit',
@@ -145,8 +159,7 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
         'The list already places the serial comma before "and," keeping the three people distinct—NO CHANGE.',
     },
     {
-      sentence:
-        'The lab studied bacteria, fungi and viruses over the summer.',
+      sentence: 'The lab studied bacteria, fungi and viruses over the summer.',
       underline: 'fungi and viruses',
       choices: [
         'fungi and viruses',
@@ -188,7 +201,8 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
         'When the dependent clause follows the main clause, no comma is needed: "celebrated after they won."',
     },
     {
-      sentence: 'Because the bridge was closed, commuters took the ferry instead.',
+      sentence:
+        'Because the bridge was closed, commuters took the ferry instead.',
       underline: 'closed, commuters',
       choices: [
         'closed, commuters',
@@ -217,7 +231,8 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
         '"They made a decision" is active and direct; the passive "a decision was made by them" is wordier and hides the doer.',
     },
     {
-      sentence: 'The mural that was painted by the seniors brightened the hallway.',
+      sentence:
+        'The mural that was painted by the seniors brightened the hallway.',
       underline: 'that was painted by the seniors',
       choices: [
         'that was painted by the seniors',
@@ -310,7 +325,8 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
   ],
   'pronoun-agreement': [
     {
-      sentence: 'The company expanded their operations into three new countries.',
+      sentence:
+        'The company expanded their operations into three new countries.',
       underline: 'their',
       choices: ['their', 'its', "it's", "they're"],
       correctChoiceIndex: 1,
@@ -358,7 +374,8 @@ const ACT_PRACTICE_BANK: Record<string, ActQuestionSeed[]> = {
         'A short introductory element is correctly set off with a comma—NO CHANGE.',
     },
     {
-      sentence: 'Determined to finish the race he pushed through the final mile.',
+      sentence:
+        'Determined to finish the race he pushed through the final mile.',
       underline: 'race he',
       choices: ['race he', 'race, he', 'race; he', 'race: he'],
       correctChoiceIndex: 1,
@@ -378,7 +395,10 @@ export function getActPracticeQuestions(
   if (!slug) return [];
   const seeds = ACT_PRACTICE_BANK[slug];
   if (!seeds) return [];
-  return seeds.map((seed, index) => ({ id: `${slug}-act-${index + 1}`, ...seed }));
+  return seeds.map((seed, index) => ({
+    id: `${slug}-act-${index + 1}`,
+    ...seed,
+  }));
 }
 
 /** Slugs that have an authored ACT bank (used by tests/tooling). */

@@ -11,12 +11,12 @@ const question = {
   id: 'q1',
   sentence: 'The museum, which opened in 1911 it houses ancient pottery.',
   underline: '1911 it houses',
-  choices: ['1911 it houses', '1911, houses', '1911, houses,', '1911; it houses'] as [
-    string,
-    string,
-    string,
-    string,
-  ],
+  choices: [
+    '1911 it houses',
+    '1911, houses',
+    '1911, houses,',
+    '1911; it houses',
+  ] as [string, string, string, string],
   correctChoiceIndex: 3,
   explanation:
     'A semicolon correctly joins the two independent clauses; the original is a comma splice/run-on.',
@@ -39,11 +39,13 @@ describe('gradeActAnswer', () => {
 
 describe('splitAroundUnderline', () => {
   test('splits the sentence around the underlined span', () => {
-    expect(splitAroundUnderline(question.sentence, question.underline)).toEqual({
-      before: 'The museum, which opened in ',
-      underlined: '1911 it houses',
-      after: ' ancient pottery.',
-    });
+    expect(splitAroundUnderline(question.sentence, question.underline)).toEqual(
+      {
+        before: 'The museum, which opened in ',
+        underlined: '1911 it houses',
+        after: ' ancient pottery.',
+      }
+    );
   });
 
   test('returns the whole sentence unhighlighted when the span is absent', () => {

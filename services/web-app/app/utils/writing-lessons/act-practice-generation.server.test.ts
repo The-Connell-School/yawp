@@ -7,9 +7,8 @@ mock.module('~/utils/getLLMCompletion', () => ({
   getLLMCompletion,
 }));
 
-const { generateActPracticeQuestions } = await import(
-  './act-practice-generation.server'
-);
+const { generateActPracticeQuestions } =
+  await import('./act-practice-generation.server');
 
 const baseInput = {
   lessonSlug: 'fixing-comma-splices',
@@ -70,10 +69,7 @@ describe('generateActPracticeQuestions', () => {
   test('drops items whose underline is not in the sentence', async () => {
     getLLMCompletion.mockResolvedValueOnce(
       JSON.stringify({
-        questions: [
-          question(),
-          question({ underline: 'not in the sentence' }),
-        ],
+        questions: [question(), question({ underline: 'not in the sentence' })],
       })
     );
 
@@ -108,7 +104,12 @@ describe('generateActPracticeQuestions', () => {
           question({
             sentence: 'He got drunk, the party ended early.',
             underline: 'drunk, the',
-            choices: ['drunk, the', 'drunk; the', 'drunk the', 'drunk, and, the'],
+            choices: [
+              'drunk, the',
+              'drunk; the',
+              'drunk the',
+              'drunk, and, the',
+            ],
           }),
         ],
       })
@@ -121,10 +122,15 @@ describe('generateActPracticeQuestions', () => {
 
   test('caps the result to the requested count', async () => {
     getLLMCompletion.mockResolvedValueOnce(
-      JSON.stringify({ questions: [question(), question(), question(), question()] })
+      JSON.stringify({
+        questions: [question(), question(), question(), question()],
+      })
     );
 
-    const result = await generateActPracticeQuestions({ ...baseInput, count: 2 });
+    const result = await generateActPracticeQuestions({
+      ...baseInput,
+      count: 2,
+    });
     expect(result).toHaveLength(2);
   });
 
@@ -139,7 +145,10 @@ describe('generateActPracticeQuestions', () => {
   });
 
   test('does not call the model for a non-positive count', async () => {
-    const result = await generateActPracticeQuestions({ ...baseInput, count: 0 });
+    const result = await generateActPracticeQuestions({
+      ...baseInput,
+      count: 0,
+    });
     expect(getLLMCompletion).not.toHaveBeenCalled();
     expect(result).toEqual([]);
   });
