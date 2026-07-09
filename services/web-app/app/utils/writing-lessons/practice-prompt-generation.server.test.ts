@@ -72,6 +72,26 @@ describe('generatePracticePrompts', () => {
     expect(prompts).toHaveLength(3);
   });
 
+  test('drops inappropriate generated items before returning them', async () => {
+    getLLMCompletion.mockResolvedValueOnce(
+      JSON.stringify({
+        prompts: [
+          { exercise: 'The team lost, the fans left.', instruction: 'Fix it.' },
+          { exercise: 'He got drunk and drove home.', instruction: 'Fix it.' },
+          { exercise: 'She sang, the crowd cheered.', instruction: 'Fix it.' },
+        ],
+      })
+    );
+
+    const prompts = await generatePracticePrompts({ ...baseInput, count: 5 });
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts.map((p) => p.exercise)).toEqual([
+      'The team lost, the fans left.',
+      'She sang, the crowd cheered.',
+    ]);
+  });
+
   test('returns [] on unparseable output (caller falls back to static)', async () => {
     getLLMCompletion.mockResolvedValueOnce('sorry, no JSON here');
 

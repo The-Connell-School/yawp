@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { getLLMCompletion } from '~/utils/getLLMCompletion';
 import { parseFirstJsonValue } from '~/utils/llm-json.server';
+import { filterAppropriatePrompts } from './practice-content-safety';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
@@ -34,6 +35,12 @@ const SYSTEM_PROMPT = [
   '',
   'Vary the topics widely (music, sports, school life, technology, social issues,',
   'food, travel) and keep them engaging and age-appropriate for high schoolers.',
+  '',
+  'CONTENT POLICY — these sentences are shown to students in a classroom, so',
+  'every item MUST be school-appropriate. Never include profanity, slurs, sexual',
+  'or suggestive content, graphic violence, weapons used to harm, self-harm or',
+  'suicide, or drug/alcohol use. Keep the tone clean and classroom-safe.',
+  '',
   'Do NOT reuse the example sentences. Do NOT number them. Return ONLY valid JSON',
   'of the form: {"prompts":[{"exercise":string,"instruction":string}, ...]}.',
 ].join('\n');
@@ -97,10 +104,16 @@ export async function generatePracticePrompts(input: {
     );
     if (!parsed.success) return [];
 
-    return parsed.data.prompts.slice(0, input.count).map((prompt) => ({
+    const trimmed = parsed.data.prompts.map((prompt) => ({
       exercise: prompt.exercise.trim(),
       instruction: prompt.instruction.trim(),
     }));
+
+    // Hard content-safety gate: drop any item that trips the school-appropriate
+    // screen before it can reach a student, then cap to the requested count.
+    // If the model returns something off-policy, the caller simply gets fewer
+    // (or zero) items and falls back to the static, human-authored bank.
+    return filterAppropriatePrompts(trimmed).slice(0, input.count);
   } catch {
     return [];
   }
