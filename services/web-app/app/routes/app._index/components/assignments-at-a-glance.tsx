@@ -1,4 +1,4 @@
-import { BookOpen, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Link } from 'react-router';
 import { Tooltip } from '~/components/ui/tooltip';
 import { cn } from '~/utils/misc';
@@ -72,9 +72,12 @@ export function AssignmentsAtAGlance({
                 to={writingPracticeTo}
                 className="group relative flex w-36 shrink-0 flex-col overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-black/5 transition-shadow hover:shadow-md"
               >
-                <div className="flex h-20 w-full items-center justify-center bg-primary/10 text-primary">
-                  <BookOpen className="h-7 w-7" />
-                </div>
+                <img
+                  src="/img/writing-fundamentals-cafe-cat.png"
+                  alt=""
+                  data-testid="writing-fundamentals-tile-image"
+                  className="h-20 w-full object-cover object-center"
+                />
                 <div className="p-2.5">
                   <h3 className="line-clamp-2 text-sm font-medium text-foreground">
                     Writing Fundamentals Practice

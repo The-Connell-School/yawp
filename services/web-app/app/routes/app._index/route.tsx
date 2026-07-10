@@ -10,7 +10,6 @@ import {
   useRouteLoaderData,
   useSearchParams,
 } from 'react-router';
-import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 import type { Route as RootRoute } from '../../+types/root';
 import { AssignmentCreationSheet } from '~/components/assignments/assignment-creation-sheet';
@@ -627,21 +626,22 @@ export default function AppRoute() {
           <p className="my-2 text-foreground/60">Practice</p>
           <Link
             to="/app/writing-lessons"
-            className="group flex flex-col gap-3 rounded-lg border bg-muted p-4 text-left hover:shadow"
+            className="group flex flex-col overflow-hidden rounded-lg border bg-muted text-left hover:shadow sm:flex-row"
           >
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <BookOpen className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-foreground">
-                  Writing Fundamentals Practice
-                </h3>
-                <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
-                  Browse focused grammar and revision lessons and practice on
-                  your own — you&rsquo;ll get instant feedback on every rewrite.
-                </p>
-              </div>
+            <img
+              src="/img/writing-fundamentals-cafe-cat.png"
+              alt=""
+              data-testid="writing-fundamentals-card-image"
+              className="h-40 w-full shrink-0 object-cover object-center sm:h-auto sm:w-56"
+            />
+            <div className="min-w-0 p-4">
+              <h3 className="text-lg font-semibold text-foreground">
+                Writing Fundamentals Practice
+              </h3>
+              <p className="mt-1 max-w-[62ch] text-base text-muted-foreground sm:text-sm">
+                Browse focused grammar and revision lessons and practice on your
+                own — you&rsquo;ll get instant feedback on every rewrite.
+              </p>
             </div>
           </Link>
         </div>
