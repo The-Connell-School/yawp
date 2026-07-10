@@ -2,12 +2,15 @@ import { describe, expect, test } from 'bun:test';
 import {
   averagePercentage,
   buildGrowthSeries,
+  buildPlanProgress,
   buildRubricTrends,
+  captureRubricLevels,
   findStudentsNeedingAttention,
   humanizeRubricCategory,
   summarizeClassRubrics,
   summarizeStudentGrades,
   type GradedSubmissionRow,
+  type PlanBaseline,
 } from './reporter-report';
 
 function row(overrides: Partial<GradedSubmissionRow>): GradedSubmissionRow {
@@ -330,5 +333,82 @@ describe('findStudentsNeedingAttention', () => {
       row({ studentMembershipId: 'stu-1', numericPercentage: 90 }),
     ];
     expect(findStudentsNeedingAttention(rows)).toEqual([]);
+  });
+});
+
+describe('captureRubricLevels', () => {
+  test('records the latest level per category and the overall average', () => {
+    const snapshot = captureRubricLevels([
+      row({
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        numericPercentage: 60,
+        rubricScores: { evidence_and_support: 4, voice_and_style: 3 },
+      }),
+      row({
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        numericPercentage: 80,
+        rubricScores: { evidence_and_support: 2, voice_and_style: 4 },
+      }),
+    ]);
+
+    expect(snapshot.averagePercentage).toBe(70);
+    // Latest level per category (chronologically last submission).
+    expect(snapshot.rubricLevels).toEqual({
+      evidence_and_support: 2,
+      voice_and_style: 4,
+    });
+  });
+});
+
+describe('buildPlanProgress', () => {
+  const baseline: PlanBaseline = {
+    capturedAt: '2026-03-01T00:00:00.000Z',
+    averagePercentage: 70,
+    rubricLevels: { evidence_and_support: 2, organization_and_structure: 3 },
+  };
+
+  test('measures average and per-target-skill movement since the baseline', () => {
+    const currentRows: GradedSubmissionRow[] = [
+      row({
+        submittedAt: new Date('2026-04-01T00:00:00.000Z'),
+        numericPercentage: 78,
+        rubricScores: { evidence_and_support: 3, organization_and_structure: 3 },
+      }),
+    ];
+
+    const progress = buildPlanProgress(
+      baseline,
+      ['evidence_and_support', 'organization_and_structure'],
+      currentRows
+    );
+
+    expect(progress.averagePercentage).toEqual({
+      baseline: 70,
+      current: 78,
+      delta: 8,
+    });
+    const evidence = progress.skills.find(
+      (s) => s.category === 'evidence_and_support'
+    )!;
+    expect(evidence).toMatchObject({
+      baselineLevel: 2,
+      currentLevel: 3,
+      delta: 1,
+    });
+    const organization = progress.skills.find(
+      (s) => s.category === 'organization_and_structure'
+    )!;
+    expect(organization.delta).toBe(0);
+  });
+
+  test('reports null deltas when the current data lacks a targeted skill', () => {
+    const progress = buildPlanProgress(baseline, ['evidence_and_support'], [
+      row({ numericPercentage: null, rubricScores: null }),
+    ]);
+    const evidence = progress.skills[0];
+    expect(evidence.baselineLevel).toBe(2);
+    expect(evidence.currentLevel).toBeNull();
+    expect(evidence.delta).toBeNull();
+    expect(progress.averagePercentage.delta).toBeNull();
   });
 });

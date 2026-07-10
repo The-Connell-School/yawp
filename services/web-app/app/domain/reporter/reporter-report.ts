@@ -278,6 +278,94 @@ export function buildGrowthSeries(rows: GradedSubmissionRow[]): GrowthSeries {
   };
 }
 
+export type RubricLevelSnapshot = {
+  /** Overall average percentage at capture, or null if ungraded. */
+  averagePercentage: number | null;
+  /** Latest rubric level per category at capture, keyed by category. */
+  rubricLevels: Record<string, number>;
+};
+
+/**
+ * Snapshot a student's current standing — overall average plus the latest level
+ * in each rubric category — so a growth plan can record a baseline and later
+ * reports can measure movement against it.
+ */
+export function captureRubricLevels(
+  rows: GradedSubmissionRow[]
+): RubricLevelSnapshot {
+  const [summary] = summarizeStudentGrades(rows);
+  const rubricLevels: Record<string, number> = {};
+  for (const trend of buildRubricTrends(rows)) {
+    rubricLevels[trend.category] = trend.latest;
+  }
+  return {
+    averagePercentage: summary?.averagePercentage ?? null,
+    rubricLevels,
+  };
+}
+
+export type PlanBaseline = RubricLevelSnapshot & { capturedAt: string };
+
+export type PlanSkillProgress = {
+  category: string;
+  label: string;
+  baselineLevel: number | null;
+  currentLevel: number | null;
+  delta: number | null;
+};
+
+export type PlanProgress = {
+  averagePercentage: {
+    baseline: number | null;
+    current: number | null;
+    delta: number | null;
+  };
+  skills: PlanSkillProgress[];
+};
+
+/**
+ * Measure a student's movement since a growth plan's baseline: the change in
+ * overall average and, for each skill the plan targets, the baseline vs current
+ * rubric level. This is what lets a later report say "since the plan, evidence
+ * & analysis moved from 2 to 3."
+ */
+export function buildPlanProgress(
+  baseline: PlanBaseline,
+  targetSkills: string[],
+  currentRows: GradedSubmissionRow[]
+): PlanProgress {
+  const current = captureRubricLevels(currentRows);
+  const skills = orderRubricCategories(targetSkills).map((category) => {
+    const baselineLevel = baseline.rubricLevels[category] ?? null;
+    const currentLevel = current.rubricLevels[category] ?? null;
+    const delta =
+      baselineLevel != null && currentLevel != null
+        ? currentLevel - baselineLevel
+        : null;
+    return {
+      category,
+      label: humanizeRubricCategory(category),
+      baselineLevel,
+      currentLevel,
+      delta,
+    };
+  });
+
+  const baselineAvg = baseline.averagePercentage;
+  const currentAvg = current.averagePercentage;
+  return {
+    averagePercentage: {
+      baseline: baselineAvg,
+      current: currentAvg,
+      delta:
+        baselineAvg != null && currentAvg != null
+          ? currentAvg - baselineAvg
+          : null,
+    },
+    skills,
+  };
+}
+
 export type AttentionFlag =
   | { type: 'below_average'; averagePercentage: number; threshold: number }
   | { type: 'low_latest_grade'; latestPercentage: number; threshold: number }
