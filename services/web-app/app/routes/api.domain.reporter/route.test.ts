@@ -1,4 +1,11 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  afterAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test';
 
 const getLLMCompletion = mock();
 const requireMutableRequest = mock();
@@ -28,6 +35,10 @@ mock.module('~/utils/getLLMCompletion', () => ({
 }));
 
 const { action } = await import('./route');
+
+afterAll(() => {
+  mock.restore();
+});
 
 function formRequest(fields: Record<string, string>) {
   const body = new URLSearchParams(fields);

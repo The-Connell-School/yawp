@@ -87,6 +87,9 @@ export default function ReporterRoute() {
   const [input, setInput] = useState('');
   const conversationId = selectedConversation?.id;
   const transcriptRef = useRef<HTMLDivElement>(null);
+  // Track the last fetcher result we merged so switching conversations (which
+  // re-runs this effect with the same stale data) can't re-append a reply.
+  const processedData = useRef<ReporterActionData | null>(null);
 
   const isSending = fetcher.state !== 'idle';
 
@@ -98,6 +101,8 @@ export default function ReporterRoute() {
   // Merge the assistant reply back in once the action resolves.
   useEffect(() => {
     if (fetcher.state !== 'idle' || !fetcher.data) return;
+    if (processedData.current === fetcher.data) return;
+    processedData.current = fetcher.data;
     if (fetcher.data.error) {
       setMessages((prev) => [
         ...prev,
