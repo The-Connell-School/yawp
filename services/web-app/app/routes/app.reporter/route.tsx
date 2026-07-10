@@ -11,6 +11,7 @@ import {
   Loader2,
   Microscope,
   Plus,
+  Printer,
   Send,
   Sparkles,
 } from 'lucide-react';
@@ -353,6 +354,8 @@ function MessageBubble({
   }
 
   const { body, suggestions } = parseAssistantMessage(message.content);
+  // Only offer print/PDF on substantial replies (a report), not one-liners.
+  const isReport = /(^|\n)#{1,3}\s/.test(body) || /\n\|.*\|/.test(body);
 
   return (
     <div className="flex gap-3">
@@ -363,6 +366,18 @@ function MessageBubble({
         <div className="rounded-2xl rounded-tl-sm border border-border/60 bg-card px-4 py-3 text-foreground shadow-sm">
           <MarkdownContent content={body} />
         </div>
+        {isReport ? (
+          <div className="mt-1.5 flex justify-end">
+            <button
+              type="button"
+              onClick={() => printReport(body)}
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+            >
+              <Printer size={13} />
+              Print / Save as PDF
+            </button>
+          </div>
+        ) : null}
         {suggestions.length > 0 && isLast ? (
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestions.map((suggestion) => (
@@ -415,6 +430,15 @@ const MARKDOWN_CLASS = cn(
   '[&_details>*:not(summary)]:mt-2'
 );
 
+/** Markdown → sanitized HTML. Browser-only (DOMPurify needs a DOM). */
+function markdownToSafeHtml(content: string): string {
+  const parsed = marked.parse(content, { async: false, gfm: true }) as string;
+  return DOMPurify.sanitize(parsed, {
+    ADD_TAGS: ['details', 'summary'],
+    ADD_ATTR: ['open'],
+  });
+}
+
 /**
  * Render assistant Markdown as sanitized HTML. To avoid a hydration mismatch
  * (DOMPurify only runs in the browser) we render plain text on the server and
@@ -424,16 +448,7 @@ function MarkdownContent({ content }: { content: string }) {
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
-    const parsed = marked.parse(content, {
-      async: false,
-      gfm: true,
-    }) as string;
-    setHtml(
-      DOMPurify.sanitize(parsed, {
-        ADD_TAGS: ['details', 'summary'],
-        ADD_ATTR: ['open'],
-      })
-    );
+    setHtml(markdownToSafeHtml(content));
   }, [content]);
 
   if (html === null) {
@@ -446,4 +461,71 @@ function MarkdownContent({ content }: { content: string }) {
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
+}
+
+// Self-contained print styles (the popup can't see the app's Tailwind).
+const PRINT_CSS = `
+  * { box-sizing: border-box; }
+  body {
+    font: 14px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a1a; margin: 0; padding: 40px; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .report { max-width: 720px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #c05a3e; padding-bottom: 10px; margin-bottom: 20px; }
+  .brand strong { font-size: 15px; color: #c05a3e; }
+  .brand span { color: #6b7280; font-size: 12px; margin-left: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 22px 0 8px; }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin: 18px 0 6px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  strong { font-weight: 600; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 18px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  thead { background: #f5f3f0; }
+  th { text-align: left; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; color: #6b7280; padding: 8px 10px; }
+  td { padding: 8px 10px; border-top: 1px solid #eee; vertical-align: top; }
+  details { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; margin: 12px 0; }
+  summary { font-weight: 600; }
+  blockquote { border-left: 3px solid #c05a3e66; margin: 10px 0; padding-left: 12px; color: #4b5563; }
+  @page { margin: 1.5cm; }
+`;
+
+/**
+ * Open a clean, print-styled copy of a single report in a new window and invoke
+ * the browser's print dialog — the teacher picks "Save as PDF" (or a printer).
+ * No dependencies or server rendering; the popup is self-styled so it doesn't
+ * depend on the app's Tailwind.
+ */
+function printReport(markdown: string) {
+  if (typeof window === 'undefined') return;
+  const inner = markdownToSafeHtml(markdown);
+  const win = window.open('', '_blank', 'width=880,height=1100');
+  if (!win) return; // popup blocked
+  const stamp = new Date().toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  win.document.write(
+    `<!doctype html><html><head><meta charset="utf-8" />` +
+      `<title>Yawp Reporter</title><style>${PRINT_CSS}</style></head>` +
+      `<body><main class="report">` +
+      `<div class="brand"><strong>Yawp Reporter</strong><span>${stamp}</span></div>` +
+      inner +
+      `</main></body></html>`
+  );
+  win.document.close();
+  win.focus();
+  const run = () => {
+    // Expand any collapsed detail blocks so nothing is hidden in the PDF.
+    win.document
+      .querySelectorAll('details')
+      .forEach((node) => node.setAttribute('open', ''));
+    win.print();
+  };
+  // Give the popup a tick to lay out before printing.
+  if (win.document.readyState === 'complete') setTimeout(run, 50);
+  else win.onload = () => setTimeout(run, 50);
 }
