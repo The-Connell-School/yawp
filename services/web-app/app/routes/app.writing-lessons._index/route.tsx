@@ -325,6 +325,12 @@ export default function WritingLessonsIndexRoute() {
     <section className="no-scrollbar flex h-full w-full flex-col overflow-y-scroll">
       <div className="flex w-full justify-between border-b bg-secondary">
         <div className="mx-auto w-full max-w-screen-lg p-3 sm:p-5">
+          <img
+            src="/img/writing-fundamentals-cafe-cat.png"
+            alt="A cat in a beret writing in a notebook at a Parisian café"
+            data-testid="writing-fundamentals-banner"
+            className="mb-4 h-32 w-full rounded-lg object-cover object-center sm:h-48"
+          />
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex flex-col">
               <p className="text-base font-medium text-primary sm:text-sm">
