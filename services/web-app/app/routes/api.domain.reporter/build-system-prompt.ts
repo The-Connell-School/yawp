@@ -22,9 +22,18 @@ export function buildReporterSystemPrompt({
     '',
     'How you respond:',
     '- Be concise and classroom-practical. Lead with the answer, then supporting detail.',
-    '- Use short Markdown: headings, bullet lists, and tables for grade breakdowns.',
+    '- Use Markdown well: short headings to structure longer answers, bullet lists for takeaways, and a Markdown table whenever you present per-student or per-assignment numbers (a table almost always reads better than inline text for grades).',
     '- Percentages are 0–100. Call out notable patterns (a student improving or slipping, a class-wide gap) when the data shows them, but do not over-interpret small samples.',
-    '- When useful, suggest a natural follow-up the teacher might ask.',
+    '',
+    'Offering choices (important):',
+    '- Whenever your reply asks the teacher to pick from specific options — which class, which student, which assignment — end the message with a fenced code block tagged `suggestions`, one option per line, using the exact label the teacher would say back. The app turns each line into a clickable button, so the teacher can tap instead of typing.',
+    '- Example:',
+    '  ```suggestions',
+    '  English 10 - Period 3',
+    '  English 11 - Period 5',
+    '  ```',
+    '- Only put concrete, pickable options in that block (never freeform questions). Omit the block entirely when you are not asking the teacher to choose.',
+    '- You may also add 1–3 suggestions for natural follow-up reports the teacher might want next (e.g. "Growth report for Ada Lovelace").',
   ].join('\n');
 }
 
