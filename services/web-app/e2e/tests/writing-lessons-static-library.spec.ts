@@ -58,12 +58,11 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await expect(page.getByText(/try it yourself/i)).toBeVisible();
     await expect(page.getByText(/^Problem 1$/)).toBeVisible();
 
-    // Answering a problem returns feedback.
-    await page
-      .getByLabel(/your answer/i)
-      .fill('The album dropped; fans went wild.');
+    // Answer an ACT multiple-choice question and see the deterministic result.
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
+    await page.getByRole('radio').first().check();
     await page.getByRole('button', { name: /check my answer/i }).click();
-    await expect(page.getByTestId('practice-feedback')).toBeVisible();
+    await expect(page.getByTestId('act-result')).toBeVisible();
   });
 
   test('loads lessons by direct URL and supports a self-guided practice check', async ({
@@ -207,15 +206,13 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.getByRole('heading', { name: /problem 1 of/i })
     ).toBeVisible();
 
-    await page
-      .getByLabel(/your practice response/i)
-      .fill(
-        'The new phone costs over a thousand dollars; most students can’t afford it.'
-      );
+    // The first offline question drills the comma splice; pick the semicolon fix.
+    await expect(page.getByText(/choose the best answer/i)).toBeVisible();
+    await page.getByRole('radio', { name: /week; students/i }).check();
     await page.getByRole('button', { name: /check & save/i }).click();
 
-    // Feedback appears and the attempt is recorded (progress advances).
-    await expect(page.getByTestId('practice-feedback')).toBeVisible();
+    // The deterministic result appears and the attempt is recorded.
+    await expect(page.getByTestId('act-result')).toBeVisible();
     await expect(page.getByText(/1 of 4 done/i)).toBeVisible();
 
     await page.getByRole('button', { name: /next problem/i }).click();
@@ -241,11 +238,10 @@ test.describe.serial('Writing Fundamentals Practice', () => {
     await studentRow.click();
     const attempts = page.getByTestId('student-attempts');
     await expect(attempts).toBeVisible();
-    await expect(attempts.getByText(/student answer/i)).toBeVisible();
-    // The student's fix (semicolon) is distinct from the prompt (comma splice).
-    await expect(
-      attempts.getByText(/thousand dollars; most students/i)
-    ).toBeVisible();
+    await expect(attempts.getByText(/their answer/i)).toBeVisible();
+    // The teacher sees the exact choice the student picked, marked correct.
+    await expect(attempts.getByText(/week; students/i)).toBeVisible();
+    await expect(attempts.getByText('Correct', { exact: true })).toBeVisible();
   });
 
   test('a teacher assigns interleaved writing practice from the create-assignment sheet', async ({

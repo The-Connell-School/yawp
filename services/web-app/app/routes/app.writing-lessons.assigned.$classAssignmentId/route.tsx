@@ -16,23 +16,20 @@ import {
 } from 'react-router';
 
 import { GeneralErrorBoundary } from '~/components/error-boundary';
-import { PracticePrompt } from '~/components/writing-lessons/practice-prompt';
+import { ActPracticeQuestionView } from '~/components/writing-lessons/act-practice-question';
 import { Button } from '~/components/ui/button';
 import { Badge } from '~/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
-import { Textarea } from '~/components/ui/textarea';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import {
+  gradeActAnswer,
+  type ActGradeResult,
+} from '~/utils/writing-lessons/act-practice.shared';
 import {
   getAssignedPracticeForStudentById,
   getOrCreateStudentPracticeSet,
   recordWritingPracticeAttempt,
 } from '~/utils/writing-lessons/practice-assignments.server';
-import { generatePracticeFeedback } from '~/utils/writing-lessons/practice-feedback.server';
-import {
-  practiceFeedbackStatusLabel,
-  type PracticeFeedbackResult,
-} from '~/utils/writing-lessons/practice-feedback.shared';
-import { getQuickWritingLessonContext } from '~/utils/writing-lessons/static-lessons.server';
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -71,7 +68,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
 type AssignedActionData = {
   position: number;
-  feedback: PracticeFeedbackResult;
+  grade: ActGradeResult;
   recorded: boolean;
 };
 
@@ -91,9 +88,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const position = Number(formData.get('position'));
   const lessonSlug = String(formData.get('lessonSlug') ?? '');
   const promptId = String(formData.get('promptId') ?? '');
-  const response = String(formData.get('response') ?? '');
+  const selectedChoiceIndex = Number(formData.get('selectedChoiceIndex'));
 
-  // The prompt must belong to this student's stored set for the assignment.
+  // The question must belong to this student's stored set for the assignment.
   const sequence = await getOrCreateStudentPracticeSet({
     classAssignmentId: classAssignment.id,
     membershipId: profile.id,
@@ -102,50 +99,34 @@ export async function action({ request, params }: ActionFunctionArgs) {
   });
   const item = sequence.find(
     (candidate) =>
-      candidate.prompt.id === promptId && candidate.lessonSlug === lessonSlug
+      candidate.question.id === promptId && candidate.lessonSlug === lessonSlug
   );
-  const context = getQuickWritingLessonContext(lessonSlug);
-  if (!item || !context) {
-    throw new Response('Unknown practice prompt', { status: 400 });
+  if (
+    !item ||
+    !Number.isInteger(selectedChoiceIndex) ||
+    selectedChoiceIndex < 0 ||
+    selectedChoiceIndex >= item.question.choices.length
+  ) {
+    throw new Response('Unknown or invalid practice answer', { status: 400 });
   }
 
-  const feedback = await generatePracticeFeedback({
-    lessonTitle: context.title,
-    skill: context.skill,
-    rule: context.rule,
-    exercise: item.prompt.exercise,
-    instruction: item.prompt.instruction,
-    response,
+  const grade = gradeActAnswer(item.question, selectedChoiceIndex);
+
+  await recordWritingPracticeAttempt({
+    classAssignmentId: classAssignment.id,
+    membershipId: profile.id,
+    lessonSlug,
+    question: item.question,
+    selectedChoiceIndex,
+    grade,
   });
-
-  // Persist only real attempts, not the empty-response guardrail.
-  let recorded = false;
-  if (response.trim().length > 0) {
-    await recordWritingPracticeAttempt({
-      classAssignmentId: classAssignment.id,
-      membershipId: profile.id,
-      lessonSlug,
-      promptId,
-      exercise: item.prompt.exercise,
-      instruction: item.prompt.instruction,
-      response,
-      feedback,
-    });
-    recorded = true;
-  }
 
   return dataResponse<AssignedActionData>({
     position: Number.isFinite(position) ? position : 0,
-    feedback,
-    recorded,
+    grade,
+    recorded: true,
   });
 }
-
-const STATUS_STYLES: Record<PracticeFeedbackResult['status'], string> = {
-  strong: 'bg-emerald-100 text-emerald-900',
-  developing: 'bg-amber-100 text-amber-900',
-  needs_revision: 'bg-rose-100 text-rose-900',
-};
 
 function formatDueDate(iso: string): string {
   const date = new Date(iso);
@@ -164,18 +145,17 @@ export default function AssignedPracticeRoute() {
   const [pointer, setPointer] = useState(
     Math.min(completedCount, sequence.length)
   );
-  const [response, setResponse] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [sessionAnswered, setSessionAnswered] = useState<number[]>([]);
 
   const currentItem = sequence[pointer] ?? null;
   const isChecking = fetcher.state !== 'idle';
-  const responseReady = response.trim().length > 0;
 
-  const feedback =
+  const grade =
     fetcher.data && fetcher.data.position === currentItem?.position
-      ? fetcher.data.feedback
+      ? fetcher.data.grade
       : null;
-  const currentAnswered = feedback !== null && fetcher.data?.recorded === true;
+  const currentAnswered = grade !== null && fetcher.data?.recorded === true;
 
   const doneCount = Math.min(
     problemCount,
@@ -189,7 +169,7 @@ export default function AssignedPracticeRoute() {
       setSessionAnswered((prev) => [...prev, currentItem.position]);
     }
     setPointer((prev) => prev + 1);
-    setResponse('');
+    setSelectedIndex(null);
   }
 
   return (
@@ -235,7 +215,7 @@ export default function AssignedPracticeRoute() {
       <div className="mx-auto flex w-full max-w-screen-lg flex-col gap-6 px-3 py-6 pb-24 sm:px-5">
         {sequence.length === 0 ? (
           <p className="text-base text-muted-foreground sm:text-sm">
-            This assignment has no practice prompts yet.
+            This assignment has no practice questions yet.
           </p>
         ) : currentItem ? (
           <Card className="shadow-none">
@@ -268,46 +248,34 @@ export default function AssignedPracticeRoute() {
                 <input
                   type="hidden"
                   name="promptId"
-                  value={currentItem.prompt.id}
+                  value={currentItem.question.id}
+                />
+                <input
+                  type="hidden"
+                  name="selectedChoiceIndex"
+                  value={selectedIndex ?? ''}
                 />
 
-                <PracticePrompt
-                  exercise={currentItem.prompt.exercise}
-                  instruction={currentItem.prompt.instruction}
-                  skillLabel={currentItem.lessonTitle}
+                <ActPracticeQuestionView
+                  question={currentItem.question}
+                  selectedIndex={selectedIndex}
+                  grade={grade}
+                  onSelect={setSelectedIndex}
                 />
-
-                <div className="space-y-2">
-                  <label
-                    htmlFor="assigned-response"
-                    className="text-base font-medium text-foreground sm:text-sm"
-                  >
-                    Your practice response
-                  </label>
-                  <Textarea
-                    id="assigned-response"
-                    name="response"
-                    value={response}
-                    onChange={(event) => setResponse(event.currentTarget.value)}
-                    placeholder="Rewrite the sentence here."
-                    className="min-h-28 text-base sm:text-sm"
-                    disabled={currentAnswered}
-                  />
-                </div>
 
                 <div className="flex flex-wrap gap-2">
                   {!currentAnswered ? (
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={!responseReady || isChecking}
+                      disabled={selectedIndex === null || isChecking}
                     >
                       {isChecking ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       ) : (
                         <CheckCircle2 className="mr-2 h-4 w-4" />
                       )}
-                      {isChecking ? 'Checking…' : 'Check & save'}
+                      {isChecking ? 'Saving…' : 'Check & save'}
                     </Button>
                   ) : (
                     <Button type="button" size="sm" onClick={goNext}>
@@ -315,10 +283,6 @@ export default function AssignedPracticeRoute() {
                     </Button>
                   )}
                 </div>
-
-                {feedback ? (
-                  <PracticeFeedbackPanel feedback={feedback} />
-                ) : null}
               </fetcher.Form>
             </CardContent>
           </Card>
@@ -341,62 +305,6 @@ export default function AssignedPracticeRoute() {
         )}
       </div>
     </section>
-  );
-}
-
-function PracticeFeedbackPanel({
-  feedback,
-}: {
-  feedback: PracticeFeedbackResult;
-}) {
-  return (
-    <div
-      data-testid="practice-feedback"
-      className="space-y-3 rounded-lg border bg-card p-3"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[feedback.status]}`}
-        >
-          {practiceFeedbackStatusLabel(feedback.status)}
-        </span>
-        {feedback.degraded ? (
-          <span className="text-xs text-muted-foreground">
-            Quick self-check · tutor offline
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">Tutor feedback</span>
-        )}
-      </div>
-
-      <p className="text-base text-foreground sm:text-sm">{feedback.summary}</p>
-
-      {feedback.strengths.length > 0 ? (
-        <div className="space-y-1">
-          <p className="text-base font-medium sm:text-sm">What worked</p>
-          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
-            {feedback.strengths.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {feedback.focus.length > 0 ? (
-        <div className="space-y-1">
-          <p className="text-base font-medium sm:text-sm">Focus next on</p>
-          <ul className="list-disc space-y-1 pl-5 text-base text-muted-foreground sm:text-sm">
-            {feedback.focus.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <p className="text-base italic text-muted-foreground sm:text-sm">
-        {feedback.encouragement}
-      </p>
-    </div>
   );
 }
 

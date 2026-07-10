@@ -92,6 +92,23 @@ export function gradeActAnswer(
   };
 }
 
+/**
+ * A persisted snapshot of one ACT answer: enough for a teacher to see exactly
+ * what the student was shown, what they picked, and whether it was right —
+ * without re-deriving anything from the (possibly changed) lesson content.
+ * Stored in the attempt's `feedbackJson` column.
+ */
+export type ActAttemptRecord = {
+  kind: 'act';
+  sentence: string;
+  underline: string;
+  choices: string[];
+  selectedChoiceIndex: number;
+  correctChoiceIndex: number;
+  correct: boolean;
+  explanation: string;
+};
+
 export type UnderlineSplit = {
   before: string;
   underlined: string;

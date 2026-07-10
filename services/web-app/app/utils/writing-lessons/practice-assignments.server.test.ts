@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
-import type { PracticeFeedbackResult } from './practice-feedback.shared';
-
 const writingPracticeAssignment = { create: mock() };
 const writingPracticeAttempt = { create: mock() };
 const writingPracticeClassAssignment = { findMany: mock(), findFirst: mock() };
@@ -53,6 +51,24 @@ function mockGeneratedPrompts(prompts: Array<{ exercise: string }>) {
   );
 }
 
+function mockGeneratedActQuestions(
+  questions: Array<{
+    sentence: string;
+    underline: string;
+    choices: string[];
+    correctChoiceIndex: number;
+  }>
+) {
+  getLLMCompletion.mockResolvedValue(
+    JSON.stringify({
+      questions: questions.map((question) => ({
+        ...question,
+        explanation: 'Because it fixes the error.',
+      })),
+    })
+  );
+}
+
 describe('createWritingPracticeAssignmentForClasses', () => {
   test('creates one assignment and deploys to de-duplicated classes', async () => {
     writingPracticeAssignment.create.mockResolvedValueOnce({ id: 'wpa-1' });
@@ -82,33 +98,68 @@ describe('createWritingPracticeAssignmentForClasses', () => {
 });
 
 describe('recordWritingPracticeAttempt', () => {
-  test('maps feedback status/json onto the persisted attempt', async () => {
+  const question = {
+    id: 'fixing-comma-splices-act-1',
+    sentence: 'The album dropped, fans went wild.',
+    underline: 'dropped, fans',
+    choices: [
+      'dropped, fans',
+      'dropped; fans',
+      'dropped fans',
+      'dropped, and, fans',
+    ],
+    correctChoiceIndex: 1,
+    explanation: 'A semicolon joins the two independent clauses.',
+  };
+
+  test('persists a correct ACT attempt as strong with the snapshot record', async () => {
     writingPracticeAttempt.create.mockResolvedValueOnce({ id: 'att-1' });
-    const feedback: PracticeFeedbackResult = {
-      status: 'strong',
-      summary: 'Clean fix.',
-      strengths: ['Semicolon joins two clauses.'],
-      focus: ['Check both sides stand alone.'],
-      encouragement: 'Nice.',
-      degraded: false,
-    };
 
     await recordWritingPracticeAttempt({
       classAssignmentId: 'wpca-1',
       membershipId: 'student-1',
       lessonSlug: 'fixing-comma-splices',
-      promptId: 'fixing-comma-splices-1',
-      exercise: 'A, B.',
-      instruction: 'Fix it.',
-      response: 'A; B.',
-      feedback,
+      question,
+      selectedChoiceIndex: 1,
+      grade: {
+        correct: true,
+        correctChoiceIndex: 1,
+        explanation: question.explanation,
+      },
     });
 
     const arg = writingPracticeAttempt.create.mock.calls[0][0];
     expect(arg.data.status).toBe('strong');
-    expect(arg.data.feedbackJson).toEqual(feedback);
+    expect(arg.data.promptId).toBe('fixing-comma-splices-act-1');
+    expect(arg.data.response).toBe('dropped; fans');
     expect(arg.data.membershipId).toBe('student-1');
-    expect(arg.data.classAssignmentId).toBe('wpca-1');
+    expect(arg.data.feedbackJson).toMatchObject({
+      kind: 'act',
+      correct: true,
+      selectedChoiceIndex: 1,
+      correctChoiceIndex: 1,
+    });
+  });
+
+  test('records an incorrect pick as needs_revision', async () => {
+    writingPracticeAttempt.create.mockResolvedValueOnce({ id: 'att-2' });
+
+    await recordWritingPracticeAttempt({
+      classAssignmentId: 'wpca-1',
+      membershipId: 'student-1',
+      lessonSlug: 'fixing-comma-splices',
+      question,
+      selectedChoiceIndex: 0,
+      grade: {
+        correct: false,
+        correctChoiceIndex: 1,
+        explanation: question.explanation,
+      },
+    });
+
+    const arg = writingPracticeAttempt.create.mock.calls[0][0];
+    expect(arg.data.status).toBe('needs_revision');
+    expect(arg.data.feedbackJson.correct).toBe(false);
   });
 });
 
@@ -211,7 +262,14 @@ describe('getOrCreateStudentPracticeSet', () => {
         position: 1,
         lessonSlug: 'fixing-comma-splices',
         lessonTitle: 'Fixing Comma Splices',
-        prompt: { id: 'x', exercise: 'A, B.', instruction: 'Fix.' },
+        question: {
+          id: 'x',
+          sentence: 'A, B.',
+          underline: 'A, B',
+          choices: ['A, B', 'A; B', 'A B', 'A, and, B'],
+          correctChoiceIndex: 1,
+          explanation: 'y',
+        },
       },
     ];
     writingPracticePromptSet.findUnique.mockResolvedValueOnce({
@@ -230,11 +288,26 @@ describe('getOrCreateStudentPracticeSet', () => {
     expect(writingPracticePromptSet.create).not.toHaveBeenCalled();
   });
 
-  test('generates and persists a set on first access', async () => {
+  test('generates and persists an ACT set on first access', async () => {
     writingPracticePromptSet.findUnique.mockResolvedValueOnce(null);
-    mockGeneratedPrompts([
-      { exercise: 'Generated one.' },
-      { exercise: 'Generated two.' },
+    mockGeneratedActQuestions([
+      {
+        sentence: 'The comet appeared, they cheered.',
+        underline: 'appeared, they',
+        choices: [
+          'appeared, they',
+          'appeared; they',
+          'appeared they',
+          'appeared, and, they',
+        ],
+        correctChoiceIndex: 1,
+      },
+      {
+        sentence: 'It rained, we stayed inside.',
+        underline: 'rained, we',
+        choices: ['rained, we', 'rained; we', 'rained we', 'rained, and, we'],
+        correctChoiceIndex: 1,
+      },
     ]);
     writingPracticePromptSet.create.mockImplementationOnce(
       async ({ data }) => ({
@@ -253,19 +326,27 @@ describe('getOrCreateStudentPracticeSet', () => {
     const createArg = writingPracticePromptSet.create.mock.calls[0][0];
     expect(createArg.data.source).toBe('ai');
     expect(items).toHaveLength(2);
-    expect(items[0].prompt.exercise).toContain('Generated');
+    expect(items[0].question.sentence).toContain('comet');
+    expect(items[0].question.choices).toHaveLength(4);
   });
 });
 
 describe('getWritingPracticeResultsForTeacher', () => {
-  test('groups each student’s full attempts with prompt, answer, and feedback', async () => {
-    const feedback: PracticeFeedbackResult = {
-      status: 'strong',
-      summary: 'Clean fix.',
-      strengths: ['Semicolon joins two clauses.'],
-      focus: [],
-      encouragement: 'Nice.',
-      degraded: false,
+  test('groups each student’s ACT attempts with the question, pick, and grade', async () => {
+    const record = {
+      kind: 'act' as const,
+      sentence: 'The album dropped, fans went wild.',
+      underline: 'dropped, fans',
+      choices: [
+        'dropped, fans',
+        'dropped; fans',
+        'dropped fans',
+        'dropped, and, fans',
+      ],
+      selectedChoiceIndex: 1,
+      correctChoiceIndex: 1,
+      correct: true,
+      explanation: 'A semicolon joins the two independent clauses.',
     };
     writingPracticeClassAssignment.findFirst.mockResolvedValueOnce({
       id: 'wpca-1',
@@ -287,27 +368,30 @@ describe('getWritingPracticeResultsForTeacher', () => {
           id: 'att-1',
           membershipId: 's-1',
           lessonSlug: 'fixing-comma-splices',
-          promptId: 'fixing-comma-splices-1',
-          exercise: 'A, B.',
-          instruction: 'Fix it.',
-          response: 'A; B.',
+          promptId: 'fixing-comma-splices-act-1',
+          exercise: record.sentence,
+          instruction: record.underline,
+          response: 'dropped; fans',
           status: 'strong',
-          feedbackJson: feedback,
+          feedbackJson: record,
           createdAt: new Date('2026-07-01T10:00:00Z'),
         },
       ],
     });
 
-    const data = await getWritingPracticeResultsForTeacher('wpca-1', 'teacher-1');
+    const data = await getWritingPracticeResultsForTeacher(
+      'wpca-1',
+      'teacher-1'
+    );
 
     expect(data).not.toBeNull();
     const attempts = data!.attemptsByStudent['s-1'];
     expect(attempts).toHaveLength(1);
-    expect(attempts[0].exercise).toBe('A, B.');
-    expect(attempts[0].response).toBe('A; B.');
-    expect(attempts[0].feedback).toEqual(feedback);
+    expect(attempts[0].status).toBe('strong');
+    expect(attempts[0].attempt).toEqual(record);
     // Scoped to a class this teacher owns.
-    const where = writingPracticeClassAssignment.findFirst.mock.calls[0][0].where;
+    const where =
+      writingPracticeClassAssignment.findFirst.mock.calls[0][0].where;
     expect(where.class.teachers.some.id).toBe('teacher-1');
   });
 

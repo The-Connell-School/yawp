@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Circle, Sparkles } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, XCircle } from 'lucide-react';
 import {
   Link,
   data as dataResponse,
@@ -18,13 +18,23 @@ import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { requireMembership, requireUserId } from '~/utils/auth.server';
+import {
+  NO_CHANGE_LABEL,
+  splitAroundUnderline,
+  type ActAttemptRecord,
+} from '~/utils/writing-lessons/act-practice.shared';
 import { getWritingPracticeResultsForTeacher } from '~/utils/writing-lessons/practice-assignments.server';
 import {
   practiceFeedbackStatusLabel,
-  type PracticeFeedbackResult,
   type PracticeFeedbackStatus,
 } from '~/utils/writing-lessons/practice-feedback.shared';
 import { getQuickWritingLessonBySlug } from '~/utils/writing-lessons/static-lessons.server';
+
+function choiceLabel(choices: string[], index: number): string {
+  const letter = String.fromCharCode(65 + index);
+  const text = index === 0 ? NO_CHANGE_LABEL : (choices[index] ?? '');
+  return `${letter}. ${text}`;
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -49,18 +59,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const completedCount = results.filter((row) => row.completed).length;
   const startedCount = results.filter((row) => row.attemptCount > 0).length;
 
-  // Attach each student's attempts (prompt + answer + feedback) to their row.
+  // Attach each student's ACT attempts (question + their pick + grade) to their row.
   const resultsWithAttempts = results.map((row) => ({
     ...row,
     attempts: (attemptsByStudent[row.membershipId] ?? []).map((attempt) => ({
       id: attempt.id,
       lessonTitle:
         getQuickWritingLessonBySlug(attempt.lessonSlug)?.title ?? 'Practice',
-      exercise: attempt.exercise,
-      instruction: attempt.instruction,
-      response: attempt.response,
       status: attempt.status,
-      feedback: attempt.feedback,
+      record: attempt.attempt,
       createdAt: attempt.createdAt.toISOString(),
     })),
   }));
@@ -231,11 +238,8 @@ export default function WritingPracticeResultsRoute() {
 type AttemptView = {
   id: string;
   lessonTitle: string;
-  exercise: string;
-  instruction: string;
-  response: string;
   status: string;
-  feedback: PracticeFeedbackResult;
+  record: ActAttemptRecord;
   createdAt: string;
 };
 
@@ -246,7 +250,8 @@ function AttemptCard({
   position: number;
   attempt: AttemptView;
 }) {
-  const { feedback } = attempt;
+  const { record } = attempt;
+  const parts = splitAroundUnderline(record.sentence, record.underline);
   return (
     <div className="rounded-lg border border-border/70 bg-background p-3.5">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -254,59 +259,66 @@ function AttemptCard({
           Problem {position} · {attempt.lessonTitle}
         </span>
         <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-            STATUS_STYLES[attempt.status as PracticeFeedbackStatus] ??
-            'bg-muted text-muted-foreground'
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            record.correct
+              ? 'bg-emerald-100 text-emerald-900'
+              : 'bg-rose-100 text-rose-900'
           }`}
         >
-          {practiceFeedbackStatusLabel(attempt.status as PracticeFeedbackStatus)}
+          {record.correct ? (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          ) : (
+            <XCircle className="h-3.5 w-3.5" />
+          )}
+          {record.correct ? 'Correct' : 'Incorrect'}
         </span>
       </div>
 
       <div className="space-y-2 text-sm">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Prompt
+            Question
           </p>
-          <p className="text-foreground">{attempt.exercise}</p>
+          <p className="text-foreground">
+            {parts.before}
+            {parts.underlined ? (
+              <span className="font-semibold underline decoration-2 underline-offset-4">
+                {parts.underlined}
+              </span>
+            ) : null}
+            {parts.after}
+          </p>
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Student answer
+            Their answer
           </p>
-          <p className="whitespace-pre-wrap rounded-md bg-muted/50 px-2.5 py-1.5 text-foreground">
-            {attempt.response}
+          <p
+            className={`rounded-md px-2.5 py-1.5 ${
+              record.correct
+                ? 'bg-emerald-50 text-emerald-900'
+                : 'bg-rose-50 text-rose-900'
+            }`}
+          >
+            {choiceLabel(record.choices, record.selectedChoiceIndex)}
           </p>
         </div>
+        {!record.correct ? (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Correct answer
+            </p>
+            <p className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-emerald-900">
+              {choiceLabel(record.choices, record.correctChoiceIndex)}
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="mt-3 space-y-2 border-t border-border/60 pt-2.5">
-        <div className="flex items-center gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {feedback.degraded ? 'Quick self-check' : 'Tutor feedback'}
-          </p>
-        </div>
-        <p className="text-sm text-foreground">{feedback.summary}</p>
-        {feedback.strengths.length > 0 ? (
-          <ul className="space-y-1 text-sm text-muted-foreground">
-            {feedback.strengths.map((item) => (
-              <li key={item} className="flex gap-2">
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {feedback.focus.length > 0 ? (
-          <ul className="space-y-1 text-sm text-muted-foreground">
-            {feedback.focus.map((item) => (
-              <li key={item} className="flex gap-2">
-                <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+      <div className="mt-3 border-t border-border/60 pt-2.5">
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {record.explanation}
+        </p>
       </div>
     </div>
   );

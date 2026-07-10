@@ -2,8 +2,11 @@ import { prisma } from '~/utils/db.server';
 
 import { getActPracticeQuestions } from './act-practice-bank';
 import { generateActPracticeQuestions } from './act-practice-generation.server';
-import type { ActPracticeQuestion } from './act-practice.shared';
-import type { PracticeFeedbackResult } from './practice-feedback.shared';
+import type {
+  ActAttemptRecord,
+  ActGradeResult,
+  ActPracticeQuestion,
+} from './act-practice.shared';
 import { generatePracticePrompts } from './practice-prompt-generation.server';
 import {
   getQuickWritingLessonBySlug,
@@ -319,7 +322,7 @@ export async function getOrCreateStudentPracticeSet(params: {
   membershipId: string;
   lessonSlugs: string[];
   problemCount: number;
-}): Promise<AssignedPracticeItem[]> {
+}): Promise<ActAssignedPracticeItem[]> {
   const where = {
     classAssignmentId_membershipId: {
       classAssignmentId: params.classAssignmentId,
@@ -329,10 +332,10 @@ export async function getOrCreateStudentPracticeSet(params: {
 
   const existing = await prisma.writingPracticePromptSet.findUnique({ where });
   if (existing) {
-    return existing.promptsJson as unknown as AssignedPracticeItem[];
+    return existing.promptsJson as unknown as ActAssignedPracticeItem[];
   }
 
-  const { items, source } = await buildGeneratedPracticeSequence(
+  const { items, source } = await buildGeneratedActPracticeSequence(
     params.lessonSlugs,
     params.problemCount
   );
@@ -346,11 +349,13 @@ export async function getOrCreateStudentPracticeSet(params: {
         promptsJson: items as unknown as object,
       },
     });
-    return created.promptsJson as unknown as AssignedPracticeItem[];
+    return created.promptsJson as unknown as ActAssignedPracticeItem[];
   } catch {
     // A concurrent request may have created the set first; re-read it.
     const raced = await prisma.writingPracticePromptSet.findUnique({ where });
-    return (raced?.promptsJson as unknown as AssignedPracticeItem[]) ?? items;
+    return (
+      (raced?.promptsJson as unknown as ActAssignedPracticeItem[]) ?? items
+    );
   }
 }
 
@@ -395,32 +400,44 @@ export type RecordWritingPracticeAttemptInput = {
   classAssignmentId: string;
   membershipId: string;
   lessonSlug: string;
-  promptId: string;
-  exercise: string;
-  instruction: string;
-  response: string;
-  feedback: PracticeFeedbackResult;
+  question: ActPracticeQuestion;
+  selectedChoiceIndex: number;
+  grade: ActGradeResult;
 };
 
 /**
- * Persists a single student practice attempt together with the feedback it
- * produced. The prompt text is snapshotted so the record stays meaningful even
- * if lesson content later changes.
+ * Persists a single ACT practice attempt. The question and the student's choice
+ * are snapshotted (the full ACT record lives in `feedbackJson`) so the record
+ * stays meaningful even if lesson content later changes. `status` reuses the
+ * existing feedback vocabulary — `strong` when correct, `needs_revision` when
+ * not — so the teacher roll-up keeps working unchanged.
  */
 export async function recordWritingPracticeAttempt(
   input: RecordWritingPracticeAttemptInput
 ) {
+  const { question, selectedChoiceIndex, grade } = input;
+  const record: ActAttemptRecord = {
+    kind: 'act',
+    sentence: question.sentence,
+    underline: question.underline,
+    choices: question.choices,
+    selectedChoiceIndex,
+    correctChoiceIndex: grade.correctChoiceIndex,
+    correct: grade.correct,
+    explanation: grade.explanation,
+  };
+
   return prisma.writingPracticeAttempt.create({
     data: {
       classAssignmentId: input.classAssignmentId,
       membershipId: input.membershipId,
       lessonSlug: input.lessonSlug,
-      promptId: input.promptId,
-      exercise: input.exercise,
-      instruction: input.instruction,
-      response: input.response,
-      status: input.feedback.status,
-      feedbackJson: input.feedback,
+      promptId: question.id,
+      exercise: question.sentence,
+      instruction: question.underline,
+      response: question.choices[selectedChoiceIndex] ?? '',
+      status: grade.correct ? 'strong' : 'needs_revision',
+      feedbackJson: record,
     },
   });
 }
@@ -499,16 +516,13 @@ export type WritingPracticeStudentResult = {
   latestStatus: string | null;
 };
 
-/** One recorded student attempt, with the prompt, their answer, and feedback. */
+/** One recorded student attempt: which ACT question, their pick, and the grade. */
 export type WritingPracticeAttemptDetail = {
   id: string;
   lessonSlug: string;
   promptId: string;
-  exercise: string;
-  instruction: string;
-  response: string;
   status: string;
-  feedback: PracticeFeedbackResult;
+  attempt: ActAttemptRecord;
   createdAt: Date;
 };
 
@@ -617,19 +631,16 @@ export async function getWritingPracticeResultsForTeacher(
     problemCount: classAssignment.assignment.problemCount,
   });
 
-  // Group each student's full attempts (prompt + answer + feedback) so the
-  // teacher can read exactly what a student wrote and how the tutor responded.
+  // Group each student's ACT attempts (question + their pick + the grade) so the
+  // teacher can see exactly what a student chose and whether it was right.
   const attemptsByStudent: Record<string, WritingPracticeAttemptDetail[]> = {};
   for (const attempt of classAssignment.attempts) {
     const detail: WritingPracticeAttemptDetail = {
       id: attempt.id,
       lessonSlug: attempt.lessonSlug,
       promptId: attempt.promptId,
-      exercise: attempt.exercise,
-      instruction: attempt.instruction,
-      response: attempt.response,
       status: attempt.status,
-      feedback: attempt.feedbackJson as PracticeFeedbackResult,
+      attempt: attempt.feedbackJson as unknown as ActAttemptRecord,
       createdAt: attempt.createdAt,
     };
     (attemptsByStudent[attempt.membershipId] ??= []).push(detail);
