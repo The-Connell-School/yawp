@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
+import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
   buildGrowthSeries,
   buildRubricTrends,
@@ -90,10 +91,53 @@ export const REPORTER_TOOLS: ReporterTool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'get_submission_detail',
+    description:
+      "Get the actual writing evidence for ONE graded submission: an excerpt of the student's essay, the teacher's inline margin comments (each tied to the quoted text it marks), the overall written feedback, the per-rubric scores, and any flagged grammar/style issues. Use this to talk specifically about a student's writing — quoting their real sentences and your own comments — after a grade or growth report surfaces a submissionId worth examining. Pass a submissionId returned by get_student_grade_report or get_student_growth.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        submissionId: {
+          type: 'string',
+          description:
+            'The submissionId of a released, graded submission (as returned by the grade or growth report tools).',
+        },
+      },
+      required: ['submissionId'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 const classIdSchema = z.object({ classId: z.string().min(1) });
 const studentSchema = z.object({ student: z.string().min(1) });
+const submissionIdSchema = z.object({ submissionId: z.string().min(1) });
+
+/** Caps for get_submission_detail so a single essay can't blow the token budget. */
+const MAX_ESSAY_EXCERPT_CHARS = 1400;
+const MAX_INLINE_COMMENTS = 20;
+const MAX_COMMENT_CHARS = 400;
+const MAX_GRAMMAR_ISSUES = 15;
+
+/**
+ * Bound an essay body to a readable opening excerpt so the model has real text
+ * to quote without pulling an entire paper into context.
+ */
+function buildEssayExcerpt(
+  text: string | null | undefined
+): { excerpt: string; truncated: boolean; totalChars: number } | null {
+  const normalized = text?.trim();
+  if (!normalized) return null;
+  if (normalized.length <= MAX_ESSAY_EXCERPT_CHARS) {
+    return { excerpt: normalized, truncated: false, totalChars: normalized.length };
+  }
+  return {
+    excerpt: `${normalized.slice(0, MAX_ESSAY_EXCERPT_CHARS).trimEnd()}…`,
+    truncated: true,
+    totalChars: normalized.length,
+  };
+}
 
 /**
  * Fetch released, graded submissions for a set of classes taught by the
@@ -382,6 +426,97 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
   };
 }
 
+async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
+  const { submissionId } = submissionIdSchema.parse(input);
+  const submission = await prisma.submission.findFirst({
+    where: {
+      id: submissionId,
+      releasedAt: { not: null },
+      archivedAt: null,
+      document: {
+        classAssignment: {
+          class: {
+            teachers: { some: { id: ctx.membershipId } },
+            school: { organizationId: ctx.organizationId },
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      text: true,
+      submittedAt: true,
+      numericPercentage: true,
+      letterGrade: true,
+      overallScore: true,
+      rubricScores: true,
+      overallComment: true,
+      feedback: true,
+      grammarIssues: true,
+      document: {
+        select: {
+          membership: { select: { user: { select: { name: true } } } },
+          classAssignment: {
+            select: { assignment: { select: { title: true } } },
+          },
+        },
+      },
+      comments: {
+        orderBy: { createdAt: 'asc' },
+        select: { content: true, excerpt: true },
+      },
+    },
+  });
+
+  if (!submission) {
+    return {
+      error:
+        'Submission not found in your classes, or its grade is not released yet.',
+    };
+  }
+
+  const grammarIssues = parseGrammarIssuesPayload(submission.grammarIssues, {
+    sourceText: submission.text ?? undefined,
+  })
+    .slice(0, MAX_GRAMMAR_ISSUES)
+    .map((issue) => ({
+      excerpt: issue.excerpt,
+      message: issue.message,
+      kind: issue.kind,
+      rule: issue.rule ?? null,
+    }));
+
+  // Teacher margin comments, each tied to the quoted text it marks. This is the
+  // richest writing signal the reporter has — the human read of the actual prose.
+  const inlineComments = submission.comments
+    .slice(0, MAX_INLINE_COMMENTS)
+    .map((comment) => ({
+      excerpt: comment.excerpt ?? null,
+      comment: comment.content.slice(0, MAX_COMMENT_CHARS),
+    }));
+
+  return {
+    submissionId: submission.id,
+    student: {
+      studentName: submission.document.membership.user.name ?? 'Unknown student',
+    },
+    assignmentTitle:
+      submission.document.classAssignment?.assignment.title ??
+      'Untitled assignment',
+    submittedAt: submission.submittedAt.toISOString(),
+    numericPercentage: submission.numericPercentage,
+    letterGrade: submission.letterGrade,
+    overallScore: submission.overallScore,
+    rubricScores: normalizeRubricScores(submission.rubricScores),
+    overallComment: submission.overallComment ?? null,
+    feedback: submission.feedback ?? null,
+    inlineComments,
+    inlineCommentCount: submission.comments.length,
+    grammarIssues,
+    essayExcerpt: buildEssayExcerpt(submission.text),
+  };
+}
+
 /**
  * Dispatch a reporter tool call by name. Returns a JSON string (the format the
  * getLLMCompletion tool loop feeds back to the model). Unknown tools and
@@ -403,6 +538,8 @@ export async function handleReporterToolCall(
         return JSON.stringify(await getStudentGradeReport(ctx, input));
       case 'get_student_growth':
         return JSON.stringify(await getStudentGrowth(ctx, input));
+      case 'get_submission_detail':
+        return JSON.stringify(await getSubmissionDetail(ctx, input));
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }

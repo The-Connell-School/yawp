@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 
 const prisma = {
   class: { findMany: mock(), findFirst: mock() },
-  submission: { findMany: mock() },
+  submission: { findMany: mock(), findFirst: mock() },
   orgMembership: { findFirst: mock(), findMany: mock() },
 };
 
@@ -17,6 +17,7 @@ beforeEach(() => {
   prisma.class.findMany.mockReset();
   prisma.class.findFirst.mockReset();
   prisma.submission.findMany.mockReset();
+  prisma.submission.findFirst.mockReset();
   prisma.orgMembership.findFirst.mockReset();
   prisma.orgMembership.findMany.mockReset();
 });
@@ -28,6 +29,7 @@ describe('REPORTER_TOOLS', () => {
       'get_class_grade_report',
       'get_student_grade_report',
       'get_student_growth',
+      'get_submission_detail',
     ]);
   });
 });
@@ -223,6 +225,119 @@ describe('get_student_growth', () => {
     expect(result.error).toContain('More than one student');
     expect(result.ambiguous).toHaveLength(2);
     expect(prisma.submission.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('get_submission_detail', () => {
+  test('returns an error when the submission is not in the teacher scope', async () => {
+    prisma.submission.findFirst.mockResolvedValue(null);
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_submission_detail',
+        { submissionId: 'sub-x' },
+        ctx
+      )
+    );
+    expect(result.error).toContain('not found');
+    // Scope is enforced in the query: teacher + org + released + not archived.
+    const where = prisma.submission.findFirst.mock.calls[0][0].where;
+    expect(where.id).toBe('sub-x');
+    expect(where.releasedAt).toEqual({ not: null });
+    expect(where.archivedAt).toBeNull();
+    expect(
+      where.document.classAssignment.class.teachers.some.id
+    ).toBe('teacher-1');
+    expect(
+      where.document.classAssignment.class.school.organizationId
+    ).toBe('org-1');
+  });
+
+  test('surfaces essay text, inline comments, feedback, and grammar issues', async () => {
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      text: 'The ibis was red. It sat in the tree. Doodle looked up at it.',
+      submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      numericPercentage: 84,
+      letterGrade: 'B',
+      overallScore: 4,
+      rubricScores: { evidence_and_support: 2, grammar_and_mechanics: 5 },
+      overallComment: 'Strong control, thin analysis.',
+      feedback: 'Push past summary into interpretation.',
+      grammarIssues: [
+        { excerpt: 'It sat in the tree.', message: 'Vague pronoun.', kind: 'style' },
+      ],
+      document: {
+        membership: { user: { name: 'Amelia Brooks' } },
+        classAssignment: { assignment: { title: 'Scarlet Ibis Analysis' } },
+      },
+      comments: [
+        { excerpt: 'The ibis was red.', content: 'What does the color signal here?' },
+        { excerpt: 'Doodle looked up at it.', content: 'Good — connect this to the ending.' },
+      ],
+    });
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_submission_detail',
+        { submissionId: 'sub-1' },
+        ctx
+      )
+    );
+
+    expect(result.student.studentName).toBe('Amelia Brooks');
+    expect(result.assignmentTitle).toBe('Scarlet Ibis Analysis');
+    expect(result.numericPercentage).toBe(84);
+    expect(result.rubricScores.evidence_and_support).toBe(2);
+    expect(result.overallComment).toBe('Strong control, thin analysis.');
+    expect(result.feedback).toBe('Push past summary into interpretation.');
+    expect(result.inlineComments).toHaveLength(2);
+    expect(result.inlineComments[0]).toEqual({
+      excerpt: 'The ibis was red.',
+      comment: 'What does the color signal here?',
+    });
+    expect(result.inlineCommentCount).toBe(2);
+    expect(result.grammarIssues[0]).toMatchObject({
+      excerpt: 'It sat in the tree.',
+      kind: 'style',
+    });
+    expect(result.essayExcerpt.excerpt).toContain('The ibis was red.');
+    expect(result.essayExcerpt.truncated).toBe(false);
+  });
+
+  test('truncates a long essay body to a bounded excerpt', async () => {
+    const longText = 'A'.repeat(3000);
+    prisma.submission.findFirst.mockResolvedValue({
+      id: 'sub-2',
+      text: longText,
+      submittedAt: new Date('2026-02-01T00:00:00.000Z'),
+      numericPercentage: 70,
+      letterGrade: 'C-',
+      overallScore: 3,
+      rubricScores: null,
+      overallComment: null,
+      feedback: null,
+      grammarIssues: null,
+      document: {
+        membership: { user: { name: 'Liam Torres' } },
+        classAssignment: { assignment: { title: 'Essay' } },
+      },
+      comments: [],
+    });
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_submission_detail',
+        { submissionId: 'sub-2' },
+        ctx
+      )
+    );
+
+    expect(result.essayExcerpt.truncated).toBe(true);
+    expect(result.essayExcerpt.totalChars).toBe(3000);
+    expect(result.essayExcerpt.excerpt.length).toBeLessThan(3000);
+    expect(result.essayExcerpt.excerpt.endsWith('…')).toBe(true);
+    expect(result.grammarIssues).toEqual([]);
+    expect(result.inlineComments).toEqual([]);
   });
 });
 
