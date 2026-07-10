@@ -369,6 +369,7 @@ model Organization {
   assignmentTypes           AssignmentType[]
   assignmentTypeAssignments OrganizationAssignmentType[]
   reporterConversations     ReporterConversation[]
+  reporterGrowthPlans       ReporterGrowthPlan[]
 }
 
 model OrganizationAssignmentType {
@@ -411,6 +412,8 @@ model OrgMembership {
   assignmentTypesCustomized     Boolean                        @default(false)
   assignmentTypeAssignments     TeacherAssignmentType[]
   reporterConversations         ReporterConversation[]
+  reporterGrowthPlansOwned      ReporterGrowthPlan[]           @relation("ReporterGrowthPlanOwner")
+  reporterGrowthPlansAsStudent  ReporterGrowthPlan[]           @relation("ReporterGrowthPlanStudent")
 
   @@unique([userId, organizationId])
   @@map("OrgMembership")
@@ -447,6 +450,35 @@ model ReporterMessage {
   conversation   ReporterConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+}
+
+/// A saved, forward-looking writing growth plan for one student, produced by
+/// the Yawp Reporter. Owned by a teacher (membership) and scoped to their org.
+/// Stores a baseline snapshot at creation so later reports can measure progress
+/// on the rubric skills the plan targets. `status` is 'active' | 'archived' |
+/// 'completed'; only one plan per student is kept active at a time.
+model ReporterGrowthPlan {
+  id                  String        @id @default(cuid())
+  createdAt           DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime      @default(now()) @updatedAt @db.Timestamptz(6)
+  status              String        @default("active")
+  focus               String
+  /// Rubric category keys this plan targets (string[]).
+  targetSkills        Json
+  body                String
+  /// { averagePercentage, rubricLevels: { category: level }, capturedAt } at creation.
+  baseline            Json
+  checkInAt           DateTime?     @db.Timestamptz(6)
+  membershipId        String
+  membership          OrgMembership @relation("ReporterGrowthPlanOwner", fields: [membershipId], references: [id], onDelete: Cascade)
+  organizationId      String
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  studentMembershipId String
+  student             OrgMembership @relation("ReporterGrowthPlanStudent", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId, studentMembershipId, status])
+  @@index([studentMembershipId])
+  @@index([organizationId])
 }
 
 model Password {
