@@ -3,7 +3,9 @@ import {
   averagePercentage,
   buildGrowthSeries,
   buildRubricTrends,
+  findStudentsNeedingAttention,
   humanizeRubricCategory,
+  summarizeClassRubrics,
   summarizeStudentGrades,
   type GradedSubmissionRow,
 } from './reporter-report';
@@ -200,5 +202,133 @@ describe('buildRubricTrends', () => {
 
   test('returns nothing when no submissions carry rubric scores', () => {
     expect(buildRubricTrends([row({ rubricScores: null })])).toEqual([]);
+  });
+});
+
+describe('summarizeClassRubrics', () => {
+  test('averages each category across all scored submissions in rubric order', () => {
+    const rubrics = summarizeClassRubrics([
+      row({
+        studentMembershipId: 'stu-1',
+        rubricScores: { evidence_and_support: 2, thesis_and_content: 4 },
+      }),
+      row({
+        studentMembershipId: 'stu-2',
+        rubricScores: { evidence_and_support: 3, thesis_and_content: 5 },
+      }),
+      row({
+        studentMembershipId: 'stu-3',
+        rubricScores: { evidence_and_support: 2 },
+      }),
+    ]);
+
+    // Known order: thesis before evidence.
+    expect(rubrics.map((r) => r.category)).toEqual([
+      'thesis_and_content',
+      'evidence_and_support',
+    ]);
+    const evidence = rubrics.find((r) => r.category === 'evidence_and_support')!;
+    // (2 + 3 + 2) / 3 = 2.33 → 2.3
+    expect(evidence.averageLevel).toBe(2.3);
+    expect(evidence.scoredCount).toBe(3);
+    expect(evidence.label).toBe('Evidence & analysis');
+  });
+
+  test('returns nothing when no submission carries rubric scores', () => {
+    expect(summarizeClassRubrics([row({ rubricScores: null })])).toEqual([]);
+  });
+});
+
+describe('findStudentsNeedingAttention', () => {
+  test('flags below-threshold, declining-overall, and slipping-skill students, ranked by severity', () => {
+    const rows: GradedSubmissionRow[] = [
+      // Struggling + declining student: 60 → 50, evidence 4 → 2.
+      row({
+        submissionId: 'a1',
+        studentMembershipId: 'stu-low',
+        studentName: 'Amelia Brooks',
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        numericPercentage: 60,
+        rubricScores: { evidence_and_support: 4 },
+      }),
+      row({
+        submissionId: 'a2',
+        studentMembershipId: 'stu-low',
+        studentName: 'Amelia Brooks',
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        numericPercentage: 50,
+        letterGrade: 'F',
+        rubricScores: { evidence_and_support: 2 },
+      }),
+      // Healthy student: high and steady — should not appear.
+      row({
+        submissionId: 'b1',
+        studentMembershipId: 'stu-ok',
+        studentName: 'Grace Hopper',
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        numericPercentage: 92,
+        rubricScores: { evidence_and_support: 5 },
+      }),
+      row({
+        submissionId: 'b2',
+        studentMembershipId: 'stu-ok',
+        studentName: 'Grace Hopper',
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        numericPercentage: 94,
+        rubricScores: { evidence_and_support: 5 },
+      }),
+    ];
+
+    const flagged = findStudentsNeedingAttention(rows);
+
+    expect(flagged.map((s) => s.studentName)).toEqual(['Amelia Brooks']);
+    const amelia = flagged[0];
+    expect(amelia.averagePercentage).toBe(55);
+    expect(amelia.latestPercentage).toBe(50);
+    expect(amelia.trend).toBe('declining');
+    const types = amelia.flags.map((f) => f.type).sort();
+    expect(types).toEqual([
+      'below_average',
+      'declining_overall',
+      'declining_skill',
+      'low_latest_grade',
+    ]);
+    const skill = amelia.flags.find((f) => f.type === 'declining_skill');
+    expect(skill).toMatchObject({
+      category: 'evidence_and_support',
+      first: 4,
+      latest: 2,
+    });
+  });
+
+  test('honors a custom threshold and orders by severity', () => {
+    const rows: GradedSubmissionRow[] = [
+      row({
+        submissionId: 'c1',
+        studentMembershipId: 'stu-1',
+        studentName: 'Mild Case',
+        numericPercentage: 78,
+      }),
+      row({
+        submissionId: 'd1',
+        studentMembershipId: 'stu-2',
+        studentName: 'Severe Case',
+        numericPercentage: 40,
+      }),
+    ];
+
+    const flagged = findStudentsNeedingAttention(rows, { averageThreshold: 80 });
+    // Both are below 80, but the 40 is far more severe and sorts first.
+    expect(flagged.map((s) => s.studentName)).toEqual([
+      'Severe Case',
+      'Mild Case',
+    ]);
+  });
+
+  test('returns nobody when everyone is above threshold and steady', () => {
+    const rows: GradedSubmissionRow[] = [
+      row({ studentMembershipId: 'stu-1', numericPercentage: 90 }),
+    ];
+    expect(findStudentsNeedingAttention(rows)).toEqual([]);
   });
 });

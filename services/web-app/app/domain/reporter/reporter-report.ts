@@ -132,6 +132,66 @@ export function humanizeRubricCategory(category: string): string {
 }
 
 /**
+ * Order rubric categories in a stable, readable order: the known rubric
+ * sequence first, then any unrecognized categories alphabetically.
+ */
+function orderRubricCategories(categories: Iterable<string>): string[] {
+  const knownOrder = Object.keys(RUBRIC_LABELS);
+  return [...new Set(categories)].sort((a, b) => {
+    const ia = knownOrder.indexOf(a);
+    const ib = knownOrder.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+export type ClassRubricSummary = {
+  category: string;
+  label: string;
+  /** Mean rubric level (typically 1–5) across every scored submission, 1 dp. */
+  averageLevel: number;
+  scoredCount: number;
+};
+
+/**
+ * Average each rubric category across every scored submission in a class, so
+ * the reporter can answer "which writing skill is my class weakest in?" from a
+ * single class report instead of walking student by student.
+ */
+export function summarizeClassRubrics(
+  rows: GradedSubmissionRow[]
+): ClassRubricSummary[] {
+  const byCategory = new Map<string, number[]>();
+  for (const row of rows) {
+    if (!row.rubricScores) continue;
+    for (const [category, value] of Object.entries(row.rubricScores)) {
+      if (typeof value !== 'number' || Number.isNaN(value)) continue;
+      const existing = byCategory.get(category);
+      if (existing) existing.push(value);
+      else byCategory.set(category, [value]);
+    }
+  }
+
+  const summaries: ClassRubricSummary[] = [];
+  for (const category of orderRubricCategories(byCategory.keys())) {
+    const values = byCategory.get(category);
+    if (!values || values.length === 0) continue;
+    const mean =
+      values.reduce((sum, value) => sum + value, 0) / values.length;
+    summaries.push({
+      category,
+      label: humanizeRubricCategory(category),
+      averageLevel: Math.round(mean * 10) / 10,
+      scoredCount: values.length,
+    });
+  }
+
+  return summaries;
+}
+
+/**
  * Compute first→latest movement for each rubric category across a student's
  * submissions, so the reporter can talk about *which writing skills* are
  * improving or slipping — not just the overall grade. Categories are returned
@@ -146,15 +206,7 @@ export function buildRubricTrends(rows: GradedSubmissionRow[]): RubricTrend[] {
     }
   }
 
-  const knownOrder = Object.keys(RUBRIC_LABELS);
-  const ordered = [...categories].sort((a, b) => {
-    const ia = knownOrder.indexOf(a);
-    const ib = knownOrder.indexOf(b);
-    if (ia !== -1 && ib !== -1) return ia - ib;
-    if (ia !== -1) return -1;
-    if (ib !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  const ordered = orderRubricCategories(categories);
 
   const trends: RubricTrend[] = [];
   for (const category of ordered) {
@@ -224,4 +276,130 @@ export function buildGrowthSeries(rows: GradedSubmissionRow[]): GrowthSeries {
     deltaPercentage,
     trend,
   };
+}
+
+export type AttentionFlag =
+  | { type: 'below_average'; averagePercentage: number; threshold: number }
+  | { type: 'low_latest_grade'; latestPercentage: number; threshold: number }
+  | { type: 'declining_overall'; deltaPercentage: number }
+  | {
+      type: 'declining_skill';
+      category: string;
+      label: string;
+      first: number;
+      latest: number;
+    };
+
+export type StudentAttention = {
+  studentMembershipId: string;
+  studentName: string;
+  gradedCount: number;
+  averagePercentage: number | null;
+  latestPercentage: number | null;
+  latestLetterGrade: string | null;
+  deltaPercentage: number | null;
+  trend: GrowthTrend;
+  flags: AttentionFlag[];
+  /** Higher = more concerning. Used to rank who to look at first. */
+  severity: number;
+};
+
+export type AttentionOptions = {
+  /** Averages/latest grades below this (0–100) are flagged. Default 70. */
+  averageThreshold?: number;
+  /** Ignore students with fewer than this many graded papers. Default 1. */
+  minGraded?: number;
+};
+
+/**
+ * Scan every graded submission a teacher can see and surface the students who
+ * look like they need attention — below a grade threshold, trending down
+ * overall, or slipping on specific writing skills — ranked by severity. Runs
+ * over rows already fetched in one query, so "who needs attention across my
+ * classes?" is a single aggregation rather than a per-student walk.
+ */
+export function findStudentsNeedingAttention(
+  rows: GradedSubmissionRow[],
+  options: AttentionOptions = {}
+): StudentAttention[] {
+  const threshold = options.averageThreshold ?? 70;
+  const minGraded = options.minGraded ?? 1;
+
+  const byStudent = new Map<string, GradedSubmissionRow[]>();
+  for (const row of rows) {
+    const existing = byStudent.get(row.studentMembershipId);
+    if (existing) existing.push(row);
+    else byStudent.set(row.studentMembershipId, [row]);
+  }
+
+  const results: StudentAttention[] = [];
+  for (const [studentMembershipId, studentRows] of byStudent) {
+    if (studentRows.length < minGraded) continue;
+
+    const [summary] = summarizeStudentGrades(studentRows);
+    const growth = buildGrowthSeries(studentRows);
+    const rubricTrends = buildRubricTrends(studentRows);
+    const average = summary?.averagePercentage ?? null;
+
+    const flags: AttentionFlag[] = [];
+    let severity = 0;
+
+    if (average != null && average < threshold) {
+      flags.push({ type: 'below_average', averagePercentage: average, threshold });
+      severity += (threshold - average) * 1.5;
+    }
+
+    if (
+      growth.latestPercentage != null &&
+      growth.latestPercentage < threshold
+    ) {
+      flags.push({
+        type: 'low_latest_grade',
+        latestPercentage: growth.latestPercentage,
+        threshold,
+      });
+      severity += threshold - growth.latestPercentage;
+    }
+
+    if (growth.trend === 'declining' && growth.deltaPercentage != null) {
+      flags.push({
+        type: 'declining_overall',
+        deltaPercentage: growth.deltaPercentage,
+      });
+      severity += Math.abs(growth.deltaPercentage);
+    }
+
+    for (const trend of rubricTrends) {
+      if (trend.direction === 'declining') {
+        flags.push({
+          type: 'declining_skill',
+          category: trend.category,
+          label: trend.label,
+          first: trend.first,
+          latest: trend.latest,
+        });
+        severity += Math.abs(trend.delta) * 3;
+      }
+    }
+
+    if (flags.length === 0) continue;
+
+    results.push({
+      studentMembershipId,
+      studentName: summary?.studentName ?? 'Unknown student',
+      gradedCount: studentRows.length,
+      averagePercentage: average,
+      latestPercentage: growth.latestPercentage,
+      latestLetterGrade: summary?.latestLetterGrade ?? null,
+      deltaPercentage: growth.deltaPercentage,
+      trend: growth.trend,
+      flags,
+      severity: Math.round(severity),
+    });
+  }
+
+  return results.sort(
+    (a, b) =>
+      b.severity - a.severity || a.studentName.localeCompare(b.studentName)
+  );
 }

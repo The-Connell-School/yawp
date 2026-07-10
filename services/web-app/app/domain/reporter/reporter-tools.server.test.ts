@@ -29,6 +29,7 @@ describe('REPORTER_TOOLS', () => {
       'get_class_grade_report',
       'get_student_grade_report',
       'get_student_growth',
+      'find_students_needing_attention',
       'get_submission_detail',
     ]);
   });
@@ -225,6 +226,114 @@ describe('get_student_growth', () => {
     expect(result.error).toContain('More than one student');
     expect(result.ambiguous).toHaveLength(2);
     expect(prisma.submission.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('get_class_grade_report rubric summary', () => {
+  test('includes per-skill class averages alongside student averages', async () => {
+    prisma.class.findFirst.mockResolvedValue({
+      id: 'class-1',
+      title: 'Honors English',
+      grade: '10',
+      period: '2',
+    });
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's1',
+        name: 'Ada',
+        pct: 80,
+        rubricScores: { evidence_and_support: 2, thesis_and_content: 4 },
+      }),
+      submissionRow({
+        id: 's2',
+        membershipId: 'stu-2',
+        name: 'Grace',
+        pct: 90,
+        rubricScores: { evidence_and_support: 4, thesis_and_content: 5 },
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_class_grade_report',
+        { classId: 'class-1' },
+        ctx
+      )
+    );
+
+    const evidence = result.rubricSummary.find(
+      (r: any) => r.category === 'evidence_and_support'
+    );
+    expect(evidence.averageLevel).toBe(3);
+    expect(evidence.scoredCount).toBe(2);
+  });
+});
+
+describe('find_students_needing_attention', () => {
+  test('scans the teacher scope and returns flagged students', async () => {
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 'a1',
+        membershipId: 'stu-low',
+        name: 'Amelia Brooks',
+        pct: 60,
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        rubricScores: { evidence_and_support: 4 },
+      }),
+      submissionRow({
+        id: 'a2',
+        membershipId: 'stu-low',
+        name: 'Amelia Brooks',
+        pct: 50,
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        rubricScores: { evidence_and_support: 2 },
+      }),
+      submissionRow({
+        id: 'b1',
+        membershipId: 'stu-ok',
+        name: 'Grace Hopper',
+        pct: 95,
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        rubricScores: { evidence_and_support: 5 },
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'find_students_needing_attention',
+        {},
+        ctx
+      )
+    );
+
+    // No classId → scans all the teacher's classes (no class filter applied).
+    const where = prisma.submission.findMany.mock.calls[0][0].where;
+    expect(where.document.classAssignment.class.id).toBeUndefined();
+    expect(where.document.classAssignment.class.teachers.some.id).toBe(
+      'teacher-1'
+    );
+
+    expect(result.scope).toBe('all_classes');
+    expect(result.studentsConsidered).toBe(2);
+    expect(result.flaggedCount).toBe(1);
+    expect(result.students[0].studentName).toBe('Amelia Brooks');
+    expect(result.averageThreshold).toBe(70);
+  });
+
+  test('passes a class filter and custom threshold through', async () => {
+    prisma.submission.findMany.mockResolvedValue([]);
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'find_students_needing_attention',
+        { classId: 'class-9', averageThreshold: 85 },
+        ctx
+      )
+    );
+    const where = prisma.submission.findMany.mock.calls[0][0].where;
+    expect(where.document.classAssignment.class.id).toBe('class-9');
+    expect(result.scope).toBe('class');
+    expect(result.averageThreshold).toBe(85);
+    expect(result.flaggedCount).toBe(0);
   });
 });
 

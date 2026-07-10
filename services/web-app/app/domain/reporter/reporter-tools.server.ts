@@ -12,6 +12,8 @@ import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
   buildGrowthSeries,
   buildRubricTrends,
+  findStudentsNeedingAttention,
+  summarizeClassRubrics,
   summarizeStudentGrades,
   type GradedSubmissionRow,
 } from './reporter-report';
@@ -88,6 +90,27 @@ export const REPORTER_TOOLS: ReporterTool[] = [
         },
       },
       required: ['student'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'find_students_needing_attention',
+    description:
+      "Scan every released, graded submission across the teacher's classes (or one class) and return the students who look like they need attention — a below-threshold average, a declining overall trend, or slipping specific writing skills — ranked by severity. Use this to answer 'who needs attention / who is struggling?' in one call instead of walking student by student.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        classId: {
+          type: 'string',
+          description:
+            'Optional. Restrict the scan to one class (from list_classes). Omit to scan every class the teacher teaches.',
+        },
+        averageThreshold: {
+          type: 'number',
+          description:
+            'Optional grade cutoff (0–100). Students at or above it on average are not flagged for a low grade. Defaults to 70.',
+        },
+      },
       additionalProperties: false,
     },
   },
@@ -283,7 +306,42 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
     },
     gradedSubmissionCount: rows.length,
     classAveragePercentage,
+    // Per-writing-skill class averages, so "what's my class weakest at?" is
+    // answerable from this one report without walking student by student.
+    rubricSummary: summarizeClassRubrics(rows),
     students,
+  };
+}
+
+const attentionSchema = z.object({
+  classId: z.string().min(1).optional(),
+  averageThreshold: z.number().min(0).max(100).optional(),
+});
+
+/** Cap the flagged list so a very large scan can't blow the token budget. */
+const MAX_ATTENTION_STUDENTS = 40;
+
+async function findAttention(ctx: ReporterToolContext, input: unknown) {
+  const { classId, averageThreshold } = attentionSchema.parse(input);
+
+  const rows = await fetchScopedGradedRows({
+    organizationId: ctx.organizationId,
+    teacherMembershipId: ctx.membershipId,
+    ...(classId ? { classId } : {}),
+  });
+
+  const flagged = findStudentsNeedingAttention(rows, { averageThreshold });
+  const studentsConsidered = new Set(
+    rows.map((row) => row.studentMembershipId)
+  ).size;
+
+  return {
+    averageThreshold: averageThreshold ?? 70,
+    scope: classId ? 'class' : 'all_classes',
+    studentsConsidered,
+    flaggedCount: flagged.length,
+    truncated: flagged.length > MAX_ATTENTION_STUDENTS,
+    students: flagged.slice(0, MAX_ATTENTION_STUDENTS),
   };
 }
 
@@ -538,6 +596,8 @@ export async function handleReporterToolCall(
         return JSON.stringify(await getStudentGradeReport(ctx, input));
       case 'get_student_growth':
         return JSON.stringify(await getStudentGrowth(ctx, input));
+      case 'find_students_needing_attention':
+        return JSON.stringify(await findAttention(ctx, input));
       case 'get_submission_detail':
         return JSON.stringify(await getSubmissionDetail(ctx, input));
       default:
