@@ -8,6 +8,7 @@ import {
   LOCAL_DEV_PERSONAS,
   type LocalDevPersona,
 } from './dev-personas';
+import { seedReporterDemoData } from './seed-reporter-demo';
 
 type PersonaRecord = {
   persona: LocalDevPersona;
@@ -61,7 +62,12 @@ async function upsertPersona(
 }
 
 function pickAssignmentTypeId(
-  rows: Array<{ id: string; title: string; kind: string | null; systemKey: string | null }>,
+  rows: Array<{
+    id: string;
+    title: string;
+    kind: string | null;
+    systemKey: string | null;
+  }>,
   matcher: (row: (typeof rows)[number]) => boolean
 ) {
   return rows.find(matcher)?.id ?? null;
@@ -93,14 +99,15 @@ export async function seedSyntheticLocalDevData(
   ];
 
   const schools = await Promise.all(
-    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(async (name, index) =>
-      prisma.school.create({
-        data: {
-          name,
-          code: `DEV-SCH-${index + 1}`,
-          organizationId: LOCAL_DEV_ORG_ID,
-        },
-      })
+    ['North Ridge High', 'Riverview Academy', 'Summit Prep'].map(
+      async (name, index) =>
+        prisma.school.create({
+          data: {
+            name,
+            code: `DEV-SCH-${index + 1}`,
+            organizationId: LOCAL_DEV_ORG_ID,
+          },
+        })
     )
   );
 
@@ -238,7 +245,8 @@ export async function seedSyntheticLocalDevData(
       data: {
         assignmentTypeId: dailyPagesAssignmentTypeId,
         title: 'Daily Pages - week 2',
-        prompt: 'Write freely for ten minutes about something that surprised you this week.',
+        prompt:
+          'Write freely for ten minutes about something that surprised you this week.',
       },
     });
     await prisma.classAssignment.create({
@@ -432,6 +440,18 @@ export async function seedSyntheticLocalDevData(
       excerpt: 'The first sentence matters',
       occurrence: 1,
     },
+  });
+
+  // Rich, deterministic reporting dataset: many students × papers × released
+  // grades with per-student trajectories so the Yawp Reporter has real trends
+  // to surface across students and across papers.
+  await seedReporterDemoData(prisma, {
+    organizationId: LOCAL_DEV_ORG_ID,
+    assignmentTypeId: thesisAssignmentTypeId,
+    teacherMembershipId: primaryTeacher.membershipId,
+    primaryClassId: primaryClass.id,
+    secondaryClassId: secondaryClass.id,
+    now: Date.now(),
   });
 
   return {
