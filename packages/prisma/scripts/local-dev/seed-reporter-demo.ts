@@ -336,6 +336,16 @@ async function seedClassReportingData(
     });
   }
 
+  const students: Array<{
+    name: string;
+    membershipId: string;
+    trajectoryKey: string;
+    baseline: {
+      averagePercentage: number;
+      rubricLevels: Record<string, number>;
+    };
+  }> = [];
+
   let submissionCount = 0;
   for (let s = 0; s < studentMembershipIds.length; s++) {
     const membershipId = studentMembershipIds[s];
@@ -343,6 +353,15 @@ async function seedClassReportingData(
     for (let p = 0; p < paperTitles.length; p++) {
       const pct = scoreFor(s, p, trajectory);
       const rubricScores = rubricScoresFor(pct, p);
+      // Record the first paper as the growth-plan baseline for this student.
+      if (p === 0) {
+        students.push({
+          name: studentNames[s],
+          membershipId,
+          trajectoryKey: trajectory.key,
+          baseline: { averagePercentage: pct, rubricLevels: rubricScores },
+        });
+      }
       // Papers spaced two weeks apart; the newest landed ~two weeks ago.
       const submittedAt = new Date(now - (paperTitles.length - p) * 2 * WEEK);
       const gradedAt = new Date(submittedAt.getTime() + 3 * DAY);
@@ -393,7 +412,76 @@ async function seedClassReportingData(
     }
   }
 
-  return { studentCount: studentMembershipIds.length, submissionCount };
+  return { studentCount: studentMembershipIds.length, submissionCount, students };
+}
+
+const DEMO_PLAN_BODY = [
+  '## Focus',
+  'Move from summarizing the text to analyzing it, and steady the organization so each paragraph builds on the last.',
+  '',
+  '## Skill priorities',
+  '- **Evidence & analysis** — after every quote, add a "so what?" sentence that explains what it proves.',
+  '- **Organization & structure** — open each body paragraph with a claim, not a plot event.',
+  '',
+  '## Instructional moves',
+  '- Mini-lesson on the quote → analysis → link sentence pattern, using a model paragraph.',
+  '- Revision task: revise one paragraph from the last paper to add analysis after each piece of evidence.',
+  '- Scaffold: a paragraph frame ("This shows… which matters because…").',
+  '',
+  '## Cadence',
+  'Check in weekly for three weeks; review the revised paragraph at the first check-in.',
+  '',
+  '## Conference talking points',
+  '- Name the strength first (voice), then the target (analysis).',
+  '- Look together at one quote from the last paper and draft the missing analysis aloud.',
+].join('\n');
+
+/**
+ * Seed one active growth plan for a visibly-declining student so the persistent
+ * growth-plan flow (save + progress-against-baseline) is demonstrable out of the
+ * box. The baseline is the student's real first-paper standing, so list_growth_plans
+ * shows genuine movement against their later work.
+ */
+async function seedDemoGrowthPlan(
+  prisma: PrismaClient,
+  params: {
+    organizationId: string;
+    teacherMembershipId: string;
+    now: number;
+    students: Array<{
+      name: string;
+      membershipId: string;
+      trajectoryKey: string;
+      baseline: {
+        averagePercentage: number;
+        rubricLevels: Record<string, number>;
+      };
+    }>;
+  }
+) {
+  const target =
+    params.students.find((s) => s.trajectoryKey === 'gradual-decliner') ??
+    params.students.find((s) => s.trajectoryKey === 'high-then-slipping');
+  if (!target) return;
+
+  await prisma.reporterGrowthPlan.create({
+    data: {
+      membershipId: params.teacherMembershipId,
+      organizationId: params.organizationId,
+      studentMembershipId: target.membershipId,
+      status: 'active',
+      focus: 'Turn description into analysis and steady the organization',
+      targetSkills: ['evidence_and_support', 'organization_and_structure'],
+      body: DEMO_PLAN_BODY,
+      baseline: {
+        ...target.baseline,
+        capturedAt: new Date(params.now - 4 * WEEK).toISOString(),
+      },
+      checkInAt: new Date(params.now + WEEK),
+    },
+  });
+
+  console.log(`📈 Reporter demo: seeded a growth plan for ${target.name}.`);
 }
 
 export async function seedReporterDemoData(
@@ -425,6 +513,13 @@ export async function seedReporterDemoData(
     studentNames: SECONDARY_STUDENT_NAMES,
     paperTitles: SECONDARY_PAPERS,
     now: params.now,
+  });
+
+  await seedDemoGrowthPlan(prisma, {
+    organizationId: params.organizationId,
+    teacherMembershipId: params.teacherMembershipId,
+    now: params.now,
+    students: primary.students,
   });
 
   console.log(
