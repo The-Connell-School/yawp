@@ -4,6 +4,7 @@ const prisma = {
   class: { findMany: mock(), findFirst: mock() },
   submission: { findMany: mock(), findFirst: mock() },
   orgMembership: { findFirst: mock(), findMany: mock() },
+  reporterGrowthPlan: { findMany: mock(), create: mock(), updateMany: mock() },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -20,6 +21,9 @@ beforeEach(() => {
   prisma.submission.findFirst.mockReset();
   prisma.orgMembership.findFirst.mockReset();
   prisma.orgMembership.findMany.mockReset();
+  prisma.reporterGrowthPlan.findMany.mockReset();
+  prisma.reporterGrowthPlan.create.mockReset();
+  prisma.reporterGrowthPlan.updateMany.mockReset();
 });
 
 describe('REPORTER_TOOLS', () => {
@@ -31,6 +35,8 @@ describe('REPORTER_TOOLS', () => {
       'get_student_growth',
       'find_students_needing_attention',
       'get_submission_detail',
+      'list_growth_plans',
+      'save_growth_plan',
     ]);
   });
 });
@@ -447,6 +453,164 @@ describe('get_submission_detail', () => {
     expect(result.essayExcerpt.excerpt.endsWith('…')).toBe(true);
     expect(result.grammarIssues).toEqual([]);
     expect(result.inlineComments).toEqual([]);
+  });
+});
+
+describe('save_growth_plan', () => {
+  test('snapshots a baseline, archives prior active plans, and creates the plan', async () => {
+    // Resolve student by name.
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-1', user: { name: 'Amelia Brooks' } },
+    ]);
+    // Baseline is captured from the student's current submissions.
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's1',
+        name: 'Amelia Brooks',
+        pct: 60,
+        rubricScores: { evidence_and_support: 2 },
+      }),
+    ]);
+    prisma.reporterGrowthPlan.updateMany.mockResolvedValue({ count: 1 });
+    prisma.reporterGrowthPlan.create.mockResolvedValue({ id: 'plan-1' });
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'save_growth_plan',
+        {
+          student: 'Amelia Brooks',
+          focus: 'Turn description into analysis',
+          targetSkills: ['evidence_and_support'],
+          body: '## Focus\nPush past summary.',
+          checkInInDays: 14,
+        },
+        ctx
+      )
+    );
+
+    // Prior active plan for this student is archived first.
+    const archiveWhere = prisma.reporterGrowthPlan.updateMany.mock.calls[0][0];
+    expect(archiveWhere.where).toMatchObject({
+      membershipId: 'teacher-1',
+      studentMembershipId: 'stu-1',
+      status: 'active',
+    });
+    expect(archiveWhere.data).toEqual({ status: 'archived' });
+
+    // The created plan carries the baseline snapshot and scope.
+    const createData = prisma.reporterGrowthPlan.create.mock.calls[0][0].data;
+    expect(createData.status).toBe('active');
+    expect(createData.membershipId).toBe('teacher-1');
+    expect(createData.studentMembershipId).toBe('stu-1');
+    expect(createData.targetSkills).toEqual(['evidence_and_support']);
+    expect(createData.baseline.rubricLevels).toEqual({ evidence_and_support: 2 });
+    expect(createData.baseline.averagePercentage).toBe(60);
+    expect(createData.checkInAt).toBeInstanceOf(Date);
+
+    expect(result.saved).toBe(true);
+    expect(result.planId).toBe('plan-1');
+    expect(result.student.studentName).toBe('Amelia Brooks');
+  });
+
+  test('refuses to save for a student outside the teacher scope', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'save_growth_plan',
+        {
+          student: 'Nobody',
+          focus: 'x',
+          targetSkills: ['evidence_and_support'],
+          body: 'x',
+        },
+        ctx
+      )
+    );
+    expect(result.error).toContain('No student named');
+    expect(prisma.reporterGrowthPlan.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('list_growth_plans', () => {
+  test('returns a student plan with progress measured against its baseline', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-1', user: { name: 'Amelia Brooks' } },
+    ]);
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([
+      {
+        id: 'plan-1',
+        status: 'active',
+        focus: 'Turn description into analysis',
+        targetSkills: ['evidence_and_support'],
+        body: '## Focus\nPush past summary.',
+        baseline: {
+          averagePercentage: 60,
+          rubricLevels: { evidence_and_support: 2 },
+          capturedAt: '2026-03-01T00:00:00.000Z',
+        },
+        checkInAt: null,
+        createdAt: new Date('2026-03-01T00:00:00.000Z'),
+        studentMembershipId: 'stu-1',
+        student: { user: { name: 'Amelia Brooks' } },
+      },
+    ]);
+    // Current work: evidence up to 3, average up to 78.
+    prisma.submission.findMany.mockResolvedValue([
+      submissionRow({
+        id: 's2',
+        name: 'Amelia Brooks',
+        pct: 78,
+        rubricScores: { evidence_and_support: 3 },
+      }),
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'list_growth_plans',
+        { student: 'Amelia Brooks' },
+        ctx
+      )
+    );
+
+    // Only active plans unless includeArchived is set.
+    const where = prisma.reporterGrowthPlan.findMany.mock.calls[0][0].where;
+    expect(where.status).toEqual({ in: ['active'] });
+    expect(where.membershipId).toBe('teacher-1');
+    expect(where.studentMembershipId).toBe('stu-1');
+
+    expect(result.planCount).toBe(1);
+    const plan = result.plans[0];
+    expect(plan.focus).toBe('Turn description into analysis');
+    expect(plan.body).toContain('Push past summary'); // body included for a single student
+    expect(plan.progress.averagePercentage).toEqual({
+      baseline: 60,
+      current: 78,
+      delta: 18,
+    });
+    expect(plan.progress.skills[0]).toMatchObject({
+      category: 'evidence_and_support',
+      baselineLevel: 2,
+      currentLevel: 3,
+      delta: 1,
+    });
+  });
+
+  test('includes archived plans when asked and omits body for the cross-student list', async () => {
+    prisma.reporterGrowthPlan.findMany.mockResolvedValue([]);
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'list_growth_plans',
+        { includeArchived: true },
+        ctx
+      )
+    );
+    const where = prisma.reporterGrowthPlan.findMany.mock.calls[0][0].where;
+    expect(where.status).toEqual({ in: ['active', 'archived', 'completed'] });
+    expect(where.studentMembershipId).toBeUndefined();
+    expect(result.planCount).toBe(0);
   });
 });
 

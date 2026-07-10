@@ -11,11 +11,14 @@ import { prisma } from '~/utils/db.server';
 import { parseGrammarIssuesPayload } from '~/domain/grading/grammarIssues';
 import {
   buildGrowthSeries,
+  buildPlanProgress,
   buildRubricTrends,
+  captureRubricLevels,
   findStudentsNeedingAttention,
   summarizeClassRubrics,
   summarizeStudentGrades,
   type GradedSubmissionRow,
+  type PlanBaseline,
 } from './reporter-report';
 
 export type ReporterToolContext = {
@@ -128,6 +131,65 @@ export const REPORTER_TOOLS: ReporterTool[] = [
         },
       },
       required: ['submissionId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_growth_plans',
+    description:
+      "List the teacher's saved writing growth plans, each with progress since its baseline (change in overall average and in each targeted rubric skill). Pass a student to get that student's active plan and its full body. ALWAYS call this before writing a student growth or grade report: if the student has an active plan, weave in how they are progressing against it.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        student: {
+          type: 'string',
+          description:
+            "Optional. A student's full name or OrgMembership id to fetch just their plan(s), including the plan body. Omit to list active plans across all students.",
+        },
+        includeArchived: {
+          type: 'boolean',
+          description:
+            'Optional. Include archived/completed plans as well as active ones. Defaults to false (active only).',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'save_growth_plan',
+    description:
+      'Persist a writing growth plan for a student so it survives the chat and future reports can measure progress against it. Call this AFTER you have presented a growth plan to the teacher (on their request). It snapshots the student\'s current standing as the baseline. Saving a new plan archives the student\'s previous active plan.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        student: {
+          type: 'string',
+          description:
+            "The student's full name or OrgMembership id, matched within your classes.",
+        },
+        focus: {
+          type: 'string',
+          description:
+            'A one-line focus/goal for the plan (e.g. "Turn description into analysis").',
+        },
+        targetSkills: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'The rubric category keys the plan targets, e.g. ["evidence_and_support","organization_and_structure"]. 1–5 skills. Use the exact keys returned by the rubric tools.',
+        },
+        body: {
+          type: 'string',
+          description:
+            'The full plan text (Markdown) exactly as shown to the teacher: focus, skill priorities, instructional moves, cadence, and conference talking points.',
+        },
+        checkInInDays: {
+          type: 'number',
+          description:
+            'Optional. Days from now to schedule a check-in (1–180).',
+        },
+      },
+      required: ['student', 'focus', 'targetSkills', 'body'],
       additionalProperties: false,
     },
   },
@@ -575,6 +637,173 @@ async function getSubmissionDetail(ctx: ReporterToolContext, input: unknown) {
   };
 }
 
+const saveGrowthPlanSchema = z.object({
+  student: z.string().min(1),
+  focus: z.string().min(1).max(200),
+  targetSkills: z.array(z.string().min(1)).min(1).max(5),
+  body: z.string().min(1).max(8000),
+  checkInInDays: z.number().int().min(1).max(180).optional(),
+});
+
+const listGrowthPlansSchema = z.object({
+  student: z.string().min(1).optional(),
+  includeArchived: z.boolean().optional(),
+});
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Coerce a stored targetSkills JSON blob into a string[] of category keys. */
+function parseTargetSkills(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === 'string');
+}
+
+/** Coerce a stored baseline JSON blob back into a PlanBaseline. */
+function parsePlanBaseline(value: unknown): PlanBaseline | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const obj = value as Record<string, unknown>;
+  const rubricLevels: Record<string, number> = {};
+  const rawLevels = obj.rubricLevels;
+  if (rawLevels && typeof rawLevels === 'object' && !Array.isArray(rawLevels)) {
+    for (const [key, raw] of Object.entries(rawLevels as Record<string, unknown>)) {
+      if (typeof raw === 'number' && !Number.isNaN(raw)) rubricLevels[key] = raw;
+    }
+  }
+  return {
+    averagePercentage:
+      typeof obj.averagePercentage === 'number' ? obj.averagePercentage : null,
+    rubricLevels,
+    capturedAt: typeof obj.capturedAt === 'string' ? obj.capturedAt : '',
+  };
+}
+
+async function saveGrowthPlan(ctx: ReporterToolContext, input: unknown) {
+  const parsed = saveGrowthPlanSchema.parse(input);
+  const resolved = await resolveStudent(ctx, parsed.student);
+  if ('error' in resolved) return resolved;
+  const { student } = resolved;
+
+  const rows = await fetchScopedGradedRows({
+    organizationId: ctx.organizationId,
+    teacherMembershipId: ctx.membershipId,
+    studentMembershipId: student.id,
+  });
+  const baseline: PlanBaseline = {
+    ...captureRubricLevels(rows),
+    capturedAt: new Date().toISOString(),
+  };
+  const checkInAt =
+    parsed.checkInInDays != null
+      ? new Date(Date.now() + parsed.checkInInDays * DAY_MS)
+      : null;
+
+  // Keep a single active plan per student: archive any prior active one first.
+  await prisma.reporterGrowthPlan.updateMany({
+    where: {
+      membershipId: ctx.membershipId,
+      studentMembershipId: student.id,
+      status: 'active',
+    },
+    data: { status: 'archived' },
+  });
+
+  const plan = await prisma.reporterGrowthPlan.create({
+    data: {
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      studentMembershipId: student.id,
+      status: 'active',
+      focus: parsed.focus,
+      targetSkills: parsed.targetSkills,
+      body: parsed.body,
+      baseline,
+      checkInAt,
+    },
+    select: { id: true },
+  });
+
+  return {
+    saved: true,
+    planId: plan.id,
+    student: { studentMembershipId: student.id, studentName: student.name },
+    focus: parsed.focus,
+    targetSkills: parsed.targetSkills,
+    baseline,
+    checkInAt: checkInAt?.toISOString() ?? null,
+  };
+}
+
+async function listGrowthPlans(ctx: ReporterToolContext, input: unknown) {
+  const parsed = listGrowthPlansSchema.parse(input);
+
+  let studentFilterId: string | undefined;
+  if (parsed.student) {
+    const resolved = await resolveStudent(ctx, parsed.student);
+    if ('error' in resolved) return resolved;
+    studentFilterId = resolved.student.id;
+  }
+
+  const statuses = parsed.includeArchived
+    ? ['active', 'archived', 'completed']
+    : ['active'];
+
+  const plans = await prisma.reporterGrowthPlan.findMany({
+    where: {
+      membershipId: ctx.membershipId,
+      organizationId: ctx.organizationId,
+      status: { in: statuses },
+      ...(studentFilterId ? { studentMembershipId: studentFilterId } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 25,
+    select: {
+      id: true,
+      status: true,
+      focus: true,
+      targetSkills: true,
+      body: true,
+      baseline: true,
+      checkInAt: true,
+      createdAt: true,
+      studentMembershipId: true,
+      student: { select: { user: { select: { name: true } } } },
+    },
+  });
+
+  // Include the full plan body only when the teacher asked about one student,
+  // to keep the cross-student list lean.
+  const includeBody = parsed.student != null;
+
+  const detailed = [];
+  for (const plan of plans) {
+    const targetSkills = parseTargetSkills(plan.targetSkills);
+    const baseline = parsePlanBaseline(plan.baseline);
+    const rows = await fetchScopedGradedRows({
+      organizationId: ctx.organizationId,
+      teacherMembershipId: ctx.membershipId,
+      studentMembershipId: plan.studentMembershipId,
+    });
+    detailed.push({
+      planId: plan.id,
+      status: plan.status,
+      focus: plan.focus,
+      targetSkills,
+      checkInAt: plan.checkInAt?.toISOString() ?? null,
+      createdAt: plan.createdAt.toISOString(),
+      student: {
+        studentMembershipId: plan.studentMembershipId,
+        studentName: plan.student.user.name ?? 'Unknown student',
+      },
+      progress: baseline
+        ? buildPlanProgress(baseline, targetSkills, rows)
+        : null,
+      ...(includeBody ? { body: plan.body } : {}),
+    });
+  }
+
+  return { planCount: detailed.length, plans: detailed };
+}
+
 /**
  * Dispatch a reporter tool call by name. Returns a JSON string (the format the
  * getLLMCompletion tool loop feeds back to the model). Unknown tools and
@@ -600,6 +829,10 @@ export async function handleReporterToolCall(
         return JSON.stringify(await findAttention(ctx, input));
       case 'get_submission_detail':
         return JSON.stringify(await getSubmissionDetail(ctx, input));
+      case 'list_growth_plans':
+        return JSON.stringify(await listGrowthPlans(ctx, input));
+      case 'save_growth_plan':
+        return JSON.stringify(await saveGrowthPlan(ctx, input));
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
