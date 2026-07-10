@@ -95,6 +95,54 @@ function scoreFor(
   );
 }
 
+/**
+ * Per-rubric-category shaping. Each category starts from the overall score but
+ * drifts on its own arc across the unit, so the writing story diverges from the
+ * headline grade: analysis gets harder as papers get more demanding, while
+ * mechanics tend to firm up. This gives the reporter real "what's going
+ * right/wrong with the writing" signal to talk about.
+ */
+const RUBRIC_PLAN: Array<{
+  key: string;
+  offset: number;
+  driftPerPaper: number;
+}> = [
+  { key: 'thesis_and_content', offset: 4, driftPerPaper: 0 },
+  { key: 'organization_and_structure', offset: 2, driftPerPaper: 0 },
+  { key: 'evidence_and_support', offset: -4, driftPerPaper: -4 },
+  { key: 'voice_and_style', offset: 5, driftPerPaper: 1 },
+  { key: 'grammar_and_mechanics', offset: -1, driftPerPaper: 3 },
+];
+
+function to5(pct: number) {
+  return clamp(Math.round(pct / 20), 1, 5);
+}
+
+function rubricScoresFor(overallPct: number, paperIndex: number) {
+  const scores: Record<string, number> = {};
+  for (const category of RUBRIC_PLAN) {
+    const effective =
+      overallPct + category.offset + category.driftPerPaper * paperIndex;
+    scores[category.key] = to5(effective);
+  }
+  return scores;
+}
+
+function commentFor(scores: Record<string, number>) {
+  const entries = Object.entries(scores);
+  const strongest = entries.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const weakest = entries.reduce((a, b) => (b[1] < a[1] ? b : a));
+  const label = (key: string) =>
+    key
+      .replace(/_and_/g, ' & ')
+      .replace(/_/g, ' ')
+      .replace('evidence & support', 'evidence & analysis');
+  if (strongest[0] === weakest[0]) {
+    return 'Even work across the rubric this time.';
+  }
+  return `Strongest on ${label(strongest[0])}; ${label(weakest[0])} needs the most attention.`;
+}
+
 function letterFor(pct: number) {
   if (pct >= 93) return 'A';
   if (pct >= 90) return 'A-';
@@ -190,6 +238,7 @@ async function seedClassReportingData(
     const trajectory = TRAJECTORIES[s % TRAJECTORIES.length];
     for (let p = 0; p < paperTitles.length; p++) {
       const pct = scoreFor(s, p, trajectory);
+      const rubricScores = rubricScoresFor(pct, p);
       // Papers spaced two weeks apart; the newest landed ~two weeks ago.
       const submittedAt = new Date(now - (paperTitles.length - p) * 2 * WEEK);
       const gradedAt = new Date(submittedAt.getTime() + 3 * DAY);
@@ -218,8 +267,10 @@ async function seedClassReportingData(
           gradedByMembershipId: teacherMembershipId,
           gradedAt,
           numericPercentage: pct,
-          overallScore: clamp(Math.round(pct / 20), 1, 5),
+          overallScore: to5(pct),
           letterGrade: letterFor(pct),
+          rubricScores,
+          overallComment: commentFor(rubricScores),
           releasedAt: gradedAt,
         },
       });

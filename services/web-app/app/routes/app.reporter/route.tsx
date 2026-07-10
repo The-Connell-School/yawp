@@ -406,7 +406,13 @@ const MARKDOWN_CLASS = cn(
   '[&_th]:whitespace-nowrap [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground',
   '[&_tbody_tr]:border-t [&_tbody_tr]:border-border/70',
   '[&_tbody_tr:hover]:bg-foreground/[0.02]',
-  '[&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_td]:tabular-nums'
+  '[&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_td]:tabular-nums',
+  // Collapsible detail blocks (click-to-expand deep dives).
+  '[&_details]:my-3 [&_details]:rounded-xl [&_details]:border [&_details]:border-border [&_details]:bg-foreground/[0.02] [&_details]:px-3 [&_details]:py-2',
+  '[&_details[open]]:bg-foreground/[0.03]',
+  '[&_summary]:cursor-pointer [&_summary]:select-none [&_summary]:font-medium [&_summary]:text-foreground [&_summary]:marker:text-primary',
+  '[&_summary]:hover:text-primary',
+  '[&_details>*:not(summary)]:mt-2'
 );
 
 /**
@@ -422,7 +428,12 @@ function MarkdownContent({ content }: { content: string }) {
       async: false,
       gfm: true,
     }) as string;
-    setHtml(DOMPurify.sanitize(parsed));
+    setHtml(
+      DOMPurify.sanitize(parsed, {
+        ADD_TAGS: ['details', 'summary'],
+        ADD_ATTR: ['open'],
+      })
+    );
   }, [content]);
 
   if (html === null) {

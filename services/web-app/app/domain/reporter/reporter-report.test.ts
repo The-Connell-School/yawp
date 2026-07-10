@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   averagePercentage,
   buildGrowthSeries,
+  buildRubricTrends,
+  humanizeRubricCategory,
   summarizeStudentGrades,
   type GradedSubmissionRow,
 } from './reporter-report';
@@ -137,5 +139,66 @@ describe('buildGrowthSeries', () => {
     const series = buildGrowthSeries([row({ numericPercentage: 80 })]);
     expect(series.trend).toBe('insufficient');
     expect(series.deltaPercentage).toBeNull();
+  });
+});
+
+describe('humanizeRubricCategory', () => {
+  test('maps known rubric keys to friendly labels', () => {
+    expect(humanizeRubricCategory('evidence_and_support')).toBe(
+      'Evidence & analysis'
+    );
+    expect(humanizeRubricCategory('grammar_and_mechanics')).toBe(
+      'Grammar & mechanics'
+    );
+  });
+
+  test('title-cases unknown keys', () => {
+    expect(humanizeRubricCategory('sentence_fluency')).toBe('Sentence fluency');
+  });
+});
+
+describe('buildRubricTrends', () => {
+  test('computes first→latest movement per category in rubric order', () => {
+    const trends = buildRubricTrends([
+      row({
+        submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        rubricScores: {
+          grammar_and_mechanics: 3,
+          thesis_and_content: 4,
+          evidence_and_support: 4,
+        },
+      }),
+      row({
+        submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        rubricScores: {
+          grammar_and_mechanics: 4,
+          thesis_and_content: 4,
+          evidence_and_support: 2,
+        },
+      }),
+    ]);
+
+    // Known rubric order: thesis before evidence before grammar.
+    expect(trends.map((t) => t.category)).toEqual([
+      'thesis_and_content',
+      'evidence_and_support',
+      'grammar_and_mechanics',
+    ]);
+
+    const evidence = trends.find((t) => t.category === 'evidence_and_support')!;
+    expect(evidence.first).toBe(4);
+    expect(evidence.latest).toBe(2);
+    expect(evidence.delta).toBe(-2);
+    expect(evidence.direction).toBe('declining');
+
+    const grammar = trends.find((t) => t.category === 'grammar_and_mechanics')!;
+    expect(grammar.direction).toBe('improving');
+
+    const thesis = trends.find((t) => t.category === 'thesis_and_content')!;
+    expect(thesis.direction).toBe('steady');
+  });
+
+  test('returns nothing when no submissions carry rubric scores', () => {
+    expect(buildRubricTrends([row({ rubricScores: null })])).toEqual([]);
   });
 });

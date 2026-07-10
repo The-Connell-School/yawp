@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { prisma } from '~/utils/db.server';
 import {
   buildGrowthSeries,
+  buildRubricTrends,
   summarizeStudentGrades,
   type GradedSubmissionRow,
 } from './reporter-report';
@@ -126,6 +127,8 @@ async function fetchScopedGradedRows(where: {
       submittedAt: true,
       numericPercentage: true,
       letterGrade: true,
+      rubricScores: true,
+      overallComment: true,
       document: {
         select: {
           membershipId: true,
@@ -149,7 +152,19 @@ async function fetchScopedGradedRows(where: {
     submittedAt: submission.submittedAt,
     numericPercentage: submission.numericPercentage,
     letterGrade: submission.letterGrade,
+    rubricScores: normalizeRubricScores(submission.rubricScores),
+    overallComment: submission.overallComment,
   }));
+}
+
+/** Coerce a stored rubricScores JSON blob into a { category: number } map. */
+function normalizeRubricScores(value: unknown): Record<string, number> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === 'number' && !Number.isNaN(raw)) out[key] = raw;
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 async function listClasses(ctx: ReporterToolContext) {
@@ -321,12 +336,15 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
     student: { studentMembershipId: student.id, studentName: student.name },
     averagePercentage: summary?.averagePercentage ?? null,
     latestLetterGrade: summary?.latestLetterGrade ?? null,
+    rubricTrends: buildRubricTrends(rows),
     submissions: rows.map((row) => ({
       submissionId: row.submissionId,
       assignmentTitle: row.assignmentTitle,
       submittedAt: row.submittedAt.toISOString(),
       numericPercentage: row.numericPercentage,
       letterGrade: row.letterGrade,
+      rubricScores: row.rubricScores ?? null,
+      comment: row.overallComment ?? null,
     })),
   };
 }
@@ -343,9 +361,24 @@ async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
     studentMembershipId: student.id,
   });
 
+  const growth = buildGrowthSeries(rows);
+
   return {
     student: { studentMembershipId: student.id, studentName: student.name },
-    ...buildGrowthSeries(rows),
+    ...growth,
+    rubricTrends: buildRubricTrends(rows),
+    // Attach rubric detail and any written feedback to each point so the model
+    // can talk specifically about the writing, not just the score.
+    points: growth.points.map((point) => {
+      const source = rows.find(
+        (row) => row.submissionId === point.submissionId
+      );
+      return {
+        ...point,
+        rubricScores: source?.rubricScores ?? null,
+        comment: source?.overallComment ?? null,
+      };
+    }),
   };
 }
 

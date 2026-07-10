@@ -159,12 +159,14 @@ describe('get_student_growth', () => {
         name: 'Ada Lovelace',
         pct: 95,
         submittedAt: new Date('2026-03-01T00:00:00.000Z'),
+        rubricScores: { evidence_and_support: 2, grammar_and_mechanics: 5 },
       }),
       submissionRow({
         id: 's1',
         name: 'Ada Lovelace',
         pct: 60,
         submittedAt: new Date('2026-01-01T00:00:00.000Z'),
+        rubricScores: { evidence_and_support: 4, grammar_and_mechanics: 3 },
       }),
     ]);
 
@@ -189,6 +191,18 @@ describe('get_student_growth', () => {
     expect(result.points.map((p: any) => p.submissionId)).toEqual(['s1', 's2']);
     expect(result.deltaPercentage).toBe(35);
     expect(result.trend).toBe('improving');
+
+    // Rubric-level writing signal comes back with the growth series (chronological).
+    const evidence = result.rubricTrends.find(
+      (t: any) => t.category === 'evidence_and_support'
+    );
+    expect(evidence).toMatchObject({
+      first: 4,
+      latest: 2,
+      direction: 'declining',
+    });
+    // Per-point rubric scores are attached for the assignment-by-assignment view.
+    expect(result.points[0].rubricScores.grammar_and_mechanics).toBe(3);
   });
 
   test('returns candidates when a name is ambiguous', async () => {
@@ -218,18 +232,22 @@ function submissionRow({
   name,
   pct,
   submittedAt = new Date('2026-01-01T00:00:00.000Z'),
+  rubricScores = null,
 }: {
   id: string;
   membershipId?: string;
   name: string;
   pct: number | null;
   submittedAt?: Date;
+  rubricScores?: Record<string, number> | null;
 }) {
   return {
     id,
     submittedAt,
     numericPercentage: pct,
     letterGrade: null,
+    rubricScores,
+    overallComment: null,
     document: {
       membershipId,
       membership: { user: { name } },

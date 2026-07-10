@@ -15,6 +15,19 @@ export type GradedSubmissionRow = {
   submittedAt: Date;
   numericPercentage: number | null;
   letterGrade: string | null;
+  /** Per-rubric-category scores (typically 1–5), keyed by category. */
+  rubricScores?: Record<string, number> | null;
+  /** The teacher's / assistant's overall written comment on the submission. */
+  overallComment?: string | null;
+};
+
+export type RubricTrend = {
+  category: string;
+  label: string;
+  first: number;
+  latest: number;
+  delta: number;
+  direction: 'improving' | 'declining' | 'steady';
 };
 
 export type StudentGradeSummary = {
@@ -101,6 +114,68 @@ export function summarizeStudentGrades(
   }
 
   return summaries.sort((a, b) => a.studentName.localeCompare(b.studentName));
+}
+
+const RUBRIC_LABELS: Record<string, string> = {
+  thesis_and_content: 'Thesis & content',
+  organization_and_structure: 'Organization & structure',
+  evidence_and_support: 'Evidence & analysis',
+  voice_and_style: 'Voice & style',
+  grammar_and_mechanics: 'Grammar & mechanics',
+};
+
+/** Human-readable label for a rubric category key. */
+export function humanizeRubricCategory(category: string): string {
+  if (RUBRIC_LABELS[category]) return RUBRIC_LABELS[category];
+  const spaced = category.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Compute first→latest movement for each rubric category across a student's
+ * submissions, so the reporter can talk about *which writing skills* are
+ * improving or slipping — not just the overall grade. Categories are returned
+ * in a stable order (known rubric order first, then any extras alphabetically).
+ */
+export function buildRubricTrends(rows: GradedSubmissionRow[]): RubricTrend[] {
+  const chronological = sortBySubmittedAtAsc(rows);
+  const categories = new Set<string>();
+  for (const row of chronological) {
+    if (row.rubricScores) {
+      for (const key of Object.keys(row.rubricScores)) categories.add(key);
+    }
+  }
+
+  const knownOrder = Object.keys(RUBRIC_LABELS);
+  const ordered = [...categories].sort((a, b) => {
+    const ia = knownOrder.indexOf(a);
+    const ib = knownOrder.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const trends: RubricTrend[] = [];
+  for (const category of ordered) {
+    const scored = chronological
+      .map((row) => row.rubricScores?.[category])
+      .filter((value): value is number => typeof value === 'number');
+    if (scored.length === 0) continue;
+    const first = scored[0];
+    const latest = scored[scored.length - 1];
+    const delta = latest - first;
+    trends.push({
+      category,
+      label: humanizeRubricCategory(category),
+      first,
+      latest,
+      delta,
+      direction: delta > 0 ? 'improving' : delta < 0 ? 'declining' : 'steady',
+    });
+  }
+
+  return trends;
 }
 
 /**
