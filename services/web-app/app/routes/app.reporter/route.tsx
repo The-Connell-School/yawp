@@ -13,7 +13,6 @@ import {
   Plus,
   Printer,
   Send,
-  Sparkles,
 } from 'lucide-react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -213,7 +212,7 @@ export default function ReporterRoute() {
       <div className="flex h-full min-w-0 flex-1 flex-col">
         <div className="border-b bg-secondary px-4 py-3">
           <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-            <Sparkles size={20} className="text-primary" />
+            <Microscope size={20} className="text-primary" />
             <div>
               <h2 className="text-lg font-semibold leading-none">
                 Yawp Reporter
@@ -307,7 +306,7 @@ function ReporterEmptyState({
     <div className="flex flex-col items-center gap-6 py-10 text-center">
       <div className="flex flex-col items-center gap-2">
         <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-          <Sparkles size={28} />
+          <Microscope size={28} />
         </div>
         <h3 className="text-xl font-semibold">What would you like to know?</h3>
         <p className="max-w-md text-sm text-muted-foreground">
