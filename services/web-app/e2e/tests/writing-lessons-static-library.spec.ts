@@ -15,11 +15,15 @@ test.describe.serial('Writing Fundamentals Practice', () => {
       page.locator('nav a[href="/app/writing-lessons"]').first()
     ).toBeVisible();
 
-    // ...plus a discovery card on the dashboard.
+    // ...plus a discovery card on the dashboard, illustrated with the
+    // café-cat artwork.
     const practiceLink = page.getByRole('link', {
       name: /writing fundamentals practice/i,
     });
     await expect(practiceLink).toBeVisible();
+    await expect(
+      page.getByTestId('writing-fundamentals-card-image')
+    ).toBeVisible();
 
     await practiceLink.click();
     await expect(
@@ -72,6 +76,10 @@ test.describe.serial('Writing Fundamentals Practice', () => {
 
     await expect(
       page.getByRole('heading', { name: /writing fundamentals practice/i })
+    ).toBeVisible();
+    // The practice page leads with the café-cat banner artwork.
+    await expect(
+      page.getByTestId('writing-fundamentals-banner')
     ).toBeVisible();
     await expect(page.getByText(/quick rewrite drills/i)).toBeVisible();
     await expect(
@@ -251,10 +259,13 @@ test.describe.serial('Writing Fundamentals Practice', () => {
 
     // Teachers reach writing practice under the Assignments section (as a tile),
     // not a standalone Practice section.
+    const assignmentsGrid = page.getByTestId('teacher-assignments-grid');
     await expect(
-      page
-        .getByTestId('teacher-assignments-grid')
-        .getByText(/writing fundamentals practice/i)
+      assignmentsGrid.getByText(/writing fundamentals practice/i)
+    ).toBeVisible();
+    // The practice tile is illustrated with the café-cat artwork.
+    await expect(
+      assignmentsGrid.getByTestId('writing-fundamentals-tile-image')
     ).toBeVisible();
 
     await page
