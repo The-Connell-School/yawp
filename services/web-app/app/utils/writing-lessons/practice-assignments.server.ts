@@ -1,5 +1,8 @@
 import { prisma } from '~/utils/db.server';
 
+import { getActPracticeQuestions } from './act-practice-bank';
+import { generateActPracticeQuestions } from './act-practice-generation.server';
+import type { ActPracticeQuestion } from './act-practice.shared';
 import type { PracticeFeedbackResult } from './practice-feedback.shared';
 import { generatePracticePrompts } from './practice-prompt-generation.server';
 import {
@@ -72,7 +75,150 @@ export function buildAssignedPracticeSequence(
   return sequence;
 }
 
+export type ActAssignedPracticeItem = {
+  /** 1-based position within the assignment. */
+  position: number;
+  lessonSlug: string;
+  lessonTitle: string;
+  question: ActPracticeQuestion;
+};
+
+/**
+ * ACT version of {@link buildAssignedPracticeSequence}: expands the selected
+ * skills into an interleaved ACT multiple-choice sequence from the offline
+ * bank, cycling if the requested count exceeds the questions available.
+ */
+export function buildActPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): ActAssignedPracticeItem[] {
+  const perLesson = lessonSlugs
+    .map((slug) => {
+      const lesson = getQuickWritingLessonBySlug(slug);
+      if (!lesson) return null;
+      return {
+        slug,
+        title: lesson.title,
+        questions: getActPracticeQuestions(slug),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  const interleaved: Array<Omit<ActAssignedPracticeItem, 'position'>> = [];
+  let round = 0;
+  let addedThisRound = true;
+  while (addedThisRound) {
+    addedThisRound = false;
+    for (const lesson of perLesson) {
+      const question = lesson.questions[round];
+      if (question) {
+        interleaved.push({
+          lessonSlug: lesson.slug,
+          lessonTitle: lesson.title,
+          question,
+        });
+        addedThisRound = true;
+      }
+    }
+    round += 1;
+  }
+
+  if (interleaved.length === 0 || problemCount <= 0) return [];
+
+  const sequence: ActAssignedPracticeItem[] = [];
+  for (let i = 0; i < problemCount; i += 1) {
+    const source = interleaved[i % interleaved.length];
+    sequence.push({ position: i + 1, ...source });
+  }
+  return sequence;
+}
+
 export type WritingPracticeSetSource = 'ai' | 'static' | 'mixed';
+
+/**
+ * ACT version of {@link buildGeneratedPracticeSequence}: generates novel ACT
+ * questions per skill (grounded in its rule + example sentences), interleaves
+ * them across the selected skills, and falls back to the offline ACT bank for
+ * any skill the generator couldn't produce.
+ */
+export async function buildGeneratedActPracticeSequence(
+  lessonSlugs: string[],
+  problemCount: number
+): Promise<{
+  items: ActAssignedPracticeItem[];
+  source: WritingPracticeSetSource;
+}> {
+  const lessons = lessonSlugs
+    .map((slug) => {
+      const context = getQuickWritingLessonContext(slug);
+      if (!context) return null;
+      return {
+        slug,
+        title: context.title,
+        skill: context.skill,
+        rule: context.rule,
+        staticQuestions: getActPracticeQuestions(slug),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+  if (lessons.length === 0 || problemCount <= 0) {
+    return { items: [], source: 'static' };
+  }
+
+  const perLesson = Math.ceil(problemCount / lessons.length);
+  let anyAi = false;
+  let anyStatic = false;
+
+  const pools = await Promise.all(
+    lessons.map(async (lesson) => {
+      const generated = await generateActPracticeQuestions({
+        lessonSlug: lesson.slug,
+        skill: lesson.skill,
+        lessonTitle: lesson.title,
+        rule: lesson.rule,
+        exampleSentences: lesson.staticQuestions
+          .slice(0, 3)
+          .map((question) => question.sentence),
+        count: perLesson,
+      });
+
+      if (generated.length > 0) {
+        anyAi = true;
+        return { lesson, questions: generated };
+      }
+
+      anyStatic = true;
+      return { lesson, questions: lesson.staticQuestions };
+    })
+  );
+
+  const items: ActAssignedPracticeItem[] = [];
+  let round = 0;
+  while (items.length < problemCount) {
+    let addedThisRound = false;
+    for (const { lesson, questions } of pools) {
+      if (items.length >= problemCount) break;
+      if (questions.length === 0) continue;
+      items.push({
+        position: items.length + 1,
+        lessonSlug: lesson.slug,
+        lessonTitle: lesson.title,
+        question: questions[round % questions.length],
+      });
+      addedThisRound = true;
+    }
+    if (!addedThisRound) break;
+    round += 1;
+  }
+
+  const source: WritingPracticeSetSource = anyAi
+    ? anyStatic
+      ? 'mixed'
+      : 'ai'
+    : 'static';
+  return { items, source };
+}
 
 /**
  * Builds a fresh practice sequence for an assignment: generates novel prompts
