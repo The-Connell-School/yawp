@@ -6,6 +6,7 @@ import {
   GaugeIcon,
   LockIcon,
   MonitorPlay,
+  Sparkles,
   Users,
 } from 'lucide-react';
 import { Tooltip } from '~/components/ui/tooltip';
@@ -24,10 +25,7 @@ export type SidebarNavLink = {
   label: string;
   end?: boolean;
   icon: React.ReactNode;
-  requires?:
-    | { OR: RequiresFn[] }
-    | { AND: RequiresFn[] }
-    | RequiresFn;
+  requires?: { OR: RequiresFn[] } | { AND: RequiresFn[] } | RequiresFn;
 };
 
 export type SidebarNavSection = {
@@ -39,6 +37,9 @@ const teacher = (user: User, studentPreviewActive = false) =>
   user.selectedMembership?.role === 'TEACHER' && !studentPreviewActive;
 const owner = (user: User) => user.selectedMembership?.isOrgOwner;
 const admin = (user: User) => user.isAdmin;
+const reporterEnabled = (user: User, studentPreviewActive = false) =>
+  teacher(user, studentPreviewActive) &&
+  Boolean(user.selectedMembership?.organization?.reporterEnabled);
 
 const icons = {
   dashboard: <GaugeIcon size={20} className="shrink-0" />,
@@ -46,6 +47,7 @@ const icons = {
   studentWork: <FileText size={20} className="shrink-0" />,
   assignments: <ClipboardList size={20} className="shrink-0" />,
   lounge: <MonitorPlay size={20} className="shrink-0" />,
+  reporter: <Sparkles size={20} className="shrink-0" />,
   organization: <CogIcon size={20} className="shrink-0" />,
   admin: <LockIcon size={20} className="shrink-0" />,
 };
@@ -82,6 +84,12 @@ export const FLAT_SIDEBAR_SECTIONS: SidebarNavSection[] = [
         label: "Teacher's Lounge",
         icon: icons.lounge,
         requires: teacher,
+      },
+      {
+        to: '/app/reporter',
+        label: 'Reporter',
+        icon: icons.reporter,
+        requires: reporterEnabled,
       },
       {
         to: '/app/organization',

@@ -73,7 +73,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'How is my class doing?' }),
     } as any);
-    const body = await response.data;
+    const body = (await response.data) as any;
 
     expect(body.conversationId).toBe('conv-1');
     expect(body.reply).toBe('Here is your report.');
@@ -89,13 +89,22 @@ describe('api.domain.reporter action', () => {
     const updateArg = prisma.reporterConversation.update.mock.calls[0][0];
     const created = updateArg.data.messages.create;
     expect(created).toHaveLength(2);
-    expect(created[0]).toMatchObject({ role: 'user', content: 'How is my class doing?' });
-    expect(created[1]).toMatchObject({ role: 'assistant', content: 'Here is your report.' });
+    expect(created[0]).toMatchObject({
+      role: 'user',
+      content: 'How is my class doing?',
+    });
+    expect(created[1]).toMatchObject({
+      role: 'assistant',
+      content: 'Here is your report.',
+    });
   });
 
   test('passes reporter tools and a teacher-scoped context to the LLM', async () => {
     getLLMCompletion.mockResolvedValue('ok');
-    prisma.reporterConversation.create.mockResolvedValue({ id: 'conv-1', messages: [] });
+    prisma.reporterConversation.create.mockResolvedValue({
+      id: 'conv-1',
+      messages: [],
+    });
     prisma.reporterConversation.update.mockResolvedValue({});
 
     await action({ request: formRequest({ message: 'hi' }) } as any);
@@ -106,10 +115,14 @@ describe('api.domain.reporter action', () => {
 
     // The handleToolCall closure must bind the calling teacher's scope.
     llmArgs.handleToolCall('list_classes', { a: 1 });
-    expect(handleReporterToolCall).toHaveBeenCalledWith('list_classes', { a: 1 }, {
-      membershipId: 'teacher-1',
-      organizationId: 'org-1',
-    });
+    expect(handleReporterToolCall).toHaveBeenCalledWith(
+      'list_classes',
+      { a: 1 },
+      {
+        membershipId: 'teacher-1',
+        organizationId: 'org-1',
+      }
+    );
   });
 
   test('continues an existing conversation with prior messages', async () => {
@@ -126,7 +139,7 @@ describe('api.domain.reporter action', () => {
     const response = await action({
       request: formRequest({ message: 'and now?', conversationId: 'conv-9' }),
     } as any);
-    const body = await response.data;
+    const body = (await response.data) as any;
 
     expect(body.isNewConversation).toBe(false);
     expect(prisma.reporterConversation.create).not.toHaveBeenCalled();

@@ -8,9 +8,8 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { handleReporterToolCall, REPORTER_TOOLS } = await import(
-  './reporter-tools.server'
-);
+const { handleReporterToolCall, REPORTER_TOOLS } =
+  await import('./reporter-tools.server');
 
 const ctx = { membershipId: 'teacher-1', organizationId: 'org-1' };
 
@@ -34,9 +33,7 @@ describe('REPORTER_TOOLS', () => {
 
 describe('handleReporterToolCall dispatch', () => {
   test('unknown tool returns a structured error', async () => {
-    const result = JSON.parse(
-      await handleReporterToolCall('nope', {}, ctx)
-    );
+    const result = JSON.parse(await handleReporterToolCall('nope', {}, ctx));
     expect(result.error).toContain('Unknown tool');
   });
 
@@ -61,7 +58,9 @@ describe('list_classes', () => {
       },
     ]);
 
-    const result = JSON.parse(await handleReporterToolCall('list_classes', {}, ctx));
+    const result = JSON.parse(
+      await handleReporterToolCall('list_classes', {}, ctx)
+    );
 
     const where = prisma.class.findMany.mock.calls[0][0].where;
     expect(where.teachers.some.id).toBe('teacher-1');
@@ -119,9 +118,9 @@ describe('get_class_grade_report', () => {
     // Released-only filter is enforced in the query.
     const subWhere = prisma.submission.findMany.mock.calls[0][0].where;
     expect(subWhere.releasedAt).toEqual({ not: null });
-    expect(
-      subWhere.document.classAssignment.class.teachers.some.id
-    ).toBe('teacher-1');
+    expect(subWhere.document.classAssignment.class.teachers.some.id).toBe(
+      'teacher-1'
+    );
 
     expect(result.gradedSubmissionCount).toBe(3);
     const ada = result.students.find((s: any) => s.studentName === 'Ada');

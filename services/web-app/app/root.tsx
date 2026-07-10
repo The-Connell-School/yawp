@@ -136,7 +136,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
                   id: true,
                   role: true,
                   isOrgOwner: true,
-                  organization: { select: { name: true } },
+                  organization: {
+                    select: { name: true, reporterEnabled: true },
+                  },
                 },
               },
             },

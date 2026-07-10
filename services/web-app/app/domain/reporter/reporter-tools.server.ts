@@ -74,7 +74,7 @@ export const REPORTER_TOOLS: ReporterTool[] = [
   {
     name: 'get_student_growth',
     description:
-      "Get a chronological growth series for one student: their released grades over time, with the first→latest change and a trend label. Use this for growth reports.",
+      'Get a chronological growth series for one student: their released grades over time, with the first→latest change and a trend label. Use this for growth reports.',
     input_schema: {
       type: 'object',
       properties: {
@@ -142,7 +142,8 @@ async function fetchScopedGradedRows(where: {
     studentMembershipId: submission.document.membershipId,
     studentName: submission.document.membership.user.name ?? 'Unknown student',
     assignmentTitle:
-      submission.document.classAssignment?.assignment.title ?? 'Untitled assignment',
+      submission.document.classAssignment?.assignment.title ??
+      'Untitled assignment',
     submittedAt: submission.submittedAt,
     numericPercentage: submission.numericPercentage,
     letterGrade: submission.letterGrade,
@@ -180,10 +181,7 @@ async function listClasses(ctx: ReporterToolContext) {
   };
 }
 
-async function getClassGradeReport(
-  ctx: ReporterToolContext,
-  input: unknown
-) {
+async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
   const { classId } = classIdSchema.parse(input);
   const klass = await prisma.class.findFirst({
     where: {
@@ -249,10 +247,7 @@ async function assertStudentIsVisible(
   });
 }
 
-async function getStudentGradeReport(
-  ctx: ReporterToolContext,
-  input: unknown
-) {
+async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
   const { studentMembershipId } = studentSchema.parse(input);
   const student = await assertStudentIsVisible(ctx, studentMembershipId);
   if (!student) {

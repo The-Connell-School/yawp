@@ -51,7 +51,8 @@ export function averagePercentage(
   values: Array<number | null | undefined>
 ): number | null {
   const defined = values.filter(
-    (value): value is number => typeof value === 'number' && !Number.isNaN(value)
+    (value): value is number =>
+      typeof value === 'number' && !Number.isNaN(value)
   );
   if (defined.length === 0) return null;
   const total = defined.reduce((sum, value) => sum + value, 0);
