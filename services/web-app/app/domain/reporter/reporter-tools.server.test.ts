@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 const prisma = {
   class: { findMany: mock(), findFirst: mock() },
   submission: { findMany: mock() },
-  orgMembership: { findFirst: mock() },
+  orgMembership: { findFirst: mock(), findMany: mock() },
 };
 
 mock.module('~/utils/db.server', () => ({ prisma }));
@@ -18,6 +18,7 @@ beforeEach(() => {
   prisma.class.findFirst.mockReset();
   prisma.submission.findMany.mockReset();
   prisma.orgMembership.findFirst.mockReset();
+  prisma.orgMembership.findMany.mockReset();
 });
 
 describe('REPORTER_TOOLS', () => {
@@ -131,34 +132,37 @@ describe('get_class_grade_report', () => {
 });
 
 describe('get_student_growth', () => {
-  test('refuses a student the teacher cannot see', async () => {
+  test('refuses a student not in any class the teacher teaches', async () => {
     prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([]);
     const result = JSON.parse(
       await handleReporterToolCall(
         'get_student_growth',
-        { studentMembershipId: 'stu-9' },
+        { student: 'Nobody Here' },
         ctx
       )
     );
-    expect(result.error).toContain('not found');
+    expect(result.error).toContain('No student named');
     expect(prisma.submission.findMany).not.toHaveBeenCalled();
   });
 
-  test('returns a chronological growth series with trend', async () => {
-    prisma.orgMembership.findFirst.mockResolvedValue({
-      id: 'stu-1',
-      user: { name: 'Ada' },
-    });
+  test('resolves a student by name, scoped to the teacher, then builds the series', async () => {
+    // Not an id match...
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    // ...but a unique name match within the teacher's classes.
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-1', user: { name: 'Ada Lovelace' } },
+    ]);
     prisma.submission.findMany.mockResolvedValue([
       submissionRow({
         id: 's2',
-        name: 'Ada',
+        name: 'Ada Lovelace',
         pct: 95,
         submittedAt: new Date('2026-03-01T00:00:00.000Z'),
       }),
       submissionRow({
         id: 's1',
-        name: 'Ada',
+        name: 'Ada Lovelace',
         pct: 60,
         submittedAt: new Date('2026-01-01T00:00:00.000Z'),
       }),
@@ -167,15 +171,44 @@ describe('get_student_growth', () => {
     const result = JSON.parse(
       await handleReporterToolCall(
         'get_student_growth',
-        { studentMembershipId: 'stu-1' },
+        { student: 'Ada Lovelace' },
         ctx
       )
     );
 
-    expect(result.student.studentName).toBe('Ada');
+    // Name lookup is case-insensitive and scoped to the teacher's classes.
+    const nameWhere = prisma.orgMembership.findMany.mock.calls[0][0].where;
+    expect(nameWhere.user.name).toEqual({
+      equals: 'Ada Lovelace',
+      mode: 'insensitive',
+    });
+    expect(nameWhere.classesAsStudent.some.teachers.some.id).toBe('teacher-1');
+
+    expect(result.student.studentName).toBe('Ada Lovelace');
+    expect(result.student.studentMembershipId).toBe('stu-1');
     expect(result.points.map((p: any) => p.submissionId)).toEqual(['s1', 's2']);
     expect(result.deltaPercentage).toBe(35);
     expect(result.trend).toBe('improving');
+  });
+
+  test('returns candidates when a name is ambiguous', async () => {
+    prisma.orgMembership.findFirst.mockResolvedValue(null);
+    prisma.orgMembership.findMany.mockResolvedValue([
+      { id: 'stu-1', user: { name: 'Alex Kim' } },
+      { id: 'stu-2', user: { name: 'Alex Kim' } },
+    ]);
+
+    const result = JSON.parse(
+      await handleReporterToolCall(
+        'get_student_growth',
+        { student: 'Alex Kim' },
+        ctx
+      )
+    );
+
+    expect(result.error).toContain('More than one student');
+    expect(result.ambiguous).toHaveLength(2);
+    expect(prisma.submission.findMany).not.toHaveBeenCalled();
   });
 });
 

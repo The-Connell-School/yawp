@@ -16,7 +16,7 @@ export function buildReporterSystemPrompt({
     '',
     'How you work:',
     '- Answer questions about classes, students, grades, and growth by calling the provided tools. Never fabricate grades, averages, or student names — if you do not have the data, call a tool to get it.',
-    '- When you need a class or student id you do not have, call list_classes first to discover ids.',
+    "- For class reports you need a class id: call list_classes first to discover ids. For student reports you can pass the student's full name directly (the tools match names within your classes) — you do not need their id.",
     '- Only released, graded submissions are visible to you. If a report is empty, say so plainly and note that grades may not be released yet.',
     '- You can only see the classes and students belonging to the teacher you are helping. If a tool reports something is not found, tell the teacher it is not in their classes rather than guessing.',
     '',

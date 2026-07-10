@@ -62,12 +62,13 @@ export const REPORTER_TOOLS: ReporterTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        studentMembershipId: {
+        student: {
           type: 'string',
-          description: "The student's OrgMembership id.",
+          description:
+            "The student's full name (as shown in a class report) or their OrgMembership id. Names are matched within the classes this teacher teaches.",
         },
       },
-      required: ['studentMembershipId'],
+      required: ['student'],
       additionalProperties: false,
     },
   },
@@ -78,19 +79,20 @@ export const REPORTER_TOOLS: ReporterTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        studentMembershipId: {
+        student: {
           type: 'string',
-          description: "The student's OrgMembership id.",
+          description:
+            "The student's full name (as shown in a class report) or their OrgMembership id. Names are matched within the classes this teacher teaches.",
         },
       },
-      required: ['studentMembershipId'],
+      required: ['student'],
       additionalProperties: false,
     },
   },
 ];
 
 const classIdSchema = z.object({ classId: z.string().min(1) });
-const studentSchema = z.object({ studentMembershipId: z.string().min(1) });
+const studentSchema = z.object({ student: z.string().min(1) });
 
 /**
  * Fetch released, graded submissions for a set of classes taught by the
@@ -226,46 +228,97 @@ async function getClassGradeReport(ctx: ReporterToolContext, input: unknown) {
   };
 }
 
+type ResolvedStudent = {
+  id: string;
+  name: string;
+};
+
+type StudentResolution =
+  | { student: ResolvedStudent }
+  | {
+      error: string;
+      ambiguous?: Array<{ studentMembershipId: string; studentName: string }>;
+    };
+
 /**
- * Confirm the student shares at least one class with the teacher before
- * returning any of their data.
+ * Resolve a student from a name or an OrgMembership id, always scoped to the
+ * teacher's classes. Chat callers usually only have the student's name (from a
+ * class report), so name lookup is the primary path; the id path stays for
+ * precision. Ambiguous names return the candidates so the caller can
+ * disambiguate rather than silently guessing.
  */
-async function assertStudentIsVisible(
+async function resolveStudent(
   ctx: ReporterToolContext,
-  studentMembershipId: string
-) {
-  return prisma.orgMembership.findFirst({
+  student: string
+): Promise<StudentResolution> {
+  const query = student.trim();
+  const inTeacherClass = {
+    role: 'STUDENT' as const,
+    organizationId: ctx.organizationId,
+    classesAsStudent: {
+      some: { teachers: { some: { id: ctx.membershipId } } },
+    },
+  };
+
+  // Exact id first (cheap, unambiguous).
+  const byId = await prisma.orgMembership.findFirst({
+    where: { ...inTeacherClass, id: query },
+    select: { id: true, user: { select: { name: true } } },
+  });
+  if (byId) {
+    return {
+      student: { id: byId.id, name: byId.user.name ?? 'Unknown student' },
+    };
+  }
+
+  // Then by name, case-insensitively, within the teacher's classes.
+  const byName = await prisma.orgMembership.findMany({
     where: {
-      id: studentMembershipId,
-      role: 'STUDENT',
-      organizationId: ctx.organizationId,
-      classesAsStudent: {
-        some: { teachers: { some: { id: ctx.membershipId } } },
-      },
+      ...inTeacherClass,
+      user: { name: { equals: query, mode: 'insensitive' } },
     },
     select: { id: true, user: { select: { name: true } } },
   });
+
+  if (byName.length === 1) {
+    return {
+      student: {
+        id: byName[0].id,
+        name: byName[0].user.name ?? 'Unknown student',
+      },
+    };
+  }
+
+  if (byName.length > 1) {
+    return {
+      error: `More than one student matches "${query}". Ask which one.`,
+      ambiguous: byName.map((match) => ({
+        studentMembershipId: match.id,
+        studentName: match.user.name ?? 'Unknown student',
+      })),
+    };
+  }
+
+  return {
+    error: `No student named "${query}" was found in your classes. Check the spelling, or run a class grade report to see the exact names.`,
+  };
 }
 
 async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
-  const { studentMembershipId } = studentSchema.parse(input);
-  const student = await assertStudentIsVisible(ctx, studentMembershipId);
-  if (!student) {
-    return { error: 'Student not found in any class you teach.' };
-  }
+  const { student: studentQuery } = studentSchema.parse(input);
+  const resolved = await resolveStudent(ctx, studentQuery);
+  if ('error' in resolved) return resolved;
+  const { student } = resolved;
 
   const rows = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
-    studentMembershipId,
+    studentMembershipId: student.id,
   });
   const [summary] = summarizeStudentGrades(rows);
 
   return {
-    student: {
-      studentMembershipId,
-      studentName: student.user.name ?? 'Unknown student',
-    },
+    student: { studentMembershipId: student.id, studentName: student.name },
     averagePercentage: summary?.averagePercentage ?? null,
     latestLetterGrade: summary?.latestLetterGrade ?? null,
     submissions: rows.map((row) => ({
@@ -279,23 +332,19 @@ async function getStudentGradeReport(ctx: ReporterToolContext, input: unknown) {
 }
 
 async function getStudentGrowth(ctx: ReporterToolContext, input: unknown) {
-  const { studentMembershipId } = studentSchema.parse(input);
-  const student = await assertStudentIsVisible(ctx, studentMembershipId);
-  if (!student) {
-    return { error: 'Student not found in any class you teach.' };
-  }
+  const { student: studentQuery } = studentSchema.parse(input);
+  const resolved = await resolveStudent(ctx, studentQuery);
+  if ('error' in resolved) return resolved;
+  const { student } = resolved;
 
   const rows = await fetchScopedGradedRows({
     organizationId: ctx.organizationId,
     teacherMembershipId: ctx.membershipId,
-    studentMembershipId,
+    studentMembershipId: student.id,
   });
 
   return {
-    student: {
-      studentMembershipId,
-      studentName: student.user.name ?? 'Unknown student',
-    },
+    student: { studentMembershipId: student.id, studentName: student.name },
     ...buildGrowthSeries(rows),
   };
 }
