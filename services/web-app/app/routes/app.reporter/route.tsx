@@ -7,6 +7,8 @@ import {
   type LoaderFunctionArgs,
 } from 'react-router';
 import { Loader2, Plus, Send, Sparkles } from 'lucide-react';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { Button } from '~/components/ui/button';
 import { Textarea } from '~/components/ui/textarea';
 import { cn } from '~/utils/misc';
@@ -321,15 +323,66 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm',
+          'max-w-[85%] rounded-2xl px-4 py-2.5 text-sm',
           isUser
-            ? 'bg-primary text-primary-foreground'
+            ? 'whitespace-pre-wrap bg-primary text-primary-foreground'
             : 'bg-secondary text-foreground'
         )}
         data-role={message.role}
       >
-        {message.content}
+        {isUser ? (
+          message.content
+        ) : (
+          <MarkdownContent content={message.content} />
+        )}
       </div>
     </div>
+  );
+}
+
+// Scoped styling for rendered Markdown (no typography plugin in this app).
+const MARKDOWN_CLASS = cn(
+  'text-sm leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+  '[&_h1]:mb-2 [&_h1]:mt-4 [&_h1]:text-base [&_h1]:font-semibold',
+  '[&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-sm [&_h2]:font-semibold',
+  '[&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold',
+  '[&_p]:my-2',
+  '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
+  '[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5',
+  '[&_li]:my-1',
+  '[&_strong]:font-semibold [&_em]:italic',
+  '[&_a]:text-primary [&_a]:underline',
+  '[&_hr]:my-3 [&_hr]:border-foreground/15',
+  '[&_code]:rounded [&_code]:bg-foreground/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs',
+  '[&_table]:my-2 [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_table]:text-xs',
+  '[&_th]:border [&_th]:border-foreground/15 [&_th]:bg-foreground/5 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold',
+  '[&_td]:border [&_td]:border-foreground/15 [&_td]:px-2 [&_td]:py-1 [&_td]:align-top'
+);
+
+/**
+ * Render assistant Markdown as sanitized HTML. To avoid a hydration mismatch
+ * (DOMPurify only runs in the browser) we render plain text on the server and
+ * the first client paint, then upgrade to formatted HTML after mount.
+ */
+function MarkdownContent({ content }: { content: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    const parsed = marked.parse(content, {
+      async: false,
+      gfm: true,
+    }) as string;
+    setHtml(DOMPurify.sanitize(parsed));
+  }, [content]);
+
+  if (html === null) {
+    return <div className="whitespace-pre-wrap">{content}</div>;
+  }
+
+  return (
+    <div
+      className={MARKDOWN_CLASS}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }
