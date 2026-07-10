@@ -143,6 +143,110 @@ function commentFor(scores: Record<string, number>) {
   return `Strongest on ${label(strongest[0])}; ${label(weakest[0])} needs the most attention.`;
 }
 
+/**
+ * A short, fixed essay whose sentences are labeled by the rubric skill each one
+ * exercises, so seeded inline comments and grammar issues can anchor to real
+ * substrings the get_submission_detail tool will return. The mechanics sentence
+ * carries deliberate errors so there is a genuine grammar issue to surface.
+ */
+const ESSAY_SENTENCES: Record<string, string> = {
+  thesis_and_content:
+    'This essay argues that one ordinary afternoon reshaped everything that came after it.',
+  organization_and_structure:
+    'First the calm, then the break, and finally the long quiet of the aftermath.',
+  evidence_and_support:
+    'The narrator lingers on the storm, describing the bruised sky and the smell of rain.',
+  voice_and_style:
+    'The wind screamed through the pines and the whole street held its breath.',
+  grammar_and_mechanics:
+    'Its clear the writer cared about this piece, they revised it many times.',
+};
+
+function essayTextFor(studentName: string): string {
+  const opening = `${studentName} — draft submitted for grading.`;
+  return [
+    opening,
+    ESSAY_SENTENCES.thesis_and_content,
+    ESSAY_SENTENCES.organization_and_structure,
+    ESSAY_SENTENCES.evidence_and_support,
+    ESSAY_SENTENCES.voice_and_style,
+    ESSAY_SENTENCES.grammar_and_mechanics,
+  ].join(' ');
+}
+
+const PRAISE_BY_CATEGORY: Record<string, string> = {
+  thesis_and_content: 'Clear, arguable thesis — you commit to a real claim here.',
+  organization_and_structure:
+    'Nice structural signposting; the reader always knows where they are.',
+  evidence_and_support:
+    'Strong, concrete detail — this is doing real evidentiary work.',
+  voice_and_style: 'Lovely image. Your voice is most alive in moments like this.',
+  grammar_and_mechanics: 'Clean, controlled sentences throughout.',
+};
+
+const PUSH_BY_CATEGORY: Record<string, string> = {
+  thesis_and_content:
+    'The claim drifts here — what exactly are you arguing? Sharpen it.',
+  organization_and_structure:
+    'This transition is abrupt. Show the reader how these parts connect.',
+  evidence_and_support:
+    'You describe the moment but stop short of analyzing it — so what does it mean?',
+  voice_and_style: 'This phrasing goes flat. Read it aloud and hear the rhythm.',
+  grammar_and_mechanics:
+    "“Its” should be “It's,” and this is a comma splice — two sentences fused by a comma.",
+};
+
+/**
+ * Deterministic teacher margin comments + grammar issues for one submission,
+ * anchored to sentences in the seeded essay. Comments target the weakest and
+ * strongest rubric skills so the written feedback lines up with the scores.
+ */
+function writingEvidenceFor(scores: Record<string, number>) {
+  const entries = Object.entries(scores);
+  const strongest = entries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+  const weakest = entries.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+
+  const comments: Array<{ excerpt: string; content: string }> = [];
+  if (ESSAY_SENTENCES[weakest]) {
+    comments.push({
+      excerpt: ESSAY_SENTENCES[weakest],
+      content: PUSH_BY_CATEGORY[weakest],
+    });
+  }
+  if (strongest !== weakest && ESSAY_SENTENCES[strongest]) {
+    comments.push({
+      excerpt: ESSAY_SENTENCES[strongest],
+      content: PRAISE_BY_CATEGORY[strongest],
+    });
+  }
+
+  const grammarIssues =
+    scores.grammar_and_mechanics < 5
+      ? [
+          {
+            id: 'mechanics-1',
+            excerpt: ESSAY_SENTENCES.grammar_and_mechanics,
+            kind: 'error',
+            message:
+              "Possessive/contraction slip (“Its” → “It's”) and a comma splice joining two independent clauses.",
+          },
+        ]
+      : [];
+
+  const feedback =
+    `Overall: your ${label(strongest)} is carrying this piece, while ` +
+    `${label(weakest)} is where the next revision should focus.`;
+
+  return { comments, grammarIssues, feedback };
+}
+
+function label(key: string) {
+  return key
+    .replace(/_and_/g, ' & ')
+    .replace(/_/g, ' ')
+    .replace('evidence & support', 'evidence & analysis');
+}
+
 function letterFor(pct: number) {
   if (pct >= 93) return 'A';
   if (pct >= 90) return 'A-';
@@ -243,8 +347,10 @@ async function seedClassReportingData(
       const submittedAt = new Date(now - (paperTitles.length - p) * 2 * WEEK);
       const gradedAt = new Date(submittedAt.getTime() + 3 * DAY);
       const title = paperTitles[p];
-      const text = `${studentNames[s]}'s essay for "${title}".`;
+      const text = essayTextFor(studentNames[s]);
       const html = `<p>${text}</p>`;
+      const { comments, grammarIssues, feedback } =
+        writingEvidenceFor(rubricScores);
 
       const document = await prisma.document.create({
         data: {
@@ -271,7 +377,16 @@ async function seedClassReportingData(
           letterGrade: letterFor(pct),
           rubricScores,
           overallComment: commentFor(rubricScores),
+          feedback,
+          grammarIssues,
           releasedAt: gradedAt,
+          comments: {
+            create: comments.map((comment) => ({
+              content: comment.content,
+              excerpt: comment.excerpt,
+              membershipId: teacherMembershipId,
+            })),
+          },
         },
       });
       submissionCount++;
