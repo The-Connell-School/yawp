@@ -6,6 +6,7 @@
  * summaries, per-student growth series). Keeping them free of Prisma makes the
  * grading math independently unit-testable.
  */
+import { rubricCategories } from '~/domain/grading/rubric';
 
 export type GradedSubmissionRow = {
   submissionId: string;
@@ -116,13 +117,13 @@ export function summarizeStudentGrades(
   return summaries.sort((a, b) => a.studentName.localeCompare(b.studentName));
 }
 
-const RUBRIC_LABELS: Record<string, string> = {
-  thesis_and_content: 'Thesis & content',
-  organization_and_structure: 'Organization & structure',
-  evidence_and_support: 'Evidence & analysis',
-  voice_and_style: 'Voice & style',
-  grammar_and_mechanics: 'Grammar & mechanics',
-};
+// Single source of truth: the canonical grading rubric. Deriving labels here
+// (rather than hand-maintaining a second copy) keeps the reporter's language
+// matched to the rubric teachers actually grade against, so it never renames a
+// skill or drifts from Brian's rubric.
+const RUBRIC_LABELS: Record<string, string> = Object.fromEntries(
+  rubricCategories.map((category) => [category.key, category.label])
+);
 
 /** Human-readable label for a rubric category key. */
 export function humanizeRubricCategory(category: string): string {

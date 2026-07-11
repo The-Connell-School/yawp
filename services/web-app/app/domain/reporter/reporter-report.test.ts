@@ -149,11 +149,12 @@ describe('buildGrowthSeries', () => {
 
 describe('humanizeRubricCategory', () => {
   test('maps known rubric keys to friendly labels', () => {
+    // Labels come straight from the canonical grading rubric (rubric.ts).
     expect(humanizeRubricCategory('evidence_and_support')).toBe(
-      'Evidence & analysis'
+      'Evidence/Support'
     );
     expect(humanizeRubricCategory('grammar_and_mechanics')).toBe(
-      'Grammar & mechanics'
+      'Grammar/Syntax/Formatting'
     );
   });
 
@@ -234,7 +235,7 @@ describe('summarizeClassRubrics', () => {
     // (2 + 3 + 2) / 3 = 2.33 → 2.3
     expect(evidence.averageLevel).toBe(2.3);
     expect(evidence.scoredCount).toBe(3);
-    expect(evidence.label).toBe('Evidence & analysis');
+    expect(evidence.label).toBe('Evidence/Support');
   });
 
   test('returns nothing when no submission carries rubric scores', () => {
