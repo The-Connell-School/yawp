@@ -44,6 +44,26 @@ Bryant needs an internal admin workflow attached to an assignment type. The assi
 
 The UI comes last. Do not overbuild it. The important work is making the backend versioned, replayable, measurable, and shared with production code.
 
+## Incremental Delivery Decision
+
+Build this one reviewed layer at a time. The first milestone is the evaluation foundation, not configuration versioning, production-route extraction, persistence, or UI.
+
+Start with the grading assistant because it already returns structured rubric scores and comments. It provides a clearer first benchmark than the open-ended tutor, while writing practice does not yet have a production AI grader.
+
+The first milestone consists of:
+
+1. one basic grading-assistant benchmark runner;
+2. explicit evaluation definitions with code, human/model-judge, or cross-case methods;
+3. a broad synthetic case corpus with score bands and qualitative requirements;
+4. case-level approval state requiring both product and educator review;
+5. honest `pass`, `fail`, `needs_review`, and `blocked` outcomes.
+
+Initial implementation lives in `services/web-app/app/domain/ai-evaluation/`. The v1 corpus begins with 15 synthetic cases and nine evaluation dimensions. Cases remain drafts until reviewed; a release-mode benchmark must refuse to execute an unapproved case.
+
+Approval is part of the evaluation data, not an informal conversation. Product review confirms the intended behavior and regression risk. Educator review confirms the expected score bands, rubric interpretation, and feedback criteria. A case is release-ready only after both approvals are named and recorded. Changing a case's input or expectations requires renewed review before it can be trusted as a gate.
+
+Do not treat a qualitative judgment as passing merely because no reviewer has scored it. Missing judgment evidence is `needs_review`. One severe failure remains a failure even when other checks pass.
+
 ## Granola Evidence
 
 Use these meeting notes as product evidence, not optional background:
@@ -403,7 +423,24 @@ Include at least:
 
 Do this in order. Do not begin UI work while the backend is still hypothetical.
 
-### Phase 1: Architecture and extraction
+### Phase 1: Benchmark contract and approved case corpus
+
+1. Define the grading-assistant benchmark input/output contract.
+2. Define named evaluation dimensions and whether each uses code, human/calibrated model judgment, or cross-case comparison.
+3. Seed synthetic cases across strong, weak, incomplete, off-topic, adversarial, false-positive, and strictness-calibration behaviors.
+4. Give every case explicit score bands and qualitative acceptance criteria.
+5. Require named product and educator approvals before release use.
+6. Prove the runner fails malformed responses, preserves severe failures, and reports missing qualitative judgments as `needs_review`.
+
+Exit criteria:
+
+- the basic runner is deterministic and model-client agnostic;
+- evaluation dimensions are explicit and inspectable;
+- at least 15 high-signal synthetic cases are runnable in draft mode;
+- unapproved cases cannot run in release mode;
+- no database migration, production behavior, or UI changes.
+
+### Phase 2: Architecture and extraction
 
 1. Write a concise ADR/spec that updates the June 24 proposal with the three-flow scope and current schema.
 2. Extract pure prompt/context compilers and flow executors from the production grading and tutor routes.
@@ -418,7 +455,7 @@ Exit criteria:
 - current production behavior remains compatible;
 - no UI changes.
 
-### Phase 2: Immutable versions and persistence
+### Phase 3: Immutable versions and persistence
 
 1. Add the selected immutable config-version model and migration.
 2. Backfill published versions from existing assignment type/module records.
@@ -434,7 +471,7 @@ Exit criteria:
 - migrations have rollback/compatibility reasoning;
 - no live model dependency in tests.
 
-### Phase 3: Runner and evaluators
+### Phase 4: Production-connected runner and evaluators
 
 1. Build a resumable benchmark runner service.
 2. Add a CLI or internal server entry point that creates and executes a run.
@@ -453,9 +490,9 @@ Exit criteria:
 - output includes case-level evidence and aggregate counts;
 - live evals are opt-in and cost-bounded.
 
-### Phase 4: Minimal admin UI
+### Phase 5: Minimal admin UI
 
-Only after Phases 1-3 pass their tests, add a small admin surface within the existing assignment type workflow.
+Only after Phases 1-4 pass their tests, add a small admin surface within the existing assignment type workflow.
 
 The first UI should provide:
 
@@ -561,8 +598,8 @@ This work is complete when all of the following are true:
 
 1. Read this prompt, `AGENTS.md`, the June 24 benchmark design, current Prisma schema, grading route, tutor route/prompt builder, assignment type admin routes, and writing-practice route.
 2. Set up the worktree and run the relevant baseline tests before editing.
-3. Write the updated ADR and proposed migration/compatibility sequence.
-4. Implement Phase 1 only after the data/control boundaries are explicit.
+3. Build and review the Phase 1 grading benchmark and case corpus before extracting production execution code.
+4. Write the updated ADR and proposed migration/compatibility sequence only after Phase 1 provides a stable evaluation target.
 5. Keep a running proof log of commands, tests, migrations, and behavioral decisions.
 6. Commit each coherent change locally. Do not push, deploy, or mutate external systems without Bryant's explicit gate.
 
