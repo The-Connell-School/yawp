@@ -1,7 +1,7 @@
 # AI Evaluation Benchmarks Design
 
 Date: 2026-06-24; assignment-type ownership clarified 2026-07-13
-Status: Proposed plan with first controlled prompt-inspection slice implemented
+Status: Proposed plan with controlled prompt testing and grading-suite history implemented
 Owner: Yawp product/engineering
 
 ## July 13 Product Decision: Evaluation Is Assignment-Type-Owned
@@ -27,9 +27,9 @@ type's suite and must be approved in that context.
 
 The admin experience should remain intentionally controlled and minimal. The
 first slice exposes the saved grading-assistant instructions and the compiled
-primary model request from the assignment type editor. Durable case libraries,
-approved run-one/run-all workflows, and tutor evaluation remain follow-on
-slices.
+primary model request from the assignment type editor. The next implemented
+slice adds a grading-assistant case library and run-all history. Case approval,
+release gates, and tutor evaluation remain follow-on slices.
 
 ### July 13 Controlled Prompt-Testing Slice
 
@@ -53,6 +53,36 @@ saved, approved, repeated, or included in run history. It exists so an admin can
 iterate on a prompt before the next slice adds assignment-type-owned case
 libraries, durable runs, approved criteria, and run-all behavior. AP History is
 excluded because its production prompt requires an assignment snapshot.
+
+### July 13 Grading Suite History Slice
+
+Each assignment type now owns a durable grading-assistant case library. An
+admin assigns every case to one rubric category and provides a case name, case
+document, and one narrow evaluation criterion. Multiple cases may target the
+same category. Removing a case archives it so prior run history remains
+readable.
+
+**Run all cases** executes the saved official grading prompt against every
+active case. It does not run unsaved prompt changes; admins continue to use the
+scratch **Test prompt** flow for that. Each suite run records:
+
+- the assignment type's grading-assistant version;
+- the exact compiled system and user-message template;
+- rubric, scoring-scale, and prompt-configuration snapshots;
+- one grading output, evaluator verdict, and evidence record per case; and
+- pass, fail, and needs-review totals.
+
+The assignment type editor renders these runs as a matrix. Rows are saved
+prompt-version runs. Columns are evaluation cases grouped under rubric-category
+headers. Green means pass, red means fail, and orange means needs review. The
+row summary is green only when every case passes. Historical prompt labels and
+result cells open small detail sheets instead of crowding the main editor.
+
+This is an admin-controlled development suite, not yet a release gate. Saving a
+case currently makes it active; named product/educator approval, repetitions,
+variance analysis, model comparisons, and published-version promotion remain
+future work. AP History remains excluded until suite runs can build the same
+assignment snapshot used by production grading.
 
 ## Ubiquitous Language
 
