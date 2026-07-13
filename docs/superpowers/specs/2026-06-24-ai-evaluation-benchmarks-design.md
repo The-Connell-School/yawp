@@ -1,8 +1,58 @@
 # AI Evaluation Benchmarks Design
 
-Date: 2026-06-24
-Status: Proposed plan
+Date: 2026-06-24; assignment-type ownership clarified 2026-07-13
+Status: Proposed plan with first controlled prompt-inspection slice implemented
 Owner: Yawp product/engineering
+
+## July 13 Product Decision: Evaluation Is Assignment-Type-Owned
+
+There is no universal Yawp benchmark. An evaluation only has meaning inside one
+assignment type because that assignment type owns the rubric, scoring scale,
+grading instructions, tutor modules, and rubric relationships that define good
+behavior.
+
+Each assignment type has two separate evaluation targets:
+
+1. **Grading assistant** — cases are submitted document examples. The target is
+   evaluated on rubric-grounded scoring and feedback.
+2. **Tutor** — cases are student-document and conversation scenarios. The target
+   is evaluated on coaching behavior, rubric alignment, and instructional
+   boundaries.
+
+Each target owns its own evaluation suite, cases, criteria, runs, and results.
+Cases and criteria can be customized within that assignment type. They are not
+shared as universal rules. Reusable examples may be copied into another
+assignment type, but the copied case becomes part of the receiving assignment
+type's suite and must be approved in that context.
+
+The admin experience should remain intentionally controlled and minimal. The
+first slice exposes the saved grading-assistant instructions and the compiled
+primary model request from the assignment type editor. Case libraries, run-one,
+run-all, automated evaluation, and tutor evaluation remain follow-on slices.
+
+## Ubiquitous Language
+
+Use these terms consistently in code, product copy, and handoff documents:
+
+| Term | Meaning |
+| --- | --- |
+| **Assignment Type** | The educational contract that owns the rubric, scoring, grading behavior, tutor behavior, and both evaluation targets. |
+| **Evaluation Target** | The AI behavior being tested inside an assignment type: either **Grading Assistant** or **Tutor**. |
+| **Prompt Configuration** | The editable, assignment-type-owned instructions and safe settings used to build a target's request. |
+| **Compiled Invocation** | The exact primary model request produced by production code from a prompt configuration plus case inputs: system message, messages, and generation settings. In UI copy, **Compiled prompt** is the shorter label. |
+| **Evaluation Suite** | One assignment type's approved collection of cases and criteria for one evaluation target. |
+| **Evaluation Case** | One named, repeatable scenario with inputs and expected behavior. A grading-assistant case's main input is a **Case Document**. |
+| **Case Document** | The example student document or submission content used by a grading-assistant evaluation case. |
+| **Evaluation Criterion** | One narrow rule describing what success means for a case, such as an exact schema check, score band, required behavior, or forbidden behavior. |
+| **Evaluator** | The code check, human reviewer, or constrained model judge that applies one or more criteria. |
+| **Evaluation Run** | An execution of one target and prompt/configuration version against one case or the full suite. |
+| **Attempt** | One model execution for one case within a run. Repetitions create multiple attempts. |
+| **Evaluation Result** | The recorded output and criterion judgments for an attempt: pass, fail, needs review, or blocked. |
+| **Release Gate** | The assignment-type-level decision that summarizes approved results and determines whether a prompt/configuration change is safe to publish. |
+
+Avoid using **benchmark** to mean a universal set of rules. When the word is
+useful, it is shorthand for a specific assignment type's approved evaluation
+suite and baseline run.
 
 ## Summary
 
@@ -862,4 +912,3 @@ External eval tools can still be useful for local development or side experiment
 10. Add teacher-training/calibration views.
 
 The key is sequencing: do not build live AI benchmarks before the system can prove which version, rubric, module, and document each AI call used.
-
