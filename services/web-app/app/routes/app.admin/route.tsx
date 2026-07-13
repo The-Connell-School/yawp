@@ -14,6 +14,7 @@ import {
   ScrollText,
   ClipboardList,
   Settings,
+  FlaskConical,
 } from 'lucide-react';
 import { requireAdmin } from '~/utils/auth.server';
 
@@ -37,6 +38,11 @@ export const adminTabs = [
     label: 'Teacher Courses',
     to: '/app/admin/teacher-trainings',
     icon: <GraduationCap size={16} className="opacity-75 mr-1" />,
+  },
+  {
+    label: 'AI Evaluations',
+    to: '/app/admin/ai-evaluations',
+    icon: <FlaskConical size={16} className="opacity-75 mr-1" />,
   },
   {
     label: 'Audit',
