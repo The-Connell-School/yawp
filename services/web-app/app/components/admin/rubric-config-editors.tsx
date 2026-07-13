@@ -2201,7 +2201,7 @@ function EvaluationRunDetailSheet({
   );
 }
 
-function EvaluationHistorySection({
+export function EvaluationHistorySection({
   assignmentTypeId,
   evaluationHistory,
   isPromptPreviewStale,
@@ -2518,7 +2518,6 @@ export function PromptConfigEditor({
   title,
   scoringScale,
   rubric,
-  evaluationHistory,
 }: {
   initial: PromptConfigData;
   namePrefix?: string;
@@ -2530,7 +2529,6 @@ export function PromptConfigEditor({
   title?: string;
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
-  evaluationHistory?: AssignmentTypeEvaluationHistory;
 }) {
   const [cfg, setCfg] = useState<PromptConfigData>(initial);
   const [editOpen, setEditOpen] = useState(false);
@@ -2608,14 +2606,6 @@ export function PromptConfigEditor({
           </Button>
         ) : null}
       </div>
-
-      {assignmentTypeId && evaluationHistory ? (
-        <EvaluationHistorySection
-          assignmentTypeId={assignmentTypeId}
-          evaluationHistory={evaluationHistory}
-          isPromptPreviewStale={isPromptPreviewStale}
-        />
-      ) : null}
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
         <SheetContent

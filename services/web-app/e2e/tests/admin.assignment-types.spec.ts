@@ -101,13 +101,31 @@ test.describe.serial('Admin assignment types', () => {
         .getByRole('dialog', { name: 'Edit instructions' })
         .getByRole('button', { name: 'Done' })
         .click();
-      await expect(
-        page.getByText('Save prompt changes before running the full suite.')
-      ).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Update' })).toBeEnabled();
       await page.getByRole('button', { name: 'Cancel' }).click();
 
       await expect(
         page.getByRole('heading', { name: 'Evaluation history' })
+      ).toHaveCount(0);
+      const evaluationsLink = page.getByRole('link', {
+        name: 'Evaluations',
+        exact: true,
+      });
+      await expect(evaluationsLink).toBeVisible();
+      await expect(evaluationsLink).toHaveAttribute(
+        'href',
+        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
+      );
+      await evaluationsLink.click();
+      await expect(page).toHaveURL(
+        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
+      );
+      await expect(
+        page.getByRole('heading', { name: 'Evaluations', exact: true })
+      ).toBeVisible();
+      await expect(page.getByText(title, { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Back to assignment type' })
       ).toBeVisible();
       await expect(
         page.getByText(
@@ -222,6 +240,10 @@ test.describe.serial('Admin assignment types', () => {
         historyTable.getByLabel('Encouraging opening: 1/2 passed')
       ).toBeVisible();
 
+      await page.getByRole('link', { name: 'Back to assignment type' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
       await page.getByRole('button', { name: 'Edit instructions' }).click();
       const versionTwoInstructions = page.getByRole('dialog', {
         name: 'Edit instructions',
@@ -237,6 +259,12 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByRole('button', { name: 'Update' }).click();
       await expect(page.getByRole('button', { name: 'Update' })).toBeDisabled();
 
+      await page
+        .getByRole('link', { name: 'Evaluations', exact: true })
+        .click();
+      await expect(page).toHaveURL(
+        `/app/admin/assignment-types/${assignmentTypeId}/evaluations`
+      );
       await page.getByRole('button', { name: 'Run all cases' }).click();
       await expect(historyTable.getByRole('row', { name: /v2/ })).toContainText(
         '2/2'
@@ -261,6 +289,10 @@ test.describe.serial('Admin assignment types', () => {
         .getByRole('button', { name: 'Close' })
         .first()
         .click();
+      await page.getByRole('link', { name: 'Back to assignment type' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },

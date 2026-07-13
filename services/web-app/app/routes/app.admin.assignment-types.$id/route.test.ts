@@ -304,42 +304,12 @@ describe('admin assignment type detail action', () => {
       strictnessLevel: 'intermediate',
       documentText: '[CASE DOCUMENT CONTENT]',
     });
-    expect(data.evaluationHistory.cases).toEqual([
-      expect.objectContaining({
-        id: 'case-1',
-        evaluationId: 'evaluation-1',
-        rubricCategoryKey: 'ideas_and_analysis',
-        expectedOutput: {
-          overallComment: 'Jordan, you have a clear claim. Revise next.',
-        },
-      }),
-    ]);
-    expect(data.evaluationHistory.evaluations).toEqual([
-      expect.objectContaining({
-        id: 'evaluation-1',
-        title: 'Positive greeting',
-      }),
-    ]);
-    expect(data.evaluationHistory.runs).toEqual([
-      expect.objectContaining({
-        id: 'run-1',
-        promptVersion: 4,
-        passedCases: 1,
-        promptSnapshot: {
-          compiledPrompt: {
-            system: 'You are a grading assistant. Prompt v4.',
-            userMessage: 'Grade the case document.',
-          },
-        },
-        results: [
-          expect.objectContaining({
-            caseId: 'case-1',
-            criterion: 'The feedback identifies the claim.',
-            status: 'pass',
-          }),
-        ],
-      }),
-    ]);
+    expect(data.evaluationHistory).toBeUndefined();
+    const assignmentTypeQuery =
+      prisma.assignmentType.findUnique.mock.calls[0]?.[0];
+    expect(assignmentTypeQuery.include.evaluations).toBeUndefined();
+    expect(assignmentTypeQuery.include.evaluationCases).toBeUndefined();
+    expect(assignmentTypeQuery.include.evaluationRuns).toBeUndefined();
   });
 
   test('does not present the standard prompt as the exact AP History invocation', async () => {

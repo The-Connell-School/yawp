@@ -13,21 +13,12 @@ import {
 import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
 import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
-import type { AssignmentTypeEvaluationStatus } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 
 const PROMPT_PREVIEW_INPUTS = {
   studentFirstName: 'Jordan',
   strictnessLevel: 'intermediate',
   documentText: '[CASE DOCUMENT CONTENT]',
 } as const;
-
-const EVALUATION_RUN_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Chicago',
-  month: 'short',
-  day: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-});
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -37,15 +28,6 @@ function parseJsonFormField(formData: FormData, name: string) {
   } catch {
     throw new Response(`${name} must be valid JSON`, { status: 400 });
   }
-}
-
-function normalizeEvaluationStatus(
-  status: string
-): AssignmentTypeEvaluationStatus {
-  if (status === 'pass' || status === 'fail' || status === 'blocked') {
-    return status;
-  }
-  return 'needs_review';
 }
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -65,19 +47,6 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         orderBy: { position: 'asc' },
       },
       image: { select: { id: true } },
-      evaluations: {
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-      },
-      evaluationCases: {
-        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-      },
-      evaluationRuns: {
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-        include: {
-          results: { orderBy: { createdAt: 'asc' } },
-        },
-      },
     },
   });
 
@@ -85,63 +54,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  const evaluationHistory = {
-    evaluations: (course.evaluations ?? []).map((evaluation) => ({
-      id: evaluation.id,
-      title: evaluation.title,
-      description: evaluation.description,
-      position: evaluation.position,
-      archived: Boolean(evaluation.archivedAt),
-      createdAt: evaluation.createdAt.toISOString(),
-    })),
-    cases: (course.evaluationCases ?? []).map((evaluationCase) => ({
-      id: evaluationCase.id,
-      evaluationId: evaluationCase.evaluationId,
-      title: evaluationCase.title,
-      rubricCategoryKey: evaluationCase.rubricCategoryKey,
-      documentText: evaluationCase.documentText,
-      criterion: evaluationCase.criterion,
-      expectedOutput: evaluationCase.expectedOutputJson,
-      position: evaluationCase.position,
-      archived: Boolean(evaluationCase.archivedAt),
-      createdAt: evaluationCase.createdAt.toISOString(),
-    })),
-    runs: (course.evaluationRuns ?? []).map((run) => ({
-      id: run.id,
-      promptVersion: run.promptVersion,
-      status: run.status,
-      totalCases: run.totalCases,
-      passedCases: run.passedCases,
-      failedCases: run.failedCases,
-      needsReviewCases: run.needsReviewCases,
-      createdAt: run.createdAt.toISOString(),
-      createdAtLabel: EVALUATION_RUN_DATE_FORMATTER.format(run.createdAt),
-      completedAt: run.completedAt?.toISOString() ?? null,
-      promptSnapshot: run.promptSnapshotJson,
-      results: run.results.map((result) => ({
-        id: result.id,
-        caseId: result.caseId,
-        caseTitle: result.caseTitle,
-        rubricCategoryKey: result.rubricCategoryKey,
-        criterion: result.criterion,
-        status: normalizeEvaluationStatus(result.status),
-        evidence: result.evidence,
-        gradingOutput: result.gradingOutputJson,
-        expectedOutput: result.expectedOutputJson,
-      })),
-    })),
-  };
-  const {
-    evaluations: _evaluations,
-    evaluationCases: _evaluationCases,
-    evaluationRuns: _evaluationRuns,
-    ...courseForEditor
-  } = course;
-
   if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
     return dataResponse({
-      course: courseForEditor,
-      evaluationHistory,
+      course,
       gradingAssistantPromptPreview: null,
       gradingAssistantPromptPreviewUnavailableReason:
         'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
@@ -159,8 +74,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   });
 
   return dataResponse({
-    course: courseForEditor,
-    evaluationHistory,
+    course,
     gradingAssistantPromptPreview: {
       ...compiledInvocation,
       version: resolvedGradingConfig.version,
@@ -322,7 +236,6 @@ export default function AssignmentTypeRoute() {
     course,
     gradingAssistantPromptPreview,
     gradingAssistantPromptPreviewUnavailableReason,
-    evaluationHistory,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -338,7 +251,6 @@ export default function AssignmentTypeRoute() {
       gradingAssistantPromptPreviewUnavailableReason={
         gradingAssistantPromptPreviewUnavailableReason ?? undefined
       }
-      evaluationHistory={evaluationHistory}
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

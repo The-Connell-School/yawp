@@ -7,7 +7,12 @@ import {
   type ReactNode,
 } from 'react';
 import { Form, Link, useFetcher } from 'react-router';
-import { ArchiveIcon, ArrowLeft, RotateCcwIcon } from 'lucide-react';
+import {
+  ArchiveIcon,
+  ArrowLeft,
+  FlaskConical,
+  RotateCcwIcon,
+} from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
@@ -34,7 +39,6 @@ import {
   type AssignmentTypeModuleRow,
 } from './assignment-type-modules-section';
 import { RubricSourceBanner } from './rubric-source-indicator';
-import type { AssignmentTypeEvaluationHistory } from '~/domain/ai-evaluation/assignment-type-evaluation.shared';
 
 type AssignmentTypeEditorFormProps = {
   mode: 'create' | 'edit';
@@ -46,7 +50,6 @@ type AssignmentTypeEditorFormProps = {
   promptConfig?: PromptConfigData;
   gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
   gradingAssistantPromptPreviewUnavailableReason?: string;
-  evaluationHistory?: AssignmentTypeEvaluationHistory;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
@@ -138,7 +141,6 @@ export function AssignmentTypeEditorForm({
   promptConfig = DEFAULT_PROMPT_CONFIG,
   gradingAssistantPromptPreview,
   gradingAssistantPromptPreviewUnavailableReason,
-  evaluationHistory,
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -413,8 +415,18 @@ export function AssignmentTypeEditorForm({
             title={title}
             scoringScale={scoringScaleState}
             rubric={rubricState}
-            evaluationHistory={evaluationHistory}
           />
+          {assignmentTypeId ? (
+            <Button type="button" variant="outline" size="sm" asChild>
+              <Link
+                to={`/app/admin/assignment-types/${assignmentTypeId}/evaluations`}
+                className="w-fit"
+              >
+                <FlaskConical className="mr-1.5 size-4 shrink-0" />
+                Evaluations
+              </Link>
+            </Button>
+          ) : null}
         </Section>
 
         {!isEdit ? (
