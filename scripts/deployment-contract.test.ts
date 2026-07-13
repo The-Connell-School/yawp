@@ -62,6 +62,7 @@ describe('production deployment contract', () => {
   test('Prisma package keeps both migration release gates available', () => {
     const prismaPackage = JSON.parse(readRepoFile('packages/prisma/package.json'));
 
+    expect(prismaPackage.scripts.prisma).toBe('prisma');
     expect(prismaPackage.scripts['assignment-type-release-gate']).toBe(
       'bun run scripts/assignment-type-release-gate.ts'
     );
@@ -168,6 +169,24 @@ describe('production deployment contract', () => {
 });
 
 describe('worktree local setup contract', () => {
+  test('worktree setup isolates generated resources by workspace instance', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+
+    expect(setupScript).toContain(
+      'WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"'
+    );
+    expect(setupScript).toContain('SLUG="$WORKTREE_NAME"');
+    expect(setupScript).not.toContain('SLUG="$(basename "$ROOT")"');
+  });
+
+  test('worktree setup installs dependencies before any Prisma generation', () => {
+    const setupScript = readRepoFile('scripts/worktree-local-setup.sh');
+
+    expect(setupScript).toContain(
+      'write_env_files\n\nbun install\n\nif [[ "$FRESH" -eq 1 ]]'
+    );
+  });
+
   test('root dev command loads the isolated worktree app port before starting React Router', () => {
     const rootPackage = JSON.parse(readRepoFile('package.json'));
 

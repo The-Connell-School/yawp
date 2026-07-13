@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SLUG="$(basename "$ROOT")"
+WORKTREE_NAME="$(basename "$(dirname "$ROOT")")"
+SLUG="$WORKTREE_NAME"
 CONFIG_DIR="$ROOT/.worktree-local"
 CONFIG_FILE="$CONFIG_DIR/config.env"
 
@@ -33,7 +34,11 @@ ensure_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$CONFIG_FILE"
-    return
+    if [[ "$SLUG" == "$WORKTREE_NAME" ]]; then
+      return
+    fi
+
+    SLUG="$WORKTREE_NAME"
   fi
 
   local slot
@@ -161,7 +166,6 @@ database_seeded() {
 migrate_and_seed() {
   (
     cd "$ROOT"
-    bun install
     bun prisma:generate
     bun run --cwd packages/prisma prisma migrate deploy
     bun run --cwd packages/prisma backfill-class-art-key
@@ -227,6 +231,8 @@ done
 ensure_config
 ensure_postgres
 write_env_files
+
+bun install
 
 if [[ "$FRESH" -eq 1 ]]; then
   reset_database
