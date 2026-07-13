@@ -12,11 +12,13 @@ import type { RubricCategory } from '~/domain/assignment-types/assignment-type-r
 export type AssignmentTypeGradingInstructions =
   | {
       mode: 'preset';
+      systemInstructions?: string;
       rubricInstructions: string;
       scoreInstructions: string;
     }
   | {
       mode: 'unified';
+      systemInstructions?: string;
       gradingInstructions: string;
     }
   | {
@@ -46,7 +48,7 @@ export type ResolvedAssignmentTypeGradingConfig = {
   sourceTemplateSlug: string | null;
 };
 
-type AssignmentTypeGradingRow = {
+export type AssignmentTypeGradingRow = {
   id: string;
   title: string;
   kind: string | null;
@@ -89,17 +91,23 @@ function getPromptConfigSnapshot(
 export function getAssignmentTypeGradingInstructions(
   promptConfig: Record<string, unknown>
 ): AssignmentTypeGradingInstructions {
+  const systemInstructions =
+    typeof promptConfig.systemInstructions === 'string' &&
+    promptConfig.systemInstructions.trim()
+      ? promptConfig.systemInstructions.trim()
+      : undefined;
   const gradingInstructions =
     typeof promptConfig.gradingInstructions === 'string'
       ? promptConfig.gradingInstructions.trim()
       : '';
   if (gradingInstructions) {
-    return { mode: 'unified', gradingInstructions };
+    return { mode: 'unified', systemInstructions, gradingInstructions };
   }
 
   if (promptConfig.instructionsPreset === 'legacy_thesis_driven_essay') {
     return {
       mode: 'preset',
+      systemInstructions,
       rubricInstructions: gradingAssistantRubricInstructions,
       scoreInstructions: gradingAssistantScoreScaleInstructions,
     };
@@ -115,12 +123,6 @@ export function getAssignmentTypeGradingInstructions(
     promptConfig.scoreInstructions.trim()
       ? promptConfig.scoreInstructions.trim()
       : 'Scores must be integers in the configured range.';
-  const systemInstructions =
-    typeof promptConfig.systemInstructions === 'string' &&
-    promptConfig.systemInstructions.trim()
-      ? promptConfig.systemInstructions.trim()
-      : undefined;
-
   return {
     mode: 'legacy-split',
     rubricInstructions,
@@ -129,7 +131,7 @@ export function getAssignmentTypeGradingInstructions(
   };
 }
 
-function buildResolvedConfig({
+export function buildResolvedAssignmentTypeGradingConfig({
   assignmentTypeId,
   assignmentTypeKind,
   assignmentTypeTitle,
@@ -165,7 +167,9 @@ function buildResolvedConfig({
     assignmentTypeTitle: row?.title ?? assignmentTypeTitle,
     label:
       parsedConfig.source === 'assignment-type'
-        ? (row?.title ?? assignmentTypeTitle ?? 'Assignment type grading config')
+        ? (row?.title ??
+          assignmentTypeTitle ??
+          'Assignment type grading config')
         : 'Thesis-driven essay grading assistant',
     version:
       parsedConfig.source === 'assignment-type'
@@ -176,7 +180,12 @@ function buildResolvedConfig({
     maxScore,
     rubricCategories,
     instructions: getAssignmentTypeGradingInstructions(promptConfigSnapshot),
-    rubricSnapshot: { categories: rubricCategories, minScore, maxScore, scoringType },
+    rubricSnapshot: {
+      categories: rubricCategories,
+      minScore,
+      maxScore,
+      scoringType,
+    },
     promptConfigSnapshot,
     outputSchemaSnapshot: parsedConfig.outputSchema,
     calibrationNotes: parsedConfig.calibrationNotes,
@@ -217,7 +226,7 @@ export async function resolveAssignmentTypeGradingConfig({
     },
   });
 
-  return buildResolvedConfig({
+  return buildResolvedAssignmentTypeGradingConfig({
     assignmentTypeId,
     assignmentTypeKind,
     assignmentTypeTitle,

@@ -52,9 +52,12 @@ test.describe.serial('Admin assignment types', () => {
 
       await page.getByRole('button', { name: 'Edit instructions' }).click();
       const editInstructionsDialog = page.getByRole('dialog', {
-        name: 'Edit grading instructions',
+        name: 'Edit instructions',
       });
       await expect(editInstructionsDialog).toBeVisible();
+      await editInstructionsDialog
+        .getByLabel('Custom system instructions')
+        .fill('Act as a careful evaluator for this assignment type.');
       await editInstructionsDialog
         .getByLabel('Grading instructions')
         .fill(
@@ -96,6 +99,11 @@ test.describe.serial('Admin assignment types', () => {
       await expect(
         compiledPromptDialog.getByText('You are a grading assistant.')
       ).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText(
+          'Act as a careful evaluator for this assignment type.'
+        )
+      ).toBeVisible();
       await expect(compiledPromptDialog.getByText(title)).toBeVisible();
       await expect(
         compiledPromptDialog.getByText(
@@ -111,13 +119,39 @@ test.describe.serial('Admin assignment types', () => {
       ).toBeVisible();
       await compiledPromptDialog.getByRole('button', { name: 'Close' }).click();
 
+      await page.getByRole('button', { name: 'Test prompt' }).click();
+      const testPromptDialog = page.getByRole('dialog', {
+        name: 'Test prompt',
+      });
+      await testPromptDialog
+        .getByLabel('Case document')
+        .fill('School uniforms should remain optional.');
+      await testPromptDialog
+        .getByLabel('Evaluation criterion')
+        .fill(
+          'The feedback should identify the thesis and give one grounded next step.'
+        );
+      await testPromptDialog.getByRole('button', { name: 'Run test' }).click();
+      await expect(
+        testPromptDialog.getByText('Pass', { exact: true })
+      ).toBeVisible();
+      await expect(
+        testPromptDialog.getByText('Jordan, make the stakes more explicit.')
+      ).toBeVisible();
+      await expect(
+        testPromptDialog.getByText(
+          'The response identifies the thesis and gives a grounded next step.'
+        )
+      ).toBeVisible();
+      await testPromptDialog.getByRole('button', { name: 'Close' }).click();
+
       await page.getByRole('button', { name: 'Edit instructions' }).click();
       await page
-        .getByRole('dialog', { name: 'Edit grading instructions' })
+        .getByRole('dialog', { name: 'Edit instructions' })
         .getByLabel('Grading instructions')
         .fill('This unsaved instruction must not appear as production-ready.');
       await page
-        .getByRole('dialog', { name: 'Edit grading instructions' })
+        .getByRole('dialog', { name: 'Edit instructions' })
         .getByRole('button', { name: 'Done' })
         .click();
       await expect(
@@ -163,6 +197,8 @@ test.describe.serial('Admin assignment types', () => {
         ],
       });
       expect(created.gradingPromptConfigJson).toMatchObject({
+        systemInstructions:
+          'Act as a careful evaluator for this assignment type.',
         gradingInstructions:
           'Grade against the rubric categories and give concise, actionable feedback.',
       });

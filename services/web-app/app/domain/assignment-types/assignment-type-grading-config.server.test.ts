@@ -8,9 +8,8 @@ const prisma = {
 
 mock.module('~/utils/db.server', () => ({ prisma }));
 
-const { resolveAssignmentTypeGradingConfig } = await import(
-  './assignment-type-grading-config.server'
-);
+const { resolveAssignmentTypeGradingConfig } =
+  await import('./assignment-type-grading-config.server');
 
 describe('resolveAssignmentTypeGradingConfig', () => {
   beforeEach(() => {
@@ -40,6 +39,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
         ],
       },
       gradingPromptConfigJson: {
+        systemInstructions:
+          'Act as a precise ACT Writing evaluator for this assignment type.',
         gradingInstructions: 'Grade this as ACT Writing.',
       },
       gradingOutputSchemaJson: { schemaVersion: 2 },
@@ -65,6 +66,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
     ]);
     expect(config.instructions).toEqual({
       mode: 'unified',
+      systemInstructions:
+        'Act as a precise ACT Writing evaluator for this assignment type.',
       gradingInstructions: 'Grade this as ACT Writing.',
     });
     expect(config.rubricSnapshot).toEqual({
@@ -74,6 +77,8 @@ describe('resolveAssignmentTypeGradingConfig', () => {
       scoringType: 'act_writing_2_12',
     });
     expect(config.promptConfigSnapshot).toEqual({
+      systemInstructions:
+        'Act as a precise ACT Writing evaluator for this assignment type.',
       gradingInstructions: 'Grade this as ACT Writing.',
     });
     expect(config.sourceTemplateSlug).toBe('act-writing-four-domain');

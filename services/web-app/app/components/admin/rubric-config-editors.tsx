@@ -27,6 +27,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Badge } from '~/components/ui/badge';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -1061,6 +1062,180 @@ function CompiledPromptSheet({
   );
 }
 
+type ScratchEvaluationCheck = {
+  status: 'pass' | 'fail' | 'blocked';
+  evidence: string;
+};
+
+type ScratchEvaluationResult = {
+  status: 'pass' | 'fail' | 'needs_review';
+  gradingOutput: {
+    categories: Array<{ key: string; score: number; comment: string }>;
+    overallComment: string;
+  } | null;
+  rawGradingOutput: string;
+  responseContract: ScratchEvaluationCheck;
+  criterion: ScratchEvaluationCheck;
+};
+
+function scratchCheckBadgeVariant(
+  status: ScratchEvaluationCheck['status']
+): 'success' | 'destructive' | 'warning-soft' {
+  if (status === 'pass') return 'success';
+  if (status === 'fail') return 'destructive';
+  return 'warning-soft';
+}
+
+function scratchCheckBadgeLabel(status: ScratchEvaluationCheck['status']) {
+  if (status === 'pass') return 'Pass';
+  if (status === 'fail') return 'Fail';
+  return 'Blocked';
+}
+
+function ScratchTestSheet({
+  open,
+  onOpenChange,
+  assignmentTypeId,
+  title,
+  scoringScale,
+  rubric,
+  promptConfig,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  assignmentTypeId: string;
+  title: string;
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
+  promptConfig: PromptConfigData;
+}) {
+  const fetcher = useFetcher<{
+    success?: boolean;
+    result?: ScratchEvaluationResult;
+    message?: string;
+  }>();
+  const [documentText, setDocumentText] = useState('');
+  const [criterion, setCriterion] = useState('');
+  const isRunning = fetcher.state !== 'idle';
+  const result =
+    fetcher.data?.success && fetcher.data.result ? fetcher.data.result : null;
+  const errorMessage =
+    fetcher.data && fetcher.data.success === false
+      ? (fetcher.data.message ?? 'The scratch test could not run.')
+      : null;
+  const canRun =
+    documentText.trim().length > 0 && criterion.trim().length > 0 && !isRunning;
+
+  function handleRun() {
+    if (!canRun) return;
+    const formData = new FormData();
+    formData.set('assignmentTypeId', assignmentTypeId);
+    formData.set('title', title);
+    formData.set('scoringScaleJson', scoringScaleSnapshot(scoringScale));
+    formData.set('rubricJson', rubricSnapshot(rubric));
+    formData.set('promptConfigJson', promptConfigSnapshot(promptConfig));
+    formData.set('documentText', documentText);
+    formData.set('criterion', criterion);
+    formData.set('strictnessLevel', 'intermediate');
+    fetcher.submit(formData, {
+      method: 'POST',
+      action: '/api/domain/grading-assistant-test',
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="flex w-full max-w-full flex-col overflow-y-auto sm:max-w-xl md:max-w-2xl"
+      >
+        <SheetHeader>
+          <SheetTitle>Test prompt</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground text-pretty">
+            Scratch test — not saved. Uses your current draft instructions and
+            rubric.
+          </p>
+          <div className="space-y-2">
+            <Label htmlFor="scratch-test-document">Case document</Label>
+            <Textarea
+              id="scratch-test-document"
+              rows={10}
+              value={documentText}
+              onChange={(event) => setDocumentText(event.target.value)}
+              placeholder="Paste or write a sample student submission..."
+              disabled={isRunning}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="scratch-test-criterion">Evaluation criterion</Label>
+            <Textarea
+              id="scratch-test-criterion"
+              rows={3}
+              value={criterion}
+              onChange={(event) => setCriterion(event.target.value)}
+              placeholder="What should the AI check for? e.g. Does the thesis take a clear position?"
+              disabled={isRunning}
+            />
+          </div>
+          <Button
+            type="button"
+            className="w-full"
+            onClick={handleRun}
+            disabled={!canRun}
+          >
+            {isRunning ? (
+              <>
+                <Loader2 className="mr-2 size-4 shrink-0 animate-spin" />
+                Running...
+              </>
+            ) : (
+              'Run test'
+            )}
+          </Button>
+
+          {errorMessage ? (
+            <p className="text-sm text-destructive">{errorMessage}</p>
+          ) : null}
+
+          {result ? (
+            <div className="space-y-4 border-t pt-4">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Grading output</p>
+                <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
+                  {result.gradingOutput
+                    ? JSON.stringify(result.gradingOutput, null, 2)
+                    : result.rawGradingOutput}
+                </pre>
+                {result.responseContract.status !== 'pass' ? (
+                  <p className="text-sm text-destructive">
+                    {result.responseContract.evidence}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium">Evaluator result</p>
+                  <Badge
+                    variant={scratchCheckBadgeVariant(result.criterion.status)}
+                    aria-label={`Evaluator result: ${scratchCheckBadgeLabel(result.criterion.status)}`}
+                  >
+                    {scratchCheckBadgeLabel(result.criterion.status)}
+                  </Badge>
+                </div>
+                <p className="text-sm text-pretty">
+                  {result.criterion.evidence}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function PromptConfigEditor({
   initial,
   namePrefix = '',
@@ -1068,6 +1243,10 @@ export function PromptConfigEditor({
   gradingAssistantPromptPreview,
   gradingAssistantPromptPreviewUnavailableReason,
   isPromptPreviewStale = false,
+  assignmentTypeId,
+  title,
+  scoringScale,
+  rubric,
 }: {
   initial: PromptConfigData;
   namePrefix?: string;
@@ -1075,13 +1254,22 @@ export function PromptConfigEditor({
   gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
   gradingAssistantPromptPreviewUnavailableReason?: string;
   isPromptPreviewStale?: boolean;
+  assignmentTypeId?: string | null;
+  title?: string;
+  scoringScale?: ScoringScaleData;
+  rubric?: RubricData;
 }) {
   const [cfg, setCfg] = useState<PromptConfigData>(initial);
   const [editOpen, setEditOpen] = useState(false);
   const [compiledOpen, setCompiledOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
   const usesBuiltInPreset = Boolean(cfg.instructionsPreset?.trim());
   const instructions = cfg.gradingInstructions?.trim() ?? '';
   const textareaId = `${namePrefix}gradingInstr`;
+  const systemInstructionsId = `${namePrefix}systemInstr`;
+  const canTestPrompt = Boolean(
+    assignmentTypeId && gradingAssistantPromptPreview
+  );
 
   function updateCfg(next: PromptConfigData) {
     setCfg(next);
@@ -1136,27 +1324,60 @@ export function PromptConfigEditor({
               'Save this assignment type to preview the compiled prompt.'}
           </p>
         )}
+        {canTestPrompt ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setTestOpen(true)}
+          >
+            Test prompt
+          </Button>
+        ) : null}
       </div>
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
-        <SheetContent aria-describedby={undefined}>
+        <SheetContent
+          aria-describedby={undefined}
+          className="flex max-h-screen flex-col overflow-y-auto"
+        >
           <SheetHeader>
-            <SheetTitle>Edit grading instructions</SheetTitle>
+            <SheetTitle>Edit instructions</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 space-y-2">
-            <Label htmlFor={textareaId}>Grading instructions</Label>
-            <Textarea
-              id={textareaId}
-              rows={12}
-              value={cfg.gradingInstructions ?? ''}
-              onChange={(e) =>
-                updateCfg({ ...cfg, gradingInstructions: e.target.value })
-              }
-            />
-            <p className="text-sm text-muted-foreground text-pretty">
-              Tell the AI how to grade this assignment. Include scoring rules,
-              tone, and how to interpret each rubric category.
-            </p>
+          <div className="mt-4 space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor={systemInstructionsId}>
+                Custom system instructions
+              </Label>
+              <Textarea
+                id={systemInstructionsId}
+                rows={4}
+                value={cfg.systemInstructions ?? ''}
+                onChange={(e) =>
+                  updateCfg({ ...cfg, systemInstructions: e.target.value })
+                }
+              />
+              <p className="text-sm text-muted-foreground text-pretty">
+                Sets tone or persona for the AI. Core grading rules — JSON
+                output format, score range, feedback structure — always apply
+                and aren&apos;t editable here.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={textareaId}>Grading instructions</Label>
+              <Textarea
+                id={textareaId}
+                rows={12}
+                value={cfg.gradingInstructions ?? ''}
+                onChange={(e) =>
+                  updateCfg({ ...cfg, gradingInstructions: e.target.value })
+                }
+              />
+              <p className="text-sm text-muted-foreground text-pretty">
+                Tell the AI how to grade this assignment. Include scoring rules,
+                tone, and how to interpret each rubric category.
+              </p>
+            </div>
           </div>
           <SheetFooter className="mt-4">
             <SheetClose asChild>
@@ -1174,6 +1395,18 @@ export function PromptConfigEditor({
         />
       ) : null}
 
+      {canTestPrompt && assignmentTypeId ? (
+        <ScratchTestSheet
+          open={testOpen}
+          onOpenChange={setTestOpen}
+          assignmentTypeId={assignmentTypeId}
+          title={title ?? ''}
+          scoringScale={scoringScale ?? DEFAULT_SCORING_SCALE}
+          rubric={rubric ?? { categories: [] }}
+          promptConfig={cfg}
+        />
+      ) : null}
+
       <input
         type="hidden"
         name="promptConfigJson"
@@ -1185,6 +1418,9 @@ export function PromptConfigEditor({
 
 function serializePromptConfig(cfg: PromptConfigData): Record<string, unknown> {
   const result: Record<string, unknown> = {};
+  if (cfg.systemInstructions?.trim()) {
+    result.systemInstructions = cfg.systemInstructions.trim();
+  }
   if (cfg.gradingInstructions?.trim()) {
     result.gradingInstructions = cfg.gradingInstructions.trim();
   }

@@ -28,7 +28,10 @@ describe('parseAssignmentTypeRubricConfig', () => {
           },
         ],
       },
-      gradingPromptConfigJson: { gradingInstructions: 'Grade against this rubric.' },
+      gradingPromptConfigJson: {
+        systemInstructions: 'Act as a careful assignment-specific evaluator.',
+        gradingInstructions: 'Grade against this rubric.',
+      },
       gradingOutputSchemaJson: { schemaVersion: 2 },
       gradingCalibrationNotes: 'Pilot notes',
     });
@@ -48,7 +51,12 @@ describe('parseAssignmentTypeRubricConfig', () => {
         weight: 0.6,
       },
     ]);
-    expect(config.promptConfig.gradingInstructions).toBe('Grade against this rubric.');
+    expect(config.promptConfig.gradingInstructions).toBe(
+      'Grade against this rubric.'
+    );
+    expect(config.promptConfig.systemInstructions).toBe(
+      'Act as a careful assignment-specific evaluator.'
+    );
     expect(config.outputSchema).toEqual({ schemaVersion: 2 });
     expect(config.calibrationNotes).toBe('Pilot notes');
   });
@@ -68,7 +76,9 @@ describe('parseAssignmentTypeRubricConfig', () => {
         (category) => category.key === 'grammar_and_mechanics'
       )?.weight
     ).toBe(0.1);
-    expect(config.promptConfig.instructionsPreset).toBe('legacy_thesis_driven_essay');
+    expect(config.promptConfig.instructionsPreset).toBe(
+      'legacy_thesis_driven_essay'
+    );
   });
 });
 

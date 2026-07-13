@@ -406,6 +406,10 @@ export function AssignmentTypeEditorForm({
               gradingAssistantPromptPreviewUnavailableReason
             }
             isPromptPreviewStale={isPromptPreviewStale}
+            assignmentTypeId={assignmentTypeId ?? null}
+            title={title}
+            scoringScale={scoringScaleState}
+            rubric={rubricState}
           />
         </Section>
 

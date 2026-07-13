@@ -38,12 +38,19 @@ export function compileGradingAssistantInvocation({
     getGradingAssistantStrictnessInstructions(strictnessLevel);
   const strictnessBlock = `Grading assistant strictness: ${strictnessLabel}\n${strictnessInstructions}\n\n`;
   const gradingSystemBase = `You are a grading assistant. Return ONLY valid JSON with the schema:\n{\n  "categories": [{"key": string, "score": ${minScore}-${maxScore}, "comment": string}],\n  "overallComment": string\n}\nScores must be integers ${minScore}-${maxScore}.\nReturn exactly one category for each rubric key provided.\nProvide concise, actionable comments.\nIn overallComment, start with "${studentFirstName}," and continue with cohesive feedback in a warm but professional tone.\nAfter the name, continue naturally (for example: "${studentFirstName}, you ...").\nDo not use fixed lead-ins like "Overall grade," or "${studentFirstName}, this is your overall feedback."`;
+  const assignmentTypeSystemInstructions =
+    'systemInstructions' in gradingConfig.instructions
+      ? gradingConfig.instructions.systemInstructions?.trim()
+      : undefined;
+  const assignmentTypeSystemBlock = assignmentTypeSystemInstructions
+    ? `\n\nAssignment type system instructions:\n${assignmentTypeSystemInstructions}`
+    : '';
 
   let system = gradingSystemBase;
   let userMessage = '';
 
   if (gradingConfig.instructions.mode === 'unified') {
-    system = `${gradingSystemBase}\nFollow the grading instructions in the user prompt exactly.`;
+    system = `${gradingSystemBase}${assignmentTypeSystemBlock}\nFollow the grading instructions in the user prompt exactly.`;
     userMessage = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${gradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nGrading instructions:\n${gradingConfig.instructions.gradingInstructions}\n\nEssay:\n${documentText}`;
   } else {
     const { rubricInstructions, scoreInstructions } =
@@ -51,11 +58,15 @@ export function compileGradingAssistantInvocation({
     const systemInstructions =
       gradingConfig.instructions.mode === 'legacy-split'
         ? gradingConfig.instructions.systemInstructions
-        : undefined;
-    const templateSystemInstructions = systemInstructions
-      ? `${systemInstructions}\n\n`
-      : '';
-    system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
+        : assignmentTypeSystemInstructions;
+    if (gradingConfig.instructions.mode === 'legacy-split') {
+      const templateSystemInstructions = systemInstructions
+        ? `${systemInstructions}\n\n`
+        : '';
+      system = `${templateSystemInstructions}${gradingSystemBase}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
+    } else {
+      system = `${gradingSystemBase}${assignmentTypeSystemBlock}\nUse the rubric language, proficiency bands, and category weights from the user prompt exactly.\n${scoreInstructions}`;
+    }
     userMessage = `Student first name: ${studentFirstName}\n\nAssignment type grading config: ${gradingConfig.label}\n\n${strictnessBlock}Rubric category keys (use these exact keys in categories[].key):\n${rubricText}\n\nRubric Instructions:\n${rubricInstructions}\n\nEssay:\n${documentText}`;
   }
 

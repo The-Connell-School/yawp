@@ -31,6 +31,8 @@ function gradingConfig(
     ],
     instructions: {
       mode: 'unified',
+      systemInstructions:
+        'Act as a precise writing coach who explains every scoring decision.',
       gradingInstructions:
         'Prioritize the strongest next revision and do not rewrite the essay.',
     },
@@ -59,6 +61,9 @@ describe('compileGradingAssistantInvocation', () => {
     );
     expect(invocation.system).toContain(
       'Follow the grading instructions in the user prompt exactly.'
+    );
+    expect(invocation.system).toContain(
+      'Assignment type system instructions:\nAct as a precise writing coach who explains every scoring decision.'
     );
     expect(invocation.userMessage).toContain('Student first name: Jordan');
     expect(invocation.userMessage).toContain(

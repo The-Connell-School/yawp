@@ -23,6 +23,7 @@ export type RubricData = {
 };
 
 export type PromptConfigData = {
+  systemInstructions?: string;
   gradingInstructions?: string;
   instructionsPreset?: string;
 };
@@ -35,7 +36,10 @@ export const DEFAULT_SCORING_SCALE: ScoringScaleData = {
 
 export const DEFAULT_RUBRIC: RubricData = { categories: [] };
 
-export const DEFAULT_PROMPT_CONFIG: PromptConfigData = { gradingInstructions: '' };
+export const DEFAULT_PROMPT_CONFIG: PromptConfigData = {
+  systemInstructions: '',
+  gradingInstructions: '',
+};
 
 export function parseScoringScale(raw: unknown): ScoringScaleData {
   const d = raw as Partial<ScoringScaleData> | null;
@@ -70,22 +74,26 @@ export function parsePromptConfig(raw: unknown): PromptConfigData {
       })
     | null;
 
-  if (typeof d?.gradingInstructions === 'string' && d.gradingInstructions.trim()) {
+  const systemInstructions =
+    typeof d?.systemInstructions === 'string' ? d.systemInstructions : '';
+
+  if (
+    typeof d?.gradingInstructions === 'string' &&
+    d.gradingInstructions.trim()
+  ) {
     return {
+      systemInstructions,
       gradingInstructions: d.gradingInstructions,
       instructionsPreset: d?.instructionsPreset ?? '',
     };
   }
 
-  const legacyParts = [
-    d?.systemInstructions,
-    d?.scoreInstructions,
-    d?.rubricInstructions,
-  ].filter(
+  const legacyParts = [d?.scoreInstructions, d?.rubricInstructions].filter(
     (part): part is string => typeof part === 'string' && part.trim().length > 0
   );
 
   return {
+    systemInstructions,
     gradingInstructions: legacyParts.join('\n\n'),
     instructionsPreset: d?.instructionsPreset ?? '',
   };

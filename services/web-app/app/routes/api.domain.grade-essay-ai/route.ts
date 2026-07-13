@@ -20,6 +20,7 @@ import {
   parseGradingAssistantStrictnessLevel,
 } from '~/domain/grading/grading-assistant-strictness';
 import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import { buildGradingAssistantOutputSchemas } from '~/domain/grading/grading-assistant-output';
 import { redirectWithToast } from '~/utils/toast.server';
 import {
   extractJsonObjectCandidates,
@@ -52,60 +53,6 @@ const POST = z.object({
   gradingAssistantStrictnessLevel: z.string().optional(),
   llmRetry: z.enum(['fallback']).optional(),
 });
-
-function buildAiSchemas({
-  rubricKeys,
-  minScore,
-  maxScore,
-}: {
-  rubricKeys: string[];
-  minScore: number;
-  maxScore: number;
-}) {
-  const RubricKeySchema = z.enum(rubricKeys as [string, ...string[]]);
-  const AiCategorySchema = z.object({
-    key: RubricKeySchema,
-    score: z.number().int().min(minScore).max(maxScore),
-    comment: z.string().min(1),
-  });
-  const AiCategoriesSchema = z
-    .array(AiCategorySchema)
-    .superRefine((categories, ctx) => {
-      if (categories.length !== rubricKeys.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Expected ${rubricKeys.length} rubric categories, received ${categories.length}.`,
-        });
-      }
-
-      const seen = new Set<string>();
-      for (const category of categories) {
-        if (seen.has(category.key)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Duplicate rubric category key: ${category.key}`,
-          });
-          continue;
-        }
-        seen.add(category.key);
-      }
-
-      for (const key of rubricKeys) {
-        if (!seen.has(key)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: `Missing rubric category key: ${key}`,
-          });
-        }
-      }
-    });
-  const AiResponseSchema = z.object({
-    categories: AiCategoriesSchema,
-    overallComment: z.string().min(1),
-  });
-
-  return { AiCategoriesSchema, AiResponseSchema };
-}
 
 const AiOverallCommentSchema = z.object({
   overallComment: z.string().min(1),
@@ -553,7 +500,10 @@ export async function action({ request }: ActionFunctionArgs) {
     maxScore,
     scoringType,
   };
-  const { AiCategoriesSchema, AiResponseSchema } = buildAiSchemas({
+  const {
+    GradingAssistantCategoriesSchema: AiCategoriesSchema,
+    GradingAssistantResponseSchema: AiResponseSchema,
+  } = buildGradingAssistantOutputSchemas({
     rubricKeys,
     minScore,
     maxScore,

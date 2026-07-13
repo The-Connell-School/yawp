@@ -126,7 +126,10 @@ describe('admin assignment type detail action', () => {
     );
     form.set(
       'promptConfigJson',
-      JSON.stringify({ gradingInstructions: 'Grade this as ACT Writing.' })
+      JSON.stringify({
+        systemInstructions: 'Act as an ACT Writing evaluator.',
+        gradingInstructions: 'Grade this as ACT Writing.',
+      })
     );
 
     await action({
@@ -163,6 +166,7 @@ describe('admin assignment type detail action', () => {
           ],
         },
         gradingPromptConfigJson: {
+          systemInstructions: 'Act as an ACT Writing evaluator.',
           gradingInstructions: 'Grade this as ACT Writing.',
         },
         gradingOutputSchemaJson: {
@@ -198,6 +202,7 @@ describe('admin assignment type detail action', () => {
         ],
       },
       gradingPromptConfigJson: {
+        systemInstructions: 'Act as an ACT Writing evaluator.',
         gradingInstructions: 'Apply the ACT Writing rubric exactly.',
       },
       gradingOutputSchemaJson: { schemaVersion: 1 },
@@ -222,6 +227,9 @@ describe('admin assignment type detail action', () => {
     expect(data.gradingAssistantPromptPreview.version).toBe(4);
     expect(data.gradingAssistantPromptPreview.system).toContain(
       'You are a grading assistant.'
+    );
+    expect(data.gradingAssistantPromptPreview.system).toContain(
+      'Assignment type system instructions:\nAct as an ACT Writing evaluator.'
     );
     expect(data.gradingAssistantPromptPreview.userMessage).toContain(
       'Assignment type grading config: ACT Writing'
