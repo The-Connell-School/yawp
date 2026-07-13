@@ -17,7 +17,9 @@ test.describe.serial('Admin assignment types', () => {
     try {
       await signIn('admin.e2e@yawp.test', 'admin-e2e-password');
       await page.goto('/app/admin/assignments');
-      await expect(page.getByRole('heading', { name: 'Assignment Types' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Assignment Types' })
+      ).toBeVisible();
 
       await page.getByRole('link', { name: 'Create assignment type' }).click();
       await expect(
@@ -35,20 +37,32 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByTestId('rubric-category-row-0').click();
       await page.getByLabel('Label', { exact: true }).fill('Thesis E2E');
       await page.getByLabel('Weight %').fill('60');
-      await page.locator('#category-edit-description').fill('Clear, defensible thesis for the essay.');
+      await page
+        .locator('#category-edit-description')
+        .fill('Clear, defensible thesis for the essay.');
       await page.getByRole('button', { name: 'Done' }).click();
 
       await page.getByTestId('rubric-category-row-1').click();
       await page.getByLabel('Label', { exact: true }).fill('Grammar E2E');
       await page.getByLabel('Weight %').fill('40');
-      await page.locator('#category-edit-description').fill('Grammar and syntax support clarity.');
+      await page
+        .locator('#category-edit-description')
+        .fill('Grammar and syntax support clarity.');
       await page.getByRole('button', { name: 'Done' }).click();
 
-      await page
-        .getByPlaceholder(
-          'Tell the AI how to grade this assignment. Include scoring rules, tone, and how to interpret each rubric category.'
-        )
-        .fill('Grade against the rubric categories and give concise, actionable feedback.');
+      await page.getByRole('button', { name: 'Edit instructions' }).click();
+      const editInstructionsDialog = page.getByRole('dialog', {
+        name: 'Edit grading instructions',
+      });
+      await expect(editInstructionsDialog).toBeVisible();
+      await editInstructionsDialog
+        .getByLabel('Grading instructions')
+        .fill(
+          'Grade against the rubric categories and give concise, actionable feedback.'
+        );
+      await editInstructionsDialog
+        .getByRole('button', { name: 'Done' })
+        .click();
 
       await Promise.all([
         page.waitForURL(
@@ -63,7 +77,56 @@ test.describe.serial('Admin assignment types', () => {
       expect(assignmentTypeId).toBeTruthy();
 
       await expect(page.locator('input[name="title"]')).toHaveValue(title);
-      await expect(page.getByRole('heading', { name: 'Edit assignment type' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Edit assignment type' })
+      ).toBeVisible();
+      await expect(page.getByText('Grading instructions')).not.toBeVisible();
+
+      await page.getByRole('button', { name: 'View compiled prompt' }).click();
+      const compiledPromptDialog = page.getByRole('dialog', {
+        name: 'Compiled prompt',
+      });
+      await expect(compiledPromptDialog).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText('System message')
+      ).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText('User message')
+      ).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText('You are a grading assistant.')
+      ).toBeVisible();
+      await expect(compiledPromptDialog.getByText(title)).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText(
+          'Grade against the rubric categories and give concise, actionable feedback.'
+        )
+      ).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText('[CASE DOCUMENT CONTENT]')
+      ).toBeVisible();
+      await expect(compiledPromptDialog.getByText('Version')).toBeVisible();
+      await expect(
+        compiledPromptDialog.getByText('Intermediate', { exact: true })
+      ).toBeVisible();
+      await compiledPromptDialog.getByRole('button', { name: 'Close' }).click();
+
+      await page.getByRole('button', { name: 'Edit instructions' }).click();
+      await page
+        .getByRole('dialog', { name: 'Edit grading instructions' })
+        .getByLabel('Grading instructions')
+        .fill('This unsaved instruction must not appear as production-ready.');
+      await page
+        .getByRole('dialog', { name: 'Edit grading instructions' })
+        .getByRole('button', { name: 'Done' })
+        .click();
+      await expect(
+        page.getByRole('button', { name: 'View compiled prompt' })
+      ).toBeDisabled();
+      await expect(
+        page.getByText('Save changes to preview the updated prompt.')
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel' }).click();
 
       const created = await prisma.assignmentType.findUniqueOrThrow({
         where: { id: assignmentTypeId! },
@@ -116,13 +179,18 @@ test.describe.serial('Admin assignment types', () => {
       await expect(page.getByRole('link', { name: 'View' })).toBeVisible();
 
       const createdModule = await prisma.assignmentModule.findFirstOrThrow({
-        where: { assignmentTypeId: assignmentTypeId!, title: 'Thesis planning' },
+        where: {
+          assignmentTypeId: assignmentTypeId!,
+          title: 'Thesis planning',
+        },
         select: { id: true },
       });
       moduleId = createdModule.id;
 
       await page.getByRole('link', { name: 'View' }).click();
-      await expect(page.getByRole('heading', { name: 'Module Details' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Module Details' })
+      ).toBeVisible();
 
       await page.getByRole('button', { name: 'Edit Module' }).click();
       await expect(page.getByText('Rubric relationships')).toBeVisible();
@@ -130,7 +198,9 @@ test.describe.serial('Admin assignment types', () => {
       await page.getByLabel('Grammar E2E').selectOption('supporting');
       await page.getByRole('button', { name: 'Save Changes' }).click();
 
-      await expect(page.getByRole('button', { name: 'Edit Module' })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Edit Module' })
+      ).toBeVisible();
 
       const updatedModule = await prisma.assignmentModule.findUniqueOrThrow({
         where: { id: moduleId },

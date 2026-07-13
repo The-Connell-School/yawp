@@ -10,6 +10,15 @@ import {
   parseRubric,
   parseScoringScale,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { resolveAssignmentTypeGradingConfig } from '~/domain/assignment-types/assignment-type-grading-config.server';
+import { compileGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import { AP_HISTORY_ASSIGNMENT_TYPE_KEY } from '~/domain/ap-history/schema';
+
+const PROMPT_PREVIEW_INPUTS = {
+  studentFirstName: 'Jordan',
+  strictnessLevel: 'intermediate',
+  documentText: '[CASE DOCUMENT CONTENT]',
+} as const;
 
 function parseJsonFormField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -45,7 +54,35 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  return dataResponse({ course });
+  if (course.systemKey === AP_HISTORY_ASSIGNMENT_TYPE_KEY) {
+    return dataResponse({
+      course,
+      gradingAssistantPromptPreview: null,
+      gradingAssistantPromptPreviewUnavailableReason:
+        'The AP History prompt is built from the assignment snapshot. Open a graded submission to inspect the full prompt.',
+    });
+  }
+
+  const resolvedGradingConfig = await resolveAssignmentTypeGradingConfig({
+    assignmentTypeId: course.id,
+    assignmentTypeKind: course.kind,
+    assignmentTypeTitle: course.title,
+  });
+  const compiledInvocation = compileGradingAssistantInvocation({
+    gradingConfig: resolvedGradingConfig,
+    ...PROMPT_PREVIEW_INPUTS,
+  });
+
+  return dataResponse({
+    course,
+    gradingAssistantPromptPreview: {
+      ...compiledInvocation,
+      version: resolvedGradingConfig.version,
+      source: resolvedGradingConfig.source,
+      previewInputs: PROMPT_PREVIEW_INPUTS,
+    },
+    gradingAssistantPromptPreviewUnavailableReason: null,
+  });
 }
 
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -195,7 +232,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
 }
 
 export default function AssignmentTypeRoute() {
-  const { course } = useLoaderData<typeof loader>();
+  const {
+    course,
+    gradingAssistantPromptPreview,
+    gradingAssistantPromptPreviewUnavailableReason,
+  } = useLoaderData<typeof loader>();
 
   return (
     <AssignmentTypeEditorForm
@@ -206,6 +247,10 @@ export default function AssignmentTypeRoute() {
       scoringScale={parseScoringScale(course.scoringScaleJson)}
       rubric={parseRubric(course.rubricJson)}
       promptConfig={parsePromptConfig(course.gradingPromptConfigJson)}
+      gradingAssistantPromptPreview={gradingAssistantPromptPreview ?? undefined}
+      gradingAssistantPromptPreviewUnavailableReason={
+        gradingAssistantPromptPreviewUnavailableReason ?? undefined
+      }
       archivedAt={course.archivedAt}
       imageId={course.image?.id ?? null}
       modules={course.assignmentModules}

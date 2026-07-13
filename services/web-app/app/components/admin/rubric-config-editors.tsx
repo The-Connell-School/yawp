@@ -41,7 +41,9 @@ import {
 } from '~/components/ui/select';
 import {
   Sheet,
+  SheetClose,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from '~/components/ui/sheet';
@@ -52,6 +54,9 @@ import {
   type RubricData,
   type ScoringScaleData,
 } from '~/domain/assignment-types/assignment-type-rubric.shared';
+import { getGradingAssistantStrictnessLabel } from '~/domain/grading/grading-assistant-strictness';
+import type { CompiledGradingAssistantInvocation } from '~/domain/grading/grading-assistant-invocation';
+import type { GradingAssistantStrictnessLevel } from '~/domain/grading/grading-assistant-strictness';
 
 const SCORING_SCALE_TYPES = [
   { value: 'weighted_1_5', label: 'Weighted 1–5' },
@@ -101,11 +106,11 @@ export function ScoringScaleEditor({
 }) {
   const [internalScale, setInternalScale] = useState<ScoringScaleData>(initial);
   const scale = value ?? internalScale;
-  const setScale = (next: ScoringScaleData | ((current: ScoringScaleData) => ScoringScaleData)) => {
+  const setScale = (
+    next: ScoringScaleData | ((current: ScoringScaleData) => ScoringScaleData)
+  ) => {
     const resolved =
-      typeof next === 'function'
-        ? next(value ?? internalScale)
-        : next;
+      typeof next === 'function' ? next(value ?? internalScale) : next;
     if (onChange) {
       onChange(resolved);
     } else {
@@ -237,12 +242,12 @@ function RubricImportPanel({
   const isLoadingSources = sourcesFetcher.state !== 'idle';
   const extractError =
     extractFetcher.data && !extractFetcher.data.success
-      ? extractFetcher.data.message ?? 'Failed to extract rubric.'
+      ? (extractFetcher.data.message ?? 'Failed to extract rubric.')
       : null;
   const copySources = sourcesFetcher.data?.sources ?? [];
   const copyLoadError =
     sourcesFetcher.data?.success === false
-      ? sourcesFetcher.data.message ?? 'Could not load assignment types.'
+      ? (sourcesFetcher.data.message ?? 'Could not load assignment types.')
       : null;
   const selectedSource =
     copySources.find((source) => source.id === selectedSourceId) ?? null;
@@ -425,11 +430,15 @@ function RubricImportPanel({
                 id="rubric-import-pdf"
                 type="file"
                 accept="application/pdf,.pdf"
-                onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  setPdfFile(event.target.files?.[0] ?? null)
+                }
                 disabled={isExtracting}
               />
               {pdfFile ? (
-                <p className="truncate text-sm text-muted-foreground">{pdfFile.name}</p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {pdfFile.name}
+                </p>
               ) : null}
             </div>
             <div className="space-y-2">
@@ -505,7 +514,9 @@ function RubricImportPanel({
                 {selectedSource ? (
                   <p className="text-sm text-muted-foreground">
                     Copies {selectedSource.categoryCount}{' '}
-                    {selectedSource.categoryCount === 1 ? 'category' : 'categories'}{' '}
+                    {selectedSource.categoryCount === 1
+                      ? 'category'
+                      : 'categories'}{' '}
                     and the scoring scale from {selectedSource.title}.
                   </p>
                 ) : null}
@@ -734,10 +745,13 @@ export function RubricEditor({
       setInternalCats(resolved);
     }
   };
-  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(
+    null
+  );
   const totalWeight = cats.reduce((sum, cat) => sum + (cat.weight || 0), 0);
   const weightOk = Math.abs(totalWeight - 1) < 0.001;
-  const editingCategory = cats.find((cat) => cat.id === editingCategoryId) ?? null;
+  const editingCategory =
+    cats.find((cat) => cat.id === editingCategoryId) ?? null;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -966,17 +980,108 @@ export function RubricConfigurationEditor({
   );
 }
 
+export type GradingAssistantPromptPreview =
+  CompiledGradingAssistantInvocation & {
+    version: number;
+    source: string;
+    previewInputs: {
+      studentFirstName: string;
+      strictnessLevel: GradingAssistantStrictnessLevel;
+      documentText: string;
+    };
+  };
+
+function CompiledPromptSheet({
+  open,
+  onOpenChange,
+  preview,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  preview: GradingAssistantPromptPreview;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        aria-describedby={undefined}
+        className="w-full max-w-full sm:max-w-xl md:max-w-2xl"
+      >
+        <SheetHeader>
+          <SheetTitle>Compiled prompt</SheetTitle>
+        </SheetHeader>
+        <div className="mt-4 space-y-4">
+          <p className="text-sm text-muted-foreground text-pretty">
+            This is the primary grading request sent to the AI. Recovery and
+            grammar-check requests run as separate follow-up calls only when
+            needed.
+          </p>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+            <div>
+              <dt className="text-muted-foreground">Version</dt>
+              <dd className="font-medium tabular-nums">{preview.version}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Source</dt>
+              <dd className="font-medium">{preview.source}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Preview student</dt>
+              <dd className="font-medium">
+                {preview.previewInputs.studentFirstName}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Strictness</dt>
+              <dd className="font-medium">
+                {getGradingAssistantStrictnessLabel(
+                  preview.previewInputs.strictnessLevel
+                )}
+              </dd>
+            </div>
+          </dl>
+          <p className="text-sm text-muted-foreground text-pretty">
+            The placeholder document text below stands in for the student&apos;s
+            actual case or submission, which is substituted in at grading time.
+          </p>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">System message</p>
+            <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
+              {preview.system}
+            </pre>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">User message</p>
+            <pre className="max-w-full overflow-x-hidden whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-3 text-sm">
+              {preview.userMessage}
+            </pre>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function PromptConfigEditor({
   initial,
   namePrefix = '',
   onChange,
+  gradingAssistantPromptPreview,
+  gradingAssistantPromptPreviewUnavailableReason,
+  isPromptPreviewStale = false,
 }: {
   initial: PromptConfigData;
   namePrefix?: string;
   onChange?: (config: PromptConfigData) => void;
+  gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
+  gradingAssistantPromptPreviewUnavailableReason?: string;
+  isPromptPreviewStale?: boolean;
 }) {
   const [cfg, setCfg] = useState<PromptConfigData>(initial);
+  const [editOpen, setEditOpen] = useState(false);
+  const [compiledOpen, setCompiledOpen] = useState(false);
   const usesBuiltInPreset = Boolean(cfg.instructionsPreset?.trim());
+  const instructions = cfg.gradingInstructions?.trim() ?? '';
+  const textareaId = `${namePrefix}gradingInstr`;
 
   function updateCfg(next: PromptConfigData) {
     setCfg(next);
@@ -987,21 +1092,87 @@ export function PromptConfigEditor({
     <div className="space-y-3">
       {usesBuiltInPreset && (
         <p className="text-sm text-muted-foreground text-pretty">
-          This grading assistant uses built-in instructions. Add custom instructions
-          below to override them.
+          This grading assistant uses built-in instructions. Use{' '}
+          <span className="font-medium text-foreground">Edit instructions</span>{' '}
+          to add custom instructions that override them.
         </p>
       )}
-      <div className="space-y-1.5">
-        <Textarea
-          id={`${namePrefix}gradingInstr`}
-          rows={8}
-          value={cfg.gradingInstructions ?? ''}
-          placeholder="Tell the AI how to grade this assignment. Include scoring rules, tone, and how to interpret each rubric category."
-          onChange={(e) =>
-            updateCfg({ ...cfg, gradingInstructions: e.target.value })
-          }
-        />
+
+      <p className="line-clamp-2 text-sm text-muted-foreground text-pretty">
+        {instructions || 'No custom grading instructions yet.'}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setEditOpen(true)}
+        >
+          Edit instructions
+        </Button>
+        {gradingAssistantPromptPreview ? (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={
+                isPromptPreviewStale ? undefined : () => setCompiledOpen(true)
+              }
+              disabled={isPromptPreviewStale}
+            >
+              View compiled prompt
+            </Button>
+            {isPromptPreviewStale ? (
+              <p className="text-sm text-muted-foreground">
+                Save changes to preview the updated prompt.
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {gradingAssistantPromptPreviewUnavailableReason ??
+              'Save this assignment type to preview the compiled prompt.'}
+          </p>
+        )}
       </div>
+
+      <Sheet open={editOpen} onOpenChange={setEditOpen}>
+        <SheetContent aria-describedby={undefined}>
+          <SheetHeader>
+            <SheetTitle>Edit grading instructions</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-2">
+            <Label htmlFor={textareaId}>Grading instructions</Label>
+            <Textarea
+              id={textareaId}
+              rows={12}
+              value={cfg.gradingInstructions ?? ''}
+              onChange={(e) =>
+                updateCfg({ ...cfg, gradingInstructions: e.target.value })
+              }
+            />
+            <p className="text-sm text-muted-foreground text-pretty">
+              Tell the AI how to grade this assignment. Include scoring rules,
+              tone, and how to interpret each rubric category.
+            </p>
+          </div>
+          <SheetFooter className="mt-4">
+            <SheetClose asChild>
+              <Button type="button">Done</Button>
+            </SheetClose>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {gradingAssistantPromptPreview ? (
+        <CompiledPromptSheet
+          open={compiledOpen}
+          onOpenChange={setCompiledOpen}
+          preview={gradingAssistantPromptPreview}
+        />
+      ) : null}
 
       <input
         type="hidden"

@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from 'react';
 import { Form, Link, useFetcher } from 'react-router';
 import { ArchiveIcon, ArrowLeft, RotateCcwIcon } from 'lucide-react';
 import { Button } from '~/components/ui/button';
@@ -20,6 +27,7 @@ import {
   RubricConfigurationEditor,
   rubricSnapshot,
   scoringScaleSnapshot,
+  type GradingAssistantPromptPreview,
 } from './rubric-config-editors';
 import {
   AssignmentTypeModulesSection,
@@ -35,6 +43,8 @@ type AssignmentTypeEditorFormProps = {
   scoringScale?: ScoringScaleData;
   rubric?: RubricData;
   promptConfig?: PromptConfigData;
+  gradingAssistantPromptPreview?: GradingAssistantPromptPreview;
+  gradingAssistantPromptPreviewUnavailableReason?: string;
   archivedAt?: Date | string | null;
   imageId?: string | null;
   modules?: AssignmentTypeModuleRow[];
@@ -50,6 +60,20 @@ function formSnapshot(values: {
   return [
     values.title.trim(),
     values.description.trim(),
+    scoringScaleSnapshot(values.scoringScale),
+    rubricSnapshot(values.rubric),
+    promptConfigSnapshot(values.promptConfig),
+  ].join('\u0000');
+}
+
+function promptAffectingSnapshot(values: {
+  title: string;
+  scoringScale: ScoringScaleData;
+  rubric: RubricData;
+  promptConfig: PromptConfigData;
+}) {
+  return [
+    values.title.trim(),
     scoringScaleSnapshot(values.scoringScale),
     rubricSnapshot(values.rubric),
     promptConfigSnapshot(values.promptConfig),
@@ -110,6 +134,8 @@ export function AssignmentTypeEditorForm({
   scoringScale = DEFAULT_SCORING_SCALE,
   rubric = DEFAULT_RUBRIC,
   promptConfig = DEFAULT_PROMPT_CONFIG,
+  gradingAssistantPromptPreview,
+  gradingAssistantPromptPreviewUnavailableReason,
   archivedAt = null,
   imageId = null,
   modules = [],
@@ -141,7 +167,13 @@ export function AssignmentTypeEditorForm({
         rubric,
         promptConfig,
       }),
-    [titleDefaultValue, descriptionDefaultValue, scoringScale, rubric, promptConfig]
+    [
+      titleDefaultValue,
+      descriptionDefaultValue,
+      scoringScale,
+      rubric,
+      promptConfig,
+    ]
   );
 
   useEffect(() => {
@@ -185,6 +217,31 @@ export function AssignmentTypeEditorForm({
       }),
     [title, description, scoringScaleState, rubricState, promptConfigState]
   );
+
+  const savedPromptAffectingSnapshot = useMemo(
+    () =>
+      promptAffectingSnapshot({
+        title: titleDefaultValue,
+        scoringScale,
+        rubric,
+        promptConfig,
+      }),
+    [titleDefaultValue, scoringScale, rubric, promptConfig]
+  );
+
+  const currentPromptAffectingSnapshot = useMemo(
+    () =>
+      promptAffectingSnapshot({
+        title,
+        scoringScale: scoringScaleState,
+        rubric: rubricState,
+        promptConfig: promptConfigState,
+      }),
+    [title, scoringScaleState, rubricState, promptConfigState]
+  );
+
+  const isPromptPreviewStale =
+    currentPromptAffectingSnapshot !== savedPromptAffectingSnapshot;
 
   const isDirty = currentSnapshot !== savedSnapshot || imageDirty;
   const canSubmit = isEdit ? isDirty && !isSubmitting : !isSubmitting;
@@ -239,7 +296,9 @@ export function AssignmentTypeEditorForm({
     fetcher.submit({ intent: 'unarchiveCourse' }, { method: 'post' });
   }
 
-  const formId = isEdit ? 'assignment-type-edit-form' : 'assignment-type-create-form';
+  const formId = isEdit
+    ? 'assignment-type-edit-form'
+    : 'assignment-type-create-form';
 
   return (
     <>
@@ -249,11 +308,19 @@ export function AssignmentTypeEditorForm({
         encType={isEdit ? 'multipart/form-data' : undefined}
         className="mx-auto max-w-5xl px-3 py-5 pb-28 md:px-6"
       >
-        {isEdit ? <input type="hidden" name="intent" value="updateCourse" /> : null}
+        {isEdit ? (
+          <input type="hidden" name="intent" value="updateCourse" />
+        ) : null}
 
         <header className="flex justify-between gap-4 pb-6">
           <div className="flex min-w-0 flex-1 flex-col gap-5">
-            <Button type="button" variant="outline" size="sm" className="w-fit" asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              asChild
+            >
               <Link to="/app/admin/assignments">
                 <ArrowLeft className="mr-2 size-4 shrink-0" />
                 Back
@@ -334,6 +401,11 @@ export function AssignmentTypeEditorForm({
             initial={promptConfigState}
             namePrefix="assignmentType"
             onChange={setPromptConfigState}
+            gradingAssistantPromptPreview={gradingAssistantPromptPreview}
+            gradingAssistantPromptPreviewUnavailableReason={
+              gradingAssistantPromptPreviewUnavailableReason
+            }
+            isPromptPreviewStale={isPromptPreviewStale}
           />
         </Section>
 

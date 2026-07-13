@@ -45,7 +45,9 @@ describe('admin assignment type detail action', () => {
     requireMembership.mockReset();
 
     requireAdmin.mockResolvedValue(undefined);
-    prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback(prisma)
+    );
     prisma.assignmentType.findUnique.mockResolvedValue({ id: 'at-1' });
     prisma.orgMembership.findMany.mockResolvedValue([]);
     prisma.orgMembership.findUnique.mockResolvedValue({ id: 'teacher-1' });
@@ -180,6 +182,29 @@ describe('admin assignment type detail action', () => {
       createdAt: new Date('2026-06-04T00:00:00.000Z'),
       description: null,
       archivedAt: null,
+      scoringScaleJson: {
+        type: 'act_writing_2_12',
+        minScore: 1,
+        maxScore: 6,
+      },
+      rubricJson: {
+        categories: [
+          {
+            key: 'ideas_and_analysis',
+            label: 'Ideas and Analysis',
+            weight: 1,
+            description: 'Develop a clear perspective.',
+          },
+        ],
+      },
+      gradingPromptConfigJson: {
+        gradingInstructions: 'Apply the ACT Writing rubric exactly.',
+      },
+      gradingOutputSchemaJson: { schemaVersion: 1 },
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 4,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
       assignmentModules: [],
       image: null,
     });
@@ -192,6 +217,62 @@ describe('admin assignment type detail action', () => {
       context: {} as never,
     });
 
-    expect((result as { data: any }).data.course.title).toBe('ACT Writing');
+    const data = (result as { data: any }).data;
+    expect(data.course.title).toBe('ACT Writing');
+    expect(data.gradingAssistantPromptPreview.version).toBe(4);
+    expect(data.gradingAssistantPromptPreview.system).toContain(
+      'You are a grading assistant.'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Assignment type grading config: ACT Writing'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Apply the ACT Writing rubric exactly.'
+    );
+    expect(data.gradingAssistantPromptPreview.userMessage).toContain(
+      'Essay:\n[CASE DOCUMENT CONTENT]'
+    );
+    expect(data.gradingAssistantPromptPreview.previewInputs).toEqual({
+      studentFirstName: 'Jordan',
+      strictnessLevel: 'intermediate',
+      documentText: '[CASE DOCUMENT CONTENT]',
+    });
+  });
+
+  test('does not present the standard prompt as the exact AP History invocation', async () => {
+    prisma.assignmentType.findUnique.mockResolvedValue({
+      id: 'at-ap-history',
+      title: 'AP History Essay',
+      kind: 'ap_history',
+      systemKey: 'ap_history_essay',
+      createdAt: new Date('2026-06-04T00:00:00.000Z'),
+      description: null,
+      archivedAt: null,
+      scoringScaleJson: null,
+      rubricJson: null,
+      gradingPromptConfigJson: null,
+      gradingOutputSchemaJson: null,
+      gradingCalibrationNotes: null,
+      gradingAssistantVersion: 1,
+      gradingAssistantSourceTemplateId: null,
+      gradingAssistantSourceTemplateSlug: null,
+      assignmentModules: [],
+      image: null,
+    });
+
+    const result = await loader({
+      request: new Request(
+        'https://example.test/app/admin/assignment-types/at-ap-history'
+      ),
+      params: { id: 'at-ap-history' },
+      context: {} as never,
+    });
+
+    const data = (result as { data: any }).data;
+    expect(data.gradingAssistantPromptPreview).toBeNull();
+    expect(data.gradingAssistantPromptPreviewUnavailableReason).toContain(
+      'assignment snapshot'
+    );
+    expect(prisma.assignmentType.findUnique).toHaveBeenCalledTimes(1);
   });
 });
